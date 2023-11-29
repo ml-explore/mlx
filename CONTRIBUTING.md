@@ -11,7 +11,7 @@ possible.
    and after the change. Examples of benchmarks can be found in `benchmarks/python/`.
 4. If you've changed APIs, update the documentation.
 5. Every PR should have passing tests and at least one review. 
-6. For code formating install `pre-commit` using something like `pip install pre-commit` and run `pre-commit install`.
+6. For code formatting install `pre-commit` using something like `pip install pre-commit` and run `pre-commit install`.
    This should install hooks for running `black` and `clang-format` to ensure
    consistent style for C++ and python code.
  

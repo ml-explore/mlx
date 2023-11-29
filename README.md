@@ -33,10 +33,10 @@ Some key features of MLX include:
    device types without moving data.
 
 MLX is designed by machine learning researchers for machine learning
-researchers. The frameowrk is intended to be user friendly, but still efficient
+researchers. The framework is intended to be user friendly, but still efficient
 to train and deploy models. The design of the framework itself is also
 conceptually simple. We intend to make it easy for researchers to extend and
-improve MLX with the goal of exploreing new ideas. 
+improve MLX with the goal of exploring new ideas. 
 
 The design of MLX is inspired by frameworks like
 [NumPy](https://numpy.org/doc/stable/index.html),
