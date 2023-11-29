@@ -1,0 +1,43 @@
+# Find MLX
+#
+# Defines the following variables:
+#
+#   MLX_FOUND            : True if MLX is found
+#   MLX_INCLUDE_DIRS     : Include directory
+#   MLX_LIBRARIES        : Libraries to link against
+#   MLX_CXX_FLAGS        : Additional compiler flags
+#   MLX_BUILD_ACCELERATE : True if MLX was built with accelerate 
+#   MLX_BUILD_METAL      : True if MLX was built with metal 
+
+@PACKAGE_INIT@
+
+include(@PACKAGE_MLX_CMAKE_INSTALL_MODULE_DIR@/MLXTargets.cmake)
+include(@PACKAGE_MLX_CMAKE_INSTALL_MODULE_DIR@/extension.cmake)
+
+set_and_check(MLX_LIBRARY_DIRS @PACKAGE_CMAKE_INSTALL_LIBDIR@)
+set_and_check(MLX_INCLUDE_DIRS @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@)
+set(MLX_LIBRARIES mlx)
+
+find_library(MLX_LIBRARY mlx PATHS ${MLX_LIBRARY_DIRS})
+
+if (@MLX_BUILD_ACCELERATE@)
+    set(MLX_BUILD_ACCELERATE @MLX_BUILD_ACCELERATE@)
+    set(MLX_CXX_FLAGS ${MLX_CXX_FLAGS} -DACCELERATE_NEW_LAPACK)
+endif()
+
+if (@MLX_BUILD_METAL@)
+    set(MLX_BUILD_METAL @MLX_BUILD_METAL@)
+    set(MLX_CXX_FLAGS ${MLX_CXX_FLAGS} -D_METAL_)
+    set_and_check(MLX_INCLUDE_DIRS 
+        ${MLX_INCLUDE_DIRS} 
+        @PACKAGE_CMAKE_INSTALL_INCLUDEDIR@/metal_cpp
+    )
+endif()
+
+set_target_properties(mlx PROPERTIES
+    CXX_STANDARD 17
+    INTERFACE_COMPILE_OPTIONS "${MLX_CXX_FLAGS}"
+)
+
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(MLX DEFAULT_MSG MLX_LIBRARY MLX_INCLUDE_DIRS)

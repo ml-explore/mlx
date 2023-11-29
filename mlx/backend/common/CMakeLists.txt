@@ -1,0 +1,18 @@
+target_sources(
+  mlx
+  PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/erf.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/scan.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/threefry.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
+)

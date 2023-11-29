@@ -1,0 +1,3 @@
+include CMakeLists.txt
+recursive-include mlx/ *
+include python/src/*
