@@ -1,7 +1,8 @@
 # MLX
 
 [**Quickstart**](#quickstart) | [**Installation**](#installation) |
-[**Documentation**](https://ml-explore.github.io/mlx/build/html/index.html)
+[**Documentation**](https://ml-explore.github.io/mlx/build/html/index.html) |
+[**Examples**](#examples)
 
 MLX is an array framework for machine learning on Apple silicon.
 
@@ -9,8 +10,8 @@ Some key features of MLX include:
 
  - **Familiar APIs**: MLX has a Python API which closely follows NumPy.
    MLX also has a fully featured C++ API which closely mirrors the Python API. 
-   MLX also has higher level `mlx.nn` and `mlx.optimizers` with APIs that closely
-   follow PyTorch to simplify building more complex models 
+   MLX has higher level `mlx.nn` and `mlx.optimizers` with APIs that closely
+   follow PyTorch to simplify building more complex models.
 
  - **Composable function transformations**: MLX has composable function
    transformations for automatic differentiation, automatic vectorization,
@@ -19,17 +20,34 @@ Some key features of MLX include:
  - **Lazy computation**: Computations in MLX are lazy. Arrays are only
    materialized when needed.
 
+ - **Dynamic graph construction**: Computation graphs in MLX are built
+   dynamically. Changing input shapes to functions does not trigger
+   slow compilations, and debugging is simple and intuitive.
+
  - **Multi-device**: Operations can run on any of the supported devices (CPU,
    GPU, ...) 
 
- - **Unified Memory**: A noteable difference from MLX and other frameworks is
+ - **Unified memory**: A noteable difference from MLX and other frameworks
    is the *unified memory model*. Arrays in MLX live in shared memory.
    Operations on MLX arrays can be performed on any of the supported
-   device types without performing data copies.
+   device types without moving data.
 
-The design of MLX is inspired by frameworks like `PyTorch
-<https://pytorch.org/>`_, `Jax <https://github.com/google/jax>`_, and
-`ArrayFire <https://arrayfire.org/>`_.
+MLX is designed by machine learning researchers for machine learning
+researchers. The frameowrk is intended to be user friendly, but still efficient
+to train and deploy models. The design of the framework itself is also
+conceptually simple. We intend to make it easy for researchers to extend and
+improve MLX with the goal of exploreing new ideas. 
+
+The design of MLX is inspired by frameworks like
+[NumPy](https://numpy.org/doc/stable/index.html),
+[PyTorch](https://pytorch.org/), [Jax](https://github.com/google/jax), and
+[ArrayFire](https://arrayfire.org/).
+
+## Examples
+
+The [MLX examples repo](https://github.com/ml-explore/mlx-examples) has a
+variety of examples including small image classifiers to large scale language
+modeling and speech recognition.
 
 ## Quickstart
 
