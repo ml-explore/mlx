@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mlx.core.negative &mdash; MLX 0.0.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="mlx.core.ones" href="mlx.core.ones.html" />
+    <link rel="prev" title="mlx.core.multiply" href="mlx.core.multiply.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            MLX
+          </a>
+              <div class="version">
+                0.0.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Install</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../install.html">Build and Install</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../using_streams.html">Using Streams</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../examples/linear_regression.html">Linear Regression</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples/mlp.html">Multi-Layer Perceptron</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples/llama-inference.html">LLM inference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Further Reading</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../dev/extensions.html">Developer Documentation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../array.html">Array</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../devices_and_streams.html">Devices and Streams</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../ops.html">Operations</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.abs.html">mlx.core.abs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.add.html">mlx.core.add</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.all.html">mlx.core.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.allclose.html">mlx.core.allclose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.any.html">mlx.core.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.arange.html">mlx.core.arange</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.arccos.html">mlx.core.arccos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.arccosh.html">mlx.core.arccosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.arcsin.html">mlx.core.arcsin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.arcsinh.html">mlx.core.arcsinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.arctan.html">mlx.core.arctan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.arctanh.html">mlx.core.arctanh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.argmax.html">mlx.core.argmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.argmin.html">mlx.core.argmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.argpartition.html">mlx.core.argpartition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.argsort.html">mlx.core.argsort</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array_equal.html">mlx.core.array_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.broadcast_to.html">mlx.core.broadcast_to</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.concatenate.html">mlx.core.concatenate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.convolve.html">mlx.core.convolve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.conv1d.html">mlx.core.conv1d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.conv2d.html">mlx.core.conv2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.cos.html">mlx.core.cos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.cosh.html">mlx.core.cosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.divide.html">mlx.core.divide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.equal.html">mlx.core.equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.erf.html">mlx.core.erf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.erfinv.html">mlx.core.erfinv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.exp.html">mlx.core.exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.full.html">mlx.core.full</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.greater.html">mlx.core.greater</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.less.html">mlx.core.less</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.less_equal.html">mlx.core.less_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.load.html">mlx.core.load</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.log.html">mlx.core.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.log2.html">mlx.core.log2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.log10.html">mlx.core.log10</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.log1p.html">mlx.core.log1p</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.logaddexp.html">mlx.core.logaddexp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.logical_not.html">mlx.core.logical_not</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.logsumexp.html">mlx.core.logsumexp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.matmul.html">mlx.core.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.max.html">mlx.core.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.maximum.html">mlx.core.maximum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.mean.html">mlx.core.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.min.html">mlx.core.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.minimum.html">mlx.core.minimum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.multiply.html">mlx.core.multiply</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">mlx.core.negative</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.ones.html">mlx.core.ones</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.ones_like.html">mlx.core.ones_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.partition.html">mlx.core.partition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.pad.html">mlx.core.pad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.prod.html">mlx.core.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.reciprocal.html">mlx.core.reciprocal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.reshape.html">mlx.core.reshape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.rsqrt.html">mlx.core.rsqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.save.html">mlx.core.save</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.savez.html">mlx.core.savez</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.savez_compressed.html">mlx.core.savez_compressed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.sigmoid.html">mlx.core.sigmoid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.sign.html">mlx.core.sign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.sin.html">mlx.core.sin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.sinh.html">mlx.core.sinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.softmax.html">mlx.core.softmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.sort.html">mlx.core.sort</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.split.html">mlx.core.split</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.sqrt.html">mlx.core.sqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.square.html">mlx.core.square</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.squeeze.html">mlx.core.squeeze</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.stop_gradient.html">mlx.core.stop_gradient</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.subtract.html">mlx.core.subtract</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.sum.html">mlx.core.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.take.html">mlx.core.take</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.take_along_axis.html">mlx.core.take_along_axis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.tan.html">mlx.core.tan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.tanh.html">mlx.core.tanh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.transpose.html">mlx.core.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.var.html">mlx.core.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.where.html">mlx.core.where</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.zeros.html">mlx.core.zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.zeros_like.html">mlx.core.zeros_like</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../random.html">Random</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../transforms.html">Transforms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fft.html">FFT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../nn.html">Neural Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tree_utils.html">Tree Utils</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">C++ API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../cpp/ops.html">Operations</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">MLX</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../ops.html">Operations</a></li>
+      <li class="breadcrumb-item active">mlx.core.negative</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/python/_autosummary/mlx.core.negative.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mlx-core-negative">
+<h1>mlx.core.negative<a class="headerlink" href="#mlx-core-negative" title="Permalink to this heading"></a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="mlx.core.negative">
+<span class="sig-prename descclassname"><span class="pre">mlx.core.</span></span><span class="sig-name descname"><span class="pre">negative</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Stream.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.core.negative" title="Permalink to this definition"></a></dt>
+<dd><p>Element-wise negation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>a</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Input array.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The negative of <code class="docutils literal notranslate"><span class="pre">a</span></code>.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="mlx.core.multiply.html" class="btn btn-neutral float-left" title="mlx.core.multiply" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="mlx.core.ones.html" class="btn btn-neutral float-right" title="mlx.core.ones" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, MLX Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
