@@ -35,27 +35,7 @@ python -m unittest discover python/tests
 ```
 
 
-## Develop
+## Contributing 
 
-- Fork and submit pull requests to the repo. 
-
-- Every PR should have passing tests and at least one review.
-
-- If a change is likely to impact efficiency, run some of the benchmarks before
-  and after the change. Examples of benchmarks can be found in `benchmarks/cpp/`.
-
-- Install `pre-commit` using something like `pip install pre-commit` and run `pre-commit install`.
-  This should install hooks for running `black` and `clang-format` to ensure
-  consistent style for C++ and python code.
-
-  You can also run the formatters manually as follows:
-
-    ```
-    clang-format -i file.cpp
-    ```
-
-    ```
-    black file.py
-    ```
-
-    or run `pre-commit run --all-files` to check all files in the repo.
+Check out the [contribution guidelines](CONTRIBUTING.md) for more information
+on contributing to MLX.
