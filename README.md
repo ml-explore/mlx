@@ -46,8 +46,14 @@ The design of MLX is inspired by frameworks like
 ## Examples
 
 The [MLX examples repo](https://github.com/ml-explore/mlx-examples) has a
-variety of examples including small image classifiers to large scale language
-modeling and speech recognition.
+variety of examples including:
+
+- [Transformer language model](https://github.com/ml-explore/mlx-examples/tree/main/transformer_lm) training.
+- Large scale text generation with
+  [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llama) and
+  finetuning with [LoRA](https://github.com/ml-explore/mlx-examples/tree/main/lora).
+- Generating images with [Stable Diffusion](https://github.com/ml-explore/mlx-examples/tree/main/stable_diffusion)
+- Speech recognition with [OpenAI's Whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper).
 
 ## Quickstart
 
