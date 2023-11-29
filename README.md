@@ -3,7 +3,7 @@
 MLX is an array framework for machine learning specifically targeting Apple
 Silicon. MLX is designed with inspiration from Jax, PyTorch, ArrayFire.
 
-[Documentation](https://at.apple.com/mlx)
+[Documentation](https://ml-explore.github.io/mlx/build/html/index.html)
 
 ## Build
 

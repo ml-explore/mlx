@@ -23,12 +23,6 @@ MLX
    examples/llama-inference
 
 .. toctree::
-   :caption: Further Reading
-   :maxdepth: 1
-
-   dev/extensions
-
-.. toctree::
    :caption: Python API Reference
    :maxdepth: 1
 
@@ -47,3 +41,9 @@ MLX
    :maxdepth: 1
 
    cpp/ops
+
+.. toctree::
+   :caption: Further Reading
+   :maxdepth: 1
+
+   dev/extensions
