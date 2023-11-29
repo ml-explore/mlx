@@ -9,7 +9,7 @@ MLX with your own Apple silicon computer is
 
 .. code-block:: shell
 
-    pip install apple-mlx -i https://pypi.apple.com/simple
+    pip install mlx
 
 Build from source
 -----------------
@@ -46,6 +46,17 @@ Then simply build and install it using pip:
 
    env CMAKE_BUILD_PARALLEL_LEVEL="" pip install .
 
+For developing use an editable install:
+
+.. code-block:: shell
+
+  env CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e .
+
+To make sure the install is working run the tests with:
+
+.. code-block:: shell
+
+  python -m unittest discover python/tests
 
 C++ API
 ^^^^^^^
