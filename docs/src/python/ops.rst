@@ -1,0 +1,94 @@
+.. _ops:
+
+Operations
+==========
+
+.. currentmodule:: mlx.core
+
+.. autosummary:: 
+  :toctree: _autosummary
+
+   abs
+   add
+   all
+   allclose 
+   any
+   arange
+   arccos
+   arccosh
+   arcsin
+   arcsinh
+   arctan
+   arctanh
+   argmax
+   argmin
+   argpartition
+   argsort
+   array_equal
+   broadcast_to
+   concatenate
+   convolve
+   conv1d
+   conv2d
+   cos
+   cosh
+   divide
+   equal
+   erf
+   erfinv
+   exp
+   expand_dims
+   full
+   greater
+   greater_equal
+   less
+   less_equal
+   load
+   log
+   log2
+   log10
+   log1p
+   logaddexp
+   logical_not
+   logsumexp
+   matmul
+   max
+   maximum
+   mean
+   min
+   minimum
+   multiply
+   negative
+   ones
+   ones_like
+   partition
+   pad
+   prod
+   reciprocal
+   reshape
+   rsqrt
+   save
+   savez
+   savez_compressed
+   sigmoid
+   sign
+   sin
+   sinh
+   softmax
+   sort
+   split
+   sqrt
+   square
+   squeeze
+   stop_gradient
+   subtract
+   sum
+   take
+   take_along_axis
+   tan
+   tanh
+   transpose
+   var
+   where
+   zeros
+   zeros_like
