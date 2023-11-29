@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quick Start Guide &mdash; MLX 0.0.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Using Streams" href="using_streams.html" />
+    <link rel="prev" title="Build and Install" href="install.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            MLX
+          </a>
+              <div class="version">
+                0.0.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Install</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="install.html">Build and Install</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Quick Start Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#basics">Basics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#function-and-graph-transformations">Function and Graph Transformations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#devices-and-streams">Devices and Streams</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="using_streams.html">Using Streams</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples/linear_regression.html">Linear Regression</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/mlp.html">Multi-Layer Perceptron</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/llama-inference.html">LLM inference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Further Reading</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="dev/extensions.html">Developer Documentation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="python/array.html">Array</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/devices_and_streams.html">Devices and Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/ops.html">Operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/random.html">Random</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/transforms.html">Transforms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/fft.html">FFT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/nn.html">Neural Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/optimizers.html">Optimizers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/tree_utils.html">Tree Utils</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">C++ API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="cpp/ops.html">Operations</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">MLX</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Quick Start Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/quick_start.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="quick-start-guide">
+<h1>Quick Start Guide<a class="headerlink" href="#quick-start-guide" title="Permalink to this heading"></a></h1>
+<p>MLX is a NumPy-like array framework designed for efficient and flexible
+machine learning on Apple silicon. The Python API closely follows NumPy with
+a few exceptions. MLX also has a fully featured C++ API which closely follows
+the Python API.</p>
+<p>The main differences between MLX and NumPy are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><strong>Composable function transformations</strong>: MLX has composable function
+transformations for automatic differentiation, automatic vectorization,
+and computation graph optimization.</p></li>
+<li><p><strong>Lazy computation</strong>: Computations in MLX are lazy. Arrays are only
+materialized when needed.</p></li>
+<li><p><strong>Multi-device</strong>: Operations can run on any of the suppoorted devices (CPU,
+GPU, …)</p></li>
+</ul>
+</div></blockquote>
+<p>The design of MLX is strongly inspired by frameworks like <a class="reference external" href="https://pytorch.org/">PyTorch</a>, <a class="reference external" href="https://github.com/google/jax">Jax</a>, and
+<a class="reference external" href="https://arrayfire.org/">ArrayFire</a>. A noteable difference from these
+frameworks and MLX is the <em>unified memory model</em>. Arrays in MLX live in shared
+memory. Operations on MLX arrays can be performed on any of the supported
+device types without performing data copies. Currently supported device types
+are the CPU and GPU.</p>
+<section id="basics">
+<h2>Basics<a class="headerlink" href="#basics" title="Permalink to this heading"></a></h2>
+<p>Import <code class="docutils literal notranslate"><span class="pre">mlx.core</span></code> and make an <a class="reference internal" href="python/_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code></a>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="kn">import</span> <span class="nn">mlx.core</span> <span class="k">as</span> <span class="nn">mx</span>
+<span class="o">&gt;&gt;</span> <span class="n">a</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">])</span>
+<span class="o">&gt;&gt;</span> <span class="n">a</span><span class="o">.</span><span class="n">shape</span>
+<span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+<span class="o">&gt;&gt;</span> <span class="n">a</span><span class="o">.</span><span class="n">dtype</span>
+<span class="n">int32</span>
+<span class="o">&gt;&gt;</span> <span class="n">b</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">3.0</span><span class="p">,</span> <span class="mf">4.0</span><span class="p">])</span>
+<span class="o">&gt;&gt;</span> <span class="n">b</span><span class="o">.</span><span class="n">dtype</span>
+<span class="n">float32</span>
+</pre></div>
+</div>
+<p>Operations in MLX are lazy. The outputs of MLX operations are not computed
+until they are needed. To force an array to be evaluated use
+<a class="reference internal" href="python/_autosummary/mlx.core.eval.html#mlx.core.eval" title="mlx.core.eval"><code class="xref py py-func docutils literal notranslate"><span class="pre">eval()</span></code></a>.  Arrays will automatically be evaluated in a few cases. For
+example, inspecting a scalar with <a class="reference internal" href="python/_autosummary/mlx.core.array.item.html#mlx.core.array.item" title="mlx.core.array.item"><code class="xref py py-meth docutils literal notranslate"><span class="pre">array.item()</span></code></a>, printing an array,
+or converting an array from <a class="reference internal" href="python/_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><code class="xref py py-class docutils literal notranslate"><span class="pre">array</span></code></a> to <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v1.26)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a> all
+automatically evaluate the array.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="n">c</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>    <span class="c1"># c not yet evaluated</span>
+<span class="o">&gt;&gt;</span> <span class="n">mx</span><span class="o">.</span><span class="n">eval</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>  <span class="c1"># evaluates c</span>
+<span class="o">&gt;&gt;</span> <span class="n">c</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+<span class="o">&gt;&gt;</span> <span class="nb">print</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>     <span class="c1"># Also evaluates c</span>
+<span class="n">array</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">8</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">float32</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span> <span class="n">c</span> <span class="o">=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+<span class="o">&gt;&gt;</span> <span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="o">&gt;&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>   <span class="c1"># Also evaluates c</span>
+<span class="n">array</span><span class="p">([</span><span class="mf">2.</span><span class="p">,</span> <span class="mf">4.</span><span class="p">,</span> <span class="mf">6.</span><span class="p">,</span> <span class="mf">8.</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">float32</span><span class="p">)</span>
+</pre></div>
+</div>
+</section>
+<section id="function-and-graph-transformations">
+<h2>Function and Graph Transformations<a class="headerlink" href="#function-and-graph-transformations" title="Permalink to this heading"></a></h2>
+<p>MLX has standard function transformations like <a class="reference internal" href="python/_autosummary/mlx.core.grad.html#mlx.core.grad" title="mlx.core.grad"><code class="xref py py-func docutils literal notranslate"><span class="pre">grad()</span></code></a> and <a class="reference internal" href="python/_autosummary/mlx.core.vmap.html#mlx.core.vmap" title="mlx.core.vmap"><code class="xref py py-func docutils literal notranslate"><span class="pre">vmap()</span></code></a>.
+Transformations can be composed arbitrarily. For example
+<code class="docutils literal notranslate"><span class="pre">grad(vmap(grad(fn)))</span></code> (or any other composition) is allowed.</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="o">&gt;&gt;</span> <span class="n">x</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="mf">0.0</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span> <span class="n">mx</span><span class="o">.</span><span class="n">sin</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">array</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">float32</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span> <span class="n">mx</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">sin</span><span class="p">)(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">array</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">float32</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span> <span class="n">mx</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">grad</span><span class="p">(</span><span class="n">mx</span><span class="o">.</span><span class="n">sin</span><span class="p">))(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">array</span><span class="p">(</span><span class="o">-</span><span class="mi">0</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">float32</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Other gradient transformations include <a class="reference internal" href="python/_autosummary/mlx.core.vjp.html#mlx.core.vjp" title="mlx.core.vjp"><code class="xref py py-func docutils literal notranslate"><span class="pre">vjp()</span></code></a> for vector-Jacobian products
+and <a class="reference internal" href="python/_autosummary/mlx.core.jvp.html#mlx.core.jvp" title="mlx.core.jvp"><code class="xref py py-func docutils literal notranslate"><span class="pre">jvp()</span></code></a> for Jacobian-vector products.</p>
+<p>Use <a class="reference internal" href="python/_autosummary/mlx.core.value_and_grad.html#mlx.core.value_and_grad" title="mlx.core.value_and_grad"><code class="xref py py-func docutils literal notranslate"><span class="pre">value_and_grad()</span></code></a> to efficiently compute both a function’s output and
+gradient with respect to the function’s input.</p>
+</section>
+<section id="devices-and-streams">
+<h2>Devices and Streams<a class="headerlink" href="#devices-and-streams" title="Permalink to this heading"></a></h2>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="install.html" class="btn btn-neutral float-left" title="Build and Install" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="using_streams.html" class="btn btn-neutral float-right" title="Using Streams" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, MLX Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
