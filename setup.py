@@ -1,14 +1,36 @@
 # Copyright © 2023 Apple Inc.
 
+import datetime
 import os
 import re
 import subprocess
 import sys
 import sysconfig
 from pathlib import Path
+from subprocess import run
 
 from setuptools import Extension, setup, find_namespace_packages
 from setuptools.command.build_ext import build_ext
+
+
+def get_version(version):
+    if "PYPI_RELEASE" not in os.environ:
+        today = datetime.date.today()
+        version = f"{version}.dev{today.year}{today.month}{today.day}"
+
+        if "DEV_RELEASE" not in os.environ:
+            git_hash = (
+                run(
+                    "git rev-parse --short HEAD".split(),
+                    capture_output=True,
+                    check=True,
+                )
+                .stdout.strip()
+                .decode()
+            )
+            version = f"{version}+{git_hash}"
+
+    return version
 
 
 # A CMakeExtension needs a sourcedir instead of a file list.
@@ -111,9 +133,10 @@ if __name__ == "__main__":
     )
     package_dir = {"": "python"}
     package_data = {"mlx": ["lib/*", "include/*", "share/*"]}
+
     setup(
         name="mlx",
-        version="0.0.2",
+        version=get_version("0.0.2"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple Silicon.",
