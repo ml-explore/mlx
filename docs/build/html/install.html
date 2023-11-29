@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Build and Install &mdash; MLX 0.0.0 documentation</title>
+      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+        <script src="_static/jquery.js"></script>
+        <script src="_static/underscore.js"></script>
+        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="_static/doctools.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Quick Start Guide" href="quick_start.html" />
+    <link rel="prev" title="MLX" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            MLX
+          </a>
+              <div class="version">
+                0.0.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Install</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Build and Install</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#install-from-pypi">Install from PyPI</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#build-from-source">Build from source</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#build-requirements">Build Requirements</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#python-api">Python API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#c-api">C++ API</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="using_streams.html">Using Streams</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="examples/linear_regression.html">Linear Regression</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/mlp.html">Multi-Layer Perceptron</a></li>
+<li class="toctree-l1"><a class="reference internal" href="examples/llama-inference.html">LLM inference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Further Reading</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="dev/extensions.html">Developer Documentation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="python/array.html">Array</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/devices_and_streams.html">Devices and Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/ops.html">Operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/random.html">Random</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/transforms.html">Transforms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/fft.html">FFT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/nn.html">Neural Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/optimizers.html">Optimizers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="python/tree_utils.html">Tree Utils</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">C++ API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="cpp/ops.html">Operations</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">MLX</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Build and Install</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/install.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="build-and-install">
+<h1>Build and Install<a class="headerlink" href="#build-and-install" title="Permalink to this heading"></a></h1>
+<section id="install-from-pypi">
+<h2>Install from PyPI<a class="headerlink" href="#install-from-pypi" title="Permalink to this heading"></a></h2>
+<p>MLX is available at Apple’s internal PyPI repository. All you have to do to use
+MLX with your own Apple silicon computer is</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>apple-mlx<span class="w"> </span>-i<span class="w"> </span>https://pypi.apple.com/simple
+</pre></div>
+</div>
+</section>
+<section id="build-from-source">
+<h2>Build from source<a class="headerlink" href="#build-from-source" title="Permalink to this heading"></a></h2>
+<section id="build-requirements">
+<h3>Build Requirements<a class="headerlink" href="#build-requirements" title="Permalink to this heading"></a></h3>
+<ul class="simple">
+<li><p>A C++ compiler with C++17 support (e.g. Clang &gt;= 5.0)</p></li>
+<li><p><a class="reference external" href="https://cmake.org/">cmake</a> – version 3.24 or later, and <code class="docutils literal notranslate"><span class="pre">make</span></code></p></li>
+</ul>
+</section>
+<section id="python-api">
+<h3>Python API<a class="headerlink" href="#python-api" title="Permalink to this heading"></a></h3>
+<p>To build and install the MLX python library from source, first, clone MLX from
+<a class="reference external" href="https://github.com/ml-explore/mlx">its GitHub repo</a>:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@github.com:ml-explore/mlx.git<span class="w"> </span>mlx<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>mlx
+</pre></div>
+</div>
+<p>Make sure that you have <a class="reference external" href="https://pybind11.readthedocs.io/en/stable/index.html">pybind11</a>
+installed. You can install <code class="docutils literal notranslate"><span class="pre">pybind11</span></code> with <code class="docutils literal notranslate"><span class="pre">pip</span></code>, <code class="docutils literal notranslate"><span class="pre">brew</span></code> or <code class="docutils literal notranslate"><span class="pre">conda</span></code> as follows:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;pybind11[global]&quot;</span>
+conda<span class="w"> </span>install<span class="w"> </span>pybind11
+brew<span class="w"> </span>install<span class="w"> </span>pybind11
+</pre></div>
+</div>
+<p>Then simply build and install it using pip:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>.
+</pre></div>
+</div>
+</section>
+<section id="c-api">
+<h3>C++ API<a class="headerlink" href="#c-api" title="Permalink to this heading"></a></h3>
+<p>Currently, MLX must be built and installed from source.</p>
+<p>Similarly to the python library, to build and install the MLX C++ library start
+by cloning MLX from <a class="reference external" href="https://github.com/ml-explore/mlx">its GitHub repo</a>:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@github.com:ml-explore/mlx.git<span class="w"> </span>mlx<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>mlx
+</pre></div>
+</div>
+<p>Create a build directory and run CMake and make:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>-p<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>build
+cmake<span class="w"> </span>..<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>make<span class="w"> </span>-j
+</pre></div>
+</div>
+<p>Run tests with:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span><span class="nb">test</span>
+</pre></div>
+</div>
+<p>Install with:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>make<span class="w"> </span>install
+</pre></div>
+</div>
+<p>Note that the built <code class="docutils literal notranslate"><span class="pre">mlx.metallib</span></code> file should be either at the same
+directory as the executable statically linked to <code class="docutils literal notranslate"><span class="pre">libmlx.a</span></code> or the
+preprocessor constant <code class="docutils literal notranslate"><span class="pre">METAL_PATH</span></code> should be defined at build time and it
+should point to the path to the built metal library.</p>
+<table class="docutils align-default" id="id2">
+<caption><span class="caption-text">Build Options</span><a class="headerlink" href="#id2" title="Permalink to this table"></a></caption>
+<colgroup>
+<col style="width: 76%" />
+<col style="width: 24%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Option</p></th>
+<th class="head"><p>Default</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>MLX_BUILD_TESTS</p></td>
+<td><p>ON</p></td>
+</tr>
+<tr class="row-odd"><td><p>MLX_BUILD_EXAMPLES</p></td>
+<td><p>OFF</p></td>
+</tr>
+<tr class="row-even"><td><p>MLX_BUILD_BENCHMARKS</p></td>
+<td><p>OFF</p></td>
+</tr>
+<tr class="row-odd"><td><p>MLX_BUILD_METAL</p></td>
+<td><p>ON</p></td>
+</tr>
+<tr class="row-even"><td><p>MLX_BUILD_PYTHON_BINDINGS</p></td>
+<td><p>OFF</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="MLX" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="quick_start.html" class="btn btn-neutral float-right" title="Quick Start Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, MLX Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

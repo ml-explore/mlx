@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mlx.core.array &mdash; MLX 0.0.0 documentation</title>
+      <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+      <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="../../_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="mlx.core.array.astype" href="mlx.core.array.astype.html" />
+    <link rel="prev" title="Array" href="../array.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            MLX
+          </a>
+              <div class="version">
+                0.0.0
+              </div>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Install</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../install.html">Build and Install</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../using_streams.html">Using Streams</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../examples/linear_regression.html">Linear Regression</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples/mlp.html">Multi-Layer Perceptron</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../examples/llama-inference.html">LLM inference</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Further Reading</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../dev/extensions.html">Developer Documentation</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../array.html">Array</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">mlx.core.array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.astype.html">mlx.core.array.astype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.item.html">mlx.core.array.item</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.tolist.html">mlx.core.array.tolist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.dtype.html">mlx.core.array.dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.ndim.html">mlx.core.array.ndim</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.shape.html">mlx.core.array.shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.size.html">mlx.core.array.size</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.Dtype.html">mlx.core.Dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.abs.html">mlx.core.array.abs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.all.html">mlx.core.array.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.any.html">mlx.core.array.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.argmax.html">mlx.core.array.argmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.argmin.html">mlx.core.array.argmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.cos.html">mlx.core.array.cos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.dtype.html">mlx.core.array.dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.exp.html">mlx.core.array.exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.log.html">mlx.core.array.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.log1p.html">mlx.core.array.log1p</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.logsumexp.html">mlx.core.array.logsumexp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.max.html">mlx.core.array.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.mean.html">mlx.core.array.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.min.html">mlx.core.array.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.prod.html">mlx.core.array.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.reciprocal.html">mlx.core.array.reciprocal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.reshape.html">mlx.core.array.reshape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.rsqrt.html">mlx.core.array.rsqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.sin.html">mlx.core.array.sin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.split.html">mlx.core.array.split</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.sqrt.html">mlx.core.array.sqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.square.html">mlx.core.array.square</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.sum.html">mlx.core.array.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.transpose.html">mlx.core.array.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.T.html">mlx.core.array.T</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.var.html">mlx.core.array.var</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../devices_and_streams.html">Devices and Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ops.html">Operations</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../random.html">Random</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../transforms.html">Transforms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../fft.html">FFT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../nn.html">Neural Networks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../optimizers.html">Optimizers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../tree_utils.html">Tree Utils</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">C++ API Reference</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../cpp/ops.html">Operations</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">MLX</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../array.html">Array</a></li>
+      <li class="breadcrumb-item active">mlx.core.array</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/python/_autosummary/mlx.core.array.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="mlx-core-array">
+<h1>mlx.core.array<a class="headerlink" href="#mlx-core-array" title="Permalink to this heading"></a></h1>
+<dl class="py class">
+<dt class="sig sig-object py" id="mlx.core.array">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mlx.core.</span></span><span class="sig-name descname"><span class="pre">array</span></span><a class="headerlink" href="#mlx.core.array" title="Permalink to this definition"></a></dt>
+<dd><p>An N-dimensional array object.</p>
+<dl class="py method">
+<dt class="sig sig-object py" id="mlx.core.array.__init__">
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.array.__init__" title="Permalink to this definition"></a></dt>
+<dd><p>Overloaded function.</p>
+<ol class="arabic simple">
+<li><p>__init__(self: mlx.core.array, val: Union[bool, int, float, complex, mlx.core.array], dtype: Optional[mlx.core.Dtype] = None) -&gt; None</p></li>
+<li><p>__init__(self: mlx.core.array, vals: Union[list, tuple], dtype: Optional[mlx.core.Dtype] = None) -&gt; None</p></li>
+<li><p>__init__(self: mlx.core.array, vals: numpy.ndarray, dtype: Optional[mlx.core.Dtype] = None) -&gt; None</p></li>
+<li><p>__init__(self: mlx.core.array, vals: buffer, dtype: Optional[mlx.core.Dtype] = None) -&gt; None</p></li>
+</ol>
+</dd></dl>
+
+<p class="rubric">Methods</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#mlx.core.array.__init__" title="mlx.core.array.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(*args, **kwargs)</p></td>
+<td><p>Overloaded function.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.abs.html#mlx.core.array.abs" title="mlx.core.array.abs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">abs</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.abs.html#mlx.core.abs" title="mlx.core.abs"><code class="xref py py-func docutils literal notranslate"><span class="pre">abs()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.all.html#mlx.core.array.all" title="mlx.core.array.all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.all.html#mlx.core.all" title="mlx.core.all"><code class="xref py py-func docutils literal notranslate"><span class="pre">all()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.any.html#mlx.core.array.any" title="mlx.core.array.any"><code class="xref py py-obj docutils literal notranslate"><span class="pre">any</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.any.html#mlx.core.any" title="mlx.core.any"><code class="xref py py-func docutils literal notranslate"><span class="pre">any()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.argmax.html#mlx.core.array.argmax" title="mlx.core.array.argmax"><code class="xref py py-obj docutils literal notranslate"><span class="pre">argmax</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.argmax.html#mlx.core.argmax" title="mlx.core.argmax"><code class="xref py py-func docutils literal notranslate"><span class="pre">argmax()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.argmin.html#mlx.core.array.argmin" title="mlx.core.array.argmin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">argmin</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.argmin.html#mlx.core.argmin" title="mlx.core.argmin"><code class="xref py py-func docutils literal notranslate"><span class="pre">argmin()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.astype.html#mlx.core.array.astype" title="mlx.core.array.astype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">astype</span></code></a>(self, dtype[, stream])</p></td>
+<td><p>Cast the array to a specified type.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.cos.html#mlx.core.array.cos" title="mlx.core.array.cos"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cos</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.cos.html#mlx.core.cos" title="mlx.core.cos"><code class="xref py py-func docutils literal notranslate"><span class="pre">cos()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">cummax</span></code>(self[, axis, reverse, inclusive, stream])</p></td>
+<td><p>See <code class="xref py py-func docutils literal notranslate"><span class="pre">cummax()</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">cummin</span></code>(self[, axis, reverse, inclusive, stream])</p></td>
+<td><p>See <code class="xref py py-func docutils literal notranslate"><span class="pre">cummin()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">cumprod</span></code>(self[, axis, reverse, inclusive, stream])</p></td>
+<td><p>See <code class="xref py py-func docutils literal notranslate"><span class="pre">cumprod()</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">cumsum</span></code>(self[, axis, reverse, inclusive, stream])</p></td>
+<td><p>See <code class="xref py py-func docutils literal notranslate"><span class="pre">cumsum()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.exp.html#mlx.core.array.exp" title="mlx.core.array.exp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exp</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.exp.html#mlx.core.exp" title="mlx.core.exp"><code class="xref py py-func docutils literal notranslate"><span class="pre">exp()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.item.html#mlx.core.array.item" title="mlx.core.array.item"><code class="xref py py-obj docutils literal notranslate"><span class="pre">item</span></code></a>(self)</p></td>
+<td><p>Access the value of a scalar array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.log.html#mlx.core.array.log" title="mlx.core.array.log"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.log.html#mlx.core.log" title="mlx.core.log"><code class="xref py py-func docutils literal notranslate"><span class="pre">log()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">log10</span></code>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.log10.html#mlx.core.log10" title="mlx.core.log10"><code class="xref py py-func docutils literal notranslate"><span class="pre">log10()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.log1p.html#mlx.core.array.log1p" title="mlx.core.array.log1p"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log1p</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.log1p.html#mlx.core.log1p" title="mlx.core.log1p"><code class="xref py py-func docutils literal notranslate"><span class="pre">log1p()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">log2</span></code>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.log2.html#mlx.core.log2" title="mlx.core.log2"><code class="xref py py-func docutils literal notranslate"><span class="pre">log2()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.logsumexp.html#mlx.core.array.logsumexp" title="mlx.core.array.logsumexp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">logsumexp</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.logsumexp.html#mlx.core.logsumexp" title="mlx.core.logsumexp"><code class="xref py py-func docutils literal notranslate"><span class="pre">logsumexp()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.max.html#mlx.core.array.max" title="mlx.core.array.max"><code class="xref py py-obj docutils literal notranslate"><span class="pre">max</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.max.html#mlx.core.max" title="mlx.core.max"><code class="xref py py-func docutils literal notranslate"><span class="pre">max()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.mean.html#mlx.core.array.mean" title="mlx.core.array.mean"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mean</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.mean.html#mlx.core.mean" title="mlx.core.mean"><code class="xref py py-func docutils literal notranslate"><span class="pre">mean()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.min.html#mlx.core.array.min" title="mlx.core.array.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">min</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.min.html#mlx.core.min" title="mlx.core.min"><code class="xref py py-func docutils literal notranslate"><span class="pre">min()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.prod.html#mlx.core.array.prod" title="mlx.core.array.prod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prod</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.prod.html#mlx.core.prod" title="mlx.core.prod"><code class="xref py py-func docutils literal notranslate"><span class="pre">prod()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.reciprocal.html#mlx.core.array.reciprocal" title="mlx.core.array.reciprocal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reciprocal</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.reciprocal.html#mlx.core.reciprocal" title="mlx.core.reciprocal"><code class="xref py py-func docutils literal notranslate"><span class="pre">reciprocal()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.reshape.html#mlx.core.array.reshape" title="mlx.core.array.reshape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reshape</span></code></a>(self, *args[, stream])</p></td>
+<td><p>Equivalent to <a class="reference internal" href="mlx.core.reshape.html#mlx.core.reshape" title="mlx.core.reshape"><code class="xref py py-func docutils literal notranslate"><span class="pre">reshape()</span></code></a> but the shape can be passed either as a tuple or as separate arguments.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.rsqrt.html#mlx.core.array.rsqrt" title="mlx.core.array.rsqrt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">rsqrt</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.rsqrt.html#mlx.core.rsqrt" title="mlx.core.rsqrt"><code class="xref py py-func docutils literal notranslate"><span class="pre">rsqrt()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.sin.html#mlx.core.array.sin" title="mlx.core.array.sin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sin</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.sin.html#mlx.core.sin" title="mlx.core.sin"><code class="xref py py-func docutils literal notranslate"><span class="pre">sin()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.split.html#mlx.core.array.split" title="mlx.core.array.split"><code class="xref py py-obj docutils literal notranslate"><span class="pre">split</span></code></a>(self, indices_or_sections[, axis, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.split.html#mlx.core.split" title="mlx.core.split"><code class="xref py py-func docutils literal notranslate"><span class="pre">split()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.sqrt.html#mlx.core.array.sqrt" title="mlx.core.array.sqrt"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sqrt</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.sqrt.html#mlx.core.sqrt" title="mlx.core.sqrt"><code class="xref py py-func docutils literal notranslate"><span class="pre">sqrt()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.square.html#mlx.core.array.square" title="mlx.core.array.square"><code class="xref py py-obj docutils literal notranslate"><span class="pre">square</span></code></a>(self, *[, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.square.html#mlx.core.square" title="mlx.core.square"><code class="xref py py-func docutils literal notranslate"><span class="pre">square()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">squeeze</span></code>(self[, axis, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.squeeze.html#mlx.core.squeeze" title="mlx.core.squeeze"><code class="xref py py-func docutils literal notranslate"><span class="pre">squeeze()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.sum.html#mlx.core.array.sum" title="mlx.core.array.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sum</span></code></a>(self[, axis, keepdims, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.sum.html#mlx.core.sum" title="mlx.core.sum"><code class="xref py py-func docutils literal notranslate"><span class="pre">sum()</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.tolist.html#mlx.core.array.tolist" title="mlx.core.array.tolist"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tolist</span></code></a>(self)</p></td>
+<td><p>Convert the array to a Python <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.transpose.html#mlx.core.array.transpose" title="mlx.core.array.transpose"><code class="xref py py-obj docutils literal notranslate"><span class="pre">transpose</span></code></a>(self, *args[, stream])</p></td>
+<td><p>Equivalent to <a class="reference internal" href="mlx.core.transpose.html#mlx.core.transpose" title="mlx.core.transpose"><code class="xref py py-func docutils literal notranslate"><span class="pre">transpose()</span></code></a> but the axes can be passed either as a tuple or as separate arguments.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.var.html#mlx.core.array.var" title="mlx.core.array.var"><code class="xref py py-obj docutils literal notranslate"><span class="pre">var</span></code></a>(self[, axis, keepdims, ddof, stream])</p></td>
+<td><p>See <a class="reference internal" href="mlx.core.var.html#mlx.core.var" title="mlx.core.var"><code class="xref py py-func docutils literal notranslate"><span class="pre">var()</span></code></a>.</p></td>
+</tr>
+</tbody>
+</table>
+<p class="rubric">Attributes</p>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.T.html#mlx.core.array.T" title="mlx.core.array.T"><code class="xref py py-obj docutils literal notranslate"><span class="pre">T</span></code></a></p></td>
+<td><p>Equivalent to calling <code class="docutils literal notranslate"><span class="pre">self.transpose()</span></code> with no arguments.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.dtype.html#mlx.core.array.dtype" title="mlx.core.array.dtype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">dtype</span></code></a></p></td>
+<td><p>The array's <a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dtype</span></code></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.ndim.html#mlx.core.array.ndim" title="mlx.core.array.ndim"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ndim</span></code></a></p></td>
+<td><p>The array's dimension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="mlx.core.array.shape.html#mlx.core.array.shape" title="mlx.core.array.shape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">shape</span></code></a></p></td>
+<td><p>The shape of the array as a Python list.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="mlx.core.array.size.html#mlx.core.array.size" title="mlx.core.array.size"><code class="xref py py-obj docutils literal notranslate"><span class="pre">size</span></code></a></p></td>
+<td><p>Number of elments in the array.</p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../array.html" class="btn btn-neutral float-left" title="Array" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="mlx.core.array.astype.html" class="btn btn-neutral float-right" title="mlx.core.array.astype" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2023, MLX Contributors.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
