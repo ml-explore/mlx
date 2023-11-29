@@ -1,0 +1,11 @@
+function(build_benchmark SRCFILE)
+  get_filename_component(src_name ${SRCFILE} NAME_WE)
+  set(target "${src_name}")
+  add_executable(${target} ${SRCFILE})
+  target_link_libraries(${target} PRIVATE mlx)
+endfunction(build_benchmark)
+
+build_benchmark(single_ops.cpp)
+build_benchmark(irregular_strides.cpp)
+build_benchmark(compare_devices.cpp)
+build_benchmark(autograd.cpp)
