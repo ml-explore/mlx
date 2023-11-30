@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <metal_math>
 #include <metal_simdgroup>
 

@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
 

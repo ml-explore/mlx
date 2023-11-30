@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <sstream>
 
 #include <pybind11/pybind11.h>

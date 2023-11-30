@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #pragma once
 #include <complex>
 #include "mlx/types/half_types.h"

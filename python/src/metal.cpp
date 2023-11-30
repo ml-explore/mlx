@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <pybind11/pybind11.h>
 
 #include "mlx/backend/metal/metal.h"

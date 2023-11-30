@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include "mlx/backend/common/threefry.h"
 
 namespace mlx::core::random {

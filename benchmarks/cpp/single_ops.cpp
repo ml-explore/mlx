@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include "mlx/mlx.h"
 #include "time_utils.h"
 

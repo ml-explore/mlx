@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <algorithm>
 
 #include "mlx/backend/metal/copy.h"

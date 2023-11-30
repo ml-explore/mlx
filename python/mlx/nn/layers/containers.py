@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 from mlx.nn.layers.base import Module
 
 

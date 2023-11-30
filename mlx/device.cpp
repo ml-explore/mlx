@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include "mlx/device.h"
 #include "mlx/backend/metal/metal.h"
 

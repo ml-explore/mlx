@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <cassert>
 
 #include <vecLib/BNNS/bnns.h>

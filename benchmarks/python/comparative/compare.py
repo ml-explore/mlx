@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 #!/usr/bin/env python
 
 import argparse

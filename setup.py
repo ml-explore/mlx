@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 import os
 import re
 import subprocess

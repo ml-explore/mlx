@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 import unittest
 
 import itertools

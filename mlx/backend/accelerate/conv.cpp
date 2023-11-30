@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <cassert>
 
 #include <simd/vector.h>

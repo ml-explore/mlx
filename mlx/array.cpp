@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <functional>
 
 #include "mlx/array.h"

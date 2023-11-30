@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #define DOCTEST_CONFIG_IMPLEMENT
 #include "doctest/doctest.h"
 

@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 import textwrap
 from typing import Any, Callable, List, Union, Optional
 

@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 import operator
 import unittest
 from itertools import permutations

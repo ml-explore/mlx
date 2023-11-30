@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <cassert>
 
 #ifdef ACCELERATE_NEW_LAPACK

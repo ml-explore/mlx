@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <iostream>
 
 #include "doctest/doctest.h"

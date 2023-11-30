@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <chrono>
 #include <cmath>
 #include <iostream>

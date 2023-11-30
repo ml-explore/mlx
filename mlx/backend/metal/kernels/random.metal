@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include "mlx/backend/metal/kernels/utils.h"
 
 static constexpr constant uint32_t rotations[2][4] = {

@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 # -*- coding: utf-8 -*-
 
 import os

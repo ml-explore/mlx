@@ -1,3 +1,5 @@
+# Copyright © 2023 Apple Inc.
+
 import numpy as np
 import argparse
 import mlx.core as mx

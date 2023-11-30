@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #pragma once
 
 #include <optional>

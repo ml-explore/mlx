@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include <cstdlib>
 #include <future>
 #include <memory>

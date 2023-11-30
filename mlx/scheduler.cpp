@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include "mlx/scheduler.h"
 #include "mlx/backend/metal/metal.h"
 
