@@ -10,8 +10,8 @@ Some key features of MLX include:
 
  - **Familiar APIs**: MLX has a Python API which closely follows NumPy.
    MLX also has a fully featured C++ API which closely mirrors the Python API. 
-   MLX has higher level `mlx.nn` and `mlx.optimizers` with APIs that closely
-   follow PyTorch to simplify building more complex models.
+   MLX has higher level packages like `mlx.nn` and `mlx.optimizers` with APIs
+   that closely follow PyTorch to simplify building more complex models.
 
  - **Composable function transformations**: MLX has composable function
    transformations for automatic differentiation, automatic vectorization,
@@ -21,11 +21,11 @@ Some key features of MLX include:
    materialized when needed.
 
  - **Dynamic graph construction**: Computation graphs in MLX are built
-   dynamically. Changing input shapes to functions does not trigger
+   dynamically. Changing the shapes of function arguments does not trigger
    slow compilations, and debugging is simple and intuitive.
 
- - **Multi-device**: Operations can run on any of the supported devices (CPU,
-   GPU, ...) 
+ - **Multi-device**: Operations can run on any of the supported devices
+   (currently the CPU and GPU).
 
  - **Unified memory**: A noteable difference from MLX and other frameworks
    is the *unified memory model*. Arrays in MLX live in shared memory.
@@ -36,7 +36,7 @@ MLX is designed by machine learning researchers for machine learning
 researchers. The framework is intended to be user friendly, but still efficient
 to train and deploy models. The design of the framework itself is also
 conceptually simple. We intend to make it easy for researchers to extend and
-improve MLX with the goal of exploring new ideas. 
+improve MLX with the goal of quickly exploring new ideas. 
 
 The design of MLX is inspired by frameworks like
 [NumPy](https://numpy.org/doc/stable/index.html),
@@ -52,7 +52,7 @@ variety of examples including:
 - Large scale text generation with
   [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llama) and
   finetuning with [LoRA](https://github.com/ml-explore/mlx-examples/tree/main/lora).
-- Generating images with [Stable Diffusion](https://github.com/ml-explore/mlx-examples/tree/main/stable_diffusion)
+- Generating images with [Stable Diffusion](https://github.com/ml-explore/mlx-examples/tree/main/stable_diffusion).
 - Speech recognition with [OpenAI's Whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper).
 
 ## Quickstart
