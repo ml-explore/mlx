@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-
 #include "mlx/primitives.h"
 
 #define NO_GPU(func)                                                  \

@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-
 namespace mlx::core {
 
 /* Approximation to the inverse error function.

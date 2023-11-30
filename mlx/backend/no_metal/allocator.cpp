@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-
 #include "mlx/allocator.h"
 
 namespace mlx::core::allocator {
