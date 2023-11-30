@@ -13,7 +13,7 @@ The main differences between MLX and NumPy are:
    and computation graph optimization.
  - **Lazy computation**: Computations in MLX are lazy. Arrays are only
    materialized when needed.
- - **Multi-device**: Operations can run on any of the suppoorted devices (CPU,
+ - **Multi-device**: Operations can run on any of the supported devices (CPU,
    GPU, ...) 
 
 The design of MLX is strongly inspired by frameworks like `PyTorch
