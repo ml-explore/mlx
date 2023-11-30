@@ -4,8 +4,8 @@ Build and Install
 Install from PyPI
 -----------------
 
-MLX is available at Apple's internal PyPI repository. All you have to do to use
-MLX with your own Apple silicon computer is
+MLX is available on PyPI. All you have to do to use MLX with your own Apple
+silicon computer is
 
 .. code-block:: shell
 

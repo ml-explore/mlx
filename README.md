@@ -58,7 +58,7 @@ variety of examples including:
 ## Quickstart
 
 See the [quick start
-guide](https://pages.github.pie.apple.com/ml-explore/framework002/build/html/quick_start.html)
+guide](https://ml-explore.github.io/mlx/build/html/quick_start.html)
 in the documentation.
 
 ## Installation
