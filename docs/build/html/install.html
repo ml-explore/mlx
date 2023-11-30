@@ -118,9 +118,9 @@
 <h1>Build and Install<a class="headerlink" href="#build-and-install" title="Permalink to this heading"></a></h1>
 <section id="install-from-pypi">
 <h2>Install from PyPI<a class="headerlink" href="#install-from-pypi" title="Permalink to this heading"></a></h2>
-<p>MLX is available at Apple’s internal PyPI repository. All you have to do to use
-MLX with your own Apple silicon computer is</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>apple-mlx<span class="w"> </span>-i<span class="w"> </span>https://pypi.apple.com/simple
+<p>MLX is available on PyPI. All you have to do to use MLX with your own Apple
+silicon computer is</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>mlx
 </pre></div>
 </div>
 </section>
@@ -149,6 +149,14 @@ brew<span class="w"> </span>install<span class="w"> </span>pybind11
 </div>
 <p>Then simply build and install it using pip:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>.
+</pre></div>
+</div>
+<p>For developing use an editable install:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+</pre></div>
+</div>
+<p>To make sure the install is working run the tests with:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>discover<span class="w"> </span>python/tests
 </pre></div>
 </div>
 </section>
