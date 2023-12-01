@@ -112,7 +112,7 @@ jobs:
               PYPI_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
               python setup.py bdist_wheel
-            twine upload dist/*
+            twine upload dist/* --repository mlx
       - store_artifacts:
           path: dist/
 
@@ -148,7 +148,7 @@ jobs:
               DEV_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
               python setup.py bdist_wheel
-            twine upload dist/*
+            twine upload dist/* --repository mlx
       - store_artifacts:
           path: dist/
 
