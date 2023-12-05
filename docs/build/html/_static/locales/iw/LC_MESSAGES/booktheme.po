@@ -1,0 +1,75 @@
+
+msgid ""
+msgstr ""
+"Project-Id-Version: Sphinx-Book-Theme\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: iw\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "suggest edit"
+msgstr "מציע לערוך"
+
+msgid "Last updated on"
+msgstr "עודכן לאחרונה ב"
+
+msgid "Edit this page"
+msgstr "ערוך דף זה"
+
+msgid "Launch"
+msgstr "לְהַשִׁיק"
+
+msgid "Print to PDF"
+msgstr "הדפס לקובץ PDF"
+
+msgid "open issue"
+msgstr "בעיה פתוחה"
+
+msgid "Download notebook file"
+msgstr "הורד קובץ מחברת"
+
+msgid "Toggle navigation"
+msgstr "החלף ניווט"
+
+msgid "Source repository"
+msgstr "מאגר המקורות"
+
+msgid "By the"
+msgstr "דרך"
+
+msgid "next page"
+msgstr "עמוד הבא"
+
+msgid "repository"
+msgstr "מאגר"
+
+msgid "Sphinx Book Theme"
+msgstr "נושא ספר ספינקס"
+
+msgid "Download source file"
+msgstr "הורד את קובץ המקור"
+
+msgid "Contents"
+msgstr "תוכן"
+
+msgid "By"
+msgstr "על ידי"
+
+msgid "Copyright"
+msgstr "זכויות יוצרים"
+
+msgid "Fullscreen mode"
+msgstr "מצב מסך מלא"
+
+msgid "Open an issue"
+msgstr "פתח גיליון"
+
+msgid "previous page"
+msgstr "עמוד קודם"
+
+msgid "Download this page"
+msgstr "הורד דף זה"
+
+msgid "Theme by the"
+msgstr "נושא מאת"
