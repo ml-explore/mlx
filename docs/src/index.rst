@@ -1,8 +1,8 @@
 MLX
 ===
 
-MLX is a NumPy-like array framework designed for efficient and flexible
-machine learning on Apple silicon.
+MLX is a NumPy-like array framework designed for efficient and flexible machine
+learning on Apple silicon, brought to you by Apple machine learning research.
 
 The Python API closely follows NumPy with a few exceptions. MLX also has a
 fully featured C++ API which closely follows the Python API.
@@ -17,7 +17,7 @@ The main differences between MLX and NumPy are:
  - **Multi-device**: Operations can run on any of the supported devices (CPU,
    GPU, ...)
 
-The design of MLX is strongly inspired by frameworks like `PyTorch
+The design of MLX is inspired by frameworks like `PyTorch
 <https://pytorch.org/>`_, `Jax <https://github.com/google/jax>`_, and
 `ArrayFire <https://arrayfire.org/>`_. A noteable difference from these
 frameworks and MLX is the *unified memory model*. Arrays in MLX live in shared

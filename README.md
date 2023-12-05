@@ -4,7 +4,8 @@
 [**Documentation**](https://ml-explore.github.io/mlx/build/html/index.html) |
 [**Examples**](#examples)
 
-MLX is an array framework for machine learning on Apple silicon.
+MLX is an array framework for machine learning on Apple silicon, brought to you
+by Apple machine learning research.
 
 Some key features of MLX include:
 
