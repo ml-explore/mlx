@@ -14,9 +14,9 @@ class TestVersion(mlx_tests.MLXTestCase):
     def test_version(self):
         v = mx.__version__
         vnums = v.split(".")
-        self.assertEqual(len(vnums), 3)
-        v = ".".join(str(int(vn)) for vn in vnums)
-        self.assertEqual(v, mx.__version__)
+        self.assertGreaterEqual(len(vnums), 3)
+        v = ".".join(str(int(vn)) for vn in vnums[:3])
+        self.assertEqual(v, mx.__version__[: len(v)])
 
 
 class TestDtypes(mlx_tests.MLXTestCase):
@@ -905,7 +905,6 @@ class TestArray(mlx_tests.MLXTestCase):
         )
 
     def test_slice_negative_step(self):
-
         a_np = np.arange(20)
         a_mx = mx.array(a_np)
 

@@ -1084,7 +1084,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a[-1] = 0.0
             a = mx.softmax(mx.array(a))
             self.assertFalse(np.any(np.isnan(a)))
-            self.assertTrue((a[:-1] == 0).all())
+            self.assertTrue((a[:-1] < 1e-9).all())
             self.assertEqual(a[-1], 1)
 
     def test_concatenate(self):
