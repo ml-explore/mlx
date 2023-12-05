@@ -7,7 +7,7 @@ for example with `conda`:
 
 ```
 conda install sphinx
-pip install sphinx-rtd-theme
+pip install sphinx-book-theme
 ```
 
 ### Build

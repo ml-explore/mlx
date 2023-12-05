@@ -39,7 +39,17 @@ pygments_style = "sphinx"
 
 # -- Options for HTML output -------------------------------------------------
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "sphinx_book_theme"
+
+html_theme_options = {
+    "show_toc_level": 2,
+    "repository_url": "https://github.com/ml-explore/mlx",
+    "use_repository_button": True,
+    "navigation_with_keys": False,
+}
+
+html_logo = "_static/mlx_logo.png"
+
 
 # -- Options for HTMLHelp output ---------------------------------------------
 
