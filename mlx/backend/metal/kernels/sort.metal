@@ -9,7 +9,7 @@
 #define MLX_MTL_CONST static constant constexpr const
 #define MLX_MTL_LOOP_UNROLL _Pragma("clang loop unroll(full)")
 
-using namespace metal;\
+using namespace metal;
 
 // Based on GPU merge sort algorithm at https://github.com/NVIDIA/cccl/tree/main/cub/cub
 
