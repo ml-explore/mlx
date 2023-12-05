@@ -1,154 +1,576 @@
+
+
 <!DOCTYPE html>
-<html class="writer-html5" lang="en" >
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Search &mdash; MLX 0.0.0 documentation</title>
-      <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
-      <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
-    
-  <!--[if lt IE 9]>
-    <script src="_static/js/html5shiv.min.js"></script>
-  <![endif]-->
+
+
+<html lang="en" data-content_root="" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>Search - MLX 0.0.0 documentation</title>
   
-        <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-        <script src="_static/jquery.js"></script>
-        <script src="_static/underscore.js"></script>
-        <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
-        <script src="_static/doctools.js"></script>
-    <script src="_static/js/theme.js"></script>
-    <script src="_static/searchtools.js"></script>
-    <script src="_static/language_data.js"></script>
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+  </script>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="_static/styles/theme.css?digest=5b4479735964841361fd" rel="stylesheet" />
+<link href="_static/styles/bootstrap.css?digest=5b4479735964841361fd" rel="stylesheet" />
+<link href="_static/styles/pydata-sphinx-theme.css?digest=5b4479735964841361fd" rel="stylesheet" />
+
+  
+  <link href="_static/vendor/fontawesome/6.1.2/css/all.min.css?digest=5b4479735964841361fd" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.1.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2" />
+
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
+    <link rel="stylesheet" href="_static/styles/sphinx-book-theme.css?digest=14f4ca6b54d191a8c7657f6c759bf11a5fb86285" type="text/css" />
+  
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="_static/scripts/bootstrap.js?digest=5b4479735964841361fd" />
+<link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
+  <script src="_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
+
+    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script src="_static/scripts/sphinx-book-theme.js?digest=5a5c038af52cf7bc1a1ec88eea08e6366ee68824"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'search';</script>
+  <script src="_static/searchtools.js"></script>
+  <script src="_static/language_data.js"></script>
+  <script src="searchindex.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
-    <link rel="search" title="Search" href="#" /> 
-</head>
+    <link rel="search" title="Search" href="#" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="docsearch:language" content="en"/>
+  </head>
+  
+  
+  <body data-bs-spy="scroll" data-bs-target=".bd-toc-nav" data-offset="180" data-bs-root-margin="0px 0px -60%" data-default-mode="">
 
-<body class="wy-body-for-nav"> 
-  <div class="wy-grid-for-nav">
-    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
-      <div class="wy-side-scroll">
-        <div class="wy-side-nav-search" >
+  
+  
+  <a class="skip-link" href="#main-content">Skip to main content</a>
+  
+  <div id="pst-scroll-pixel-helper"></div>
 
-          
-          
-          <a href="index.html" class="icon icon-home">
-            MLX
-          </a>
-              <div class="version">
-                0.0.0
-              </div>
-<div role="search">
-  <form id="rtd-search-form" class="wy-form" action="#" method="get">
-    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
-    <input type="hidden" name="check_keywords" value="yes" />
-    <input type="hidden" name="area" value="default" />
-  </form>
-</div>
-        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <p class="caption" role="heading"><span class="caption-text">Install</span></p>
-<ul>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>
+    Back to top
+  </button>
+
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          name="__primary"
+          id="__primary"/>
+  <label class="overlay overlay-primary" for="__primary"></label>
+  
+  <input type="checkbox"
+          class="sidebar-toggle"
+          name="__secondary"
+          id="__secondary"/>
+  <label class="overlay overlay-secondary" for="__secondary"></label>
+  
+  <div class="search-button__wrapper">
+    <div class="search-button__overlay"></div>
+    <div class="search-button__search-container">
+<form class="bd-search d-flex align-items-center"
+      action="#"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form></div>
+  </div>
+  
+    <nav class="bd-header navbar navbar-expand-lg bd-navbar">
+    </nav>
+  
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      <div class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+    
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item">
+
+  
+
+<a class="navbar-brand logo" href="index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.0 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.0 documentation - Home"/>`);</script>
+  
+  
+</a></div>
+        <div class="sidebar-primary-item"><nav class="bd-links" id="bd-docs-nav" aria-label="Main">
+    <div class="bd-toc-item navbar-nav active">
+        <p aria-level="2" class="caption" role="heading"><span class="caption-text">Install</span></p>
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="install.html">Build and Install</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Usage</span></p>
-<ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick Start Guide</a></li>
 <li class="toctree-l1"><a class="reference internal" href="using_streams.html">Using Streams</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Examples</span></p>
-<ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="examples/linear_regression.html">Linear Regression</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/mlp.html">Multi-Layer Perceptron</a></li>
 <li class="toctree-l1"><a class="reference internal" href="examples/llama-inference.html">LLM inference</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
-<ul>
-<li class="toctree-l1"><a class="reference internal" href="python/array.html">Array</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/devices_and_streams.html">Devices and Streams</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/ops.html">Operations</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/random.html">Random</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/transforms.html">Transforms</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/fft.html">FFT</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/nn.html">Neural Networks</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/optimizers.html">Optimizers</a></li>
-<li class="toctree-l1"><a class="reference internal" href="python/tree_utils.html">Tree Utils</a></li>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
+<ul class="nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/array.html">Array</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-1"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.html">mlx.core.array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.astype.html">mlx.core.array.astype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.item.html">mlx.core.array.item</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.tolist.html">mlx.core.array.tolist</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.dtype.html">mlx.core.array.dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.ndim.html">mlx.core.array.ndim</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.shape.html">mlx.core.array.shape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.size.html">mlx.core.array.size</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.Dtype.html">mlx.core.Dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.abs.html">mlx.core.array.abs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.all.html">mlx.core.array.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.any.html">mlx.core.array.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.argmax.html">mlx.core.array.argmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.argmin.html">mlx.core.array.argmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.cos.html">mlx.core.array.cos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.dtype.html">mlx.core.array.dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.exp.html">mlx.core.array.exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.log.html">mlx.core.array.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.log1p.html">mlx.core.array.log1p</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.logsumexp.html">mlx.core.array.logsumexp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.max.html">mlx.core.array.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.mean.html">mlx.core.array.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.min.html">mlx.core.array.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.prod.html">mlx.core.array.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.reciprocal.html">mlx.core.array.reciprocal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.reshape.html">mlx.core.array.reshape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.rsqrt.html">mlx.core.array.rsqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.sin.html">mlx.core.array.sin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.split.html">mlx.core.array.split</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.sqrt.html">mlx.core.array.sqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.square.html">mlx.core.array.square</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.sum.html">mlx.core.array.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.transpose.html">mlx.core.array.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.T.html">mlx.core.array.T</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array.var.html">mlx.core.array.var</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">C++ API Reference</span></p>
-<ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/devices_and_streams.html">Devices and Streams</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-2"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.Device.html">mlx.core.Device</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.default_device.html">mlx.core.default_device</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.set_default_device.html">mlx.core.set_default_device</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.Stream.html">mlx.core.Stream</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.default_stream.html">mlx.core.default_stream</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.new_stream.html">mlx.core.new_stream</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.set_default_stream.html">mlx.core.set_default_stream</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/ops.html">Operations</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-3"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.abs.html">mlx.core.abs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.add.html">mlx.core.add</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.all.html">mlx.core.all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.allclose.html">mlx.core.allclose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.any.html">mlx.core.any</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.arange.html">mlx.core.arange</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.arccos.html">mlx.core.arccos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.arccosh.html">mlx.core.arccosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.arcsin.html">mlx.core.arcsin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.arcsinh.html">mlx.core.arcsinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.arctan.html">mlx.core.arctan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.arctanh.html">mlx.core.arctanh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.argmax.html">mlx.core.argmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.argmin.html">mlx.core.argmin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.argpartition.html">mlx.core.argpartition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.argsort.html">mlx.core.argsort</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array_equal.html">mlx.core.array_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.broadcast_to.html">mlx.core.broadcast_to</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.concatenate.html">mlx.core.concatenate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.convolve.html">mlx.core.convolve</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv1d.html">mlx.core.conv1d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv2d.html">mlx.core.conv2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.cos.html">mlx.core.cos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.cosh.html">mlx.core.cosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.divide.html">mlx.core.divide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.equal.html">mlx.core.equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.erf.html">mlx.core.erf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.erfinv.html">mlx.core.erfinv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.exp.html">mlx.core.exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.full.html">mlx.core.full</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.greater.html">mlx.core.greater</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.less.html">mlx.core.less</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.less_equal.html">mlx.core.less_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.load.html">mlx.core.load</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.log.html">mlx.core.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.log2.html">mlx.core.log2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.log10.html">mlx.core.log10</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.log1p.html">mlx.core.log1p</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.logaddexp.html">mlx.core.logaddexp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.logical_not.html">mlx.core.logical_not</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.logsumexp.html">mlx.core.logsumexp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.matmul.html">mlx.core.matmul</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.max.html">mlx.core.max</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.maximum.html">mlx.core.maximum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.mean.html">mlx.core.mean</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.min.html">mlx.core.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.minimum.html">mlx.core.minimum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.multiply.html">mlx.core.multiply</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.negative.html">mlx.core.negative</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.ones.html">mlx.core.ones</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.ones_like.html">mlx.core.ones_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.partition.html">mlx.core.partition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.pad.html">mlx.core.pad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.prod.html">mlx.core.prod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.reciprocal.html">mlx.core.reciprocal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.reshape.html">mlx.core.reshape</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.rsqrt.html">mlx.core.rsqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.save.html">mlx.core.save</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.savez.html">mlx.core.savez</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.savez_compressed.html">mlx.core.savez_compressed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.sigmoid.html">mlx.core.sigmoid</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.sign.html">mlx.core.sign</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.sin.html">mlx.core.sin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.sinh.html">mlx.core.sinh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.softmax.html">mlx.core.softmax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.sort.html">mlx.core.sort</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.split.html">mlx.core.split</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.sqrt.html">mlx.core.sqrt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.square.html">mlx.core.square</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.squeeze.html">mlx.core.squeeze</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.stop_gradient.html">mlx.core.stop_gradient</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.subtract.html">mlx.core.subtract</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.sum.html">mlx.core.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.take.html">mlx.core.take</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.take_along_axis.html">mlx.core.take_along_axis</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.tan.html">mlx.core.tan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.tanh.html">mlx.core.tanh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.transpose.html">mlx.core.transpose</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.var.html">mlx.core.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.where.html">mlx.core.where</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.zeros.html">mlx.core.zeros</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.zeros_like.html">mlx.core.zeros_like</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/random.html">Random</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.seed.html">mlx.core.random.seed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.key.html">mlx.core.random.key</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.split.html">mlx.core.random.split</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.bernoulli.html">mlx.core.random.bernoulli</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.categorical.html">mlx.core.random.categorical</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.gumbel.html">mlx.core.random.gumbel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.normal.html">mlx.core.random.normal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.randint.html">mlx.core.random.randint</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.random.truncated_normal.html">mlx.core.random.truncated_normal</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.eval.html">mlx.core.eval</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.grad.html">mlx.core.grad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.value_and_grad.html">mlx.core.value_and_grad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.jvp.html">mlx.core.jvp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.vjp.html">mlx.core.vjp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.vmap.html">mlx.core.vmap</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.fft.html">mlx.core.fft.fft</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.ifft.html">mlx.core.fft.ifft</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.fft2.html">mlx.core.fft.fft2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.ifft2.html">mlx.core.fft.ifft2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.fftn.html">mlx.core.fft.fftn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.ifftn.html">mlx.core.fft.ifftn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.rfft.html">mlx.core.fft.rfft</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.irfft.html">mlx.core.fft.irfft</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.rfft2.html">mlx.core.fft.rfft2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.irfft2.html">mlx.core.fft.irfft2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.rfftn.html">mlx.core.fft.rfftn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fft.irfftn.html">mlx.core.fft.irfftn</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/nn.html">Neural Networks</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-7"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.GELU.html">mlx.nn.GELU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.LayerNorm.html">mlx.nn.LayerNorm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.RMSNorm.html">mlx.nn.RMSNorm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.GroupNorm.html">mlx.nn.GroupNorm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.RoPE.html">mlx.nn.RoPE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.MultiHeadAttention.html">mlx.nn.MultiHeadAttention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.nn.Sequential.html">mlx.nn.Sequential</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary_functions/mlx.nn.gelu.html">mlx.nn.gelu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary_functions/mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.optimizers.OptimizerState.html">mlx.optimizers.OptimizerState</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.optimizers.Optimizer.html">mlx.optimizers.Optimizer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.optimizers.SGD.html">mlx.optimizers.SGD</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.optimizers.Adam.html">mlx.optimizers.Adam</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>
+</ul>
+</li>
+</ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">C++ API Reference</span></p>
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="cpp/ops.html">Operations</a></li>
 </ul>
-<p class="caption" role="heading"><span class="caption-text">Further Reading</span></p>
-<ul>
+<p aria-level="2" class="caption" role="heading"><span class="caption-text">Further Reading</span></p>
+<ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="dev/extensions.html">Developer Documentation</a></li>
 </ul>
 
-        </div>
+    </div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+  </div>
+  
+  <div id="rtd-footer-container"></div>
+
+
       </div>
-    </nav>
+      
+      <main id="main-content" class="bd-main">
+        
+        
 
-    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
-          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
-          <a href="index.html">MLX</a>
-      </nav>
+<div class="sbt-scroll-pixel-helper"></div>
 
-      <div class="wy-nav-content">
-        <div class="rst-content">
-          <div role="navigation" aria-label="Page navigation">
-  <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
-      <li class="breadcrumb-item active">Search</li>
-      <li class="wy-breadcrumbs-aside">
-      </li>
-  </ul>
-  <hr/>
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item"><label class="sidebar-toggle primary-toggle btn btn-sm" for="__primary" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <span class="fa-solid fa-bars"></span>
+</label></div>
+      
+    </div>
+  
+  
+    <div class="header-article-items__end">
+      
+        <div class="header-article-item">
+
+<div class="article-header-buttons">
+
+
+<a href="https://github.com/ml-explore/mlx" target="_blank"
+   class="btn btn-sm btn-source-repository-button"
+   title="Source repository"
+   data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fab fa-github"></i>
+  </span>
+
+</a>
+
+
+
+
+<button onclick="toggleFullScreen()"
+  class="btn btn-sm btn-fullscreen-button"
+  title="Fullscreen mode"
+  data-bs-placement="bottom" data-bs-toggle="tooltip"
+>
+  
+
+<span class="btn__icon-container">
+  <i class="fas fa-expand"></i>
+  </span>
+
+</button>
+
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm navbar-btn theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <span class="theme-switch nav-link" data-mode="light"><i class="fa-solid fa-sun fa-lg"></i></span>
+    <span class="theme-switch nav-link" data-mode="dark"><i class="fa-solid fa-moon fa-lg"></i></span>
+    <span class="theme-switch nav-link" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg"></i></span>
+  </button>
+`);
+</script>
+
+
+<script>
+document.write(`
+  <button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass fa-lg"></i>
+  </button>
+`);
+</script>
+
+</div></div>
+      
+    </div>
+  
 </div>
-          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
-           <div itemprop="articleBody">
-             
-  <noscript>
-  <div id="fallback" class="admonition warning">
-    <p class="last">
-      Please activate JavaScript to enable the search functionality.
-    </p>
-  </div>
-  </noscript>
-
-  
-  <div id="search-results">
-  
-  </div>
-
-           </div>
-          </div>
-          <footer>
-
-  <hr/>
-
-  <div role="contentinfo">
-    <p>&#169; Copyright 2023, MLX Contributors.</p>
-  </div>
-
-  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
-    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
-    provided by <a href="https://readthedocs.org">Read the Docs</a>.
-   
-
-</footer>
-        </div>
+</div>
+              
+              
+  <div class="bd-search-container">
+    <h1>Search</h1>
+    <noscript>
+      <div class="admonition error">
+        <p class="admonition-title">Error</p>
+        <p>Please activate JavaScript to enable the search functionality.</p>
       </div>
-    </section>
+    </noscript>
+    
+<form class="bd-search d-flex align-items-center"
+      action="#"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         id="search-input"
+         placeholder="Search..."
+         aria-label="Search..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+    <div id="search-results"></div>
   </div>
   <script>
-      jQuery(function () {
-          SphinxRtdTheme.Navigation.enable(true);
-      });
+    // Activate the search field on page load
+    let searchInput = document.querySelector("form.bd-search input");
+    if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+        console.log("[PST]: Set focus on search field.");
+    }
   </script>
-  <script>
-    jQuery(function() { Search.loadIndex("searchindex.js"); });
-  </script>
+
+              
+              
+              
+              
+                <footer class="prev-next-footer">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+<div class="bd-footer-content__inner container">
   
-  <script id="searchindexloader"></script>
-   
+  <div class="footer-item">
+    
+<p class="component-author">
+By MLX Contributors
+</p>
 
+  </div>
+  
+  <div class="footer-item">
+    
 
-</body>
+  <p class="copyright">
+    
+      © Copyright 2023, MLX Contributors.
+      <br/>
+    
+  </p>
+
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+  <div class="footer-item">
+    
+  </div>
+  
+</div>
+          </footer>
+        
+
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script src="_static/scripts/bootstrap.js?digest=5b4479735964841361fd"></script>
+<script src="_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd"></script>
+
+  <footer class="bd-footer">
+  </footer>
+  </body>
 </html>
