@@ -349,10 +349,10 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     int stride_vec = batch_size_vec == 1 ? 0 : in_vector_len;
 
     // Determine if inputs have simple batching / broadcasting
-    bool contiguous_kernel = (
-      batch_size_out == std::max(batch_size_mat, batch_size_vec) &&
-      (batch_size_mat == batch_size_vec ||
-       std::min(batch_size_mat, batch_size_vec) == 1));
+    bool contiguous_kernel =
+        (batch_size_out == std::max(batch_size_mat, batch_size_vec) &&
+         (batch_size_mat == batch_size_vec ||
+          std::min(batch_size_mat, batch_size_vec) == 1));
 
     int nc_dim = out.ndim() - 2;
 
@@ -415,13 +415,15 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&stride_vec, sizeof(int), 5);
       compute_encoder->setBytes(&stride_mat, sizeof(int), 6);
     } else {
-      // In case of complex broadcasting, we consider the shape[:-2] and 
+      // In case of complex broadcasting, we consider the shape[:-2] and
       // strides [:-2] to determine the location of a batch
       // nc_dim = out.ndim() - 2
       compute_encoder->setBytes(&nc_dim, sizeof(int), 5);
       compute_encoder->setBytes(out.shape().data(), nc_dim * sizeof(int), 6);
-      compute_encoder->setBytes(vec.strides().data(), nc_dim * sizeof(size_t), 7);
-      compute_encoder->setBytes(mat.strides().data(), nc_dim * sizeof(size_t), 8);
+      compute_encoder->setBytes(
+          vec.strides().data(), nc_dim * sizeof(size_t), 7);
+      compute_encoder->setBytes(
+          mat.strides().data(), nc_dim * sizeof(size_t), 8);
     }
 
     compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
