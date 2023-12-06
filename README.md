@@ -2,7 +2,7 @@
 
 [**Quickstart**](#quickstart) | [**Installation**](#installation) |
 [**Documentation**](https://ml-explore.github.io/mlx/build/html/index.html) |
-[**Examples**](#examples)
+[**Examples**](#examples) | [![CircleCI](https://circleci.com/gh/ml-explore/mlx.svg?style=svg)](https://circleci.com/gh/ml-explore/mlx)
 
 MLX is an array framework for machine learning on Apple silicon, brought to you
 by Apple machine learning research.
