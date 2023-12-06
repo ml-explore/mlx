@@ -33,7 +33,7 @@ def silu(x):
 
 
 def gelu(x):
-    """Applies the Gaussian Error Linear Units function.
+    r"""Applies the Gaussian Error Linear Units function.
 
     .. math::
         \\textrm{GELU}(x) = x * \Phi(x)
