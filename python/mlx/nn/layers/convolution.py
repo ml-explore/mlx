@@ -78,7 +78,7 @@ class Conv2d(Module):
         out_channels (int): The number of output channels.
         kernel_size (int or tuple): The size of the convolution filters.
         stride (int or tuple, optional): The size of the stride when
-            applying the filter. Default: 0.
+            applying the filter. Default: 1.
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: 0.
         bias (bool, optional): If ``True`` add a learnable bias to the
