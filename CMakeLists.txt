@@ -18,7 +18,7 @@ option(MLX_BUILD_METAL "Build metal backend" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.0.1)
+  set(MLX_VERSION 0.0.3)
 endif()
 
 # ----------------------------- Lib -----------------------------
@@ -41,16 +41,19 @@ elseif (MLX_BUILD_METAL)
   message(STATUS "Building METAL sources")
   add_compile_definitions(_METAL_)
 
-  execute_process(COMMAND zsh "-c" "/usr/bin/sw_vers | cut -f2- -d: | sed -n 2p | grep -Eo '[0-9]+.[0-9]+'"
+  execute_process(COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
                   OUTPUT_VARIABLE MACOS_VERSION)
 
-  message(STATUS "Detected macOS version ${MACOS_VERSION}")
-  if (${MACOS_VERSION} GREATER_EQUAL 14.0)
+  message(STATUS "Building with SDK for MacOS version ${MACOS_VERSION}")
+  
+  if (${MACOS_VERSION} GREATER_EQUAL 14.2)
+    set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
+  elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14_iOS17-beta.zip)
   elseif (${MACOS_VERSION} GREATER_EQUAL 13.3)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS13.3_iOS16.4.zip)
   else()
-    set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS13_iOS16.zip)
+    message(FATAL_ERROR "MLX requires MacOS >= 13.4 to be built with MLX_BUILD_METAL=ON" )
   endif()
 
   FetchContent_Declare(
