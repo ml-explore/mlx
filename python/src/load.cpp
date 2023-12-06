@@ -140,12 +140,11 @@ class PyFileReader : public io::Reader {
   }
 
   void read(char* data, size_t n) override {
-
     py::gil_scoped_acquire gil;
 
     py::object bytes_read =
         readinto_func_(py::memoryview::from_buffer(data, {n}, {sizeof(char)}));
-    
+
     if (bytes_read.is_none() || py::cast<size_t>(bytes_read) < n) {
       throw std::runtime_error("[load] Failed to read from python stream");
     }
@@ -233,7 +232,7 @@ class PyFileWriter : public io::Writer {
   }
 
   bool is_open() const override {
-    bool out;    
+    bool out;
     {
       py::gil_scoped_acquire gil;
       out = !pyostream_.attr("closed").cast<bool>();
@@ -288,12 +287,10 @@ class PyFileWriter : public io::Writer {
 };
 
 void mlx_save_helper(py::object file, array a, bool retain_graph) {
-
   if (py::isinstance<py::str>(file)) {
     save(py::cast<std::string>(file), a, retain_graph);
     return;
   } else if (is_ostream_object(file)) {
-
     auto writer = std::make_shared<PyFileWriter>(file);
     {
       py::gil_scoped_release gil;
