@@ -203,7 +203,7 @@ workflows:
               ignore: /.*/
           matrix:
             parameters:
-              python_version: ["3.8", "3.9", "3.10", "3.11"]
+              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               macos_version: ["13", "14"]
   nightly_build:
     when: << pipeline.parameters.nightly_build >>
@@ -211,7 +211,7 @@ workflows:
       - build_package:
           matrix:
             parameters:
-              python_version: ["3.8", "3.9", "3.10", "3.11"]
+              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               macos_version: ["13", "14"]
   weekly_build:
     when: << pipeline.parameters.weekly_build >>
@@ -219,5 +219,5 @@ workflows:
       - build_dev_release:
           matrix:
             parameters:
-              python_version: ["3.8", "3.9", "3.10", "3.11"]
+              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               macos_version: ["13", "14"]
