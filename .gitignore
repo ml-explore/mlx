@@ -8,6 +8,7 @@ __pycache__/
 
 # Metal libraries
 *.metallib
+venv/
 
 # Distribution / packaging
 python/mlx/share

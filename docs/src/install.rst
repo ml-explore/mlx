@@ -55,7 +55,7 @@ For developing use an editable install:
 To make sure the install is working run the tests with:
 
 .. code-block:: shell
-
+  pip install ".[testing]"
   python -m unittest discover python/tests
 
 C++ API

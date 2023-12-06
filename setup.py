@@ -145,6 +145,9 @@ if __name__ == "__main__":
         package_dir=package_dir,
         package_data=package_data,
         include_package_data=True,
+        extras_require={
+            "testing": ["numpy", "torch"]
+        },
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={"build_ext": CMakeBuild},
         zip_safe=False,
