@@ -131,7 +131,7 @@ back and go to our example to give ourselves a more concrete image.
         * A primitive must know how to evaluate itself on the CPU/GPU
         * for the given inputs and populate the output array.
         *
-        * To avoid unecessary allocations, the evaluation function
+        * To avoid unnecessary allocations, the evaluation function
         * is responsible for allocating space for the array.
         */
         void eval_cpu(const std::vector<array>& inputs, array& out) override;
