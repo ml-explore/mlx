@@ -63,14 +63,6 @@ To make sure the install is working run the tests with:
 
   python -m unittest discover python/tests
 
-If you have multiple Xcode installations and wish to use 
-only one while building, you can do so by adding the 
-follwing environment variable before building 
-
-.. code-block:: shell
-
-  export DEVELOPER_DIR="/path/to/Xcode.app/Contents/Developer/"
-
 C++ API
 ^^^^^^^
 
@@ -124,3 +116,21 @@ should point to the path to the built metal library.
      - ON
    * - MLX_BUILD_PYTHON_BINDINGS
      - OFF
+
+
+.. note::
+
+    If you have multiple Xcode installations and wish to use 
+    a specific one while building, you can do so by adding the 
+    following environment variable before building 
+
+    .. code-block:: shell
+
+      export DEVELOPER_DIR="/path/to/Xcode.app/Contents/Developer/"
+
+    Further, you can use the following command to find out which 
+    MacOS SDK will be used
+
+    .. code-block:: shell
+
+      xcrun -sdk macosx --show-sdk-version
