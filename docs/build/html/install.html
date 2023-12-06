@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Build and Install &#8212; MLX 0.0.0 documentation</title>
+    <title>Build and Install &#8212; MLX 0.0.3 documentation</title>
   
   
   
@@ -134,8 +134,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.0 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.0 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.3 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.3 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -563,6 +563,11 @@ silicon computer is</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>mlx
 </pre></div>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>MLX is only available on devices running MacOS &gt;= 13.3
+It is highly recommended to use MacOS 14 (Sonoma)</p>
+</div>
 </section>
 <section id="build-from-source">
 <h2>Build from source<a class="headerlink" href="#build-from-source" title="Permalink to this heading">#</a></h2>
@@ -571,6 +576,7 @@ silicon computer is</p>
 <ul class="simple">
 <li><p>A C++ compiler with C++17 support (e.g. Clang &gt;= 5.0)</p></li>
 <li><p><a class="reference external" href="https://cmake.org/">cmake</a> – version 3.24 or later, and <code class="docutils literal notranslate"><span class="pre">make</span></code></p></li>
+<li><p>Xcode &gt;= 14.3 (Xcode &gt;= 15.0 for MacOS 14 and above)</p></li>
 </ul>
 </section>
 <section id="python-api">
@@ -654,6 +660,20 @@ should point to the path to the built metal library.</p>
 </tr>
 </tbody>
 </table>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>If you have multiple Xcode installations and wish to use
+a specific one while building, you can do so by adding the
+following environment variable before building</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">DEVELOPER_DIR</span><span class="o">=</span><span class="s2">&quot;/path/to/Xcode.app/Contents/Developer/&quot;</span>
+</pre></div>
+</div>
+<p>Further, you can use the following command to find out which
+MacOS SDK will be used</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>xcrun<span class="w"> </span>-sdk<span class="w"> </span>macosx<span class="w"> </span>--show-sdk-version
+</pre></div>
+</div>
+</div>
 </section>
 </section>
 </section>
