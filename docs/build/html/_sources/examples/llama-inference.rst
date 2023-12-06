@@ -321,7 +321,7 @@ which can then be used to update the model. Note that the method above incurs
 several unnecessary copies from disk to numpy and then from numpy to MLX. It
 will be replaced in the future with direct loading to MLX.
 
-You can download the full example code in `mlx-examples <code>`_. Assuming, the
+You can download the full example code in `mlx-examples`_. Assuming, the
 existence of ``weights.pth`` and ``tokenizer.model`` in the current working
 directory we can play around with our inference script as follows (the timings
 are representative of an M1 Ultra and the 7B parameter Llama model):
@@ -369,9 +369,9 @@ Scripts
 
 .. admonition:: Download the code
 
-   The full example code is available in `mlx-examples <code>`_.
+   The full example code is available in `mlx-examples`_.
 
-.. code: `https://github.com/ml-explore/mlx-examples/tree/main/llama`_
+.. _mlx-examples: https://github.com/ml-explore/mlx-examples/tree/main/llama
 
 .. [1] Su, J., Lu, Y., Pan, S., Murtadha, A., Wen, B. and Liu, Y., 2021.
    Roformer: Enhanced transformer with rotary position embedding. arXiv

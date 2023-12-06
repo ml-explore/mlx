@@ -127,5 +127,5 @@ Finally, we put it all together by instantiating the model, the
   This should not be confused with :func:`mlx.core.value_and_grad`.
 
 The model should train to a decent accuracy (about 95%) after just a few passes
-over the training set. The `full example <https://github.com/ml-explore/mlx-examples/tree/main/mlp>`_
+over the training set. The `full example <https://github.com/ml-explore/mlx-examples/tree/main/mnist>`_
 is available in the MLX GitHub repo.
