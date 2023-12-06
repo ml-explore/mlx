@@ -11,6 +11,10 @@ silicon computer is
 
     pip install mlx
 
+.. note::
+    MLX is only available on devices running MacOS >= 13.3 
+    It is highly recommended to use MacOS 14 (Sonoma)
+
 Build from source
 -----------------
 
@@ -19,6 +23,7 @@ Build Requirements
 
 - A C++ compiler with C++17 support (e.g. Clang >= 5.0)
 - `cmake <https://cmake.org/>`_ -- version 3.24 or later, and ``make``
+- Xcode >= 14.3 (Xcode >= 15.0 for MacOS 14 and above)
 
 
 Python API
@@ -57,6 +62,14 @@ To make sure the install is working run the tests with:
 .. code-block:: shell
 
   python -m unittest discover python/tests
+
+If you have multiple Xcode installations and wish to use 
+only one while building, you can do so by adding the 
+follwing environment variable before building 
+
+.. code-block:: shell
+
+  export DEVELOPER_DIR="/path/to/Xcode.app/Contents/Developer/"
 
 C++ API
 ^^^^^^^
