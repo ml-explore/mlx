@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Developer Documentation &#8212; MLX 0.0.0 documentation</title>
+    <title>Developer Documentation &#8212; MLX 0.0.3 documentation</title>
   
   
   
@@ -133,8 +133,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.0 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.0 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.3 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.3 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -684,7 +684,7 @@ back and go to our example to give ourselves a more concrete image.</p>
 <span class="cm">    * A primitive must know how to evaluate itself on the CPU/GPU</span>
 <span class="cm">    * for the given inputs and populate the output array.</span>
 <span class="cm">    *</span>
-<span class="cm">    * To avoid unecessary allocations, the evaluation function</span>
+<span class="cm">    * To avoid unnecessary allocations, the evaluation function</span>
 <span class="cm">    * is responsible for allocating space for the array.</span>
 <span class="cm">    */</span>
 <span class="w">    </span><span class="kt">void</span><span class="w"> </span><span class="nf">eval_cpu</span><span class="p">(</span><span class="k">const</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">array</span><span class="o">&gt;&amp;</span><span class="w"> </span><span class="n">inputs</span><span class="p">,</span><span class="w"> </span><span class="n">array</span><span class="o">&amp;</span><span class="w"> </span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="k">override</span><span class="p">;</span>
