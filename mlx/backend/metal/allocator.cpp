@@ -153,7 +153,7 @@ MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
       buffer_cache_(device_),
       peak_allocated_size_(0),
-      block_limit_(2.5 * device_->recommendedMaxWorkingSetSize()) {}
+      block_limit_(4.0 * device_->recommendedMaxWorkingSetSize()) {}
 
 Buffer MetalAllocator::malloc(size_t size) {
   // Align up memory
