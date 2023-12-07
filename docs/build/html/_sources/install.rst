@@ -11,9 +11,33 @@ silicon computer is
 
     pip install mlx
 
+To install from PyPI you must meet the following requirements:
+
+- Using an M series chip (Apple silicon)
+- Using a native Python >= 3.8
+- MacOS >= 13.3
+
 .. note::
     MLX is only available on devices running MacOS >= 13.3 
     It is highly recommended to use MacOS 14 (Sonoma)
+
+Troubleshooting
+^^^^^^^^^^^^^^^
+
+*My OS and Python versions are in the required range but pip still does not find
+a matching distribution.*
+
+Probably you are using a non-native Python. The output of
+
+.. code-block:: shell
+
+  python -c "import platform; print(platform.processor())"
+
+should be ``arm``. If it is ``i386`` (and you have M series machine) then you
+are using a non-native Python. Switch your Python to a native Python. A good
+way to do this is with
+`Conda <https://stackoverflow.com/questions/65415996/how-to-specify-the-architecture-or-platform-for-a-new-conda-environment-apple>`_.
+
 
 Build from source
 -----------------
@@ -61,6 +85,7 @@ To make sure the install is working run the tests with:
 
 .. code-block:: shell
 
+  pip install ".[testing]"
   python -m unittest discover python/tests
 
 C++ API
