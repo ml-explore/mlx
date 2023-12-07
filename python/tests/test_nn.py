@@ -30,6 +30,16 @@ class TestNN(mlx_tests.MLXTestCase):
         outputs = layer(inputs)
         self.assertEqual(tuple(outputs.shape), (2, 2))
 
+        x = mx.full((2, 2), 10, dtype=mx.float32)
+        setattr(layer, "weight", x)
+        self.assertEqual(layer.weight.dtype, mx.int8)
+        self.assertEqual(tuple(layer.weight.shape), (2, 2))
+        res = layer(x)
+        self.assertEqual(res.dtype, mx.float32)
+        self.assertEqual(tuple(res.shape), (2, 2))
+        # note the previous test set the weight to 10 so its 10 @ 10
+        self.assertEqual(res.tolist(), mx.full((2, 2), 200, dtype=mx.float32).tolist())
+
     def test_cross_entropy(self):
         logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
         targets = mx.array([0, 1])
