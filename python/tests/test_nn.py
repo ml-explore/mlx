@@ -18,6 +18,18 @@ class TestNN(mlx_tests.MLXTestCase):
         outputs = layer(inputs)
         self.assertEqual(tuple(outputs.shape), (10, 8))
 
+    def test_int8_quantize(self):
+        inputs = mx.full((2, 2), 2.0, dtype=mx.float32)
+        new_inputs, scale = nn.absmax_quantize(inputs)
+        res = new_inputs.astype(mx.float32) * scale
+        assert np.allclose(res, inputs)
+
+    def test_linear_quantize(self):
+        inputs = mx.full((2, 2), 2.0, dtype=mx.float32)
+        layer = nn.AbsmaxQuantizedLinear(input_dims=2, output_dims=2)
+        outputs = layer(inputs)
+        self.assertEqual(tuple(outputs.shape), (2, 2))
+
     def test_cross_entropy(self):
         logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
         targets = mx.array([0, 1])

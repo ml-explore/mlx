@@ -34,3 +34,43 @@ class Linear(Module):
         if "bias" in self:
             x = x + self.bias
         return x
+
+
+def absmax_quantize(x: mx.array):
+    """Quantize the input to int8 using absmax method.
+    Returns:
+        (mx.array, mx.array): (quantized x, scale)
+    """
+    scale = x.abs().max(axis=1) / 127.0
+    new_x = (x / scale).astype(mx.int8)
+    return (
+        new_x,
+        scale,
+    )
+
+
+class AbsmaxQuantizedLinear(Module):
+    """Applies an affine transformation to the input.
+
+    Args:
+        input_dims (int): The dimensionality of the input features
+        output_dims (int): The dimensionality of the output features
+        bias (bool): If set to False then the layer will not use a bias
+
+    Note:
+        This layer expects the weight to be a int8 mlx.array, utilized absmax_quantize
+        to get the int8 weight and scale.
+    """
+
+    def __init__(self, input_dims: int, output_dims: int, bias: bool = True):
+        super().__init__()
+        self.weight = mx.ones(shape=(output_dims, input_dims), dtype=mx.int8)
+        self.scale = mx.ones((output_dims, input_dims))
+        if bias:
+            self.bias = mx.zeros((output_dims,))
+
+    def __call__(self, x: mx.array) -> mx.array:
+        x = x @ (self.weight.T * self.scale)
+        if "bias" in self:
+            x = x + self.bias
+        return x
