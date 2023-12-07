@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import Any
+from typing import Any, Tuple
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -37,11 +37,16 @@ class Linear(Module):
         return x
 
 
-def absmax_quantize(x: mx.array):
+def absmax_quantize(x: mx.array) -> Tuple[mx.array, mx.array]:
     """Quantize the input to int8 using absmax method.
     Returns:
         (mx.array, mx.array): (quantized x, scale)
     """
+    assert x.dtype in (
+        mx.float32,
+        mx.float16,
+        mx.bfloat16,
+    ), f"Unsupported weight for quantization dtype: {x.dtype}"
     scale = x.abs().max(axis=1) / 127.0
     new_x = (x / scale).astype(mx.int8)
     return (

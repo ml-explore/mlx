@@ -19,10 +19,25 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(tuple(outputs.shape), (10, 8))
 
     def test_int8_quantize(self):
-        inputs = mx.full((2, 2), 2.0, dtype=mx.float32)
-        new_inputs, scale = nn.absmax_quantize(inputs)
-        res = new_inputs * scale
-        assert np.allclose(res, inputs)
+        key = mx.random.key(42)
+        for dtype in [mx.float32, mx.bfloat16, mx.float16]:
+            for shape in [(2, 2), (1, 2048), (2048, 2048)]:
+                # random.uniform with float16 produces 0s
+                inputs = (
+                    mx.random.uniform(shape=shape, key=key, dtype=dtype)
+                    if dtype != mx.float16
+                    else mx.full(shape, 1, dtype=dtype)
+                )
+                new_inputs, scale = nn.absmax_quantize(inputs)
+                self.assertEqual(new_inputs.dtype, mx.int8)
+                self.assertEqual(tuple(new_inputs.shape), shape)
+                self.assertEqual(scale.dtype, mx.float32)
+                self.assertEqual(tuple(scale.shape), (shape[0],))
+                res = (new_inputs * scale).astype(dtype)
+                np.testing.assert_allclose(res, inputs, atol=1, rtol=1)
+
+        with self.assertRaises(AssertionError):
+            nn.absmax_quantize(mx.full((2, 2), 2, dtype=mx.int32))
 
     def test_linear_quantize(self):
         inputs = mx.full((2, 2), 2.0, dtype=mx.float32)
