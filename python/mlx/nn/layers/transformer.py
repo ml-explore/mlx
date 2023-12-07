@@ -161,6 +161,7 @@ class TransformerDecoderLayer(Module):
 
         y = self.ln3(x)
         y = self.linear1(y)
+        y = mx.maximum(y, 0)
         y = self.linear2(y)
         x = x + y
 
