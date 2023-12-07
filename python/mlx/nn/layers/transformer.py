@@ -213,8 +213,8 @@ class Transformer(Module):
                 num_decoder_layers, dims, num_heads, mlp_dims
             )
 
-    def __call__(self, src, tgt, src_mask, tgt_mask):
+    def __call__(self, src, tgt, src_mask, tgt_mask, memory_mask):
         memory = self.encoder(src, src_mask)
-        output = self.decoder(tgt, memory, src_mask, tgt_mask)
+        output = self.decoder(tgt, memory, tgt_mask, memory_mask)
 
         return output
