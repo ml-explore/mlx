@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
+from typing import Any
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -68,6 +69,12 @@ class AbsmaxQuantizedLinear(Module):
         self.scale = mx.ones((output_dims, input_dims))
         if bias:
             self.bias = mx.zeros((output_dims,))
+
+    def __setattr__(self, key: str, val: Any):
+        if key == "weight" and isinstance(val, mx.array) and val.dtype != mx.int8:
+            val, scale = absmax_quantize(val)
+            self.scale = scale
+        return super().__setattr__(key, val)
 
     def __call__(self, x: mx.array) -> mx.array:
         x = x @ (self.weight.T * self.scale)
