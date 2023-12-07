@@ -21,7 +21,7 @@ class TestNN(mlx_tests.MLXTestCase):
     def test_int8_quantize(self):
         inputs = mx.full((2, 2), 2.0, dtype=mx.float32)
         new_inputs, scale = nn.absmax_quantize(inputs)
-        res = new_inputs.astype(mx.float32) * scale
+        res = new_inputs * scale
         assert np.allclose(res, inputs)
 
     def test_linear_quantize(self):
