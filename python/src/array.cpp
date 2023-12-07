@@ -436,6 +436,7 @@ void init_array(py::module_& m) {
           "__repr__",
           [](const Dtype& t) {
             std::ostringstream os;
+            os << "mlx.core.";
             os << t;
             return os.str();
           })
