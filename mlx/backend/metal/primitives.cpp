@@ -363,6 +363,10 @@ void Divide::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "div");
 }
 
+void Remainder::eval_gpu(const std::vector<array>& inputs, array& out) {
+  binary_op(inputs, out, "rem");
+}
+
 void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, equal_nan_ ? "naneq" : "eq");
 }

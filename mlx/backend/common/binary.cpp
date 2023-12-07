@@ -82,6 +82,29 @@ void Divide::eval(const std::vector<array>& inputs, array& out) {
   binary(a, b, out, [](auto x, auto y) { return x / y; });
 }
 
+struct RemainderFn {
+  template <typename T>
+  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    return std::fmod(numerator, denominator);
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_integral_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    return numerator % denominator;
+  }
+};
+
+void Remainder::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  binary(a, b, out, RemainderFn{});
+}
+
 void Equal::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   if (equal_nan_) {

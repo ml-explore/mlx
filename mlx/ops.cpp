@@ -1438,6 +1438,26 @@ array operator/(const array& a, double b) {
   return divide(a, array(b));
 }
 
+array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  auto dtype = promote_types(a.dtype(), b.dtype());
+  auto inputs = broadcast_arrays(
+      {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
+  return array(
+      inputs[0].shape(),
+      dtype,
+      std::make_unique<Remainder>(to_stream(s)),
+      inputs);
+}
+array operator%(const array& a, const array& b) {
+  return remainder(a, b);
+}
+array operator%(double a, const array& b) {
+  return remainder(array(a), b);
+}
+array operator%(const array& a, double b) {
+  return remainder(a, array(b));
+}
+
 array maximum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =

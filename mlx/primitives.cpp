@@ -738,6 +738,51 @@ std::pair<array, int> Divide::vmap(
   return {divide(a, b, stream()), to_ax};
 }
 
+std::vector<array> Remainder::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      vjps.push_back(cotan);
+    } else {
+      auto x_over_y = divide(primals[0], primals[1], stream());
+      x_over_y = astype(x_over_y, int32, stream());
+      vjps.push_back(negative(multiply(x_over_y, cotan, stream()), stream()));
+    }
+  }
+  return vjps;
+}
+
+array Remainder::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto jvp_fun = [&](int i) {
+    int arg = argnums[i];
+    if (arg == 0) {
+      return tangents[i];
+    } else {
+      auto x_over_y = divide(primals[0], primals[1], stream());
+      x_over_y = astype(x_over_y, int32, stream());
+      return negative(multiply(x_over_y, tangents[i], stream()), stream());
+    }
+  };
+  auto out = jvp_fun(0);
+  if (argnums.size() > 1) {
+    out = add(out, jvp_fun(1), stream());
+  }
+  return out;
+}
+
+std::pair<array, int> Remainder::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {remainder(a, b, stream()), to_ax};
+}
+
 std::pair<array, int> Equal::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
