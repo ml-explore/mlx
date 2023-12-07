@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Build and Install &#8212; MLX 0.0.3 documentation</title>
+    <title>Build and Install &#8212; MLX 0.0.4 documentation</title>
   
   
   
@@ -134,8 +134,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.3 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.3 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.4 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.4 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -536,7 +536,10 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#install-from-pypi">Install from PyPI</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#install-from-pypi">Install from PyPI</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-from-source">Build from source</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#build-requirements">Build Requirements</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">Python API</a></li>
@@ -563,11 +566,30 @@ silicon computer is</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>mlx
 </pre></div>
 </div>
+<p>To install from PyPI you must meet the following requirements:</p>
+<ul class="simple">
+<li><p>Using an M series chip (Apple silicon)</p></li>
+<li><p>Using a native Python &gt;= 3.8</p></li>
+<li><p>MacOS &gt;= 13.3</p></li>
+</ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>MLX is only available on devices running MacOS &gt;= 13.3
 It is highly recommended to use MacOS 14 (Sonoma)</p>
 </div>
+<section id="troubleshooting">
+<h3>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permalink to this heading">#</a></h3>
+<p><em>My OS and Python versions are in the required range but pip still does not find
+a matching distribution.</em></p>
+<p>Probably you are using a non-native Python. The output of</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import platform; print(platform.processor())&quot;</span>
+</pre></div>
+</div>
+<p>should be <code class="docutils literal notranslate"><span class="pre">arm</span></code>. If it is <code class="docutils literal notranslate"><span class="pre">i386</span></code> (and you have M series machine) then you
+are using a non-native Python. Switch your Python to a native Python. A good
+way to do this is with
+<a class="reference external" href="https://stackoverflow.com/questions/65415996/how-to-specify-the-architecture-or-platform-for-a-new-conda-environment-apple">Conda</a>.</p>
+</section>
 </section>
 <section id="build-from-source">
 <h2>Build from source<a class="headerlink" href="#build-from-source" title="Permalink to this heading">#</a></h2>
@@ -602,7 +624,8 @@ brew<span class="w"> </span>install<span class="w"> </span>pybind11
 </pre></div>
 </div>
 <p>To make sure the install is working run the tests with:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>discover<span class="w"> </span>python/tests
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[testing]&quot;</span>
+python<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>discover<span class="w"> </span>python/tests
 </pre></div>
 </div>
 </section>
@@ -722,7 +745,10 @@ MacOS SDK will be used</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#install-from-pypi">Install from PyPI</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#install-from-pypi">Install from PyPI</a><ul class="visible nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#build-from-source">Build from source</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#build-requirements">Build Requirements</a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#python-api">Python API</a></li>
