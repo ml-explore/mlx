@@ -35,7 +35,8 @@ Probably you are using a non-native Python. The output of
 
 should be ``arm``. If it is ``i386`` (and you have M series machine) then you
 are using a non-native Python. Switch your Python to a native Python. A good
-way to do this is to reinstall Conda.
+way to do this is with
+[Conda](https://stackoverflow.com/questions/65415996/how-to-specify-the-architecture-or-platform-for-a-new-conda-environment-apple).
 
 
 Build from source
