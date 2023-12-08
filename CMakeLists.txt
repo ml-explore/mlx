@@ -21,6 +21,27 @@ if(NOT MLX_VERSION)
   set(MLX_VERSION 0.0.3)
 endif()
 
+# --------------------- Processor tests -------------------------
+
+message(STATUS "Building MLX for ${CMAKE_HOST_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}")
+
+set(MLX_BUILD_ARM OFF)
+
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+
+  if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64")
+    message(WARNING 
+      "Building for x86_64 on MacOS is not supported." 
+      " If you are on an Apple silicon system, "
+      " make sure you are building for arm64.")
+  elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm64")
+    set(MLX_BUILD_ARM ON)
+  endif()
+
+else()
+  message(WARNING "MLX is prioritised for Apple Silicon systems using MacOS.")
+endif()
+
 # ----------------------------- Lib -----------------------------
 
 include(FetchContent)
@@ -78,13 +99,13 @@ elseif (MLX_BUILD_METAL)
 endif()
 
 find_library(ACCELERATE_LIBRARY Accelerate)
-if (ACCELERATE_LIBRARY)
+if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
   message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
   set(MLX_BUILD_ACCELERATE ON)
   target_link_libraries(mlx ${ACCELERATE_LIBRARY})
   add_compile_definitions(ACCELERATE_NEW_LAPACK)
 else()
-  message(STATUS "Accelerate not found, using default backend.")
+  message(STATUS "Accelerate or arm neon not found, using default backend.")
   set(MLX_BUILD_ACCELERATE OFF)
   #set(BLA_VENDOR Generic)
   find_package(BLAS REQUIRED)
