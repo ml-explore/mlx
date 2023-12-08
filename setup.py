@@ -125,6 +125,10 @@ class CMakeBuild(build_ext):
                     self.copy_tree(regular_dir, inplace_dir)
 
 
+# Read the content of README.md
+with open(Path(__file__).parent / "README.md", encoding="utf-8") as f:
+    long_description = f.read()
+
 # The information here can also be placed in setup.cfg - better separation of
 # logic and declaration, and simpler if you include description/version in a file.
 if __name__ == "__main__":
@@ -140,7 +144,8 @@ if __name__ == "__main__":
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple Silicon.",
-        long_description="",
+        long_description=long_description,
+        long_description_content_type="text/markdown",
         packages=packages,
         package_dir=package_dir,
         package_data=package_data,
