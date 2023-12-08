@@ -184,7 +184,7 @@ class AdamW(Adam):
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
-        """Performs the AdamW parameter update by modifying the parameters 
+        """Performs the AdamW parameter update by modifying the parameters
         passed into Adam.
         """
 
