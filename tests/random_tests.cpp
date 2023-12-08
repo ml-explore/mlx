@@ -359,12 +359,12 @@ TEST_CASE("test random uniform") {
 
   {
     auto key = random::key(0);
-    auto out = random::uniform({100}, float16, key);
+    auto out = random::uniform({100}, bfloat16, key);
     CHECK_EQ(out.dtype(), bfloat16);
     CHECK(all(less(out, array(1.0f))).item<bool>());
     CHECK(all(greater_equal(out, array(0.0f))).item<bool>());
     CHECK(!all(equal(out, array(0.0f))).item<bool>());
-    CHECK(abs(float(mean(out).item<float16_t>()) - 0.5f) < 0.02);
+    CHECK(abs(float(mean(out).item<bfloat16_t>()) - 0.5f) < 0.02);
   }
 }
 
