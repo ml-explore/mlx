@@ -154,7 +154,7 @@ class Adam(Optimizer):
         return parameter - lr * m / (mx.sqrt(v) + eps)
 
 
-class AdamW(Optimizer):
+class AdamW(Adam):
     r"""Implementation of the AdamW optimizer [1].
 
     Following the above convention, in contrast with [1], we do not use bias
@@ -178,28 +178,16 @@ class AdamW(Optimizer):
         eps: float = 1e-8,
         weight_decay: float = 0.01,
     ):
-        super().__init__()
-
-        self.learning_rate = learning_rate
-        self.betas = betas
-        self.eps = eps
+        super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)
         self.weight_decay = weight_decay
 
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
-        """Performs the AdamW parameter update and stores :math:`v` and
-        :math:`m` in the optimizer state."""
-        lr = self.learning_rate
-        b1, b2 = self.betas
-        eps = self.eps
-        wd = self.weight_decay
+        """Performs the AdamW parameter update by modifying the parameters 
+        passed into Adam.
+        """
 
-        m = state.get("m", gradient)
-        v = state.get("v", mx.square(gradient))
-        m = b1 * m + (1 - b1) * gradient
-        v = b2 * v + (1 - b2) * mx.square(gradient)
-        state["m"] = m
-        state["v"] = v
-
-        return parameter - lr * (m / (mx.sqrt(v) + eps) + wd * parameter)
+        return super().apply_single(
+            gradient, parameter * (1 - self.learning_rate * self.weight_decay), state
+        )
