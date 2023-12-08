@@ -9,7 +9,7 @@ import sysconfig
 from pathlib import Path
 from subprocess import run
 
-from setuptools import Extension, setup, find_namespace_packages
+from setuptools import Extension, find_namespace_packages, setup
 from setuptools.command.build_ext import build_ext
 
 

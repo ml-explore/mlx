@@ -5,7 +5,6 @@ import unittest
 import mlx.core as mx
 import mlx.optimizers as opt
 import mlx.utils
-
 import mlx_tests
 
 

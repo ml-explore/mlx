@@ -1,14 +1,14 @@
 # Copyright © 2023 Apple Inc.
 
-import matplotlib.pyplot as plt
-import numpy as np
 import argparse
-import mlx.core as mx
-import time
-import torch
 import os
 import subprocess
+import time
 
+import matplotlib.pyplot as plt
+import mlx.core as mx
+import numpy as np
+import torch
 
 results_dir = "./results"
 

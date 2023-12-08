@@ -4,8 +4,8 @@ import math
 import time
 
 import torch
-import torch.nn as nn
 import torch.mps
+import torch.nn as nn
 
 
 def sync_if_needed(x):

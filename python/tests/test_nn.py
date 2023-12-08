@@ -1,15 +1,14 @@
 # Copyright © 2023 Apple Inc.
 
+import os
+import tempfile
 import unittest
 
 import mlx.core as mx
 import mlx.nn as nn
-from mlx.utils import tree_flatten, tree_map, tree_unflatten
-import numpy as np
-import os
-import tempfile
-
 import mlx_tests
+import numpy as np
+from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 
 class TestNN(mlx_tests.MLXTestCase):

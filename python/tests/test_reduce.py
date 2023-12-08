@@ -1,12 +1,11 @@
 # Copyright © 2023 Apple Inc.
 
 import unittest
-from itertools import permutations, combinations
+from itertools import combinations, permutations
 
 import mlx.core as mx
-import numpy as np
-
 import mlx_tests
+import numpy as np
 
 
 class TestReduce(mlx_tests.MLXTestCase):

@@ -1,13 +1,14 @@
 # Copyright © 2023 Apple Inc.
 
-import numpy as np
 import argparse
-import mlx.core as mx
-import time
-import torch
-import os
 import math
+import os
 import subprocess
+import time
+
+import mlx.core as mx
+import numpy as np
+import torch
 
 device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
 device_name = device_name.decode("utf-8").strip("\n")
