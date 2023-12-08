@@ -36,6 +36,7 @@ are the CPU and GPU.
    :maxdepth: 1
 
    quick_start
+   unified_memory
    using_streams
 
 .. toctree::
