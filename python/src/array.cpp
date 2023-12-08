@@ -460,35 +460,40 @@ void init_array(py::module_& m) {
 
   py::class_<array>(m, "array", R"pbdoc(An N-dimensional array object.)pbdoc")
       .def(
-          py::init([](ScalarOrArray v, std::optional<Dtype> t) {
-            auto arr = to_array(v, t);
-            return astype(arr, t.value_or(arr.dtype()));
-          }),
-          "val"_a,
-          "dtype"_a = std::nullopt)
-      .def(
-          py::init([](std::variant<py::list, py::tuple> pl,
-                      std::optional<Dtype> dtype) {
-            if (auto pv = std::get_if<py::list>(&pl); pv) {
-              return array_from_list(*pv, dtype);
+          py::init([](std::variant<
+                          py::bool_,
+                          py::int_,
+                          py::float_,
+                          std::complex<float>,
+                          py::list,
+                          py::tuple,
+                          py::array,
+                          py::buffer,
+                          py::object> v,
+                      std::optional<Dtype> t) {
+            if (auto pv = std::get_if<py::bool_>(&v); pv) {
+              return array(py::cast<bool>(*pv), t.value_or(bool_));
+            } else if (auto pv = std::get_if<py::int_>(&v); pv) {
+              return array(py::cast<int>(*pv), t.value_or(int32));
+            } else if (auto pv = std::get_if<py::float_>(&v); pv) {
+              return array(py::cast<float>(*pv), t.value_or(float32));
+            } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
+              return array(
+                  static_cast<complex64_t>(*pv), t.value_or(complex64));
+            } else if (auto pv = std::get_if<py::list>(&v); pv) {
+              return array_from_list(*pv, t);
+            } else if (auto pv = std::get_if<py::tuple>(&v); pv) {
+              return array_from_list(*pv, t);
+            } else if (auto pv = std::get_if<py::array>(&v); pv) {
+              return np_array_to_mlx(*pv, t);
+            } else if (auto pv = std::get_if<py::buffer>(&v); pv) {
+              return np_array_to_mlx(*pv, t);
             } else {
-              auto v = std::get<py::tuple>(pl);
-              return array_from_list(v, dtype);
+              auto arr = to_array_with_accessor(std::get<py::object>(v));
+              return astype(arr, t.value_or(arr.dtype()));
             }
           }),
-          "vals"_a,
-          "dtype"_a = std::nullopt)
-      .def(
-          py::init([](py::array np_array, std::optional<Dtype> dtype) {
-            return np_array_to_mlx(np_array, dtype);
-          }),
-          "vals"_a,
-          "dtype"_a = std::nullopt)
-      .def(
-          py::init([](py::buffer np_buffer, std::optional<Dtype> dtype) {
-            return np_array_to_mlx(np_buffer, dtype);
-          }),
-          "vals"_a,
+          "val"_a,
           "dtype"_a = std::nullopt)
       .def_property_readonly(
           "size", &array::size, R"pbdoc(Number of elments in the array.)pbdoc")
