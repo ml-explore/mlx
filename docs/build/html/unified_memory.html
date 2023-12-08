@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Using Streams &#8212; MLX 0.0.4 documentation</title>
+    <title>Unified Memory &#8212; MLX 0.0.4 documentation</title>
   
   
   
@@ -43,11 +43,11 @@
     <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="_static/doctools.js"></script>
     <script src="_static/scripts/sphinx-book-theme.js?digest=5a5c038af52cf7bc1a1ec88eea08e6366ee68824"></script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'using_streams';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'unified_memory';</script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Linear Regression" href="examples/linear_regression.html" />
-    <link rel="prev" title="Unified Memory" href="unified_memory.html" />
+    <link rel="next" title="Using Streams" href="using_streams.html" />
+    <link rel="prev" title="Quick Start Guide" href="quick_start.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -148,8 +148,8 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="current nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="quick_start.html">Quick Start Guide</a></li>
-<li class="toctree-l1"><a class="reference internal" href="unified_memory.html">Unified Memory</a></li>
-<li class="toctree-l1 current active"><a class="current reference internal" href="#">Using Streams</a></li>
+<li class="toctree-l1 current active"><a class="current reference internal" href="#">Unified Memory</a></li>
+<li class="toctree-l1"><a class="reference internal" href="using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul class="nav bd-sidenav">
@@ -443,7 +443,7 @@
       
       
       
-      <li><a href="_sources/using_streams.rst" target="_blank"
+      <li><a href="_sources/unified_memory.rst" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -527,7 +527,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>Using Streams</h1>
+    <h1>Unified Memory</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -537,7 +537,7 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#specifying-the-stream">Specifying the <code class="xref py py-obj docutils literal notranslate"><span class="pre">Stream</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#a-simple-example">A Simple Example</a></li>
 </ul>
             </nav>
         </div>
@@ -549,18 +549,62 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article" role="main">
                   
-  <section id="using-streams">
-<span id="id1"></span><h1>Using Streams<a class="headerlink" href="#using-streams" title="Permalink to this heading">#</a></h1>
-<section id="specifying-the-stream">
-<h2>Specifying the <a class="reference internal" href="python/_autosummary/mlx.core.Stream.html#mlx.core.Stream" title="mlx.core.Stream"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stream</span></code></a><a class="headerlink" href="#specifying-the-stream" title="Permalink to this heading">#</a></h2>
-<p>All operations (including random number generation) take an optional
-keyword argument <code class="docutils literal notranslate"><span class="pre">stream</span></code>. The <code class="docutils literal notranslate"><span class="pre">stream</span></code> kwarg specifies which
-<a class="reference internal" href="python/_autosummary/mlx.core.Stream.html#mlx.core.Stream" title="mlx.core.Stream"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Stream</span></code></a> the operation should run on. If the stream is unspecified then
-the operation is run on the default stream of the default device:
-<code class="docutils literal notranslate"><span class="pre">mx.default_stream(mx.default_device())</span></code>.  The <code class="docutils literal notranslate"><span class="pre">stream</span></code> kwarg can also
-be a <a class="reference internal" href="python/_autosummary/mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Device</span></code></a> (e.g. <code class="docutils literal notranslate"><span class="pre">stream=my_device</span></code>) in which case the operation is
-run on the default stream of the provided device
-<code class="docutils literal notranslate"><span class="pre">mx.default_stream(my_device)</span></code>.</p>
+  <section id="unified-memory">
+<span id="id1"></span><h1>Unified Memory<a class="headerlink" href="#unified-memory" title="Permalink to this heading">#</a></h1>
+<p>Apple silicon has a unified memory architecture. The CPU and GPU have direct
+access to the same memory pool. MLX is designed to take advantage that.</p>
+<p>Concretely, when you make an array in MLX you don’t have to specify its location:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">((</span><span class="mi">100</span><span class="p">,))</span>
+</pre></div>
+</div>
+<p>Both <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code> live in unified memory.</p>
+<p>In MLX, rather than moving arrays to devices, you specify the device when you
+run the operation. Any device can perform any operation on <code class="docutils literal notranslate"><span class="pre">a</span></code> and <code class="docutils literal notranslate"><span class="pre">b</span></code>
+without needing to move them from one memory location to another. For example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">mx</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="n">mx</span><span class="o">.</span><span class="n">cpu</span><span class="p">)</span>
+<span class="n">mx</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="n">mx</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In the above, both the CPU and the GPU will perform the same add
+operation. The operations can (and likely will) be run in parallel since
+there are no dependencies between them. See <a class="reference internal" href="using_streams.html#using-streams"><span class="std std-ref">Using Streams</span></a> for more
+information the semantics of streams in MLX.</p>
+<p>In the above <code class="docutils literal notranslate"><span class="pre">add</span></code> example, there are no dependencies between operations, so
+there is no possibility for race conditions. If there are dependencies, the
+MLX scheduler will automatically manage them. For example:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">c</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="n">mx</span><span class="o">.</span><span class="n">cpu</span><span class="p">)</span>
+<span class="n">d</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">c</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="n">mx</span><span class="o">.</span><span class="n">gpu</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>In the above case, the second <code class="docutils literal notranslate"><span class="pre">add</span></code> runs on the GPU but it depends on the
+output of the first <code class="docutils literal notranslate"><span class="pre">add</span></code> which is running on the CPU. MLX will
+automatically insert a dependency between the two streams so that the second
+<code class="docutils literal notranslate"><span class="pre">add</span></code> only starts executing after the first is complete and <code class="docutils literal notranslate"><span class="pre">c</span></code> is
+available.</p>
+<section id="a-simple-example">
+<h2>A Simple Example<a class="headerlink" href="#a-simple-example" title="Permalink to this heading">#</a></h2>
+<p>Here is a more interesting (albeit slightly contrived example) of how unified
+memory can be helpful. Suppose we have the following computation:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">fun</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">d1</span><span class="p">,</span> <span class="n">d2</span><span class="p">):</span>
+  <span class="n">x</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="n">d1</span><span class="p">)</span>
+  <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">500</span><span class="p">):</span>
+      <span class="n">b</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="n">d2</span><span class="p">)</span>
+  <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">b</span>
+</pre></div>
+</div>
+<p>which we want to run with the following arguments:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">a</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">4096</span><span class="p">,</span> <span class="mi">512</span><span class="p">))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span> <span class="mi">4</span><span class="p">))</span>
+</pre></div>
+</div>
+<p>The first <code class="docutils literal notranslate"><span class="pre">matmul</span></code> operation is a good fit for the GPU since it’s more
+compute dense. The second sequence of operations are a better fit for the CPU,
+since they are very small and would probably be overhead bound on the GPU.</p>
+<p>If we time the computation fully on the GPU, we get 2.8 milliseconds. But if we
+run the computation with <code class="docutils literal notranslate"><span class="pre">d1=mx.gpu</span></code> and <code class="docutils literal notranslate"><span class="pre">d2=mx.cpu</span></code>, then the time is only
+about 1.4 milliseconds, about twice as fast. These times were measured on an M1
+Max.</p>
 </section>
 </section>
 
@@ -576,20 +620,20 @@ run on the default stream of the provided device
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="unified_memory.html"
+       href="quick_start.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">Unified Memory</p>
+        <p class="prev-next-title">Quick Start Guide</p>
       </div>
     </a>
     <a class="right-next"
-       href="examples/linear_regression.html"
+       href="using_streams.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Linear Regression</p>
+        <p class="prev-next-title">Using Streams</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
@@ -608,7 +652,7 @@ run on the default stream of the provided device
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#specifying-the-stream">Specifying the <code class="xref py py-obj docutils literal notranslate"><span class="pre">Stream</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#a-simple-example">A Simple Example</a></li>
 </ul>
   </nav></div>
 
