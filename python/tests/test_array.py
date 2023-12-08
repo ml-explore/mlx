@@ -18,6 +18,18 @@ class TestVersion(mlx_tests.MLXTestCase):
         self.assertEqual(v, mx.__version__[: len(v)])
 
 
+class TestDevice(mlx_tests.MLXTestCase):
+    def test_default_device(self):
+        mx.set_default_device(mx.cpu)
+        x = mx.ones(2)
+        self.assertEqual(x.device, mx.cpu)
+        mx.set_default_device(mx.gpu)
+        x = mx.ones(2)
+        self.assertEqual(x.device, mx.gpu)
+        y = mx.add(x, x, stream=mx.default_stream(mx.cpu))
+        self.assertEqual(y.device, mx.cpu)
+
+
 class TestDtypes(mlx_tests.MLXTestCase):
     def test_dtypes(self):
         self.assertEqual(mx.bool_.size, 1)

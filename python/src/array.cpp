@@ -10,6 +10,7 @@
 #include "python/src/utils.h"
 
 #include "mlx/ops.h"
+#include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
 
@@ -508,6 +509,17 @@ void init_array(py::module_& m) {
           R"pbdoc(
             The array's :class:`Dtype`.
           )pbdoc")
+      .def_property_readonly(
+          "device",
+          [](const array& a) {
+            if (a.has_primitive()) {
+              return a.primitive().device();
+            }
+            return Device(Device::cpu);
+          },
+          R"pbdoc(
+          The device on which the array resides.
+        )pbdoc")
       .def(
           "item",
           &to_scalar,
