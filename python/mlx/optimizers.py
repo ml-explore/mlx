@@ -88,13 +88,17 @@ class SGD(Optimizer):
     Args:
         learning_rate (float): The learning :math:`\lambda` for the update
         momentum (float): The momentum strength :math:`\mu`
+        nesterov (bool, optional): Enables Nesterov momentum (default: False)
     """
 
-    def __init__(self, learning_rate: float, momentum: float = 0.0):
+    def __init__(
+        self, learning_rate: float, momentum: float = 0.0, nesterov: bool = False
+    ):
         super().__init__()
 
         self.learning_rate = learning_rate
         self.momentum = momentum
+        self.nesterov = nesterov
 
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
@@ -105,6 +109,8 @@ class SGD(Optimizer):
             return parameter - self.learning_rate * gradient
 
         v = state.get("v", mx.zeros_like(gradient))
+        if self.nesterov:
+            gradient += self.momentum * v
         v = self.momentum * v + (1 - self.momentum) * gradient
         state["v"] = v
         return parameter - self.learning_rate * v
