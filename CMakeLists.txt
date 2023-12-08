@@ -32,7 +32,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64")
     message(WARNING 
       "Building for x86_64 on MacOS is not supported." 
-      " If you are on an Apple Silicon system, "
+      " If you are on an Apple silicon system, "
       " make sure you are building for arm64.")
   elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm64")
     set(MLX_BUILD_ARM ON)
