@@ -1451,12 +1451,6 @@ array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 array operator%(const array& a, const array& b) {
   return remainder(a, b);
 }
-array operator%(double a, const array& b) {
-  return remainder(array(a), b);
-}
-array operator%(const array& a, double b) {
-  return remainder(a, array(b));
-}
 
 array maximum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());

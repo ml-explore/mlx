@@ -639,8 +639,14 @@ array operator/(const array& a, double b);
 /** Compute the element-wise remainder of division */
 array remainder(const array& a, const array& b, StreamOrDevice s = {});
 array operator%(const array& a, const array& b);
-array operator%(double a, const array& b);
-array operator%(const array& a, double b);
+template <typename T>
+array operator%(T a, const array& b) {
+  return remainder(array(a), b);
+}
+template <typename T>
+array operator%(const array& a, T b) {
+  return remainder(a, array(b));
+}
 
 /** Element-wise maximum between two arrays. */
 array maximum(const array& a, const array& b, StreamOrDevice s = {});

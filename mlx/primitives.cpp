@@ -748,6 +748,7 @@ std::vector<array> Remainder::vjp(
       vjps.push_back(cotan);
     } else {
       auto x_over_y = divide(primals[0], primals[1], stream());
+      // TODO: Replace with a proper floor when available
       x_over_y = astype(x_over_y, int32, stream());
       vjps.push_back(negative(multiply(x_over_y, cotan, stream()), stream()));
     }
@@ -765,6 +766,7 @@ array Remainder::jvp(
       return tangents[i];
     } else {
       auto x_over_y = divide(primals[0], primals[1], stream());
+      // TODO: Replace with a proper floor when available
       x_over_y = astype(x_over_y, int32, stream());
       return negative(multiply(x_over_y, tangents[i], stream()), stream());
     }
