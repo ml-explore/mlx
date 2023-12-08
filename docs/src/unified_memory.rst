@@ -6,7 +6,7 @@ Unified Memory
 .. currentmodule:: mlx.core
 
 Apple silicon has a unified memory architecture. The CPU and GPU have direct
-acess to the same memory pool. MLX is designed to take advantage that.
+access to the same memory pool. MLX is designed to take advantage that.
 
 Concretely, when you make an array in MLX you don't have to specify its location:
 
@@ -18,7 +18,9 @@ Concretely, when you make an array in MLX you don't have to specify its location
 
 Both ``a`` and ``b`` live in unified memory.
 
-In MLX, rather than moving arrays to devices, you specify the device when you run the operation. Any device can perform any operation on ``a`` and ``b`` without needing to move them from one memory location to another. For example: 
+In MLX, rather than moving arrays to devices, you specify the device when you
+run the operation. Any device can perform any operation on ``a`` and ``b``
+without needing to move them from one memory location to another. For example: 
 
 .. code-block:: python
 
@@ -44,5 +46,3 @@ output of the first ``add`` which is running on the CPU. MLX will
 automatically insert a dependency between the two streams so that the second
 ``add`` only starts executing after the first is complete and ``c`` is
 available.
-
-
