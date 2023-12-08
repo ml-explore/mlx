@@ -10,7 +10,6 @@ import mlx_tests
 import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
-
 class TestNN(mlx_tests.MLXTestCase):
     def test_linear(self):
         inputs = mx.zeros((10, 4))
@@ -23,6 +22,19 @@ class TestNN(mlx_tests.MLXTestCase):
         targets = mx.array([0, 1])
         losses = nn.losses.cross_entropy(logits, targets)
         self.assertTrue(mx.array_equal(losses, mx.zeros((2,))))
+
+    def test_MLE_loss(self):
+        logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
+        targets = mx.array([0, 1])
+        losses = nn.losses.MLE_loss(logits, targets)
+        print(losses)
+        self.assertTrue(mx.allclose(losses, mx.zeros((2,))))
+
+    def test_L1_loss(self):
+        predictions = mx.array([0.5, 0.2, 0.9, 0.0])
+        targets = mx.array([0.5, 0.2, 0.9, 0.0])
+        losses = nn.losses.L1_loss(predictions, targets)
+        self.assertEqual(losses, 0.0)
 
     def test_gelu(self):
         inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
