@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from setuptools import Extension, setup, find_namespace_packages
+from setuptools import Extension, find_namespace_packages, setup
 from setuptools.command.build_ext import build_ext
 
 import mlx

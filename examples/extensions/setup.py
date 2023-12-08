@@ -1,7 +1,8 @@
 # Copyright © 2023 Apple Inc.
 
-from mlx import extension
 from setuptools import setup
+
+from mlx import extension
 
 if __name__ == "__main__":
     setup(

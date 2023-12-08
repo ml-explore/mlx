@@ -1,6 +1,5 @@
 # Copyright © 2023 Apple Inc.
 
-from mlx.nn.layers.base import Module
 from mlx.nn.layers.activations import (
     GELU,
     ReLU,
@@ -11,6 +10,7 @@ from mlx.nn.layers.activations import (
     relu,
     silu,
 )
+from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
 from mlx.nn.layers.convolution import Conv1d, Conv2d
 from mlx.nn.layers.dropout import Dropout

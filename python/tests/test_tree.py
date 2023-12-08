@@ -4,7 +4,6 @@ import unittest
 
 import mlx.core as mx
 import mlx.utils
-
 import mlx_tests
 
 
