@@ -46,3 +46,30 @@ output of the first ``add`` which is running on the CPU. MLX will
 automatically insert a dependency between the two streams so that the second
 ``add`` only starts executing after the first is complete and ``c`` is
 available.
+
+Here is a more interesting (albeit slightly contrived example) of how unified
+memory can be helpful. Suppose we have the following computation:
+
+.. code-block:: python
+
+  def fun(a, b, d1, d2):
+    x = mx.matmul(a, b, stream=d1)
+    for _ in range(500):
+        b = mx.exp(b, stream=d2)
+    return x, b
+
+which we want to run with the following arguments:
+
+.. code-block:: python
+
+  a = mx.random.uniform(shape=(4096, 512))
+  b = mx.random.uniform(shape=(512, 4))
+
+The first ``matmul`` operation is a good fit for the GPU since it's more
+compute dense. The second sequence of operations are a better fit for the CPU,
+since they are very small and would probably be overhead bound on the GPU.
+
+If we time the computation fully on the GPU, we get 23 milliseconds. But if we
+run the computation with ``d1=mx.gpu`` and ``d2=mx.cpu``, then the time is only
+about 14 milliseconds, nearly 40% faster. These times were measured on an M1
+Max.
