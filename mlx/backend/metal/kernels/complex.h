@@ -110,3 +110,7 @@ constexpr complex64_t operator-(complex64_t a, complex64_t b) {
 constexpr complex64_t operator*(complex64_t a, complex64_t b) {
   return {a.real * b.real - a.imag * b.imag, a.real * b.imag + a.imag * b.real};
 }
+
+constexpr complex64_t operator%(complex64_t a, complex64_t b) {
+  return {fmod(a.real, b.real), fmod(a.imag, b.imag)};
+}

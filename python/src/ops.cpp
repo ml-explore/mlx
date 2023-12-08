@@ -254,6 +254,31 @@ void init_ops(py::module_& m) {
             array: The quotient ``a / b``.
       )pbdoc");
   m.def(
+      "remainder",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return remainder(a, b, s);
+      },
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        Element-wise remainder of division.
+
+        Computes the remainder of dividing a with b with numpy-style
+        broadcasting semantics. Either or both input arrays can also be
+        scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The remainder of ``a // b``.
+      )pbdoc");
+  m.def(
       "equal",
       [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
