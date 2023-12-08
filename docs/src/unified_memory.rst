@@ -72,7 +72,7 @@ The first ``matmul`` operation is a good fit for the GPU since it's more
 compute dense. The second sequence of operations are a better fit for the CPU,
 since they are very small and would probably be overhead bound on the GPU.
 
-If we time the computation fully on the GPU, we get 23 milliseconds. But if we
+If we time the computation fully on the GPU, we get 2.8 milliseconds. But if we
 run the computation with ``d1=mx.gpu`` and ``d2=mx.cpu``, then the time is only
-about 14 milliseconds, nearly 40% faster. These times were measured on an M1
+about 1.4 milliseconds, about twice as fast. These times were measured on an M1
 Max.
