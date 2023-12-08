@@ -47,6 +47,9 @@ automatically insert a dependency between the two streams so that the second
 ``add`` only starts executing after the first is complete and ``c`` is
 available.
 
+A Simple Example
+~~~~~~~~~~~~~~~~
+
 Here is a more interesting (albeit slightly contrived example) of how unified
 memory can be helpful. Suppose we have the following computation:
 
