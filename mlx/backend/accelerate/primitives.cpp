@@ -494,7 +494,7 @@ void Power::eval_cpu(const std::vector<array>& inputs, array& out) {
       b.flags().row_contiguous) {
     int size = a.size();
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    vvpowf(out.data<float>(), a.data<float>(), b.data<float>(), &size);
+    vvpowf(out.data<float>(), b.data<float>(), a.data<float>(), &size);
   } else {
     eval(inputs, out);
   }
