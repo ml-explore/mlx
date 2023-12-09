@@ -2,7 +2,7 @@
 
 import mlx.core as mx
 
-def cross_entropy(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = 'mean'):
+def cross_entropy(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = 'none'):
     """
     Computes the cross entropy loss between logits and targets.
 
@@ -14,21 +14,20 @@ def cross_entropy(logits: mx.array, targets: mx.array, axis: int = -1, reduction
                                     'none': no reduction will be applied. 
                                     'mean': the sum of the output will be divided by the number of elements in the output.
                                     'sum': the output will be summed. 
-                                    Defaults to 'mean'.
+                                    Defaults to 'none'.
 
     Returns:
         mx.array: The computed cross entropy loss.
     """
-    logits = logits - mx.max(logits, axis=axis, keepdims=True)
-    log_probs = mx.log(mx.softmax(logits, axis=axis))
-    score = mx.take_along_axis(log_probs, targets[..., None], axis).squeeze(-1)
-    
+    score = mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
+    loss = mx.logsumexp(logits, axis=axis) - score
+
     if reduction == 'mean':
-        return -mx.mean(score)
+        return mx.mean(loss)
     elif reduction == 'sum':
-        return -mx.sum(score)
+        return mx.sum(loss)
     elif reduction == 'none':
-        return -score
+        return loss
     else:
         raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
 
