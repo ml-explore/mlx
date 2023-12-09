@@ -625,6 +625,18 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
+          "__mod__",
+          [](const array& a, const ScalarOrArray v) {
+            return remainder(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__rmod__",
+          [](const array& a, const ScalarOrArray v) {
+            return remainder(to_array(v, a.dtype()), a);
+          },
+          "other"_a)
+      .def(
           "__eq__",
           [](const array& a, const ScalarOrArray v) {
             return equal(a, to_array(v, a.dtype()));

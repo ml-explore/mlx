@@ -322,6 +322,45 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+// TODO: Avoid code duplication with the common backend.
+struct RemainderFn {
+  template <typename T>
+  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    return std::fmod(numerator, denominator);
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_integral_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    return numerator % denominator;
+  }
+};
+
+void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+
+  if (a.dtype() == float32) {
+    binary(
+        a,
+        b,
+        out,
+        RemainderFn{},
+        UseDefaultBinaryOp(),
+        UseDefaultBinaryOp(),
+        [](const auto* a, const auto* b, auto* o, auto n) {
+          int num_el = n;
+          vvremainderf((float*)o, (const float*)a, (const float*)b, &num_el);
+        });
+  } else {
+    binary(a, b, out, RemainderFn{});
+  }
+}
+
 void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
