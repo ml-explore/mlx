@@ -36,10 +36,10 @@ class TestNN(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
         self.assertEqual(losses_sum, expected_sum)
 
-    def test_L1_loss(self):
+    def test_l1_loss(self):
         predictions = mx.array([0.5, 0.2, 0.9, 0.0])
         targets = mx.array([0.5, 0.2, 0.9, 0.0])
-        losses = nn.losses.L1_loss(predictions, targets)
+        losses = nn.losses.l1_loss(predictions, targets)
         self.assertEqual(losses, 0.0)
 
     def test_gelu(self):
