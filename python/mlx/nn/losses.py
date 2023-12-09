@@ -124,7 +124,7 @@ def kl_div_loss(p_logits: mx.array, q_logits: mx.array, axis: int = -1, reductio
     p_probs = mx.softmax(p_logits, axis=-1)
     q_probs = mx.softmax(q_logits, axis=-1)
 
-    loss = mx.sum(p_probs * (mx.log(p_probs) - mx.log(q_probs)), axis=-1)
+    loss = mx.sum(p_probs * (mx.log(p_probs) - mx.log(q_probs)), axis)
 
     if reduction == "mean":
         return mx.mean(loss)
