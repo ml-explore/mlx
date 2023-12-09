@@ -12,6 +12,6 @@ def MLE_loss(logits: mx.array, targets: mx.array, axis: int = -1):
     score = mx.take_along_axis(log_probs, targets[..., None], axis).squeeze(-1)
     return -mx.mean(score)
 
-def L1_loss(predictions: mx.array, targets: mx.array):
+def l1_loss(predictions: mx.array, targets: mx.array):
     return mx.mean(mx.abs(predictions - targets))
 
