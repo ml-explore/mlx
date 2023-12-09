@@ -82,7 +82,7 @@ class SGD(Optimizer):
 
     .. math::
 
-        v_{t+1} &= \mu v_t + (1 - \tau) g_t \\
+        v_{t+1} &= \mu v_t + g_t \\
         w_{t+1} &= w_t - \lambda v_{t+1}
 
     Args:
@@ -101,6 +101,10 @@ class SGD(Optimizer):
         dampening: float = 0.0,
         nesterov: bool = False,
     ):
+        if nesterov and (momentum <= 0 or dampening != 0):
+            raise ValueError(
+                "Nesterov momentum requires a momentum and zero dampening."
+            )
         super().__init__()
 
         self.learning_rate = learning_rate
@@ -122,15 +126,18 @@ class SGD(Optimizer):
         if self.weight_decay != 0:
             gradient += self.weight_decay * parameter
 
-        buf = self.momentum * v + (1 - self.dampening) * gradient
+        v = self.momentum * v
+        if self.dampening > 0:
+            v += (1 - self.dampening) * gradient
+        else:
+            v += gradient
 
         if self.nesterov:
-            v += self.momentum * buf
+            update = gradient + self.momentum * v
         else:
-            v = buf
-
+            update = v
         state["v"] = v
-        return parameter - self.learning_rate * v
+        return parameter - self.learning_rate * update
 
 
 class Adam(Optimizer):
