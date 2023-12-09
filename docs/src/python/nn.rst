@@ -170,3 +170,13 @@ simple functions.
    gelu_fast_approx
    relu
    silu
+
+Loss Functions
+--------------
+
+.. autosummary::
+   :toctree: _autosummary_functions
+   :template: nn-module-template.rst
+
+   losses.cross_entropy
+   losses.l1_loss
