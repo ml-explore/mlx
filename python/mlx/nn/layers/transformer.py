@@ -43,7 +43,7 @@ class MultiHeadAttention(Module):
         value_input_dims: Optional[int] = None,
         value_dims: Optional[int] = None,
         value_output_dims: Optional[int] = None,
-        bias: bool = False
+        bias: bool = False,
     ):
         super().__init__()
 
