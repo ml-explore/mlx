@@ -82,22 +82,31 @@ class SGD(Optimizer):
 
     .. math::
 
-        v_{t+1} &= \mu v_t + (1 - \mu) g_t \\
+        v_{t+1} &= \mu v_t + (1 - \tau) g_t \\
         w_{t+1} &= w_t - \lambda v_{t+1}
 
     Args:
         learning_rate (float): The learning :math:`\lambda` for the update
-        momentum (float): The momentum strength :math:`\mu`
+        momentum (float, optional): The momentum strength :math:`\mu` (default: 0)
+        weight_decay (float, optional): The weight decay (L2 penalty) (default: 0)
+        dampening (float, optional): Dampening for momentum :math:`\tau` (default: 0)
         nesterov (bool, optional): Enables Nesterov momentum (default: False)
     """
 
     def __init__(
-        self, learning_rate: float, momentum: float = 0.0, nesterov: bool = False
+        self,
+        learning_rate: float,
+        momentum: float = 0.0,
+        weight_decay: float = 0.0,
+        dampening: float = 0.0,
+        nesterov: bool = False,
     ):
         super().__init__()
 
         self.learning_rate = learning_rate
         self.momentum = momentum
+        self.weight_decay = weight_decay
+        self.dampening = dampening
         self.nesterov = nesterov
 
     def apply_single(
@@ -109,9 +118,17 @@ class SGD(Optimizer):
             return parameter - self.learning_rate * gradient
 
         v = state.get("v", mx.zeros_like(gradient))
+
+        if self.weight_decay != 0:
+            gradient += self.weight_decay * parameter
+
+        buf = self.momentum * v + (1 - self.dampening) * gradient
+
         if self.nesterov:
-            gradient += self.momentum * v
-        v = self.momentum * v + (1 - self.momentum) * gradient
+            v += self.momentum * buf
+        else:
+            v = buf
+
         state["v"] = v
         return parameter - self.learning_rate * v
 
@@ -190,7 +207,7 @@ class AdamW(Adam):
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
-        """Performs the AdamW parameter update by modifying the parameters 
+        """Performs the AdamW parameter update by modifying the parameters
         passed into Adam.
         """
 
