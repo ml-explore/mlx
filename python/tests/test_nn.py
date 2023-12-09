@@ -20,15 +20,21 @@ class TestNN(mlx_tests.MLXTestCase):
     def test_cross_entropy(self):
         logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
         targets = mx.array([0, 1])
-        losses = nn.losses.cross_entropy(logits, targets)
-        self.assertTrue(mx.array_equal(losses, mx.zeros((2,))))
 
-    def test_MLE_loss(self):
-        logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
-        targets = mx.array([0, 1])
-        losses = nn.losses.MLE_loss(logits, targets)
-        print(losses)
-        self.assertTrue(mx.allclose(losses, mx.zeros((2,))))
+        # Test with reduction 'none'
+        losses_none = nn.losses.cross_entropy(logits, targets, reduction='none')
+        expected_none = mx.array([0.0, 0.0])
+        self.assertTrue(mx.array_equal(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.cross_entropy(logits, targets, reduction='mean')
+        expected_mean = mx.mean(expected_none)
+        self.assertEqual(losses_mean, expected_mean)
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.cross_entropy(logits, targets, reduction='sum')
+        expected_sum = mx.sum(expected_none)
+        self.assertEqual(losses_sum, expected_sum)
 
     def test_L1_loss(self):
         predictions = mx.array([0.5, 0.2, 0.9, 0.0])
