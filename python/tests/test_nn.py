@@ -40,7 +40,7 @@ class TestNN(mlx_tests.MLXTestCase):
     def test_l1_loss(self):
         predictions = mx.array([0.5, 0.2, 0.9, 0.0])
         targets = mx.array([0.5, 0.2, 0.9, 0.0])
-        losses = nn.losses.l1_loss(predictions, targets)
+        losses = nn.losses.l1_loss(predictions, targets, reduction="none")
         self.assertEqual(losses, 0.0)
     
     def test_mse_loss(self):
