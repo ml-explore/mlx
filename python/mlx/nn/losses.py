@@ -95,12 +95,9 @@ def kl_div_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: 
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed Kullback-Leiber Divergence loss.
+        mx.array: The computed Kullback-Leiber divergence loss.
     """
-    p_probs = mx.softmax(logits, axis=-1)
-    q_probs = mx.softmax(targets, axis=-1)
-
-    loss = mx.sum(p_probs * (mx.log(p_probs) - mx.log(q_probs)), axis)
+    loss = mx.sum(mx.exp(targets) * (targets - logits), axis)
 
     return _reduce(loss, reduction)
 
