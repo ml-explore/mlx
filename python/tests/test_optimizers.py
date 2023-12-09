@@ -1,12 +1,13 @@
 # Copyright © 2023 Apple Inc.
 
-import unittest
 import inspect
+import unittest
 
 import mlx.core as mx
 import mlx.optimizers as opt
 import mlx.utils
 import mlx_tests
+
 
 def get_all_optimizers():
     classes = dict()
@@ -16,7 +17,9 @@ def get_all_optimizers():
                 classes[name] = obj
     return classes
 
+
 optimizers_dict = get_all_optimizers()
+
 
 class TestOptimizers(mlx_tests.MLXTestCase):
     def test_optimizers(self):

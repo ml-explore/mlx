@@ -11,12 +11,9 @@ def cross_entropy(
     Args:
         logits (mx.array): The predicted logits.
         targets (mx.array): The target values.
-        axis (int, optional): The axis over which to compute softmax. Defaults to -1.
-        reduction (str, optional): Specifies the reduction to apply to the output: 'none' | 'mean' | 'sum'.
-                                    'none': no reduction will be applied.
-                                    'mean': the sum of the output will be divided by the number of elements in the output.
-                                    'sum': the output will be summed.
-                                    Defaults to 'none'.
+        axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         mx.array: The computed cross entropy loss.
