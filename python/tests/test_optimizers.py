@@ -1,8 +1,8 @@
 # Copyright © 2023 Apple Inc.
 
 import unittest
-import sys
 import inspect
+
 import mlx.core as mx
 import mlx.optimizers as opt
 import mlx.utils
