@@ -2,16 +2,6 @@
 
 import mlx.core as mx
 
-def _reduce(loss: mx.array, reduction: str = 'none'):
-    if reduction == "mean":
-        return mx.mean(loss)
-    elif reduction == "sum":
-        return mx.sum(loss)
-    elif reduction == "none":
-        return loss
-    else:
-        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
-
 def cross_entropy(
     logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
 ) -> mx.array:
@@ -93,13 +83,13 @@ def nll_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str
     return _reduce(loss, reduction)
 
 
-def kl_div_loss(p_logits: mx.array, q_logits: mx.array, axis: int = -1, reduction: str = "none") -> mx.array:
+def kl_div_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none") -> mx.array:
     """
-    Computes the Kullback-Leiber divergence loss between two sets of logits, p_logits and q_logits.
+    Computes the Kullback-Leiber divergence loss between logits and targets.
 
     Args:
-        p_logits (mx.array): Logits for the distribution p.
-        q_logits (mx.array): Logits for the distribution q.
+        logits (mx.array): Logits for the distribution p.
+        targets (mx.array): Logits for the distribution q.
         axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
@@ -107,9 +97,19 @@ def kl_div_loss(p_logits: mx.array, q_logits: mx.array, axis: int = -1, reductio
     Returns:
         mx.array: The computed Kullback-Leiber Divergence loss.
     """
-    p_probs = mx.softmax(p_logits, axis=-1)
-    q_probs = mx.softmax(q_logits, axis=-1)
+    p_probs = mx.softmax(logits, axis=-1)
+    q_probs = mx.softmax(targets, axis=-1)
 
     loss = mx.sum(p_probs * (mx.log(p_probs) - mx.log(q_probs)), axis)
 
     return _reduce(loss, reduction)
+
+def _reduce(loss: mx.array, reduction: str = 'none'):
+    if reduction == "mean":
+        return mx.mean(loss)
+    elif reduction == "sum":
+        return mx.sum(loss)
+    elif reduction == "none":
+        return loss
+    else:
+        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
