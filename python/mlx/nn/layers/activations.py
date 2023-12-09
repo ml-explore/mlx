@@ -23,6 +23,47 @@ def relu(x):
     return mx.maximum(x, 0)
 
 
+def leaky_relu(x, alpha=0.01):
+    """Applies the Leaky Rectified Linear Unit.
+
+    Simply ``mx.maximum(alpha * x, x)``.
+    """
+    return mx.maximum(alpha * x, x)
+
+
+def elu(x, alpha=1.0):
+    """Applies the Exponential Linear Unit.
+
+    Simply ``mx.maximum(alpha * (mx.exp(x) - 1), x)``.
+    """
+    return mx.maximum(alpha * (mx.exp(x) - 1), x)
+
+
+def relu6(x):
+    """Applies the Rectified Linear Unit 6.
+
+    Applies :math:`\min(\max(x, 0), 6)` element wise.
+    """
+    return mx.minimum(mx.maximum(x, 0), 6.0)
+
+
+def softplus(x):
+    """Applies the Softplus function.
+
+    Applies :math:`\log(1 + \exp(x))` element wise.
+    """
+    return mx.logaddexp(x, 0)
+
+
+def celu(x, alpha=1.0):
+    """Applies the Continuously Differentiable Exponential Linear Unit.
+
+    Applies :math:`\max(0, x) + \min(0, \alpha * (\exp(x / \alpha) - 1))`
+    element wise.
+    """
+    return mx.maximum(x, 0.0) + alpha * (mx.exp(mx.minimum(x, 0.0) / alpha) - 1)
+
+
 def silu(x):
     r"""Applies the Sigmoid Linear Unit.
 
@@ -30,6 +71,14 @@ def silu(x):
     the logistic sigmoid.
     """
     return x * mx.sigmoid(x)
+
+
+def log_sigmoid(x):
+    r"""Applies the Log Sigmoid function.
+
+    Applies :math:`\log(\sigma(x)) = -\log(1 + e^{-x})` element wise.
+    """
+    return -softplus(-x)
 
 
 def gelu(x):
@@ -85,8 +134,38 @@ class ReLU(Module):
     pass
 
 
+@_make_activation_module(leaky_relu)
+class LeakyReLU(Module):
+    pass
+
+
+@_make_activation_module(elu)
+class ELU(Module):
+    pass
+
+
+@_make_activation_module(relu6)
+class ReLU6(Module):
+    pass
+
+
+@_make_activation_module(softplus)
+class Softplus(Module):
+    pass
+
+
+@_make_activation_module(celu)
+class CELU(Module):
+    pass
+
+
 @_make_activation_module(silu)
 class SiLU(Module):
+    pass
+
+
+@_make_activation_module(log_sigmoid)
+class LogSigmoid(Module):
     pass
 
 

@@ -99,6 +99,48 @@ def relu(x):
     mx.eval(y)
 
 
+def leaky_relu(x):
+    y = x
+    for i in range(100):
+        y = mx.maximum(0.1 * y, y)
+    mx.eval(y)
+
+
+def elu(x):
+    y = x
+    for i in range(100):
+        y = mx.maximum(1.0 * (mx.exp(y) - 1), y)
+    mx.eval(y)
+
+
+def relu6(x):
+    y = x
+    for i in range(100):
+        y = mx.minimum(mx.maximum(y, 0), 6.0)
+    mx.eval(y)
+
+
+def softplus(x):
+    y = x
+    for i in range(100):
+        y = mx.logaddexp(y, 0)
+    mx.eval(y)
+
+
+def celu(x):
+    y = x
+    for i in range(100):
+        y = mx.maximum(y, 0.0) + 1.0 * (mx.exp(mx.minimum(y, 0.0) / 1.0) - 1)
+    mx.eval(y)
+
+
+def log_sigmoid(x):
+    y = x
+    for i in range(100):
+        y = -mx.logaddexp(-y, 0)
+    mx.eval(y)
+
+
 def scalar_mult(x):
     y = x
     for i in range(100):
@@ -276,6 +318,24 @@ if __name__ == "__main__":
 
     elif args.benchmark == "relu":
         print(bench(relu, x))
+
+    elif args.benchmark == "leaky_relu":
+        print(bench(leaky_relu, x))
+
+    elif args.benchmark == "elu":
+        print(bench(elu, x))
+
+    elif args.benchmark == "relu6":
+        print(bench(relu6, x))
+
+    elif args.benchmark == "softplus":
+        print(bench(softplus, x))
+
+    elif args.benchmark == "celu":
+        print(bench(celu, x))
+
+    elif args.benchmark == "log_sigmoid":
+        print(bench(log_sigmoid, x))
 
     elif args.benchmark == "scalar_mul":
         print(bench(scalar_mult, x))

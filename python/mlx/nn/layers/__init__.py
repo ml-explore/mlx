@@ -1,14 +1,26 @@
 # Copyright © 2023 Apple Inc.
 
 from mlx.nn.layers.activations import (
+    CELU,
+    ELU,
     GELU,
+    LeakyReLU,
+    LogSigmoid,
     ReLU,
+    ReLU6,
     SiLU,
+    Softplus,
+    celu,
+    elu,
     gelu,
     gelu_approx,
     gelu_fast_approx,
+    leaky_relu,
+    log_sigmoid,
     relu,
+    relu6,
     silu,
+    softplus,
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
