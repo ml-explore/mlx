@@ -85,17 +85,17 @@ def nll_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str
 
 def kl_div_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none") -> mx.array:
     """
-    Computes the Kullback-Leiber divergence loss between logits and targets.
+    Computes the Kullback-Leibler divergence loss between logits and targets.
 
     Args:
         logits (mx.array): Logits for the distribution p.
-        targets (mx.array): Logits for the distribution q.
+        targets (mx.array): Log probabilities for the distribution q.
         axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed Kullback-Leiber divergence loss.
+        mx.array: The computed Kullback-Leibler divergence loss.
     """
     loss = mx.sum(mx.exp(targets) * (targets - logits), axis)
 
