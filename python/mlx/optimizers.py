@@ -221,3 +221,54 @@ class AdamW(Adam):
         return super().apply_single(
             gradient, parameter * (1 - self.learning_rate * self.weight_decay), state
         )
+
+
+class RMSprop(Optimizer):
+    r"""Implementation of the RMSprop optimizer.
+
+    The RMSprop update adjusts the Adagrad method in a very simple way in an
+    attempt to reduce its aggressive, monotonically decreasing learning rate.
+    Specifically, it uses a moving average of squared gradients to normalize
+    the gradient itself. That has an effect of balancing the step size decrease
+    (equivalently, divide the gradient by the root of the mean of the squares
+    of the gradients):
+
+    .. math::
+
+        v_{t+1} &= \beta v_t + (1 - \beta) g_t^2 \\
+        w_{t+1} &= w_t - \frac{\lambda}{\sqrt{v_{t+1} + \epsilon}} g_t
+
+    Where:
+    - :math:`\beta` is the decay rate that controls the moving average over past squared gradients.
+    - :math:`\lambda` is the learning rate.
+    - :math:`\epsilon` is a small constant that prevents division by zero.
+    - :math:`g_t` is the gradient at time step `t`.
+    - :math:`v_t` is the moving average of past squared gradients at time step `t`.
+
+    Args:
+        learning_rate (float): Learning rate :math:`\lambda`.
+        alpha (float): Smoothing constant :math:`\beta`.
+        eps (float): Term added to improve numerical stability :math:`\epsilon`.
+    """
+
+    def __init__(self, learning_rate: float, alpha: float = 0.99, eps: float = 1e-8):
+        super().__init__()
+
+        self.learning_rate = learning_rate
+        self.alpha = alpha
+        self.eps = eps
+
+    def apply_single(
+            self, gradient: mx.array, parameter: mx.array, state: OptimizerState
+    ):
+        """Performs the RMSprop parameter update and stores the squared
+        average of gradients in the optimizer state."""
+        squared_grad_avg = state.get('squared_grad_avg', mx.zeros_like(gradient))
+
+        squared_grad_avg = self.alpha * squared_grad_avg + (1 - self.alpha) * mx.square(gradient)
+
+        state['squared_grad_avg'] = squared_grad_avg
+
+        parameter_update = self.learning_rate * gradient / (mx.sqrt(squared_grad_avg) + self.eps)
+
+        return parameter - parameter_update

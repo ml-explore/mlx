@@ -1,0 +1,66 @@
+Index: python/mlx/optimizers.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># Copyright © 2023 Apple Inc.\n\nimport math\nfrom typing import List\n\nimport mlx.core as mx\nfrom mlx.utils import tree_map\n\n\nclass OptimizerState(dict):\n    \"\"\"The optimizer state implements a recursively defined\n    :class:`collections.defaultdict`, namely a missing key in an optimizer\n    state is an :class:`OptimizerState`.\n\n    .. note::\n       :meth:`OptimizerState.get` in contrast to a normal dictionary also sets\n       the key to the ``default`` value if the ``key`` was not present in the\n       dictionary.\n    \"\"\"\n\n    def __getitem__(self, key):\n        if key not in self:\n            self[key] = OptimizerState()\n        return super().__getitem__(key)\n\n    def get(self, key, default):\n        \"\"\"If ``key`` doesn't exist set its value to ``default`` and then return it.\"\"\"\n        if key not in self:\n            self[key] = default\n        return super().__getitem__(key)\n\n\nclass Optimizer:\n    \"\"\"The base class for all optimizers. It allows us to implement an\n    optimizer on a per-parameter basis and apply it to a parameter tree.\n\n    Attributes:\n        state (OptimizerState): It holds the optimizer's state dictionary.\n    \"\"\"\n\n    def __init__(self):\n        self.state = OptimizerState()\n\n    def update(self, model: \"mlx.nn.Module\", gradients: dict):\n        \"\"\"Apply the gradients to the parameters of the model and update the\n        model with the new parameters.\n\n        Args:\n            model (mlx.nn.Module): An mlx module to be updated.\n            gradients (dict): A Python tree of gradients, most likely computed\n                              via :func:`mlx.nn.value_and_grad`.\n        \"\"\"\n        model.update(self.apply_gradients(gradients, model))\n\n    def apply_gradients(self, gradients: dict, model: dict):\n        \"\"\"Apply the gradients to the parameters and return the updated parameters.\n\n        Can be used to update a model via\n        ``model.update(opt.apply_gradients(grads, model))`` which is precisely\n        how :meth:`Optimizer.update` is implemented.\n\n        Args:\n            gradients (dict): A Python tree of gradients.\n            model (dict): A Python tree of parameters. It can be a superset of\n                          the gradients. In that case the returned python tree\n                          will be of the same structure as the gradients.\n        \"\"\"\n        return tree_map(self.apply_single, gradients, model, self.state)\n\n    def apply_single(\n        self, gradient: mx.array, parameter: mx.array, state: OptimizerState\n    ):\n        \"\"\"To be extended by the children classes to implement each optimizer's\n        update.\"\"\"\n        raise NotImplementedError()\n\n\nclass SGD(Optimizer):\n    r\"\"\"Stochastic gradient descent optimizer.\n\n    Updates a parameter :math:`w` with a gradient :math:`g` as follows\n\n    .. math::\n\n        v_{t+1} &= \\mu v_t + g_t \\\\\n        w_{t+1} &= w_t - \\lambda v_{t+1}\n\n    Args:\n        learning_rate (float): The learning :math:`\\lambda` for the update\n        momentum (float, optional): The momentum strength :math:`\\mu` (default: 0)\n        weight_decay (float, optional): The weight decay (L2 penalty) (default: 0)\n        dampening (float, optional): Dampening for momentum :math:`\\tau` (default: 0)\n        nesterov (bool, optional): Enables Nesterov momentum (default: False)\n    \"\"\"\n\n    def __init__(\n        self,\n        learning_rate: float,\n        momentum: float = 0.0,\n        weight_decay: float = 0.0,\n        dampening: float = 0.0,\n        nesterov: bool = False,\n    ):\n        if nesterov and (momentum <= 0 or dampening != 0):\n            raise ValueError(\n                \"Nesterov momentum requires a momentum and zero dampening.\"\n            )\n        super().__init__()\n\n        self.learning_rate = learning_rate\n        self.momentum = momentum\n        self.weight_decay = weight_decay\n        self.dampening = dampening\n        self.nesterov = nesterov\n\n    def apply_single(\n        self, gradient: mx.array, parameter: mx.array, state: OptimizerState\n    ):\n        \"\"\"Performs the SGD parameter update and stores :math:`v` in the\n        optimizer state.\"\"\"\n        if self.momentum <= 0:\n            return parameter - self.learning_rate * gradient\n\n        v = state.get(\"v\", mx.zeros_like(gradient))\n\n        if self.weight_decay != 0:\n            gradient += self.weight_decay * parameter\n\n        v = self.momentum * v\n        if self.dampening > 0:\n            v += (1 - self.dampening) * gradient\n        else:\n            v += gradient\n\n        if self.nesterov:\n            update = gradient + self.momentum * v\n        else:\n            update = v\n        state[\"v\"] = v\n        return parameter - self.learning_rate * update\n\n\nclass Adam(Optimizer):\n    r\"\"\"Implementation of the Adam optimizer [1].\n\n    Our Adam implementation follows the original paper and omits the bias\n    correction in the first and second moment estimates. In detail,\n\n    .. math::\n\n        m_{t+1} &= \\beta_1 m_t + (1 - \\beta_1) g_t \\\\\n        v_{t+1} &= \\beta_2 v_t + (1 - \\beta_2) g_t^2 \\\\\n        w_{t+1} &= w_t - \\lambda \\frac{m_{t+1}}{\\sqrt{v_{t+1} + \\epsilon}}\n\n    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic\n    optimization. ICLR 2015.\n    \"\"\"\n\n    def __init__(\n        self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8\n    ):\n        super().__init__()\n\n        self.learning_rate = learning_rate\n        self.betas = betas\n        self.eps = eps\n\n    def apply_single(\n        self, gradient: mx.array, parameter: mx.array, state: OptimizerState\n    ):\n        \"\"\"Performs the Adam parameter update and stores :math:`v` and\n        :math:`m` in the optimizer state.\"\"\"\n        lr = self.learning_rate\n        b1, b2 = self.betas\n        eps = self.eps\n\n        m = state.get(\"m\", gradient)\n        v = state.get(\"v\", mx.square(gradient))\n        m = b1 * m + (1 - b1) * gradient\n        v = b2 * v + (1 - b2) * mx.square(gradient)\n        state[\"m\"] = m\n        state[\"v\"] = v\n\n        return parameter - lr * m / (mx.sqrt(v) + eps)\n\n\nclass AdamW(Adam):\n    r\"\"\"Implementation of the AdamW optimizer [1].\n\n    Following the above convention, in contrast with [1], we do not use bias\n    correction in the first and second moments for AdamW. We update the weights \n    with a weight_decay (λ) value:\n\n    .. math::\n\n        m_{t+1} &= \\beta_1 m_t + (1 - \\beta_1) g_t \\\\\n        v_{t+1} &= \\beta_2 v_t + (1 - \\beta_2) g_t^2 \\\\\n        w_{t+1} &= w_t - \\alpha (\\frac{m_{t+1}}{\\sqrt{v_{t+1} + \\epsilon}} + \\lambda w_t)\n\n    [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay \n    regularization. ICLR 2019.\n    \"\"\"\n\n    def __init__(\n        self,\n        learning_rate: float,\n        betas: List[float] = [0.9, 0.999],\n        eps: float = 1e-8,\n        weight_decay: float = 0.01,\n    ):\n        super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)\n        self.weight_decay = weight_decay\n\n    def apply_single(\n        self, gradient: mx.array, parameter: mx.array, state: OptimizerState\n    ):\n        \"\"\"Performs the AdamW parameter update by modifying the parameters\n        passed into Adam.\n        \"\"\"\n\n        return super().apply_single(\n            gradient, parameter * (1 - self.learning_rate * self.weight_decay), state\n        )\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/python/mlx/optimizers.py b/python/mlx/optimizers.py
+--- a/python/mlx/optimizers.py	(revision ac6dc5d3ebe230c2f888215a9346c9deaaf302cd)
++++ b/python/mlx/optimizers.py	(date 1702160455769)
+@@ -221,3 +221,54 @@
+         return super().apply_single(
+             gradient, parameter * (1 - self.learning_rate * self.weight_decay), state
+         )
++
++
++class RMSprop(Optimizer):
++    r"""Implementation of the RMSprop optimizer.
++
++    The RMSprop update adjusts the Adagrad method in a very simple way in an
++    attempt to reduce its aggressive, monotonically decreasing learning rate.
++    Specifically, it uses a moving average of squared gradients to normalize
++    the gradient itself. That has an effect of balancing the step size decrease
++    (equivalently, divide the gradient by the root of the mean of the squares
++    of the gradients):
++
++    .. math::
++
++        v_{t+1} &= \beta v_t + (1 - \beta) g_t^2 \\
++        w_{t+1} &= w_t - \frac{\lambda}{\sqrt{v_{t+1} + \epsilon}} g_t
++
++    Where:
++    - :math:`\beta` is the decay rate that controls the moving average over past squared gradients.
++    - :math:`\lambda` is the learning rate.
++    - :math:`\epsilon` is a small constant that prevents division by zero.
++    - :math:`g_t` is the gradient at time step `t`.
++    - :math:`v_t` is the moving average of past squared gradients at time step `t`.
++
++    Args:
++        learning_rate (float): Learning rate :math:`\lambda`.
++        alpha (float): Smoothing constant :math:`\beta`.
++        eps (float): Term added to improve numerical stability :math:`\epsilon`.
++    """
++
++    def __init__(self, learning_rate: float, alpha: float = 0.99, eps: float = 1e-8):
++        super().__init__()
++
++        self.learning_rate = learning_rate
++        self.alpha = alpha
++        self.eps = eps
++
++    def apply_single(
++            self, gradient: mx.array, parameter: mx.array, state: OptimizerState
++    ):
++        """Performs the RMSprop parameter update and stores the squared
++        average of gradients in the optimizer state."""
++        squared_grad_avg = state.get('squared_grad_avg', mx.zeros_like(gradient))
++
++        squared_grad_avg = self.alpha * squared_grad_avg + (1 - self.alpha) * mx.square(gradient)
++
++        state['squared_grad_avg'] = squared_grad_avg
++
++        parameter_update = self.learning_rate * gradient / (mx.sqrt(squared_grad_avg) + self.eps)
++
++        return parameter - parameter_update
+\ No newline at end of file
