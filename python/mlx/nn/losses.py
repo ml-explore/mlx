@@ -49,7 +49,7 @@ def l1_loss(predictions: mx.array, targets: mx.array):
     return mx.mean(mx.abs(predictions - targets))
 
 
-def mse_loss(predictions: mx.array, targets: mx.array, reduction: str = "none"):
+def mse_loss(predictions: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"):
     """
     Computes the Mean Squared Error (MSE) loss between predictions and targets.
 
@@ -65,7 +65,7 @@ def mse_loss(predictions: mx.array, targets: mx.array, reduction: str = "none"):
     Returns:
         mx.array: The computed MSE loss.
     """
-    loss = mx.mean(mx.square(predictions - targets), axis=-1)
+    loss = mx.mean(mx.square(predictions - targets), axis)
 
     if reduction == "mean":
         return mx.mean(loss)
@@ -77,7 +77,7 @@ def mse_loss(predictions: mx.array, targets: mx.array, reduction: str = "none"):
         raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
 
 
-def nll_loss(logits: mx.array, targets: mx.array, reduction: str = "none"):
+def nll_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"):
     """
     Computes the Negative Log Likelihood (NLL) loss between logits and targets.
 
@@ -105,7 +105,7 @@ def nll_loss(logits: mx.array, targets: mx.array, reduction: str = "none"):
         raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
 
 
-def kl_div_loss(p_logits: mx.array, q_logits: mx.array, reduction: str = "none"):
+def kl_div_loss(p_logits: mx.array, q_logits: mx.array, axis: int = -1, reduction: str = "none"):
     """
     Computes the Kullback-Leibler (KL) Divergence loss between two sets of logits, p_logits and q_logits.
 
