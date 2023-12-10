@@ -22,7 +22,6 @@ def sigmoid(x):
         \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
     """
     return mx.sigmoid(x)
-    
 
 
 def relu(x):
@@ -89,9 +88,11 @@ def gelu_fast_approx(x):
     """
     return x * mx.sigmoid(1.773 * x)
 
+
 @_make_activation_module
 class Sigmoid(Module):
     pass
+
 
 @_make_activation_module(relu)
 class ReLU(Module):
