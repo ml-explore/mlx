@@ -223,6 +223,27 @@ def topk(axis, x):
     mx.eval(ys)
 
 
+def step_function(x):
+    y = x
+    for i in range(100):
+        y = nn.step(x)
+    mx.eval(y)
+
+
+def selu(x):
+    y = x
+    for i in range(100):
+        y = nn.selu(x)
+    mx.eval(y)
+
+
+def swish(x):
+    y = x
+    for i in range(100):
+        y = nn.swish(x)
+    mx.eval(y)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("benchmark", help="Choose the benchmark to run")
@@ -371,6 +392,15 @@ if __name__ == "__main__":
 
     elif args.benchmark == "topk":
         print(bench(topk, axis, x))
+
+    elif args.benchmark == "step":
+        print(bench(step_function, x))
+
+    elif args.benchmark == "selu":
+        print(bench(selu, x))
+
+    elif args.benchmark == "swish":
+        print(bench(swish, x))
 
     else:
         raise ValueError("Unknown benchmark")

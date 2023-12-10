@@ -257,6 +257,14 @@ def topk(axis, x):
     sync_if_needed(x)
 
 
+@torch.no_grad()
+def selu(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.selu(y)
+    sync_if_needed(x)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("benchmark", help="Choose the benchmark to run")
