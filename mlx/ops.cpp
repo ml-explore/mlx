@@ -567,6 +567,11 @@ array concatenate(
   return concatenate(flat_inputs, 0, s);
 }
 
+/** Stack arrays along a new axis */
+array stack(const std::vector<array>& arrays, int axis, StreamOrDevice s = {}) {
+}
+array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {}
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,

@@ -1926,3 +1926,16 @@ TEST_CASE("test where") {
   expected = array({1, 2, 2, 1}, {2, 2});
   CHECK(array_equal(where(condition, x, y), expected).item<bool>());
 }
+
+TEST_CASE("test stack") {
+  auto x = array({1, 2, 3}, {3});
+  auto y = array({4, 5, 6}, {3});
+  auto z = std::vector<array>{x, y};
+  CHECK_EQ(stack(z).shape(), std::vector<int>{2, 3});
+  CHECK_EQ(stack(z, 0).shape(), std::vector<int>{2, 3});
+  CHECK_EQ(stack(z, 1).shape(), std::vector<int>{3, 2});
+  CHECK_EQ(stack(z, -1).shape(), std::vector<int>{3, 2});
+
+  auto a = array({1, 2, 3, 4}, {4});
+  CHECK_THROWS(stack(std::vector<array>{a, x}));
+}

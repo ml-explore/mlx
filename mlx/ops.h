@@ -151,6 +151,10 @@ array concatenate(
     StreamOrDevice s = {});
 array concatenate(const std::vector<array>& arrays, StreamOrDevice s = {});
 
+/** Stack arrays along a new axis. */
+array stack(const std::vector<array>& arrays, int axis, StreamOrDevice s = {});
+array stack(const std::vector<array>& arrays, StreamOrDevice s = {});
+
 /** Permutes the dimensions according to the given axes. */
 array transpose(const array& a, std::vector<int> axes, StreamOrDevice s = {});
 inline array transpose(
