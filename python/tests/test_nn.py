@@ -260,11 +260,23 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
 
+        y = nn.LeakyReLU(negative_slope=0.1)(x)
+        self.assertTrue(mx.array_equal(y, mx.array([1.0, -0.1, 0.0])))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
     def test_elu(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.elu(x)
         epsilon = 1e-4
         expected_y = mx.array([1.0, -0.6321, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.ELU(alpha=1.1)(x)
+        epsilon = 1e-4
+        expected_y = mx.array([1.0, -0.6953, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
@@ -290,6 +302,12 @@ class TestNN(mlx_tests.MLXTestCase):
         y = nn.celu(x)
         epsilon = 1e-4
         expected_y = mx.array([1.0, -0.6321, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.CELU(alpha=1.1)(x)
+        expected_y = mx.array([1.0, -0.6568, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)

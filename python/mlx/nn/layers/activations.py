@@ -23,12 +23,12 @@ def relu(x):
     return mx.maximum(x, 0)
 
 
-def leaky_relu(x, alpha=0.01):
+def leaky_relu(x, negative_slope=0.01):
     """Applies the Leaky Rectified Linear Unit.
 
-    Simply ``mx.maximum(alpha * x, x)``.
+    Simply ``mx.maximum(negative_slope * x, x)``.
     """
-    return mx.maximum(alpha * x, x)
+    return mx.maximum(negative_slope * x, x)
 
 
 def elu(x, alpha=1.0):
@@ -134,14 +134,39 @@ class ReLU(Module):
     pass
 
 
-@_make_activation_module(leaky_relu)
 class LeakyReLU(Module):
-    pass
+    r"""Applies the Leaky Rectified Linear Unit.
+
+    Simply ``mx.maximum(negative_slope * x, x)``.
+
+    Args:
+        negative_slope: Controls the angle of the negative slope. Default: 1e-2.
+    """
+
+    def __init__(self, negative_slope=1e-2):
+        super().__init__()
+        self._negative_slope = negative_slope
+
+    def __call__(self, x):
+        return leaky_relu(x, self._negative_slope)
 
 
-@_make_activation_module(elu)
 class ELU(Module):
-    pass
+    r"""Applies the Exponential Linear Unit.
+        Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
+
+    See :func:`elu`, for the functional equivalent.
+
+    Args:
+        alpha: the :math:`\alpha` value for the ELU formulation. Default: 1.0
+    """
+
+    def __init__(self, alpha=1.0):
+        super().__init__()
+        self._alpha = alpha
+
+    def __call__(self, x):
+        return elu(x, self._alpha)
 
 
 @_make_activation_module(relu6)
@@ -154,9 +179,23 @@ class Softplus(Module):
     pass
 
 
-@_make_activation_module(celu)
 class CELU(Module):
-    pass
+    r"""Applies the Continuously Differentiable Exponential Linear Unit.
+        Applies :math:`\max(0, x) + \min(0, \alpha * (\exp(x / \alpha) - 1))`
+        element wise.
+
+    See :func:`celu`, for the functional equivalent.
+
+    Args:
+        alpha: the :math:`\alpha` value for the CELU formulation. Default: 1.0
+    """
+
+    def __init__(self, alpha=1.0):
+        super().__init__()
+        self._alpha = alpha
+
+    def __call__(self, x):
+        return celu(x, self._alpha)
 
 
 @_make_activation_module(silu)
