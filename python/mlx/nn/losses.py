@@ -2,6 +2,7 @@
 
 import mlx.core as mx
 
+
 def cross_entropy(
     logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
 ) -> mx.array:
@@ -24,7 +25,9 @@ def cross_entropy(
     return _reduce(loss, reduction)
 
 
-def l1_loss(predictions: mx.array, targets: mx.array, reduction: str = "none") -> mx.array:
+def l1_loss(
+    predictions: mx.array, targets: mx.array, reduction: str = "none"
+) -> mx.array:
     """
     Computes the L1 loss between predictions and targets.
 
@@ -38,11 +41,13 @@ def l1_loss(predictions: mx.array, targets: mx.array, reduction: str = "none") -
         mx.array: The computed L1 loss.
     """
     loss = mx.mean(mx.abs(predictions - targets))
-    
+
     return _reduce(loss, reduction)
 
 
-def mse_loss(predictions: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none") -> mx.array:
+def mse_loss(
+    predictions: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+) -> mx.array:
     """
     Computes the mean squared error loss between predictions and targets.
 
@@ -57,11 +62,13 @@ def mse_loss(predictions: mx.array, targets: mx.array, axis: int = -1, reduction
         mx.array: The computed mean squared error loss.
     """
     loss = mx.mean(mx.square(predictions - targets), axis)
-    
+
     return _reduce(loss, reduction)
 
 
-def nll_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none") -> mx.array:
+def nll_loss(
+    logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+) -> mx.array:
     """
     Computes the negative log likelihood loss between logits and targets.
 
@@ -80,7 +87,9 @@ def nll_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str
     return _reduce(loss, reduction)
 
 
-def kl_div_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none") -> mx.array:
+def kl_div_loss(
+    logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+) -> mx.array:
     """
     Computes the Kullback-Leibler divergence loss between logits and targets.
 
@@ -98,7 +107,8 @@ def kl_div_loss(logits: mx.array, targets: mx.array, axis: int = -1, reduction: 
 
     return _reduce(loss, reduction)
 
-def _reduce(loss: mx.array, reduction: str = 'none'):
+
+def _reduce(loss: mx.array, reduction: str = "none"):
     if reduction == "mean":
         return mx.mean(loss)
     elif reduction == "sum":
