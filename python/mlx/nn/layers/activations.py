@@ -3,7 +3,6 @@
 import math
 
 import mlx.core as mx
-from mlx.core import array
 from mlx.nn.layers.base import Module
 
 
