@@ -18,7 +18,7 @@ struct Remainder {
   template <typename T> T operator()(T x, T y) { return x % y; }
   template <> float operator()(float x, float y) { return fmod(x, y); }
   template <> half operator()(half x, half y) { return fmod(x, y); }
-  template <> bfloat operator()(bfloat x, bfloat y) { return fmod(x, y); }
+  template <> bfloat16_t operator()(bfloat16_t x, bfloat16_t y) { return fmod(x, y); }
 };
 
 struct Equal {
