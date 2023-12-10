@@ -244,9 +244,13 @@ class Adagrad(Optimizer):
         self.eps = eps
 
         if self.learning_rate < 0.0:
-            raise ValueError("Invalid learning rate: {}".format(self.learning_rate))
+            raise ValueError(
+                f"Adagrad learning rate should be >=0, {self.learning_rate} was provided instead"
+            )
         if self.eps < 0.0:
-            raise ValueError("Invalid eps: {}".format(self.eps))
+            raise ValueError(
+                f"Adagrad epsilon should be >0, {self.eps} was provided instead"
+            )
 
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
@@ -256,7 +260,7 @@ class Adagrad(Optimizer):
         lr = self.learning_rate
         eps = self.eps
 
-        v = state.get("v", mx.square(gradient))
+        v = state.get("v", mx.zeros_like(gradient))
         v = v + mx.square(gradient)
         state["v"] = v
 
