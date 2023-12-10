@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import textwrap
-from typing import Any, Callable, List, Union, Optional
+from typing import Any, Callable, List, Optional, Union
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten

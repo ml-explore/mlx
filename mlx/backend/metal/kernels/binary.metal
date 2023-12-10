@@ -14,6 +14,13 @@ struct Divide {
   template <typename T> T operator()(T x, T y) { return x / y; }
 };
 
+struct Remainder {
+  template <typename T> T operator()(T x, T y) { return x % y; }
+  template <> float operator()(float x, float y) { return fmod(x, y); }
+  template <> half operator()(half x, half y) { return fmod(x, y); }
+  template <> bfloat operator()(bfloat x, bfloat y) { return fmod(x, y); }
+};
+
 struct Equal {
   template <typename T> bool operator()(T x, T y) { return x == y; }
 };
@@ -363,6 +370,7 @@ instantiate_binary_types(min, Minimum)
 instantiate_binary_types(mul, Multiply)
 instantiate_binary_types(sub, Subtract)
 instantiate_binary_types(pow, Power)
+instantiate_binary_types(rem, Remainder)
 
 // NaNEqual only needed for floating point types with boolean output
 instantiate_binary_all(naneq, float16, half, bool, NaNEqual)

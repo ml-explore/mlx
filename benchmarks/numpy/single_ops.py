@@ -1,7 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
 import numpy as np
-
 from time_utils import time_fn
 
 

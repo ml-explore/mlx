@@ -436,10 +436,14 @@ void init_array(py::module_& m) {
           "__repr__",
           [](const Dtype& t) {
             std::ostringstream os;
+            os << "mlx.core.";
             os << t;
             return os.str();
           })
-      .def("__eq__", [](const Dtype& t1, const Dtype& t2) { return t1 == t2; });
+      .def("__eq__", [](const Dtype& t1, const Dtype& t2) { return t1 == t2; })
+      .def("__hash__", [](const Dtype& t) {
+        return static_cast<int64_t>(t.val);
+      });
   m.attr("bool_") = py::cast(bool_);
   m.attr("uint8") = py::cast(uint8);
   m.attr("uint16") = py::cast(uint16);
@@ -622,6 +626,18 @@ void init_array(py::module_& m) {
           "__rdiv__",
           [](const array& a, const ScalarOrArray v) {
             return divide(to_array(v, float32), a);
+          },
+          "other"_a)
+      .def(
+          "__mod__",
+          [](const array& a, const ScalarOrArray v) {
+            return remainder(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__rmod__",
+          [](const array& a, const ScalarOrArray v) {
+            return remainder(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(

@@ -84,6 +84,10 @@ inline bool is_floating_point(const Dtype& t) {
       kindof(t) == Dtype::Kind::c;
 }
 
+inline bool is_complex(const Dtype& t) {
+  return kindof(t) == Dtype::Kind::c;
+}
+
 inline bool is_integral(const Dtype& t) {
   return !(is_floating_point(t));
 }

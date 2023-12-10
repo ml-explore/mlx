@@ -536,6 +536,25 @@ class Divide : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Remainder : public Primitive {
+ public:
+  explicit Remainder(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Remainder)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Equal : public Primitive {
  public:
   explicit Equal(Stream stream, bool equal_nan = false)

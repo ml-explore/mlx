@@ -1,13 +1,12 @@
 # Copyright © 2023 Apple Inc.
 
+import math
 import unittest
 from itertools import permutations
 
-import math
 import mlx.core as mx
-import numpy as np
-
 import mlx_tests
+import numpy as np
 
 
 class TestOps(mlx_tests.MLXTestCase):
@@ -116,6 +115,7 @@ class TestOps(mlx_tests.MLXTestCase):
             "subtract",
             "multiply",
             "divide",
+            "remainder",
             "equal",
             "not_equal",
             "less",
@@ -235,6 +235,25 @@ class TestOps(mlx_tests.MLXTestCase):
         z = 1.0 / x
         self.assertEqual(z.dtype, mx.float32)
         self.assertEqual(z.item(), 0.5)
+
+    def test_remainder(self):
+        for dt in [mx.int32, mx.float32]:
+            x = mx.array(2, dtype=dt)
+            y = mx.array(4, dtype=dt)
+
+            z1 = mx.remainder(x, y)
+            z2 = mx.remainder(y, x)
+            self.assertEqual(z1.dtype, dt)
+            self.assertEqual(z1.item(), 2)
+            self.assertEqual(z2.item(), 0)
+
+            z = x % 4
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), 2)
+
+            z = 1 % x
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), 1)
 
     def test_comparisons(self):
         a = mx.array([0.0, 1.0, 5.0])
@@ -953,30 +972,32 @@ class TestOps(mlx_tests.MLXTestCase):
                     test_ops(np_vjp, mx_vjp, x_, y_, atol_)
 
     def test_binary_ops(self):
-        def test_ops(npop, mlxop, x, y, atol):
-            r_np = npop(x, x)
-            r_mlx = mlxop(y, y)
+        def test_ops(npop, mlxop, x1, x2, y1, y2, atol):
+            r_np = npop(x1, x2)
+            r_mlx = mlxop(y1, y2)
             mx.eval(r_mlx)
             self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
 
-            r_np = npop(x[:1], x)
-            r_mlx = mlxop(y[:1], y)
+            r_np = npop(x1[:1], x2)
+            r_mlx = mlxop(y1[:1], y2)
             mx.eval(r_mlx)
             self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
 
-            r_np = npop(x[:, :1], x)
-            r_mlx = mlxop(y[:, :1], y)
+            r_np = npop(x1[:, :1], x2)
+            r_mlx = mlxop(y1[:, :1], y2)
             mx.eval(r_mlx)
             self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
 
-            r_np = npop(x[:, :, :1], x)
-            r_mlx = mlxop(y[:, :, :1], y)
+            r_np = npop(x1[:, :, :1], x2)
+            r_mlx = mlxop(y1[:, :, :1], y2)
             mx.eval(r_mlx)
             self.assertTrue(np.allclose(r_np, r_mlx, atol=atol))
 
-        x = np.maximum(np.random.rand(18, 28, 38), 0.1)
-        y = mx.array(x)
-        mx.eval(y)
+        x1 = np.maximum(np.random.rand(18, 28, 38), 0.1)
+        x2 = np.maximum(np.random.rand(18, 28, 38), 0.1)
+        y1 = mx.array(x1)
+        y2 = mx.array(x2)
+        mx.eval(y1, y2)
         for op in [
             "add",
             "subtract",
@@ -1008,9 +1029,13 @@ class TestOps(mlx_tests.MLXTestCase):
                 for dtype in dtypes:
                     atol = 1e-3 if dtype == "float16" else 1e-6
                     with self.subTest(dtype=dtype):
-                        x_ = x.astype(getattr(np, dtype))
-                        y_ = mx.array(x_)
-                        test_ops(getattr(np, op), getattr(mx, op), x_, y_, atol)
+                        x1_ = x1.astype(getattr(np, dtype))
+                        x2_ = x2.astype(getattr(np, dtype))
+                        y1_ = mx.array(x1_)
+                        y2_ = mx.array(x2_)
+                        test_ops(
+                            getattr(np, op), getattr(mx, op), x1_, x2_, y1_, y2_, atol
+                        )
 
     def test_irregular_binary_ops(self):
         # Check transposed binary ops
