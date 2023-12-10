@@ -87,6 +87,26 @@ inline array ones(const std::vector<int>& shape, StreamOrDevice s = {}) {
 }
 array ones_like(const array& a, StreamOrDevice s = {});
 
+/** Fill an array of the given shape with ones in the diagonal and zeros
+ * everywhere else. */
+array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s = {});
+inline array eye(int n, Dtype dtype, StreamOrDevice s = {}) {
+  return eye(n, n, 0, dtype, s);
+}
+inline array eye(int n, int m, StreamOrDevice s = {}) {
+  return eye(n, m, 0, float32, s); // Defaulting Dtype to float32
+}
+inline array eye(int n, StreamOrDevice s = {}) {
+  return eye(n, n, 0, float32, s); // Defaulting M and Dtype
+}
+
+/** Fill an array of the given shape with ones in the major diagonal and zeros
+ * everywhere else. */
+array identity(int n, Dtype dtype, StreamOrDevice s = {});
+inline array identity(int n, StreamOrDevice s = {}) {
+  return identity(n, float32, s);
+}
+
 /** array manipulation */
 
 /** Reshape an array to the given shape. */
