@@ -100,6 +100,25 @@ class TestNN(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
+    def test_binary_cross_entropy(self):
+        inputs = mx.array([[0.5, 0.5], [0.5, 0.5]])
+        targets = mx.array([[0.0, 1.0], [1.0, 0.0]])
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.binary_cross_entropy(inputs, targets, reduction="none")
+        expected_none = mx.array([[0.693147, 0.693147], [0.693147, 0.693147]])
+        self.assertTrue(mx.array_equal(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.binary_cross_entropy(inputs, targets, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertEqual(losses_mean, expected_mean)
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.binary_cross_entropy(inputs, targets, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertEqual(losses_sum, expected_sum)
+
     def test_gelu(self):
         inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
 
