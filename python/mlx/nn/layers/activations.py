@@ -40,7 +40,7 @@ def elu(x, alpha=1.0):
 
 
 def relu6(x):
-    """Applies the Rectified Linear Unit 6.
+    r"""Applies the Rectified Linear Unit 6.
 
     Applies :math:`\min(\max(x, 0), 6)` element wise.
     """
@@ -48,7 +48,7 @@ def relu6(x):
 
 
 def softplus(x):
-    """Applies the Softplus function.
+    r"""Applies the Softplus function.
 
     Applies :math:`\log(1 + \exp(x))` element wise.
     """
@@ -56,7 +56,7 @@ def softplus(x):
 
 
 def celu(x, alpha=1.0):
-    """Applies the Continuously Differentiable Exponential Linear Unit.
+    r"""Applies the Continuously Differentiable Exponential Linear Unit.
 
     Applies :math:`\max(0, x) + \min(0, \alpha * (\exp(x / \alpha) - 1))`
     element wise.

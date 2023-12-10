@@ -6,6 +6,7 @@ import os
 import time
 
 import mlx.core as mx
+import mlx.nn as nn
 
 
 def int_or_list(x):
@@ -102,42 +103,42 @@ def relu(x):
 def leaky_relu(x):
     y = x
     for i in range(100):
-        y = mx.maximum(0.1 * y, y)
+        y = nn.leaky_relu(y)
     mx.eval(y)
 
 
 def elu(x):
     y = x
     for i in range(100):
-        y = mx.maximum(1.0 * (mx.exp(y) - 1), y)
+        y = nn.elu(y)
     mx.eval(y)
 
 
 def relu6(x):
     y = x
     for i in range(100):
-        y = mx.minimum(mx.maximum(y, 0), 6.0)
+        y = nn.relu6(y)
     mx.eval(y)
 
 
 def softplus(x):
     y = x
     for i in range(100):
-        y = mx.logaddexp(y, 0)
+        y = nn.softplus(y)
     mx.eval(y)
 
 
 def celu(x):
     y = x
     for i in range(100):
-        y = mx.maximum(y, 0.0) + 1.0 * (mx.exp(mx.minimum(y, 0.0) / 1.0) - 1)
+        y = nn.celu(y)
     mx.eval(y)
 
 
 def log_sigmoid(x):
     y = x
     for i in range(100):
-        y = -mx.logaddexp(-y, 0)
+        y = nn.log_sigmoid(y)
     mx.eval(y)
 
 
