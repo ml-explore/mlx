@@ -226,8 +226,7 @@ class AdamW(Adam):
 class Adagrad(Optimizer):
     r"""Implementation of the Adagrad optimizer [1].
 
-    Our Adagrad implementation follows the original paper and omits the bias
-    correction in the first and second moment estimates. In detail,
+    Our Adagrad implementation follows the original paper. In detail,
 
     .. math::
 
