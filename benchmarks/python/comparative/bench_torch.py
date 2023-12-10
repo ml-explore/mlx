@@ -164,6 +164,16 @@ def log_sigmoid(x):
 
 
 @torch.no_grad()
+def prelu(x: torch.Tensor) -> torch.Tensor:
+    return torch.nn.functional.prelu(x, torch.ones(1).to(x.device))
+
+
+@torch.no_grad()
+def mish(x: torch.Tensor) -> torch.Tensor:
+    return torch.nn.functional.mish(x)
+
+
+@torch.no_grad()
 def scalar_mult(x):
     y = x
     for i in range(100):
@@ -376,6 +386,10 @@ if __name__ == "__main__":
     elif args.benchmark == "log_sigmoid":
         print(bench(log_sigmoid, x))
 
+    elif args.benchmark == "prelu":
+        print(bench(prelu, x))
+    elif args.benchmark == "mish":
+        print(bench(mish, x))
     elif args.benchmark == "scalar_mul":
         print(bench(scalar_mult, x))
 
