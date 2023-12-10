@@ -34,9 +34,9 @@ def leaky_relu(x, alpha=0.01):
 def elu(x, alpha=1.0):
     """Applies the Exponential Linear Unit.
 
-    Simply ``mx.maximum(alpha * (mx.exp(x) - 1), x)``.
+    Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
     """
-    return mx.maximum(alpha * (mx.exp(x) - 1), x)
+    return mx.where(x > 0, x, alpha * (mx.exp(x) - 1))
 
 
 def relu6(x):
