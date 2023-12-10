@@ -180,3 +180,6 @@ Loss Functions
 
    losses.cross_entropy
    losses.l1_loss
+   losses.mse_loss
+   losses.nll_loss
+   losses.kl_div_loss

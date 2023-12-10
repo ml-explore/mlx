@@ -15,6 +15,16 @@ def _make_activation_module(f):
     return decorator
 
 
+def sigmoid(x):
+    r"""Applies the element-wise function:
+
+    .. math::
+        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
+    """
+    return mx.sigmoid(x)
+    
+
+
 def relu(x):
     """Applies the Rectified Linear Unit.
 
@@ -79,6 +89,9 @@ def gelu_fast_approx(x):
     """
     return x * mx.sigmoid(1.773 * x)
 
+@_make_activation_module
+class Sigmoid(Module):
+    pass
 
 @_make_activation_module(relu)
 class ReLU(Module):
@@ -129,3 +142,16 @@ class GELU(Module):
 
     def __call__(self, x):
         return self._act(x)
+
+
+def tanh(x):
+    """Applies the hyperbolic tangent function.
+
+    Simply ``mx.tanh(x)``.
+    """
+    return mx.tanh(x)
+
+
+@_make_activation_module(tanh)
+class Tanh(Module):
+    pass
