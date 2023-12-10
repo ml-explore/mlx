@@ -46,7 +46,7 @@ def l1_loss(
 
 
 def mse_loss(
-    predictions: mx.array, targets: mx.array, reduction: str = "mean"
+    predictions: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
     """
     Computes the mean squared error loss between predictions and targets.
@@ -55,7 +55,7 @@ def mse_loss(
         predictions (mx.array): The predicted values.
         targets (mx.array): The target values.
         reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         mx.array: The computed mean squared error loss.
