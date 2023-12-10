@@ -3,6 +3,7 @@
 import math
 
 import mlx.core as mx
+from mlx.core import array
 from mlx.nn.layers.base import Module
 
 
@@ -129,3 +130,16 @@ class GELU(Module):
 
     def __call__(self, x):
         return self._act(x)
+
+
+def tanh(x):
+    """Applies the hyperbolic tangent function.
+
+    Simply ``mx.tanh(x)``.
+    """
+    return mx.tanh(x)
+
+
+@_make_activation_module(tanh)
+class Tanh(Module):
+    pass
