@@ -46,7 +46,7 @@ def l1_loss(
 
 
 def mse_loss(
-    predictions: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+    predictions: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
     """
     Computes the mean squared error loss between predictions and targets.
@@ -54,56 +54,62 @@ def mse_loss(
     Args:
         predictions (mx.array): The predicted values.
         targets (mx.array): The target values.
-        axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         mx.array: The computed mean squared error loss.
     """
-    loss = mx.mean(mx.square(predictions - targets), axis)
+    loss = mx.square(predictions - targets)
 
     return _reduce(loss, reduction)
 
 
 def nll_loss(
-    logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
 ) -> mx.array:
     """
-    Computes the negative log likelihood loss between logits and targets.
+    Computes the negative log likelihood loss between inputs and targets.
 
     Args:
-        logits (mx.array): The predicted logits.
+        inputs (mx.array): The predicted distribution in log space.
         targets (mx.array): The target values.
-        axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
+        axis (int, optional): The distribution axis. Default: ``-1``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         mx.array: The computed NLL loss.
     """
-    loss = -mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
+    loss = -mx.take_along_axis(inputs, targets[..., None], axis).squeeze(-1)
 
     return _reduce(loss, reduction)
 
 
 def kl_div_loss(
-    logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
 ) -> mx.array:
     """
-    Computes the Kullback-Leibler divergence loss between logits and targets.
+    Computes the Kullback-Leibler divergence loss between targets and the
+    inputs.
+
+    Computes the following when ``reduction == 'none'``:
+
+    .. code-block:: python
+
+        mx.exp(targets) * (targets - inputs).sum(axis)
 
     Args:
-        logits (mx.array): Logits for the distribution p.
-        targets (mx.array): Log probabilities for the distribution q.
-        axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
+        inputs (mx.array): Log probabilities for the predicted distribution.
+        targets (mx.array): Log probabilities for the target distribution.
+        axis (int, optional): The distribution axis. Default: ``-1``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         mx.array: The computed Kullback-Leibler divergence loss.
     """
-    loss = mx.sum(mx.exp(targets) * (targets - logits), axis)
+    loss = mx.sum(mx.exp(targets) * (targets - inputs), axis)
 
     return _reduce(loss, reduction)
 
