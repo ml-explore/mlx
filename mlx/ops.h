@@ -96,6 +96,9 @@ inline array eye(int n, Dtype dtype, StreamOrDevice s = {}) {
 inline array eye(int n, int m, StreamOrDevice s = {}) {
   return eye(n, m, 0, float32, s);
 }
+inline array eye(int n, int m, int k, StreamOrDevice s = {}) {
+  return eye(n, m, k, float32, s);
+}
 inline array eye(int n, StreamOrDevice s = {}) {
   return eye(n, n, 0, float32, s);
 }

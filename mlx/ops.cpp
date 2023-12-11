@@ -203,7 +203,7 @@ array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
     return reshape(result, {n, m}, s);
   }
 
-  int diagonal_length = std::min(n, m - std::abs(k));
+  int diagonal_length = k >= 0 ? std::min(n, m - k) : std::min(n + k, m);
   int start_index = (k >= 0) ? k : -k * m;
 
   array diag_indices_array = arange(start_index, start_index + diagonal_length * (m + 1), m + 1, int32, s);
@@ -211,7 +211,6 @@ array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
   result = scatter(result, diag_indices_array, ones_array, 0, s);
 
   return reshape(result, {n, m}, s);
-
 }
 
 array identity(int n, Dtype dtype, StreamOrDevice s /* = {} */) {
