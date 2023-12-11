@@ -8,6 +8,7 @@ import mlx.optimizers as opt
 import mlx.utils
 import mlx_tests
 
+
 def get_all_optimizers():
     classes = dict()
     for name, obj in inspect.getmembers(opt):
@@ -16,7 +17,9 @@ def get_all_optimizers():
                 classes[name] = obj
     return classes
 
+
 optimizers_dict = get_all_optimizers()
+
 
 class TestOptimizers(mlx_tests.MLXTestCase):
     def test_optimizers(self):

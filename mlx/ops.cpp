@@ -572,21 +572,23 @@ array stack(
     const std::vector<array>& arrays,
     int axis,
     StreamOrDevice s /* = {} */) {
-  if (arrays.size() == 0) {
+  if (arrays.empty()) {
     throw std::invalid_argument("No arrays provided for stacking");
   }
-
   if (!is_same_size_and_shape(arrays)) {
     throw std::invalid_argument("All arrays must have the same shape");
   }
-
-  if (arrays.size() == 1) {
-    return expand_dims(arrays[0], axis, s);
+  int normalized_axis = normalize_axis(axis, arrays[0].ndim() + 1);
+  std::vector<array> new_arrays;
+  new_arrays.reserve(arrays.size());
+  for (auto& a : arrays) {
+    new_arrays.emplace_back(expand_dims(a, normalized_axis, s));
   }
-
-  return concatenate(arrays, axis, s);
+  return concatenate(new_arrays, axis, s);
 }
-// array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {}
+array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
+  return stack(arrays, 0, s);
+}
 
 /** Pad an array with a constant value */
 array pad(

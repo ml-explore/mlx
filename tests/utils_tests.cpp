@@ -43,3 +43,22 @@ TEST_CASE("test normalize axis") {
   CHECK_THROWS(normalize_axis(3, 3));
   CHECK_THROWS(normalize_axis(-4, 3));
 }
+
+TEST_CASE("test is same size and shape") {
+  struct TestCase {
+    std::vector<array> a;
+    bool expected;
+  };
+
+  std::vector<TestCase> testCases = {
+      {{array({}), array({})}, true},
+      {{array({1}), array({1})}, true},
+      {{array({1, 2, 3}), array({1, 2, 4})}, true},
+      {{array({1, 2, 3}), array({1, 2})}, false},
+      {{array({1, 2, 3}, int32), array({1, 2, 3}, int16)}, false},
+      {{array({1, 2, 3}, int32), array({1, 2, 3}, int32)}, true}};
+
+  for (const auto& tc : testCases) {
+    CHECK_EQ(is_same_size_and_shape(tc.a), tc.expected);
+  }
+}
