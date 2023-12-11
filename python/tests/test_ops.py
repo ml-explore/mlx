@@ -1305,6 +1305,11 @@ class TestOps(mlx_tests.MLXTestCase):
                             d_np = np.take(b_mx, np.arange(kth), axis=axis)
                             self.assertTrue(np.all(d_np <= c_mx))
 
+    def test_large_binary(self):
+        a = mx.ones([1000, 2147484], mx.int8)
+        b = mx.ones([2147484], mx.int8)
+        self.assertEqual((a + b)[0, 0].item(), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
