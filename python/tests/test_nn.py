@@ -40,8 +40,136 @@ class TestNN(mlx_tests.MLXTestCase):
     def test_l1_loss(self):
         predictions = mx.array([0.5, 0.2, 0.9, 0.0])
         targets = mx.array([0.5, 0.2, 0.9, 0.0])
-        losses = nn.losses.l1_loss(predictions, targets)
+        losses = nn.losses.l1_loss(predictions, targets, reduction="none")
         self.assertEqual(losses, 0.0)
+
+    def test_mse_loss(self):
+        predictions = mx.array([0.5, 0.2, 0.9, 0.0])
+        targets = mx.array([0.7, 0.1, 0.8, 0.2])
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.mse_loss(predictions, targets, reduction="none")
+        expected_none = mx.array([0.04, 0.01, 0.01, 0.04])
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.mse_loss(predictions, targets, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertEqual(losses_mean, expected_mean)
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.mse_loss(predictions, targets, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertEqual(losses_sum, expected_sum)
+
+    def test_nll_loss(self):
+        logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
+        targets = mx.array([0, 1])
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.nll_loss(logits, targets, reduction="none")
+        expected_none = mx.array([0.0, 0.0])
+        self.assertTrue(mx.array_equal(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.nll_loss(logits, targets, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertEqual(losses_mean, expected_mean)
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.nll_loss(logits, targets, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertEqual(losses_sum, expected_sum)
+
+    def test_kl_div_loss(self):
+        p_logits = mx.log(mx.array([[0.5, 0.5], [0.8, 0.2]]))
+        q_logits = mx.log(mx.array([[0.5, 0.5], [0.2, 0.8]]))
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.kl_div_loss(p_logits, q_logits, reduction="none")
+        expected_none = mx.array([0.0, 0.831777])
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.kl_div_loss(p_logits, q_logits, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.kl_div_loss(p_logits, q_logits, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_binary_cross_entropy(self):
+        inputs = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 0.0]])
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.binary_cross_entropy(inputs, targets, reduction="none")
+        expected_none = mx.array(
+            [
+                [
+                    0.6931471824645996,
+                    0.6931471824645996,
+                    0.2231435477733612,
+                    0.10536054521799088,
+                ],
+                [
+                    2.3025851249694824,
+                    0.3566749691963196,
+                    0.6931471824645996,
+                    0.6931471824645996,
+                ],
+            ]
+        )
+        self.assertTrue(mx.allclose(losses_none, expected_none, rtol=1e-5, atol=1e-8))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.binary_cross_entropy(inputs, targets, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.binary_cross_entropy(inputs, targets, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_bce_loss_module(self):
+        inputs = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 0.0]])
+
+        # Test with reduction 'none'
+        loss_module_none = nn.losses.BCELoss(reduction="none")
+        losses_none = loss_module_none(inputs, targets)
+        expected_none = mx.array(
+            [
+                [
+                    0.6931471824645996,
+                    0.6931471824645996,
+                    0.2231435477733612,
+                    0.10536054521799088,
+                ],
+                [
+                    2.3025851249694824,
+                    0.3566749691963196,
+                    0.6931471824645996,
+                    0.6931471824645996,
+                ],
+            ]
+        )
+        self.assertTrue(mx.allclose(losses_none, expected_none, rtol=1e-5, atol=1e-8))
+
+        # Test with reduction 'mean'
+        loss_module_mean = nn.losses.BCELoss(reduction="mean")
+        losses_mean = loss_module_mean(inputs, targets)
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        loss_module_sum = nn.losses.BCELoss(reduction="sum")
+        losses_sum = loss_module_sum(inputs, targets)
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
     def test_gelu(self):
         inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
@@ -245,6 +373,81 @@ class TestNN(mlx_tests.MLXTestCase):
 
         eq_tree = tree_map(mx.array_equal, m.parameters(), m_load.parameters())
         self.assertTrue(all(tree_flatten(eq_tree)))
+
+    def test_relu(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.relu(x)
+        self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0])))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_leaky_relu(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.leaky_relu(x)
+        self.assertTrue(mx.array_equal(y, mx.array([1.0, -0.01, 0.0])))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.LeakyReLU(negative_slope=0.1)(x)
+        self.assertTrue(mx.array_equal(y, mx.array([1.0, -0.1, 0.0])))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_elu(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.elu(x)
+        epsilon = 1e-4
+        expected_y = mx.array([1.0, -0.6321, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.ELU(alpha=1.1)(x)
+        epsilon = 1e-4
+        expected_y = mx.array([1.0, -0.6953, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_relu6(self):
+        x = mx.array([1.0, -1.0, 0.0, 7.0, -7.0])
+        y = nn.relu6(x)
+        self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0, 6.0, 0.0])))
+        self.assertEqual(y.shape, [5])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_softplus(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.softplus(x)
+        epsilon = 1e-4
+        expected_y = mx.array([1.3133, 0.3133, 0.6931])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_celu(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.celu(x)
+        epsilon = 1e-4
+        expected_y = mx.array([1.0, -0.6321, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+        y = nn.CELU(alpha=1.1)(x)
+        expected_y = mx.array([1.0, -0.6568, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_log_sigmoid(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.log_sigmoid(x)
+        epsilon = 1e-4
+        expected_y = mx.array([-0.3133, -1.3133, -0.6931])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
 
 
 if __name__ == "__main__":

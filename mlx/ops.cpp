@@ -194,6 +194,30 @@ array ones_like(const array& a, StreamOrDevice s /* = {} */) {
   return ones(a.shape(), a.dtype(), to_stream(s));
 }
 
+array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
+  if (n <= 0 || m <= 0) {
+    throw std::invalid_argument("N and M must be positive integers.");
+  }
+  array result = zeros({n * m}, dtype, s);
+  if (k >= m || -k >= n) {
+    return reshape(result, {n, m}, s);
+  }
+
+  int diagonal_length = k >= 0 ? std::min(n, m - k) : std::min(n + k, m);
+  int start_index = (k >= 0) ? k : -k * m;
+
+  array diag_indices_array = arange(
+      start_index, start_index + diagonal_length * (m + 1), m + 1, int32, s);
+  array ones_array = ones({diagonal_length, 1}, dtype, s);
+  result = scatter(result, diag_indices_array, ones_array, 0, s);
+
+  return reshape(result, {n, m}, s);
+}
+
+array identity(int n, Dtype dtype, StreamOrDevice s /* = {} */) {
+  return eye(n, n, 0, dtype, s);
+}
+
 array reshape(
     const array& a,
     std::vector<int> shape,

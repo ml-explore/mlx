@@ -179,4 +179,8 @@ Loss Functions
    :template: nn-module-template.rst
 
    losses.cross_entropy
+   losses.binary_cross_entropy
    losses.l1_loss
+   losses.mse_loss
+   losses.nll_loss
+   losses.kl_div_loss
