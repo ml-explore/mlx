@@ -184,7 +184,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        add(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        add(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise addition.
 
@@ -210,7 +210,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        subtract(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        subtract(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise subtraction.
 
@@ -236,7 +236,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        multiply(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        multiply(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise multiplication.
 
@@ -262,7 +262,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        divide(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise division.
 
@@ -288,7 +288,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        remainder(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        remainder(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise remainder of division.
 
@@ -315,7 +315,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        equal(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise equality.
 
@@ -341,7 +341,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        not_equal(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        not_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise not equal.
 
@@ -367,7 +367,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        less(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        less(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise less than.
 
@@ -393,7 +393,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        less_equal(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        less_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise less than or equal.
 
@@ -419,7 +419,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        greater(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        greater(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise greater than.
 
@@ -445,7 +445,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        greater_equal(a: Union[Scalar, array], b: Union[Scalar, array], stream: Union[None, Stream, Device] = None) -> array
+        greater_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise greater or equal.
 
@@ -475,7 +475,7 @@ void init_ops(py::module_& m) {
       "equal_nan"_a = false,
       "stream"_a = none,
       R"pbdoc(
-        array_equal(a: Union[Scalar, array], b: Union[Scalar, array], equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
+        array_equal(a: Union[scalar, array], b: Union[scalar, array], equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
 
         Array equality check.
 
@@ -629,7 +629,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        logaddexp(a: Union[Scalar, array], b: Union[Scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
+        logaddexp(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise log-add-exp.
 
@@ -1047,7 +1047,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        power(a: Union[Scalar, array], b: Union[Scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
+        power(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise power operation.
 
@@ -1248,7 +1248,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        full(shape: Union[int, List[int]], vals: Union[Scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        full(shape: Union[int, List[int]], vals: Union[scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
 
         Construct an array with the given value.
 
@@ -1463,7 +1463,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        minimum(a: Union[Scalar, array], b: Union[Scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
+        minimum(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise minimum.
 
@@ -1489,7 +1489,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        maximum(a: Union[Scalar, array], b: Union[Scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
+        maximum(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
 
         Element-wise maximum.
 
@@ -2026,7 +2026,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        broadcast_to(a: Union[Scalar, array], /, shape: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+        broadcast_to(a: Union[scalar, array], /, shape: List[int], *, stream: Union[None, Stream, Device] = None) -> array
 
         Broadcast an array to the given shape.
 
@@ -2130,7 +2130,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        pad(a: array, pad_with: Union[int, Tuple[int], Tuple[int, int], List[Tuple[int, int]]], constant_values: Union[Scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array
+        pad(a: array, pad_with: Union[int, Tuple[int], Tuple[int, int], List[Tuple[int, int]]], constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array
 
         Pad an array with a constant value
 
@@ -2613,7 +2613,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        where(condition: Union[Scalar, array], x: Union[Scalar, array], y: Union[Scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
+        where(condition: Union[scalar, array], x: Union[scalar, array], y: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
 
         Select from ``x`` or ``y`` according to ``condition``.
 

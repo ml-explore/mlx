@@ -501,7 +501,7 @@ void init_array(py::module_& m) {
         "val"_a,
         "dtype"_a = std::nullopt,
         R"pbdoc(
-            __init__(self: array, val: Union[Scalar, list, tuple, numpy.ndarray, array], dtype: Optional[Dtype] = None)
+            __init__(self: array, val: Union[scalar, list, tuple, numpy.ndarray, array], dtype: Optional[Dtype] = None)
           )pbdoc");
   }
 
