@@ -165,12 +165,18 @@ def log_sigmoid(x):
 
 @torch.no_grad()
 def prelu(x: torch.Tensor) -> torch.Tensor:
-    return torch.nn.functional.prelu(x, torch.ones(1).to(x.device))
+    y = x
+    for _ in range(100):
+        y = torch.nn.functional.prelu(y, torch.ones(1).to(y.device))
+    sync_if_needed(x)
 
 
 @torch.no_grad()
 def mish(x: torch.Tensor) -> torch.Tensor:
-    return torch.nn.functional.mish(x)
+    y = x
+    for _ in range(100):
+        return torch.nn.functional.mish(y)
+    sync_if_needed(x)
 
 
 @torch.no_grad()
