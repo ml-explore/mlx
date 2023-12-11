@@ -101,23 +101,75 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
     def test_binary_cross_entropy(self):
-        inputs = mx.array([[0.5, 0.5], [0.5, 0.5]])
-        targets = mx.array([[0.0, 1.0], [1.0, 0.0]])
+        inputs = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 0.0]])
 
         # Test with reduction 'none'
         losses_none = nn.losses.binary_cross_entropy(inputs, targets, reduction="none")
-        expected_none = mx.array([[0.693147, 0.693147], [0.693147, 0.693147]])
-        self.assertTrue(mx.allclose(losses_none, expected_none))
+        expected_none = mx.array(
+            [
+                [
+                    0.6931471824645996,
+                    0.6931471824645996,
+                    0.2231435477733612,
+                    0.10536054521799088,
+                ],
+                [
+                    2.3025851249694824,
+                    0.3566749691963196,
+                    0.6931471824645996,
+                    0.6931471824645996,
+                ],
+            ]
+        )
+        self.assertTrue(mx.allclose(losses_none, expected_none, rtol=1e-5, atol=1e-8))
 
         # Test with reduction 'mean'
         losses_mean = nn.losses.binary_cross_entropy(inputs, targets, reduction="mean")
         expected_mean = mx.mean(expected_none)
-        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+        self.assertEqual(losses_mean.item(), expected_mean.item())
 
         # Test with reduction 'sum'
         losses_sum = nn.losses.binary_cross_entropy(inputs, targets, reduction="sum")
         expected_sum = mx.sum(expected_none)
-        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+        self.assertEqual(losses_sum.item(), expected_sum.item())
+
+    def test_bce_loss_module(self):
+        inputs = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[0.0, 1.0, 0.0, 1.0], [1.0, 0.0, 1.0, 0.0]])
+
+        # Test with reduction 'none'
+        loss_module_none = nn.losses.BCELoss(reduction="none")
+        losses_none = loss_module_none(inputs, targets)
+        expected_none = mx.array(
+            [
+                [
+                    0.6931471824645996,
+                    0.6931471824645996,
+                    0.2231435477733612,
+                    0.10536054521799088,
+                ],
+                [
+                    2.3025851249694824,
+                    0.3566749691963196,
+                    0.6931471824645996,
+                    0.6931471824645996,
+                ],
+            ]
+        )
+        self.assertTrue(mx.allclose(losses_none, expected_none, rtol=1e-5, atol=1e-8))
+
+        # Test with reduction 'mean'
+        loss_module_mean = nn.losses.BCELoss(reduction="mean")
+        losses_mean = loss_module_mean(inputs, targets)
+        expected_mean = mx.mean(expected_none)
+        self.assertEqual(losses_mean.item(), expected_mean.item())
+
+        # Test with reduction 'sum'
+        loss_module_sum = nn.losses.BCELoss(reduction="sum")
+        losses_sum = loss_module_sum(inputs, targets)
+        expected_sum = mx.sum(expected_none)
+        self.assertEqual(losses_sum.item(), expected_sum.item())
 
     def test_gelu(self):
         inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
