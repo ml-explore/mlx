@@ -1361,21 +1361,21 @@ void init_ops(py::module_& m) {
   m.def(
       "eye",
       [](int n,
-         py::object m_obj,
-         py::object k_obj,
+         std::optional<int> m,
+         int k,
          std::optional<Dtype> dtype,
          StreamOrDevice s) {
-        int m = m_obj.is_none() ? n : m_obj.cast<int>();
-        int k = k_obj.is_none() ? 0 : k_obj.cast<int>();
-        return eye(n, m, k, dtype.value_or(float32), s);
+        return eye(n, m.value_or(n), k, dtype.value_or(float32), s);
       },
       "n"_a,
       "m"_a = py::none(),
-      "k"_a = py::none(),
+      "k"_a = 0,
       "dtype"_a = std::nullopt,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
+      eye(n: int, m: Optional[int] = None, k: int = 0, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+
       Create an identity matrix or a general diagonal matrix.
 
       Args:
@@ -1398,6 +1398,8 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
+      identity(n: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+
       Create a square identity matrix.
 
       Args:
