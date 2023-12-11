@@ -8,6 +8,7 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx_tests
 import numpy as np
+import torch
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 
@@ -449,31 +450,12 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
 
-    def test_step_activation(self):
-        x = mx.arange(-3, 4)
-        expected = mx.array([0, 0, 0, 0, 0, 1, 1])
-        y = nn.Step()(x)
-        self.assertTrue(mx.array_equal(y, expected))
+    def test_prelu(self):
+        with torch.no_grad():
+            self.compare_torch([(2048, 2048)], nn.PReLU(), torch.nn.PReLU())
 
-        y = nn.Step(2)(x)
-        expected = mx.array([0, 0, 0, 0, 0, 0, 1])
-        self.assertTrue(mx.array_equal(y, expected))
-
-    def test_selu(self):
-        x = mx.arange(-3, 4)
-        expected = mx.array(
-            [
-                -1.670563817024231,
-                -1.5201621055603027,
-                -1.1113275289535522,
-                0.0,
-                1.0506999492645264,
-                2.1013998985290527,
-                3.152099847793579,
-            ]
-        )
-        y = nn.SELU()(x)
-        self.assertTrue(mx.allclose(y, expected))
+    def test_mish(self):
+        self.compare_torch([(2048, 2048)], nn.Mish(), torch.nn.Mish())
 
 
 if __name__ == "__main__":
