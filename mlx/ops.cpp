@@ -568,9 +568,25 @@ array concatenate(
 }
 
 /** Stack arrays along a new axis */
-array stack(const std::vector<array>& arrays, int axis, StreamOrDevice s = {}) {
+array stack(
+    const std::vector<array>& arrays,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  if (arrays.size() == 0) {
+    throw std::invalid_argument("No arrays provided for stacking");
+  }
+
+  if (!is_same_size_and_shape(arrays)) {
+    throw std::invalid_argument("All arrays must have the same shape");
+  }
+
+  if (arrays.size() == 1) {
+    return expand_dims(arrays[0], axis, s);
+  }
+
+  return concatenate(arrays, axis, s);
 }
-array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {}
+// array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {}
 
 /** Pad an array with a constant value */
 array pad(

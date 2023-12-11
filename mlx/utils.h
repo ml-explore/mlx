@@ -16,6 +16,15 @@ std::vector<int> broadcast_shapes(
     const std::vector<int>& s1,
     const std::vector<int>& s2);
 
+bool is_same_size_and_shape(const std::vector<array>& arrays);
+
+/**
+ * Returns the axis normalized to be in the range [-ndim, ndim).
+ * Based on numpy's normalize_axis_index. See
+ * https://numpy.org/devdocs/reference/generated/numpy.lib.array_utils.normalize_axis_index.html
+ */
+int normalize_axis(int axis, int ndim);
+
 std::ostream& operator<<(std::ostream& os, const Device& d);
 std::ostream& operator<<(std::ostream& os, const Stream& s);
 std::ostream& operator<<(std::ostream& os, const Dtype& d);
