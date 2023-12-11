@@ -206,7 +206,8 @@ array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
   int diagonal_length = k >= 0 ? std::min(n, m - k) : std::min(n + k, m);
   int start_index = (k >= 0) ? k : -k * m;
 
-  array diag_indices_array = arange(start_index, start_index + diagonal_length * (m + 1), m + 1, int32, s);
+  array diag_indices_array = arange(
+      start_index, start_index + diagonal_length * (m + 1), m + 1, int32, s);
   array ones_array = ones({diagonal_length, 1}, dtype, s);
   result = scatter(result, diag_indices_array, ones_array, 0, s);
 
