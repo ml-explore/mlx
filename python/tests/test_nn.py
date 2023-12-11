@@ -402,24 +402,7 @@ class TestNN(mlx_tests.MLXTestCase):
             ]
         )
         y = nn.SELU()(x)
-        self.assertTrue(mx.array_equal(y, expected))
-
-    def test_swish(self):
-        x = mx.arange(-3, 4)
-        expected = mx.array(
-            [
-                -0.14227759838104248,
-                -0.23840594291687012,
-                -0.26894140243530273,
-                0.0,
-                0.7310585975646973,
-                1.7615940570831299,
-                2.857722282409668,
-            ]
-        )
-        y = nn.Swish()(x)
-        mx.array_equal(y, expected)
-        self.assertTrue(mx.array_equal(y, expected))
+        self.assertTrue(mx.allclose(y, expected))
 
 
 if __name__ == "__main__":

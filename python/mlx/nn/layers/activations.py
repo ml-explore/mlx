@@ -74,7 +74,7 @@ def celu(x, alpha=1.0):
 
 
 def silu(x):
-    r"""Applies the Sigmoid Linear Unit.
+    r"""Applies the Sigmoid Linear Unit. Also known as Swish.
 
     Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
     the logistic sigmoid.
@@ -176,17 +176,6 @@ def selu(x):
     See also :func:`elu`.
     """
     return elu(x, 1.67326) * 1.0507
-
-
-def swish(x):
-    r"""Applies the Swish Activation Function.
-
-    .. math::
-        \text{swish}(x) = x * \sigma(x)
-
-    where :math:`\sigma(\cdot)` is the logistic sigmoid.
-    """
-    return x * mx.sigmoid(x)
 
 
 @_make_activation_module(relu)
@@ -348,9 +337,4 @@ class Step(Module):
 
 @_make_activation_module(selu)
 class SELU(Module):
-    pass
-
-
-@_make_activation_module(swish)
-class Swish(Module):
     pass

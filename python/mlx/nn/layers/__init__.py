@@ -12,7 +12,6 @@ from mlx.nn.layers.activations import (
     SiLU,
     Softplus,
     Step,
-    Swish,
     celu,
     elu,
     gelu,
@@ -26,7 +25,6 @@ from mlx.nn.layers.activations import (
     silu,
     softplus,
     step,
-    swish,
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential

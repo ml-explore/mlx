@@ -209,8 +209,6 @@ if __name__ == "__main__":
     compare_filtered("step --size 32x16x1024 --cpu")
     compare_filtered("selu --size 32x16x1024")
     compare_filtered("selu --size 32x16x1024 --cpu")
-    compare_filtered("swish --size 32x16x1024")
-    compare_filtered("swish --size 32x16x1024 --cpu")
     compare_filtered("scalar_mul --size 32x16x1024")
     compare_filtered("scalar_mul --size 32x16x1024 --cpu")
     compare_filtered("cross_entropy --size 256x1024")

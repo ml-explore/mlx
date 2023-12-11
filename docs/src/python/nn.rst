@@ -150,7 +150,6 @@ Neural Network Layers
    SiLU
    Step
    SELU
-   Swish
    Linear
    Conv1d
    Conv2d
@@ -175,7 +174,6 @@ simple functions.
    silu
    step
    selu
-   swish
 
 Loss Functions
 --------------
