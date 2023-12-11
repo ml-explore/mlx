@@ -198,19 +198,20 @@ array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (n <= 0 || m <= 0) {
     throw std::invalid_argument("N and M must be positive integers.");
   }
-  std::vector<int> shape = {n, m};
-  array result = zeros(shape, dtype, s);
+  array result = zeros({n * m}, dtype, s);
   if (k >= m || -k >= n) {
-    return result;
+    return reshape(result, {n, m}, s);
   }
-  int start = k >= 0 ? k : 0;
-  int end = k <= 0 ? n + k : m;
-  int length = std::min(n, m) - std::abs(k);
 
-  array diag_indices = arange(start, end * m + start, m + 1, dtype, s);
-  array ones = full({length}, 1, dtype, s);
-  result = scatter(result, {diag_indices}, ones, 0, s);
-  return result;
+  int diagonal_length = std::min(n, m - std::abs(k));
+  int start_index = (k >= 0) ? k : -k * m;
+
+  array diag_indices_array = arange(start_index, start_index + diagonal_length * (m + 1), m + 1, int32, s);
+  array ones_array = ones({diagonal_length, 1}, dtype, s);
+  result = scatter(result, diag_indices_array, ones_array, 0, s);
+
+  return reshape(result, {n, m}, s);
+
 }
 
 array identity(int n, Dtype dtype, StreamOrDevice s /* = {} */) {

@@ -1926,3 +1926,12 @@ TEST_CASE("test where") {
   expected = array({1, 2, 2, 1}, {2, 2});
   CHECK(array_equal(where(condition, x, y), expected).item<bool>());
 }
+
+TEST_CASE("test eye") {
+  CHECK_EQ(eye(3).shape(), std::vector<int>{3, 3});
+  CHECK_EQ(eye(3, 4).shape(), std::vector<int>{3, 4});
+}
+
+TEST_CASE("test identity") {
+  CHECK_EQ(identity(5).shape(), std::vector<int>{5, 5});
+}
