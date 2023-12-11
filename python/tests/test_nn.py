@@ -8,7 +8,6 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx_tests
 import numpy as np
-import torch
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 
@@ -451,11 +450,18 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(y.dtype, mx.float32)
 
     def test_prelu(self):
-        with torch.no_grad():
-            self.compare_torch([(2048, 2048)], nn.PReLU(), torch.nn.PReLU())
+        self.assertEqualArray(
+            [mx.array([1.0, -1.0, 0.0, 0.5])],
+            nn.PReLU(),
+            mx.array([1.0, -0.25, 0.0, 0.5]),
+        )
 
     def test_mish(self):
-        self.compare_torch([(2048, 2048)], nn.Mish(), torch.nn.Mish())
+        self.assertEqualArray(
+            [mx.array([1.0, -1.0, 0.0, 0.5])],
+            nn.Mish(),
+            mx.array([0.8651, -0.3034, 0.0000, 0.3752]),
+        )
 
 
 if __name__ == "__main__":

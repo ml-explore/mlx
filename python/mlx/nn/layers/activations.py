@@ -283,9 +283,9 @@ class LogSigmoid(Module):
 
 
 class PReLU(Module):
-    def __init__(self, num_parameters=1):
+    def __init__(self, num_parameters=1, init=0.25):
         super().__init__()
-        self.weight = mx.zeros(shape=[num_parameters])
+        self.weight = mx.full([num_parameters], init)
 
     def __call__(self, x: mx.array):
         return prelu(x, self.weight)
