@@ -192,3 +192,4 @@ Loss Functions
    losses.mse_loss
    losses.nll_loss
    losses.kl_div_loss
+   losses.smooth_l1_loss
