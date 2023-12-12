@@ -2,7 +2,7 @@
 
 import os
 import unittest
-from typing import Callable, List, Tuple
+from typing import Callable, List, Tuple, Union
 
 import mlx.core as mx
 import numpy as np
@@ -21,7 +21,7 @@ class MLXTestCase(unittest.TestCase):
 
     def assertEqualArray(
         self,
-        args: List[mx.array | float | int],
+        args: List[Union[mx.array, float, int]],
         mlx_func: Callable[..., mx.array],
         expected: mx.array,
         atol=1e-2,
