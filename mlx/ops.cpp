@@ -2543,4 +2543,41 @@ array conv2d(
       {in, wt});
 }
 
+array quantized_matmul(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int groups /* = 128 */,
+    int width /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  if (w.dtype() != uint32) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] The weight matrix should be uint32 "
+        << "but received" << w.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+
+  // TODO: Fix the behaviour to match matmul's
+
+  int inner_dims = w.shape(0) * (32 / width);
+  if (inner_dims != x.shape(1)) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Last dimension of first input with shape "
+        << x.shape()
+        << " does not match the expanded first dimension of the quantized matrix "
+        << inner_dims << " computed from shape " << w.shape()
+        << " with groups=" << groups << " and width=" << width;
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out = array(
+      {x.shape(0), w.shape(1)},
+      x.dtype(),
+      std::make_unique<QuantizedMatmul>(to_stream(s), groups, width),
+      {x, w, scales, biases});
+
+  return out;
+}
+
 } // namespace mlx::core
