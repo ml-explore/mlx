@@ -140,87 +140,46 @@ class SGD(Optimizer):
         return parameter - self.learning_rate * update
 
 
-class Adam(Optimizer):
-    r"""Implementation of the Adam optimizer [1].
-
-    Our Adam implementation follows the original paper and omits the bias
-    correction in the first and second moment estimates. In detail,
+class RMSprop(Optimizer):
+    r"""Implementation of the RMSprop optimizer [1].
 
     .. math::
 
-        m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
-        v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
-        w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}}
+        v_{t+1} &= \beta v_t + (1 - \beta) g_t^2 \\
+        w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1} + \epsilon}}
 
-    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
-    optimization. ICLR 2015.
+    [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural networks for machine learning
     """
 
-    def __init__(
-        self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
-    ):
+    def __init__(self, learning_rate: float, beta: float = 0.99, eps: float = 1e-8):
         super().__init__()
 
         self.learning_rate = learning_rate
-        self.betas = betas
+        self.beta = beta
         self.eps = eps
 
+        if self.beta < 0.0:
+            raise ValueError(
+                f"RMSprop beta should be >=0, {self.beta} was provided instead"
+            )
+        if self.eps < 0.0:
+            raise ValueError(
+                f"RMSprop epsilon should be >0, {self.eps} was provided instead"
+            )
+
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
-        """Performs the Adam parameter update and stores :math:`v` and
-        :math:`m` in the optimizer state."""
+        """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
         lr = self.learning_rate
-        b1, b2 = self.betas
+        beta = self.beta
         eps = self.eps
 
-        m = state.get("m", gradient)
-        v = state.get("v", mx.square(gradient))
-        m = b1 * m + (1 - b1) * gradient
-        v = b2 * v + (1 - b2) * mx.square(gradient)
-        state["m"] = m
+        v = state.get("v", mx.zeros_like(gradient))
+        v = beta * v + (1 - beta) * mx.square(gradient)
         state["v"] = v
 
-        return parameter - lr * m / (mx.sqrt(v) + eps)
-
-
-class AdamW(Adam):
-    r"""Implementation of the AdamW optimizer [1].
-
-    Following the above convention, in contrast with [1], we do not use bias
-    correction in the first and second moments for AdamW. We update the weights 
-    with a weight_decay (λ) value:
-
-    .. math::
-
-        m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
-        v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
-        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}} + \lambda w_t)
-
-    [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay 
-    regularization. ICLR 2019.
-    """
-
-    def __init__(
-        self,
-        learning_rate: float,
-        betas: List[float] = [0.9, 0.999],
-        eps: float = 1e-8,
-        weight_decay: float = 0.01,
-    ):
-        super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)
-        self.weight_decay = weight_decay
-
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
-        """Performs the AdamW parameter update by modifying the parameters
-        passed into Adam.
-        """
-
-        return super().apply_single(
-            gradient, parameter * (1 - self.learning_rate * self.weight_decay), state
-        )
+        return parameter - lr * gradient / (mx.sqrt(v) + eps)
 
 
 class Adagrad(Optimizer):
@@ -317,6 +276,90 @@ class AdaDelta(Optimizer):
         state["s"] = s
 
         return parameter + d
+
+
+
+class Adam(Optimizer):
+    r"""Implementation of the Adam optimizer [1].
+
+    Our Adam implementation follows the original paper and omits the bias
+    correction in the first and second moment estimates. In detail,
+
+    .. math::
+
+        m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
+        v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
+        w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}}
+
+    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
+    optimization. ICLR 2015.
+    """
+
+    def __init__(
+        self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
+    ):
+        super().__init__()
+
+        self.learning_rate = learning_rate
+        self.betas = betas
+        self.eps = eps
+
+    def apply_single(
+        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
+    ):
+        """Performs the Adam parameter update and stores :math:`v` and
+        :math:`m` in the optimizer state."""
+        lr = self.learning_rate
+        b1, b2 = self.betas
+        eps = self.eps
+
+        m = state.get("m", gradient)
+        v = state.get("v", mx.square(gradient))
+        m = b1 * m + (1 - b1) * gradient
+        v = b2 * v + (1 - b2) * mx.square(gradient)
+        state["m"] = m
+        state["v"] = v
+
+        return parameter - lr * m / (mx.sqrt(v) + eps)
+
+
+class AdamW(Adam):
+    r"""Implementation of the AdamW optimizer [1].
+
+    Following the above convention, in contrast with [1], we do not use bias
+    correction in the first and second moments for AdamW. We update the weights 
+    with a weight_decay (λ) value:
+
+    .. math::
+
+        m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
+        v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
+        w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}} + \lambda w_t)
+
+    [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay 
+    regularization. ICLR 2019.
+    """
+
+    def __init__(
+        self,
+        learning_rate: float,
+        betas: List[float] = [0.9, 0.999],
+        eps: float = 1e-8,
+        weight_decay: float = 0.01,
+    ):
+        super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)
+        self.weight_decay = weight_decay
+
+    def apply_single(
+        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
+    ):
+        """Performs the AdamW parameter update by modifying the parameters
+        passed into Adam.
+        """
+
+        return super().apply_single(
+            gradient, parameter * (1 - self.learning_rate * self.weight_decay), state
+        )
 
 
 class AdaMax(Adam):
