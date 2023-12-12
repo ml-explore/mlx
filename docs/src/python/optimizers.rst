@@ -43,4 +43,4 @@ model's parameters and the **optimizer state**.
    AdaDelta
    Adam
    AdamW
-   AdaMax
+   Adamax

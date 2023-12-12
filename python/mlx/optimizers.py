@@ -362,7 +362,7 @@ class AdamW(Adam):
         )
 
 
-class AdaMax(Adam):
+class Adamax(Adam):
     r"""Implementation of the AdaMax optimizer. It is a variant of Adam based on the infinity norm [1].
     
     Our Adam implementation follows the original paper and omits the bias
@@ -384,7 +384,7 @@ class AdaMax(Adam):
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
-        """Performs the AdaMax parameter update and stores :math:`v` and
+        """Performs the Adamax parameter update and stores :math:`v` and
         :math:`m` in the optimizer state."""
         lr = self.learning_rate
         b1, b2 = self.betas
