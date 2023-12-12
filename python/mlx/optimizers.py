@@ -310,7 +310,7 @@ class AdaDelta(Optimizer):
         v = state.get("v", mx.zeros_like(gradient))
         s = state.get("s", mx.zeros_like(gradient))
 
-        v = rho * v + (1.0 - rho) * mx.square(gradient)
+        v = rho * v + (1 - rho) * mx.square(gradient)
         d = -mx.sqrt(s + eps) / mx.sqrt(v + eps) * gradient
         s = rho * s + (1 - rho) * mx.square(d)
 
