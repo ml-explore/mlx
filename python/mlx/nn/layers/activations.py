@@ -176,6 +176,8 @@ def selu(x):
     See also :func:`elu`.
     """
     return elu(x, 1.67326) * 1.0507
+
+
 def prelu(x: mx.array, alpha: mx.array) -> mx.array:
     r"""Applies the element-wise function:
 
