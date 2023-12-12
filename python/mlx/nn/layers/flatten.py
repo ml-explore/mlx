@@ -19,7 +19,7 @@ def _get_new_shape(a: mx.array, start: int, end: int):
 
         length = length * shape[idx]
 
-    new_shape = (*shape[:start], length, *shape[end + 1:])
+    new_shape = (*shape[:start], length, *shape[end + 1 :])
     return new_shape
 
 
@@ -37,7 +37,7 @@ def flatten(a: mx.array, start_dim: int = 0, end_dim: int = -1) -> mx.array:
 
     start_dim = max(0, start_dim)
     end_dim = a.ndim if end_dim == -1 else min(a.ndim, end_dim)
-    
+
     if start_dim > end_dim:
         raise ValueError("start_dim must be less than or equal to end_dim")
 
@@ -80,7 +80,7 @@ class Flatten(Module):
         >>> output.shape
         (21504, 224)
     """
-    
+
     def __init__(self, start_dim: int = 1, end_dim: int = -1):
         super(Flatten, self).__init__()
         self.start_dim = start_dim

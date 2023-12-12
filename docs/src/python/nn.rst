@@ -161,6 +161,7 @@ Neural Network Layers
    RoPE
    MultiHeadAttention
    Sequential
+   Flatten
 
 Layers without parameters (e.g. activation functions) are also provided as
 simple functions.
