@@ -334,6 +334,16 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [1, -5, 10]
         self.assertListEqual(mx.maximum(x, y).tolist(), expected)
 
+    def test_floor(self):
+        x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
+        expected = [-23, 19, -27, 9, 0, -np.inf, np.inf]
+        self.assertListEqual(mx.floor(x).tolist(), expected)
+
+    def test_ceil(self):
+        x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
+        expected = [-22, 20, -27, 9, 0, -np.inf, np.inf]
+        self.assertListEqual(mx.ceil(x).tolist(), expected)
+
     def test_transpose_noargs(self):
         x = mx.array([[0, 1, 1], [1, 0, 0]])
 
@@ -550,6 +560,7 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.sqrt(a)
         expected = np.sqrt(a, dtype=np.float32)
         self.assertTrue(np.allclose(result, expected))
+
 
     def test_rsqrt(self):
         a = mx.array([0.1, 0.5, 1.0, 10.0])
