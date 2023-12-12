@@ -31,7 +31,7 @@ def flatten(a: mx.array, start_dim: int = 0, end_dim: int = -1) -> mx.array:
 
     Args:
         input: input tensor.
-        start_dim: first dim to flatten (default = 1).
+        start_dim: first dim to flatten (default = 0).
         end_dim: last dim to flatten (default = -1).
     """
 
