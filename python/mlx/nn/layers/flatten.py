@@ -47,7 +47,7 @@ def flatten(a: mx.array, start_dim: int = 0, end_dim: int = -1) -> mx.array:
 
 
 class Flatten(Module):
-    """
+    r"""
     Flattens input by reshaping it into a one-dimensional array. For use with :class:`~nn.Flatten`.
     See :meth:`mx.nn.flatten` for details.
 
