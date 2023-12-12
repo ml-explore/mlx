@@ -1310,6 +1310,7 @@ class TestOps(mlx_tests.MLXTestCase):
         b = mx.ones([2147484], mx.int8)
         self.assertEqual((a + b)[0, 0].item(), 2)
 
+
     def test_eye(self):
         eye_matrix = mx.eye(3)
         np_eye_matrix = np.eye(3)
@@ -1330,24 +1331,7 @@ class TestOps(mlx_tests.MLXTestCase):
         np_eye_matrix = np.eye(5, 6, k=-2)
         self.assertTrue(np.array_equal(eye_matrix, np_eye_matrix))
 
-    # def test_stack(self):
-    #     a = mx.ones((1,2))
-    #     np_a = np.ones((1,2))
-
-    #     b = mx.ones((1,2))
-    #     np_b = np.ones((1,2))
-
-    #     a = mx.ones((2, 3, 4))
-    #     b = mx.ones((2, 3, 4))
-    #     c = mx.ones((2, 3, 4))
-    #     d = mx.stack([a, b, c])
-    #     self.assertEqual(d.shape, (3, 2, 3, 4))
-
-    #     d = mx.stack([a, b, c], axis=1)
-    #     self.assertEqual(d.shape, (2, 3, 3, 4))
-
-    #     d = mx.stack([a, b, c], axis=-1)
-    #     self.assertEqual(d.shape, (2, 3, 4, 3))
+    
 
 
 if __name__ == "__main__":
