@@ -360,7 +360,6 @@ class AdaMax(Adam):
 class RMSprop(Optimizer):
     r"""Implementation of the RMSprop optimizer [1].
 
-
     .. math::
 
         v_{t+1} &= \beta v_t + (1 - \beta) g_t^2 \\
