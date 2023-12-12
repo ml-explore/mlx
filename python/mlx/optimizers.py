@@ -278,7 +278,6 @@ class AdaDelta(Optimizer):
         return parameter + d
 
 
-
 class Adam(Optimizer):
     r"""Implementation of the Adam optimizer [1].
 
@@ -378,7 +377,9 @@ class Adamax(Adam):
     optimization. ICLR 2015.
     """
 
-    def __init__(self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8):
+    def __init__(
+        self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
+    ):
         super().__init__(learning_rate, betas, eps)
 
     def apply_single(
@@ -399,4 +400,3 @@ class Adamax(Adam):
         state["v"] = v
 
         return parameter - lr * m / (v + eps)
-
