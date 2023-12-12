@@ -226,6 +226,90 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(means, 3 * np.ones_like(means), atol=1e-6))
         self.assertTrue(np.allclose(var, 4 * np.ones_like(var), atol=1e-6))
 
+    def test_flatten_module(self):
+        x = mx.random.normal((100, 50, 25))
+
+        flattened_x = nn.Flatten()(x)
+        self.assertEqual(flattened_x.shape, [100, 1250])
+
+        flattened_x = nn.Flatten(start_dim=1)(x)
+        self.assertEqual(flattened_x.shape, [100, 1250])
+
+        flattened_x = nn.Flatten(start_dim=1, end_dim=2)(x)
+        self.assertEqual(flattened_x.shape, [100, 1250])
+
+        flattened_x = nn.Flatten(start_dim=1, end_dim=1)(x)
+        self.assertEqual(flattened_x.shape, [100, 50, 25])
+
+        images_batch = mx.random.normal((16, 3, 224, 224))
+        flattened_images_batch = nn.Flatten()(images_batch)
+        self.assertEqual(flattened_images_batch.shape, [16, 150528])
+
+        res = nn.Flatten()(x)
+        self.assertEqual(res.shape, [100, 1250])
+        res = nn.Flatten(start_dim=1)(x)
+        self.assertEqual(res.shape, [100, 1250])
+        res = nn.Flatten(start_dim=2)(x)
+        self.assertEqual(res.shape, [100, 50, 25])
+
+        res = nn.Flatten(end_dim=1)(x)
+        self.assertEqual(res.shape, [100, 50, 25])
+        res = nn.Flatten(end_dim=2)(x)
+        self.assertEqual(res.shape, [100, 1250])
+
+        with self.assertRaises(ValueError):
+            nn.Flatten(end_dim=0)(x)
+
+        res = nn.Flatten(start_dim=0, end_dim=2)(x)
+        self.assertEqual(
+            res.shape,
+            [
+                125000,
+            ],
+        )
+
+    def test_flatten_function(self):
+        x = mx.random.normal((100, 50, 25))
+
+        flattened_x = nn.flatten(x)
+        self.assertEqual(
+            flattened_x.shape,
+            [
+                125000,
+            ],
+        )
+
+        flattened_x = nn.flatten(x, start_dim=1)
+        self.assertEqual(flattened_x.shape, [100, 1250])
+
+        flattened_x = nn.flatten(x, start_dim=1, end_dim=2)
+        self.assertEqual(flattened_x.shape, [100, 1250])
+
+        flattened_x = nn.flatten(x, start_dim=1, end_dim=1)
+        self.assertEqual(flattened_x.shape, [100, 50, 25])
+
+        x = mx.random.normal((16, 3, 224, 224))
+        res = nn.flatten(x)
+        self.assertEqual(
+            res.shape,
+            [
+                2408448,
+            ],
+        )
+
+        res = nn.flatten(x, start_dim=1)
+        self.assertEqual(res.shape, [16, 150528])
+        res = nn.flatten(x, start_dim=2)
+        self.assertEqual(res.shape, [16, 3, 50176])
+
+        res = nn.flatten(x, end_dim=1)
+        self.assertEqual(res.shape, [48, 224, 224])
+        res = nn.flatten(x, end_dim=2)
+        self.assertEqual(res.shape, [10752, 224])
+
+        res = nn.flatten(x, start_dim=0, end_dim=2)
+        self.assertEqual(res.shape, [10752, 224])
+
     def test_conv1d(self):
         N = 5
         L = 12
