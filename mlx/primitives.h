@@ -404,6 +404,25 @@ class Broadcast : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Ceil : public Primitive {
+ public:
+  explicit Ceil(Stream stream) : Primitive(stream) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Ceil)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Concatenate : public Primitive {
  public:
   explicit Concatenate(Stream stream, int axis)
@@ -659,6 +678,25 @@ class FFT : public Primitive {
   bool inverse_;
   bool real_;
 
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Floor : public Primitive {
+ public:
+  explicit Floor(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Floor)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
   void eval(const std::vector<array>& inputs, array& out);
 };
 

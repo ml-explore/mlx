@@ -450,6 +450,14 @@ void Minimum::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "min");
 }
 
+void Floor::eval_gpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("[Floor::eval_gpu] Not implemented");
+}
+
+void Ceil::eval_gpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("[Ceil::eval_gpu] Not implemented");
+}
+
 void Multiply::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "mul");
 }

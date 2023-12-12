@@ -773,6 +773,26 @@ TEST_CASE("test arithmetic unary ops") {
 
   constexpr float neginf = -std::numeric_limits<float>::infinity();
 
+  // Test floor and ceil
+  {
+    array x(1.0f);
+    CHECK_EQ(floor(x).item<float>(), 1.0f);
+    CHECK_EQ(ceil(x).item<float>(), 1.0f);
+
+    x = array(1.5f);
+    CHECK_EQ(floor(x).item<float>(), 1.0f);
+    CHECK_EQ(ceil(x).item<float>(), 2.0f);
+
+    x = array(-1.5f);
+    CHECK_EQ(floor(x).item<float>(), -2.0f);
+    CHECK_EQ(ceil(x).item<float>(), -1.0f);
+
+    x = array(neginf);
+    CHECK_EQ(floor(x).item<float>(), neginf);
+    CHECK_EQ(ceil(x).item<float>(), neginf);
+
+  }
+  
   // Test exponential
   {
     array x(0.0);

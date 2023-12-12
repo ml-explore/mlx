@@ -1498,6 +1498,16 @@ array minimum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       inputs);
 }
 
+array floor(const array& a, StreamOrDevice s /* = {} */) {
+  return array(
+      a.shape(), a.dtype(), std::make_unique<Floor>(to_stream(s)), {a});
+}
+
+array ceil(const array& a, StreamOrDevice s /* = {} */) {
+  return array(
+      a.shape(), a.dtype(), std::make_unique<Ceil>(to_stream(s)), {a});
+}
+
 array square(const array& a, StreamOrDevice s /* = {} */) {
   return array(
       a.shape(), a.dtype(), std::make_unique<Square>(to_stream(s)), {a});
