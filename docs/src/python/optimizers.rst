@@ -39,3 +39,7 @@ model's parameters and the **optimizer state**.
    Optimizer
    SGD
    Adam
+   AdamW
+   Adagrad
+   AdaDelta
+   AdaMax
