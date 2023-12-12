@@ -4,12 +4,14 @@ from mlx.nn.layers.activations import (
     CELU,
     ELU,
     GELU,
+    SELU,
     LeakyReLU,
     LogSigmoid,
     ReLU,
     ReLU6,
     SiLU,
     Softplus,
+    Step,
     celu,
     elu,
     gelu,
@@ -19,8 +21,10 @@ from mlx.nn.layers.activations import (
     log_sigmoid,
     relu,
     relu6,
+    selu,
     silu,
     softplus,
+    step,
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
