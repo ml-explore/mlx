@@ -265,3 +265,97 @@ class Adagrad(Optimizer):
         state["v"] = v
 
         return parameter - lr * gradient / (mx.sqrt(v) + eps)
+
+class AdaDelta(Optimizer):
+    r"""Implementation of the AdaDelta optimizer with learning rate[1].
+
+    Our AdaDelta implementation follows the original paper. In detail,
+
+    .. math::
+
+        v_{t+1} &= \rho v_t + (1 - \rho) g_t^2 \\
+        \Delta w_{t+1} &= - \frac{\sqrt{s_t + \epsilon}}{\sqrt{v_{t+1} + \epsilon}} g_t \\
+        s_{t+1} &= \rho s_t + (1 - \rho) \Delta w_{t+1}^2 \\
+        w_{t+1} &= w_t + \Delta w_{t+1}
+
+    [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint arXiv:1212.5701.
+    """
+
+    def __init__(self, learning_rate: float, rho: float = 0.95, eps: float = 1e-6):
+        super().__init__()
+
+        self.learning_rate = learning_rate
+        self.rho = rho
+        self.eps = eps
+        self.weight_
+        if self.rho < 0.0:
+            raise ValueError(
+                f"AdaDelta rho should be >=0, {self.rho} was provided instead"
+            )
+        if self.eps < 0.0:
+            raise ValueError(
+                f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
+            )
+
+    def apply_single(
+        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
+    ):
+        """Performs the AdaDelta parameter update and stores :math:`v` and
+        :math:`s` in the optimizer state."""
+        lr = self.learning_rate
+        rho = self.rho
+        eps = self.eps
+
+        v = state.get("v", mx.zeros_like(gradient))
+        s = state.get("s", mx.zeros_like(gradient))
+
+        v = rho * v + (1. - rho) * mx.square(gradient)
+        d = - mx.sqrt(s + eps) / mx.sqrt(v + eps) * gradient
+        s = rho * s + (1 - rho) * mx.square(d)
+
+        state["v"] = v
+        state["s"] = s
+
+        return parameter + d
+    
+class AdaMax(Optimizer):
+    r"""Implementation of the AdaMax optimizer. It is a variant of Adam based on the infinity norm [1].
+    
+    Our Adam implementation follows the original paper and omits the bias
+    correction in the first and second moment estimates. In detail,
+    
+    .. math::
+    
+        m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
+        v_{t+1} &= \max(\beta_2 v_t, |g_t|) \\
+        w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{v_{t+1} + \epsilon}
+
+    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
+    optimization. ICLR 2015.
+    """
+    
+    def __init__(
+        self, learning_rate: float = 0.002, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
+    ):
+        super().__init__(learning_rate, betas, eps)
+
+    def apply_single(
+        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
+    ):
+        """Performs the AdaMax parameter update and stores :math:`v` and
+        :math:`m` in the optimizer state."""
+        lr = self.learning_rate
+        b1, b2 = self.betas
+        eps = self.eps
+
+        m = state.get("m", mx.zeros_like(gradient))
+        v = state.get("v", mx.zeros_like(gradient))
+
+        m = b1 * m + (1 - b1) * gradient
+        v = mx.maximum(b2 * v, mx.abs(gradient))
+        state["m"] = m
+        state["v"] = v
+
+        return parameter - lr * m / (v + eps)
+
+    
