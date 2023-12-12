@@ -266,6 +266,7 @@ class Adagrad(Optimizer):
 
         return parameter - lr * gradient / (mx.sqrt(v) + eps)
 
+
 class AdaDelta(Optimizer):
     r"""Implementation of the AdaDelta optimizer with learning rate[1].
 
@@ -309,15 +310,16 @@ class AdaDelta(Optimizer):
         v = state.get("v", mx.zeros_like(gradient))
         s = state.get("s", mx.zeros_like(gradient))
 
-        v = rho * v + (1. - rho) * mx.square(gradient)
-        d = - mx.sqrt(s + eps) / mx.sqrt(v + eps) * gradient
+        v = rho * v + (1.0 - rho) * mx.square(gradient)
+        d = -mx.sqrt(s + eps) / mx.sqrt(v + eps) * gradient
         s = rho * s + (1 - rho) * mx.square(d)
 
         state["v"] = v
         state["s"] = s
 
         return parameter + d
-    
+
+
 class AdaMax(Optimizer):
     r"""Implementation of the AdaMax optimizer. It is a variant of Adam based on the infinity norm [1].
     
@@ -333,9 +335,12 @@ class AdaMax(Optimizer):
     [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
     optimization. ICLR 2015.
     """
-    
+
     def __init__(
-        self, learning_rate: float = 0.002, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
+        self,
+        learning_rate: float = 0.002,
+        betas: List[float] = [0.9, 0.999],
+        eps: float = 1e-8,
     ):
         super().__init__(learning_rate, betas, eps)
 
@@ -357,5 +362,3 @@ class AdaMax(Optimizer):
         state["v"] = v
 
         return parameter - lr * m / (v + eps)
-
-    
