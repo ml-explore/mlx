@@ -441,8 +441,6 @@ bool Broadcast::is_equivalent(const Primitive& other) const {
   return shape_ == b_other.shape_;
 }
 
-
-
 std::vector<array> Ceil::vjp(
     const std::vector<array>& primals,
     const array& cotan,

@@ -406,7 +406,7 @@ class Broadcast : public Primitive {
 
 class Ceil : public Primitive {
  public:
-  explicit Ceil(Stream stream) : Primitive(stream) {};
+  explicit Ceil(Stream stream) : Primitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;

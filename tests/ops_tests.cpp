@@ -790,9 +790,8 @@ TEST_CASE("test arithmetic unary ops") {
     x = array(neginf);
     CHECK_EQ(floor(x).item<float>(), neginf);
     CHECK_EQ(ceil(x).item<float>(), neginf);
-
   }
-  
+
   // Test exponential
   {
     array x(0.0);

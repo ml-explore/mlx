@@ -1504,8 +1504,7 @@ array floor(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array ceil(const array& a, StreamOrDevice s /* = {} */) {
-  return array(
-      a.shape(), a.dtype(), std::make_unique<Ceil>(to_stream(s)), {a});
+  return array(a.shape(), a.dtype(), std::make_unique<Ceil>(to_stream(s)), {a});
 }
 
 array square(const array& a, StreamOrDevice s /* = {} */) {

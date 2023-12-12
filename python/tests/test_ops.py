@@ -561,7 +561,6 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.sqrt(a, dtype=np.float32)
         self.assertTrue(np.allclose(result, expected))
 
-
     def test_rsqrt(self):
         a = mx.array([0.1, 0.5, 1.0, 10.0])
         result = mx.rsqrt(a)

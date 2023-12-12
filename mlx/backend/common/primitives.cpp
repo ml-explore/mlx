@@ -170,7 +170,7 @@ void Broadcast::eval(const std::vector<array>& inputs, array& out) {
 void Ceil::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  if (not is_integral(in.dtype())) { 
+  if (not is_integral(in.dtype())) {
     unary_fp(in, out, [](auto x) { return std::ceil(x); });
   } else {
     // No-op non-integer types
@@ -301,7 +301,7 @@ void Exp::eval(const std::vector<array>& inputs, array& out) {
 void Floor::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  if (not is_integral(in.dtype())) { 
+  if (not is_integral(in.dtype())) {
     unary_fp(in, out, [](auto x) { return std::floor(x); });
   } else {
     // No-op non-integer types
