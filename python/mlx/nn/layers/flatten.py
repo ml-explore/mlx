@@ -66,7 +66,9 @@ class Flatten(Module):
         and ending with end_dim are flattened. The order of elements in input is unchanged.
 
     Examples:
-        >>> input = mx.random.normal(32, 3, 224, 224)
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> input = mx.random.normal((32, 3, 224, 224))
         >>> # With default parameters
         >>> m = Flatten()
         >>> output = m(input)
