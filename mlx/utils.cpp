@@ -49,12 +49,12 @@ std::vector<int> broadcast_shapes(
   return out_shape;
 }
 
-bool is_same_size_and_shape(const std::vector<array>& arrays) {
+bool is_same_shape(const std::vector<array>& arrays) {
   if (arrays.empty())
     return true;
 
   return std::all_of(arrays.begin() + 1, arrays.end(), [&](const array& a) {
-    return ((a.shape() == arrays[0].shape()) && a.dtype() == arrays[0].dtype());
+    return (a.shape() == arrays[0].shape());
   });
 }
 

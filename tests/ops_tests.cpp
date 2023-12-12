@@ -1927,7 +1927,6 @@ TEST_CASE("test where") {
   CHECK(array_equal(where(condition, x, y), expected).item<bool>());
 }
 
-
 TEST_CASE("test stack") {
   auto x = array({});
   CHECK_EQ(stack({x}, 0).shape(), std::vector<int>{1, 0});
@@ -1949,8 +1948,7 @@ TEST_CASE("test stack") {
 
   x = array({1, 2, 3}, {3}, float16);
   y = array({4, 5, 6}, {3}, int32);
-  CHECK_THROWS_MESSAGE(
-      stack({x, y}, 0), "All arrays must have the same shape and dtype");
+  CHECK_EQ(stack({x, y}, 0).dtype(), float16);
 
   x = array({1, 2, 3}, {3}, int32);
   y = array({4, 5, 6, 7}, {4}, int32);

@@ -54,11 +54,9 @@ TEST_CASE("test is same size and shape") {
       {{array({}), array({})}, true},
       {{array({1}), array({1})}, true},
       {{array({1, 2, 3}), array({1, 2, 4})}, true},
-      {{array({1, 2, 3}), array({1, 2})}, false},
-      {{array({1, 2, 3}, int32), array({1, 2, 3}, int16)}, false},
-      {{array({1, 2, 3}, int32), array({1, 2, 3}, int32)}, true}};
+      {{array({1, 2, 3}), array({1, 2})}, false}};
 
   for (const auto& tc : testCases) {
-    CHECK_EQ(is_same_size_and_shape(tc.a), tc.expected);
+    CHECK_EQ(is_same_shape(tc.a), tc.expected);
   }
 }

@@ -574,11 +574,11 @@ array concatenate(
     shape[ax] += a.shape(ax);
   }
 
+  // Promote all the arrays to the same type
+  auto dtype = result_type(arrays);
+
   return array(
-      shape,
-      arrays[0].dtype(),
-      std::make_unique<Concatenate>(to_stream(s), ax),
-      arrays);
+      shape, dtype, std::make_unique<Concatenate>(to_stream(s), ax), arrays);
 }
 
 array concatenate(
@@ -599,7 +599,7 @@ array stack(
   if (arrays.empty()) {
     throw std::invalid_argument("No arrays provided for stacking");
   }
-  if (!is_same_size_and_shape(arrays)) {
+  if (!is_same_shape(arrays)) {
     throw std::invalid_argument("All arrays must have the same shape");
   }
   int normalized_axis = normalize_axis(axis, arrays[0].ndim() + 1);

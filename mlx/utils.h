@@ -16,10 +16,10 @@ std::vector<int> broadcast_shapes(
     const std::vector<int>& s1,
     const std::vector<int>& s2);
 
-bool is_same_size_and_shape(const std::vector<array>& arrays);
+bool is_same_shape(const std::vector<array>& arrays);
 
 /**
- * Returns the axis normalized to be in the range [-ndim, ndim).
+ * Returns the axis normalized to be in the range [0, ndim).
  * Based on numpy's normalize_axis_index. See
  * https://numpy.org/devdocs/reference/generated/numpy.lib.array_utils.normalize_axis_index.html
  */
