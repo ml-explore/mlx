@@ -288,7 +288,6 @@ class AdaDelta(Optimizer):
         self.learning_rate = learning_rate
         self.rho = rho
         self.eps = eps
-        self.weight_
         if self.rho < 0.0:
             raise ValueError(
                 f"AdaDelta rho should be >=0, {self.rho} was provided instead"
@@ -320,7 +319,7 @@ class AdaDelta(Optimizer):
         return parameter + d
 
 
-class AdaMax(Optimizer):
+class AdaMax(Adam):
     r"""Implementation of the AdaMax optimizer. It is a variant of Adam based on the infinity norm [1].
     
     Our Adam implementation follows the original paper and omits the bias
@@ -336,12 +335,7 @@ class AdaMax(Optimizer):
     optimization. ICLR 2015.
     """
 
-    def __init__(
-        self,
-        learning_rate: float = 0.002,
-        betas: List[float] = [0.9, 0.999],
-        eps: float = 1e-8,
-    ):
+    def __init__(self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8):
         super().__init__(learning_rate, betas, eps)
 
     def apply_single(
