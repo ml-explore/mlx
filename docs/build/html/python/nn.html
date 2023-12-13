@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Neural Networks &#8212; MLX 0.0.4 documentation</title>
+    <title>Neural Networks &#8212; MLX 0.0.5 documentation</title>
   
   
   
@@ -134,8 +134,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.4 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.4 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.5 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.5 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -148,6 +148,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../unified_memory.html">Unified Memory</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -237,9 +238,11 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.erfinv.html">mlx.core.erfinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.exp.html">mlx.core.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.eye.html">mlx.core.eye</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.full.html">mlx.core.full</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.load.html">mlx.core.load</a></li>
@@ -334,8 +337,12 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.GELU.html">mlx.nn.GELU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.SELU.html">mlx.nn.SELU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
@@ -349,7 +356,17 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.selu.html">mlx.nn.selu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.mish.html">mlx.nn.mish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -546,6 +563,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#neural-network-layers">Neural Network Layers</a><ul class="visible nav section-nav flex-column">
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#loss-functions">Loss Functions</a></li>
 </ul>
             </nav>
         </div>
@@ -688,11 +706,23 @@ parameters as the first argument to the function returned by
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.ReLU.html#mlx.nn.ReLU" title="mlx.nn.ReLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReLU</span></code></a>()</p></td>
 <td><p>Applies the Rectified Linear Unit.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GELU.html#mlx.nn.GELU" title="mlx.nn.GELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GELU</span></code></a>([approx])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.PReLU.html#mlx.nn.PReLU" title="mlx.nn.PReLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PReLU</span></code></a>([num_parameters, init])</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.GELU.html#mlx.nn.GELU" title="mlx.nn.GELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">GELU</span></code></a>([approx])</p></td>
 <td><p>Applies the Gaussian Error Linear Units.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.SiLU.html#mlx.nn.SiLU" title="mlx.nn.SiLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SiLU</span></code></a>()</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.SiLU.html#mlx.nn.SiLU" title="mlx.nn.SiLU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SiLU</span></code></a>()</p></td>
 <td><p>Applies the Sigmoid Linear Unit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Step.html#mlx.nn.Step" title="mlx.nn.Step"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Step</span></code></a>([threshold])</p></td>
+<td><p>Applies the Step Activation Function.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.SELU.html#mlx.nn.SELU" title="mlx.nn.SELU"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SELU</span></code></a>()</p></td>
+<td><p>Applies the Scaled Exponential Linear Unit.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Mish.html#mlx.nn.Mish" title="mlx.nn.Mish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Mish</span></code></a>()</p></td>
+<td><p>Applies the Mish function, element-wise.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.nn.Linear.html#mlx.nn.Linear" title="mlx.nn.Linear"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Linear</span></code></a>(input_dims, output_dims[, bias])</p></td>
 <td><p>Applies an affine transformation to the input.</p></td>
@@ -739,8 +769,45 @@ simple functions.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.relu.html#mlx.nn.relu" title="mlx.nn.relu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">relu</span></code></a>(x)</p></td>
 <td><p>Applies the Rectified Linear Unit.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.silu.html#mlx.nn.silu" title="mlx.nn.silu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">silu</span></code></a>(x)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.prelu.html#mlx.nn.prelu" title="mlx.nn.prelu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prelu</span></code></a>(x, alpha)</p></td>
+<td><p>Applies the element-wise function:</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.silu.html#mlx.nn.silu" title="mlx.nn.silu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">silu</span></code></a>(x)</p></td>
 <td><p>Applies the Sigmoid Linear Unit.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.step.html#mlx.nn.step" title="mlx.nn.step"><code class="xref py py-obj docutils literal notranslate"><span class="pre">step</span></code></a>(x[, threshold])</p></td>
+<td><p>Applies the Step Activation Function.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.selu.html#mlx.nn.selu" title="mlx.nn.selu"><code class="xref py py-obj docutils literal notranslate"><span class="pre">selu</span></code></a>(x)</p></td>
+<td><p>Applies the Scaled Exponential Linear Unit.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.mish.html#mlx.nn.mish" title="mlx.nn.mish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">mish</span></code></a>(x)</p></td>
+<td><p>Applies the Mish function, element-wise.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="loss-functions">
+<h2>Loss Functions<a class="headerlink" href="#loss-functions" title="Permalink to this heading">#</a></h2>
+<table class="autosummary longtable table autosummary">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.cross_entropy.html#mlx.nn.losses.cross_entropy" title="mlx.nn.losses.cross_entropy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">losses.cross_entropy</span></code></a>(logits, targets[, ...])</p></td>
+<td><p>Computes the cross entropy loss between logits and targets.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html#mlx.nn.losses.binary_cross_entropy" title="mlx.nn.losses.binary_cross_entropy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">losses.binary_cross_entropy</span></code></a>(inputs, targets)</p></td>
+<td><p>Computes the binary cross entropy loss between inputs and targets.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.l1_loss.html#mlx.nn.losses.l1_loss" title="mlx.nn.losses.l1_loss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">losses.l1_loss</span></code></a>(predictions, targets[, reduction])</p></td>
+<td><p>Computes the L1 loss between predictions and targets.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.mse_loss.html#mlx.nn.losses.mse_loss" title="mlx.nn.losses.mse_loss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">losses.mse_loss</span></code></a>(predictions, targets[, ...])</p></td>
+<td><p>Computes the mean squared error loss between predictions and targets.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.nll_loss.html#mlx.nn.losses.nll_loss" title="mlx.nn.losses.nll_loss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">losses.nll_loss</span></code></a>(inputs, targets[, axis, ...])</p></td>
+<td><p>Computes the negative log likelihood loss between inputs and targets.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.kl_div_loss.html#mlx.nn.losses.kl_div_loss" title="mlx.nn.losses.kl_div_loss"><code class="xref py py-obj docutils literal notranslate"><span class="pre">losses.kl_div_loss</span></code></a>(inputs, targets[, axis, ...])</p></td>
+<td><p>Computes the Kullback-Leibler divergence loss between targets and the inputs.</p></td>
 </tr>
 </tbody>
 </table>
@@ -801,6 +868,7 @@ simple functions.</p>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#neural-network-layers">Neural Network Layers</a><ul class="visible nav section-nav flex-column">
 </ul>
 </li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#loss-functions">Loss Functions</a></li>
 </ul>
   </nav></div>
 
