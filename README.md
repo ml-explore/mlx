@@ -80,3 +80,10 @@ for more information on building the C++ and Python APIs from source.
 
 Check out the [contribution guidelines](CONTRIBUTING.md) for more information
 on contributing to MLX.
+
+Optional: Generate stubs for C++ python objects to enable IDE auto-completion
+
+```shell
+pip install ".[dev]"
+python setup.py generate_stubs
+```
