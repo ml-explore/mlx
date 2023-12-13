@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Operations &#8212; MLX 0.0.4 documentation</title>
+    <title>Operations &#8212; MLX 0.0.5 documentation</title>
   
   
   
@@ -134,8 +134,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.4 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.4 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.5 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.5 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -148,6 +148,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../unified_memory.html">Unified Memory</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -237,9 +238,11 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.erfinv.html">mlx.core.erfinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.exp.html">mlx.core.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.eye.html">mlx.core.eye</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.full.html">mlx.core.full</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.load.html">mlx.core.load</a></li>
@@ -334,8 +337,12 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.GELU.html">mlx.nn.GELU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.SELU.html">mlx.nn.SELU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
@@ -349,7 +356,17 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.selu.html">mlx.nn.selu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.mish.html">mlx.nn.mish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -545,7 +562,7 @@ document.write(`
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.abs.html#mlx.core.abs" title="mlx.core.abs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">abs</span></code></a>(a, /, *[, stream])</p></td>
 <td><p>Element-wise absolute value.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.add.html#mlx.core.add" title="mlx.core.add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.add.html#mlx.core.add" title="mlx.core.add"><code class="xref py py-obj docutils literal notranslate"><span class="pre">add</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise addition.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.all.html#mlx.core.all" title="mlx.core.all"><code class="xref py py-obj docutils literal notranslate"><span class="pre">all</span></code></a>(a, /[, axis, keepdims, stream])</p></td>
@@ -590,13 +607,13 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.argsort.html#mlx.core.argsort" title="mlx.core.argsort"><code class="xref py py-obj docutils literal notranslate"><span class="pre">argsort</span></code></a>(a, /[, axis, stream])</p></td>
 <td><p>Returns the indices that sort the array.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.array_equal.html#mlx.core.array_equal" title="mlx.core.array_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array_equal</span></code></a>(a, b, /, *[, equal_nan, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.array_equal.html#mlx.core.array_equal" title="mlx.core.array_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array_equal</span></code></a>(a, b[, equal_nan, stream])</p></td>
 <td><p>Array equality check.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.broadcast_to.html#mlx.core.broadcast_to" title="mlx.core.broadcast_to"><code class="xref py py-obj docutils literal notranslate"><span class="pre">broadcast_to</span></code></a>(a, /, shape, *[, stream])</p></td>
 <td><p>Broadcast an array to the given shape.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.concatenate.html#mlx.core.concatenate" title="mlx.core.concatenate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">concatenate</span></code></a>(arrays, /[, axis, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.concatenate.html#mlx.core.concatenate" title="mlx.core.concatenate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">concatenate</span></code></a>(arrays[, axis, stream])</p></td>
 <td><p>Concatenate the arrays along the given axis.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.convolve.html#mlx.core.convolve" title="mlx.core.convolve"><code class="xref py py-obj docutils literal notranslate"><span class="pre">convolve</span></code></a>(a, v, /[, mode, stream])</p></td>
@@ -614,10 +631,10 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.cosh.html#mlx.core.cosh" title="mlx.core.cosh"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cosh</span></code></a>(a, /, *[, stream])</p></td>
 <td><p>Element-wise hyperbolic cosine.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.divide.html#mlx.core.divide" title="mlx.core.divide"><code class="xref py py-obj docutils literal notranslate"><span class="pre">divide</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.divide.html#mlx.core.divide" title="mlx.core.divide"><code class="xref py py-obj docutils literal notranslate"><span class="pre">divide</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise division.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.equal.html#mlx.core.equal" title="mlx.core.equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">equal</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.equal.html#mlx.core.equal" title="mlx.core.equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">equal</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise equality.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.erf.html#mlx.core.erf" title="mlx.core.erf"><code class="xref py py-obj docutils literal notranslate"><span class="pre">erf</span></code></a>(a, /, *[, stream])</p></td>
@@ -632,19 +649,25 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.expand_dims.html#mlx.core.expand_dims" title="mlx.core.expand_dims"><code class="xref py py-obj docutils literal notranslate"><span class="pre">expand_dims</span></code></a>(a, /, axis, *[, stream])</p></td>
 <td><p>Add a size one dimension at the given axis.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.full.html#mlx.core.full" title="mlx.core.full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">full</span></code></a>(shape, vals[, dtype, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.eye.html#mlx.core.eye" title="mlx.core.eye"><code class="xref py py-obj docutils literal notranslate"><span class="pre">eye</span></code></a>(n[, m, k, dtype, stream])</p></td>
+<td><p>Create an identity matrix or a general diagonal matrix.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.full.html#mlx.core.full" title="mlx.core.full"><code class="xref py py-obj docutils literal notranslate"><span class="pre">full</span></code></a>(shape, vals[, dtype, stream])</p></td>
 <td><p>Construct an array with the given value.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.greater.html#mlx.core.greater" title="mlx.core.greater"><code class="xref py py-obj docutils literal notranslate"><span class="pre">greater</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.greater.html#mlx.core.greater" title="mlx.core.greater"><code class="xref py py-obj docutils literal notranslate"><span class="pre">greater</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise greater than.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.greater_equal.html#mlx.core.greater_equal" title="mlx.core.greater_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">greater_equal</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.greater_equal.html#mlx.core.greater_equal" title="mlx.core.greater_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">greater_equal</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise greater or equal.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.less.html#mlx.core.less" title="mlx.core.less"><code class="xref py py-obj docutils literal notranslate"><span class="pre">less</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.identity.html#mlx.core.identity" title="mlx.core.identity"><code class="xref py py-obj docutils literal notranslate"><span class="pre">identity</span></code></a>(n[, dtype, stream])</p></td>
+<td><p>Create a square identity matrix.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.less.html#mlx.core.less" title="mlx.core.less"><code class="xref py py-obj docutils literal notranslate"><span class="pre">less</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise less than.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.less_equal.html#mlx.core.less_equal" title="mlx.core.less_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">less_equal</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.less_equal.html#mlx.core.less_equal" title="mlx.core.less_equal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">less_equal</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise less than or equal.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.load.html#mlx.core.load" title="mlx.core.load"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load</span></code></a>(file, /, *[, stream])</p></td>
@@ -686,10 +709,10 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.min.html#mlx.core.min" title="mlx.core.min"><code class="xref py py-obj docutils literal notranslate"><span class="pre">min</span></code></a>(a, /[, axis, keepdims, stream])</p></td>
 <td><p>An <cite>min</cite> reduction over the given axes.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.minimum.html#mlx.core.minimum" title="mlx.core.minimum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">minimum</span></code></a>(a, b, /[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.minimum.html#mlx.core.minimum" title="mlx.core.minimum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">minimum</span></code></a>(a, b, /, *[, stream])</p></td>
 <td><p>Element-wise minimum.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.multiply.html#mlx.core.multiply" title="mlx.core.multiply"><code class="xref py py-obj docutils literal notranslate"><span class="pre">multiply</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.multiply.html#mlx.core.multiply" title="mlx.core.multiply"><code class="xref py py-obj docutils literal notranslate"><span class="pre">multiply</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise multiplication.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.negative.html#mlx.core.negative" title="mlx.core.negative"><code class="xref py py-obj docutils literal notranslate"><span class="pre">negative</span></code></a>(a, /, *[, stream])</p></td>
@@ -704,7 +727,7 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.partition.html#mlx.core.partition" title="mlx.core.partition"><code class="xref py py-obj docutils literal notranslate"><span class="pre">partition</span></code></a>(a, /, kth[, axis, stream])</p></td>
 <td><p>Returns a partitioned copy of the array such that the smaller <code class="docutils literal notranslate"><span class="pre">kth</span></code> elements are first.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.pad.html#mlx.core.pad" title="mlx.core.pad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pad</span></code></a>(a, /, pad_width[, constant_values, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.pad.html#mlx.core.pad" title="mlx.core.pad"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pad</span></code></a>(a, pad_with[, constant_values, stream])</p></td>
 <td><p>Pad an array with a constant value</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.prod.html#mlx.core.prod" title="mlx.core.prod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">prod</span></code></a>(a, /[, axis, keepdims, stream])</p></td>
@@ -722,10 +745,10 @@ document.write(`
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.save.html#mlx.core.save" title="mlx.core.save"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save</span></code></a>(file, arr, /[, retain_graph])</p></td>
 <td><p>Save the array to a binary file in <code class="docutils literal notranslate"><span class="pre">.npy</span></code> format.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.savez.html#mlx.core.savez" title="mlx.core.savez"><code class="xref py py-obj docutils literal notranslate"><span class="pre">savez</span></code></a>(file, /, *args, **kwargs)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.savez.html#mlx.core.savez" title="mlx.core.savez"><code class="xref py py-obj docutils literal notranslate"><span class="pre">savez</span></code></a>(file, *args, **kwargs)</p></td>
 <td><p>Save several arrays to a binary file in uncompressed <code class="docutils literal notranslate"><span class="pre">.npz</span></code> format.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.savez_compressed.html#mlx.core.savez_compressed" title="mlx.core.savez_compressed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">savez_compressed</span></code></a>(file, /, *args, **kwargs)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.savez_compressed.html#mlx.core.savez_compressed" title="mlx.core.savez_compressed"><code class="xref py py-obj docutils literal notranslate"><span class="pre">savez_compressed</span></code></a>(file, *args, **kwargs)</p></td>
 <td><p>Save several arrays to a binary file in compressed <code class="docutils literal notranslate"><span class="pre">.npz</span></code> format.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.sigmoid.html#mlx.core.sigmoid" title="mlx.core.sigmoid"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sigmoid</span></code></a>(a, /, *[, stream])</p></td>
@@ -761,16 +784,16 @@ document.write(`
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.stop_gradient.html#mlx.core.stop_gradient" title="mlx.core.stop_gradient"><code class="xref py py-obj docutils literal notranslate"><span class="pre">stop_gradient</span></code></a>(a, /, *[, stream])</p></td>
 <td><p>Stop gradients from being computed.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.subtract.html#mlx.core.subtract" title="mlx.core.subtract"><code class="xref py py-obj docutils literal notranslate"><span class="pre">subtract</span></code></a>(a, b, /, *[, stream])</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.subtract.html#mlx.core.subtract" title="mlx.core.subtract"><code class="xref py py-obj docutils literal notranslate"><span class="pre">subtract</span></code></a>(a, b[, stream])</p></td>
 <td><p>Element-wise subtraction.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.sum.html#mlx.core.sum" title="mlx.core.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sum</span></code></a>(array, /[, axis, keepdims, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.sum.html#mlx.core.sum" title="mlx.core.sum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sum</span></code></a>(a, /[, axis, keepdims, stream])</p></td>
 <td><p>Sum reduce the array over the given axes.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.take.html#mlx.core.take" title="mlx.core.take"><code class="xref py py-obj docutils literal notranslate"><span class="pre">take</span></code></a>(a, /, indices[, axis, stream])</p></td>
 <td><p>Take elements along an axis.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.take_along_axis.html#mlx.core.take_along_axis" title="mlx.core.take_along_axis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">take_along_axis</span></code></a>(a, /, indices, axis, *[, stream])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.take_along_axis.html#mlx.core.take_along_axis" title="mlx.core.take_along_axis"><code class="xref py py-obj docutils literal notranslate"><span class="pre">take_along_axis</span></code></a>(a, /, indices[, axis, stream])</p></td>
 <td><p>Take values along an axis at the specified indices.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.tan.html#mlx.core.tan" title="mlx.core.tan"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tan</span></code></a>(a, /, *[, stream])</p></td>
