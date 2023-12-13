@@ -4,6 +4,7 @@ import math
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
+from typing import Optional
 
 
 class Embedding(Module):
@@ -18,10 +19,20 @@ class Embedding(Module):
         dims (int): The dimensionality of the embeddings.
     """
 
-    def __init__(self, num_embeddings: int, dims: int):
+    def __init__(self, num_embeddings: int, dims: int, _weight: Optional[mx.array], padding_idx: Optional[int], freeze: Optional[bool]):
         super().__init__()
         scale = math.sqrt(1 / dims)
-        self.weight = mx.random.normal((num_embeddings, dims)) * scale
+        if _weight is  None:
+            self.weight = mx.random.normal((num_embeddings, dims)) * scale
+        else:
+            assert _weight.shape == [num_embeddings, dims], 'Shape of weight does not match num_embeddings and dims'
+            self.weight = _weight
+
+        if(freeze):
+            self.weight.freeze()
+
+        if(padding_idx is not None):
+            self.weight[padding_idx] = 0
 
     def _extra_repr(self):
         return f"{self.weight.shape[0]}, {self.weight.shape[1]}"
