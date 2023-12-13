@@ -597,9 +597,9 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
 
 array clip(
     const array& a,
-    const std::optional<array>& a_min = std::nullopt,
-    const std::optional<array>& a_max = std::nullopt,
-    StreamOrDevice s = {}) {
+    const std::optional<array>& a_min,
+    const std::optional<array>& a_max,
+    StreamOrDevice s /* = {} */) {
   if (!a_min.has_value() && !a_max.has_value()) {
     throw std::invalid_argument("At most one of a_min and a_max may be None");
   }
