@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.core.full &#8212; MLX 0.0.4 documentation</title>
+    <title>mlx.core.full &#8212; MLX 0.0.5 documentation</title>
   
   
   
@@ -47,7 +47,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="mlx.core.greater" href="mlx.core.greater.html" />
-    <link rel="prev" title="mlx.core.expand_dims" href="mlx.core.expand_dims.html" />
+    <link rel="prev" title="mlx.core.eye" href="mlx.core.eye.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -134,8 +134,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.4 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.4 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.5 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.5 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -148,6 +148,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../unified_memory.html">Unified Memory</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -237,9 +238,11 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.erfinv.html">mlx.core.erfinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.exp.html">mlx.core.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.eye.html">mlx.core.eye</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">mlx.core.full</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.load.html">mlx.core.load</a></li>
@@ -334,8 +337,12 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.GELU.html">mlx.nn.GELU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.SELU.html">mlx.nn.SELU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
@@ -349,7 +356,17 @@
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.selu.html">mlx.nn.selu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.mish.html">mlx.nn.mish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -542,7 +559,7 @@ document.write(`
 <h1>mlx.core.full<a class="headerlink" href="#mlx-core-full" title="Permalink to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.core.full">
-<span class="sig-prename descclassname"><span class="pre">mlx.core.</span></span><span class="sig-name descname"><span class="pre">full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vals</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#complex" title="(in Python v3.12)"><span class="pre">complex</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><span class="pre">Dtype</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Stream.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.core.full" title="Permalink to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">mlx.core.</span></span><span class="sig-name descname"><span class="pre">full</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">shape</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vals</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><span class="pre">scalar</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dtype</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><span class="pre">Dtype</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Union</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Stream.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.core.full" title="Permalink to this definition">#</a></dt>
 <dd><p>Construct an array with the given value.</p>
 <p>Constructs an array of size <code class="docutils literal notranslate"><span class="pre">shape</span></code> filled with <code class="docutils literal notranslate"><span class="pre">vals</span></code>. If <code class="docutils literal notranslate"><span class="pre">vals</span></code>
 is an <a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array</span></code></a> it must be broadcastable to the given <code class="docutils literal notranslate"><span class="pre">shape</span></code>.</p>
@@ -578,12 +595,12 @@ unspecified the output type is inferred from <code class="docutils literal notra
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="mlx.core.expand_dims.html"
+       href="mlx.core.eye.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">mlx.core.expand_dims</p>
+        <p class="prev-next-title">mlx.core.eye</p>
       </div>
     </a>
     <a class="right-next"

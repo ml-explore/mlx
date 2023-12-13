@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Optimizers &#8212; MLX 0.0.4 documentation</title>
+    <title>Optimizers &#8212; MLX 0.0.5 documentation</title>
   
   
   
@@ -47,7 +47,7 @@
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="mlx.optimizers.OptimizerState" href="_autosummary/mlx.optimizers.OptimizerState.html" />
-    <link rel="prev" title="mlx.nn.silu" href="_autosummary_functions/mlx.nn.silu.html" />
+    <link rel="prev" title="mlx.nn.losses.kl_div_loss" href="_autosummary_functions/mlx.nn.losses.kl_div_loss.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -134,8 +134,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.4 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.4 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.5 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.5 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -148,6 +148,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../unified_memory.html">Unified Memory</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -237,9 +238,11 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.erfinv.html">mlx.core.erfinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.exp.html">mlx.core.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.eye.html">mlx.core.eye</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.full.html">mlx.core.full</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.load.html">mlx.core.load</a></li>
@@ -334,8 +337,12 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.GELU.html">mlx.nn.GELU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.SELU.html">mlx.nn.SELU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
@@ -349,7 +356,17 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.selu.html">mlx.nn.selu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.mish.html">mlx.nn.mish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary_functions/mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 </ul>
 </li>
 <li class="toctree-l1 current active has-children"><a class="current reference internal" href="#">Optimizers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -572,7 +589,7 @@ model’s parameters and the <strong>optimizer state</strong>.</p>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.optimizers.Optimizer.html#mlx.optimizers.Optimizer" title="mlx.optimizers.Optimizer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Optimizer</span></code></a>()</p></td>
 <td><p>The base class for all optimizers.</p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.optimizers.SGD.html#mlx.optimizers.SGD" title="mlx.optimizers.SGD"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SGD</span></code></a>(learning_rate[, momentum])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.optimizers.SGD.html#mlx.optimizers.SGD" title="mlx.optimizers.SGD"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SGD</span></code></a>(learning_rate[, momentum, weight_decay, ...])</p></td>
 <td><p>Stochastic gradient descent optimizer.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.optimizers.Adam.html#mlx.optimizers.Adam" title="mlx.optimizers.Adam"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Adam</span></code></a>(learning_rate[, betas, eps])</p></td>
@@ -594,12 +611,12 @@ model’s parameters and the <strong>optimizer state</strong>.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="_autosummary_functions/mlx.nn.silu.html"
+       href="_autosummary_functions/mlx.nn.losses.kl_div_loss.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">mlx.nn.silu</p>
+        <p class="prev-next-title">mlx.nn.losses.kl_div_loss</p>
       </div>
     </a>
     <a class="right-next"

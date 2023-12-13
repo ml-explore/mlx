@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.optimizers.SGD &#8212; MLX 0.0.4 documentation</title>
+    <title>mlx.optimizers.SGD &#8212; MLX 0.0.5 documentation</title>
   
   
   
@@ -135,8 +135,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.4 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.4 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.5 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.5 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -149,6 +149,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../unified_memory.html">Unified Memory</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -238,9 +239,11 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.erfinv.html">mlx.core.erfinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.exp.html">mlx.core.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.eye.html">mlx.core.eye</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.full.html">mlx.core.full</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.load.html">mlx.core.load</a></li>
@@ -335,8 +338,12 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.GELU.html">mlx.nn.GELU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.SELU.html">mlx.nn.SELU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
@@ -350,7 +357,17 @@
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.selu.html">mlx.nn.selu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.mish.html">mlx.nn.mish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary_functions/mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 </ul>
 </li>
 <li class="toctree-l1 current active has-children"><a class="reference internal" href="../optimizers.html">Optimizers</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
@@ -543,24 +560,27 @@ document.write(`
 <h1>mlx.optimizers.SGD<a class="headerlink" href="#mlx-optimizers-sgd" title="Permalink to this heading">#</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mlx.optimizers.SGD">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mlx.optimizers.</span></span><span class="sig-name descname"><span class="pre">SGD</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">momentum</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.optimizers.SGD" title="Permalink to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mlx.optimizers.</span></span><span class="sig-name descname"><span class="pre">SGD</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">learning_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">momentum</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">weight_decay</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dampening</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nesterov</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.optimizers.SGD" title="Permalink to this definition">#</a></dt>
 <dd><p>Stochastic gradient descent optimizer.</p>
 <p>Updates a parameter <span class="math notranslate nohighlight">\(w\)</span> with a gradient <span class="math notranslate nohighlight">\(g\)</span> as follows</p>
 <div class="math notranslate nohighlight">
-\[\begin{split}v_{t+1} &amp;= \mu v_t + (1 - \mu) g_t \\
+\[\begin{split}v_{t+1} &amp;= \mu v_t + g_t \\
 w_{t+1} &amp;= w_t - \lambda v_{t+1}\end{split}\]</div>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>learning_rate</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a>) – The learning <span class="math notranslate nohighlight">\(\lambda\)</span> for the update</p></li>
-<li><p><strong>momentum</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a>) – The momentum strength <span class="math notranslate nohighlight">\(\mu\)</span></p></li>
+<li><p><strong>momentum</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – The momentum strength <span class="math notranslate nohighlight">\(\mu\)</span> (default: 0)</p></li>
+<li><p><strong>weight_decay</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – The weight decay (L2 penalty) (default: 0)</p></li>
+<li><p><strong>dampening</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – Dampening for momentum <span class="math notranslate nohighlight">\(\tau\)</span> (default: 0)</p></li>
+<li><p><strong>nesterov</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>optional</em>) – Enables Nesterov momentum (default: False)</p></li>
 </ul>
 </dd>
 </dl>
 <p class="rubric">Methods</p>
 <table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code>(learning_rate[, momentum])</p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code>(learning_rate[, momentum, ...])</p></td>
 <td><p></p></td>
 </tr>
 <tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">apply_single</span></code>(gradient, parameter, state)</p></td>
