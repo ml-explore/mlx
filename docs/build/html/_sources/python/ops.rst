@@ -38,9 +38,11 @@ Operations
    erfinv
    exp
    expand_dims
+   eye
    full
    greater
    greater_equal
+   identity
    less
    less_equal
    load
