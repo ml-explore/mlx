@@ -187,7 +187,7 @@ split(const array& a, const std::vector<int>& indices, StreamOrDevice s = {});
 
 /**
  * Clip (limit) the values in an array.
-*/
+ */
 array clip(
     const array& a,
     const std::optional<array>& a_min = std::nullopt,

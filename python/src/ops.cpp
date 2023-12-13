@@ -2368,6 +2368,18 @@ void init_ops(py::module_& m) {
     py::kw_only(),
     "stream"_a = none,
     R"pbdoc(
+      "clip",
+      [](const array& a,
+         const ScalarOrArray& min,
+         const ScalarOrArray& max,
+         StreamOrDevice s) { return clip(a, to_array(min), to_array(max), s); },
+      "a"_a,
+      py::pos_only(),
+      "min"_a,
+      "max"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
       clip(a: array, /, min: Union[scalar, array], max: Union[scalar, array], *, stream: Union[None, Stream, Device] = None) -> array
 
       Clip the values of the array between the given minimum and maximum.
