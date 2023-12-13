@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.nn.silu &#8212; MLX 0.0.4 documentation</title>
+    <title>mlx.nn.silu &#8212; MLX 0.0.5 documentation</title>
   
   
   
@@ -47,8 +47,8 @@
     <script>DOCUMENTATION_OPTIONS.pagename = 'python/_autosummary_functions/mlx.nn.silu';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Optimizers" href="../optimizers.html" />
-    <link rel="prev" title="mlx.nn.relu" href="mlx.nn.relu.html" />
+    <link rel="next" title="mlx.nn.step" href="mlx.nn.step.html" />
+    <link rel="prev" title="mlx.nn.prelu" href="mlx.nn.prelu.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -135,8 +135,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.4 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.4 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.0.5 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.0.5 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -149,6 +149,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../unified_memory.html">Unified Memory</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -238,9 +239,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.erfinv.html">mlx.core.erfinv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.exp.html">mlx.core.exp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.expand_dims.html">mlx.core.expand_dims</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.eye.html">mlx.core.eye</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.full.html">mlx.core.full</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.core.load.html">mlx.core.load</a></li>
@@ -335,8 +338,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.GELU.html">mlx.nn.GELU</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.SELU.html">mlx.nn.SELU</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../_autosummary/mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
@@ -350,7 +357,17 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">mlx.nn.silu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.step.html">mlx.nn.step</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.selu.html">mlx.nn.selu</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.mish.html">mlx.nn.mish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -544,7 +561,7 @@ document.write(`
 <dl class="py class">
 <dt class="sig sig-object py" id="mlx.nn.silu">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">mlx.nn.</span></span><span class="sig-name descname"><span class="pre">silu</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">x</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.silu" title="Permalink to this definition">#</a></dt>
-<dd><p>Applies the Sigmoid Linear Unit.</p>
+<dd><p>Applies the Sigmoid Linear Unit. Also known as Swish.</p>
 <p>Applies <span class="math notranslate nohighlight">\(x \sigma(x)\)</span> element wise, where <span class="math notranslate nohighlight">\(\sigma(\cdot)\)</span> is
 the logistic sigmoid.</p>
 </dd></dl>
@@ -563,20 +580,20 @@ the logistic sigmoid.</p>
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="mlx.nn.relu.html"
+       href="mlx.nn.prelu.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">mlx.nn.relu</p>
+        <p class="prev-next-title">mlx.nn.prelu</p>
       </div>
     </a>
     <a class="right-next"
-       href="../optimizers.html"
+       href="mlx.nn.step.html"
        title="next page">
       <div class="prev-next-info">
         <p class="prev-next-subtitle">next</p>
-        <p class="prev-next-title">Optimizers</p>
+        <p class="prev-next-title">mlx.nn.step</p>
       </div>
       <i class="fa-solid fa-angle-right"></i>
     </a>
