@@ -173,7 +173,7 @@ void Ceil::eval(const std::vector<array>& inputs, array& out) {
   if (not is_integral(in.dtype())) {
     unary_fp(in, out, [](auto x) { return std::ceil(x); });
   } else {
-    // No-op non-integer types
+    // No-op integer types
     out.copy_shared_buffer(in);
   }
 }
@@ -304,7 +304,7 @@ void Floor::eval(const std::vector<array>& inputs, array& out) {
   if (not is_integral(in.dtype())) {
     unary_fp(in, out, [](auto x) { return std::floor(x); });
   } else {
-    // No-op non-integer types
+    // No-op integer types
     out.copy_shared_buffer(in);
   }
 }

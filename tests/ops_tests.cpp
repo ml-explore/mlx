@@ -790,6 +790,10 @@ TEST_CASE("test arithmetic unary ops") {
     x = array(neginf);
     CHECK_EQ(floor(x).item<float>(), neginf);
     CHECK_EQ(ceil(x).item<float>(), neginf);
+
+    x = array(std::complex<float>(1.0f, 1.0f));
+    CHECK_THROWS_AS(floor(x), std::invalid_argument);
+    CHECK_THROWS_AS(ceil(x), std::invalid_argument);
   }
 
   // Test exponential

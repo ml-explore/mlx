@@ -13,7 +13,7 @@ set(CMAKE_INSTALL_MESSAGE NEVER)
 option(MLX_BUILD_TESTS "Build tests for mlx" ON)
 option(MLX_BUILD_EXAMPLES "Build examples for mlx" ON)
 option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
-option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" YES)
+option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
