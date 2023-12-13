@@ -183,6 +183,16 @@ inline array transpose(
   return transpose(a, std::vector<int>(axes), s);
 }
 
+/** Swap two axes of an array. */
+array swapaxes(const array& a, int axis1, int axis2, StreamOrDevice s = {});
+
+/** Move an axis of an array. */
+array moveaxis(
+    const array& a,
+    int source,
+    int destination,
+    StreamOrDevice s = {});
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,

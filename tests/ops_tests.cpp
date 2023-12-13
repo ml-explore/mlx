@@ -1,6 +1,6 @@
 // Copyright © 2023 Apple Inc.
-
 #include <cmath>
+#include <iostream> // TODO
 #include <numeric>
 
 #include "doctest/doctest.h"
@@ -203,6 +203,46 @@ TEST_CASE("test split") {
   CHECK(array_equal(out[1], array({})).item<bool>());
   CHECK(array_equal(out[2], array({1})).item<bool>());
   CHECK(array_equal(out[3], array({2, 3, 4})).item<bool>());
+}
+
+TEST_CASE("test swap and move axes") {
+  // Test swapaxes
+  array a(0.0);
+  CHECK_THROWS(swapaxes(a, 0, 0));
+
+  a = zeros({2});
+  CHECK_THROWS(swapaxes(a, 0, 1));
+  CHECK_EQ(swapaxes(a, 0, 0).shape(), std::vector<int>{2});
+  CHECK_EQ(swapaxes(a, -1, -1).shape(), std::vector<int>{2});
+
+  a = zeros({2, 3, 4});
+  CHECK_THROWS(swapaxes(a, 0, -4));
+  CHECK_THROWS(swapaxes(a, 0, 3));
+  CHECK_THROWS(swapaxes(a, 3, 0));
+  CHECK_THROWS(swapaxes(a, -4, 0));
+  CHECK_EQ(swapaxes(a, 0, 2).shape(), std::vector<int>{4, 3, 2});
+  CHECK_EQ(swapaxes(a, 0, 1).shape(), std::vector<int>{3, 2, 4});
+  CHECK_EQ(swapaxes(a, 0, -1).shape(), std::vector<int>{4, 3, 2});
+  CHECK_EQ(swapaxes(a, -2, 2).shape(), std::vector<int>{2, 4, 3});
+
+  // Test moveaxis
+  a = array(0.0);
+  CHECK_THROWS(moveaxis(a, 0, 0));
+
+  a = zeros({2});
+  CHECK_THROWS(moveaxis(a, 0, 1));
+  CHECK_EQ(moveaxis(a, 0, 0).shape(), std::vector<int>{2});
+  CHECK_EQ(moveaxis(a, -1, -1).shape(), std::vector<int>{2});
+
+  a = zeros({2, 3, 4});
+  CHECK_THROWS(moveaxis(a, 0, -4));
+  CHECK_THROWS(moveaxis(a, 0, 3));
+  CHECK_THROWS(moveaxis(a, 3, 0));
+  CHECK_THROWS(moveaxis(a, -4, 0));
+  CHECK_EQ(moveaxis(a, 0, 2).shape(), std::vector<int>{3, 4, 2});
+  CHECK_EQ(moveaxis(a, 0, 1).shape(), std::vector<int>{3, 2, 4});
+  CHECK_EQ(moveaxis(a, 0, -1).shape(), std::vector<int>{3, 4, 2});
+  CHECK_EQ(moveaxis(a, -2, 2).shape(), std::vector<int>{2, 4, 3});
 }
 
 TEST_CASE("test transpose") {
