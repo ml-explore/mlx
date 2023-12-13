@@ -595,6 +595,25 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
   return split(a, num_splits, 0, to_stream(s));
 }
 
+array clip(
+    const array& a,
+    const std::optional<array>& a_min = std::nullopt,
+    const std::optional<array>& a_max = std::nullopt,
+    StreamOrDevice s = {}) {
+
+    if (!a_min.has_value() && !a_max.has_value()) {
+      throw std::invalid_argument("At most one of a_min and a_max may be None");
+    }
+    array result = astype(a, a.dtype(), s);
+    if (a_min.has_value()) {
+        result = maximum(result, a_min.value(), s);
+    }
+    if (a_max.has_value()) {
+        result = minimum(result, a_max.value(), s);
+    }
+    return result;
+}
+
 array concatenate(
     const std::vector<array>& arrays,
     int axis,
