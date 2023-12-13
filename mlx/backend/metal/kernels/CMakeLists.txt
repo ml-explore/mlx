@@ -18,6 +18,7 @@ set(
   "copy"
   "gemm"
   "gemv"
+  "quantized"
   "random"
   "reduce"
   "scan"

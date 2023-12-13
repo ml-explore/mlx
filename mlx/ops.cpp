@@ -2563,11 +2563,11 @@ array quantized_matmul(
   int inner_dims = w.shape(0) * (32 / width);
   if (inner_dims != x.shape(1)) {
     std::ostringstream msg;
-    msg << "[quantized_matmul] Last dimension of first input with shape "
-        << x.shape()
-        << " does not match the expanded first dimension of the quantized matrix "
-        << inner_dims << " computed from shape " << w.shape()
-        << " with groups=" << groups << " and width=" << width;
+    msg << "[quantized_matmul] Last dimension of first input with "
+        << "shape " << x.shape() << " does not match the expanded first "
+        << "dimension of the quantized matrix " << inner_dims
+        << ", computed from shape " << w.shape() << " with groups=" << groups
+        << " and width=" << width;
     throw std::invalid_argument(msg.str());
   }
 

@@ -1113,7 +1113,7 @@ class Power : public Primitive {
 class QuantizedMatmul : public Primitive {
  public:
   explicit QuantizedMatmul(Stream stream, int groups, int width)
-      : Primitive(stream){};
+      : Primitive(stream), groups_(groups), width_(width){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
