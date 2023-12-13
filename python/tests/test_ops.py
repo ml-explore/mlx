@@ -1435,6 +1435,22 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.flatten(start_axis=1).shape, [2, 3 * 4])
         self.assertEqual(x.flatten(end_axis=1).shape, [2 * 3, 4])
 
+    def test_clip(self):
+        a = np.array([1, 4, 3, 8, 5])
+        expected = np.clip(a, 2, 6)
+        clipped = mx.clip(a, 2, 6)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        a = np.array([-1, 1, 0, 5])
+        expected = np.clip(a, 0, None)
+        clipped = mx.clip(a, 0, None)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        a = np.array([2, 3, 4, 5])
+        expected = np.clip(a, None, 4)
+        clipped = mx.clip(a, None, 4)
+        self.assertTrue(np.array_equal(clipped, expected))
+
 
 if __name__ == "__main__":
     unittest.main()
