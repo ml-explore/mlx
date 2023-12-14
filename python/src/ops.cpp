@@ -2167,20 +2167,18 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-      stack(arrays: List[array], axis: Optional[int] = 0, *, stream:
-      Union[None, Stream, Device] = None) -> array
+      stack(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array
 
       Stacks the arrays along a new axis.
 
       Args:
           arrays (list(array)): A list of arrays to stack.
           axis (int, optional): The axis in the result array along which the
-          input arrays are stacked. Defaults to 0. stream (Stream, optional):
-          Stream or device. Defaults to None.
+          input arrays are stacked. Defaults to ``0``. 
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
 
       Returns:
-          array: Stacked array of the input arrays. Default stacked along
-          axis 0.
+          array: The stacked array.
     )pbdoc");
   m.def(
       "pad",
