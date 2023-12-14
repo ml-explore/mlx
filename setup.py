@@ -143,7 +143,7 @@ if __name__ == "__main__":
         version=get_version("0.0.5"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
-        description="A framework for machine learning on Apple Silicon.",
+        description="A framework for machine learning on Apple silicon.",
         long_description=long_description,
         long_description_content_type="text/markdown",
         packages=packages,
