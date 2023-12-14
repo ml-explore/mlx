@@ -269,7 +269,7 @@ class AdaDelta(Optimizer):
         u = rho * u + (1 - rho) * mx.square(d)
 
         state["v"] = v
-        state["s"] = u
+        state["u"] = u
 
         return parameter - lr * d
 
