@@ -85,6 +85,7 @@ Operations
    sqrt
    square
    squeeze
+   stack
    stop_gradient
    subtract
    sum
