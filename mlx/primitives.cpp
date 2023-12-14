@@ -2,7 +2,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <iostream> // TODO
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
