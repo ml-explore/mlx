@@ -230,9 +230,9 @@ class AdaDelta(Optimizer):
     .. math::
 
         v_{t+1} &= \rho v_t + (1 - \rho) g_t^2 \\
-        \Delta w_{t+1} &= - \frac{\sqrt{s_t + \epsilon}}{\sqrt{v_{t+1} + \epsilon}} g_t \\
-        s_{t+1} &= \rho s_t + (1 - \rho) \Delta w_{t+1}^2 \\
-        w_{t+1} &= w_t + \Delta w_{t+1}
+        \Delta w_{t+1} &= \frac{\sqrt{u_t + \epsilon}}{\sqrt{v_{t+1} + \epsilon}} g_t \\
+        u_{t+1} &= \rho u_t + (1 - \rho) \Delta w_{t+1}^2 \\
+        w_{t+1} &= w_t - \lambda \Delta w_{t+1}
 
     [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint arXiv:1212.5701.
     """
@@ -256,22 +256,22 @@ class AdaDelta(Optimizer):
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
         """Performs the AdaDelta parameter update and stores :math:`v` and
-        :math:`s` in the optimizer state."""
+        :math:`u` in the optimizer state."""
         lr = self.learning_rate
         rho = self.rho
         eps = self.eps
 
         v = state.get("v", mx.zeros_like(gradient))
-        s = state.get("s", mx.zeros_like(gradient))
+        u = state.get("s", mx.zeros_like(gradient))
 
         v = rho * v + (1 - rho) * mx.square(gradient)
-        d = -mx.sqrt(s + eps) / mx.sqrt(v + eps) * gradient
-        s = rho * s + (1 - rho) * mx.square(d)
+        d = mx.sqrt(u + eps) / mx.sqrt(v + eps) * gradient
+        u = rho * u + (1 - rho) * mx.square(d)
 
         state["v"] = v
-        state["s"] = s
+        state["s"] = u
 
-        return parameter + d
+        return parameter - lr * d
 
 
 class Adam(Optimizer):
