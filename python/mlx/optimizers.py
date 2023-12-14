@@ -145,22 +145,22 @@ class RMSprop(Optimizer):
 
     .. math::
 
-        v_{t+1} &= \beta v_t + (1 - \beta) g_t^2 \\
-        w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1} + \epsilon}}
+        v_{t+1} &= \alpha v_t + (1 - \alpha) g_t^2 \\
+        w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1}} + \epsilon}
 
     [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural networks for machine learning
     """
 
-    def __init__(self, learning_rate: float, beta: float = 0.99, eps: float = 1e-8):
+    def __init__(self, learning_rate: float, alpha: float = 0.99, eps: float = 1e-8):
         super().__init__()
 
         self.learning_rate = learning_rate
-        self.beta = beta
+        self.alpha = alpha
         self.eps = eps
 
-        if self.beta < 0.0:
+        if self.alpha < 0.0:
             raise ValueError(
-                f"RMSprop beta should be >=0, {self.beta} was provided instead"
+                f"RMSprop alpha should be >=0, {self.alpha} was provided instead"
             )
         if self.eps < 0.0:
             raise ValueError(
@@ -172,11 +172,11 @@ class RMSprop(Optimizer):
     ):
         """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
         lr = self.learning_rate
-        beta = self.beta
+        alpha = self.alpha
         eps = self.eps
 
         v = state.get("v", mx.zeros_like(gradient))
-        v = beta * v + (1 - beta) * mx.square(gradient)
+        v = alpha * v + (1 - alpha) * mx.square(gradient)
         state["v"] = v
 
         return parameter - lr * gradient / (mx.sqrt(v) + eps)
@@ -190,7 +190,7 @@ class Adagrad(Optimizer):
     .. math::
 
         v_{t+1} &= v_t + g_t^2 \\
-        w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1} + \epsilon}}
+        w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1}} + \epsilon}
 
     [1]: Duchi, J., Hazan, E. and Singer, Y., 2011. Adaptive subgradient methods
     for online learning and stochastic optimization. JMLR 2011.
