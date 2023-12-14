@@ -11,6 +11,7 @@ __pycache__/
 venv/
 
 # Distribution / packaging
+python/mlx/core
 python/mlx/share
 python/mlx/include
 .Python
