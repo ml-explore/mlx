@@ -237,7 +237,7 @@ class AdaDelta(Optimizer):
     [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint arXiv:1212.5701.
     """
 
-    def __init__(self, learning_rate: float, rho: float = 0.95, eps: float = 1e-6):
+    def __init__(self, learning_rate: float, rho: float = 0.9, eps: float = 1e-6):
         super().__init__()
 
         self.learning_rate = learning_rate
