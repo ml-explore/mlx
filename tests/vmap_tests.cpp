@@ -275,7 +275,6 @@ TEST_CASE("test vmap concatenate") {
   auto y = reshape(arange(4), {2, 2});
   auto out = vmap(fun)({x, y})[0];
   auto expected = reshape(array({0, 1, 0, 1, 2, 3, 2, 3}), {2, 4});
-  std::cout << out.shape() << std::endl;
   CHECK(array_equal(out, expected).item<bool>());
   out = vmap(fun, {1, 1})({x, y})[0];
   expected = reshape(array({0, 2, 0, 2, 1, 3, 1, 3}), {2, 4});
