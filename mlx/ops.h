@@ -677,6 +677,12 @@ array maximum(const array& a, const array& b, StreamOrDevice s = {});
 /** Element-wise minimum between two arrays. */
 array minimum(const array& a, const array& b, StreamOrDevice s = {});
 
+/** Floor the element of an array. **/
+array floor(const array& a, StreamOrDevice s = {});
+
+/** Ceil the element of an array. **/
+array ceil(const array& a, StreamOrDevice s = {});
+
 /** Square the elements of an array. */
 array square(const array& a, StreamOrDevice s = {});
 

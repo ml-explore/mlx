@@ -1556,6 +1556,42 @@ void init_ops(py::module_& m) {
             array: The max of ``a`` and ``b``.
       )pbdoc");
   m.def(
+      "floor",
+      &mlx::core::floor,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        floor(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise floor.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The floor of ``a``.
+      )pbdoc");
+  m.def(
+      "ceil",
+      &mlx::core::ceil,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        ceil(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise ceil.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The ceil of ``a``.
+      )pbdoc");
+  m.def(
       "transpose",
       [](const array& a,
          const std::optional<std::vector<int>>& axes,

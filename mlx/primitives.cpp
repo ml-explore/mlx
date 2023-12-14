@@ -441,6 +441,30 @@ bool Broadcast::is_equivalent(const Primitive& other) const {
   return shape_ == b_other.shape_;
 }
 
+std::vector<array> Ceil::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  return {jvp(primals, {cotan}, argnums)};
+}
+
+array Ceil::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> Ceil::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {ceil(inputs[0], stream()), axes[0]};
+}
+
 std::vector<array> Concatenate::vjp(
     const std::vector<array>& primals,
     const array& cotan,
@@ -748,8 +772,7 @@ std::vector<array> Remainder::vjp(
       vjps.push_back(cotan);
     } else {
       auto x_over_y = divide(primals[0], primals[1], stream());
-      // TODO: Replace with a proper floor when available
-      x_over_y = astype(x_over_y, int32, stream());
+      x_over_y = floor(x_over_y, stream());
       vjps.push_back(negative(multiply(x_over_y, cotan, stream()), stream()));
     }
   }
@@ -766,8 +789,7 @@ array Remainder::jvp(
       return tangents[i];
     } else {
       auto x_over_y = divide(primals[0], primals[1], stream());
-      // TODO: Replace with a proper floor when available
-      x_over_y = astype(x_over_y, int32, stream());
+      x_over_y = floor(x_over_y, stream());
       return negative(multiply(x_over_y, tangents[i], stream()), stream());
     }
   };
@@ -974,6 +996,30 @@ array FFT::jvp(
   } else {
     return fft::fftn(tan, stream());
   }
+}
+
+std::vector<array> Floor::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  return {jvp(primals, {cotan}, argnums)};
+}
+
+array Floor::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> Floor::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {floor(inputs[0], stream()), axes[0]};
 }
 
 std::vector<array> Full::vjp(
