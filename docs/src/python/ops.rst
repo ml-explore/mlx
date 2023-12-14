@@ -26,6 +26,7 @@ Operations
    argsort
    array_equal
    broadcast_to
+   ceil
    concatenate
    convolve
    conv1d
@@ -39,6 +40,7 @@ Operations
    exp
    expand_dims
    eye
+   floor
    full
    greater
    greater_equal
