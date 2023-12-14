@@ -9,6 +9,7 @@ from mlx.nn.layers.dropout import Dropout
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.normalization import LayerNorm
 
+
 class MultiHeadAttention(Module):
     """Implements the scaled dot product attention with multiple heads.
 
