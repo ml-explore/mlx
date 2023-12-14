@@ -2174,11 +2174,11 @@ void init_ops(py::module_& m) {
       Args:
           arrays (list(array)): A list of arrays to stack.
           axis (int, optional): The axis in the result array along which the
-          input arrays are stacked. Defaults to ``0``. 
+            input arrays are stacked. Defaults to ``0``. 
           stream (Stream, optional): Stream or device. Defaults to ``None``.
 
       Returns:
-          array: The stacked array.
+          array: The resulting stacked array.
     )pbdoc");
   m.def(
       "pad",
