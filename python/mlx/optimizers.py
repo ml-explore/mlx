@@ -202,10 +202,6 @@ class Adagrad(Optimizer):
         self.learning_rate = learning_rate
         self.eps = eps
 
-        if self.learning_rate < 0.0:
-            raise ValueError(
-                f"Adagrad learning rate should be >=0, {self.learning_rate} was provided instead"
-            )
         if self.eps < 0.0:
             raise ValueError(
                 f"Adagrad epsilon should be >0, {self.eps} was provided instead"
