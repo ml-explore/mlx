@@ -1,0 +1,20 @@
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check_lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.8
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pre-commit black isort clang-format
+      - name: Run lint
+        run: |
+          pre-commit run --all-files

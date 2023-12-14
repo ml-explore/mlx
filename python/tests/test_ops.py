@@ -236,6 +236,24 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.dtype, mx.float32)
         self.assertEqual(z.item(), 0.5)
 
+        x = x.astype(mx.float16)
+        z = x / 4.0
+        self.assertEqual(z.dtype, mx.float16)
+
+        x = x.astype(mx.float16)
+        z = 4.0 / x
+        self.assertEqual(z.dtype, mx.float16)
+
+        x = mx.array(5)
+        y = mx.array(2)
+        z = x / y
+        self.assertEqual(z.dtype, mx.float32)
+        self.assertEqual(z.item(), 2.5)
+
+        z = x // y
+        self.assertEqual(z.dtype, mx.int32)
+        self.assertEqual(z.item(), 2)
+
     def test_remainder(self):
         for dt in [mx.int32, mx.float32]:
             x = mx.array(2, dtype=dt)
@@ -1310,7 +1328,6 @@ class TestOps(mlx_tests.MLXTestCase):
         b = mx.ones([2147484], mx.int8)
         self.assertEqual((a + b)[0, 0].item(), 2)
 
-
     def test_eye(self):
         eye_matrix = mx.eye(3)
         np_eye_matrix = np.eye(3)
@@ -1361,7 +1378,6 @@ class TestOps(mlx_tests.MLXTestCase):
         c = mx.stack([a, b], axis=1)
         np_c = np.stack([np_a, np_b], axis=1)
         self.assertTrue(np.array_equal(c, np_c))
-
 
 if __name__ == "__main__":
     unittest.main()

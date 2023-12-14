@@ -205,6 +205,15 @@ if __name__ == "__main__":
     compare_filtered("celu --size 32x16x1024 --cpu")
     compare_filtered("log_sigmoid --size 32x16x1024")
     compare_filtered("log_sigmoid --size 32x16x1024 --cpu")
+    compare_filtered("step --size 32x16x1024")
+    compare_filtered("step --size 32x16x1024 --cpu")
+    compare_filtered("selu --size 32x16x1024")
+    compare_filtered("selu --size 32x16x1024 --cpu")
+    # compare_filtered("mish --size 32x16x1024") NOTE: Torch does not implement Mish in MPS atm
+    compare_filtered("mish --size 32x16x1024 --cpu")
+    compare_filtered("prelu --size 32x16x1024")
+    compare_filtered("prelu --size 32x16x1024 --cpu")
+
     compare_filtered("scalar_mul --size 32x16x1024")
     compare_filtered("scalar_mul --size 32x16x1024 --cpu")
     compare_filtered("cross_entropy --size 256x1024")

@@ -97,7 +97,7 @@ Updating the parameters
 
 MLX modules allow accessing and updating individual parameters. However, most
 times we need to update large subsets of a module's parameters. This action is
-performed by :meth:`Module.update`. 
+performed by :meth:`Module.update`.
 
 Value and grad
 --------------
@@ -146,8 +146,12 @@ Neural Network Layers
 
    Embedding
    ReLU
+   PReLU
    GELU
    SiLU
+   Step
+   SELU
+   Mish
    Linear
    Conv1d
    Conv2d
@@ -169,7 +173,11 @@ simple functions.
    gelu_approx
    gelu_fast_approx
    relu
+   prelu
    silu
+   step
+   selu
+   mish
 
 Loss Functions
 --------------

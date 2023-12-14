@@ -74,7 +74,7 @@ def celu(x, alpha=1.0):
 
 
 def silu(x):
-    r"""Applies the Sigmoid Linear Unit.
+    r"""Applies the Sigmoid Linear Unit. Also known as Swish.
 
     Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
     the logistic sigmoid.
@@ -140,6 +140,70 @@ def gelu_fast_approx(x):
 
 @_make_activation_module
 class Sigmoid(Module):
+    pass
+
+
+def step(x: mx.array, threshold: float = 0.0):
+    r"""Applies the Step Activation Function.
+
+    This function implements a binary step activation, where the output is set
+    to 1 if the input is greater than a specified threshold, and 0 otherwise.
+
+    .. math::
+        \text{step}(x) = \begin{cases}
+        0 & \text{if } x < \text{threshold} \\
+        1 & \text{if } x \geq \text{threshold}
+        \end{cases}
+
+    Args:
+        threshold: The value to threshold at.
+    """
+
+    return mx.where(x > threshold, 1, 0)
+
+
+def selu(x):
+    r"""Applies the Scaled Exponential Linear Unit.
+
+    .. math::
+        \text{selu}(x) = \begin{cases}
+        \lambda x & \text{if } x > 0 \\
+        \lambda \alpha (\exp(x) - 1) & \text{if } x \leq 0
+        \end{cases}
+
+    where :math:`\lambda = 1.0507` and :math:`\alpha = 1.67326`.
+
+    See also :func:`elu`.
+    """
+    return elu(x, 1.67326) * 1.0507
+
+
+def prelu(x: mx.array, alpha: mx.array) -> mx.array:
+    r"""Applies the element-wise function:
+
+    .. math::
+        \text{PReLU}(x) = \max(0,x) + a * \min(0,x)
+
+    Here :math:`a` is an array.
+    """
+    return mx.maximum(0, x) + alpha * mx.minimum(0, x)
+
+
+def mish(x: mx.array) -> mx.array:
+    r"""Applies the Mish function, element-wise.
+    Mish: A Self Regularized Non-Monotonic Neural Activation Function.
+
+    Reference: https://arxiv.org/abs/1908.08681
+
+    .. math::
+        \text{Mish}(x) = x * \text{Tanh}(\text{Softplus}(x))
+
+    """
+    return x * mx.tanh(softplus(x))
+
+
+@_make_activation_module(mish)
+class Mish(Module):
     pass
 
 
@@ -222,6 +286,15 @@ class LogSigmoid(Module):
     pass
 
 
+class PReLU(Module):
+    def __init__(self, num_parameters=1, init=0.25):
+        super().__init__()
+        self.weight = mx.full([num_parameters], init)
+
+    def __call__(self, x: mx.array):
+        return prelu(x, self.weight)
+
+
 class GELU(Module):
     r"""Applies the Gaussian Error Linear Units.
 
@@ -273,4 +346,33 @@ def tanh(x):
 
 @_make_activation_module(tanh)
 class Tanh(Module):
+    pass
+
+
+class Step(Module):
+    r"""Applies the Step Activation Function.
+
+    This function implements a binary step activation, where the output is set
+    to 1 if the input is greater than a specified threshold, and 0 otherwise.
+
+    .. math::
+        \text{step}(x) = \begin{cases}
+        0 & \text{if } x < \text{threshold} \\
+        1 & \text{if } x \geq \text{threshold}
+        \end{cases}
+
+    Args:
+        threshold: The value to threshold at.
+    """
+
+    def __init__(self, threshold: float = 0.0):
+        super().__init__()
+        self.threshold = threshold
+
+    def __call__(self, x: mx.array):
+        return step(x, self.threshold)
+
+
+@_make_activation_module(selu)
+class SELU(Module):
     pass
