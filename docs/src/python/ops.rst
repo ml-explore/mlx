@@ -61,6 +61,7 @@ Operations
    mean
    min
    minimum
+   moveaxis
    multiply
    negative
    ones
@@ -87,6 +88,7 @@ Operations
    stop_gradient
    subtract
    sum
+   swapaxes
    take
    take_along_axis
    tan
