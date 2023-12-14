@@ -2231,6 +2231,36 @@ void init_ops(py::module_& m) {
             array: The concatenated array.
       )pbdoc");
   m.def(
+      "stack",
+      [](const std::vector<array>& arrays,
+         std::optional<int> axis,
+         StreamOrDevice s) {
+        if (axis.has_value()) {
+          return stack(arrays, axis.value(), s);
+        } else {
+          return stack(arrays, s);
+        }
+      },
+      "arrays"_a,
+      py::pos_only(),
+      "axis"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      stack(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Stacks the arrays along a new axis.
+
+      Args:
+          arrays (list(array)): A list of arrays to stack.
+          axis (int, optional): The axis in the result array along which the
+            input arrays are stacked. Defaults to ``0``. 
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+      Returns:
+          array: The resulting stacked array.
+    )pbdoc");
+  m.def(
       "pad",
       [](const array& a,
          const std::variant<

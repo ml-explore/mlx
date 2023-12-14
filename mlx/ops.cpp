@@ -574,11 +574,11 @@ array concatenate(
     shape[ax] += a.shape(ax);
   }
 
+  // Promote all the arrays to the same type
+  auto dtype = result_type(arrays);
+
   return array(
-      shape,
-      arrays[0].dtype(),
-      std::make_unique<Concatenate>(to_stream(s), ax),
-      arrays);
+      shape, dtype, std::make_unique<Concatenate>(to_stream(s), ax), arrays);
 }
 
 array concatenate(
@@ -589,6 +589,29 @@ array concatenate(
     flat_inputs.push_back(reshape(a, {-1}, s));
   }
   return concatenate(flat_inputs, 0, s);
+}
+
+/** Stack arrays along a new axis */
+array stack(
+    const std::vector<array>& arrays,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  if (arrays.empty()) {
+    throw std::invalid_argument("No arrays provided for stacking");
+  }
+  if (!is_same_shape(arrays)) {
+    throw std::invalid_argument("All arrays must have the same shape");
+  }
+  int normalized_axis = normalize_axis(axis, arrays[0].ndim() + 1);
+  std::vector<array> new_arrays;
+  new_arrays.reserve(arrays.size());
+  for (auto& a : arrays) {
+    new_arrays.emplace_back(expand_dims(a, normalized_axis, s));
+  }
+  return concatenate(new_arrays, axis, s);
+}
+array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
+  return stack(arrays, 0, s);
 }
 
 /** Pad an array with a constant value */
