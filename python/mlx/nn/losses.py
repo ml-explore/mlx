@@ -20,35 +20,45 @@ def cross_entropy(
     weights: mx.array = None,
     axis: int = -1,
     label_smoothing: float = 0.0,
-    reduction: str = "none",
+    reduction: str = "mean",
 ) -> mx.array:
     """
-    Computes the cross entropy loss between logits and targets.
+    Computes the cross entropy loss between logits and targets with optional label smoothing.
 
     Args:
         logits (mx.array): The predicted logits.
-        targets (mx.array): The target values.
-        weights (mx.array, optional): Weights for each target. Default: ``None``.
-        label_smoothing (float, optional):  Label smoothing factor. Default: ``0``.
-        reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+        targets (mx.array): The target values, as class indices.
+        weights (mx.array, optional): Weights for each target. Default: None.
+        axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
+        label_smoothing (float, optional): Label smoothing factor. Default: 0.
+        reduction (str, optional): Specifies the reduction: 'none', 'mean', or 'sum'. Default: 'mean'.
 
     Returns:
-        mx.array: The computed cross entropy loss.
+        mx.nd.array: The computed cross entropy loss.
     """
-
-    if label_smoothing > 0:
-        num_classes = logits.shape[axis]
-        targets = (1 - label_smoothing) * targets + label_smoothing / num_classes
-
+    assert 0 <= label_smoothing < 1
     score = mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
-    loss = mx.logsumexp(logits, axis=axis) - score
+    logsumexp_logits = mx.logsumexp(logits, axis=axis)
+    if label_smoothing > 0:
+        # Adjust the true class score with label smoothing
+        adjusted_score = (1 - label_smoothing) * score
 
+        # Calculate the mean logit across the classes for smoothed loss
+        mean_logits = logits.mean(axis=axis)
+        smoothed_loss = -mean_logits * label_smoothing
+
+        # Combine the adjusted score and smoothed loss with the logsumexp logits
+        loss = logsumexp_logits - adjusted_score + smoothed_loss
+    else:
+        loss = logsumexp_logits - score
+
+    # Apply weights if provided
     if weights is not None:
-        if weights.shape != targets.shape:
-            raise ValueError("Shape of weights must be the same as shape of targets.")
+        if weights.shape != loss.shape:
+            raise ValueError("Shape of weights must be the same as shape of loss.")
         loss *= weights
 
+    # Apply reduction
     return _reduce(loss, reduction)
 
 

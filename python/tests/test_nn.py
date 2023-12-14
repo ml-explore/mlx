@@ -41,14 +41,12 @@ class TestNN(mlx_tests.MLXTestCase):
         logits = mx.array([[2.0, -1.0], [-1.0, 2.0]])
         targets = mx.array([0, 1])
         weights = mx.array([1.0, 2.0])
-        label_smoothing = 0
 
         # Reduction 'none'
         losses_none = nn.losses.cross_entropy(
             logits,
             targets,
             weights=weights,
-            label_smoothing=label_smoothing,
             reduction="none",
         )
         expected_none = mx.array([0.04858735, 0.0971747])  # Calculated losses
@@ -62,7 +60,6 @@ class TestNN(mlx_tests.MLXTestCase):
             logits,
             targets,
             weights=weights,
-            label_smoothing=label_smoothing,
             reduction="mean",
         )
         expected_mean = mx.mean(expected_none)
@@ -76,13 +73,45 @@ class TestNN(mlx_tests.MLXTestCase):
             logits,
             targets,
             weights=weights,
-            label_smoothing=label_smoothing,
             reduction="sum",
         )
         expected_sum = mx.sum(expected_none)
         self.assertTrue(
             np.allclose(losses_sum, expected_sum, atol=1e-5),
             "Test case failed for cross_entropy loss --reduction='sum' --weights=[1.0, 2.0]",
+        )
+
+        # Test case with equal weights and label smoothing > 0
+        logits = mx.array(
+            [[0, 0.2, 0.7, 0.1, 0], [0, 0.9, 0.2, 0.2, 1], [1, 0.2, 0.7, 0.9, 1]]
+        )
+        target = mx.array([2, 1, 0])
+
+        losses_none = nn.losses.cross_entropy(
+            logits, target, label_smoothing=0.3, reduction="none"
+        )
+        expected_none = mx.array([1.29693, 1.38617, 1.48176])
+        self.assertTrue(
+            mx.allclose(expected_none, losses_none),
+            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='none'",
+        )
+
+        expected_mean = mx.mean(expected_none)
+        losses_mean = nn.losses.cross_entropy(
+            logits, target, label_smoothing=0.3, reduction="mean"
+        )
+        self.assertTrue(
+            mx.allclose(losses_mean, expected_mean),
+            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='mean'",
+        )
+
+        expected_sum = mx.sum(expected_none)
+        losses_sum = nn.losses.cross_entropy(
+            logits, target, label_smoothing=0.3, reduction="sum"
+        )
+        self.assertTrue(
+            mx.allclose(losses_sum, expected_sum),
+            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='sum'",
         )
 
     def test_l1_loss(self):
