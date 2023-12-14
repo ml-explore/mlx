@@ -1411,6 +1411,72 @@ void init_ops(py::module_& m) {
           array: An identity matrix of size n x n.
       )pbdoc");
   m.def(
+      "tri",
+      [](int n, int m, int k, std::optional<Dtype> dtype, StreamOrDevice s) {
+        return tri(n, m, k, dtype.value_or(float32), s);
+      },
+      "n"_a,
+      "m"_a,
+      "k"_a,
+      "dtype"_a = std::nullopt,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        tri(n: int, m: int, k: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        
+        An array with ones at and below the given diagonal and zeros elsewhere.
+
+        Args:
+          n (int): The number of rows in the output.
+          m (int): The number of cols in the output.
+          k (int): The diagonal of the 2-D array
+          dtype (Dtype, optional): Data type of the output array. Defaults to float32.
+          stream (Stream, optional): Stream or device. Defaults to None.
+        
+        Returns:
+          array: Array with its lower triangle filled with ones and zero elsewhere
+      )pbdoc");
+  m.def(
+      "tril",
+      &tril,
+      "x"_a,
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
+        
+        An array with zeros above the given diagonal and self elsewhere.
+
+        Args:
+          x (array): input array.
+          k (int): The diagonal of the 2-D array
+          stream (Stream, optional): Stream or device. Defaults to None.
+        
+        Returns:
+          array: Array filled with zeros above given diagonal
+    )pbdoc");
+  m.def(
+      "triu",
+      &triu,
+      "x"_a,
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      triu(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
+        
+        An array with zeros below the given diagonal and self elsewhere.
+
+        Args:
+          x (array): input array.
+          k (int): The diagonal of the 2-D array
+          stream (Stream, optional): Stream or device. Defaults to None.
+        
+        Returns:
+          array: Array filled with zeros below given diagonal
+    )pbdoc");
+  m.def(
       "allclose",
       &allclose,
       "a"_a,
