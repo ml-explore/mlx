@@ -88,6 +88,13 @@ To make sure the install is working run the tests with:
   pip install ".[testing]"
   python -m unittest discover python/tests
 
+Optional: Install stubs to enable auto completions and type checking from your IDE:
+
+.. code-block:: shell
+
+  pip install ".[dev]"
+  python setup.py generate_stubs
+
 C++ API
 ^^^^^^^
 
