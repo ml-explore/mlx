@@ -44,7 +44,11 @@ struct ArcTanh {
 };
 
 struct Ceil {
-  template <typename T> T operator()(T x) { return static_cast<T>(metal::ceil(static_cast<float>(x))); };
+  template <typename T> T operator()(T x) { return metal::ceil(x); };
+  template <> int8_t operator()(int8_t x) { return x; };
+  template <> int16_t operator()(int16_t x) { return x; };
+  template <> int32_t operator()(int32_t x) { return x; };
+  template <> int64_t operator()(int64_t x) { return x; };
   template <> uint8_t operator()(uint8_t x) { return x; };
   template <> uint16_t operator()(uint16_t x) { return x; };
   template <> uint32_t operator()(uint32_t x) { return x; };
@@ -93,7 +97,11 @@ struct Exp {
 };
 
 struct Floor {
-  template <typename T> T operator()(T x) { return static_cast<T>(metal::floor(static_cast<float>(x))); };
+  template <typename T> T operator()(T x) { return metal::floor(x); };
+  template <> int8_t operator()(int8_t x) { return x; };
+  template <> int16_t operator()(int16_t x) { return x; };
+  template <> int32_t operator()(int32_t x) { return x; };
+  template <> int64_t operator()(int64_t x) { return x; };
   template <> uint8_t operator()(uint8_t x) { return x; };
   template <> uint16_t operator()(uint16_t x) { return x; };
   template <> uint32_t operator()(uint32_t x) { return x; };
