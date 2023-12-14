@@ -677,6 +677,53 @@ array pad(
       s);
 }
 
+array moveaxis(
+    const array& a,
+    int source,
+    int destination,
+    StreamOrDevice s /* = {} */) {
+  auto check_ax = [&a](int ax) {
+    auto ndim = static_cast<int>(a.ndim());
+    if (ax < -ndim || ax >= ndim) {
+      std::ostringstream msg;
+      msg << "[moveaxis] Invalid axis " << ax << " for array with " << ndim
+          << " dimensions.";
+      throw std::out_of_range(msg.str());
+    }
+    return ax < 0 ? ax + ndim : ax;
+  };
+  source = check_ax(source);
+  destination = check_ax(destination);
+  std::vector<int> reorder(a.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  reorder.erase(reorder.begin() + source);
+  reorder.insert(reorder.begin() + destination, source);
+  return transpose(a, reorder, s);
+}
+
+array swapaxes(
+    const array& a,
+    int axis1,
+    int axis2,
+    StreamOrDevice s /* = {} */) {
+  auto check_ax = [&a](int ax) {
+    auto ndim = static_cast<int>(a.ndim());
+    if (ax < -ndim || ax >= ndim) {
+      std::ostringstream msg;
+      msg << "[swapaxes] Invalid axis " << ax << " for array with " << ndim
+          << " dimensions.";
+      throw std::out_of_range(msg.str());
+    }
+    return ax < 0 ? ax + ndim : ax;
+  };
+  axis1 = check_ax(axis1);
+  axis2 = check_ax(axis2);
+  std::vector<int> reorder(a.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  std::swap(reorder[axis1], reorder[axis2]);
+  return transpose(a, reorder, s);
+}
+
 array transpose(
     const array& a,
     std::vector<int> axes,

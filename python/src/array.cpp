@@ -863,6 +863,22 @@ void init_array(py::module_& m) {
           "stream"_a = none,
           "See :func:`any`.")
       .def(
+          "moveaxis",
+          &moveaxis,
+          "source"_a,
+          "destination"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
+      .def(
+          "swapaxes",
+          &swapaxes,
+          "axis1"_a,
+          "axis2"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
+      .def(
           "transpose",
           [](const array& a, py::args axes, StreamOrDevice s) {
             if (axes.size() > 0) {
