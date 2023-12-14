@@ -31,7 +31,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
   if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64")
     message(WARNING 
-      "Building for x86_64 on MacOS is not supported." 
+      "Building for x86_64 on macOS is not supported." 
       " If you are on an Apple silicon system, "
       " make sure you are building for arm64.")
   elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm64")
@@ -39,7 +39,7 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   endif()
 
 else()
-  message(WARNING "MLX is prioritised for Apple Silicon systems using MacOS.")
+  message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
 endif()
 
 # ----------------------------- Lib -----------------------------
@@ -68,7 +68,7 @@ elseif (MLX_BUILD_METAL)
                   OUTPUT_VARIABLE MACOS_VERSION
                   COMMAND_ERROR_IS_FATAL ANY)
 
-  message(STATUS "Building with SDK for MacOS version ${MACOS_VERSION}")
+  message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
   
   if (${MACOS_VERSION} GREATER_EQUAL 14.2)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
@@ -77,7 +77,7 @@ elseif (MLX_BUILD_METAL)
   elseif (${MACOS_VERSION} GREATER_EQUAL 13.3)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS13.3_iOS16.4.zip)
   else()
-    message(FATAL_ERROR "MLX requires MacOS >= 13.4 to be built with MLX_BUILD_METAL=ON" )
+    message(FATAL_ERROR "MLX requires macOS >= 13.4 to be built with MLX_BUILD_METAL=ON" )
   endif()
 
   FetchContent_Declare(

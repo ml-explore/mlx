@@ -15,11 +15,11 @@ To install from PyPI you must meet the following requirements:
 
 - Using an M series chip (Apple silicon)
 - Using a native Python >= 3.8
-- MacOS >= 13.3
+- macOS >= 13.3
 
 .. note::
-    MLX is only available on devices running MacOS >= 13.3 
-    It is highly recommended to use MacOS 14 (Sonoma)
+    MLX is only available on devices running macOS >= 13.3 
+    It is highly recommended to use macOS 14 (Sonoma)
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
@@ -47,7 +47,7 @@ Build Requirements
 
 - A C++ compiler with C++17 support (e.g. Clang >= 5.0)
 - `cmake <https://cmake.org/>`_ -- version 3.24 or later, and ``make``
-- Xcode >= 14.3 (Xcode >= 15.0 for MacOS 14 and above)
+- Xcode >= 14.3 (Xcode >= 15.0 for macOS 14 and above)
 
 
 Python API
@@ -154,7 +154,7 @@ should point to the path to the built metal library.
       export DEVELOPER_DIR="/path/to/Xcode.app/Contents/Developer/"
 
     Further, you can use the following command to find out which 
-    MacOS SDK will be used
+    macOS SDK will be used
 
     .. code-block:: shell
 
