@@ -1379,5 +1379,6 @@ class TestOps(mlx_tests.MLXTestCase):
         np_c = np.stack([np_a, np_b], axis=1)
         self.assertTrue(np.array_equal(c, np_c))
 
+
 if __name__ == "__main__":
     unittest.main()
