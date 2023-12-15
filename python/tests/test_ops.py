@@ -326,13 +326,13 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_tril(self):
         mt = mx.random.normal((10, 10))
-        nt = np.array(mt.tolist())
+        nt = np.array(mt)
         for diag in [-1, 0, 1, -2]:
             self.assertEqualArray(mx.tril(mt, diag), mx.array(np.tril(nt, diag)))
 
     def test_triu(self):
         mt = mx.random.normal((10, 10))
-        nt = np.array(mt.tolist())
+        nt = np.array(mt)
         for diag in [-1, 0, 1, -2]:
             self.assertEqualArray(mx.triu(mt, diag), mx.array(np.triu(nt, diag)))
 
