@@ -321,8 +321,11 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(mx.array_equal(x, y, equal_nan=True))
 
     def test_tri(self):
-        for diag in [-1, 0, 1, -2]:
-            self.assertEqualArray(mx.tri(4, 4, diag), mx.array(np.tri(4, 4, diag)))
+        for shape in [[4], [4, 4], [2, 10]]:
+            for diag in [-1, 0, 1, -2]:
+                self.assertEqualArray(
+                    mx.tri(*shape, k=diag), mx.array(np.tri(*shape, k=diag))
+                )
 
     def test_tril(self):
         mt = mx.random.normal((10, 10))
