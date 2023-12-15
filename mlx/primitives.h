@@ -980,6 +980,32 @@ class Negative : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Norm : public Primitive {
+ public:
+  explicit Norm(
+      Stream stream,
+      const std::variant<std::monostate, int, std::string>& ord,
+      const std::vector<size_t>& axes)
+      : Primitive(stream), ord_(ord), axes_(axes){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(NORM)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  std::variant<std::monostate, int, std::string> ord_;
+  std::vector<size_t> axes_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class NotEqual : public Primitive {
  public:
   explicit NotEqual(Stream stream) : Primitive(stream){};
