@@ -322,19 +322,19 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_tri(self):
         for diag in [-1, 0, 1, -2]:
-            self.assertEqualArray([4, 4, diag], mx.tri, mx.array(np.tri(4, 4, diag)))
+            self.assertEqualArray(mx.tri(4, 4, diag), mx.array(np.tri(4, 4, diag)))
 
     def test_tril(self):
         mt = mx.random.normal((10, 10))
         nt = np.array(mt.tolist())
         for diag in [-1, 0, 1, -2]:
-            self.assertEqualArray([mt, diag], mx.tril, mx.array(np.tril(nt, diag)))
+            self.assertEqualArray(mx.tril(mt, diag), mx.array(np.tril(nt, diag)))
 
     def test_triu(self):
         mt = mx.random.normal((10, 10))
         nt = np.array(mt.tolist())
         for diag in [-1, 0, 1, -2]:
-            self.assertEqualArray([mt, diag], mx.triu, mx.array(np.triu(nt, diag)))
+            self.assertEqualArray(mx.triu(mt, diag), mx.array(np.triu(nt, diag)))
 
     def test_minimum(self):
         x = mx.array([0.0, -5, 10.0])
