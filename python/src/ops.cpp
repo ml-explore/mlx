@@ -62,15 +62,15 @@ void init_ops(py::module_& m) {
             array: The reshaped array.
       )pbdoc");
   m.def(
-    "flatten",
-    &flatten,
-    "a"_a,
-    py::pos_only(),
-    "start_dim"_a = 0,
-    "end_dim"_a = -1,
-    py::kw_only(),
-    "stream"_a = none,
-    R"pbdoc(
+      "flatten",
+      &flatten,
+      "a"_a,
+      py::pos_only(),
+      "start_dim"_a = 0,
+      "end_dim"_a = -1,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
       flatten(a: array, /, start_dim: int = 0, end_dim: int = -1, *, stream: Union[None, Stream, Device] = None) -> array
 
       Flatten an array.

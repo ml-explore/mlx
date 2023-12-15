@@ -1,10 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
+#include <algorithm>
 #include <sstream>
 #include <vector>
-#include <algorithm>
 
-# include "array.h"
+#include "array.h"
 #include "utils.h"
 
 namespace mlx::core {
@@ -54,7 +54,6 @@ std::vector<int> broadcast_shapes(
 bool is_same_shape(const std::vector<array>& arrays) {
   if (arrays.empty())
     return true;
-
   return std::all_of(arrays.begin() + 1, arrays.end(), [&](const array& a) {
     return (a.shape() == arrays[0].shape());
   });

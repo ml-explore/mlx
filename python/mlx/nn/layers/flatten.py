@@ -13,7 +13,7 @@ def flatten(a: mx.array, start_dim: int = 0, end_dim: int = -1) -> mx.array:
         start_dim: first dim to flatten (default = 0).
         end_dim: last dim to flatten (default = -1).
     """
-    
+
     return mx.flatten(a, start_dim, end_dim)
 
 
@@ -59,19 +59,3 @@ class Flatten(Module):
 
     def __call__(self, a: mx.array) -> mx.array:
         return flatten(a, self.start_dim, self.end_dim)
-    
-if __name__ == "__main__":
-    
-    import mlx.core as mx
-    import mlx.nn as nn
-
-    # Example 1: With default parameters
-    input_tensor = mx.random.normal((32, 3, 224, 224))
-    flattener = nn.Flatten()
-    output_tensor = flattener(input_tensor)
-    print(output_tensor.shape)  # Output: [32, 150528]
-
-    # Example 2: With non-default parameters
-    flattener = nn.Flatten(start_dim=0, end_dim=2)
-    output_tensor = flattener(input_tensor)
-    print(output_tensor.shape)  # Output: [21504, 224]

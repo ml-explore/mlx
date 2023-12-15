@@ -15,7 +15,7 @@ Dtype result_type(const std::vector<array>& arrays);
 std::vector<int> broadcast_shapes(
     const std::vector<int>& s1,
     const std::vector<int>& s2);
-std::vector<int> getNewShape(array const &a, int start, int end);
+std::vector<int> getNewShape(array const& a, int start, int end);
 
 bool is_same_shape(const std::vector<array>& arrays);
 

@@ -124,7 +124,11 @@ array triu(array x, int k, StreamOrDevice s = {});
 array reshape(const array& a, std::vector<int> shape, StreamOrDevice s = {});
 
 /** Flatten an array to a 1D array. */
-array flatten(const array& a, int start_dim = 0, int end_dim = -1, StreamOrDevice s = {});
+array flatten(
+    const array& a,
+    int start_dim = 0,
+    int end_dim = -1,
+    StreamOrDevice s = {});
 
 /** Remove singleton dimensions at the given axes. */
 array squeeze(
