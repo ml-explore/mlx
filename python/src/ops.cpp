@@ -1164,9 +1164,7 @@ void init_ops(py::module_& m) {
          Scalar num,
          std::optional<Dtype> dtype_,
          StreamOrDevice s) {
-        Dtype dtype = dtype_.has_value()
-            ? dtype_.value()
-            : float32;
+        Dtype dtype = dtype_.has_value() ? dtype_.value() : float32;
 
         return linspace(
             scalar_to_double(start),
