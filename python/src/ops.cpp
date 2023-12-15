@@ -1164,7 +1164,6 @@ void init_ops(py::module_& m) {
          Scalar num,
          std::optional<Dtype> dtype_,
          StreamOrDevice s) {
-
         return linspace(
             scalar_to_double(start),
             scalar_to_double(stop),
