@@ -4,7 +4,6 @@
 
 #include "doctest/doctest.h"
 
-#include <iostream>
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
