@@ -36,6 +36,17 @@ array arange(int start, int stop, int step, StreamOrDevice s = {});
 array arange(int start, int stop, StreamOrDevice s = {});
 array arange(int stop, StreamOrDevice s = {});
 
+/** A 1D array of evenly spaced numbers starting at `start`
+ * stopping at `stop`, stepping by (`end` - `start`) / (`num` - 1) **/
+array linspace(
+    double start,
+    double stop,
+    int num,
+    Dtype dtype,
+    StreamOrDevice s = {});
+array linspace(double start, double stop, int num, StreamOrDevice s = {});
+array linspace(double start, double stop, StreamOrDevice s = {});
+
 /** Convert an array to the given data type. */
 array astype(const array& a, Dtype dtype, StreamOrDevice s = {});
 

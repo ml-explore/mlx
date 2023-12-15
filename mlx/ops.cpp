@@ -129,6 +129,26 @@ array arange(int stop, StreamOrDevice s /* = {} */) {
   return arange(0.0, static_cast<double>(stop), 1.0, int32, to_stream(s));
 }
 
+array linspace(
+    double start,
+    double stop,
+    int num,
+    Dtype dtype,
+    StreamOrDevice s /* = {} */) {
+  double step = (stop - start) / (num - 1);
+  return astype(arange(start, stop + step, step, to_stream(s)), dtype);
+}
+array linspace(
+    double start,
+    double stop,
+    int num,
+    StreamOrDevice s /* = {} */) {
+  return linspace(start, stop, num, float32, to_stream(s));
+}
+array linspace(double start, double stop, StreamOrDevice s /* = {} */) {
+  return linspace(start, stop, 50, float32, to_stream(s));
+}
+
 array astype(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (dtype == a.dtype()) {
     return a;

@@ -4,6 +4,7 @@
 
 #include "doctest/doctest.h"
 
+#include <iostream>
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -2071,4 +2072,14 @@ TEST_CASE("test eye with negative k offset") {
       {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f},
       {4, 3});
   CHECK(array_equal(eye_4_k_minus1, expected_eye_4_k_minus1).item<bool>());
+}
+
+TEST_CASE("test linspace") {
+  auto x = linspace(0, 10, 5);
+  auto y = array({0.0f, 2.5f, 5.0f, 7.5f, 10.0f}, {5});
+  CHECK(array_equal(x, y).item<bool>());
+
+  x = linspace(0, 10, 5, int32);
+  y = array({0, 2, 5, 7, 10}, {5});
+  CHECK(array_equal(x, y).item<bool>());
 }
