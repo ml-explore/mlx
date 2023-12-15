@@ -1158,6 +1158,47 @@ void init_ops(py::module_& m) {
         is a fractional value and the `dtype` is integral.
       )pbdoc");
   m.def(
+      "linspace",
+      [](Scalar start,
+         Scalar stop,
+         Scalar num,
+         std::optional<Dtype> dtype_,
+         StreamOrDevice s) {
+        Dtype dtype = dtype_.has_value()
+            ? dtype_.value()
+            : float32;
+
+        return linspace(
+            scalar_to_double(start),
+            scalar_to_double(stop),
+            scalar_to_double(num),
+            dtype,
+            s);
+      },
+      "start"_a,
+      "stop"_a,
+      "num"_a = 50,
+      "dtype"_a = none,
+      "stream"_a = none,
+      R"pbdoc(
+      linspace(start, stop, num: Optional[float] = 50, dtype: Optional[Dtype] = None, stream: Union[None, Stream, Device] = None) -> array
+
+      Generates evenly spaced numbers over a specified interval.
+
+      Generate ``num`` evenly spaced numbers, calculated over the interval
+      ``[start, stop]``.
+
+      Args:
+          start (float): Starting value.
+          stop (float): Stopping value.
+          num (float, optional): Number of samples, defaults to ``50``.
+          dtype (Dtype, optional): Specifies the data type of the output.
+            If unspecified will default to ``float32``.
+
+      Returns:
+          array: The range of values.
+      )pbdoc");
+  m.def(
       "take",
       [](const array& a,
          const array& indices,

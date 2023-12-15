@@ -1402,6 +1402,15 @@ class TestOps(mlx_tests.MLXTestCase):
         np_c = np.stack([np_a, np_b], axis=1)
         self.assertTrue(np.array_equal(c, np_c))
 
+    def test_linspace(self):
+        a = mx.linspace(0, 10, 5)
+        np_a = np.linspace(0, 10, 5)
+        self.assertTrue(np.array_equal(a, np_a))
+
+        b = mx.linspace(0, 10, 5, dtype=mx.int32)
+        np_b = np.linspace(0, 10, 5, dtype=int)
+        self.assertTrue(np.array_equal(b, np_b))
+
 
 if __name__ == "__main__":
     unittest.main()
