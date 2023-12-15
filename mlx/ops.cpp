@@ -226,7 +226,7 @@ array tri(int n, int m, int k, Dtype type, StreamOrDevice s /* = {} */) {
 
 array tril(array x, int k, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
-    throw std::invalid_argument("array must be atleast 2-D");
+    throw std::invalid_argument("[tril] array must be atleast 2-D");
   }
   auto mask = tri(x.shape(-2), x.shape(-1), k, x.dtype(), s);
   return where(mask, x, zeros_like(x, s), s);
@@ -234,7 +234,7 @@ array tril(array x, int k, StreamOrDevice s /* = {} */) {
 
 array triu(array x, int k, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
-    throw std::invalid_argument("array must be atleast 2-D");
+    throw std::invalid_argument("[triu] array must be atleast 2-D");
   }
   auto mask = tri(x.shape(-2), x.shape(-1), k - 1, x.dtype(), s);
   return where(mask, zeros_like(x, s), x, s);

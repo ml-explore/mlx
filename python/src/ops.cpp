@@ -1412,13 +1412,13 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "tri",
-      [](int n, int m, int k, std::optional<Dtype> dtype, StreamOrDevice s) {
-        return tri(n, m, k, dtype.value_or(float32), s);
+      [](int n, std::optional<int> m, int k, Dtype dtype, StreamOrDevice s) {
+        return tri(n, m.value_or(n), k, float32, s);
       },
       "n"_a,
-      "m"_a,
-      "k"_a,
-      "dtype"_a = std::nullopt,
+      "m"_a = none,
+      "k"_a = 0,
+      "dtype"_a = float32,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -1428,10 +1428,10 @@ void init_ops(py::module_& m) {
 
         Args:
           n (int): The number of rows in the output.
-          m (int): The number of cols in the output.
-          k (int): The diagonal of the 2-D array
-          dtype (Dtype, optional): Data type of the output array. Defaults to float32.
-          stream (Stream, optional): Stream or device. Defaults to None.
+          m (int, optional): The number of cols in the output. Defaults to `None`.
+          k (int, optional): The diagonal of the 2-D array. Defaults to 0
+          dtype (Dtype, optional): Data type of the output array. Defaults to `float32`.
+          stream (Stream, optional): Stream or device. Defaults to `None`.
         
         Returns:
           array: Array with its lower triangle filled with ones and zero elsewhere
@@ -1446,15 +1446,15 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
         
-        An array with zeros above the given diagonal and self elsewhere.
+        Zeros the array above the given diagonal.
 
         Args:
           x (array): input array.
           k (int): The diagonal of the 2-D array
-          stream (Stream, optional): Stream or device. Defaults to None.
+          stream (Stream, optional): Stream or device. Defaults to `None`.
         
         Returns:
-          array: Array filled with zeros above given diagonal
+          array: Array zeroed above the given diagonal
     )pbdoc");
   m.def(
       "triu",
@@ -1466,15 +1466,15 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       triu(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
         
-        An array with zeros below the given diagonal and self elsewhere.
+        Zeros the array below the given diagonal.
 
         Args:
           x (array): input array.
           k (int): The diagonal of the 2-D array
-          stream (Stream, optional): Stream or device. Defaults to None.
+          stream (Stream, optional): Stream or device. Defaults to `None`.
         
         Returns:
-          array: Array filled with zeros below given diagonal
+          array: Array zeroed below the given diagonal
     )pbdoc");
   m.def(
       "allclose",
