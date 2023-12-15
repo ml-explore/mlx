@@ -111,7 +111,6 @@ inline array identity(int n, StreamOrDevice s = {}) {
 }
 
 array tri(int n, int m, int k, Dtype type, StreamOrDevice s = {});
-
 array tril(array x, int k, StreamOrDevice s = {});
 array triu(array x, int k, StreamOrDevice s = {});
 
