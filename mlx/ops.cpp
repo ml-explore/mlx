@@ -284,7 +284,7 @@ array flatten(
     int end_dim,
     StreamOrDevice s /* = {} */) {
   start_dim = std::max(0, start_dim);
-  int ndim = static_cast<int>(a.ndim());
+  auto ndim = static_cast<int>(a.ndim());
   end_dim = (end_dim == -1) ? ndim : std::min(ndim, end_dim);
 
   if (start_dim > end_dim) {
