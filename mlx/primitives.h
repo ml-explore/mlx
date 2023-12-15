@@ -72,7 +72,7 @@ class Primitive {
       const std::vector<int>& argnums);
 
   /**
-   * The primitive must know how to vectorize itself accross
+   * The primitive must know how to vectorize itself across
    * the given axes. The output is a pair containing the array
    * representing the vectorized computation and the axis which
    * corresponds to the output vectorized dimension.
