@@ -2,7 +2,9 @@
 
 #include <sstream>
 #include <vector>
+#include <algorithm>
 
+# include "array.h"
 #include "utils.h"
 
 namespace mlx::core {

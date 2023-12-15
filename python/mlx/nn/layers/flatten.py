@@ -2,27 +2,6 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-def _get_new_shape(a: mx.array, start: int, end: int):
-    shape = a.shape
-
-    if a.ndim == 0 or (end == start):
-        return shape
-    end = min(end, a.ndim - 1)
-    length = shape[end]
-    for idx in range(end - 1, start - 1, -1):
-        if shape[idx] == 0 or shape[idx + 1] == 0:
-            length = 0
-            break
-
-        if shape[idx] == 1:
-            continue
-
-        length = length * shape[idx]
-
-    new_shape = (*shape[:start], length, *shape[end + 1 :])
-    return new_shape
-
-
 def flatten(a: mx.array, start_dim: int = 0, end_dim: int = -1) -> mx.array:
     r"""
     Flattens a contiguous range of dims into a tensor.
@@ -34,16 +13,8 @@ def flatten(a: mx.array, start_dim: int = 0, end_dim: int = -1) -> mx.array:
         start_dim: first dim to flatten (default = 0).
         end_dim: last dim to flatten (default = -1).
     """
-
-    start_dim = max(0, start_dim)
-    end_dim = a.ndim if end_dim == -1 else min(a.ndim, end_dim)
-
-    if start_dim > end_dim:
-        raise ValueError("start_dim must be less than or equal to end_dim")
-
-    if start_dim == end_dim and a.ndim != 0:
-        return a
-    return mx.reshape(a, _get_new_shape(a, start_dim, end_dim))
+    
+    return mx.flatten(a, start_dim, end_dim)
 
 
 class Flatten(Module):
@@ -88,3 +59,19 @@ class Flatten(Module):
 
     def __call__(self, a: mx.array) -> mx.array:
         return flatten(a, self.start_dim, self.end_dim)
+    
+if __name__ == "__main__":
+    
+    import mlx.core as mx
+    import mlx.nn as nn
+
+    # Example 1: With default parameters
+    input_tensor = mx.random.normal((32, 3, 224, 224))
+    flattener = nn.Flatten()
+    output_tensor = flattener(input_tensor)
+    print(output_tensor.shape)  # Output: [32, 150528]
+
+    # Example 2: With non-default parameters
+    flattener = nn.Flatten(start_dim=0, end_dim=2)
+    output_tensor = flattener(input_tensor)
+    print(output_tensor.shape)  # Output: [21504, 224]

@@ -62,6 +62,30 @@ void init_ops(py::module_& m) {
             array: The reshaped array.
       )pbdoc");
   m.def(
+    "flatten",
+    &flatten,
+    "a"_a,
+    py::pos_only(),
+    "start_dim"_a = 0,
+    "end_dim"_a = -1,
+    py::kw_only(),
+    "stream"_a = none,
+    R"pbdoc(
+      flatten(a: array, /, start_dim: int = 0, end_dim: int = -1, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Flatten an array.
+
+      Args:
+          a (array): Input array.
+          start_dim (int, optional): The first dimension to flatten. Defaults to 0.
+          end_dim (int, optional): The last dimension to flatten. Defaults to -1.
+          stream (Stream, optional): Stream or device. Defaults to ```None```
+            in which case the default stream of the default device is used.
+
+      Returns:
+          array: The flattened array.
+  )pbdoc");
+  m.def(
       "squeeze",
       [](const array& a, const IntOrVec& v, const StreamOrDevice& s) {
         if (std::holds_alternative<std::monostate>(v)) {

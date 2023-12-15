@@ -4,6 +4,7 @@
 #include <numeric>
 #include <set>
 #include <sstream>
+#include <stdexcept>
 
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -275,6 +276,22 @@ array reshape(
   }
   return array(
       shape, a.dtype(), std::make_unique<Reshape>(to_stream(s), shape), {a});
+}
+
+array flatten(const array& a, int start_dim, int end_dim, StreamOrDevice s /* = {} */) {
+  start_dim = std::max(0, start_dim);
+  int ndim = static_cast<int>(a.ndim());
+  end_dim = (end_dim == -1) ? ndim : std::min(ndim, end_dim);
+
+  if (start_dim > end_dim) {
+    throw std::invalid_argument("start_dim must be less than or equal to end_dim");
+  }
+
+  if (start_dim == end_dim && ndim != 0) {
+    return a;
+  }
+
+  return reshape(a, getNewShape(a, start_dim, end_dim), s);
 }
 
 array squeeze(
