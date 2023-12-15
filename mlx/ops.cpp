@@ -2544,30 +2544,52 @@ array conv2d(
 }
 
 array quantized_matmul(
-    const array& x,
+    const array& in_x,
     const array& w,
     const array& scales,
     const array& biases,
     int groups /* = 128 */,
     int width /* = 4 */,
     StreamOrDevice s /* = {} */) {
+  auto x = in_x;
+
   if (w.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[quantized_matmul] The weight matrix should be uint32 "
         << "but received" << w.dtype();
     throw std::invalid_argument(msg.str());
   }
+  if (w.ndim() != 2) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Batched quantized matmul is not supported for now "
+        << "received w with shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
 
-  // TODO: Fix the behaviour to match matmul's
+  if (x.ndim() == 1) {
+    // Insert a singleton dim in the beginning
+    x = reshape(x, {1, -1}, s);
+  }
 
   int inner_dims = w.shape(0) * (32 / width);
-  if (inner_dims != x.shape(1)) {
+  if (inner_dims != x.shape(-1)) {
     std::ostringstream msg;
     msg << "[quantized_matmul] Last dimension of first input with "
         << "shape " << x.shape() << " does not match the expanded first "
         << "dimension of the quantized matrix " << inner_dims
         << ", computed from shape " << w.shape() << " with groups=" << groups
         << " and width=" << width;
+    throw std::invalid_argument(msg.str());
+  }
+
+  int n_groups = x.shape(-1) / groups;
+  if (scales.shape(-1) != n_groups || biases.shape(-1) != n_groups) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Scales and biases provided do not match the "
+        << "quantization arguments (groups=" << groups << ", width=" << width
+        << "). Expected shapes (" << w.shape(1) << ", " << x.shape(-1) / groups
+        << "), but got scales.shape=" << scales.shape()
+        << " and biases.shape=" << biases.shape();
     throw std::invalid_argument(msg.str());
   }
 

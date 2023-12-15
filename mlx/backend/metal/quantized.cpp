@@ -60,10 +60,11 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int B = x.size() / D;
   int O = w.size() / w_cols;
 
+  int tm = 4;
   int bo = 32;
   int bd = 32;
   MTL::Size group_dims = MTL::Size(bd, bo, 1);
-  MTL::Size grid_dims = MTL::Size(1, O / bo, B);
+  MTL::Size grid_dims = MTL::Size(1, O / (bo * tm), B);
 
   set_array_buffer(compute_encoder, w, 0);
   set_array_buffer(compute_encoder, scales, 1);
