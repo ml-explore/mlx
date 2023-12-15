@@ -219,8 +219,8 @@ array identity(int n, Dtype dtype, StreamOrDevice s /* = {} */) {
 }
 
 array tri(int n, int m, int k, Dtype type, StreamOrDevice s /* = {} */) {
-  auto l = broadcast_to(expand_dims(arange(n, s), 1, s), {n, m}, s);
-  auto r = broadcast_to(expand_dims(arange(-k, m - k, s), 0, s), {n, m}, s);
+  auto l = expand_dims(arange(n, s), 1, s);
+  auto r = expand_dims(arange(-k, m - k, s), 0, s);
   return astype(greater_equal(l, r, s), type, s);
 }
 
