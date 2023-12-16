@@ -143,12 +143,17 @@ class SGD(Optimizer):
 class RMSprop(Optimizer):
     r"""Implementation of the RMSprop optimizer [1].
 
+    [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural networks for machine learning
+
     .. math::
 
         v_{t+1} &= \alpha v_t + (1 - \alpha) g_t^2 \\
         w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1}} + \epsilon}
 
-    [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural networks for machine learning
+    Args:
+        learning_rate (float): The learning :math:`\lambda` for the update
+        alpha (float, optional): The smoothing constant :math:`\alpha` (default: 0.99)
+        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
     """
 
     def __init__(self, learning_rate: float, alpha: float = 0.99, eps: float = 1e-8):
@@ -187,13 +192,17 @@ class Adagrad(Optimizer):
 
     Our Adagrad implementation follows the original paper. In detail,
 
+    [1]: Duchi, J., Hazan, E. and Singer, Y., 2011. Adaptive subgradient methods
+    for online learning and stochastic optimization. JMLR 2011.
+
     .. math::
 
         v_{t+1} &= v_t + g_t^2 \\
         w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1}} + \epsilon}
 
-    [1]: Duchi, J., Hazan, E. and Singer, Y., 2011. Adaptive subgradient methods
-    for online learning and stochastic optimization. JMLR 2011.
+    Args:
+        learning_rate (float): The learning :math:`\lambda` for the update
+        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
     """
 
     def __init__(self, learning_rate: float, eps: float = 1e-8):
@@ -227,6 +236,8 @@ class AdaDelta(Optimizer):
 
     Our AdaDelta implementation follows the original paper. In detail,
 
+    [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint arXiv:1212.5701.
+
     .. math::
 
         v_{t+1} &= \rho v_t + (1 - \rho) g_t^2 \\
@@ -234,7 +245,10 @@ class AdaDelta(Optimizer):
         u_{t+1} &= \rho u_t + (1 - \rho) \Delta w_{t+1}^2 \\
         w_{t+1} &= w_t - \lambda \Delta w_{t+1}
 
-    [1]: Zeiler, M.D., 2012. ADADELTA: an adaptive learning rate method. arXiv preprint arXiv:1212.5701.
+    Args:
+        learning_rate (float): The learning :math:`\lambda` for the update
+        rho (float, optional): The coefficient used for computing a running average of squared gradients :math:`\rho` (default: 0.9)
+        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
     """
 
     def __init__(self, learning_rate: float, rho: float = 0.9, eps: float = 1e-6):
@@ -280,14 +294,19 @@ class Adam(Optimizer):
     Our Adam implementation follows the original paper and omits the bias
     correction in the first and second moment estimates. In detail,
 
+    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
+    optimization. ICLR 2015.
+
     .. math::
 
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
         w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}}
 
-    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
-    optimization. ICLR 2015.
+    Args:
+        learning_rate (float): The learning :math:`\lambda` for the update
+        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`\beta_1`  :math:`\beta_2` (default: (0.9, 0.999))
+        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
     """
 
     def __init__(
@@ -325,14 +344,20 @@ class AdamW(Adam):
     correction in the first and second moments for AdamW. We update the weights 
     with a weight_decay (λ) value:
 
+    [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay 
+    regularization. ICLR 2019.
+
     .. math::
 
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \beta_2 v_t + (1 - \beta_2) g_t^2 \\
         w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}} + \lambda w_t)
 
-    [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay 
-    regularization. ICLR 2019.
+    Args:
+        learning_rate (float): The learning :math:`\lambda` for the update
+        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`\beta_1`  :math:`\beta_2` (default: (0.9, 0.999))
+        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
+        weight_decay (float, optional): weight decay `λ` (L2 penalty) (default: 0)
     """
 
     def __init__(
@@ -363,14 +388,19 @@ class Adamax(Adam):
     Our Adam implementation follows the original paper and omits the bias
     correction in the first and second moment estimates. In detail,
     
+    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
+    optimization. ICLR 2015.
+
     .. math::
     
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \max(\beta_2 v_t, |g_t|) \\
         w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{v_{t+1} + \epsilon}
 
-    [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
-    optimization. ICLR 2015.
+    Args:
+        learning_rate (float): The learning :math:`\lambda` for the update
+        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`\beta_1`  :math:`\beta_2` (default: (0.9, 0.999))
+        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
     """
 
     def __init__(
