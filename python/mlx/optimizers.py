@@ -355,7 +355,7 @@ class AdamW(Adam):
 
     Args:
         learning_rate (float): The learning :math:`\lambda` for the update
-        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`\beta_1`  :math:`\beta_2` (default: (0.9, 0.999))
+        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`(\beta_1, \beta_2)` (default: (0.9, 0.999))
         eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
         weight_decay (float, optional): weight decay `λ` (L2 penalty) (default: 0)
     """
@@ -399,7 +399,7 @@ class Adamax(Adam):
 
     Args:
         learning_rate (float): The learning :math:`\lambda` for the update
-        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`\beta_1`  :math:`\beta_2` (default: (0.9, 0.999))
+        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`(\beta_1, \beta_2)` (default: (0.9, 0.999))
         eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
     """
 
