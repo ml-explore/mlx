@@ -20,23 +20,30 @@ def cross_entropy(
     weights: mx.array = None,
     axis: int = -1,
     label_smoothing: float = 0.0,
-    reduction: str = "mean",
+    reduction: str = "none",
 ) -> mx.array:
     """
-    Computes the cross entropy loss between logits and targets with optional label smoothing.
+    Computes the cross entropy loss between logits and targets.
 
     Args:
         logits (mx.array): The predicted logits.
         targets (mx.array): The target values, as class indices.
-        weights (mx.array, optional): Weights for each target. Default: None.
+        weights (mx.array, optional): Weights for each target. Default: ``None``.
         axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
-        label_smoothing (float, optional): Label smoothing factor. Default: 0.
-        reduction (str, optional): Specifies the reduction: 'none', 'mean', or 'sum'. Default: 'mean'.
+        label_smoothing (float, optional): Label smoothing factor. Default: ``0``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+            ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.nd.array: The computed cross entropy loss.
+        mx.array: The computed cross entropy loss.
     """
-    assert 0 <= label_smoothing < 1
+    assert (
+        0 <= label_smoothing < 1
+    ), "label smoothing must be between 0 and 1 (exclusive)"
+    assert (
+        logits.shape[0] == targets.shape[0]
+    ), "The shape of logits and targets must match along axis 0."
+
     score = mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
     logsumexp_logits = mx.logsumexp(logits, axis=axis)
     if label_smoothing > 0:
@@ -54,8 +61,8 @@ def cross_entropy(
 
     # Apply weights if provided
     if weights is not None:
-        if weights.shape != loss.shape:
-            raise ValueError("Shape of weights must be the same as shape of loss.")
+        if weights.shape != targets.shape:
+            raise ValueError("Shape of weights must be the same as shape of targets.")
         loss *= weights
 
     # Apply reduction
@@ -133,7 +140,7 @@ class BCELoss(Module):
 
 
 def l1_loss(
-    predictions: mx.array, targets: mx.array, reduction: str = "none"
+    predictions: mx.array, targets: mx.array, reduction: str = "mean"
 ) -> mx.array:
     """
     Computes the L1 loss between predictions and targets.
@@ -147,13 +154,16 @@ def l1_loss(
     Returns:
         mx.array: The computed L1 loss.
     """
+    assert (
+        predictions.shape == targets.shape
+    ), f"Shape of predictions {predictions.shape} and targets {targets.shape} must match"
     loss = mx.abs(predictions - targets)
 
     return _reduce(loss, reduction)
 
 
 def mse_loss(
-    predictions: mx.array, targets: mx.array, reduction: str = "none"
+    predictions: mx.array, targets: mx.array, reduction: str = "mean"
 ) -> mx.array:
     """
     Computes the mean squared error loss between predictions and targets.
@@ -167,6 +177,10 @@ def mse_loss(
     Returns:
         mx.array: The computed mean squared error loss.
     """
+    assert (
+        predictions.shape == targets.shape
+    ), f"Shape of predictions {predictions.shape} and targets {targets.shape} must match"
+
     loss = mx.square(predictions - targets)
     return _reduce(loss, reduction)
 
@@ -226,10 +240,23 @@ def smooth_l1_loss(
     """
     Calculate the Smooth L1 Loss between predictions and true values.
 
+    Smooth L1 loss is a variant of L1 loss which replaces the absolute difference term with a quadratic function when the absolute difference is less than beta. This quadratic segment makes the function smooth near the zero difference, avoiding large gradient updates that can occur in L1 loss.
+
+    Note:
+    - Smooth L1 loss can be conceptualized as a variant of L1 loss. For differences less than beta, the function uses a quadratic segment with a slope of 1 at |predictions - targets| = beta, smoothing the transition around zero.
+    - Smooth L1 loss is closely related to Huber Loss. While both are piecewise functions combining L1 and L2 losses, Huber Loss transitions based on a delta parameter (analogous to beta in Smooth L1 Loss). When scaled by 1/beta, Smooth L1 loss resembles Huber Loss, but with distinct behaviors at different values of beta:
+        * As beta -> 0, Smooth L1 loss approaches L1 Loss. Huber Loss, however, converges to a constant 0 loss.
+        * As beta -> ∞, Smooth L1 loss converges to a constant 0 loss while Huber Loss becomes L2 loss.
+    - The L1 segment in Smooth L1 Loss has a constant slope of 1. For HuberLoss, the slope of the L1 segment is beta.
+
+    The formula for Smooth L1 Loss is as follows:
+    - If |predictions - targets| < beta: 0.5 * ((predictions - targets) ** 2) / beta
+    - Otherwise: |predictions - targets| - 0.5 * beta
+
     Args:
         predictions (mx.array): Predicted values.
         targets (mx.array): Ground truth values.
-        beta (float, optional): The threshold at which to change from L2 to L1 loss. Defaults to 1.0.
+        beta (float, optional): The threshold at which to change from L2 to L1 loss. Defaults: ``1.0``.
         reduction (str, optional):  reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
@@ -238,9 +265,14 @@ def smooth_l1_loss(
                      or the same shape as predictions and targets if reduction is 'none'.
     """
 
-    diff = mx.abs(predictions - targets)
+    assert (
+        predictions.shape == targets.shape
+    ), f"Shape of predictions {predictions.shape} and targets {targets.shape} must match"
+
+    diff = predictions - targets
+
     loss = mx.where(
-        diff < beta, 0.5 * mx.square(predictions - targets) / beta, diff - 0.5 * beta
+        diff < beta, 0.5 * mx.square(diff) / beta, mx.abs(diff) - 0.5 * beta
     )
 
     return _reduce(loss, reduction)
