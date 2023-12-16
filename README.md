@@ -83,9 +83,9 @@ on contributing to MLX. See the
 [docs](https://ml-explore.github.io/mlx/build/html/install.html) for more
 information on building from source, and running tests.
 
-If you contribute to MLX and wish to be acknowledged, please inlude your name
-in our [acknowledgments](ACKNOWLEDGMENTS.md#Individual-Contributors) along with
-your pull request.
+If you contribute to MLX and wish to be acknowledged, please add your name to
+[our list of contributions](ACKNOWLEDGMENTS.md#Individual-Contributors) in your
+pull request.
 
 ## Citing MLX
 
@@ -98,8 +98,8 @@ BibTex entry:
 @software{mlx2023,
   author = {Awni Hannun and Jagrit Digani and Angelos Katharopoulos and Ronan Collobert},
   title = {{MLX}: Efficient and flexible machine learning on Apple silicon},
-  url = {http://github.com/ml-explore},
-  version = {0.0}
+  url = {https://github.com/ml-explore},
+  version = {0.0},
   year = {2023},
 }
 ```
