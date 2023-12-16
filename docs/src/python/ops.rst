@@ -95,6 +95,9 @@ Operations
    tan
    tanh
    transpose
+   tri
+   tril
+   triu
    var
    where
    zeros

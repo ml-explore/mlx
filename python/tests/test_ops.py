@@ -320,6 +320,30 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertFalse(mx.array_equal(x, y))
                 self.assertTrue(mx.array_equal(x, y, equal_nan=True))
 
+    def test_tri(self):
+        for shape in [[4], [4, 4], [2, 10]]:
+            for diag in [-1, 0, 1, -2]:
+                self.assertEqualArray(
+                    mx.tri(*shape, k=diag), mx.array(np.tri(*shape, k=diag))
+                )
+
+    def test_tril(self):
+        mt = mx.random.normal((10, 10))
+        nt = np.array(mt)
+        for diag in [-1, 0, 1, -2]:
+            self.assertEqualArray(mx.tril(mt, diag), mx.array(np.tril(nt, diag)))
+
+        with self.assertRaises(Exception):
+            mx.tril(mx.zeros((1)))
+
+    def test_triu(self):
+        mt = mx.random.normal((10, 10))
+        nt = np.array(mt)
+        for diag in [-1, 0, 1, -2]:
+            self.assertEqualArray(mx.triu(mt, diag), mx.array(np.triu(nt, diag)))
+        with self.assertRaises(Exception):
+            mx.triu(mx.zeros((1)))
+
     def test_minimum(self):
         x = mx.array([0.0, -5, 10.0])
         y = mx.array([1.0, -7.0, 3.0])
