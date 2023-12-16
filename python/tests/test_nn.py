@@ -600,15 +600,13 @@ class TestNN(mlx_tests.MLXTestCase):
 
     def test_prelu(self):
         self.assertEqualArray(
-            [mx.array([1.0, -1.0, 0.0, 0.5])],
-            nn.PReLU(),
+            nn.PReLU()(mx.array([1.0, -1.0, 0.0, 0.5])),
             mx.array([1.0, -0.25, 0.0, 0.5]),
         )
 
     def test_mish(self):
         self.assertEqualArray(
-            [mx.array([1.0, -1.0, 0.0, 0.5])],
-            nn.Mish(),
+            nn.Mish()(mx.array([1.0, -1.0, 0.0, 0.5])),
             mx.array([0.8651, -0.3034, 0.0000, 0.3752]),
         )
 
