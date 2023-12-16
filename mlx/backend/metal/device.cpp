@@ -17,8 +17,6 @@ namespace fs = std::filesystem;
 
 namespace mlx::core::metal {
 
-static Device metal_device_;
-
 namespace {
 
 // TODO nicer way to set this or possibly expose as an environment variable
@@ -240,6 +238,7 @@ MTL::ComputePipelineState* Device::get_kernel(
 }
 
 Device& device(mlx::core::Device) {
+  static Device metal_device_;
   return metal_device_;
 }
 
