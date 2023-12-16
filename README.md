@@ -79,11 +79,27 @@ for more information on building the C++ and Python APIs from source.
 ## Contributing 
 
 Check out the [contribution guidelines](CONTRIBUTING.md) for more information
-on contributing to MLX.
+on contributing to MLX. See the
+[docs](https://ml-explore.github.io/mlx/build/html/install.html) for more
+information on building from source, and running tests.
 
-Optional: Generate stubs for C++ python objects to enable IDE auto-completion
+If you contribute to MLX and wish to be acknowledged, please inlude your name
+in our [acknowledgments](ACKNOWLEDGMENTS.md#Individual-Contributors) along with
+your pull request.
 
-```shell
-pip install ".[dev]"
-python setup.py generate_stubs
+## Citing MLX
+
+The MLX software suite was initially developed with equal contribution by Awni
+Hannun, Jagrit Digani, Angelos Katharopoulos, and Ronan Collobert. If you find
+MLX useful in your research and wish to cite it, please use the following
+BibTex entry:
+
+```
+@software{mlx2023,
+  author = {Awni Hannun and Jagrit Digani and Angelos Katharopoulos and Ronan Collobert},
+  title = {{MLX}: Efficient and flexible machine learning on Apple silicon},
+  url = {http://github.com/ml-explore},
+  version = {0.0}
+  year = {2023},
+}
 ```
