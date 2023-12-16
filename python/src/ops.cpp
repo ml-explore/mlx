@@ -1423,18 +1423,18 @@ void init_ops(py::module_& m) {
       "stream"_a = none,
       R"pbdoc(
         tri(n: int, m: int, k: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
-        
+
         An array with ones at and below the given diagonal and zeros elsewhere.
 
         Args:
           n (int): The number of rows in the output.
-          m (int, optional): The number of cols in the output. Defaults to `None`.
-          k (int, optional): The diagonal of the 2-D array. Defaults to 0
-          dtype (Dtype, optional): Data type of the output array. Defaults to `float32`.
-          stream (Stream, optional): Stream or device. Defaults to `None`.
-        
+          m (int, optional): The number of cols in the output. Defaults to ``None``.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          dtype (Dtype, optional): Data type of the output array. Defaults to ``float32``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
         Returns:
-          array: Array with its lower triangle filled with ones and zero elsewhere
+          array: Array with its lower triangle filled with ones and zeros elsewhere
       )pbdoc");
   m.def(
       "tril",
@@ -1445,14 +1445,14 @@ void init_ops(py::module_& m) {
       "stream"_a = none,
       R"pbdoc(
       tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
-        
+
         Zeros the array above the given diagonal.
 
         Args:
           x (array): input array.
-          k (int): The diagonal of the 2-D array
-          stream (Stream, optional): Stream or device. Defaults to `None`.
-        
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
         Returns:
           array: Array zeroed above the given diagonal
     )pbdoc");
@@ -1465,14 +1465,14 @@ void init_ops(py::module_& m) {
       "stream"_a = none,
       R"pbdoc(
       triu(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
-        
+
         Zeros the array below the given diagonal.
 
         Args:
           x (array): input array.
-          k (int): The diagonal of the 2-D array
-          stream (Stream, optional): Stream or device. Defaults to `None`.
-        
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
         Returns:
           array: Array zeroed below the given diagonal
     )pbdoc");
@@ -2320,7 +2320,7 @@ void init_ops(py::module_& m) {
       Args:
           arrays (list(array)): A list of arrays to stack.
           axis (int, optional): The axis in the result array along which the
-            input arrays are stacked. Defaults to ``0``. 
+            input arrays are stacked. Defaults to ``0``.
           stream (Stream, optional): Stream or device. Defaults to ``None``.
 
       Returns:
