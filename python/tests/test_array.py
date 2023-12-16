@@ -903,6 +903,11 @@ class TestArray(mlx_tests.MLXTestCase):
             np.array([0, 1]),
         )
 
+        # Check slice assign with negative indices works
+        a = mx.zeros((5, 5), mx.int32)
+        a[2:-2, 2:-2] = 4
+        self.assertEquals(a[2, 2].item(), 4)
+
     def test_slice_negative_step(self):
         a_np = np.arange(20)
         a_mx = mx.array(a_np)
