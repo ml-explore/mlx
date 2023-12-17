@@ -15,11 +15,11 @@ To install from PyPI you must meet the following requirements:
 
 - Using an M series chip (Apple silicon)
 - Using a native Python >= 3.8
-- MacOS >= 13.3
+- macOS >= 13.3
 
 .. note::
-    MLX is only available on devices running MacOS >= 13.3 
-    It is highly recommended to use MacOS 14 (Sonoma)
+    MLX is only available on devices running macOS >= 13.3 
+    It is highly recommended to use macOS 14 (Sonoma)
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
@@ -35,8 +35,7 @@ Probably you are using a non-native Python. The output of
 
 should be ``arm``. If it is ``i386`` (and you have M series machine) then you
 are using a non-native Python. Switch your Python to a native Python. A good
-way to do this is with
-`Conda <https://stackoverflow.com/questions/65415996/how-to-specify-the-architecture-or-platform-for-a-new-conda-environment-apple>`_.
+way to do this is with `Conda <https://stackoverflow.com/q/65415996>`_.
 
 
 Build from source
@@ -47,7 +46,7 @@ Build Requirements
 
 - A C++ compiler with C++17 support (e.g. Clang >= 5.0)
 - `cmake <https://cmake.org/>`_ -- version 3.24 or later, and ``make``
-- Xcode >= 14.3 (Xcode >= 15.0 for MacOS 14 and above)
+- Xcode >= 14.3 (Xcode >= 15.0 for macOS 14 and above)
 
 
 Python API
@@ -87,6 +86,13 @@ To make sure the install is working run the tests with:
 
   pip install ".[testing]"
   python -m unittest discover python/tests
+
+Optional: Install stubs to enable auto completions and type checking from your IDE:
+
+.. code-block:: shell
+
+  pip install ".[dev]"
+  python setup.py generate_stubs
 
 C++ API
 ^^^^^^^
@@ -154,8 +160,32 @@ should point to the path to the built metal library.
       export DEVELOPER_DIR="/path/to/Xcode.app/Contents/Developer/"
 
     Further, you can use the following command to find out which 
-    MacOS SDK will be used
+    macOS SDK will be used
 
     .. code-block:: shell
 
       xcrun -sdk macosx --show-sdk-version
+
+Troubleshooting
+^^^^^^^^^^^^^^^
+
+Metal not found
+~~~~~~~~~~~~~~~
+
+You see the following error when you try to build:
+
+.. code-block:: shell
+
+  error: unable to find utility "metal", not a developer tool or in PATH
+
+To fix this, first make sure you have Xcode installed:
+
+.. code-block:: shell
+
+  xcode-select --install
+
+Then set the active developer directory:
+
+.. code-block:: shell
+
+  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
