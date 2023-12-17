@@ -35,8 +35,7 @@ Probably you are using a non-native Python. The output of
 
 should be ``arm``. If it is ``i386`` (and you have M series machine) then you
 are using a non-native Python. Switch your Python to a native Python. A good
-way to do this is with
-`Conda <https://stackoverflow.com/questions/65415996/how-to-specify-the-architecture-or-platform-for-a-new-conda-environment-apple>`_.
+way to do this is with `Conda <https://stackoverflow.com/q/65415996>`_.
 
 
 Build from source
@@ -166,3 +165,27 @@ should point to the path to the built metal library.
     .. code-block:: shell
 
       xcrun -sdk macosx --show-sdk-version
+
+Troubleshooting
+^^^^^^^^^^^^^^^
+
+Metal not found
+~~~~~~~~~~~~~~~
+
+You see the following error when you try to build:
+
+.. code-block:: shell
+
+  error: unable to find utility "metal", not a developer tool or in PATH
+
+To fix this, first make sure you have Xcode installed:
+
+.. code-block:: shell
+
+  xcode-select --install
+
+Then set the active developer directory:
+
+.. code-block:: shell
+
+  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
