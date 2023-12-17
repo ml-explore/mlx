@@ -26,6 +26,7 @@
       ~array.cumprod
       ~array.cumsum
       ~array.exp
+      ~array.flatten
       ~array.item
       ~array.log
       ~array.log10
@@ -35,6 +36,7 @@
       ~array.max
       ~array.mean
       ~array.min
+      ~array.moveaxis
       ~array.prod
       ~array.reciprocal
       ~array.reshape
@@ -45,6 +47,7 @@
       ~array.square
       ~array.squeeze
       ~array.sum
+      ~array.swapaxes
       ~array.tolist
       ~array.transpose
       ~array.var
