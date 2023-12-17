@@ -73,6 +73,12 @@ TEST_CASE("test flatten") {
   // Check start > end throws
   CHECK_THROWS(flatten(x, 2, 1));
 
+  // Check start >= ndim throws
+  CHECK_THROWS(flatten(x, 5, 6));
+
+  // Check end < 0 throws
+  CHECK_THROWS(flatten(x, -5, -4));
+
   // Check scalar flattens to 1D
   x = array(1);
   CHECK_EQ(flatten(x, -3, -1).shape(), std::vector<int>({1}));
