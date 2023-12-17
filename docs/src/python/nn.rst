@@ -64,7 +64,6 @@ Quick Start with Neural Networks
     # gradient with respect to `mlp.trainable_parameters()`
     loss_and_grad = nn.value_and_grad(mlp, l2_loss)
 
-
 .. _module_class:
 
 The Module Class
@@ -86,11 +85,10 @@ name should not start with ``_``). It can be arbitrarily nested in other
 :meth:`Module.parameters` can be used to extract a nested dictionary with all
 the parameters of a module and its submodules.
 
-A :class:`Module` can also keep track of "frozen" parameters.
-:meth:`Module.trainable_parameters` returns only the subset of
-:meth:`Module.parameters` that is not frozen. When using
-:meth:`mlx.nn.value_and_grad` the gradients returned will be with respect to these
-trainable parameters.
+A :class:`Module` can also keep track of "frozen" parameters. See the
+:meth:`Module.freeze` method for more details. :meth:`mlx.nn.value_and_grad`
+the gradients returned will be with respect to these trainable parameters.
+
 
 Updating the Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -172,62 +170,14 @@ In detail:
   :meth:`mlx.core.value_and_grad`
 
 .. autosummary::
+   :recursive:
    :toctree: _autosummary
 
    value_and_grad
+   Module
 
-Neural Network Layers
----------------------
+.. toctree::
 
-.. autosummary::
-   :toctree: _autosummary
-   :template: nn-module-template.rst
-
-   Embedding
-   ReLU
-   PReLU
-   GELU
-   SiLU
-   Step
-   SELU
-   Mish
-   Linear
-   Conv1d
-   Conv2d
-   LayerNorm
-   RMSNorm
-   GroupNorm
-   RoPE
-   MultiHeadAttention
-   Sequential
-
-Layers without parameters (e.g. activation functions) are also provided as
-simple functions.
-
-.. autosummary::
-   :toctree: _autosummary_functions
-   :template: nn-module-template.rst
-
-   gelu
-   gelu_approx
-   gelu_fast_approx
-   relu
-   prelu
-   silu
-   step
-   selu
-   mish
-
-Loss Functions
---------------
-
-.. autosummary::
-   :toctree: _autosummary_functions
-   :template: nn-module-template.rst
-
-   losses.cross_entropy
-   losses.binary_cross_entropy
-   losses.l1_loss
-   losses.mse_loss
-   losses.nll_loss
-   losses.kl_div_loss
+   nn/layers
+   nn/functions
+   nn/losses
