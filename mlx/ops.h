@@ -1057,4 +1057,12 @@ array dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
+/** Load array from .safetensor file format */
+std::map<std::string, array> load_safetensor(
+    std::shared_ptr<io::Reader> in_stream,
+    StreamOrDevice s = {});
+std::map<std::string, array> load_safetensor(
+    const std::string& file,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core

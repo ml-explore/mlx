@@ -14,6 +14,25 @@ std::string get_temp_file(const std::string& name) {
   return std::filesystem::temp_directory_path().append(name);
 }
 
+TEST_CASE("test tokenizer") {
+  auto raw = std::string(" { \"testing\": [1 , \"test\"]}   ");
+  auto tokenizer = io::Tokenizer(raw.c_str(), raw.size());
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::CURLY_OPEN);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::STRING);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::COLON);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::ARRAY_OPEN);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::NUMBER);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::COMMA);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::STRING);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::ARRAY_CLOSE);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::CURLY_CLOSE);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::NULL_TYPE);
+}
+
+// TEST_CASE("test load_safetensor") {
+//   auto array = load_safetensor("../../temp.safe");
+// }
+
 TEST_CASE("test single array serialization") {
   // Basic test
   {

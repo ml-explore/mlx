@@ -1,0 +1,79 @@
+// Copyright © 2023 Apple Inc.
+
+#pragma once
+
+#include <map>
+
+#include "mlx/load.h"
+#include "mlx/ops.h"
+#include "mlx/primitives.h"
+#include "mlx/utils.h"
+
+namespace mlx::core {
+
+namespace io {
+class JSONNode;
+using JSONObject = std::map<std::string, std::shared_ptr<JSONNode>>;
+using JSONList = std::vector<std::shared_ptr<JSONNode>>;
+
+class JSONNode {
+ public:
+  enum class Type { OBJECT, LIST, STRING, NUMBER, BOOLEAN, NULL_TYPE };
+
+  JSONNode() : _type(Type::NULL_TYPE){};
+  JSONNode(Type type) : _type(type) {
+    // set the default value
+    if (type == Type::OBJECT) {
+      this->_values.object = new JSONObject();
+    } else if (type == Type::LIST) {
+      this->_values.list = new JSONList();
+    }
+  };
+
+  inline bool is_type(Type t) {
+    return this->_type == t;
+  }
+
+ private:
+  union Values {
+    JSONObject* object;
+    JSONList* list;
+    std::string* s;
+    float fValue;
+  } _values;
+  Type _type;
+};
+
+enum class TOKEN {
+  CURLY_OPEN,
+  CURLY_CLOSE,
+  COLON,
+  STRING,
+  NUMBER,
+  ARRAY_OPEN,
+  ARRAY_CLOSE,
+  COMMA,
+  NULL_TYPE,
+};
+
+struct Token {
+  TOKEN type;
+  size_t start;
+  size_t end;
+};
+
+class Tokenizer {
+ public:
+  Tokenizer(const char* data, size_t len) : _data(data), _loc(0), _len(len){};
+  Token getToken();
+  inline bool hasMoreTokens() {
+    return this->_loc < this->_len;
+  };
+
+ private:
+  const char* _data;
+  size_t _len;
+  size_t _loc;
+};
+} // namespace io
+} // namespace mlx::core

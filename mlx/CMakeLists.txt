@@ -11,6 +11,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/safetensor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
