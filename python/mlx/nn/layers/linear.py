@@ -7,12 +7,13 @@ from mlx.nn.layers.base import Module
 
 
 class Linear(Module):
-    """Applies a affine transformation to the input.
+    r"""Applies an affine transformation to the input.
 
     Concretely:
 
     .. math::
-        y = W^\\top x + b
+
+        y = W^\top x + b
 
     where :math:`W` has shape ``[output_dims, input_dims]``.
 
