@@ -1426,6 +1426,15 @@ class TestOps(mlx_tests.MLXTestCase):
         np_c = np.stack([np_a, np_b], axis=1)
         self.assertTrue(np.array_equal(c, np_c))
 
+    def test_flatten(self):
+        x = mx.zeros([2, 3, 4])
+        self.assertEqual(mx.flatten(x).shape, [2 * 3 * 4])
+        self.assertEqual(mx.flatten(x, start_axis=1).shape, [2, 3 * 4])
+        self.assertEqual(mx.flatten(x, end_axis=1).shape, [2 * 3, 4])
+        self.assertEqual(x.flatten().shape, [2 * 3 * 4])
+        self.assertEqual(x.flatten(start_axis=1).shape, [2, 3 * 4])
+        self.assertEqual(x.flatten(end_axis=1).shape, [2 * 3, 4])
+
 
 if __name__ == "__main__":
     unittest.main()
