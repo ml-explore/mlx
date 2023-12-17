@@ -1,10 +1,8 @@
 // Copyright © 2023 Apple Inc.
 
-#include <algorithm>
 #include <sstream>
 #include <vector>
 
-#include "array.h"
 #include "utils.h"
 
 namespace mlx::core {
