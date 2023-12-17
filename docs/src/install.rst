@@ -169,7 +169,8 @@ should point to the path to the built metal library.
 Troubleshooting
 ^^^^^^^^^^^^^^^
 
-*Compilation fails because Metal utility is not found.*
+Metal not found
+~~~~~~~~~~~~~~~
 
 You see the following error when you try to build:
 
