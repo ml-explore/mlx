@@ -43,42 +43,78 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [scales_transposed, scales_cols, scales] = check_transpose(scales_pre);
   auto [biases_transposed, biases_cols, biases] = check_transpose(biases_pre);
 
-  if (x_transposed || scales_transposed || biases_transposed) {
-    throw std::runtime_error("x, scales and biases should be row contiguous");
+  if (scales_transposed || biases_transposed) {
+    throw std::runtime_error("scales and biases should be row contiguous");
   }
-
-  std::ostringstream kname;
-  kname << "qmv_" << (w_transposed ? "n_" : "t_") << type_to_name(out)
-        << "_groups_" << groups_ << "_width_" << width_;
-
-  // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
-  compute_encoder->setComputePipelineState(kernel);
 
   int D = x.shape(-1);
   int B = x.size() / D;
-  int O = w.size() / w_cols;
 
-  int tm = 4;
-  int bo = 32;
-  int bd = 32;
-  MTL::Size group_dims = MTL::Size(bd, bo, 1);
-  MTL::Size grid_dims = MTL::Size(1, O / (bo * tm), B);
+  // Route to the qmv kernel
+  if (B == 1) {
+    std::ostringstream kname;
+    kname << "qmv_" << (w_transposed ? "n_" : "t_") << type_to_name(out)
+          << "_groups_" << groups_ << "_width_" << width_;
 
-  set_array_buffer(compute_encoder, w, 0);
-  set_array_buffer(compute_encoder, scales, 1);
-  set_array_buffer(compute_encoder, biases, 2);
-  set_array_buffer(compute_encoder, x, 3);
-  set_array_buffer(compute_encoder, out, 4);
-  compute_encoder->setBytes(&D, sizeof(int), 5);
-  compute_encoder->setBytes(&O, sizeof(int), 6);
+    // Encode and dispatch kernel
+    auto compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = d.get_kernel(kname.str());
+    compute_encoder->setComputePipelineState(kernel);
 
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    int O = w.size() / w_cols;
+
+    int tm = 4;
+    int bo = 32;
+    int bd = 32;
+    MTL::Size group_dims = MTL::Size(bd, bo, 1);
+    MTL::Size grid_dims = MTL::Size(1, O / (bo * tm), B);
+
+    set_array_buffer(compute_encoder, w, 0);
+    set_array_buffer(compute_encoder, scales, 1);
+    set_array_buffer(compute_encoder, biases, 2);
+    set_array_buffer(compute_encoder, x, 3);
+    set_array_buffer(compute_encoder, out, 4);
+    compute_encoder->setBytes(&D, sizeof(int), 5);
+    compute_encoder->setBytes(&O, sizeof(int), 6);
+
+    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  }
+
+  // Route to the qmm kernel
+  else {
+    std::ostringstream kname;
+    kname << "qmm_" << (w_transposed ? "t_" : "n_") << type_to_name(out)
+          << "_groups_" << groups_ << "_width_" << width_;
+
+    // Encode and dispatch kernel
+    auto compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = d.get_kernel(kname.str());
+    compute_encoder->setComputePipelineState(kernel);
+
+    int O = w.size() / w_cols;
+
+    int wn = 2;
+    int wm = 2;
+    int bm = 32;
+    int bn = 32;
+    int bk = 64;
+    MTL::Size group_dims = MTL::Size(32, wn, wm);
+    MTL::Size grid_dims = MTL::Size(O / bn, B / bm, 1);
+
+    set_array_buffer(compute_encoder, x, 0);
+    set_array_buffer(compute_encoder, w, 1);
+    set_array_buffer(compute_encoder, scales, 2);
+    set_array_buffer(compute_encoder, biases, 3);
+    set_array_buffer(compute_encoder, out, 4);
+    compute_encoder->setBytes(&B, sizeof(int), 5);
+    compute_encoder->setBytes(&O, sizeof(int), 6);
+    compute_encoder->setBytes(&D, sizeof(int), 7);
+
+    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  }
 
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
-  return;
 }
 
 } // namespace mlx::core
