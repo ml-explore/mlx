@@ -277,6 +277,34 @@ array reshape(
       shape, a.dtype(), std::make_unique<Reshape>(to_stream(s), shape), {a});
 }
 
+array flatten(
+    const array& a,
+    int start_axis,
+    int end_axis /* = -1 */,
+    StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  start_axis += (start_axis < 0 ? ndim : 0);
+  end_axis += (end_axis < 0 ? ndim + 1 : 0);
+  start_axis = std::max(0, start_axis);
+  end_axis = std::min(ndim, end_axis);
+  if (end_axis < start_axis) {
+    throw std::invalid_argument(
+        "[flatten] start_axis must be less than or equal to end_axis");
+  }
+  if (start_axis == end_axis and a.ndim() != 0) {
+    return a;
+  }
+  std::vector<int> new_shape(a.shape().begin(), a.shape().begin() + start_axis);
+  new_shape.push_back(-1);
+  new_shape.insert(
+      new_shape.end(), a.shape().begin() + end_axis + 1, a.shape().end());
+  return reshape(a, new_shape, s);
+}
+
+array flatten(const array& a, StreamOrDevice s /* = {} */) {
+  return flatten(a, 0, a.ndim() - 1, s);
+}
+
 array squeeze(
     const array& a,
     const std::vector<int>& axes,
