@@ -6,6 +6,7 @@
 #include "mlx/backend/metal/metal.h"
 #include "mlx/device.h"
 #include "mlx/fft.h"
+#include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/random.h"
 #include "mlx/stream.h"
