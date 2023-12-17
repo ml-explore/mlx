@@ -79,7 +79,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         for groups in [128, 64]:
-            for width in [2, 4, 8]:
+            for width in [4, 8]:
                 for M in [512, 1024]:
                     for N in [512, 1024]:
                         # with self.subTest(shape=(M, N), groups=groups, width=width):

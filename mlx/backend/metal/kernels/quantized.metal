@@ -37,21 +37,23 @@ template <typename T, const int BM, const int BN, const int groups, const int wi
   constexpr int groups_per_block = colgroup / groups;
   constexpr int simdgroups_fetching_vec = colgroup / SIMD_SIZE;
 
-  threadgroup T scales_block[BM * groups_per_block];
-  threadgroup T biases_block[BM * groups_per_block];
+  threadgroup T scales_block[BM * TM * groups_per_block];
+  threadgroup T biases_block[BM * TM * groups_per_block];
   threadgroup T x_block[colgroup];
 
   thread uint32_t w_local[TM];
   thread T result[TM] = {0};
-  thread T scale = 1;
-  thread T bias = 0;
+  thread T scale[TM] = {0};
+  thread T bias[TM] = {0};
   thread T x_thread[el_per_thread];
 
   // Adjust positions
+  const int in_vec_size_w = in_vec_size / el_per_thread;
+  const int in_vec_size_g = in_vec_size / groups;
   int out_row = tid.y * BM * TM + simd_gid * TM;
-  w += out_row * in_vec_size / el_per_thread;
-  scales += out_row * (in_vec_size / groups);
-  biases += out_row * (in_vec_size / groups);
+  w += out_row * in_vec_size_w;
+  scales += out_row * in_vec_size_g;
+  biases += out_row * in_vec_size_g;
   x += tid.z * in_vec_size;
   y += tid.z * out_vec_size;
 
@@ -62,14 +64,14 @@ template <typename T, const int BM, const int BN, const int groups, const int wi
     if (simd_gid < simdgroups_fetching_vec) {
       x_block[lid] = x[lid + i];
     }
-    if (simd_lid == 0) {
+    if (simd_lid < TM) {
       #pragma clang loop unroll(full)
       for (int j=0; j<groups_per_block; j++) {
-        scales_block[simd_gid * groups_per_block + j] = scales[i / groups + j];
+        scales_block[(simd_gid * TM + simd_lid) * groups_per_block + j] = scales[simd_lid * in_vec_size_g + i / groups + j];
       }
       #pragma clang loop unroll(full)
       for (int j=0; j<groups_per_block; j++) {
-        biases_block[simd_gid * groups_per_block + j] = biases[i / groups + j];
+        biases_block[(simd_gid * TM + simd_lid) * groups_per_block + j] = biases[simd_lid * in_vec_size_g + i / groups + j];
       }
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -79,8 +81,11 @@ template <typename T, const int BM, const int BN, const int groups, const int wi
     for (int j=0; j<el_per_thread; j++) {
       x_thread[j] = x_block[simd_lid*el_per_thread + j];
     }
-    scale = scales_block[simd_lid * el_per_thread / groups];
-    bias = biases_block[simd_lid * el_per_thread / groups];
+    #pragma clang loop unroll(full)
+    for (int j=0; j<TM; j++) {
+      scale[j] = scales_block[(simd_gid *  TM + j) * groups_per_block + simd_lid * el_per_thread / groups];
+      bias[j] = biases_block[(simd_gid *  TM + j) * groups_per_block + simd_lid * el_per_thread / groups];
+    }
 
     // Load the matrix elements
     #pragma clang loop unroll(full)
@@ -93,7 +98,7 @@ template <typename T, const int BM, const int BN, const int groups, const int wi
     for (int j=0; j<TM; j++) {
       #pragma clang loop unroll(full)
       for (int k=0; k<el_per_thread; k++) {
-        result[j] += (scale * static_cast<T>(w_local[j] & bitmask) + bias) * x_thread[k];
+        result[j] += (scale[j] * static_cast<T>(w_local[j] & bitmask) + bias[j]) * x_thread[k];
         w_local[j] >>= width;
       }
     }
