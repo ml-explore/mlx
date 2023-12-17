@@ -4,7 +4,6 @@
 #include <numeric>
 #include <set>
 #include <sstream>
-#include <stdexcept>
 
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -280,23 +279,30 @@ array reshape(
 
 array flatten(
     const array& a,
-    int start_dim,
-    int end_dim,
+    int start_axis,
+    int end_axis /* = -1 */,
     StreamOrDevice s /* = {} */) {
-  start_dim = std::max(0, start_dim);
   auto ndim = static_cast<int>(a.ndim());
-  end_dim = (end_dim == -1) ? ndim : std::min(ndim, end_dim);
-
-  if (start_dim > end_dim) {
+  start_axis += (start_axis < 0 ? ndim : 0);
+  end_axis += (end_axis < 0 ? ndim + 1 : 0);
+  start_axis = std::max(0, start_axis);
+  end_axis = std::min(ndim, end_axis);
+  if (end_axis < start_axis) {
     throw std::invalid_argument(
-        "start_dim must be less than or equal to end_dim");
+        "[flatten] start_axis must be less than or equal to end_axis");
   }
-
-  if (start_dim == end_dim && ndim != 0) {
+  if (start_axis == end_axis and a.ndim() != 0) {
     return a;
   }
+  std::vector<int> new_shape(a.shape().begin(), a.shape().begin() + start_axis);
+  new_shape.push_back(-1);
+  new_shape.insert(
+      new_shape.end(), a.shape().begin() + end_axis + 1, a.shape().end());
+  return reshape(a, new_shape, s);
+}
 
-  return reshape(a, getNewShape(a, start_dim, end_dim), s);
+array flatten(const array& a, StreamOrDevice s /* = {} */) {
+  return flatten(a, 0, a.ndim() - 1, s);
 }
 
 array squeeze(
