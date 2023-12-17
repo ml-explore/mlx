@@ -83,8 +83,9 @@ on contributing to MLX. See the
 [docs](https://ml-explore.github.io/mlx/build/html/install.html) for more
 information on building from source, and running tests.
 
-If you contribute to MLX and wish to be acknowledged, please add your name to
-[our list of contributors](ACKNOWLEDGMENTS.md#Individual-Contributors) in your
+We are grateful for all of [our
+contributors](ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
+to MLX and wish to be acknowledged, please add your name to to the list in your
 pull request.
 
 ## Citing MLX
