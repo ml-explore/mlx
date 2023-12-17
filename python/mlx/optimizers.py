@@ -82,15 +82,15 @@ class SGD(Optimizer):
 
     .. math::
 
-        v_{t+1} &= \mu v_t + g_t \\
+        v_{t+1} &= \mu v_t + (1 - \tau) g_t \\
         w_{t+1} &= w_t - \lambda v_{t+1}
 
     Args:
-        learning_rate (float): The learning :math:`\lambda` for the update
-        momentum (float, optional): The momentum strength :math:`\mu` (default: 0)
-        weight_decay (float, optional): The weight decay (L2 penalty) (default: 0)
-        dampening (float, optional): Dampening for momentum :math:`\tau` (default: 0)
-        nesterov (bool, optional): Enables Nesterov momentum (default: False)
+        learning_rate (float): The learning rate :math:`\lambda`.
+        momentum (float, optional): The momentum strength :math:`\mu`. Default: ``0``
+        weight_decay (float, optional): The weight decay (L2 penalty). Default: ``0``
+        dampening (float, optional): Dampening for momentum :math:`\tau`. Default: ``0``
+        nesterov (bool, optional): Enables Nesterov momentum. Default: ``False``
     """
 
     def __init__(
@@ -151,9 +151,11 @@ class RMSprop(Optimizer):
         w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1}} + \epsilon}
 
     Args:
-        learning_rate (float): The learning :math:`\lambda` for the update
-        alpha (float, optional): The smoothing constant :math:`\alpha` (default: 0.99)
-        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
+        learning_rate (float): The learning rate :math:`\lambda`.
+        alpha (float, optional): The smoothing constant :math:`\alpha`.
+          Default: ``0.99``
+        eps (float, optional): The term :math:`\epsilon` added to the denominator
+          to improve numerical stability. Default: ``1e-8``
     """
 
     def __init__(self, learning_rate: float, alpha: float = 0.99, eps: float = 1e-8):
@@ -201,8 +203,9 @@ class Adagrad(Optimizer):
         w_{t+1} &= w_t - \lambda \frac{g_t}{\sqrt{v_{t+1}} + \epsilon}
 
     Args:
-        learning_rate (float): The learning :math:`\lambda` for the update
-        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
+        learning_rate (float): The learning rate :math:`\lambda`.
+        eps (float, optional): The term :math:`\epsilon` added to the
+          denominator to improve numerical stability. Default: ``1e-8``
     """
 
     def __init__(self, learning_rate: float, eps: float = 1e-8):
@@ -246,9 +249,11 @@ class AdaDelta(Optimizer):
         w_{t+1} &= w_t - \lambda \Delta w_{t+1}
 
     Args:
-        learning_rate (float): The learning :math:`\lambda` for the update
-        rho (float, optional): The coefficient used for computing a running average of squared gradients :math:`\rho` (default: 0.9)
-        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
+        learning_rate (float): The learning rate :math:`\lambda`.
+        rho (float, optional): The coefficient :math:`\rho` used for computing a
+            running average of squared gradients. Default: ``0.9``
+        eps (float, optional): The term :math:`\epsilon` added to the denominator to improve
+          numerical stability. Ddefault: `1e-8`
     """
 
     def __init__(self, learning_rate: float, rho: float = 0.9, eps: float = 1e-6):
@@ -304,9 +309,12 @@ class Adam(Optimizer):
         w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}}
 
     Args:
-        learning_rate (float): The learning :math:`\lambda` for the update
-        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`(\beta_1, \beta_2)` (default: (0.9, 0.999))
-        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
+        learning_rate (float): The learning rate :math:`\lambda`.
+        betas (Tuple[float, float], optional): The coefficients
+          :math:`(\beta_1, \beta_2)` used for computing running averages of the
+          gradient and its square. Default: ``(0.9, 0.999)``
+        eps (float, optional): The term :math:`\epsilon` added to the
+          denominator to improve numerical stability. Default: ``1e-8``
     """
 
     def __init__(
@@ -341,10 +349,10 @@ class AdamW(Adam):
     r"""Implementation of the AdamW optimizer [1].
 
     Following the above convention, in contrast with [1], we do not use bias
-    correction in the first and second moments for AdamW. We update the weights 
-    with a weight_decay (λ) value:
+    correction in the first and second moments for AdamW. We update the weights
+    with a weight_decay (:math:`\lambda`) value:
 
-    [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay 
+    [1]: Loshchilov, I. and Hutter, F., 2019. Decoupled weight decay
     regularization. ICLR 2019.
 
     .. math::
@@ -354,10 +362,14 @@ class AdamW(Adam):
         w_{t+1} &= w_t - \alpha (\frac{m_{t+1}}{\sqrt{v_{t+1} + \epsilon}} + \lambda w_t)
 
     Args:
-        learning_rate (float): The learning :math:`\lambda` for the update
-        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`(\beta_1, \beta_2)` (default: (0.9, 0.999))
-        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
-        weight_decay (float, optional): weight decay `λ` (L2 penalty) (default: 0)
+        learning_rate (float): The learning rate :math:`\alpha`.
+        betas (Tuple[float, float], optional): The coefficients
+          :math:`(\beta_1, \beta_2)` used for computing running averages of the
+          gradient and its square. Default: ``(0.9, 0.999)``
+        eps (float, optional): The term :math:`\epsilon` added to the
+          denominator to improve numerical stability. Default: ``1e-8``
+        weight_decay (float, optional): The weight decay :math:`\lambda`.
+          Default: ``0``.
     """
 
     def __init__(
@@ -383,24 +395,28 @@ class AdamW(Adam):
 
 
 class Adamax(Adam):
-    r"""Implementation of the AdaMax optimizer. It is a variant of Adam based on the infinity norm [1].
-    
+    r"""Implementation of the Adamax optimizer. It is a variant of Adam based
+    on the infinity norm [1].
+
     Our Adam implementation follows the original paper and omits the bias
     correction in the first and second moment estimates. In detail,
-    
+
     [1]: Kingma, D.P. and Ba, J., 2015. Adam: A method for stochastic
     optimization. ICLR 2015.
 
     .. math::
-    
+
         m_{t+1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
         v_{t+1} &= \max(\beta_2 v_t, |g_t|) \\
         w_{t+1} &= w_t - \lambda \frac{m_{t+1}}{v_{t+1} + \epsilon}
 
     Args:
-        learning_rate (float): The learning :math:`\lambda` for the update
-        betas (Tuple[float, float], optional): The coefficients used for computing running averages of gradient and its square :math:`(\beta_1, \beta_2)` (default: (0.9, 0.999))
-        eps (float, optional): The term added to the denominator to improve numerical stability :math:`\epsilon` (default: 1e-8)
+        learning_rate (float): The learning rate :math:`\lambda`.
+        betas (Tuple[float, float], optional): The coefficients
+          :math:`(\beta_1, \beta_2)` used for computing running averages of the
+          gradient and its square. Default: ``(0.9, 0.999)``
+        eps (float, optional): The term :math:`\epsilon` added to the
+          denominator to improve numerical stability. Default: ``1e-8``
     """
 
     def __init__(
