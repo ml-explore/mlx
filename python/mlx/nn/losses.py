@@ -283,3 +283,83 @@ def _reduce(loss: mx.array, reduction: str = "none"):
         return loss
     else:
         raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
+
+
+def hinge_loss(
+    inputs: mx.array, targets: mx.array, reduction: str = "none"
+) -> mx.array:
+    """
+    Computes the hinge loss between inputs and targets.
+
+    .. math::
+
+       \text{hinge}(y, y_{\text{pred}}) = \max(0, 1 - y \cdot y_{\text{pred}})
+
+
+    Args:
+        inputs (array): The predicted values.
+        targets (array): The target values.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: The computed hinge loss.
+    """
+    loss = mx.maximum(1 - inputs * targets, 0)
+
+    return _reduce(loss, reduction)
+
+
+def huber_loss(
+    inputs: mx.array, targets: mx.array, delta: float = 1.0, reduction: str = "none"
+) -> mx.array:
+    """
+    Computes the Huber loss between inputs and targets.
+
+    .. math::
+
+       L_{\delta}(a) = \left\{ \begin{array}{ll}\frac{1}{2} a^2 & \text{for } |a| \leq \delta, \\\delta \left( |a| - \frac{1}{2} \delta \right) & \text{otherwise.}\end{array} \right.
+
+    Args:
+        inputs (array): The predicted values.
+        targets (array): The target values.
+        delta (float, optional): The threshold at which to change between L1 and L2 loss.
+          Default: ``1.0``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: The computed Huber loss.
+    """
+    errors = inputs - targets
+    abs_errors = mx.abs(errors)
+    quadratic = mx.minimum(abs_errors, delta)
+    linear = abs_errors - quadratic
+    loss = 0.5 * quadratic**2 + delta * linear
+
+    return _reduce(loss, reduction)
+
+
+def log_cosh_loss(
+    inputs: mx.array, targets: mx.array, reduction: str = "none"
+) -> mx.array:
+    """
+    Computes the log cosh loss between inputs and targets.
+
+    .. math::
+
+       \text{logcosh}(y_{\text{true}}, y_{\text{pred}}) = \frac{1}{n} \sum_{i=1}^{n} \log(\cosh(y_{\text{pred}}^{(i)} - y_{\text{true}}^{(i)}))
+
+    Args:
+        inputs (array): The predicted values.
+        targets (array): The target values.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: The computed log cosh loss.
+    """
+    errors = inputs - targets
+    loss = mx.logaddexp(errors, -errors) - mx.log(mx.array(2.0))
+
+    return _reduce(loss, reduction)

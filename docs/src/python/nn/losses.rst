@@ -17,3 +17,6 @@ Loss Functions
    nll_loss
    smooth_l1_loss
    triplet_loss
+   hinge_loss
+   huber_loss
+   log_cosh_loss

@@ -581,6 +581,24 @@ class TestNN(mlx_tests.MLXTestCase):
         y = alibi(x.astype(mx.float16))
         self.assertTrue(y.dtype, mx.float16)
 
+    def test_hinge_loss(self):
+        inputs = mx.ones((2, 4))
+        targets = mx.zeros((2, 4))
+        loss = nn.losses.hinge_loss(inputs, targets, reduction="mean")
+        self.assertEqual(loss, 1.0)
+
+    def test_huber_loss(self):
+        inputs = mx.ones((2, 4))
+        targets = mx.zeros((2, 4))
+        loss = nn.losses.huber_loss(inputs, targets, reduction="mean")
+        self.assertEqual(loss, 0.5)
+
+    def test_log_cosh_loss(self):
+        inputs = mx.ones((2, 4))
+        targets = mx.zeros((2, 4))
+        loss = nn.losses.log_cosh_loss(inputs, targets, reduction="mean")
+        self.assertEqual(loss, 0.433781)
+
 
 if __name__ == "__main__":
     unittest.main()
