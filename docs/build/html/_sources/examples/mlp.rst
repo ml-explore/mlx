@@ -61,7 +61,10 @@ set:
   def eval_fn(model, X, y):
       return mx.mean(mx.argmax(model(X), axis=1) == y)
 
-Next, setup the problem parameters and load the data:
+Next, setup the problem parameters and load the data. To load the data, you need our
+`mnist data loader
+<https://github.com/ml-explore/mlx-examples/blob/main/mnist/mnist.py>`_, which
+we will import as `mnist`.
 
 .. code-block:: python
 
