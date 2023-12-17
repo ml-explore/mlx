@@ -92,14 +92,53 @@ A :class:`Module` can also keep track of "frozen" parameters.
 :meth:`mlx.nn.value_and_grad` the gradients returned will be with respect to these
 trainable parameters.
 
-Updating the parameters
+Updating the Parameters
 ^^^^^^^^^^^^^^^^^^^^^^^
 
 MLX modules allow accessing and updating individual parameters. However, most
 times we need to update large subsets of a module's parameters. This action is
 performed by :meth:`Module.update`.
 
-Value and grad
+
+Inspecting Modules
+^^^^^^^^^^^^^^^^^^
+
+The simplest way to see the model architecture is to print it. Following along with
+the above example, you can print the ``MLP`` with:
+
+.. code-block:: python
+
+  print(mlp)
+
+This will display:
+
+.. code-block:: shell
+
+  MLP(
+    (layers.0): Linear(input_dims=2, output_dims=128, bias=True)
+    (layers.1): Linear(input_dims=128, output_dims=128, bias=True)
+    (layers.2): Linear(input_dims=128, output_dims=10, bias=True)
+  )
+
+To get more detailed information on the arrays in a :class:`Module` you can use
+:func:`mlx.utils.tree_map` on the parameters. For example, to see the shapes of
+all the parameters in a :class:`Module` do:
+
+.. code-block:: python
+    
+   from mlx.utils import tree_map
+   shapes = tree_map(lambda p: p.shape, mlp.parameters())
+
+As another example, you can count the number of parameters in a :class:`Module`
+with:
+
+.. code-block:: python
+    
+   from mlx.utils import tree_flatten
+   num_params = sum(v.size for _, v in tree_flatten(mlp.parameters()))
+
+
+Value and Grad
 --------------
 
 Using a :class:`Module` does not preclude using MLX's high order function
