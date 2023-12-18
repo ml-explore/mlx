@@ -27,6 +27,7 @@ Operations
    array_equal
    broadcast_to
    ceil
+   clip
    concatenate
    convolve
    conv1d
