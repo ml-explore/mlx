@@ -2354,20 +2354,6 @@ void init_ops(py::module_& m) {
           array: The resulting stacked array.
     )pbdoc");
   m.def(
-    "clip",
-    [](const array& a,
-       const ScalarOrArray& min,
-       const ScalarOrArray& max,
-       StreamOrDevice s) {
-      return clip(a, to_array(min), to_array(max), s);
-    },
-    "a"_a,
-    py::pos_only(),
-    "min"_a,
-    "max"_a,
-    py::kw_only(),
-    "stream"_a = none,
-    R"pbdoc(
       "clip",
       [](const array& a,
          const std::optional<ScalarOrArray>& min,
