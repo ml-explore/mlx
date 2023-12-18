@@ -6,6 +6,10 @@ __pycache__/
 # C extensions
 *.so
 
+# tensor files
+*.safe
+*.safetensor
+
 # Metal libraries
 *.metallib
 venv/
