@@ -83,31 +83,35 @@ JSONNode parseJson(const char* data, size_t len) {
               throw std::runtime_error("invalid json");
             }
           } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-            auto list = ctx.top()->getList();
-            list->push_back(obj);
+            ctx.top()->getList()->push_back(obj);
           }
         }
         break;
       case TOKEN::ARRAY_CLOSE:
-        if (ctx.top()->is_type(JSONNode::Type::STRING)) {
-          // key is above
-          auto key = ctx.top();
-          ctx.pop();
-          if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-            ctx.top()->getObject()->insert({key->getString(), new JSONNode()});
-          }
-        } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+        if (ctx.top()->is_type(JSONNode::Type::LIST)) {
           auto obj = ctx.top();
           ctx.pop();
-          // top-level object
           if (ctx.size() == 0) {
             return *obj;
           }
-
-          if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-            auto list = ctx.top()->getList();
-            list->push_back(obj);
+          if (ctx.top()->is_type(JSONNode::Type::STRING)) {
+            // key is above
+            auto key = ctx.top();
+            ctx.pop();
+            if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
+              ctx.top()->getObject()->insert({key->getString(), obj});
+            } else {
+              throw std::runtime_error(
+                  "invalid json, string/array key pair did not have object parent");
+            }
+          } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+            if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+              ctx.top()->getList()->push_back(obj);
+            }
           }
+        } else {
+          throw std::runtime_error(
+              "invalid json, could not find array to close");
         }
         break;
       case TOKEN::STRING: {
@@ -155,7 +159,7 @@ JSONNode parseJson(const char* data, size_t len) {
         break;
     }
   }
-  throw std::runtime_error("invalid json");
+  throw std::runtime_error("[unreachable] invalid json");
 }
 
 } // namespace io
@@ -187,6 +191,22 @@ std::map<std::string, array> load_safetensor(
   }
   // Parse the json raw data
   std::map<std::string, array> res;
+  for (const auto& key : *metadata.getObject()) {
+    std::string dtype = key.second->getObject()->at("dtype")->getString();
+    auto shape = key.second->getObject()->at("shape")->getList();
+    std::vector<int> shape_vec;
+    for (const auto& dim : *shape) {
+      shape_vec.push_back(dim->getNumber());
+    }
+    auto data_offsets = key.second->getObject()->at("data_offsets")->getList();
+    std::vector<int64_t> data_offsets_vec;
+    for (const auto& offset : *data_offsets) {
+      data_offsets_vec.push_back(offset->getNumber());
+    }
+    if (dtype == "F32") {
+      res.insert({key.first, zeros(shape_vec, s)});
+    }
+  }
   return res;
 }
 
