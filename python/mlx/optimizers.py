@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import List, Optional
+from typing import List
 
 import mlx.core as mx
 from mlx.utils import tree_map
@@ -445,12 +445,13 @@ class Adamax(Adam):
 
 
 class Lion(Optimizer):
-    r"""Implementation of the Lion optimizer [1]. Since updates are computed
-    through the sign operation, they tend to have larger norm than for other
-    optimizers such as SGD and Adam. We recommend a learning rate that is
-    3-10x smaller than AdamW and a weight decay 3-10x larger than AdamW to
-    maintain the strength (lr * wd). Our Lion implementation follows the
-    original paper. In detail,
+    r"""Implementation of the Lion optimizer [1]. 
+    Since updates are computed through the sign operation, they tend to 
+    have larger norm than for other optimizers such as SGD and Adam. 
+    We recommend a learning rate that is 3-10x smaller than AdamW and a 
+    weight decay 3-10x larger than AdamW to maintain the strength 
+    (lr * wd). Our Lion implementation follows the original paper. In 
+    detail,
 
     [1]: Chen, X. Symbolic Discovery of Optimization Algorithms. arXiv
     preprint arXiv:2302.06675.
@@ -493,4 +494,6 @@ class Lion(Optimizer):
         m = state.get("m", gradient)
         c = b1 * m + (1 - b1) * gradient
         state["m"] = b2 * m + (1 - b2) * gradient
-        return parameter - lr * (mx.sign(c) + weight_decay * parameter)
+        if weight_decay > 0:
+            parameter = (1 - lr * weight_decay) * parameter
+        return parameter - lr * mx.sign(c)
