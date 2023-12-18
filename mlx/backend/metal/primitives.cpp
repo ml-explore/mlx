@@ -563,6 +563,17 @@ void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (not is_integral(in.dtype())) {
+    unary_op(inputs, out, "round");
+  } else {
+    // No-op integer types
+    out.copy_shared_buffer(in);
+  }
+}
+
 void Sigmoid::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "sigmoid");
 }

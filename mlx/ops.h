@@ -794,6 +794,12 @@ array erfinv(const array& a, StreamOrDevice s = {});
 /** Stop the flow of gradients. */
 array stop_gradient(const array& a, StreamOrDevice s = {});
 
+/** Round a floating point number */
+array round(const array& a, int decimals, StreamOrDevice s = {});
+inline array round(const array& a, StreamOrDevice s = {}) {
+  return round(a, 0, s);
+}
+
 /** Matrix-matrix multiplication. */
 array matmul(const array& a, const array& b, StreamOrDevice s = {});
 

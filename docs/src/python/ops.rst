@@ -73,6 +73,7 @@ Operations
    prod
    reciprocal
    reshape
+   round
    rsqrt
    save
    savez

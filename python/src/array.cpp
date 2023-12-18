@@ -1148,5 +1148,15 @@ void init_array(py::module_& m) {
           "reverse"_a = false,
           "inclusive"_a = true,
           "stream"_a = none,
-          "See :func:`cummin`.");
+          "See :func:`cummin`.")
+      .def(
+          "round",
+          [](const array& a, int decimals, StreamOrDevice s) {
+            return round(a, decimals, s);
+          },
+          py::pos_only(),
+          "decimals"_a = 0,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`round`.");
 }
