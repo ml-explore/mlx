@@ -288,6 +288,10 @@ std::unordered_map<std::string, array> load_safetensor(
   // Load the arrays using metadata
   std::unordered_map<std::string, array> res;
   for (auto& [key, obj] : *metadata.getObject()) {
+    if (key == "__metadata__") {
+      // ignore metadata for now
+      continue;
+    }
     std::string dtype = obj->getObject()->at("dtype")->getString();
     auto shape = obj->getObject()->at("shape")->getList();
     std::vector<int> shape_vec;
