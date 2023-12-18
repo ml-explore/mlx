@@ -94,7 +94,7 @@ class JSONNode {
     JSONObject* object;
     JSONList* list;
     std::string* s;
-    uint32_t f;
+    uint64_t f;
   } _values;
   Type _type;
 };
