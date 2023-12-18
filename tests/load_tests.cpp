@@ -47,6 +47,9 @@ TEST_CASE("test parseJson") {
   res = io::parseJson(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::LIST));
 
+  raw = std::string("[");
+  CHECK_THROWS_AS(io::parseJson(raw.c_str(), raw.size()), std::runtime_error);
+
   raw = std::string("[{}, \"test\"]");
   res = io::parseJson(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::LIST));

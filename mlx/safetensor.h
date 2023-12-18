@@ -18,7 +18,7 @@ using JSONList = std::vector<JSONNode*>;
 
 class JSONNode {
  public:
-  enum class Type { OBJECT, LIST, STRING, NUMBER, BOOLEAN, NULL_TYPE };
+  enum class Type { OBJECT, LIST, STRING, NUMBER, NULL_TYPE };
 
   JSONNode() : _type(Type::NULL_TYPE){};
   JSONNode(Type type) : _type(type) {
