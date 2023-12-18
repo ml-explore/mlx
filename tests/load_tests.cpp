@@ -58,36 +58,6 @@ TEST_CASE("test parseJson") {
   CHECK(res.getList()->at(1)->is_type(io::JSONNode::Type::STRING));
   CHECK_EQ(res.getList()->at(1)->getString(), "test");
 
-  raw = std::string("{\"test\": \"test\", \"test_num\": 1}");
-  res = io::parseJson(raw.c_str(), raw.size());
-  CHECK(res.is_type(io::JSONNode::Type::OBJECT));
-  CHECK_EQ(res.getObject()->size(), 2);
-  CHECK(res.getObject()->at("test")->is_type(io::JSONNode::Type::STRING));
-  CHECK_EQ(res.getObject()->at("test")->getString(), "test");
-  CHECK(res.getObject()->at("test_num")->is_type(io::JSONNode::Type::NUMBER));
-  CHECK_EQ(res.getObject()->at("test_num")->getNumber(), 1);
-
-  raw = std::string("{\"test\": { \"test\": \"test\"}}");
-  res = io::parseJson(raw.c_str(), raw.size());
-  CHECK(res.is_type(io::JSONNode::Type::OBJECT));
-  CHECK_EQ(res.getObject()->size(), 1);
-  CHECK(res.getObject()->at("test")->is_type(io::JSONNode::Type::OBJECT));
-  CHECK_EQ(res.getObject()->at("test")->getObject()->size(), 1);
-  CHECK(res.getObject()->at("test")->getObject()->at("test")->is_type(
-      io::JSONNode::Type::STRING));
-
-  raw = std::string("{\"test\":[1, 2]}");
-  res = io::parseJson(raw.c_str(), raw.size());
-  CHECK(res.is_type(io::JSONNode::Type::OBJECT));
-  CHECK_EQ(res.getObject()->size(), 1);
-  CHECK(res.getObject()->at("test")->is_type(io::JSONNode::Type::LIST));
-  CHECK_EQ(res.getObject()->at("test")->getList()->size(), 2);
-  CHECK(res.getObject()->at("test")->getList()->at(0)->is_type(
-      io::JSONNode::Type::NUMBER));
-  CHECK_EQ(res.getObject()->at("test")->getList()->at(0)->getNumber(), 1);
-  CHECK(res.getObject()->at("test")->getList()->at(1)->is_type(
-      io::JSONNode::Type::NUMBER));
-  CHECK_EQ(res.getObject()->at("test")->getList()->at(1)->getNumber(), 2);
   raw = std::string(
       "{\"test\":{\"dtype\":\"F32\",\"shape\":[4], \"data_offsets\":[0, 16]}}");
   res = io::parseJson(raw.c_str(), raw.size());

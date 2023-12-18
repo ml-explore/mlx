@@ -165,7 +165,7 @@ JSONNode parseJson(const char* data, size_t len) {
 } // namespace io
 
 /** Load array from reader in safetensor format */
-std::map<std::string, array> load_safetensor(
+std::unordered_map<std::string, array> load_safetensor(
     std::shared_ptr<io::Reader> in_stream,
     StreamOrDevice s) {
   ////////////////////////////////////////////////////////
@@ -190,27 +190,27 @@ std::map<std::string, array> load_safetensor(
         "[load_safetensor] Invalid json metadata " + in_stream->label());
   }
   // Parse the json raw data
-  std::map<std::string, array> res;
-  for (const auto& key : *metadata.getObject()) {
-    std::string dtype = key.second->getObject()->at("dtype")->getString();
-    auto shape = key.second->getObject()->at("shape")->getList();
+  std::unordered_map<std::string, array> res;
+  for (auto& [key, obj] : *metadata.getObject()) {
+    std::string dtype = obj->getObject()->at("dtype")->getString();
+    auto shape = obj->getObject()->at("shape")->getList();
     std::vector<int> shape_vec;
     for (const auto& dim : *shape) {
       shape_vec.push_back(dim->getNumber());
     }
-    auto data_offsets = key.second->getObject()->at("data_offsets")->getList();
+    auto data_offsets = obj->getObject()->at("data_offsets")->getList();
     std::vector<int64_t> data_offsets_vec;
     for (const auto& offset : *data_offsets) {
       data_offsets_vec.push_back(offset->getNumber());
     }
     if (dtype == "F32") {
-      res.insert({key.first, zeros(shape_vec, s)});
+      res.insert({key, zeros(shape_vec, s)});
     }
   }
   return res;
 }
 
-std::map<std::string, array> load_safetensor(
+std::unordered_map<std::string, array> load_safetensor(
     const std::string& file,
     StreamOrDevice s) {
   return load_safetensor(std::make_shared<io::FileReader>(file), s);

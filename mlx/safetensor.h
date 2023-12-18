@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <map>
-
 #include "mlx/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -13,7 +11,7 @@ namespace mlx::core {
 
 namespace io {
 class JSONNode;
-using JSONObject = std::map<std::string, JSONNode*>;
+using JSONObject = std::unordered_map<std::string, JSONNode*>;
 using JSONList = std::vector<JSONNode*>;
 
 class JSONNode {
