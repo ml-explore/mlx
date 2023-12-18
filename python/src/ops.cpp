@@ -2947,5 +2947,8 @@ void init_ops(py::module_& m) {
         Args:
           a (array): Input array
           decimals (int): Number of decimal places to round to. (default: 0)
+
+        Returns:
+          result (array): An array of the same type as ``a`` rounded to the given number of decimals.
       )pbdoc");
 }
