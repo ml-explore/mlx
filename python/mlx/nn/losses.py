@@ -4,6 +4,7 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
+<<<<<<< HEAD
 def _make_loss_module(f):
     def decorator(klass):
         klass.__call__ = lambda self, inputs, targets: f(
@@ -25,135 +26,140 @@ def _reduce(loss: mx.array, reduction: str = "none"):
         raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
 
 
+=======
+>>>>>>> 18cca64 (Add smoothed L1 loss and enhancements to cross entropy loss  (#166))
 def cross_entropy(
-    logits: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+    logits: mx.array,
+    targets: mx.array,
+    weights: mx.array = None,
+    axis: int = -1,
+    label_smoothing: float = 0.0,
+    reduction: str = "none",
 ) -> mx.array:
     """
-    Computes the cross entropy loss between logits and targets.
+    Computes the cross entropy loss.
 
     Args:
-        logits (mx.array): The predicted logits.
-        targets (mx.array): The target values.
+        logits (array): The unnormalized predicted logits.
+        targets (array): The target values, as class indices.
+        weights (array, optional): Weights for each target. Default: ``None``.
         axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
+        label_smoothing (float, optional): Label smoothing factor. Default: ``0``.
         reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+            ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed cross entropy loss.
+        array: The computed cross entropy loss.
     """
-    score = mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
-    loss = mx.logsumexp(logits, axis=axis) - score
+    if label_smoothing < 0 or label_smoothing >= 1:
+        raise ValueError(f"Label smoothing must in [0, 1), got {label_smoothing}.")
 
+    score = mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
+    logsumexp_logits = mx.logsumexp(logits, axis=axis)
+    if label_smoothing > 0:
+        # Adjust the true class score with label smoothing
+        adjusted_score = (1 - label_smoothing) * score
+
+        # Calculate the mean logit across the classes for smoothed loss
+        mean_logits = logits.mean(axis=axis)
+        smoothed_loss = -mean_logits * label_smoothing
+
+        # Combine the adjusted score and smoothed loss with the logsumexp logits
+        loss = logsumexp_logits - adjusted_score + smoothed_loss
+    else:
+        loss = logsumexp_logits - score
+
+    # Apply weights if provided
+    if weights is not None:
+        if weights.shape != targets.shape:
+            raise ValueError(
+                f"Weights with shape {weights.shape} is not the same as "
+                f"targets with shape {targets.shape}."
+            )
+        loss *= weights
+
+    # Apply reduction
     return _reduce(loss, reduction)
 
 
 def binary_cross_entropy(
-    inputs: mx.array, targets: mx.array, reduction: str = "none"
+    logits: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
     """
-    Computes the binary cross entropy loss between inputs and targets.
+    Computes the binary cross entropy loss.
 
     Args:
-        inputs (mx.array): The predicted inputs (post-sigmoid probabilities).
-        targets (mx.array): The target values (binary labels).
+        logits (array): The unnormalized (pre-sigmoid) predicted logits.
+        targets (array): The binary target values in {0, 1}.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed binary cross entropy loss.
+        array: The computed binary cross entropy loss.
     Examples:
         >>> import mlx.core as mx
         >>> import mlx.nn as nn
-        >>> inputs = mx.array([0.1, 0.2, 0.3, 0.4])
+        >>> inputs = mx.array([0.105361, 0.223144, 1.20397, 0.916291])
         >>> targets = mx.array([0, 0, 1, 1])
-        >>> loss = nn.losses.binary_cross_entropy(inputs, targets)
+        >>> loss = nn.losses.binary_cross_entropy(inputs, targets, "mean")
         >>> loss
-        array([0.612192])
+        array([0.612192], dtype=float32)
     """
-    loss = -targets * mx.log(inputs) - (1 - targets) * mx.log(1 - inputs)
+    loss = mx.logaddexp(0.0, logits) - targets * logits
     return _reduce(loss, reduction)
 
 
-@_make_loss_module(binary_cross_entropy)
-class BCELoss(Module):
-    """
-    Binary Cross Entropy Loss module.
-    It computes the binary cross entropy loss between predicted probabilities (post-sigmoid inputs) and target binary labels.
-
-    Args:
-        reduction (str, optional): Specifies the reduction to apply to the output:
-            - 'none': no reduction (default)
-            - 'mean': compute the mean loss
-            - 'sum': compute the sum of the loss
-
-    Examples:
-        >>> import mlx.core as mx
-        >>> from mlx.nn.losses import BCELoss
-        >>>
-        >>> # Create BCELoss module with default reduction ('none')
-        >>> loss_module_none = BCELoss()
-        >>> inputs = mx.array([0.5, 0.7, 0.3])
-        >>> targets = mx.array([1, 0, 1])
-        >>> loss_none = loss_module_none(inputs, targets)
-        >>> print(loss_none)
-        array([0.693147, 1.20397, 1.20397], dtype=float32)
-
-        >>> # Create BCELoss module with reduction 'mean'
-        >>> loss_module_mean = BCELoss(reduction='mean')
-        >>> loss_mean = loss_module_mean(inputs, targets)
-        >>> print(loss_mean)
-        array(1.0337, dtype=float32)
-
-        >>> # Create BCELoss module with reduction 'sum'
-        >>> loss_module_sum = BCELoss(reduction='sum')
-        >>> loss_sum = loss_module_sum(inputs, targets)
-        >>> print(loss_sum)
-        array(3.10109, dtype=float32)
-    """
-
-    def __init__(self, reduction: str = "none"):
-        super().__init__()
-
-        self.reduction = reduction
-
-
 def l1_loss(
-    predictions: mx.array, targets: mx.array, reduction: str = "none"
+    predictions: mx.array, targets: mx.array, reduction: str = "mean"
 ) -> mx.array:
     """
-    Computes the L1 loss between predictions and targets.
+    Computes the L1 loss.
 
     Args:
-        predictions (mx.array): The predicted values.
-        targets (mx.array): The target values.
+        predictions (array): The predicted values.
+        targets (array): The target values.
         reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
     Returns:
-        mx.array: The computed L1 loss.
+        array: The computed L1 loss.
     """
-    loss = mx.mean(mx.abs(predictions - targets))
+    if predictions.shape != targets.shape:
+        raise ValueError(
+            f"Predictions shape {predictions.shape} does not match "
+            f"targets shape {targets.shape}."
+        )
+    loss = mx.abs(predictions - targets)
 
     return _reduce(loss, reduction)
 
 
 def mse_loss(
-    predictions: mx.array, targets: mx.array, reduction: str = "none"
+    predictions: mx.array, targets: mx.array, reduction: str = "mean"
 ) -> mx.array:
     """
-    Computes the mean squared error loss between predictions and targets.
+    Computes the mean squared error loss.
 
     Args:
-        predictions (mx.array): The predicted values.
-        targets (mx.array): The target values.
+        predictions (array): The predicted values.
+        targets (array): The target values.
         reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
     Returns:
-        mx.array: The computed mean squared error loss.
+        array: The computed mean squared error loss.
     """
-    loss = mx.square(predictions - targets)
+    if predictions.shape != targets.shape:
+        raise ValueError(
+            f"Predictions shape {predictions.shape} does not match "
+            f"targets shape {targets.shape}."
+        )
 
+    assert (
+        predictions.shape == targets.shape
+    ), f"Shape of predictions {predictions.shape} and targets {targets.shape} must match"
+
+    loss = mx.square(predictions - targets)
     return _reduce(loss, reduction)
 
 
@@ -161,17 +167,17 @@ def nll_loss(
     inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
 ) -> mx.array:
     """
-    Computes the negative log likelihood loss between inputs and targets.
+    Computes the negative log likelihood loss.
 
     Args:
-        inputs (mx.array): The predicted distribution in log space.
-        targets (mx.array): The target values.
+        inputs (array): The predicted distribution in log space.
+        targets (array): The target values.
         axis (int, optional): The distribution axis. Default: ``-1``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed NLL loss.
+        array: The computed NLL loss.
     """
     loss = -mx.take_along_axis(inputs, targets[..., None], axis).squeeze(-1)
 
@@ -182,8 +188,7 @@ def kl_div_loss(
     inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
 ) -> mx.array:
     """
-    Computes the Kullback-Leibler divergence loss between targets and the
-    inputs.
+    Computes the Kullback-Leibler divergence loss.
 
     Computes the following when ``reduction == 'none'``:
 
@@ -192,20 +197,21 @@ def kl_div_loss(
         mx.exp(targets) * (targets - inputs).sum(axis)
 
     Args:
-        inputs (mx.array): Log probabilities for the predicted distribution.
-        targets (mx.array): Log probabilities for the target distribution.
+        inputs (array): Log probabilities for the predicted distribution.
+        targets (array): Log probabilities for the target distribution.
         axis (int, optional): The distribution axis. Default: ``-1``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed Kullback-Leibler divergence loss.
+        array: The computed Kullback-Leibler divergence loss.
     """
     loss = mx.sum(mx.exp(targets) * (targets - inputs), axis)
 
     return _reduce(loss, reduction)
 
 
+<<<<<<< HEAD
 def hinge_loss(
     predictions: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
@@ -360,3 +366,59 @@ def cosine_similarity_loss(
         targets == 1, 1 - cos_similarity, mx.maximum(0, cos_similarity - margin)
     )
     return _reduce(loss, reduction)
+=======
+def smooth_l1_loss(
+    predictions: mx.array, targets: mx.array, beta: float = 1.0, reduction: str = "mean"
+) -> mx.array:
+    r"""
+    Computes the smooth L1 loss.
+
+    The smooth L1 loss is a variant of the L1 loss which replaces the absolute
+    difference with a squared difference when the absolute difference is less
+    than ``beta``.
+
+    The formula for the smooth L1 Loss is:
+
+    .. math::
+
+       l =
+          \begin{cases}
+            0.5 (x - y)^2, & \text{ if } & (x - y) < \beta \\
+            |x - y| - 0.5 \beta, &  & \text{otherwise}
+          \end{cases}
+
+    Args:
+        predictions (array): Predicted values.
+        targets (array): Ground truth values.
+        beta (float, optional): The threshold after which the loss changes
+          from the squared to the absolute difference. Default: ``1.0``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
+
+    Returns:
+        array: The computed smooth L1 loss.
+    """
+    if predictions.shape != targets.shape:
+        raise ValueError(
+            f"Predictions shape {predictions.shape} does not match "
+            f"targets shape {targets.shape}."
+        )
+
+    diff = predictions - targets
+    loss = mx.where(
+        diff < beta, 0.5 * mx.square(diff) / beta, mx.abs(diff) - 0.5 * beta
+    )
+
+    return _reduce(loss, reduction)
+
+
+def _reduce(loss: mx.array, reduction: str = "none"):
+    if reduction == "mean":
+        return mx.mean(loss)
+    elif reduction == "sum":
+        return mx.sum(loss)
+    elif reduction == "none":
+        return loss
+    else:
+        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
+>>>>>>> 18cca64 (Add smoothed L1 loss and enhancements to cross entropy loss  (#166))
