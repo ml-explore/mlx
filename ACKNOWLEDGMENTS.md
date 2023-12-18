@@ -7,6 +7,7 @@ with a short description of your contribution(s) below. For example:
 
 MLX was developed with contributions from the following individuals:
   
+- Juarez Bochi: Fixed bug in cross attention.
 
 # Third-Party Software
 
