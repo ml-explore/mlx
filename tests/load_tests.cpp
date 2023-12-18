@@ -27,11 +27,48 @@ TEST_CASE("test tokenizer") {
   CHECK_EQ(tokenizer.getToken().type, io::TOKEN::ARRAY_CLOSE);
   CHECK_EQ(tokenizer.getToken().type, io::TOKEN::CURLY_CLOSE);
   CHECK_EQ(tokenizer.getToken().type, io::TOKEN::NULL_TYPE);
+
+  raw = std::string(" { \"testing\": \"test\"}   ");
+  tokenizer = io::Tokenizer(raw.c_str(), raw.size());
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::CURLY_OPEN);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::STRING);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::COLON);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::STRING);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::CURLY_CLOSE);
+  CHECK_EQ(tokenizer.getToken().type, io::TOKEN::NULL_TYPE);
 }
 
-// TEST_CASE("test load_safetensor") {
-//   auto array = load_safetensor("../../temp.safe");
-// }
+TEST_CASE("test load_safetensor") {
+  auto raw = std::string("{}");
+  auto res = io::parseJson(raw.c_str(), raw.size());
+  CHECK(res.is_type(io::JSONNode::Type::OBJECT));
+  raw = std::string("[]");
+  res = io::parseJson(raw.c_str(), raw.size());
+  CHECK(res.is_type(io::JSONNode::Type::LIST));
+  raw = std::string("[{}, \"test\"]");
+  res = io::parseJson(raw.c_str(), raw.size());
+  CHECK(res.is_type(io::JSONNode::Type::LIST));
+  CHECK_EQ(res.getList()->size(), 2);
+  CHECK(res.getList()->at(0)->is_type(io::JSONNode::Type::OBJECT));
+  CHECK(res.getList()->at(1)->is_type(io::JSONNode::Type::STRING));
+  MESSAGE(res.getList()->at(1)->getString());
+  CHECK_EQ(res.getList()->at(1)->getString(), "test");
+  raw = std::string("{\"test\": \"test\", \"test_num\": 1}");
+  res = io::parseJson(raw.c_str(), raw.size());
+  CHECK(res.is_type(io::JSONNode::Type::OBJECT));
+  CHECK_EQ(res.getObject()->size(), 2);
+  CHECK(res.getObject()->at("test")->is_type(io::JSONNode::Type::STRING));
+  CHECK_EQ(res.getObject()->at("test")->getString(), "test");
+  CHECK(res.getObject()->at("test_num")->is_type(io::JSONNode::Type::NUMBER));
+  raw = std::string("{\"test\": { \"test\": \"test\"}}");
+  res = io::parseJson(raw.c_str(), raw.size());
+  CHECK(res.is_type(io::JSONNode::Type::OBJECT));
+  CHECK_EQ(res.getObject()->size(), 1);
+  CHECK(res.getObject()->at("test")->is_type(io::JSONNode::Type::OBJECT));
+  CHECK_EQ(res.getObject()->at("test")->getObject()->size(), 1);
+  CHECK(res.getObject()->at("test")->getObject()->at("test")->is_type(
+      io::JSONNode::Type::STRING));
+}
 
 TEST_CASE("test single array serialization") {
   // Basic test

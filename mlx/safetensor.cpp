@@ -36,17 +36,14 @@ Token Tokenizer::getToken() {
       this->_loc++;
       return Token{TOKEN::COMMA};
     case '"': {
-      size_t start = this->_loc;
-      this->_loc++;
-      while (_data[this->_loc] != '"' && this->hasMoreTokens()) {
-        this->_loc++;
-      }
+      size_t start = ++this->_loc;
+      while (_data[++this->_loc] != '"' && this->hasMoreTokens())
+        ;
       if (!this->hasMoreTokens()) {
         throw new std::runtime_error("no more chars to parse");
       }
       // pass the last "
-      this->_loc++;
-      return Token{TOKEN::STRING, start, this->_loc};
+      return Token{TOKEN::STRING, start, ++this->_loc};
     }
     default: {
       size_t start = this->_loc;
@@ -63,66 +60,105 @@ Token Tokenizer::getToken() {
   }
 }
 
-// JSONNode parseJson(char* data, size_t len) {
-//   auto tokenizer = Tokenizer(data, len);
-//   std::stack<JSONNode*> ctx;
-//   auto token = tokenizer.getToken();
-//   auto parent = new JSONNode();
+JSONNode parseJson(const char* data, size_t len) {
+  auto tokenizer = Tokenizer(data, len);
+  std::stack<JSONNode*> ctx;
+  while (tokenizer.hasMoreTokens()) {
+    auto token = tokenizer.getToken();
+    switch (token.type) {
+      case TOKEN::NULL_TYPE:
+        break;
+      case TOKEN::CURLY_OPEN:
+        ctx.push(new JSONNode(JSONNode::Type::OBJECT));
+        break;
+      case TOKEN::CURLY_CLOSE:
+        if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
+          auto obj = ctx.top();
+          ctx.pop();
+          // top-level object
+          if (ctx.size() == 0) {
+            return *obj;
+          }
 
-//   switch (token.type) {
-//     case TOKEN::CURLY_OPEN:
-//       parent->setObject(new JSONObject());
-//       break;
-//     case TOKEN::ARRAY_OPEN:
-//       parent->setList(new JSONList());
-//       break;
-//     default:
-//       throw new std::runtime_error("invalid json");
-//   }
-//   ctx.push(parent);
+          if (ctx.top()->is_type(JSONNode::Type::STRING)) {
+            auto key = ctx.top();
+            ctx.pop();
+            if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
+              ctx.top()->getObject()->insert({key->getString(), obj});
+            } else {
+              throw new std::runtime_error("invalid json");
+            }
+          } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+            auto list = ctx.top()->getList();
+            list->push_back(obj);
+          }
+        }
+        break;
+      case TOKEN::ARRAY_OPEN:
+        ctx.push(new JSONNode(JSONNode::Type::LIST));
+        break;
+      case TOKEN::ARRAY_CLOSE:
+        if (ctx.top()->is_type(JSONNode::Type::STRING)) {
+          // key is above
+          auto key = ctx.top();
+          ctx.pop();
+          if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
+            ctx.top()->getObject()->insert({key->getString(), new JSONNode()});
+          }
+        } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+          auto obj = ctx.top();
+          ctx.pop();
+          // top-level object
+          if (ctx.size() == 0) {
+            return *obj;
+          }
 
-//   while (tokenizer.hasMoreTokens()) {
-//     auto token = tokenizer.getToken();
-//     switch (token.type) {
-//       case TOKEN::CURLY_OPEN:
-//         ctx.push(new JSONNode(JSONNode::Type::OBJECT));
-//         break;
-//       case TOKEN::CURLY_CLOSE:
-//         if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-//           auto obj = ctx.top();
-//           ctx.pop();
-//           if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-//             auto list = ctx.top()->getList();
-//             list->push_back(obj);
-//           } else if (ctx.top()->is_type(JSONNode::Type::STRING)) {
-//             //
-//             auto key = ctx.top();
-//             ctx.pop();
-//             if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-//               ctx.top()->getObject()->insert({key->getString(), obj});
-//             }
-//           }
-//         } else {
-//           throw new std::runtime_error("invalid json");
-//         }
-//         break;
-//       case TOKEN::COLON:
-//         break;
-//       case TOKEN::ARRAY_OPEN:
-//         break;
-//       case TOKEN::ARRAY_CLOSE:
-//         break;
-//       case TOKEN::COMMA:
-//         break;
-//       case TOKEN::NULL_TYPE:
-//         break;
-//       case TOKEN::STRING:
-//         break;
-//       case TOKEN::NUMBER:
-//         break;
-//     }
-//   }
-// }
+          if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+            auto list = ctx.top()->getList();
+            list->push_back(obj);
+          }
+        }
+        break;
+      case TOKEN::STRING: {
+        auto str =
+            new std::string(data + token.start, token.end - token.start - 1);
+        if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
+          ctx.push(new JSONNode(str));
+        } else if (ctx.top()->is_type(JSONNode::Type::STRING)) {
+          auto key = ctx.top();
+          ctx.pop();
+          if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
+            ctx.top()->getObject()->insert(
+                {key->getString(), new JSONNode(str)});
+          } else {
+            throw new std::runtime_error("invalid json");
+          }
+        } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+          ctx.top()->getList()->push_back(new JSONNode(str));
+        }
+        break;
+      }
+      case TOKEN::NUMBER:
+        if (ctx.top()->is_type(JSONNode::Type::LIST)) {
+          ctx.top()->getList()->push_back(new JSONNode(JSONNode::Type::NUMBER));
+        } else if (ctx.top()->is_type(JSONNode::Type::STRING)) {
+          auto key = ctx.top();
+          ctx.pop();
+          if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
+            ctx.top()->getObject()->insert(
+                {key->getString(), new JSONNode(JSONNode::Type::NUMBER)});
+          } else {
+            throw new std::runtime_error("invalid json");
+          }
+        }
+        break;
+      case TOKEN::COMMA:
+        break;
+      case TOKEN::COLON:
+        break;
+    }
+  }
+}
 
 } // namespace io
 
@@ -141,7 +177,7 @@ std::map<std::string, array> load_safetensor(
   in_stream->read(reinterpret_cast<char*>(&jsonHeaderLength), 8);
   if (jsonHeaderLength <= 0) {
     throw std::runtime_error(
-        "[load_safetensor] Invalid json header lenght " + in_stream->label());
+        "[load_safetensor] Invalid json header length " + in_stream->label());
   }
   // Load the json metadata
   char json[jsonHeaderLength];

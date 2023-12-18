@@ -13,8 +13,8 @@ namespace mlx::core {
 
 namespace io {
 class JSONNode;
-using JSONObject = std::map<std::string, std::shared_ptr<JSONNode>>;
-using JSONList = std::vector<std::shared_ptr<JSONNode>>;
+using JSONObject = std::map<std::string, JSONNode*>;
+using JSONList = std::vector<JSONNode*>;
 
 class JSONNode {
  public:
@@ -29,9 +29,37 @@ class JSONNode {
       this->_values.list = new JSONList();
     }
   };
+  JSONNode(std::string* s) : _type(Type::STRING) {
+    this->_values.s = s;
+  };
+
+  JSONObject* getObject() {
+    if (!is_type(Type::OBJECT)) {
+      throw new std::runtime_error("not an object");
+    }
+    return this->_values.object;
+  }
+
+  JSONList* getList() {
+    if (!is_type(Type::LIST)) {
+      throw new std::runtime_error("not a list");
+    }
+    return this->_values.list;
+  }
+
+  std::string getString() {
+    if (!is_type(Type::STRING)) {
+      throw new std::runtime_error("not a string");
+    }
+    return *this->_values.s;
+  }
 
   inline bool is_type(Type t) {
     return this->_type == t;
+  }
+
+  inline Type type() const {
+    return this->_type;
   }
 
  private:
@@ -43,6 +71,8 @@ class JSONNode {
   } _values;
   Type _type;
 };
+
+JSONNode parseJson(const char* data, size_t len);
 
 enum class TOKEN {
   CURLY_OPEN,
