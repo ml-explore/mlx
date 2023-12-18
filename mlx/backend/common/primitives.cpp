@@ -470,7 +470,7 @@ void Round::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   if (not is_integral(in.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::round(x); });
+    unary_fp(in, out, RoundOp());
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);
