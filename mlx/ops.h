@@ -1065,4 +1065,10 @@ std::unordered_map<std::string, array> load_safetensor(
     const std::string& file,
     StreamOrDevice s = {});
 
+void save_safetensor(
+    std::shared_ptr<io::Reader> in_stream,
+    std::unordered_map<std::string, array>);
+void save_safetensor(
+    const std::string& file,
+    std::unordered_map<std::string, array>);
 } // namespace mlx::core

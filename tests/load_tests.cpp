@@ -38,20 +38,42 @@ TEST_CASE("test tokenizer") {
   CHECK_EQ(tokenizer.getToken().type, io::TOKEN::NULL_TYPE);
 }
 
-TEST_CASE("test parseJson") {
+TEST_CASE("test jsonSerialize") {
+  auto test = new io::JSONNode(io::JSONNode::Type::OBJECT);
+  auto src = io::jsonSerialize(test);
+  CHECK_EQ(src, "{}");
+  test = new io::JSONNode(io::JSONNode::Type::LIST);
+  src = io::jsonSerialize(test);
+  CHECK_EQ(src, "[]");
+  test = new io::JSONNode(io::JSONNode::Type::OBJECT);
+  test->getObject()->insert(
+      {"test", new io::JSONNode(new std::string("testing"))});
+  src = io::jsonSerialize(test);
+  CHECK_EQ(src, "{\"test\":\"testing\"}");
+  test = new io::JSONNode(io::JSONNode::Type::OBJECT);
+  auto arr = new io::JSONNode(io::JSONNode::Type::LIST);
+  arr->getList()->push_back(new io::JSONNode(1));
+  arr->getList()->push_back(new io::JSONNode(2));
+  test->getObject()->insert({"test", arr});
+  src = io::jsonSerialize(test);
+  CHECK_EQ(src, "{\"test\":[1,2]}");
+}
+
+TEST_CASE("test jsonDeserialize") {
   auto raw = std::string("{}");
-  auto res = io::parseJson(raw.c_str(), raw.size());
+  auto res = io::jsonDeserialize(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::OBJECT));
 
   raw = std::string("[]");
-  res = io::parseJson(raw.c_str(), raw.size());
+  res = io::jsonDeserialize(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::LIST));
 
   raw = std::string("[");
-  CHECK_THROWS_AS(io::parseJson(raw.c_str(), raw.size()), std::runtime_error);
+  CHECK_THROWS_AS(
+      io::jsonDeserialize(raw.c_str(), raw.size()), std::runtime_error);
 
   raw = std::string("[{}, \"test\"]");
-  res = io::parseJson(raw.c_str(), raw.size());
+  res = io::jsonDeserialize(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::LIST));
   CHECK_EQ(res.getList()->size(), 2);
   CHECK(res.getList()->at(0)->is_type(io::JSONNode::Type::OBJECT));
@@ -60,7 +82,7 @@ TEST_CASE("test parseJson") {
 
   raw = std::string(
       "{\"test\":{\"dtype\":\"F32\",\"shape\":[4], \"data_offsets\":[0, 16]}}");
-  res = io::parseJson(raw.c_str(), raw.size());
+  res = io::jsonDeserialize(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::OBJECT));
   CHECK_EQ(res.getObject()->size(), 1);
   CHECK(res.getObject()->at("test")->is_type(io::JSONNode::Type::OBJECT));
@@ -138,8 +160,16 @@ TEST_CASE("test parseJson") {
       16);
 }
 
+TEST_CASE("test save_safetensor") {
+  auto map = std::unordered_map<std::string, array>();
+  map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
+  map.insert({"test2", ones({2, 2})});
+  MESSAGE("SAVING");
+  save_safetensor("../../temp1", map);
+}
+
 TEST_CASE("test load_safetensor") {
-  auto safeDict = load_safetensor("../../temp.safe");
+  auto safeDict = load_safetensor("../../temp1.safetensors");
   CHECK_EQ(safeDict.size(), 2);
   CHECK_EQ(safeDict.count("test"), 1);
   CHECK_EQ(safeDict.count("test2"), 1);

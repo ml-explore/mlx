@@ -55,7 +55,7 @@ Token Tokenizer::getToken() {
   }
 }
 
-JSONNode parseJson(const char* data, size_t len) {
+JSONNode jsonDeserialize(const char* data, size_t len) {
   auto tokenizer = Tokenizer(data, len);
   std::stack<JSONNode*> ctx;
   while (tokenizer.hasMoreTokens()) {
@@ -137,7 +137,7 @@ JSONNode parseJson(const char* data, size_t len) {
       case TOKEN::NUMBER: {
         // TODO: is there an easier way of doing this.
         auto str = new std::string(data + token.start, token.end - token.start);
-        float val = strtof(str->c_str(), nullptr);
+        auto val = strtoul(str->c_str(), nullptr, 10);
         if (ctx.top()->is_type(JSONNode::Type::LIST)) {
           ctx.top()->getList()->push_back(new JSONNode(val));
         } else if (ctx.top()->is_type(JSONNode::Type::STRING)) {
@@ -152,21 +152,83 @@ JSONNode parseJson(const char* data, size_t len) {
         }
         break;
       }
-      case TOKEN::COMMA:
-        break;
-      case TOKEN::COLON:
-        break;
-      case TOKEN::NULL_TYPE:
+      default:
         break;
     }
   }
   throw std::runtime_error(
-      "[parseJson] json was invalid and could not be parsed");
+      "[jsonDeserialize] json was invalid and could not be parsed");
+}
+
+std::string jsonSerialize(JSONNode* node) {
+  std::string res;
+  if (node->is_type(JSONNode::Type::STRING)) {
+    return "\"" + node->getString() + "\"";
+  }
+  if (node->is_type(JSONNode::Type::NUMBER)) {
+    return std::to_string(node->getNumber());
+  }
+  if (node->is_type(JSONNode::Type::LIST)) {
+    res += "[";
+    for (auto& item : *node->getList()) {
+      res += jsonSerialize(item);
+      res += ",";
+    }
+    if (res.back() == ',') {
+      res.pop_back();
+    }
+    res += "]";
+    return res;
+  }
+  if (node->is_type(JSONNode::Type::OBJECT)) {
+    res += "{";
+    for (auto& [key, item] : *node->getObject()) {
+      res += "\"" + key + "\":";
+      res += jsonSerialize(item);
+      res += ",";
+    }
+    if (res.back() == ',') {
+      res.pop_back();
+    }
+    res += "}";
+    return res;
+  }
+
+  throw std::runtime_error("[jsonSerialize] invalid json node");
 }
 
 } // namespace io
+std::string dtype_to_safetensor_str(Dtype t) {
+  if (t == float32) {
+    return ST_F32;
+  } else if (t == bfloat16) {
+    return ST_BF16;
+  } else if (t == float16) {
+    return ST_F16;
+  } else if (t == int64) {
+    return ST_I64;
+  } else if (t == int32) {
+    return ST_I32;
+  } else if (t == int16) {
+    return ST_I16;
+  } else if (t == int8) {
+    return ST_I8;
+  } else if (t == uint64) {
+    return ST_U64;
+  } else if (t == uint32) {
+    return ST_U32;
+  } else if (t == uint16) {
+    return ST_U16;
+  } else if (t == uint8) {
+    return ST_U8;
+  } else if (t == bool_) {
+    return ST_BOOL;
+  } else {
+    throw std::runtime_error("[safetensor] unsupported dtype");
+  }
+}
 
-Dtype dtype_from_safe_tensor_str(std::string str) {
+Dtype dtype_from_safetensor_str(std::string str) {
   if (str == ST_F32) {
     return float32;
   } else if (str == ST_F16) {
@@ -216,7 +278,7 @@ std::unordered_map<std::string, array> load_safetensor(
   // Load the json metadata
   char json[jsonHeaderLength];
   in_stream->read(json, jsonHeaderLength);
-  auto metadata = io::parseJson(json, jsonHeaderLength);
+  auto metadata = io::jsonDeserialize(json, jsonHeaderLength);
   // Should always be an object on the top-level
   if (!metadata.is_type(io::JSONNode::Type::OBJECT)) {
     throw std::runtime_error(
@@ -237,7 +299,7 @@ std::unordered_map<std::string, array> load_safetensor(
     for (const auto& offset : *data_offsets) {
       data_offsets_vec.push_back(offset->getNumber());
     }
-    Dtype type = dtype_from_safe_tensor_str(dtype);
+    Dtype type = dtype_from_safetensor_str(dtype);
     auto loaded_array = array(
         shape_vec,
         float32,
@@ -257,6 +319,84 @@ std::unordered_map<std::string, array> load_safetensor(
     const std::string& file,
     StreamOrDevice s) {
   return load_safetensor(std::make_shared<io::FileReader>(file), s);
+}
+
+/** Save array to out stream in .npy format */
+void save_safetensor(
+    std::shared_ptr<io::Writer> out_stream,
+    std::unordered_map<std::string, array> a) {
+  ////////////////////////////////////////////////////////
+  // Check array map
+
+  io::JSONNode metadata(io::JSONNode::Type::OBJECT);
+  size_t offset = 0;
+  for (auto& [key, arr] : a) {
+    arr.eval(false);
+    if (arr.nbytes() == 0) {
+      throw std::invalid_argument(
+          "[save_safetensor] cannot serialize an empty array key: " + key);
+    }
+
+    if (!arr.flags().contiguous) {
+      throw std::invalid_argument(
+          "[save_safetensor] cannot serialize a non-contiguous array key: " +
+          key);
+    }
+    auto obj = new io::JSONNode(io::JSONNode::Type::OBJECT);
+    // TODO: dont make a new string
+    obj->getObject()->insert(
+        {"dtype",
+         new io::JSONNode(
+             new std::string(dtype_to_safetensor_str(arr.dtype())))});
+    obj->getObject()->insert(
+        {"shape", new io::JSONNode(io::JSONNode::Type::LIST)});
+    for (auto& dim : arr.shape()) {
+      obj->getObject()->at("shape")->getList()->push_back(
+          new io::JSONNode(dim));
+    }
+    obj->getObject()->insert(
+        {"data_offsets", new io::JSONNode(io::JSONNode::Type::LIST)});
+    obj->getObject()
+        ->at("data_offsets")
+        ->getList()
+        ->push_back(new io::JSONNode(offset));
+    obj->getObject()
+        ->at("data_offsets")
+        ->getList()
+        ->push_back(new io::JSONNode(offset + arr.nbytes()));
+    metadata.getObject()->insert({key, obj});
+    offset += arr.nbytes();
+  }
+
+  ////////////////////////////////////////////////////////
+  // Check file
+  if (!out_stream->good() || !out_stream->is_open()) {
+    throw std::runtime_error(
+        "[save_safetensor] Failed to open " + out_stream->label());
+  }
+
+  auto header = io::jsonSerialize(&metadata);
+  uint64_t header_len = header.length();
+  out_stream->write(reinterpret_cast<char*>(&header_len), 8);
+  out_stream->write(header.c_str(), header_len);
+  for (auto& [key, arr] : a) {
+    out_stream->write(arr.data<char>(), arr.nbytes());
+  }
+}
+
+void save_safetensor(
+    const std::string& file_,
+    std::unordered_map<std::string, array> a) {
+  // Open and check file
+  std::string file = file_;
+
+  // Add .npy to file name if it is not there
+  if (file.length() < 12 ||
+      file.substr(file.length() - 12, 12) != ".safetensors")
+    file += ".safetensors";
+
+  // Serialize array
+  save_safetensor(std::make_shared<io::FileWriter>(file), a);
 }
 
 } // namespace mlx::core

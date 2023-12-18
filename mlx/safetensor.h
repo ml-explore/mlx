@@ -74,7 +74,7 @@ class JSONNode {
     return *this->_values.s;
   }
 
-  float getNumber() {
+  uint32_t getNumber() {
     if (!is_type(Type::NUMBER)) {
       throw new std::runtime_error("not a number");
     }
@@ -94,12 +94,13 @@ class JSONNode {
     JSONObject* object;
     JSONList* list;
     std::string* s;
-    float f;
+    uint32_t f;
   } _values;
   Type _type;
 };
 
-JSONNode parseJson(const char* data, size_t len);
+JSONNode jsonDeserialize(const char* data, size_t len);
+std::string jsonSerialize(JSONNode* node);
 
 enum class TOKEN {
   CURLY_OPEN,
