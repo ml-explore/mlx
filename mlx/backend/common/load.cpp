@@ -34,7 +34,6 @@ void Load::eval(const std::vector<array>& inputs, array& out) {
   if (len_ == 0) {
     len_ = out.nbytes();
   }
-  printf("Load::eval: offset= %ld len_ = %ld\n", offset_, len_);
   out.set_data(allocator::malloc_or_wait(len_));
 
   reader_->seek(offset_, std::ios_base::beg);
