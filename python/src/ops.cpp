@@ -2370,24 +2370,38 @@ void init_ops(py::module_& m) {
     R"pbdoc(
       "clip",
       [](const array& a,
-         const ScalarOrArray& min,
-         const ScalarOrArray& max,
-         StreamOrDevice s) { return clip(a, to_array(min), to_array(max), s); },
+         const std::optional<ScalarOrArray>& min,
+         const std::optional<ScalarOrArray>& max,
+         StreamOrDevice s) {
+        std::optional<array> min_ = std::nullopt;
+        std::optional<array> max_ = std::nullopt;
+        if (min) {
+          min_ = to_array(min.value());
+        }
+        if (max) {
+          max_ = to_array(max.value());
+        }
+        return clip(a, min_, max_, s);
+      },
       "a"_a,
       py::pos_only(),
-      "min"_a,
-      "max"_a,
+      "a_min"_a,
+      "a_max"_a,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-      clip(a: array, /, min: Union[scalar, array], max: Union[scalar, array], *, stream: Union[None, Stream, Device] = None) -> array
+      clip(a: array, /, a_min: Union[scalar, array, None], a_max: Union[scalar, array, None], *, stream: Union[None, Stream, Device] = None) -> array
 
       Clip the values of the array between the given minimum and maximum.
 
+      If either ``a_min`` or ``a_max`` are ``None``, then corresponding edge
+      is ignored. At least one of ``a_min`` and ``a_max`` cannot be ``None``.
+      The input ``a`` and the limits must broadcast with one another.
+
       Args:
           a (array): Input array.
-          min (scalar or array): Minimum value to clip to.
-          max (scalar or array): Maximum value to clip to.
+          a_min (scalar or array or None): Minimum value to clip to.
+          a_max (scalar or array or None): Maximum value to clip to.
 
       Returns:
           array: The clipped array.

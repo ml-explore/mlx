@@ -1436,19 +1436,31 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(x.flatten(end_axis=1).shape, [2 * 3, 4])
 
     def test_clip(self):
-        a = np.array([1, 4, 3, 8, 5])
+        a = np.array([1, 4, 3, 8, 5], np.int32)
         expected = np.clip(a, 2, 6)
-        clipped = mx.clip(a, 2, 6)
+        clipped = mx.clip(mx.array(a), 2, 6)
         self.assertTrue(np.array_equal(clipped, expected))
 
-        a = np.array([-1, 1, 0, 5])
+        a = np.array([-1, 1, 0, 5], np.int32)
         expected = np.clip(a, 0, None)
-        clipped = mx.clip(a, 0, None)
+        clipped = mx.clip(mx.array(a), 0, None)
         self.assertTrue(np.array_equal(clipped, expected))
 
-        a = np.array([2, 3, 4, 5])
+        a = np.array([2, 3, 4, 5], np.int32)
         expected = np.clip(a, None, 4)
-        clipped = mx.clip(a, None, 4)
+        clipped = mx.clip(mx.array(a), None, 4)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        mins = np.array([3, 1, 5, 5])
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, mins, 4)
+        clipped = mx.clip(mx.array(a), mx.array(mins), 4)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        maxs = np.array([5, -1, 2, 9])
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, mins, maxs)
+        clipped = mx.clip(mx.array(a), mx.array(mins), mx.array(maxs))
         self.assertTrue(np.array_equal(clipped, expected))
 
 
