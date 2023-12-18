@@ -307,7 +307,6 @@ std::unordered_map<std::string, array> load_safetensor(
             to_stream(s),
             in_stream,
             offset + data_offsets->at(0)->getNumber(),
-            offset + data_offsets->at(1)->getNumber(),
             false),
         std::vector<array>{});
     res.insert({key, loaded_array});

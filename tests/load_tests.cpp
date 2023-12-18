@@ -165,7 +165,6 @@ TEST_CASE("test save_safetensor") {
   auto map = std::unordered_map<std::string, array>();
   map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
   map.insert({"test2", ones({2, 2})});
-  MESSAGE("SAVING");
   save_safetensor(file_path, map);
   auto safeDict = load_safetensor(file_path);
   CHECK_EQ(safeDict.size(), 2);

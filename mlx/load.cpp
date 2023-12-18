@@ -225,8 +225,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   auto loaded_array = array(
       shape,
       dtype,
-      std::make_unique<Load>(
-          to_stream(s), in_stream, offset, in_stream->tell(), swap_endianness),
+      std::make_unique<Load>(to_stream(s), in_stream, offset, swap_endianness),
       std::vector<array>{});
   if (col_contiguous) {
     loaded_array = transpose(loaded_array, s);
