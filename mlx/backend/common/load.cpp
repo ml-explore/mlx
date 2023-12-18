@@ -31,10 +31,14 @@ void swap_endianess(uint8_t* data_bytes, size_t N) {
 
 void Load::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  if (len_ == 0) {
+    len_ = out.nbytes();
+  }
+  printf("Load::eval: offset= %ld len_ = %ld\n", offset_, len_);
+  out.set_data(allocator::malloc_or_wait(len_));
 
   reader_->seek(offset_, std::ios_base::beg);
-  reader_->read(out.data<char>(), out.nbytes());
+  reader_->read(out.data<char>(), len_);
 
   if (swap_endianness_) {
     switch (out.itemsize()) {

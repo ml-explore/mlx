@@ -826,6 +826,7 @@ class Load : public Primitive {
       Stream stream,
       std::shared_ptr<io::Reader> reader,
       size_t offset,
+      size_t len,
       bool swap_endianness = false)
       : Primitive(stream),
         reader_(reader),
@@ -841,6 +842,7 @@ class Load : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
   std::shared_ptr<io::Reader> reader_;
   size_t offset_;
+  size_t len_;
   bool swap_endianness_;
 };
 

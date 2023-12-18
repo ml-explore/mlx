@@ -145,6 +145,10 @@ TEST_CASE("test load_safetensor") {
   array test = safeDict.at("test");
   CHECK_EQ(test.dtype(), float32);
   CHECK_EQ(test.shape(), std::vector<int>({4}));
+  array b = array({1.0, 2.0, 3.0, 4.0});
+  MESSAGE("test: " << test);
+  MESSAGE("b: " << b);
+  CHECK(array_equal(test, b).item<bool>());
 }
 
 TEST_CASE("test single array serialization") {

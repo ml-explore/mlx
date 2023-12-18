@@ -189,6 +189,7 @@ std::unordered_map<std::string, array> load_safetensor(
     throw std::runtime_error(
         "[load_safetensor] Invalid json metadata " + in_stream->label());
   }
+  size_t offset = jsonHeaderLength + 8;
   // Parse the json raw data
   std::unordered_map<std::string, array> res;
   for (auto& [key, obj] : *metadata.getObject()) {
@@ -204,9 +205,22 @@ std::unordered_map<std::string, array> load_safetensor(
       data_offsets_vec.push_back(offset->getNumber());
     }
     if (dtype == "F32") {
-      res.insert({key, zeros(shape_vec, s)});
+      auto loaded_array = array(
+          shape_vec,
+          float32,
+          std::make_unique<Load>(
+              to_stream(s),
+              in_stream,
+              offset + data_offsets->at(0)->getNumber(),
+              offset + data_offsets->at(1)->getNumber(),
+              false),
+          std::vector<array>{});
+      res.insert({key, loaded_array});
     }
   }
+  // for (auto& [key, arr] : res) {
+  //   arr.eval();
+  // }
   return res;
 }
 
