@@ -1834,6 +1834,20 @@ array stop_gradient(const array& a, StreamOrDevice s /* = {} */) {
       a.shape(), a.dtype(), std::make_unique<StopGradient>(to_stream(s)), {a});
 }
 
+array round(const array& a, int decimals, StreamOrDevice s /* = {} */) {
+  if (decimals == 0) {
+    return array(
+        a.shape(), a.dtype(), std::make_unique<Round>(to_stream(s)), {a});
+  }
+
+  float scale = std::pow(10, decimals);
+  auto result = multiply(a, array(scale), s);
+  result = round(result, 0, s);
+  result = multiply(result, array(1 / scale), s);
+
+  return result;
+}
+
 array matmul(
     const array& in_a,
     const array& in_b,

@@ -133,6 +133,10 @@ struct Negative {
   template <typename T> T operator()(T x) { return -x; };
 };
 
+struct Round {
+  template <typename T> T operator()(T x) { return metal::round(x); };
+};
+
 struct Sigmoid {
   template <typename T>
   T operator()(T x) {
@@ -300,6 +304,7 @@ instantiate_unary_float(sqrt, Sqrt)
 instantiate_unary_float(rsqrt, Rsqrt)
 instantiate_unary_float(tan, Tan)
 instantiate_unary_float(tanh, Tanh)
+instantiate_unary_float(round, Round)
 
 instantiate_unary_all(abs, complex64, complex64_t, Abs)
 instantiate_unary_all(cos, complex64, complex64_t, Cos)
