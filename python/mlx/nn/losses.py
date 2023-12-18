@@ -232,6 +232,41 @@ def smooth_l1_loss(
     return _reduce(loss, reduction)
 
 
+def triplet_loss(
+    anchors: mx.array,
+    positives: mx.array,
+    negatives: mx.array,
+    axis: int = -1,
+    alpha: float = 1.0,
+    eps: float = 10e-6,
+    reduction: str = "none",
+) -> mx.array:
+    """
+    Computes the triplet loss for a set of anchor, positive, and negative samples.
+
+    Args:
+        anchors (mx.array): The anchor samples.
+        positives (mx.array): The positive samples.
+        negatives (mx.array): The negative samples.
+        axis (int, optional): The distribution axis. Default: ``-1``.
+        alpha (float, optional): Margin for the triplet loss. Defaults to ``1.0``.
+        eps (float, optional): Small positive constant to prevent numerical instability. Defaults to ``10e-6``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        mx.array: Computed triplet loss. If reduction is "none", returns a tensor of the same shape as input;
+                  if reduction is "mean" or "sum", returns a scalar tensor.
+    """
+    triplet = (
+        mx.sqrt(mx.square(anchors - positives).sum(axis) + eps)
+        - mx.sqrt(mx.square(anchors - negatives).sum(axis) + eps)
+        + alpha
+    )
+    loss = triplet * (triplet > 0)
+    return _reduce(loss, reduction)
+
+
 def _reduce(loss: mx.array, reduction: str = "none"):
     if reduction == "mean":
         return mx.mean(loss)

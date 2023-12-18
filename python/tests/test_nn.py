@@ -239,6 +239,32 @@ class TestNN(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
+    def test_triplet_loss(self):
+        anchors = mx.array([[1, 2, 3], [1, 2, 3]])
+        positives = mx.array([[4, 5, 6], [0, -1, 2]])
+        negatives = mx.array([[7, 8, 9], [3, 2, 3]])
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.triplet_loss(
+            anchors, positives, negatives, reduction="none"
+        )
+        expected_none = mx.array([-0, 2.31662])
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.triplet_loss(
+            anchors, positives, negatives, reduction="mean"
+        )
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.triplet_loss(
+            anchors, positives, negatives, reduction="sum"
+        )
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
     def test_gelu(self):
         inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
 
