@@ -30,27 +30,26 @@ template <typename T, const int BM, const int BN, const int groups, const int wi
 
   static_assert(BN == SIMD_SIZE, "qmv expects BN to be equal to SIMD_SIZE");
 
-  constexpr int TM = 4;
   constexpr int bitmask = (1 << width) - 1;
   constexpr int el_per_thread = 32 / width;
   constexpr int colgroup = BN * el_per_thread;
   constexpr int groups_per_block = colgroup / groups;
   constexpr int simdgroups_fetching_vec = colgroup / SIMD_SIZE;
 
-  threadgroup T scales_block[BM * TM * groups_per_block];
-  threadgroup T biases_block[BM * TM * groups_per_block];
+  threadgroup T scales_block[BM * groups_per_block];
+  threadgroup T biases_block[BM * groups_per_block];
   threadgroup T x_block[colgroup];
 
-  thread uint32_t w_local[TM];
-  thread T result[TM] = {0};
-  thread T scale[TM] = {0};
-  thread T bias[TM] = {0};
+  thread uint32_t w_local;
+  thread T result = 0;
+  thread T scale = 1;
+  thread T bias = 0;
   thread T x_thread[el_per_thread];
 
   // Adjust positions
   const int in_vec_size_w = in_vec_size / el_per_thread;
   const int in_vec_size_g = in_vec_size / groups;
-  int out_row = tid.y * BM * TM + simd_gid * TM;
+  int out_row = tid.y * BM + simd_gid;
   w += out_row * in_vec_size_w;
   scales += out_row * in_vec_size_g;
   biases += out_row * in_vec_size_g;
@@ -64,14 +63,14 @@ template <typename T, const int BM, const int BN, const int groups, const int wi
     if (simd_gid < simdgroups_fetching_vec) {
       x_block[lid] = x[lid + i];
     }
-    if (simd_lid < TM) {
+    if (simd_lid == 0) {
       #pragma clang loop unroll(full)
       for (int j=0; j<groups_per_block; j++) {
-        scales_block[(simd_gid * TM + simd_lid) * groups_per_block + j] = scales[simd_lid * in_vec_size_g + i / groups + j];
+        scales_block[simd_gid * groups_per_block + j] = scales[i / groups + j];
       }
       #pragma clang loop unroll(full)
       for (int j=0; j<groups_per_block; j++) {
-        biases_block[(simd_gid * TM + simd_lid) * groups_per_block + j] = biases[simd_lid * in_vec_size_g + i / groups + j];
+        biases_block[simd_gid * groups_per_block + j] = biases[i / groups + j];
       }
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -81,39 +80,26 @@ template <typename T, const int BM, const int BN, const int groups, const int wi
     for (int j=0; j<el_per_thread; j++) {
       x_thread[j] = x_block[simd_lid*el_per_thread + j];
     }
-    #pragma clang loop unroll(full)
-    for (int j=0; j<TM; j++) {
-      scale[j] = scales_block[(simd_gid *  TM + j) * groups_per_block + simd_lid * el_per_thread / groups];
-      bias[j] = biases_block[(simd_gid *  TM + j) * groups_per_block + simd_lid * el_per_thread / groups];
-    }
+    scale = scales_block[simd_gid * groups_per_block + simd_lid * el_per_thread / groups];
+    bias = biases_block[simd_gid * groups_per_block + simd_lid * el_per_thread / groups];
 
     // Load the matrix elements
-    #pragma clang loop unroll(full)
-    for (int j=0; j<TM; j++) {
-      w_local[j] = w[i / el_per_thread + simd_lid + j * in_vec_size / el_per_thread];
-    }
+    w_local = w[i / el_per_thread + simd_lid];
 
     // Do all the work.
     #pragma clang loop unroll(full)
-    for (int j=0; j<TM; j++) {
-      #pragma clang loop unroll(full)
-      for (int k=0; k<el_per_thread; k++) {
-        result[j] += (scale[j] * static_cast<T>(w_local[j] & bitmask) + bias[j]) * x_thread[k];
-        w_local[j] >>= width;
-      }
+    for (int k=0; k<el_per_thread; k++) {
+      result += (scale * static_cast<T>(w_local & bitmask) + bias) * x_thread[k];
+      w_local >>= width;
     }
   }
 
   // Accumulate in the simdgroup
-  for (int j=0; j<TM; j++) {
-    result[j] = simd_sum(result[j]);
-  }
+  result = simd_sum(result);
 
   // Store the result
   if (simd_lid == 0) {
-    for (int j=0; j<TM; j++) {
-      y[out_row + j] = result[j];
-    }
+    y[out_row] = result;
   }
 }
 
