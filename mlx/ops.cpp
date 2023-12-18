@@ -1840,12 +1840,13 @@ array round(const array& a, int decimals, StreamOrDevice s /* = {} */) {
         a.shape(), a.dtype(), std::make_unique<Round>(to_stream(s)), {a});
   }
 
+  auto dtype = at_least_float(a.dtype());
   float scale = std::pow(10, decimals);
-  auto result = multiply(a, array(scale), s);
+  auto result = multiply(a, array(scale, dtype), s);
   result = round(result, 0, s);
-  result = multiply(result, array(1 / scale), s);
+  result = multiply(result, array(1 / scale, dtype), s);
 
-  return result;
+  return astype(result, a.dtype(), s);
 }
 
 array matmul(
