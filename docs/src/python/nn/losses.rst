@@ -9,9 +9,10 @@ Loss Functions
    :toctree: _autosummary_functions
    :template: nn-module-template.rst
 
-   cross_entropy
    binary_cross_entropy
+   cross_entropy
+   kl_div_loss
    l1_loss
    mse_loss
    nll_loss
-   kl_div_loss
+   smooth_l1_loss

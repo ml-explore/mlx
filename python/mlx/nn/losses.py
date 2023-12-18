@@ -211,7 +211,7 @@ def smooth_l1_loss(
         predictions (array): Predicted values.
         targets (array): Ground truth values.
         beta (float, optional): The threshold after which the loss changes
-          from L2 to L1. Default: ``1.0``.
+          from the squared to the absolute difference. Default: ``1.0``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
