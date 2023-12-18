@@ -9,7 +9,26 @@
 
 namespace mlx::core {
 
+#define ST_F16 "F16"
+#define ST_BF16 "BF16"
+#define ST_F32 "F32"
+
+#define ST_BOOL "BOOL"
+#define ST_I8 "I8"
+#define ST_I16 "I16"
+#define ST_I32 "I32"
+#define ST_I64 "I64"
+#define ST_U8 "U8"
+#define ST_U16 "U16"
+#define ST_U32 "U32"
+#define ST_U64 "U64"
+
 namespace io {
+// NOTE: This json parser is a bare minimum implementation for safetensors,
+// it does not support all of json features, and does not have alot of edge case
+// catches. This is okay as safe tensor json is very simple and we can assume it
+// is always valid and well formed, but this should not be used for general json
+// parsing
 class JSONNode;
 using JSONObject = std::unordered_map<std::string, JSONNode*>;
 using JSONList = std::vector<JSONNode*>;
