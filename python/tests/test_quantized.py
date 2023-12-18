@@ -42,18 +42,12 @@ def quantize(w, width, groups):
 
 
 class TestQuantized(mlx_tests.MLXTestCase):
-    def setUp(self):
-        super().setUp()
-
-        if mx.default_device() != mx.gpu:
-            self.skipTest("Quantization only implemented on the GPU for now")
-
     def test_quantize_dequantize(self):
         w = mx.random.normal(shape=(128, 128))
         w_q, scales, biases = quantize(w, 4, 64)
         w_hat = dequantize(w_q, scales, biases, 4)
         w_hat2 = dequantize(*quantize(w_hat, 4, 64), 4)
-        self.assertTrue(mx.allclose(w_hat, w_hat2))
+        self.assertLess((w_hat - w_hat2).abs().max(), 1e-6)
 
     def test_qmm(self):
         key = mx.random.key(0)
