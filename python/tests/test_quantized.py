@@ -4,7 +4,6 @@ import unittest
 
 import mlx.core as mx
 import mlx_tests
-import numpy as np
 
 
 def select_bits(w, width, start):
@@ -30,7 +29,7 @@ def quantize(w, width, groups):
     w_min = w.min(-1, keepdims=True)
     delta = (w_max - w_min) / (2**width - 1)
 
-    w_int = mx.array(np.round((w - w_min) / delta), dtype=mx.uint32)
+    w_int = mx.round((w - w_min) / delta).astype(mx.uint32)
     scales = delta.squeeze(-1)
     biases = w_min.squeeze(-1)
 
