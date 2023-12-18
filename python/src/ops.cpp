@@ -2922,4 +2922,33 @@ void init_ops(py::module_& m) {
         Returns:
             result (array): The output containing elements selected from ``x`` and ``y``.
       )pbdoc");
+  m.def(
+      "round",
+      [](const array& a, int decimals, StreamOrDevice s) {
+        return round(a, decimals, s);
+      },
+      "a"_a,
+      py::pos_only(),
+      "decimals"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        round(a: array, /, decimals: int = 0, stream: Union[None, Stream, Device] = None) -> array
+
+        Round to the given number of decimals.
+
+        Bascially performs:
+
+        .. code-block:: python
+
+          s = 10**decimals
+          x = round(x * s) / s
+
+        Args:
+          a (array): Input array
+          decimals (int): Number of decimal places to round to. (default: 0)
+
+        Returns:
+          result (array): An array of the same type as ``a`` rounded to the given number of decimals.
+      )pbdoc");
 }
