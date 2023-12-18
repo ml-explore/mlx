@@ -6,7 +6,7 @@ Unified Memory
 .. currentmodule:: mlx.core
 
 Apple silicon has a unified memory architecture. The CPU and GPU have direct
-access to the same memory pool. MLX is designed to take advantage that.
+access to the same memory pool. MLX is designed to take advantage of that.
 
 Concretely, when you make an array in MLX you don't have to specify its location:
 

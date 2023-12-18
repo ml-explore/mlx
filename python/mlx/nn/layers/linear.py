@@ -7,12 +7,21 @@ from mlx.nn.layers.base import Module
 
 
 class Linear(Module):
-    """Applies an affine transformation to the input.
+    r"""Applies an affine transformation to the input.
+
+    Concretely:
+
+    .. math::
+
+        y = W^\top x + b
+
+    where :math:`W` has shape ``[output_dims, input_dims]``.
 
     Args:
         input_dims (int): The dimensionality of the input features
         output_dims (int): The dimensionality of the output features
-        bias (bool): If set to False then the layer will not use a bias
+        bias (bool, optional): If set to ``False`` then the layer will
+          not use a bias. Default ``True``.
     """
 
     def __init__(self, input_dims: int, output_dims: int, bias: bool = True):

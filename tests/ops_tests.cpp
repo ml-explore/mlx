@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include <cmath>
 #include <numeric>
 
@@ -57,6 +56,33 @@ TEST_CASE("test reshape") {
   CHECK_THROWS_AS(reshape(x, {1}), std::invalid_argument);
   y = reshape(x, {1, 5, 0});
   CHECK_EQ(y.shape(), std::vector<int>{1, 5, 0});
+}
+
+TEST_CASE("test flatten") {
+  array x = zeros({2, 3, 4});
+  CHECK_EQ(flatten(x).shape(), std::vector<int>({2 * 3 * 4}));
+
+  CHECK_EQ(flatten(x, 1, 1).shape(), std::vector<int>({2, 3, 4}));
+  CHECK_EQ(flatten(x, 1, 2).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, 1, 3).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, 1, -1).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, -2, -1).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, -3, -1).shape(), std::vector<int>({2 * 3 * 4}));
+  CHECK_EQ(flatten(x, -4, -1).shape(), std::vector<int>({2 * 3 * 4}));
+
+  // Check start > end throws
+  CHECK_THROWS(flatten(x, 2, 1));
+
+  // Check start >= ndim throws
+  CHECK_THROWS(flatten(x, 5, 6));
+
+  // Check end < 0 throws
+  CHECK_THROWS(flatten(x, -5, -4));
+
+  // Check scalar flattens to 1D
+  x = array(1);
+  CHECK_EQ(flatten(x, -3, -1).shape(), std::vector<int>({1}));
+  CHECK_EQ(flatten(x, 0, 0).shape(), std::vector<int>({1}));
 }
 
 TEST_CASE("test squeeze and expand") {
@@ -203,6 +229,46 @@ TEST_CASE("test split") {
   CHECK(array_equal(out[1], array({})).item<bool>());
   CHECK(array_equal(out[2], array({1})).item<bool>());
   CHECK(array_equal(out[3], array({2, 3, 4})).item<bool>());
+}
+
+TEST_CASE("test swap and move axes") {
+  // Test swapaxes
+  array a(0.0);
+  CHECK_THROWS(swapaxes(a, 0, 0));
+
+  a = zeros({2});
+  CHECK_THROWS(swapaxes(a, 0, 1));
+  CHECK_EQ(swapaxes(a, 0, 0).shape(), std::vector<int>{2});
+  CHECK_EQ(swapaxes(a, -1, -1).shape(), std::vector<int>{2});
+
+  a = zeros({2, 3, 4});
+  CHECK_THROWS(swapaxes(a, 0, -4));
+  CHECK_THROWS(swapaxes(a, 0, 3));
+  CHECK_THROWS(swapaxes(a, 3, 0));
+  CHECK_THROWS(swapaxes(a, -4, 0));
+  CHECK_EQ(swapaxes(a, 0, 2).shape(), std::vector<int>{4, 3, 2});
+  CHECK_EQ(swapaxes(a, 0, 1).shape(), std::vector<int>{3, 2, 4});
+  CHECK_EQ(swapaxes(a, 0, -1).shape(), std::vector<int>{4, 3, 2});
+  CHECK_EQ(swapaxes(a, -2, 2).shape(), std::vector<int>{2, 4, 3});
+
+  // Test moveaxis
+  a = array(0.0);
+  CHECK_THROWS(moveaxis(a, 0, 0));
+
+  a = zeros({2});
+  CHECK_THROWS(moveaxis(a, 0, 1));
+  CHECK_EQ(moveaxis(a, 0, 0).shape(), std::vector<int>{2});
+  CHECK_EQ(moveaxis(a, -1, -1).shape(), std::vector<int>{2});
+
+  a = zeros({2, 3, 4});
+  CHECK_THROWS(moveaxis(a, 0, -4));
+  CHECK_THROWS(moveaxis(a, 0, 3));
+  CHECK_THROWS(moveaxis(a, 3, 0));
+  CHECK_THROWS(moveaxis(a, -4, 0));
+  CHECK_EQ(moveaxis(a, 0, 2).shape(), std::vector<int>{3, 4, 2});
+  CHECK_EQ(moveaxis(a, 0, 1).shape(), std::vector<int>{3, 2, 4});
+  CHECK_EQ(moveaxis(a, 0, -1).shape(), std::vector<int>{3, 4, 2});
+  CHECK_EQ(moveaxis(a, -2, 2).shape(), std::vector<int>{2, 4, 3});
 }
 
 TEST_CASE("test transpose") {
@@ -772,6 +838,29 @@ TEST_CASE("test arithmetic unary ops") {
   }
 
   constexpr float neginf = -std::numeric_limits<float>::infinity();
+
+  // Test floor and ceil
+  {
+    array x(1.0f);
+    CHECK_EQ(floor(x).item<float>(), 1.0f);
+    CHECK_EQ(ceil(x).item<float>(), 1.0f);
+
+    x = array(1.5f);
+    CHECK_EQ(floor(x).item<float>(), 1.0f);
+    CHECK_EQ(ceil(x).item<float>(), 2.0f);
+
+    x = array(-1.5f);
+    CHECK_EQ(floor(x).item<float>(), -2.0f);
+    CHECK_EQ(ceil(x).item<float>(), -1.0f);
+
+    x = array(neginf);
+    CHECK_EQ(floor(x).item<float>(), neginf);
+    CHECK_EQ(ceil(x).item<float>(), neginf);
+
+    x = array(std::complex<float>(1.0f, 1.0f));
+    CHECK_THROWS_AS(floor(x), std::invalid_argument);
+    CHECK_THROWS_AS(ceil(x), std::invalid_argument);
+  }
 
   // Test exponential
   {
@@ -1927,6 +2016,35 @@ TEST_CASE("test where") {
   CHECK(array_equal(where(condition, x, y), expected).item<bool>());
 }
 
+TEST_CASE("test stack") {
+  auto x = array({});
+  CHECK_EQ(stack({x}, 0).shape(), std::vector<int>{1, 0});
+  CHECK_EQ(stack({x}, 1).shape(), std::vector<int>{0, 1});
+
+  x = array({1, 2, 3}, {3});
+  CHECK_EQ(stack({x}, 0).shape(), std::vector<int>{1, 3});
+  CHECK_EQ(stack({x}, 1).shape(), std::vector<int>{3, 1});
+
+  auto y = array({4, 5, 6}, {3});
+  auto z = std::vector<array>{x, y};
+  CHECK_EQ(stack(z).shape(), std::vector<int>{2, 3});
+  CHECK_EQ(stack(z, 0).shape(), std::vector<int>{2, 3});
+  CHECK_EQ(stack(z, 1).shape(), std::vector<int>{3, 2});
+  CHECK_EQ(stack(z, -1).shape(), std::vector<int>{3, 2});
+  CHECK_EQ(stack(z, -2).shape(), std::vector<int>{2, 3});
+
+  CHECK_THROWS_MESSAGE(stack({}, 0), "No arrays provided for stacking");
+
+  x = array({1, 2, 3}, {3}, float16);
+  y = array({4, 5, 6}, {3}, int32);
+  CHECK_EQ(stack({x, y}, 0).dtype(), float16);
+
+  x = array({1, 2, 3}, {3}, int32);
+  y = array({4, 5, 6, 7}, {4}, int32);
+  CHECK_THROWS_MESSAGE(
+      stack({x, y}, 0), "All arrays must have the same shape and dtype");
+}
+
 TEST_CASE("test eye") {
   auto eye_3 = eye(3);
   CHECK_EQ(eye_3.shape(), std::vector<int>{3, 3});
@@ -1938,6 +2056,78 @@ TEST_CASE("test eye") {
   CHECK_EQ(eye_3x2.shape(), std::vector<int>{3, 2});
   auto expected_eye_3x2 = array({1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f}, {3, 2});
   CHECK(array_equal(eye_3x2, expected_eye_3x2).item<bool>());
+}
+
+TEST_CASE("test tri") {
+  auto _tri = tri(4, 4, 0, float32);
+  CHECK_EQ(_tri.shape(), std::vector<int>{4, 4});
+  auto expected_tri = array(
+      {1.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       1.0f,
+       1.0f,
+       0.0f,
+       0.0f,
+       1.0f,
+       1.0f,
+       1.0f,
+       0.0f,
+       1.0f,
+       1.0f,
+       1.0f,
+       1.0f},
+      {4, 4});
+  CHECK(array_equal(_tri, expected_tri).item<bool>());
+}
+
+TEST_CASE("test tril") {
+  auto _tril = tril(full(std::vector<int>{4, 4}, 2.0f, float32), 0);
+  CHECK_EQ(_tril.shape(), std::vector<int>{4, 4});
+  auto expected_tri = array(
+      {2.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       2.0f},
+      {4, 4});
+  CHECK(array_equal(_tril, expected_tri).item<bool>());
+}
+
+TEST_CASE("test triu") {
+  auto _triu = triu(full(std::vector<int>{4, 4}, 2.0f, float32), 0);
+  CHECK_EQ(_triu.shape(), std::vector<int>{4, 4});
+  auto expected_tri = array(
+      {2.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       2.0f},
+      {4, 4});
+  CHECK(array_equal(_triu, expected_tri).item<bool>());
 }
 
 TEST_CASE("test identity") {
@@ -1980,4 +2170,25 @@ TEST_CASE("test eye with negative k offset") {
       {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f},
       {4, 3});
   CHECK(array_equal(eye_4_k_minus1, expected_eye_4_k_minus1).item<bool>());
+}
+
+TEST_CASE("test basic clipping") {
+  array a({1.0f, 4.0f, 3.0f, 8.0f, 5.0f}, {5});
+  array expected({2.0f, 4.0f, 3.0f, 6.0f, 5.0f}, {5});
+  auto clipped = clip(a, array(2.0f), array(6.0f));
+  CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test clipping with only min") {
+  array a({-1.0f, 1.0f, 0.0f, 5.0f}, {4});
+  array expected({0.0f, 1.0f, 0.0f, 5.0f}, {4});
+  auto clipped = clip(a, array(0.0f), std::nullopt);
+  CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test clipping with only max") {
+  array a({2.0f, 3.0f, 4.0f, 5.0f}, {4});
+  array expected({2.0f, 3.0f, 4.0f, 4.0f}, {4});
+  auto clipped = clip(a, std::nullopt, array(4.0f));
+  CHECK(array_equal(clipped, expected).item<bool>());
 }

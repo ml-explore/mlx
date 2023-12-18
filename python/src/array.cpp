@@ -729,6 +729,21 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
+          "flatten",
+          [](const array& a,
+             int start_axis,
+             int end_axis,
+             const StreamOrDevice& s) {
+            return flatten(a, start_axis, end_axis);
+          },
+          "start_axis"_a = 0,
+          "end_axis"_a = -1,
+          py::kw_only(),
+          "stream"_a = none,
+          R"pbdoc(
+            See :func:`flatten`.
+          )pbdoc")
+      .def(
           "reshape",
           [](const array& a, py::args shape, StreamOrDevice s) {
             if (shape.size() == 1) {
@@ -862,6 +877,22 @@ void init_array(py::module_& m) {
           py::kw_only(),
           "stream"_a = none,
           "See :func:`any`.")
+      .def(
+          "moveaxis",
+          &moveaxis,
+          "source"_a,
+          "destination"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
+      .def(
+          "swapaxes",
+          &swapaxes,
+          "axis1"_a,
+          "axis2"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
       .def(
           "transpose",
           [](const array& a, py::args axes, StreamOrDevice s) {

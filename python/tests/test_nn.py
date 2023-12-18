@@ -519,17 +519,30 @@ class TestNN(mlx_tests.MLXTestCase):
 
     def test_prelu(self):
         self.assertEqualArray(
-            [mx.array([1.0, -1.0, 0.0, 0.5])],
-            nn.PReLU(),
+            nn.PReLU()(mx.array([1.0, -1.0, 0.0, 0.5])),
             mx.array([1.0, -0.25, 0.0, 0.5]),
         )
 
     def test_mish(self):
         self.assertEqualArray(
-            [mx.array([1.0, -1.0, 0.0, 0.5])],
-            nn.Mish(),
+            nn.Mish()(mx.array([1.0, -1.0, 0.0, 0.5])),
             mx.array([0.8651, -0.3034, 0.0000, 0.3752]),
         )
+
+    def test_rope(self):
+        for kwargs in [{}, {"traditional": False}, {"base": 10000}]:
+            rope = nn.RoPE(4, **kwargs)
+            shape = (1, 3, 4)
+            x = mx.random.uniform(shape=shape)
+            y = rope(x)
+            self.assertTrue(y.shape, shape)
+            self.assertTrue(y.dtype, mx.float32)
+
+            y = rope(x, offset=3)
+            self.assertTrue(y.shape, shape)
+
+            y = rope(x.astype(mx.float16))
+            self.assertTrue(y.dtype, mx.float16)
 
 
 if __name__ == "__main__":

@@ -62,6 +62,33 @@ void init_ops(py::module_& m) {
             array: The reshaped array.
       )pbdoc");
   m.def(
+      "flatten",
+      [](const array& a,
+         int start_axis,
+         int end_axis,
+         const StreamOrDevice& s) { return flatten(a, start_axis, end_axis); },
+      "a"_a,
+      py::pos_only(),
+      "start_axis"_a = 0,
+      "end_axis"_a = -1,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      flatten(a: array, /, start_axis: int = 0, end_axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Flatten an array.
+
+      Args:
+          a (array): Input array.
+          start_axis (int, optional): The first dimension to flatten. Defaults to ``0``.
+          end_axis (int, optional): The last dimension to flatten. Defaults to ``-1``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+      Returns:
+          array: The flattened array.
+  )pbdoc");
+  m.def(
       "squeeze",
       [](const array& a, const IntOrVec& v, const StreamOrDevice& s) {
         if (std::holds_alternative<std::monostate>(v)) {
@@ -1411,6 +1438,72 @@ void init_ops(py::module_& m) {
           array: An identity matrix of size n x n.
       )pbdoc");
   m.def(
+      "tri",
+      [](int n, std::optional<int> m, int k, Dtype dtype, StreamOrDevice s) {
+        return tri(n, m.value_or(n), k, float32, s);
+      },
+      "n"_a,
+      "m"_a = none,
+      "k"_a = 0,
+      "dtype"_a = float32,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        tri(n: int, m: int, k: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+
+        An array with ones at and below the given diagonal and zeros elsewhere.
+
+        Args:
+          n (int): The number of rows in the output.
+          m (int, optional): The number of cols in the output. Defaults to ``None``.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          dtype (Dtype, optional): Data type of the output array. Defaults to ``float32``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+        Returns:
+          array: Array with its lower triangle filled with ones and zeros elsewhere
+      )pbdoc");
+  m.def(
+      "tril",
+      &tril,
+      "x"_a,
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Zeros the array above the given diagonal.
+
+        Args:
+          x (array): input array.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+        Returns:
+          array: Array zeroed above the given diagonal
+    )pbdoc");
+  m.def(
+      "triu",
+      &triu,
+      "x"_a,
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      triu(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Zeros the array below the given diagonal.
+
+        Args:
+          x (array): input array.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+        Returns:
+          array: Array zeroed below the given diagonal
+    )pbdoc");
+  m.def(
       "allclose",
       &allclose,
       "a"_a,
@@ -1554,6 +1647,86 @@ void init_ops(py::module_& m) {
 
         Returns:
             array: The max of ``a`` and ``b``.
+      )pbdoc");
+  m.def(
+      "floor",
+      &mlx::core::floor,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        floor(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise floor.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The floor of ``a``.
+      )pbdoc");
+  m.def(
+      "ceil",
+      &mlx::core::ceil,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        ceil(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise ceil.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The ceil of ``a``.
+      )pbdoc");
+  m.def(
+      "moveaxis",
+      &moveaxis,
+      "a"_a,
+      py::pos_only(),
+      "source"_a,
+      "destiantion"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        moveaxis(a: array, /, source: int, destination: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Move an axis to a new position.
+
+        Args:
+            a (array): Input array.
+            source (int): Specifies the source axis.
+            destination (int): Specifies the destination axis.
+
+        Returns:
+            array: The array with the axis moved.
+      )pbdoc");
+  m.def(
+      "swapaxes",
+      &swapaxes,
+      "a"_a,
+      py::pos_only(),
+      "axis1"_a,
+      "axis2"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        swapaxes(a: array, /, axis1 : int, axis2: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Swap two axes of an array.
+
+        Args:
+            a (array): Input array.
+            axis1 (int): Specifies the first axis.
+            axis2 (int): Specifies the second axis.
+
+        Returns:
+            array: The array with swapped axes.
       )pbdoc");
   m.def(
       "transpose",
@@ -2150,6 +2323,75 @@ void init_ops(py::module_& m) {
         Returns:
             array: The concatenated array.
       )pbdoc");
+  m.def(
+      "stack",
+      [](const std::vector<array>& arrays,
+         std::optional<int> axis,
+         StreamOrDevice s) {
+        if (axis.has_value()) {
+          return stack(arrays, axis.value(), s);
+        } else {
+          return stack(arrays, s);
+        }
+      },
+      "arrays"_a,
+      py::pos_only(),
+      "axis"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      stack(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Stacks the arrays along a new axis.
+
+      Args:
+          arrays (list(array)): A list of arrays to stack.
+          axis (int, optional): The axis in the result array along which the
+            input arrays are stacked. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+      Returns:
+          array: The resulting stacked array.
+    )pbdoc");
+  m.def(
+      "clip",
+      [](const array& a,
+         const std::optional<ScalarOrArray>& min,
+         const std::optional<ScalarOrArray>& max,
+         StreamOrDevice s) {
+        std::optional<array> min_ = std::nullopt;
+        std::optional<array> max_ = std::nullopt;
+        if (min) {
+          min_ = to_array(min.value());
+        }
+        if (max) {
+          max_ = to_array(max.value());
+        }
+        return clip(a, min_, max_, s);
+      },
+      "a"_a,
+      py::pos_only(),
+      "a_min"_a,
+      "a_max"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      clip(a: array, /, a_min: Union[scalar, array, None], a_max: Union[scalar, array, None], *, stream: Union[None, Stream, Device] = None) -> array
+
+      Clip the values of the array between the given minimum and maximum.
+
+      If either ``a_min`` or ``a_max`` are ``None``, then corresponding edge
+      is ignored. At least one of ``a_min`` and ``a_max`` cannot be ``None``.
+      The input ``a`` and the limits must broadcast with one another.
+
+      Args:
+          a (array): Input array.
+          a_min (scalar or array or None): Minimum value to clip to.
+          a_max (scalar or array or None): Maximum value to clip to.
+
+      Returns:
+          array: The clipped array.
+    )pbdoc");
   m.def(
       "pad",
       [](const array& a,

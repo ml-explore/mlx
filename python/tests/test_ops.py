@@ -320,6 +320,30 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertFalse(mx.array_equal(x, y))
                 self.assertTrue(mx.array_equal(x, y, equal_nan=True))
 
+    def test_tri(self):
+        for shape in [[4], [4, 4], [2, 10]]:
+            for diag in [-1, 0, 1, -2]:
+                self.assertEqualArray(
+                    mx.tri(*shape, k=diag), mx.array(np.tri(*shape, k=diag))
+                )
+
+    def test_tril(self):
+        mt = mx.random.normal((10, 10))
+        nt = np.array(mt)
+        for diag in [-1, 0, 1, -2]:
+            self.assertEqualArray(mx.tril(mt, diag), mx.array(np.tril(nt, diag)))
+
+        with self.assertRaises(Exception):
+            mx.tril(mx.zeros((1)))
+
+    def test_triu(self):
+        mt = mx.random.normal((10, 10))
+        nt = np.array(mt)
+        for diag in [-1, 0, 1, -2]:
+            self.assertEqualArray(mx.triu(mt, diag), mx.array(np.triu(nt, diag)))
+        with self.assertRaises(Exception):
+            mx.triu(mx.zeros((1)))
+
     def test_minimum(self):
         x = mx.array([0.0, -5, 10.0])
         y = mx.array([1.0, -7.0, 3.0])
@@ -333,6 +357,22 @@ class TestOps(mlx_tests.MLXTestCase):
 
         expected = [1, -5, 10]
         self.assertListEqual(mx.maximum(x, y).tolist(), expected)
+
+    def test_floor(self):
+        x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
+        expected = [-23, 19, -27, 9, 0, -np.inf, np.inf]
+        self.assertListEqual(mx.floor(x).tolist(), expected)
+
+        with self.assertRaises(ValueError):
+            mx.floor(mx.array([22 + 3j, 19 + 98j]))
+
+    def test_ceil(self):
+        x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
+        expected = [-22, 20, -27, 9, 0, -np.inf, np.inf]
+        self.assertListEqual(mx.ceil(x).tolist(), expected)
+
+        with self.assertRaises(ValueError):
+            mx.floor(mx.array([22 + 3j, 19 + 98j]))
 
     def test_transpose_noargs(self):
         x = mx.array([[0, 1, 1], [1, 0, 0]])
@@ -358,6 +398,13 @@ class TestOps(mlx_tests.MLXTestCase):
         ]
 
         self.assertListEqual(mx.transpose(x, axes=(0, 2, 1)).tolist(), expected)
+
+    def test_move_swap_axes(self):
+        x = mx.zeros((2, 3, 4))
+        self.assertEqual(mx.moveaxis(x, 0, 2).shape, [3, 4, 2])
+        self.assertEqual(x.moveaxis(0, 2).shape, [3, 4, 2])
+        self.assertEqual(mx.swapaxes(x, 0, 2).shape, [4, 3, 2])
+        self.assertEqual(x.swapaxes(0, 2).shape, [4, 3, 2])
 
     def test_sum(self):
         x = mx.array(
@@ -1347,6 +1394,74 @@ class TestOps(mlx_tests.MLXTestCase):
         eye_matrix = mx.eye(5, 6, k=-2)
         np_eye_matrix = np.eye(5, 6, k=-2)
         self.assertTrue(np.array_equal(eye_matrix, np_eye_matrix))
+
+    def test_stack(self):
+        a = mx.ones((2,))
+        np_a = np.ones((2,))
+        b = mx.ones((2,))
+        np_b = np.ones((2,))
+
+        # One dimensional stack axis=0
+        c = mx.stack([a, b])
+        np_c = np.stack([np_a, np_b])
+        self.assertTrue(np.array_equal(c, np_c))
+
+        # One dimensional stack axis=1
+        c = mx.stack([a, b], axis=1)
+        np_c = np.stack([np_a, np_b], axis=1)
+        self.assertTrue(np.array_equal(c, np_c))
+
+        a = mx.ones((1, 2))
+        np_a = np.ones((1, 2))
+        b = mx.ones((1, 2))
+        np_b = np.ones((1, 2))
+
+        # Two dimensional stack axis=0
+        c = mx.stack([a, b])
+        np_c = np.stack([np_a, np_b])
+        self.assertTrue(np.array_equal(c, np_c))
+
+        # Two dimensional stack axis=1
+        c = mx.stack([a, b], axis=1)
+        np_c = np.stack([np_a, np_b], axis=1)
+        self.assertTrue(np.array_equal(c, np_c))
+
+    def test_flatten(self):
+        x = mx.zeros([2, 3, 4])
+        self.assertEqual(mx.flatten(x).shape, [2 * 3 * 4])
+        self.assertEqual(mx.flatten(x, start_axis=1).shape, [2, 3 * 4])
+        self.assertEqual(mx.flatten(x, end_axis=1).shape, [2 * 3, 4])
+        self.assertEqual(x.flatten().shape, [2 * 3 * 4])
+        self.assertEqual(x.flatten(start_axis=1).shape, [2, 3 * 4])
+        self.assertEqual(x.flatten(end_axis=1).shape, [2 * 3, 4])
+
+    def test_clip(self):
+        a = np.array([1, 4, 3, 8, 5], np.int32)
+        expected = np.clip(a, 2, 6)
+        clipped = mx.clip(mx.array(a), 2, 6)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        a = np.array([-1, 1, 0, 5], np.int32)
+        expected = np.clip(a, 0, None)
+        clipped = mx.clip(mx.array(a), 0, None)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, None, 4)
+        clipped = mx.clip(mx.array(a), None, 4)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        mins = np.array([3, 1, 5, 5])
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, mins, 4)
+        clipped = mx.clip(mx.array(a), mx.array(mins), 4)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        maxs = np.array([5, -1, 2, 9])
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, mins, maxs)
+        clipped = mx.clip(mx.array(a), mx.array(mins), mx.array(maxs))
+        self.assertTrue(np.array_equal(clipped, expected))
 
 
 if __name__ == "__main__":

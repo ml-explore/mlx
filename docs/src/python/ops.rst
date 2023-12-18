@@ -26,6 +26,8 @@ Operations
    argsort
    array_equal
    broadcast_to
+   ceil
+   clip
    concatenate
    convolve
    conv1d
@@ -39,6 +41,8 @@ Operations
    exp
    expand_dims
    eye
+   floor
+   flatten
    full
    greater
    greater_equal
@@ -59,6 +63,7 @@ Operations
    mean
    min
    minimum
+   moveaxis
    multiply
    negative
    ones
@@ -82,14 +87,19 @@ Operations
    sqrt
    square
    squeeze
+   stack
    stop_gradient
    subtract
    sum
+   swapaxes
    take
    take_along_axis
    tan
    tanh
    transpose
+   tri
+   tril
+   triu
    var
    where
    zeros
