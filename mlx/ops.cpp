@@ -132,21 +132,16 @@ array arange(int stop, StreamOrDevice s /* = {} */) {
 array linspace(
     double start,
     double stop,
-    int num,
-    Dtype dtype,
+    int num /* = 50 */,
+    Dtype dtype /* = float32 */,
     StreamOrDevice s /* = {} */) {
-  double step = (stop - start) / (num - 1);
-  return astype(arange(start, stop + step, step, to_stream(s)), dtype);
-}
-array linspace(
-    double start,
-    double stop,
-    int num,
-    StreamOrDevice s /* = {} */) {
-  return linspace(start, stop, num, float32, to_stream(s));
-}
-array linspace(double start, double stop, StreamOrDevice s /* = {} */) {
-  return linspace(start, stop, 50, float32, to_stream(s));
+  float step = (stop - start) / (num - 1);
+  if (step < 0 && num != 0) {
+    std::ostringstream msg;
+    msg << "number of steps, " << step << ", must be non-negative.";
+    throw std::invalid_argument(msg.str());
+  }
+  return astype(arange(start, stop + step, step, float32, to_stream(s)), dtype);
 }
 
 array astype(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {

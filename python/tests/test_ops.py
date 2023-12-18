@@ -1403,13 +1403,25 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.array_equal(c, np_c))
 
     def test_linspace(self):
-        a = mx.linspace(0, 10, 5)
-        np_a = np.linspace(0, 10, 5)
+        # Test default num = 50
+        a = mx.linspace(0, 1)
+        np_a = np.linspace(0, 1)
         self.assertTrue(np.array_equal(a, np_a))
 
+        # Test int32 dtype
         b = mx.linspace(0, 10, 5, dtype=mx.int32)
         np_b = np.linspace(0, 10, 5, dtype=int)
         self.assertTrue(np.array_equal(b, np_b))
+
+        # Test negative sequence with float start and stop
+        c = mx.linspace(-2.7, -0.7, 7)
+        np_c = np.linspace(-2.7, -0.7, 7)
+        self.assertTrue(np.array_equal(c, np_c))
+
+        # Test irrational step size of 1/9
+        d = mx.linspace(0, 1, 10)
+        np_d = np.linspace(0, 1, 10)
+        self.assertTrue(np.array_equal(d, np_d))
 
 
 if __name__ == "__main__":

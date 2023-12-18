@@ -47,6 +47,7 @@ Operations
    identity
    less
    less_equal
+   linspace
    load
    log
    log2

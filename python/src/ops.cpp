@@ -1159,17 +1159,9 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "linspace",
-      [](Scalar start,
-         Scalar stop,
-         Scalar num,
-         std::optional<Dtype> dtype_,
-         StreamOrDevice s) {
+      [](Scalar start, Scalar stop, int num, Dtype dtype, StreamOrDevice s) {
         return linspace(
-            scalar_to_double(start),
-            scalar_to_double(stop),
-            scalar_to_double(num),
-            dtype_.value(),
-            s);
+            scalar_to_double(start), scalar_to_double(stop), num, dtype, s);
       },
       "start"_a,
       "stop"_a,
@@ -1177,7 +1169,7 @@ void init_ops(py::module_& m) {
       "dtype"_a = float32,
       "stream"_a = none,
       R"pbdoc(
-      linspace(start, stop, num: Optional[float] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
+      linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
 
       Generates evenly spaced numbers over a specified interval.
 
@@ -1187,7 +1179,7 @@ void init_ops(py::module_& m) {
       Args:
           start (float): Starting value.
           stop (float): Stopping value.
-          num (float, optional): Number of samples, defaults to ``50``.
+          num (int, optional): Number of samples, defaults to ``50``.
           dtype (Dtype, optional): Specifies the data type of the output,
           default to ``float32``.
 

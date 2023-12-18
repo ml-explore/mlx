@@ -41,11 +41,9 @@ array arange(int stop, StreamOrDevice s = {});
 array linspace(
     double start,
     double stop,
-    int num,
-    Dtype dtype,
+    int num = 50,
+    Dtype dtype = float32,
     StreamOrDevice s = {});
-array linspace(double start, double stop, int num, StreamOrDevice s = {});
-array linspace(double start, double stop, StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
 array astype(const array& a, Dtype dtype, StreamOrDevice s = {});
