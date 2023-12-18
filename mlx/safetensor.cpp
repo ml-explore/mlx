@@ -18,23 +18,17 @@ Token Tokenizer::getToken() {
   }
   switch (nextChar) {
     case '{':
-      this->_loc++;
-      return Token{TOKEN::CURLY_OPEN};
+      return Token{TOKEN::CURLY_OPEN, ++this->_loc};
     case '}':
-      this->_loc++;
-      return Token{TOKEN::CURLY_CLOSE};
+      return Token{TOKEN::CURLY_CLOSE, ++this->_loc};
     case ':':
-      this->_loc++;
-      return Token{TOKEN::COLON};
+      return Token{TOKEN::COLON, ++this->_loc};
     case '[':
-      this->_loc++;
-      return Token{TOKEN::ARRAY_OPEN};
+      return Token{TOKEN::ARRAY_OPEN, ++this->_loc};
     case ']':
-      this->_loc++;
-      return Token{TOKEN::ARRAY_CLOSE};
+      return Token{TOKEN::ARRAY_CLOSE, ++this->_loc};
     case ',':
-      this->_loc++;
-      return Token{TOKEN::COMMA};
+      return Token{TOKEN::COMMA, ++this->_loc};
     case '"': {
       size_t start = ++this->_loc;
       while (_data[++this->_loc] != '"' && this->hasMoreTokens())
@@ -63,13 +57,15 @@ Token Tokenizer::getToken() {
 JSONNode parseJson(const char* data, size_t len) {
   auto tokenizer = Tokenizer(data, len);
   std::stack<JSONNode*> ctx;
+  std::string key;
   while (tokenizer.hasMoreTokens()) {
     auto token = tokenizer.getToken();
     switch (token.type) {
-      case TOKEN::NULL_TYPE:
-        break;
       case TOKEN::CURLY_OPEN:
         ctx.push(new JSONNode(JSONNode::Type::OBJECT));
+        break;
+      case TOKEN::ARRAY_OPEN:
+        ctx.push(new JSONNode(JSONNode::Type::LIST));
         break;
       case TOKEN::CURLY_CLOSE:
         if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
@@ -94,9 +90,7 @@ JSONNode parseJson(const char* data, size_t len) {
           }
         }
         break;
-      case TOKEN::ARRAY_OPEN:
-        ctx.push(new JSONNode(JSONNode::Type::LIST));
-        break;
+
       case TOKEN::ARRAY_CLOSE:
         if (ctx.top()->is_type(JSONNode::Type::STRING)) {
           // key is above
@@ -155,6 +149,8 @@ JSONNode parseJson(const char* data, size_t len) {
       case TOKEN::COMMA:
         break;
       case TOKEN::COLON:
+        break;
+      case TOKEN::NULL_TYPE:
         break;
     }
   }
