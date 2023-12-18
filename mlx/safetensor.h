@@ -32,6 +32,9 @@ class JSONNode {
   JSONNode(std::string* s) : _type(Type::STRING) {
     this->_values.s = s;
   };
+  JSONNode(float f) : _type(Type::NUMBER) {
+    this->_values.f = f;
+  };
 
   JSONObject* getObject() {
     if (!is_type(Type::OBJECT)) {
@@ -54,6 +57,13 @@ class JSONNode {
     return *this->_values.s;
   }
 
+  float getNumber() {
+    if (!is_type(Type::NUMBER)) {
+      throw new std::runtime_error("not a number");
+    }
+    return this->_values.f;
+  }
+
   inline bool is_type(Type t) {
     return this->_type == t;
   }
@@ -67,7 +77,7 @@ class JSONNode {
     JSONObject* object;
     JSONList* list;
     std::string* s;
-    float fValue;
+    float f;
   } _values;
   Type _type;
 };

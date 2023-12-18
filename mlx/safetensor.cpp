@@ -36,7 +36,6 @@ Token Tokenizer::getToken() {
       if (!this->hasMoreTokens()) {
         throw new std::runtime_error("no more chars to parse");
       }
-      // pass the last "
       return Token{TOKEN::STRING, start, ++this->_loc};
     }
     default: {
@@ -132,20 +131,24 @@ JSONNode parseJson(const char* data, size_t len) {
         }
         break;
       }
-      case TOKEN::NUMBER:
+      case TOKEN::NUMBER: {
+        // TODO: is there an easier way of doing this.
+        auto str = new std::string(data + token.start, token.end - token.start);
+        float val = strtof(str->c_str(), nullptr);
         if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-          ctx.top()->getList()->push_back(new JSONNode(JSONNode::Type::NUMBER));
+          ctx.top()->getList()->push_back(new JSONNode(val));
         } else if (ctx.top()->is_type(JSONNode::Type::STRING)) {
           auto key = ctx.top();
           ctx.pop();
           if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
             ctx.top()->getObject()->insert(
-                {key->getString(), new JSONNode(JSONNode::Type::NUMBER)});
+                {key->getString(), new JSONNode(val)});
           } else {
             throw new std::runtime_error("invalid json");
           }
         }
         break;
+      }
       case TOKEN::COMMA:
         break;
       case TOKEN::COLON:

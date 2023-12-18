@@ -38,13 +38,15 @@ TEST_CASE("test tokenizer") {
   CHECK_EQ(tokenizer.getToken().type, io::TOKEN::NULL_TYPE);
 }
 
-TEST_CASE("test load_safetensor") {
+TEST_CASE("test parseJson") {
   auto raw = std::string("{}");
   auto res = io::parseJson(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::OBJECT));
+
   raw = std::string("[]");
   res = io::parseJson(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::LIST));
+
   raw = std::string("[{}, \"test\"]");
   res = io::parseJson(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::LIST));
@@ -53,6 +55,7 @@ TEST_CASE("test load_safetensor") {
   CHECK(res.getList()->at(1)->is_type(io::JSONNode::Type::STRING));
   MESSAGE(res.getList()->at(1)->getString());
   CHECK_EQ(res.getList()->at(1)->getString(), "test");
+
   raw = std::string("{\"test\": \"test\", \"test_num\": 1}");
   res = io::parseJson(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::OBJECT));
@@ -60,6 +63,8 @@ TEST_CASE("test load_safetensor") {
   CHECK(res.getObject()->at("test")->is_type(io::JSONNode::Type::STRING));
   CHECK_EQ(res.getObject()->at("test")->getString(), "test");
   CHECK(res.getObject()->at("test_num")->is_type(io::JSONNode::Type::NUMBER));
+  CHECK_EQ(res.getObject()->at("test_num")->getNumber(), 1);
+
   raw = std::string("{\"test\": { \"test\": \"test\"}}");
   res = io::parseJson(raw.c_str(), raw.size());
   CHECK(res.is_type(io::JSONNode::Type::OBJECT));
