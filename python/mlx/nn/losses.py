@@ -244,10 +244,11 @@ def triplet_loss(
 ) -> mx.array:
     r"""
     Computes the triplet loss for a set of anchor, positive, and negative samples.
+    Margin is represented with alpha in the math section.
 
     .. math::
 
-       L_{\text{triplet}} = \max\left(\|A - P\|_p - \|A - N\|_p + \margin, 0\right)
+       L_{\text{triplet}} = \max\left(\|A - P\|_p - \|A - N\|_p + \alpha, 0\right)
 
     Args:
         anchors (array): The anchor samples.
