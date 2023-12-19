@@ -1066,7 +1066,7 @@ std::unordered_map<std::string, array> load_safetensor(
     StreamOrDevice s = {});
 
 void save_safetensor(
-    std::shared_ptr<io::Reader> in_stream,
+    std::shared_ptr<io::Writer> in_stream,
     std::unordered_map<std::string, array>);
 void save_safetensor(
     const std::string& file,

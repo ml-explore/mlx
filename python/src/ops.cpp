@@ -2964,6 +2964,22 @@ void init_ops(py::module_& m) {
             result dict: The loaded dict mapping name to array from the ``.safetensors`` file
       )pbdoc");
   m.def(
+      "save_safetensor",
+      &mlx_save_safetensor_helper,
+      "file"_a,
+      "d"_a,
+      py::pos_only(),
+      py::kw_only(),
+      R"pbdoc(
+        save_safetensor(file: str, d: Dict[str, array], /, *, stream: Union[None, Stream, Device] = None)
+
+        Save array(s) to a binary file in ``.safetensors`` format.
+
+        Args:
+            file (file, str): File in which the array is saved
+            d (Dict[str, array]): The dict mapping name to array to be saved
+      )pbdoc");
+  m.def(
       "where",
       [](const ScalarOrArray& condition,
          const ScalarOrArray& x_,

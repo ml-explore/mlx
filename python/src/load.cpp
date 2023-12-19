@@ -382,3 +382,22 @@ void mlx_savez_helper(
 
   return;
 }
+
+void mlx_save_safetensor_helper(py::object file, py::dict d) {
+  auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
+  if (py::isinstance<py::str>(file)) {
+    save_safetensor(py::cast<std::string>(file), arrays_map);
+    return;
+  } else if (is_ostream_object(file)) {
+    auto writer = std::make_shared<PyFileWriter>(file);
+    {
+      py::gil_scoped_release gil;
+      save_safetensor(writer, arrays_map);
+    }
+
+    return;
+  }
+
+  throw std::invalid_argument(
+      "[save_safetensor] Input must be a file-like object, string, or pathlib.Path");
+}
