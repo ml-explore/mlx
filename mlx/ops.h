@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <optional>
 #include <variant>
 
 #include "array.h"
@@ -119,10 +120,28 @@ inline array identity(int n, StreamOrDevice s = {}) {
   return identity(n, float32, s);
 }
 
+array tri(int n, int m, int k, Dtype type, StreamOrDevice s = {});
+inline array tri(int n, Dtype type, StreamOrDevice s = {}) {
+  return tri(n, n, 0, type, s);
+}
+
+array tril(array x, int k, StreamOrDevice s = {});
+array triu(array x, int k, StreamOrDevice s = {});
+
 /** array manipulation */
 
 /** Reshape an array to the given shape. */
 array reshape(const array& a, std::vector<int> shape, StreamOrDevice s = {});
+
+/** Flatten the dimensions in the range `[start_axis, end_axis]` . */
+array flatten(
+    const array& a,
+    int start_axis,
+    int end_axis = -1,
+    StreamOrDevice s = {});
+
+/** Flatten the array to 1D. */
+array flatten(const array& a, StreamOrDevice s = {});
 
 /** Remove singleton dimensions at the given axes. */
 array squeeze(
@@ -175,6 +194,15 @@ std::vector<array> split(
     StreamOrDevice s = {});
 std::vector<array>
 split(const array& a, const std::vector<int>& indices, StreamOrDevice s = {});
+
+/**
+ * Clip (limit) the values in an array.
+ */
+array clip(
+    const array& a,
+    const std::optional<array>& a_min = std::nullopt,
+    const std::optional<array>& a_max = std::nullopt,
+    StreamOrDevice s = {});
 
 /** Concatenate arrays along a given axis. */
 array concatenate(
@@ -774,6 +802,12 @@ array erfinv(const array& a, StreamOrDevice s = {});
 
 /** Stop the flow of gradients. */
 array stop_gradient(const array& a, StreamOrDevice s = {});
+
+/** Round a floating point number */
+array round(const array& a, int decimals, StreamOrDevice s = {});
+inline array round(const array& a, StreamOrDevice s = {}) {
+  return round(a, 0, s);
+}
 
 /** Matrix-matrix multiplication. */
 array matmul(const array& a, const array& b, StreamOrDevice s = {});

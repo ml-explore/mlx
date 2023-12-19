@@ -53,6 +53,17 @@ struct SignOp {
   }
 };
 
+struct RoundOp {
+  template <typename T>
+  T operator()(T x) {
+    return std::round(x);
+  }
+
+  complex64_t operator()(complex64_t x) {
+    return {std::round(x.real()), std::round(x.imag())};
+  }
+};
+
 template <typename T, typename Op>
 void unary_op(const array& a, array& out, Op op) {
   const T* a_ptr = a.data<T>();

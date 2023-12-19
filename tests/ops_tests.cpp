@@ -58,6 +58,33 @@ TEST_CASE("test reshape") {
   CHECK_EQ(y.shape(), std::vector<int>{1, 5, 0});
 }
 
+TEST_CASE("test flatten") {
+  array x = zeros({2, 3, 4});
+  CHECK_EQ(flatten(x).shape(), std::vector<int>({2 * 3 * 4}));
+
+  CHECK_EQ(flatten(x, 1, 1).shape(), std::vector<int>({2, 3, 4}));
+  CHECK_EQ(flatten(x, 1, 2).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, 1, 3).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, 1, -1).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, -2, -1).shape(), std::vector<int>({2, 3 * 4}));
+  CHECK_EQ(flatten(x, -3, -1).shape(), std::vector<int>({2 * 3 * 4}));
+  CHECK_EQ(flatten(x, -4, -1).shape(), std::vector<int>({2 * 3 * 4}));
+
+  // Check start > end throws
+  CHECK_THROWS(flatten(x, 2, 1));
+
+  // Check start >= ndim throws
+  CHECK_THROWS(flatten(x, 5, 6));
+
+  // Check end < 0 throws
+  CHECK_THROWS(flatten(x, -5, -4));
+
+  // Check scalar flattens to 1D
+  x = array(1);
+  CHECK_EQ(flatten(x, -3, -1).shape(), std::vector<int>({1}));
+  CHECK_EQ(flatten(x, 0, 0).shape(), std::vector<int>({1}));
+}
+
 TEST_CASE("test squeeze and expand") {
   array x = zeros({2, 1, 2, 1, 2, 1});
   CHECK_EQ(squeeze(x).shape(), std::vector<int>{2, 2, 2});
@@ -833,6 +860,15 @@ TEST_CASE("test arithmetic unary ops") {
     x = array(std::complex<float>(1.0f, 1.0f));
     CHECK_THROWS_AS(floor(x), std::invalid_argument);
     CHECK_THROWS_AS(ceil(x), std::invalid_argument);
+  }
+
+  // Test round
+  {
+    array x({0.5, -0.5, 1.5, -1.5, 2.3, 2.6});
+    CHECK(array_equal(round(x), array({1, -1, 2, -2, 2, 3})).item<bool>());
+
+    x = array({11, 222, 32});
+    CHECK(array_equal(round(x, -1), array({10, 220, 30})).item<bool>());
   }
 
   // Test exponential
@@ -2031,6 +2067,78 @@ TEST_CASE("test eye") {
   CHECK(array_equal(eye_3x2, expected_eye_3x2).item<bool>());
 }
 
+TEST_CASE("test tri") {
+  auto _tri = tri(4, 4, 0, float32);
+  CHECK_EQ(_tri.shape(), std::vector<int>{4, 4});
+  auto expected_tri = array(
+      {1.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       1.0f,
+       1.0f,
+       0.0f,
+       0.0f,
+       1.0f,
+       1.0f,
+       1.0f,
+       0.0f,
+       1.0f,
+       1.0f,
+       1.0f,
+       1.0f},
+      {4, 4});
+  CHECK(array_equal(_tri, expected_tri).item<bool>());
+}
+
+TEST_CASE("test tril") {
+  auto _tril = tril(full(std::vector<int>{4, 4}, 2.0f, float32), 0);
+  CHECK_EQ(_tril.shape(), std::vector<int>{4, 4});
+  auto expected_tri = array(
+      {2.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       2.0f},
+      {4, 4});
+  CHECK(array_equal(_tril, expected_tri).item<bool>());
+}
+
+TEST_CASE("test triu") {
+  auto _triu = triu(full(std::vector<int>{4, 4}, 2.0f, float32), 0);
+  CHECK_EQ(_triu.shape(), std::vector<int>{4, 4});
+  auto expected_tri = array(
+      {2.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       2.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       2.0f},
+      {4, 4});
+  CHECK(array_equal(_triu, expected_tri).item<bool>());
+}
+
 TEST_CASE("test identity") {
   auto id_4 = identity(4);
   CHECK_EQ(id_4.shape(), std::vector<int>{4, 4});
@@ -2071,6 +2179,48 @@ TEST_CASE("test eye with negative k offset") {
       {0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f},
       {4, 3});
   CHECK(array_equal(eye_4_k_minus1, expected_eye_4_k_minus1).item<bool>());
+}
+
+TEST_CASE("test basic clipping") {
+  array a({1.0f, 4.0f, 3.0f, 8.0f, 5.0f}, {5});
+  array expected({2.0f, 4.0f, 3.0f, 6.0f, 5.0f}, {5});
+  auto clipped = clip(a, array(2.0f), array(6.0f));
+  CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test clipping with only min") {
+  array a({-1.0f, 1.0f, 0.0f, 5.0f}, {4});
+  array expected({0.0f, 1.0f, 0.0f, 5.0f}, {4});
+  auto clipped = clip(a, array(0.0f), std::nullopt);
+  CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test clipping with only max") {
+  array a({2.0f, 3.0f, 4.0f, 5.0f}, {4});
+  array expected({2.0f, 3.0f, 4.0f, 4.0f}, {4});
+  auto clipped = clip(a, std::nullopt, array(4.0f));
+  CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test basic clipping") {
+  array a({1.0f, 4.0f, 3.0f, 8.0f, 5.0f}, {5});
+  array expected({2.0f, 4.0f, 3.0f, 6.0f, 5.0f}, {5});
+  auto clipped = clip(a, array(2.0f), array(6.0f));
+  CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test clipping with only min") {
+  array a({-1.0f, 1.0f, 0.0f, 5.0f}, {4});
+  array expected({0.0f, 1.0f, 0.0f, 5.0f}, {4});
+  auto clipped = clip(a, array(0.0f), std::nullopt);
+  CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test clipping with only max") {
+  array a({2.0f, 3.0f, 4.0f, 5.0f}, {4});
+  array expected({2.0f, 3.0f, 4.0f, 4.0f}, {4});
+  auto clipped = clip(a, std::nullopt, array(4.0f));
+  CHECK(array_equal(clipped, expected).item<bool>());
 }
 
 TEST_CASE("test linspace") {

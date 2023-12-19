@@ -72,7 +72,7 @@ class Primitive {
       const std::vector<int>& argnums);
 
   /**
-   * The primitive must know how to vectorize itself accross
+   * The primitive must know how to vectorize itself across
    * the given axes. The output is a pair containing the array
    * representing the vectorized computation and the axis which
    * corresponds to the output vectorized dimension.
@@ -1203,6 +1203,25 @@ class Reduce : public Primitive {
   ReduceType reduce_type_;
   std::vector<int> axes_;
 
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Round : public Primitive {
+ public:
+  explicit Round(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Round)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
   void eval(const std::vector<array>& inputs, array& out);
 };
 

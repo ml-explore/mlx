@@ -27,6 +27,7 @@ Operations
    array_equal
    broadcast_to
    ceil
+   clip
    concatenate
    convolve
    conv1d
@@ -41,6 +42,7 @@ Operations
    expand_dims
    eye
    floor
+   flatten
    full
    greater
    greater_equal
@@ -72,6 +74,7 @@ Operations
    prod
    reciprocal
    reshape
+   round
    rsqrt
    save
    savez
@@ -96,6 +99,9 @@ Operations
    tan
    tanh
    transpose
+   tri
+   tril
+   triu
    var
    where
    zeros

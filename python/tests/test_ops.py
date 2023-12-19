@@ -320,6 +320,30 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertFalse(mx.array_equal(x, y))
                 self.assertTrue(mx.array_equal(x, y, equal_nan=True))
 
+    def test_tri(self):
+        for shape in [[4], [4, 4], [2, 10]]:
+            for diag in [-1, 0, 1, -2]:
+                self.assertEqualArray(
+                    mx.tri(*shape, k=diag), mx.array(np.tri(*shape, k=diag))
+                )
+
+    def test_tril(self):
+        mt = mx.random.normal((10, 10))
+        nt = np.array(mt)
+        for diag in [-1, 0, 1, -2]:
+            self.assertEqualArray(mx.tril(mt, diag), mx.array(np.tril(nt, diag)))
+
+        with self.assertRaises(Exception):
+            mx.tril(mx.zeros((1)))
+
+    def test_triu(self):
+        mt = mx.random.normal((10, 10))
+        nt = np.array(mt)
+        for diag in [-1, 0, 1, -2]:
+            self.assertEqualArray(mx.triu(mt, diag), mx.array(np.triu(nt, diag)))
+        with self.assertRaises(Exception):
+            mx.triu(mx.zeros((1)))
+
     def test_minimum(self):
         x = mx.array([0.0, -5, 10.0])
         y = mx.array([1.0, -7.0, 3.0])
@@ -348,7 +372,35 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(mx.ceil(x).tolist(), expected)
 
         with self.assertRaises(ValueError):
-            mx.floor(mx.array([22 + 3j, 19 + 98j]))
+            mx.ceil(mx.array([22 + 3j, 19 + 98j]))
+
+    def test_round(self):
+        # float
+        x = mx.array(
+            [0.5, -0.5, 1.5, -1.5, -22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf]
+        )
+        expected = [1, -1, 2, -2, -22, 20, -27, 9, 0, -np.inf, np.inf]
+        self.assertListEqual(mx.round(x).tolist(), expected)
+
+        # complex
+        y = mx.round(mx.array([22.2 + 3.6j, 19.5 + 98.2j]))
+        self.assertListEqual(y.tolist(), [22 + 4j, 20 + 98j])
+
+        # decimals
+        y0 = mx.round(mx.array([15, 122], mx.int32), decimals=0)
+        y1 = mx.round(mx.array([15, 122], mx.int32), decimals=-1)
+        y2 = mx.round(mx.array([15, 122], mx.int32), decimals=-2)
+        self.assertEqual(y0.dtype, mx.int32)
+        self.assertEqual(y1.dtype, mx.int32)
+        self.assertEqual(y2.dtype, mx.int32)
+        self.assertListEqual(y0.tolist(), [15, 122])
+        self.assertListEqual(y1.tolist(), [20, 120])
+        self.assertListEqual(y2.tolist(), [0, 100])
+
+        y1 = mx.round(mx.array([1.537, 1.471], mx.float32), decimals=1)
+        y2 = mx.round(mx.array([1.537, 1.471], mx.float32), decimals=2)
+        self.assertTrue(mx.allclose(y1, mx.array([1.5, 1.5])))
+        self.assertTrue(mx.allclose(y2, mx.array([1.54, 1.47])))
 
     def test_transpose_noargs(self):
         x = mx.array([[0, 1, 1], [1, 0, 0]])
@@ -1401,6 +1453,43 @@ class TestOps(mlx_tests.MLXTestCase):
         c = mx.stack([a, b], axis=1)
         np_c = np.stack([np_a, np_b], axis=1)
         self.assertTrue(np.array_equal(c, np_c))
+
+    def test_flatten(self):
+        x = mx.zeros([2, 3, 4])
+        self.assertEqual(mx.flatten(x).shape, [2 * 3 * 4])
+        self.assertEqual(mx.flatten(x, start_axis=1).shape, [2, 3 * 4])
+        self.assertEqual(mx.flatten(x, end_axis=1).shape, [2 * 3, 4])
+        self.assertEqual(x.flatten().shape, [2 * 3 * 4])
+        self.assertEqual(x.flatten(start_axis=1).shape, [2, 3 * 4])
+        self.assertEqual(x.flatten(end_axis=1).shape, [2 * 3, 4])
+
+    def test_clip(self):
+        a = np.array([1, 4, 3, 8, 5], np.int32)
+        expected = np.clip(a, 2, 6)
+        clipped = mx.clip(mx.array(a), 2, 6)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        a = np.array([-1, 1, 0, 5], np.int32)
+        expected = np.clip(a, 0, None)
+        clipped = mx.clip(mx.array(a), 0, None)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, None, 4)
+        clipped = mx.clip(mx.array(a), None, 4)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        mins = np.array([3, 1, 5, 5])
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, mins, 4)
+        clipped = mx.clip(mx.array(a), mx.array(mins), 4)
+        self.assertTrue(np.array_equal(clipped, expected))
+
+        maxs = np.array([5, -1, 2, 9])
+        a = np.array([2, 3, 4, 5], np.int32)
+        expected = np.clip(a, mins, maxs)
+        clipped = mx.clip(mx.array(a), mx.array(mins), mx.array(maxs))
+        self.assertTrue(np.array_equal(clipped, expected))
 
     def test_linspace(self):
         # Test default num = 50

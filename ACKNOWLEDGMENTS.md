@@ -1,3 +1,16 @@
+# Individual Contributors
+
+If you wish to be acknowledged for your contributions, please list your name
+with a short description of your contribution(s) below. For example:
+
+- Jane Smith: Added the `foo` and `bar` ops.
+
+MLX was developed with contributions from the following individuals:
+  
+- Juarez Bochi: Fixed bug in cross attention.
+
+# Third-Party Software
+
 MLX leverages several third-party software, listed here together with
 their license copied verbatim.
 

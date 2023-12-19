@@ -97,7 +97,7 @@ class GroupNorm(Module):
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively. However, the mean and
     variance are computed over the spatial dimensions and each group of
-    features. In particular, the input is split into num_groups accross the
+    features. In particular, the input is split into num_groups across the
     feature dimension.
 
     The feature dimension is assumed to be the last dimension and the dimensions
