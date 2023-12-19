@@ -98,6 +98,10 @@ elseif (MLX_BUILD_METAL)
     ${QUARTZ_LIB})
 endif()
 
+MESSAGE(STATUS "Downloading json")
+find_package(nlohmann_json 3.11.3 REQUIRED)
+target_link_libraries(mlx nlohmann_json::nlohmann_json)
+
 find_library(ACCELERATE_LIBRARY Accelerate)
 if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
   message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
@@ -151,6 +155,8 @@ endif()
 if (MLX_BUILD_BENCHMARKS)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/benchmarks/cpp)
 endif()
+
+
 
 # ----------------------------- Installation -----------------------------
 include(GNUInstallDirs)

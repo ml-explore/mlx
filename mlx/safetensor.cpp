@@ -4,200 +4,6 @@
 
 namespace mlx::core {
 
-namespace io {
-Token Tokenizer::getToken() {
-  if (!this->hasMoreTokens()) {
-    return Token{TOKEN::NULL_TYPE};
-  }
-  char nextChar = this->_data[this->_loc];
-  while ((nextChar == ' ' || nextChar == '\n') && this->hasMoreTokens()) {
-    nextChar = this->_data[++this->_loc];
-  }
-  if (!this->hasMoreTokens()) {
-    return Token{TOKEN::NULL_TYPE};
-  }
-  // loc is not that important here, but need to increment location
-  // so might as well do it all in one line
-  switch (nextChar) {
-    case '{':
-      return Token{TOKEN::CURLY_OPEN, ++this->_loc};
-    case '}':
-      return Token{TOKEN::CURLY_CLOSE, ++this->_loc};
-    case ':':
-      return Token{TOKEN::COLON, ++this->_loc};
-    case '[':
-      return Token{TOKEN::ARRAY_OPEN, ++this->_loc};
-    case ']':
-      return Token{TOKEN::ARRAY_CLOSE, ++this->_loc};
-    case ',':
-      return Token{TOKEN::COMMA, ++this->_loc};
-    case '"': {
-      size_t start = ++this->_loc;
-      while (_data[++this->_loc] != '"' && this->hasMoreTokens())
-        ;
-      if (!this->hasMoreTokens()) {
-        throw std::runtime_error("no more chars to parse");
-      }
-      return Token{TOKEN::STRING, start, ++this->_loc};
-    }
-    default: {
-      size_t start = this->_loc;
-      while ((nextChar != ',' && nextChar != '}' && nextChar != ']' &&
-              nextChar != ' ' && nextChar != '\n') &&
-             this->hasMoreTokens()) {
-        nextChar = this->_data[++this->_loc];
-      }
-      if (!this->hasMoreTokens()) {
-        throw std::runtime_error("no more chars to parse");
-      }
-      return Token{TOKEN::NUMBER, start, this->_loc};
-    }
-  }
-}
-
-JSONNode jsonDeserialize(const char* data, size_t len) {
-  auto tokenizer = Tokenizer(data, len);
-  std::stack<JSONNode*> ctx;
-  while (tokenizer.hasMoreTokens()) {
-    auto token = tokenizer.getToken();
-    switch (token.type) {
-      case TOKEN::CURLY_OPEN:
-        ctx.push(new JSONNode(JSONNode::Type::OBJECT));
-        break;
-      case TOKEN::ARRAY_OPEN:
-        ctx.push(new JSONNode(JSONNode::Type::LIST));
-        break;
-      case TOKEN::CURLY_CLOSE:
-        if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-          auto obj = ctx.top();
-          ctx.pop();
-          // top-level object
-          if (ctx.size() == 0) {
-            return *obj;
-          }
-
-          if (ctx.top()->is_type(JSONNode::Type::STRING)) {
-            auto key = ctx.top();
-            ctx.pop();
-            if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-              ctx.top()->getObject()->insert({key->getString(), obj});
-            } else {
-              throw std::runtime_error("invalid json");
-            }
-          } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-            ctx.top()->getList()->push_back(obj);
-          }
-        }
-        break;
-      case TOKEN::ARRAY_CLOSE:
-        if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-          auto obj = ctx.top();
-          ctx.pop();
-          if (ctx.size() == 0) {
-            return *obj;
-          }
-          if (ctx.top()->is_type(JSONNode::Type::STRING)) {
-            auto key = ctx.top();
-            ctx.pop();
-            if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-              ctx.top()->getObject()->insert({key->getString(), obj});
-            } else {
-              throw std::runtime_error(
-                  "invalid json, string/array key pair did not have object parent");
-            }
-          } else if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-            if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-              ctx.top()->getList()->push_back(obj);
-            }
-          }
-        } else {
-          throw std::runtime_error(
-              "invalid json, could not find array to close");
-        }
-        break;
-      case TOKEN::STRING: {
-        auto str =
-            new std::string(data + token.start, token.end - token.start - 1);
-        if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-          ctx.top()->getList()->push_back(new JSONNode(str));
-        } else if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-          ctx.push(new JSONNode(str));
-        } else if (ctx.top()->is_type(JSONNode::Type::STRING)) {
-          auto key = ctx.top();
-          ctx.pop();
-          if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-            ctx.top()->getObject()->insert(
-                {key->getString(), new JSONNode(str)});
-          } else {
-            throw std::runtime_error("invalid json");
-          }
-        }
-        break;
-      }
-      case TOKEN::NUMBER: {
-        // TODO: is there an easier way of doing this.
-        auto str = new std::string(data + token.start, token.end - token.start);
-        auto val = strtoul(str->c_str(), nullptr, 10);
-        if (ctx.top()->is_type(JSONNode::Type::LIST)) {
-          ctx.top()->getList()->push_back(new JSONNode(val));
-        } else if (ctx.top()->is_type(JSONNode::Type::STRING)) {
-          auto key = ctx.top();
-          ctx.pop();
-          if (ctx.top()->is_type(JSONNode::Type::OBJECT)) {
-            ctx.top()->getObject()->insert(
-                {key->getString(), new JSONNode(val)});
-          } else {
-            throw std::runtime_error("invalid json");
-          }
-        }
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  throw std::runtime_error(
-      "[jsonDeserialize] json was invalid and could not be parsed");
-}
-
-std::string jsonSerialize(JSONNode* node) {
-  std::string res;
-  if (node->is_type(JSONNode::Type::STRING)) {
-    return "\"" + node->getString() + "\"";
-  }
-  if (node->is_type(JSONNode::Type::NUMBER)) {
-    return std::to_string(node->getNumber());
-  }
-  if (node->is_type(JSONNode::Type::LIST)) {
-    res += "[";
-    for (auto& item : *node->getList()) {
-      res += jsonSerialize(item);
-      res += ",";
-    }
-    if (res.back() == ',') {
-      res.pop_back();
-    }
-    res += "]";
-    return res;
-  }
-  if (node->is_type(JSONNode::Type::OBJECT)) {
-    res += "{";
-    for (auto& [key, item] : *node->getObject()) {
-      res += "\"" + key + "\":";
-      res += jsonSerialize(item);
-      res += ",";
-    }
-    if (res.back() == ',') {
-      res.pop_back();
-    }
-    res += "}";
-    return res;
-  }
-
-  throw std::runtime_error("[jsonSerialize] invalid json node");
-}
-
-} // namespace io
 std::string dtype_to_safetensor_str(Dtype t) {
   if (t == float32) {
     return ST_F32;
@@ -276,44 +82,34 @@ std::unordered_map<std::string, array> load_safetensor(
         "[load_safetensor] Invalid json header length " + in_stream->label());
   }
   // Load the json metadata
-  char json[jsonHeaderLength];
-  in_stream->read(json, jsonHeaderLength);
-  auto metadata = io::jsonDeserialize(json, jsonHeaderLength);
+  char rawJson[jsonHeaderLength];
+  in_stream->read(rawJson, jsonHeaderLength);
+  auto metadata = json::parse(rawJson, rawJson + jsonHeaderLength);
+  // auto metadata = io::jsonDeserialize(json, jsonHeaderLength);
   // Should always be an object on the top-level
-  if (!metadata.is_type(io::JSONNode::Type::OBJECT)) {
+  if (!metadata.is_object()) {
     throw std::runtime_error(
         "[load_safetensor] Invalid json metadata " + in_stream->label());
   }
   size_t offset = jsonHeaderLength + 8;
   // Load the arrays using metadata
   std::unordered_map<std::string, array> res;
-  for (auto& [key, obj] : *metadata.getObject()) {
-    if (key == "__metadata__") {
+  for (const auto& item : metadata.items()) {
+    if (item.key() == "__metadata__") {
       // ignore metadata for now
       continue;
     }
-    std::string dtype = obj->getObject()->at("dtype")->getString();
-    auto shape = obj->getObject()->at("shape")->getList();
-    std::vector<int> shape_vec;
-    for (const auto& dim : *shape) {
-      shape_vec.push_back(dim->getNumber());
-    }
-    auto data_offsets = obj->getObject()->at("data_offsets")->getList();
-    std::vector<int64_t> data_offsets_vec;
-    for (const auto& offset : *data_offsets) {
-      data_offsets_vec.push_back(offset->getNumber());
-    }
+    std::string dtype = item.value().at("dtype");
+    std::vector<int> shape = item.value().at("shape");
+    std::vector<size_t> data_offsets = item.value().at("data_offsets");
     Dtype type = dtype_from_safetensor_str(dtype);
     auto loaded_array = array(
-        shape_vec,
+        shape,
         type,
         std::make_unique<Load>(
-            to_stream(s),
-            in_stream,
-            offset + data_offsets->at(0)->getNumber(),
-            false),
+            to_stream(s), in_stream, offset + data_offsets.at(0), false),
         std::vector<array>{});
-    res.insert({key, loaded_array});
+    res.insert({item.key(), loaded_array});
   }
   return res;
 }
@@ -330,8 +126,8 @@ void save_safetensor(
     std::unordered_map<std::string, array> a) {
   ////////////////////////////////////////////////////////
   // Check array map
+  json parent;
 
-  io::JSONNode metadata(io::JSONNode::Type::OBJECT);
   size_t offset = 0;
   for (auto& [key, arr] : a) {
     arr.eval(false);
@@ -345,29 +141,12 @@ void save_safetensor(
           "[save_safetensor] cannot serialize a non-contiguous array key: " +
           key);
     }
-    auto obj = new io::JSONNode(io::JSONNode::Type::OBJECT);
+    json child;
     // TODO: dont make a new string
-    obj->getObject()->insert(
-        {"dtype",
-         new io::JSONNode(
-             new std::string(dtype_to_safetensor_str(arr.dtype())))});
-    obj->getObject()->insert(
-        {"shape", new io::JSONNode(io::JSONNode::Type::LIST)});
-    for (auto& dim : arr.shape()) {
-      obj->getObject()->at("shape")->getList()->push_back(
-          new io::JSONNode(dim));
-    }
-    obj->getObject()->insert(
-        {"data_offsets", new io::JSONNode(io::JSONNode::Type::LIST)});
-    obj->getObject()
-        ->at("data_offsets")
-        ->getList()
-        ->push_back(new io::JSONNode(offset));
-    obj->getObject()
-        ->at("data_offsets")
-        ->getList()
-        ->push_back(new io::JSONNode(offset + arr.nbytes()));
-    metadata.getObject()->insert({key, obj});
+    child["dtype"] = dtype_to_safetensor_str(arr.dtype());
+    child["shape"] = arr.shape();
+    child["data_offsets"] = std::vector<size_t>{offset, offset + arr.nbytes()};
+    parent[key] = child;
     offset += arr.nbytes();
   }
 
@@ -378,7 +157,7 @@ void save_safetensor(
         "[save_safetensor] Failed to open " + out_stream->label());
   }
 
-  auto header = io::jsonSerialize(&metadata);
+  auto header = parent.dump();
   uint64_t header_len = header.length();
   out_stream->write(reinterpret_cast<char*>(&header_len), 8);
   out_stream->write(header.c_str(), header_len);
@@ -393,7 +172,7 @@ void save_safetensor(
   // Open and check file
   std::string file = file_;
 
-  // Add .npy to file name if it is not there
+  // Add .safetensors to file name if it is not there
   if (file.length() < 12 ||
       file.substr(file.length() - 12, 12) != ".safetensors")
     file += ".safetensors";
