@@ -16,3 +16,4 @@ Loss Functions
    mse_loss
    nll_loss
    smooth_l1_loss
+   triplet_loss
