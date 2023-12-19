@@ -276,27 +276,21 @@ class TestNN(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
 
         # Test with reduction 'none'
-        losses_none = nn.losses.dice_loss(
-            predictions, targets, reduction="none"
-        )
+        losses_none = nn.losses.dice_loss(predictions, targets, reduction="none")
         self.assertTrue(
             mx.allclose(losses_none, expected_none, atol=1e-5),
             "Test case failed for dice_loss --reduction='none'",
         )
 
         # Test with reduction 'mean'
-        losses_mean = nn.losses.dice_loss(
-            predictions, targets, reduction="mean"
-        )
+        losses_mean = nn.losses.dice_loss(predictions, targets, reduction="mean")
         self.assertTrue(
             mx.allclose(losses_mean, expected_mean, atol=1e-5),
             "Test case failed for dice_loss --reduction='mean'",
         )
 
         # Test with reduction 'sum'
-        losses_sum = nn.losses.dice_loss(
-            predictions, targets, reduction="sum"
-        )
+        losses_sum = nn.losses.dice_loss(predictions, targets, reduction="sum")
         self.assertTrue(
             mx.allclose(losses_sum, expected_sum, atol=1e-5),
             "Test case failed for dice_loss --reduction='sum'",
