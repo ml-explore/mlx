@@ -265,6 +265,43 @@ class TestNN(mlx_tests.MLXTestCase):
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
+    def test_dice_loss(self):
+        # Create a simple test case
+        predictions = mx.array([[0.7, 0.2, 0.1], [0.1, 0.6, 0.3]])
+        targets = mx.array([[1, 0, 0], [0, 1, 0]])
+
+        # Expected Dice loss
+        expected_none = mx.array([0.22222265, 0.3333337, 1.0])
+        expected_mean = mx.mean(expected_none)
+        expected_sum = mx.sum(expected_none)
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.dice_loss(
+            predictions, targets, reduction="none"
+        )
+        self.assertTrue(
+            mx.allclose(losses_none, expected_none, atol=1e-5),
+            "Test case failed for dice_loss --reduction='none'",
+        )
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.dice_loss(
+            predictions, targets, reduction="mean"
+        )
+        self.assertTrue(
+            mx.allclose(losses_mean, expected_mean, atol=1e-5),
+            "Test case failed for dice_loss --reduction='mean'",
+        )
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.dice_loss(
+            predictions, targets, reduction="sum"
+        )
+        self.assertTrue(
+            mx.allclose(losses_sum, expected_sum, atol=1e-5),
+            "Test case failed for dice_loss --reduction='sum'",
+        )
+
     def test_gelu(self):
         inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
 

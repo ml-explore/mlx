@@ -274,6 +274,43 @@ def triplet_loss(
     return _reduce(loss, reduction)
 
 
+def dice_loss(
+    predictions: mx.array,
+    targets: mx.array,
+    epsilon: float = 1e-6,
+    reduction: str = "mean",
+) -> mx.array:
+    """
+    Computes the multiclass Dice loss.
+
+    Args:
+        predictions (array): The predicted probabilities. Shape: [batch, classes, ...]
+        targets (array): The target values in one-hot encoded form. Shape: [batch, classes, ...]
+        epsilon (float, optional): Small constant to avoid division by zero. Default: 1e-6.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          'none' | 'mean' | 'sum'. Default: 'mean'.
+
+    Returns:
+        array: The computed multiclass Dice loss.
+    """
+    # Ensure the shapes are correct
+    if predictions.shape != targets.shape:
+        raise ValueError(
+            f"Shape of predictions {predictions.shape} does not match targets shape {targets.shape}."
+        )
+
+    intersection = mx.sum(
+        predictions * targets, axis=[0, *range(2, len(targets.shape))]
+    )
+    cardinality = mx.sum(predictions + targets, axis=[0, *range(2, len(targets.shape))])
+    dice_score = 2.0 * intersection / (cardinality + epsilon)
+
+    dice_loss = 1 - dice_score
+
+    # Apply reduction
+    return _reduce(dice_loss, reduction)
+
+
 def _reduce(loss: mx.array, reduction: str = "none"):
     if reduction == "mean":
         return mx.mean(loss)

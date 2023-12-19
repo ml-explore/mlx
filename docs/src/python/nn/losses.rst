@@ -17,3 +17,4 @@ Loss Functions
    nll_loss
    smooth_l1_loss
    triplet_loss
+   dice_loss
