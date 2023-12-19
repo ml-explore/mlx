@@ -376,6 +376,40 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
 
+        # test with 3D input
+        mx.random.seed(42)
+        x = mx.random.normal((2, 4, 3), dtype=mx.float32)
+
+        # Batch norm
+        bn = nn.BatchNorm1d(num_features=4, affine=True)
+        self.assertTrue(mx.allclose(bn.running_mean, mx.zeros_like(bn.running_mean)))
+        self.assertTrue(mx.allclose(bn.running_var, mx.ones_like(bn.running_var)))
+        y = bn(x)
+        self.assertTrue(x.shape == y.shape)
+        expected_y = mx.array(
+            [
+                [
+                    [-0.285056, -0.657241, 0.584881],
+                    [1.079424, 0.795527, 0.163417],
+                    [-0.351929, 0.669030, 1.713490],
+                    [-0.679080, -1.467115, 1.077580],
+                ],
+                [
+                    [-0.091968, -1.362007, 1.811391],
+                    [-1.654407, -1.017945, 0.633983],
+                    [-1.309168, 0.148356, -0.869779],
+                    [-0.742132, 1.037774, 0.772974],
+                ],
+            ]
+        )
+        self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        expected_mean = mx.array(
+            [[[0.0362097], [0.0360611], [0.0166926], [-0.0111884]]]
+        )
+        expected_var = mx.array([[[1.07218], [0.992639], [1.01724], [1.16217]]])
+        self.assertTrue(np.allclose(bn.running_mean, expected_mean, atol=1e-5))
+        self.assertTrue(np.allclose(bn.running_var, expected_var, atol=1e-5))
+
     def test_conv1d(self):
         N = 5
         L = 12

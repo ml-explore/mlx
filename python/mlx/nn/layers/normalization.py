@@ -253,11 +253,31 @@ class BatchNorm1d(Module):
         if self.track_running_stats and self.training:
             self.running_mean = (
                 1 - self.momentum
-            ) * self.running_mean + self.momentum * means.squeeze()
+            ) * self.running_mean + self.momentum * means
             self.running_var = (
                 1 - self.momentum
-            ) * self.running_var + self.momentum * var.squeeze()
+            ) * self.running_var + self.momentum * var
         return means, var
+
+    def _check_and_expand_dims(self, x: mx.array):
+        """
+        Check if the input is a 2D or 3D tensor and expand the weight, bias, running mean, and running variance accordingly.
+
+        Args:
+            x (mx.array): Input tensor.
+        """
+
+        if x.ndim != 2 and x.ndim != 3:
+            raise ValueError(f"expected 2D or 3D input (got {x.ndim}D input)")
+
+        if x.ndim == 3 and self.weight.ndim != x.ndim:
+            self.weight = mx.expand_dims(self.weight, [0, 2])
+            self.bias = mx.expand_dims(self.bias, [0, 2])
+
+        if self.track_running_stats:
+            if x.ndim == 3 and self.running_mean.ndim != x.ndim:
+                self.running_mean = mx.expand_dims(self.running_mean, [0, 2])
+                self.running_var = mx.expand_dims(self.running_var, [0, 2])
 
     def __call__(self, x: mx.array):
         """
@@ -270,12 +290,7 @@ class BatchNorm1d(Module):
             mx.array: Output tensor.
         """
 
-        if x.ndim != 2 and x.ndim != 3:
-            raise ValueError(f"expected 2D or 3D input (got {x.ndim}D input)")
-
-        if x.ndim == 3:
-            self.weight = mx.expand_dims(self.weight, [0, 2])
-            self.bias = mx.expand_dims(self.bias, [0, 2])
+        self._check_and_expand_dims(x)
 
         if self.training or not self.track_running_stats:
             means, var = self._calc_stats(x)
