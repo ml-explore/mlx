@@ -20,7 +20,7 @@ Stream to_stream(StreamOrDevice s);
 
 /**
  * A 1D array of numbers starting at `start` (optional),
- * stopping at stop, stepping by `step` (optional). **/
+ * stopping at stop, stepping by `step` (optional). */
 array arange(
     double start,
     double stop,
@@ -36,6 +36,14 @@ array arange(double stop, StreamOrDevice s = {});
 array arange(int start, int stop, int step, StreamOrDevice s = {});
 array arange(int start, int stop, StreamOrDevice s = {});
 array arange(int stop, StreamOrDevice s = {});
+
+/** A 1D array of `num` evenly spaced numbers in the range `[start, stop]` */
+array linspace(
+    double start,
+    double stop,
+    int num = 50,
+    Dtype dtype = float32,
+    StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
 array astype(const array& a, Dtype dtype, StreamOrDevice s = {});

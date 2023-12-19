@@ -129,6 +129,27 @@ array arange(int stop, StreamOrDevice s /* = {} */) {
   return arange(0.0, static_cast<double>(stop), 1.0, int32, to_stream(s));
 }
 
+array linspace(
+    double start,
+    double stop,
+    int num /* = 50 */,
+    Dtype dtype /* = float32 */,
+    StreamOrDevice s /* = {} */) {
+  if (num < 0) {
+    std::ostringstream msg;
+    msg << "[linspace] number of samples, " << num << ", must be non-negative.";
+    throw std::invalid_argument(msg.str());
+  }
+  array sequence = arange(0, num, float32, to_stream(s));
+  float step = (stop - start) / (num - 1);
+  return astype(
+      add(multiply(sequence, array(step), to_stream(s)),
+          array(start),
+          to_stream(s)),
+      dtype,
+      to_stream(s));
+}
+
 array astype(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (dtype == a.dtype()) {
     return a;
