@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <nlohmann/json.hpp>
+#include <json.hpp>
 
 #include "mlx/load.h"
 #include "mlx/ops.h"
