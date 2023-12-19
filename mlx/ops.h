@@ -1028,4 +1028,14 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
 /** Load array from file in .npy format */
 array load(const std::string& file, StreamOrDevice s = {});
 
+/** Quantized matmul multiplies x with a quantized matrix w*/
+array quantized_matmul(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int groups = 128,
+    int width = 4,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core

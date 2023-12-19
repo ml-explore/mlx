@@ -1110,6 +1110,29 @@ class Power : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class QuantizedMatmul : public Primitive {
+ public:
+  explicit QuantizedMatmul(Stream stream, int groups, int width)
+      : Primitive(stream), groups_(groups), width_(width){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(QuantizedMatmul)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int groups_;
+  int width_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class RandomBits : public Primitive {
  public:
   explicit RandomBits(Stream stream, const std::vector<int>& shape, int width)
