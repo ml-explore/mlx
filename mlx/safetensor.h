@@ -7,7 +7,6 @@
 #include "mlx/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
-#include "mlx/utils.h"
 
 using json = nlohmann::json;
 
