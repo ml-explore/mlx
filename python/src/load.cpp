@@ -161,6 +161,27 @@ class PyFileReader : public io::Reader {
   py::object tell_func_;
 };
 
+std::unordered_map<std::string, array> mlx_load_safetensor_helper(
+    py::object file,
+    StreamOrDevice s) {
+  if (py::isinstance<py::str>(file)) { // Assume .safetensors file path string
+    return {load_safetensor(py::cast<std::string>(file), s)};
+  } else if (is_istream_object(file)) {
+    // If we don't own the stream and it was passed to us, eval immediately
+    auto arr = load_safetensor(std::make_shared<PyFileReader>(file), s);
+    {
+      py::gil_scoped_release gil;
+      for (auto& [key, arr] : arr) {
+        arr.eval();
+      }
+    }
+    return {arr};
+  }
+
+  throw std::invalid_argument(
+      "[load] Input must be a file-like object, string, or pathlib.Path");
+}
+
 DictOrArray mlx_load_helper(py::object file, StreamOrDevice s) {
   py::module_ zipfile = py::module_::import("zipfile");
 

@@ -2946,6 +2946,24 @@ void init_ops(py::module_& m) {
             result (array, dict): The loaded array if ``.npy`` file or a dict mapping name to array if ``.npz`` file
       )pbdoc");
   m.def(
+      "load_safetensor",
+      &mlx_load_safetensor_helper,
+      "file"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        load_safetensor(file: str, /, *, stream: Union[None, Stream, Device] = None) -> Dict[str, array]
+
+        Load array(s) from a binary file in ``.safetensors`` format.
+
+        Args:
+            file (file, str): File in which the array is saved
+
+        Returns:
+            result dict: The loaded dict mapping name to array from the ``.safetensors`` file
+      )pbdoc");
+  m.def(
       "where",
       [](const ScalarOrArray& condition,
          const ScalarOrArray& x_,
