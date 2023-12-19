@@ -306,7 +306,7 @@ std::unordered_map<std::string, array> load_safetensor(
     Dtype type = dtype_from_safetensor_str(dtype);
     auto loaded_array = array(
         shape_vec,
-        float32,
+        type,
         std::make_unique<Load>(
             to_stream(s),
             in_stream,
