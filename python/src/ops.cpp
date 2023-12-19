@@ -1198,14 +1198,11 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
 
-      Generates evenly spaced numbers over a specified interval.
-
-      Generate ``num`` evenly spaced numbers, calculated over the interval
-      ``[start, stop]``.
+      Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
 
       Args:
-          start (float): Starting value.
-          stop (float): Stopping value.
+          start (scalar): Starting value.
+          stop (scalar): Stopping value.
           num (int, optional): Number of samples, defaults to ``50``.
           dtype (Dtype, optional): Specifies the data type of the output,
           default to ``float32``.

@@ -20,7 +20,7 @@ Stream to_stream(StreamOrDevice s);
 
 /**
  * A 1D array of numbers starting at `start` (optional),
- * stopping at stop, stepping by `step` (optional). **/
+ * stopping at stop, stepping by `step` (optional). */
 array arange(
     double start,
     double stop,
@@ -37,8 +37,7 @@ array arange(int start, int stop, int step, StreamOrDevice s = {});
 array arange(int start, int stop, StreamOrDevice s = {});
 array arange(int stop, StreamOrDevice s = {});
 
-/** A 1D array of evenly spaced numbers starting at `start`
- * stopping at `stop`, stepping by (`end` - `start`) / (`num` - 1) **/
+/** A 1D array of `num` evenly spaced numbers in the range `[start, stop]` */
 array linspace(
     double start,
     double stop,

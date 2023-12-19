@@ -137,12 +137,11 @@ array linspace(
     StreamOrDevice s /* = {} */) {
   if (num < 0) {
     std::ostringstream msg;
-    msg << "number of samples, " << num << ", must be non-negative.";
+    msg << "[linspace] number of samples, " << num << ", must be non-negative.";
     throw std::invalid_argument(msg.str());
   }
   array sequence = arange(0, num, float32, to_stream(s));
-  float delta = stop - start;
-  float step = delta / (num - 1);
+  float step = (stop - start) / (num - 1);
   return astype(
       add(multiply(sequence, array(step), to_stream(s)),
           array(start),
