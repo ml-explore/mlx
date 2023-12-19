@@ -2201,3 +2201,17 @@ TEST_CASE("test clipping with only max") {
   auto clipped = clip(a, std::nullopt, array(4.0f));
   CHECK(array_equal(clipped, expected).item<bool>());
 }
+
+TEST_CASE("test linspace") {
+  auto x = linspace(0, 10, 5);
+  auto expected = array({0.0f, 2.5f, 5.0f, 7.5f, 10.0f}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, int32);
+  expected = array({0, 2, 5, 7, 10}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 1, 0);
+  expected = array(std::initializer_list<float>{}, {0});
+  CHECK(array_equal(x, expected).item<bool>());
+}

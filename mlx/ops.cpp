@@ -129,6 +129,27 @@ array arange(int stop, StreamOrDevice s /* = {} */) {
   return arange(0.0, static_cast<double>(stop), 1.0, int32, to_stream(s));
 }
 
+array linspace(
+    double start,
+    double stop,
+    int num /* = 50 */,
+    Dtype dtype /* = float32 */,
+    StreamOrDevice s /* = {} */) {
+  if (num < 0) {
+    std::ostringstream msg;
+    msg << "[linspace] number of samples, " << num << ", must be non-negative.";
+    throw std::invalid_argument(msg.str());
+  }
+  array sequence = arange(0, num, float32, to_stream(s));
+  float step = (stop - start) / (num - 1);
+  return astype(
+      add(multiply(sequence, array(step), to_stream(s)),
+          array(start),
+          to_stream(s)),
+      dtype,
+      to_stream(s));
+}
+
 array astype(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (dtype == a.dtype()) {
     return a;
@@ -2541,6 +2562,77 @@ array conv2d(
           dilation_vec,
           std::vector<int>(2, 1)),
       {in, wt});
+}
+
+array quantized_matmul(
+    const array& in_x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int groups /* = 128 */,
+    int width /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  auto x = in_x;
+
+  if (w.dtype() != uint32) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] The weight matrix should be uint32 "
+        << "but received" << w.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+  if (w.ndim() != 2) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Batched quantized matmul is not supported for now "
+        << "received w with shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Keep x's batch dimensions to reshape it back after the matmul
+  auto original_shape = x.shape();
+  int x_inner_dims = original_shape.back();
+  original_shape.pop_back();
+
+  // Reshape x into a matrix if it isn't already one
+  if (x.ndim() != 2) {
+    x = reshape(x, {-1, x_inner_dims}, s);
+  }
+
+  int w_inner_dims = w.shape(0) * (32 / width);
+  if (w_inner_dims != x_inner_dims) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Last dimension of first input with "
+        << "shape (..., " << x_inner_dims
+        << ") does not match the expanded first "
+        << "dimension of the quantized matrix " << w_inner_dims
+        << ", computed from shape " << w.shape() << " with groups=" << groups
+        << " and width=" << width;
+    throw std::invalid_argument(msg.str());
+  }
+
+  int n_groups = x_inner_dims / groups;
+  if (scales.shape(-1) != n_groups || biases.shape(-1) != n_groups) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Scales and biases provided do not match the "
+        << "quantization arguments (groups=" << groups << ", width=" << width
+        << "). Expected shapes (" << w.shape(1) << ", " << x_inner_dims / groups
+        << "), but got scales.shape=" << scales.shape()
+        << " and biases.shape=" << biases.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out = array(
+      {x.shape(0), w.shape(1)},
+      x.dtype(),
+      std::make_unique<QuantizedMatmul>(to_stream(s), groups, width),
+      {x, w, scales, biases});
+
+  // If needed reshape x to the original batch shape
+  if (original_shape.size() != 1) {
+    original_shape.push_back(w.shape(1));
+    out = reshape(out, original_shape, s);
+  }
+
+  return out;
 }
 
 } // namespace mlx::core
