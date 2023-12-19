@@ -2566,28 +2566,34 @@ array quantized_matmul(
     throw std::invalid_argument(msg.str());
   }
 
-  if (x.ndim() == 1) {
-    // Insert a singleton dim in the beginning
-    x = reshape(x, {1, -1}, s);
+  // Keep x's batch dimensions to reshape it back after the matmul
+  auto original_shape = x.shape();
+  int x_inner_dims = original_shape.back();
+  original_shape.pop_back();
+
+  // Reshape x into a matrix if it isn't already one
+  if (x.ndim() != 2) {
+    x = reshape(x, {-1, x_inner_dims}, s);
   }
 
-  int inner_dims = w.shape(0) * (32 / width);
-  if (inner_dims != x.shape(-1)) {
+  int w_inner_dims = w.shape(0) * (32 / width);
+  if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
     msg << "[quantized_matmul] Last dimension of first input with "
-        << "shape " << x.shape() << " does not match the expanded first "
-        << "dimension of the quantized matrix " << inner_dims
+        << "shape (..., " << x_inner_dims
+        << ") does not match the expanded first "
+        << "dimension of the quantized matrix " << w_inner_dims
         << ", computed from shape " << w.shape() << " with groups=" << groups
         << " and width=" << width;
     throw std::invalid_argument(msg.str());
   }
 
-  int n_groups = x.shape(-1) / groups;
+  int n_groups = x_inner_dims / groups;
   if (scales.shape(-1) != n_groups || biases.shape(-1) != n_groups) {
     std::ostringstream msg;
     msg << "[quantized_matmul] Scales and biases provided do not match the "
         << "quantization arguments (groups=" << groups << ", width=" << width
-        << "). Expected shapes (" << w.shape(1) << ", " << x.shape(-1) / groups
+        << "). Expected shapes (" << w.shape(1) << ", " << x_inner_dims / groups
         << "), but got scales.shape=" << scales.shape()
         << " and biases.shape=" << biases.shape();
     throw std::invalid_argument(msg.str());
@@ -2598,6 +2604,12 @@ array quantized_matmul(
       x.dtype(),
       std::make_unique<QuantizedMatmul>(to_stream(s), groups, width),
       {x, w, scales, biases});
+
+  // If needed reshape x to the original batch shape
+  if (original_shape.size() != 1) {
+    original_shape.push_back(w.shape(1));
+    out = reshape(out, original_shape, s);
+  }
 
   return out;
 }

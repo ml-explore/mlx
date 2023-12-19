@@ -140,8 +140,8 @@ template <typename T, const int BM, const int BK, const int BN, const int groups
 
   threadgroup T scales_block[BN * groups_per_block];
   threadgroup T biases_block[BN * groups_per_block];
-  threadgroup T Xs[BN * BK];
-  threadgroup T Ws[BM * BK];
+  threadgroup T Xs[BM * BK];
+  threadgroup T Ws[BN * BK];
 
   // Set the block
   const int K_w = K / el_per_int;
@@ -155,13 +155,18 @@ template <typename T, const int BM, const int BK, const int BN, const int groups
   y += y_row * N + y_col;
 
   // Make the x loader and mma operation
+  const short num_els = min(BM, M - y_row);
   loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
   for (int k=0; k<K; k += BK) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
     // Load the x tile
-    loader_x.load_unsafe();
+    if (num_els < BM) {
+        loader_x.load_safe(short2(BK, num_els));
+    } else {
+        loader_x.load_unsafe();
+    }
 
     // Load the scale and bias
     if (simd_lid == 0) {
@@ -217,7 +222,12 @@ template <typename T, const int BM, const int BK, const int BN, const int groups
   }
 
   // Store results to device memory
-  mma_op.store_result(y, N);
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+  if (num_els < BM) {
+    mma_op.store_result_safe(y, N, short2(BN, num_els));
+  } else {
+    mma_op.store_result(y, N);
+  }
 }
 
 
