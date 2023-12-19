@@ -1493,28 +1493,24 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_linspace(self):
         # Test default num = 50
-        args = [0, 1]
-        a_func = lambda s, e: mx.linspace(s, e)
+        a = mx.linspace(0, 1)
         expected = mx.array(np.linspace(0, 1))
-        self.assertEqualArray(args, a_func, expected)
+        self.assertEqualArray(a, expected)
 
         # Test int32 dtype
-        args = [0, 10, 5, mx.int64]
-        b_func = lambda s, e, n, d: mx.linspace(s, e, n, d)
+        b = mx.linspace(0, 10, 5, mx.int64)
         expected = mx.array(np.linspace(0, 10, 5, dtype=int))
-        self.assertEqualArray(args, b_func, expected)
+        self.assertEqualArray(b, expected)
 
         # Test negative sequence with float start and stop
-        args = [-2.7, -0.7, 7]
-        c_func = lambda s, e, n: mx.linspace(s, e, n)
+        c = mx.linspace(-2.7, -0.7, 7)
         expected = mx.array(np.linspace(-2.7, -0.7, 7))
-        self.assertEqualArray(args, c_func, expected)
+        self.assertEqualArray(c, expected)
 
         # Test irrational step size of 1/9
-        args = [0, 1, 10]
-        d_func = lambda s, e, n: mx.linspace(s, e, n)
+        d = mx.linspace(0, 1, 10)
         expected = mx.array(np.linspace(0, 1, 10))
-        self.assertEqualArray(args, d_func, expected)
+        self.assertEqualArray(d, expected)
 
 
 if __name__ == "__main__":
