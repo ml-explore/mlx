@@ -203,7 +203,13 @@ class BatchNorm1d(Module):
         affine (bool, optional): If True, learn an affine transform to apply after the normalization. Default is True.
 
     Examples:
-        -> TODO: Add examples.
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> mx.random.seed(42)
+        >>> input = mx.random.normal((5, 4), dtype=mx.float32)
+        >>> # Batch norm
+        >>> bn = nn.BatchNorm1d(num_features=4, affine=True)
+        >>> output = bn(x)
     """
 
     def __init__(
