@@ -85,7 +85,6 @@ std::unordered_map<std::string, array> load_safetensor(
   char rawJson[jsonHeaderLength];
   in_stream->read(rawJson, jsonHeaderLength);
   auto metadata = json::parse(rawJson, rawJson + jsonHeaderLength);
-  // auto metadata = io::jsonDeserialize(json, jsonHeaderLength);
   // Should always be an object on the top-level
   if (!metadata.is_object()) {
     throw std::runtime_error(

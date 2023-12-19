@@ -1057,7 +1057,7 @@ array dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-/** Load array from .safetensor file format */
+/** Load array map from .safetensor file format */
 std::unordered_map<std::string, array> load_safetensor(
     std::shared_ptr<io::Reader> in_stream,
     StreamOrDevice s = {});
