@@ -288,15 +288,15 @@ Device& device(mlx::core::Device) {
   return metal_device_;
 }
 
-NS::AutoreleasePool*& thread_autorelease_pool() {
+NS::AutoreleasePool*& Device::g_thread_autorelease_pool() {
   static thread_local NS::AutoreleasePool* p =
       NS::AutoreleasePool::alloc()->init();
   return p;
 }
 
 void new_stream(Stream stream) {
-  thread_autorelease_pool();
   if (stream.device == mlx::core::Device::gpu) {
+    device(stream.device).g_thread_autorelease_pool();
     device(stream.device).new_queue(stream.index);
   }
 }
