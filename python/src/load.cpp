@@ -26,7 +26,7 @@ using namespace mlx::core;
 ///////////////////////////////////////////////////////////////////////////////
 
 bool is_istream_object(const py::object& file) {
-  return py::hasattr(file, "read") && py::hasattr(file, "seek") &&
+  return py::hasattr(file, "readinto") && py::hasattr(file, "seek") &&
       py::hasattr(file, "tell") && py::hasattr(file, "closed");
 }
 
