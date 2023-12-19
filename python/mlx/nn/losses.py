@@ -232,6 +232,48 @@ def smooth_l1_loss(
     return _reduce(loss, reduction)
 
 
+def triplet_loss(
+    anchors: mx.array,
+    positives: mx.array,
+    negatives: mx.array,
+    axis: int = -1,
+    p: int = 2,
+    margin: float = 1.0,
+    eps: float = 1e-6,
+    reduction: str = "none",
+) -> mx.array:
+    r"""
+    Computes the triplet loss for a set of anchor, positive, and negative samples.
+    Margin is represented with alpha in the math section.
+
+    .. math::
+
+       L_{\text{triplet}} = \max\left(\|A - P\|_p - \|A - N\|_p + \alpha, 0\right)
+
+    Args:
+        anchors (array): The anchor samples.
+        positives (array): The positive samples.
+        negatives (array): The negative samples.
+        axis (int, optional): The distribution axis. Default: ``-1``.
+        p (int, optional): The norm degree for pairwise distance. Default: ``2``.
+        margin (float, optional): Margin for the triplet loss. Defaults to ``1.0``.
+        eps (float, optional): Small positive constant to prevent numerical instability. Defaults to ``1e-6``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: Computed triplet loss. If reduction is "none", returns a tensor of the same shape as input;
+                  if reduction is "mean" or "sum", returns a scalar tensor.
+    """
+    loss = mx.maximum(
+        mx.sqrt(mx.power(anchors - positives, p).sum(axis) + eps)
+        - mx.sqrt(mx.power(anchors - negatives, p).sum(axis) + eps)
+        + margin,
+        0,
+    )
+    return _reduce(loss, reduction)
+
+
 def _reduce(loss: mx.array, reduction: str = "none"):
     if reduction == "mean":
         return mx.mean(loss)
