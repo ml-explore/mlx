@@ -2977,4 +2977,36 @@ void init_ops(py::module_& m) {
         Returns:
           result (array): An array of the same type as ``a`` rounded to the given number of decimals.
       )pbdoc");
+  m.def(
+      "quantized_matmul",
+      &quantized_matmul,
+      "x"_a,
+      "w"_a,
+      py::pos_only(),
+      "scales"_a,
+      "biases"_a,
+      "groups"_a = 128,
+      "width"_a = 4,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        quantized_matmul(x: array, w: array, scales: array, biases: array, /, groups: int = 128, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Perform the matrix multiplication with the quantized matrix ``w``. The
+        quantization uses one floating point scale and bias per ``groups`` of
+        elements. Each element in ``w`` takes ``width`` bits and is packed in an
+        unsigned 32 bit integer.
+
+        Args:
+          x (array): Input array
+          w (array): Quantized matrix packed in unsigned integers
+          scales (array): The scales to use per ``groups`` elements of ``w``
+          biases (array): The biases to use per ``groups`` elements of ``w``
+          groups (int): The size of the group in ``w`` that shares a scale and
+                        bias. (default: 128)
+          width (int): The bitwidth of the elements in ``w``. (default: 4)
+
+        Returns:
+          result (array): The result of the multiplication of ``x`` with ``w``.
+      )pbdoc");
 }

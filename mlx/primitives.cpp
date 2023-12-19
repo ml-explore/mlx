@@ -1696,6 +1696,31 @@ std::pair<array, int> Power::vmap(
   return {power(a, b, stream()), to_ax};
 }
 
+std::pair<array, int> QuantizedMatmul::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  throw std::runtime_error("QuantizedMatmul::vmap NYI");
+}
+
+std::vector<array> QuantizedMatmul::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+}
+
+array QuantizedMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+}
+
+bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
+  const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
+  return groups_ == qm_other.groups_ && width_ == qm_other.width_;
+}
+
 std::pair<array, int> RandomBits::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
