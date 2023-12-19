@@ -2971,7 +2971,7 @@ void init_ops(py::module_& m) {
       py::pos_only(),
       py::kw_only(),
       R"pbdoc(
-        save_safetensor(file: str, d: Dict[str, array], /, *, stream: Union[None, Stream, Device] = None)
+        save_safetensor(file: str, d: Dict[str, array], /, *)
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
