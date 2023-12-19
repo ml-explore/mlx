@@ -1404,24 +1404,28 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_linspace(self):
         # Test default num = 50
-        a = mx.linspace(0, 1)
-        np_a = np.linspace(0, 1)
-        self.assertTrue(np.array_equal(a, np_a))
+        args = [0, 1]
+        a_func = lambda s, e: mx.linspace(s, e)
+        expected = mx.array(np.linspace(0, 1))
+        self.assertEqualArray(args, a_func, expected)
 
         # Test int32 dtype
-        b = mx.linspace(0, 10, 5, dtype=mx.int32)
-        np_b = np.linspace(0, 10, 5, dtype=int)
-        self.assertTrue(np.array_equal(b, np_b))
+        args = [0, 10, 5, mx.int64]
+        b_func = lambda s, e, n, d: mx.linspace(s, e, n, d)
+        expected = mx.array(np.linspace(0, 10, 5, dtype=int))
+        self.assertEqualArray(args, b_func, expected)
 
         # Test negative sequence with float start and stop
-        c = mx.linspace(-2.7, -0.7, 7)
-        np_c = np.linspace(-2.7, -0.7, 7)
-        self.assertTrue(np.array_equal(c, np_c))
+        args = [-2.7, -0.7, 7]
+        c_func = lambda s, e, n: mx.linspace(s, e, n)
+        expected = mx.array(np.linspace(-2.7, -0.7, 7))
+        self.assertEqualArray(args, c_func, expected)
 
         # Test irrational step size of 1/9
-        d = mx.linspace(0, 1, 10)
-        np_d = np.linspace(0, 1, 10)
-        self.assertTrue(np.array_equal(d, np_d))
+        args = [0, 1, 10]
+        d_func = lambda s, e, n: mx.linspace(s, e, n)
+        expected = mx.array(np.linspace(0, 1, 10))
+        self.assertEqualArray(args, d_func, expected)
 
 
 if __name__ == "__main__":

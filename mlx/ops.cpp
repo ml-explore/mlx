@@ -135,13 +135,20 @@ array linspace(
     int num /* = 50 */,
     Dtype dtype /* = float32 */,
     StreamOrDevice s /* = {} */) {
-  float step = (stop - start) / (num - 1);
-  if (step < 0 && num != 0) {
+  if (num < 0) {
     std::ostringstream msg;
-    msg << "number of steps, " << step << ", must be non-negative.";
+    msg << "number of samples, " << num << ", must be non-negative.";
     throw std::invalid_argument(msg.str());
   }
-  return astype(arange(start, stop + step, step, float32, to_stream(s)), dtype);
+  array sequence = arange(0, num, float32, to_stream(s));
+  float delta = stop - start;
+  float step = delta / (num - 1);
+  return astype(
+      add(multiply(sequence, array(step), to_stream(s)),
+          array(start),
+          to_stream(s)),
+      dtype,
+      to_stream(s));
 }
 
 array astype(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
