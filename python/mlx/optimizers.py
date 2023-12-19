@@ -461,14 +461,14 @@ class Lion(Optimizer):
 
         c_{t + 1} &= \beta_1 m_t + (1 - \beta_1) g_t
         m_{t + 1} &= \beta_2 m_t + (1 - \beta_2) g_t
-        w_{t + 1} &= w_t - \lambda (\text{sign}(c_t) + \lambda w_t)
+        w_{t + 1} &= w_t - \eta (\text{sign}(c_t) + \lambda w_t)
 
     Args:
         learning_rate (float): The learning rate :math:`\eta`.
         betas (Tuple[float, float], optional): The coefficients
           :math:`(\beta_1, \beta_2)` used for computing the gradient
           momentum and update direction. Default: ``(0.9, 0.99)``
-        weight_decay (float, optional): The weight decay (L2 penalty). Default: ``0.0``
+        weight_decay (float, optional): The weight decay :math:`\lambda`. Default: ``0.0``
     """
 
     def __init__(
