@@ -1,6 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
-#include <cblas.h>
+#include <VecLib/cblas.h>
 
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
