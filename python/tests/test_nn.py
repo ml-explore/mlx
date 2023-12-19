@@ -248,7 +248,7 @@ class TestNN(mlx_tests.MLXTestCase):
         losses_none = nn.losses.triplet_loss(
             anchors, positives, negatives, reduction="none"
         )
-        expected_none = mx.array([-0, 2.31662])
+        expected_none = mx.array([0, 2.31662])
         self.assertTrue(mx.allclose(losses_none, expected_none))
 
         # Test with reduction 'mean'

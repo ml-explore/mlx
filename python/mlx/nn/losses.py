@@ -237,33 +237,39 @@ def triplet_loss(
     positives: mx.array,
     negatives: mx.array,
     axis: int = -1,
-    alpha: float = 1.0,
-    eps: float = 10e-6,
+    p: int = 2,
+    margin: float = 1.0,
+    eps: float = 1e-6,
     reduction: str = "none",
 ) -> mx.array:
-    """
+    r"""
     Computes the triplet loss for a set of anchor, positive, and negative samples.
 
+    .. math::
+
+       L_{\text{triplet}} = \max\left(\|A - P\|_p - \|A - N\|_p + \margin, 0\right)
+
     Args:
-        anchors (mx.array): The anchor samples.
-        positives (mx.array): The positive samples.
-        negatives (mx.array): The negative samples.
+        anchors (array): The anchor samples.
+        positives (array): The positive samples.
+        negatives (array): The negative samples.
         axis (int, optional): The distribution axis. Default: ``-1``.
-        alpha (float, optional): Margin for the triplet loss. Defaults to ``1.0``.
-        eps (float, optional): Small positive constant to prevent numerical instability. Defaults to ``10e-6``.
+        p (int, optional): The norm degree for pairwise distance. Default: ``2``.
+        margin (float, optional): Margin for the triplet loss. Defaults to ``1.0``.
+        eps (float, optional): Small positive constant to prevent numerical instability. Defaults to ``1e-6``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: Computed triplet loss. If reduction is "none", returns a tensor of the same shape as input;
+        array: Computed triplet loss. If reduction is "none", returns a tensor of the same shape as input;
                   if reduction is "mean" or "sum", returns a scalar tensor.
     """
-    triplet = (
-        mx.sqrt(mx.square(anchors - positives).sum(axis) + eps)
-        - mx.sqrt(mx.square(anchors - negatives).sum(axis) + eps)
-        + alpha
+    loss = mx.maximum(
+        mx.sqrt(mx.power(anchors - positives, p).sum(axis) + eps)
+        - mx.sqrt(mx.power(anchors - negatives, p).sum(axis) + eps)
+        + margin,
+        0,
     )
-    loss = triplet * (triplet > 0)
     return _reduce(loss, reduction)
 
 
