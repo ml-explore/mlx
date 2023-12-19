@@ -66,6 +66,8 @@ class Device {
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
+  NS::AutoreleasePool*& g_thread_autorelease_pool();
+
  private:
   NS::AutoreleasePool* pool_;
   MTL::Device* device_;
@@ -78,6 +80,5 @@ class Device {
 };
 
 Device& device(mlx::core::Device);
-NS::AutoreleasePool*& thread_autorelease_pool();
 
 } // namespace mlx::core::metal
