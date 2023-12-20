@@ -142,3 +142,43 @@ class SinusoidalPositionalEncoding(Module):
             y = y * self.scale
 
         return y
+
+
+class ALiBi(Module):
+    def __init__(self, num_heads: int, bidirectional: bool):
+        super().__init__()
+        self.num_heads = num_heads
+        self.bidirectional = bidirectional
+
+    @staticmethod
+    def create_alibi_matrix(
+        q_sequence_length: int,
+        k_sequence_length,
+        num_heads: int,
+        mask: Optional[mx.array] = None,
+    ):
+        x1 = mx.arange(0, q_sequence_length)
+        x2 = mx.arange(0, k_sequence_length)
+        distance_matrix = -mx.abs(
+            mx.expand_dims(x1[:, None] - x2[None, :], axis=(0, 1))
+        )
+        alibi_slope = ALiBi.create_alibi_slope(num_heads)
+        alibi_matrix = distance_matrix * alibi_slope
+        if mask is not None:
+            alibi_matrix = alibi_matrix + mask
+        return alibi_matrix
+
+    @staticmethod
+    def create_alibi_slope(num_heads):
+        x = (2**8) ** (1 / num_heads)
+        out = mx.array([[1 / x ** (i + 1) for i in range(num_heads)]])
+        return mx.expand_dims(out, axis=(-1, -2))
+
+    def __call__(self, attention_scores, mask=None):
+        q_sequence_length = attention_scores.shape[-2]
+        k_sequence_length = attention_scores.shape[-1]
+        num_heads = attention_scores.shape[1]
+        alibi_distance_matrix = ALiBi.create_alibi_matrix(
+            q_sequence_length, k_sequence_length, num_heads, mask
+        )
+        return attention_scores + alibi_distance_matrix
