@@ -3047,10 +3047,16 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         quantize(w: array, /, groups: int = 128, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]
 
-        Quantize the matrix ``w`` using ``width`` bits per element. In
-        particular, every ``groups`` elements in a row of ``w`` are quantized
-        together which means that number of columns of ``w`` should be
-        divisible by ``groups``.
+        Quantize the matrix ``w`` using ``width`` bits per element.
+
+        Note, every ``groups`` elements in a row of ``w`` are quantized
+        together. Hence, number of columns of ``w`` should be divisible by
+        ``groups``. In particular, the rows of ``w`` are divided into groups of
+        size ``groups`` which are quantized together.
+
+        .. warning::
+
+          ``quantize`` currently only supports 2D inputs with dimensions which are multiples of 32
 
         Formally, for a group of :math:`g` consecutive elements :math:`w_1` to
         :math:`w_g` in a row of ``w`` we compute the quantized representation
@@ -3077,9 +3083,10 @@ void init_ops(py::module_& m) {
 
         Args:
           w (array): Matrix to be quantized
-          groups (int): The size of the group in ``w`` that shares a scale and
-                        bias. (default: 128)
-          width (int): The bitwidth of the elements in ``w``. (default: 4)
+          groups (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. (default: 128)
+          width (int, optional): The bitwidth of the elements in ``w``.
+            (default: 4)
 
         Returns:
           (tuple): A tuple containing
@@ -3117,9 +3124,10 @@ void init_ops(py::module_& m) {
           w (array): Matrix to be quantized
           scales (array): The scales to use per ``groups`` elements of ``w``
           biases (array): The biases to use per ``groups`` elements of ``w``
-          groups (int): The size of the group in ``w`` that shares a scale and
-                        bias. (default: 128)
-          width (int): The bitwidth of the elements in ``w``. (default: 4)
+          groups (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. (default: 128)
+          width (int, optional): The bitwidth of the elements in ``w``.
+            (default: 4)
 
         Returns:
           result (array): The dequantized version of w
