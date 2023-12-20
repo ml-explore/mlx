@@ -3,6 +3,8 @@
 #pragma once
 
 #include <pybind11/pybind11.h>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <variant>
 #include "mlx/ops.h"

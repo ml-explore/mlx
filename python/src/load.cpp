@@ -6,7 +6,6 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -179,43 +178,50 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
   }
 
   throw std::invalid_argument(
-      "[load] Input must be a file-like object, string, or pathlib.Path");
+      "[load_safetensor] Input must be a file-like object, string, or pathlib.Path");
 }
 
-DictOrArray mlx_load_helper(py::object file, StreamOrDevice s) {
+std::unordered_map<std::string, array> mlx_load_npz_helper(
+    py::object file,
+    StreamOrDevice s) {
   py::module_ zipfile = py::module_::import("zipfile");
+  if (!is_zip_file(zipfile, file)) {
+    throw std::invalid_argument(
+        "[load_npz] Input must be a zip file or a file-like object that can be "
+        "opened with zipfile.ZipFile");
+  }
+  // Output dictionary filename in zip -> loaded array
+  std::unordered_map<std::string, array> array_dict;
 
-  // Assume .npz file if it is zipped
-  if (is_zip_file(zipfile, file)) {
-    // Output dictionary filename in zip -> loaded array
-    std::unordered_map<std::string, array> array_dict;
+  // Create python ZipFile object
+  ZipFileWrapper zipfile_object(zipfile, file);
+  for (const std::string& st : zipfile_object.namelist()) {
+    // Open zip file as a python file stream
+    py::object sub_file = zipfile_object.open(st);
 
-    // Create python ZipFile object
-    ZipFileWrapper zipfile_object(zipfile, file);
-    for (const std::string& st : zipfile_object.namelist()) {
-      // Open zip file as a python file stream
-      py::object sub_file = zipfile_object.open(st);
+    // Create array from python fille stream
+    auto arr = load(std::make_shared<PyFileReader>(sub_file), s);
 
-      // Create array from python fille stream
-      auto arr = load(std::make_shared<PyFileReader>(sub_file), s);
+    // Remove .npy from file if it is there
+    auto key = st;
+    if (st.length() > 4 && st.substr(st.length() - 4, 4) == ".npy")
+      key = st.substr(0, st.length() - 4);
 
-      // Remove .npy from file if it is there
-      auto key = st;
-      if (st.length() > 4 && st.substr(st.length() - 4, 4) == ".npy")
-        key = st.substr(0, st.length() - 4);
+    // Add array to dict
+    array_dict.insert({key, arr});
+  }
 
-      // Add array to dict
-      array_dict.insert({key, arr});
-    }
+  // If we don't own the stream and it was passed to us, eval immediately
+  for (auto& [key, arr] : array_dict) {
+    py::gil_scoped_release gil;
+    arr.eval();
+  }
 
-    // If we don't own the stream and it was passed to us, eval immediately
-    for (auto& [key, arr] : array_dict) {
-      py::gil_scoped_release gil;
-      arr.eval();
-    }
+  return {array_dict};
+}
 
-    return {array_dict};
-  } else if (py::isinstance<py::str>(file)) { // Assume .npy file path string
+array mlx_load_npy_helper(py::object file, StreamOrDevice s) {
+  if (py::isinstance<py::str>(file)) { // Assume .npy file path string
     return {load(py::cast<std::string>(file), s)};
   } else if (is_istream_object(file)) {
     // If we don't own the stream and it was passed to us, eval immediately
@@ -226,9 +232,39 @@ DictOrArray mlx_load_helper(py::object file, StreamOrDevice s) {
     }
     return {arr};
   }
+}
 
-  throw std::invalid_argument(
-      "[load] Input must be a file-like object, string, or pathlib.Path");
+DictOrArray mlx_load_helper(
+    py::object file,
+    std::optional<std::string> format,
+    StreamOrDevice s) {
+  if (!format.has_value()) {
+    std::string fname;
+    if (py::isinstance<py::str>(file)) {
+      fname = py::cast<std::string>(file);
+    } else if (is_istream_object(file)) {
+      fname = file.attr("name").cast<std::string>();
+    } else {
+      throw std::invalid_argument(
+          "[load] Input must be a file-like object, string, or pathlib.Path");
+    }
+    size_t ext = fname.find_last_of('.');
+    if (ext == std::string::npos) {
+      throw std::invalid_argument(
+          "[load] Could not infer file format from extension");
+    }
+    format.emplace(fname.substr(ext + 1));
+  }
+
+  if (format.value() == "safetensors") {
+    return mlx_load_safetensor_helper(file, s);
+  } else if (format.value() == "npz") {
+    return mlx_load_npz_helper(file, s);
+  } else if (format.value() == "npy") {
+    return mlx_load_npy_helper(file, s);
+  } else {
+    throw std::invalid_argument("[load] Unknown file format " + format.value());
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
