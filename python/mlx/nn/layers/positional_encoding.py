@@ -145,10 +145,9 @@ class SinusoidalPositionalEncoding(Module):
 
 
 class ALiBi(Module):
-    def __init__(self, num_heads: int, bidirectional: bool):
+    def __init__(self, num_heads: int):
         super().__init__()
         self.num_heads = num_heads
-        self.bidirectional = bidirectional
 
     @staticmethod
     def create_alibi_matrix(
