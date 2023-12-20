@@ -17,7 +17,10 @@ using DictOrArray = std::variant<array, std::unordered_map<std::string, array>>;
 std::unordered_map<std::string, array> mlx_load_safetensor_helper(
     py::object file,
     StreamOrDevice s);
-void mlx_save_safetensor_helper(py::object file, py::dict d);
+void mlx_save_safetensor_helper(
+    py::object file,
+    py::dict d,
+    bool retain_graph = true);
 
 DictOrArray mlx_load_helper(py::object file, StreamOrDevice s);
 void mlx_save_helper(

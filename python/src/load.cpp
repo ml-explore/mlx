@@ -419,16 +419,19 @@ void mlx_savez_helper(
   return;
 }
 
-void mlx_save_safetensor_helper(py::object file, py::dict d) {
+void mlx_save_safetensor_helper(
+    py::object file,
+    py::dict d,
+    bool retain_graph) {
   auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
   if (py::isinstance<py::str>(file)) {
-    save_safetensor(py::cast<std::string>(file), arrays_map);
+    save_safetensor(py::cast<std::string>(file), arrays_map, retain_graph);
     return;
   } else if (is_ostream_object(file)) {
     auto writer = std::make_shared<PyFileWriter>(file);
     {
       py::gil_scoped_release gil;
-      save_safetensor(writer, arrays_map);
+      save_safetensor(writer, arrays_map, retain_graph);
     }
 
     return;

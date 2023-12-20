@@ -126,7 +126,8 @@ std::unordered_map<std::string, array> load_safetensor(
 /** Save array to out stream in .npy format */
 void save_safetensor(
     std::shared_ptr<io::Writer> out_stream,
-    std::unordered_map<std::string, array> a) {
+    std::unordered_map<std::string, array> a,
+    bool retain_graph) {
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
@@ -142,7 +143,7 @@ void save_safetensor(
   });
   size_t offset = 0;
   for (auto& [key, arr] : a) {
-    arr.eval(false);
+    arr.eval(retain_graph);
     if (arr.nbytes() == 0) {
       throw std::invalid_argument(
           "[save_safetensor] cannot serialize an empty array key: " + key);
@@ -172,7 +173,8 @@ void save_safetensor(
 
 void save_safetensor(
     const std::string& file_,
-    std::unordered_map<std::string, array> a) {
+    std::unordered_map<std::string, array> a,
+    bool retain_graph) {
   // Open and check file
   std::string file = file_;
 
@@ -182,7 +184,7 @@ void save_safetensor(
     file += ".safetensors";
 
   // Serialize array
-  save_safetensor(std::make_shared<io::FileWriter>(file), a);
+  save_safetensor(std::make_shared<io::FileWriter>(file), a, retain_graph);
 }
 
 } // namespace mlx::core

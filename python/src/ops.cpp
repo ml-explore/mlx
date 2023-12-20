@@ -2953,15 +2953,18 @@ void init_ops(py::module_& m) {
       "file"_a,
       "d"_a,
       py::pos_only(),
+      "retain_graph"_a = true,
       py::kw_only(),
       R"pbdoc(
-        save_safetensor(file: str, d: Dict[str, array], /, *)
+        save_safetensor(file: str, d: Dict[str, array], /, retain_graph: bool = True, *)
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
         Args:
             file (file, str): File in which the array is saved
             d (Dict[str, array]): The dict mapping name to array to be saved
+            retain_graph(bool): Optional argument to retain graph
+              during array evaluation before saving. Default: True
       )pbdoc");
   m.def(
       "where",

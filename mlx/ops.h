@@ -1067,8 +1067,10 @@ std::unordered_map<std::string, array> load_safetensor(
 
 void save_safetensor(
     std::shared_ptr<io::Writer> in_stream,
-    std::unordered_map<std::string, array>);
+    std::unordered_map<std::string, array>,
+    bool retain_graph = true);
 void save_safetensor(
     const std::string& file,
-    std::unordered_map<std::string, array>);
+    std::unordered_map<std::string, array>,
+    bool retain_graph = true);
 } // namespace mlx::core
