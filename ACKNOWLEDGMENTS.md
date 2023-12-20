@@ -7,6 +7,8 @@ with a short description of your contribution(s) below. For example:
 
 MLX was developed with contributions from the following individuals:
   
+- Juarez Bochi: Fixed bug in cross attention.
+- Justin Deschenaux: Sine, Cosine, arange, randint, truncated normal, bernoulli, lion optimizer, linear and logistic regression python example.
 
 # Third-Party Software
 
