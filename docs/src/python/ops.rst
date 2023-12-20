@@ -41,8 +41,9 @@ Operations
    exp
    expand_dims
    eye
-   floor
    flatten
+   floor
+   floor_divide
    full
    greater
    greater_equal
