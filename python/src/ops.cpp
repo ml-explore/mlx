@@ -3011,12 +3011,12 @@ void init_ops(py::module_& m) {
       py::pos_only(),
       "scales"_a,
       "biases"_a,
-      "groups"_a = 128,
+      "groups"_a = 64,
       "width"_a = 4,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        quantized_matmul(x: array, w: array, scales: array, biases: array, /, groups: int = 128, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+        quantized_matmul(x: array, w: array, scales: array, biases: array, /, groups: int = 64, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
 
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``groups`` of
@@ -3029,7 +3029,7 @@ void init_ops(py::module_& m) {
           scales (array): The scales to use per ``groups`` elements of ``w``
           biases (array): The biases to use per ``groups`` elements of ``w``
           groups (int): The size of the group in ``w`` that shares a scale and
-                        bias. (default: 128)
+                        bias. (default: 64)
           width (int): The bitwidth of the elements in ``w``. (default: 4)
 
         Returns:
@@ -3040,12 +3040,12 @@ void init_ops(py::module_& m) {
       &quantize,
       "w"_a,
       py::pos_only(),
-      "groups"_a = 128,
+      "groups"_a = 64,
       "width"_a = 4,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        quantize(w: array, /, groups: int = 128, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]
+        quantize(w: array, /, groups: int = 64, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]
 
         Quantize the matrix ``w`` using ``width`` bits per element.
 
@@ -3084,7 +3084,7 @@ void init_ops(py::module_& m) {
         Args:
           w (array): Matrix to be quantized
           groups (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: 128)
+            scale and bias. (default: 64)
           width (int, optional): The bitwidth of the elements in ``w``.
             (default: 4)
 
@@ -3102,12 +3102,12 @@ void init_ops(py::module_& m) {
       py::pos_only(),
       "scales"_a,
       "biases"_a,
-      "groups"_a = 128,
+      "groups"_a = 64,
       "width"_a = 4,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        dequantize(w: array, /, scales: array, biases: array, groups: int = 128, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+        dequantize(w: array, /, scales: array, biases: array, groups: int = 64, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
 
         Dequantize the matrix ``w`` using the provided ``scales`` and
         ``biases`` and the ``groups`` and ``width`` configuration.
@@ -3125,7 +3125,7 @@ void init_ops(py::module_& m) {
           scales (array): The scales to use per ``groups`` elements of ``w``
           biases (array): The biases to use per ``groups`` elements of ``w``
           groups (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: 128)
+            scale and bias. (default: 64)
           width (int, optional): The bitwidth of the elements in ``w``.
             (default: 4)
 

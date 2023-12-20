@@ -2583,7 +2583,7 @@ array quantized_matmul(
     const array& w,
     const array& scales,
     const array& biases,
-    int groups /* = 128 */,
+    int groups /* = 64 */,
     int width /* = 4 */,
     StreamOrDevice s /* = {} */) {
   auto x = in_x;
@@ -2651,7 +2651,7 @@ array quantized_matmul(
 
 std::tuple<array, array, array> quantize(
     const array& w,
-    int groups /* = 128 */,
+    int groups /* = 64 */,
     int width /* = 4 */,
     StreamOrDevice s /* = {} */) {
   if (w.ndim() != 2) {
@@ -2700,7 +2700,7 @@ array dequantize(
     const array& w,
     const array& scales,
     const array& biases,
-    int groups /* = 128 */,
+    int groups /* = 64 */,
     int width /* = 4 */,
     StreamOrDevice s /* = {} */) {
   if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {

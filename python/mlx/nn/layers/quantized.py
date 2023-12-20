@@ -29,7 +29,7 @@ class QuantizedLinear(Module):
         bias (bool): If set to ``False`` then the layer will not use a bias.
             (default: True).
         groups (int): The group size to use for the quantized weight. See
-            :func:`~mlx.core.quantize`. (default: 128)
+            :func:`~mlx.core.quantize`. (default: 64)
         width (int): The bit width to use for the quantized weight. See
             :func:`~mlx.core.quantize`. (default: 4)
     """

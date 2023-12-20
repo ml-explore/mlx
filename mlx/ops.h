@@ -1037,23 +1037,20 @@ array quantized_matmul(
     const array& w,
     const array& scales,
     const array& biases,
-    int groups = 128,
+    int groups = 64,
     int width = 4,
     StreamOrDevice s = {});
 
 /** Quantize a matrix along its last axis */
-std::tuple<array, array, array> quantize(
-    const array& w,
-    int groups = 128,
-    int width = 4,
-    StreamOrDevice s = {});
+std::tuple<array, array, array>
+quantize(const array& w, int groups = 64, int width = 4, StreamOrDevice s = {});
 
 /** Dequantize a matrix produced by quantize() */
 array dequantize(
     const array& w,
     const array& scales,
     const array& biases,
-    int groups = 128,
+    int groups = 64,
     int width = 4,
     StreamOrDevice s = {});
 
