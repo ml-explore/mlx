@@ -145,9 +145,8 @@ class SinusoidalPositionalEncoding(Module):
 
 
 class ALiBi(Module):
-    def __init__(self, num_heads: int):
+    def __init__(self):
         super().__init__()
-        self.num_heads = num_heads
 
     @staticmethod
     def create_alibi_matrix(
@@ -172,7 +171,7 @@ class ALiBi(Module):
     @staticmethod
     def create_alibi_slope(num_heads):
         x = (2**8) ** (1 / num_heads)
-        out = mx.array([[1 / x ** (i + 1) for i in range(num_heads)]])
+        out = mx.power(x, -mx.arange(1, num_heads + 1))
         return mx.expand_dims(out, axis=(-1, -2))
 
     def __call__(self, attention_scores, mask=None):
