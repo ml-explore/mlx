@@ -29,6 +29,8 @@ std::string dtype_to_safetensor_str(Dtype t) {
     return ST_U8;
   } else if (t == bool_) {
     return ST_BOOL;
+  } else if (t == complex64) {
+    return ST_C64;
   } else {
     throw std::runtime_error("[safetensor] unsupported dtype");
   }
@@ -59,6 +61,8 @@ Dtype dtype_from_safetensor_str(std::string str) {
     return uint8;
   } else if (str == ST_BOOL) {
     return bool_;
+  } else if (str == ST_C64) {
+    return complex64;
   } else {
     throw std::runtime_error("[safetensor] unsupported dtype " + str);
   }

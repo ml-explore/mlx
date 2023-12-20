@@ -25,4 +25,8 @@ namespace mlx::core {
 #define ST_U16 "U16"
 #define ST_U32 "U32"
 #define ST_U64 "U64"
+
+// Note: Complex numbers aren't in the spec yet so this could change -
+// https://github.com/huggingface/safetensors/issues/389
+#define ST_C64 "C64"
 } // namespace mlx::core
