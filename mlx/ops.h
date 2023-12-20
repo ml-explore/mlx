@@ -709,6 +709,9 @@ array operator/(const array& a, const array& b);
 array operator/(double a, const array& b);
 array operator/(const array& a, double b);
 
+/** Compute integer division. Equivalent to doing floor(a / x). */
+array floor_divide(const array& a, const array& b, StreamOrDevice s = {});
+
 /** Compute the element-wise remainder of division */
 array remainder(const array& a, const array& b, StreamOrDevice s = {});
 array operator%(const array& a, const array& b);
