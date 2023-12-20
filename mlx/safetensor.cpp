@@ -128,9 +128,18 @@ void save_safetensor(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a) {
   ////////////////////////////////////////////////////////
+  // Check file
+  if (!out_stream->good() || !out_stream->is_open()) {
+    throw std::runtime_error(
+        "[save_safetensor] Failed to open " + out_stream->label());
+  }
+
+  ////////////////////////////////////////////////////////
   // Check array map
   json parent;
-
+  parent["__metadata__"] = json::object({
+      {"format", "mlx"},
+  });
   size_t offset = 0;
   for (auto& [key, arr] : a) {
     arr.eval(false);
@@ -145,19 +154,11 @@ void save_safetensor(
           key);
     }
     json child;
-    // TODO: dont make a new string
     child["dtype"] = dtype_to_safetensor_str(arr.dtype());
     child["shape"] = arr.shape();
     child["data_offsets"] = std::vector<size_t>{offset, offset + arr.nbytes()};
     parent[key] = child;
     offset += arr.nbytes();
-  }
-
-  ////////////////////////////////////////////////////////
-  // Check file
-  if (!out_stream->good() || !out_stream->is_open()) {
-    throw std::runtime_error(
-        "[save_safetensor] Failed to open " + out_stream->label());
   }
 
   auto header = parent.dump();
