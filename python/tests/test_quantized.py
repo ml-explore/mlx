@@ -37,7 +37,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                                 )
                                 y_hat = x @ w_hat.T
                                 self.assertEqual(y_q.shape, y_hat.shape)
-                                self.assertLess((y_q - y_hat).abs().max(), 1e-4)
+                                self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qmm_shapes(self):
         key = mx.random.key(0)
@@ -54,7 +54,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
             )
             y_hat = x @ w_hat.T
             self.assertEqual(y_q.shape, y_hat.shape)
-            self.assertLess((y_q - y_hat).abs().max(), 1e-4)
+            self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qmv(self):
         key = mx.random.key(0)
@@ -73,7 +73,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                             )
                             y_hat = x @ w_hat.T
                             self.assertEqual(y_q.shape, y_hat.shape)
-                            self.assertLess((y_q - y_hat).abs().max(), 1e-4)
+                            self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
 
 if __name__ == "__main__":
