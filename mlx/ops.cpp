@@ -2649,4 +2649,111 @@ array quantized_matmul(
   return out;
 }
 
+std::tuple<array, array, array> quantize(
+    const array& w,
+    int groups /* = 128 */,
+    int width /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  if (w.ndim() != 2) {
+    throw std::invalid_argument("[quantize] Only matrices supported for now");
+  }
+
+  if ((w.shape(0) % 32) != 0) {
+    throw std::invalid_argument(
+        "[quantize] All dimensions should be divisible by 32 for now");
+  }
+
+  if ((w.shape(-1) % groups) != 0) {
+    std::ostringstream msg;
+    msg << "[quantize] The last dimension of the matrix needs to be divisible by "
+        << "the quantization group size " << groups
+        << ". However the provided matrix"
+        << " has shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Compute some constants used for the quantization
+  int n_bins = (1 << width) - 1; // 2**width - 1
+  int el_per_int = 32 / width;
+  array shifts = power(array(2, uint32), arange(0, 32, width, uint32, s), s);
+  shifts = reshape(shifts, {1, 1, -1}, s);
+
+  // Compute scales and biases
+  array packed_w = reshape(w, {w.shape(0), w.shape(1) / groups, groups}, s);
+  array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+  array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+  array delta = divide(subtract(w_max, w_min, s), array(n_bins, w.dtype()), s);
+  array scales = squeeze(delta, -1, s);
+  array biases = squeeze(w_min, -1, s);
+
+  // Quantize and pack w
+  packed_w =
+      astype(round(divide(subtract(packed_w, w_min, s), delta, s), s), uint32);
+  packed_w = reshape(packed_w, {w.shape(0), -1, el_per_int}, s);
+  packed_w = sum(
+      multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+
+  return std::make_tuple(packed_w, scales, biases);
+}
+
+array dequantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int groups /* = 128 */,
+    int width /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {
+    throw std::invalid_argument("[dequantize] Only matrices supported for now");
+  }
+
+  if ((w.shape(0) % 32) != 0) {
+    throw std::invalid_argument(
+        "[dequantize] All dimensions should be divisible by 32 for now");
+  }
+
+  if (w.shape(0) != scales.shape(0) || w.shape(0) != biases.shape(0)) {
+    throw std::invalid_argument(
+        "[dequantize] Shape of scales and biases does not match the matrix");
+  }
+
+  if (w.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[dequantize] The matrix should be given as a uint32");
+  }
+
+  // Compute some constants for the dequantization
+  int el_per_int = 32 / width;
+
+  if (w.shape(1) * el_per_int != scales.shape(1) * groups) {
+    std::ostringstream msg;
+    msg << "[dequantize] Shape of scales and biases does not match the matrix "
+        << "given the quantization parameters. Provided matrix of shape "
+        << w.shape() << " and scales/biases of shape " << scales.shape()
+        << " with groups=" << groups << " and width=" << width << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Extract the pieces from the passed quantized matrix
+  std::vector<array> parts;
+  for (int start = 0; start < 32; start += width) {
+    // TODO: Implement bitwise operators for integral types
+    int shift_left = 32 - (start + width);
+    int shift_right = shift_left + start;
+    array p = multiply(w, array(1 << shift_left, uint32), s);
+    p = floor_divide(p, array(1 << shift_right, uint32), s);
+    p = expand_dims(p, -1, s);
+    parts.push_back(p);
+  }
+  array w_full = concatenate(parts, -1, s);
+
+  // Dequantize
+  w_full = reshape(w_full, {w.shape(0), -1, groups}, s);
+  w_full = multiply(w_full, expand_dims(scales, -1, s), s);
+  w_full = add(w_full, expand_dims(biases, -1, s), s);
+  w_full = reshape(w_full, {w.shape(0), -1}, s);
+
+  return w_full;
+}
+
 } // namespace mlx::core

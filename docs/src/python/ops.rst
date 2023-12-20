@@ -34,6 +34,7 @@ Operations
    conv2d
    cos
    cosh
+   dequantize
    divide
    equal
    erf
@@ -73,6 +74,8 @@ Operations
    partition
    pad
    prod
+   quantize
+   quantized_matmul
    reciprocal
    reshape
    round

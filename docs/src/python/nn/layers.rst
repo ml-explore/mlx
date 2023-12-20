@@ -26,3 +26,4 @@ Layers
    RoPE
    MultiHeadAttention
    Sequential
+   QuantizedLinear
