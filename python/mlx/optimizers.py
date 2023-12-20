@@ -445,13 +445,13 @@ class Adamax(Adam):
 
 
 class Lion(Optimizer):
-    r"""Implementation of the Lion optimizer [1]. 
+    r"""Implementation of the Lion optimizer [1].
 
-    Since updates are computed through the sign operation, they tend to 
-    have larger norm than for other optimizers such as SGD and Adam. 
-    We recommend a learning rate that is 3-10x smaller than AdamW and a 
-    weight decay 3-10x larger than AdamW to maintain the strength 
-    (lr * wd). Our Lion implementation follows the original paper. In 
+    Since updates are computed through the sign operation, they tend to
+    have larger norm than for other optimizers such as SGD and Adam.
+    We recommend a learning rate that is 3-10x smaller than AdamW and a
+    weight decay 3-10x larger than AdamW to maintain the strength
+    (lr * wd). Our Lion implementation follows the original paper. In
     detail,
 
     [1]: Chen, X. Symbolic Discovery of Optimization Algorithms. arXiv
@@ -486,7 +486,7 @@ class Lion(Optimizer):
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
-        """Performs the Lion parameter update and stores :math:`m` 
+        """Performs the Lion parameter update and stores :math:`m`
         in the optimizer state."""
         lr = self.learning_rate
         b1, b2 = self.betas

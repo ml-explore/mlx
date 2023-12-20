@@ -38,6 +38,7 @@ from mlx.nn.layers.embedding import Embedding
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.normalization import GroupNorm, LayerNorm, RMSNorm
 from mlx.nn.layers.positional_encoding import RoPE, SinusoidalPositionalEncoding
+from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.nn.layers.transformer import (
     MultiHeadAttention,
     TransformerEncoder,
