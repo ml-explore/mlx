@@ -1,6 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
-#include <VecLib/cblas.h>
+#ifdef ACCELERATE_NEW_LAPACK
+#include <vecLib/cblas_new.h>
+#else
+#include <cblas.h>
+#endif
 
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
