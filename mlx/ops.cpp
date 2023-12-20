@@ -1636,6 +1636,20 @@ array operator/(const array& a, double b) {
   return divide(a, array(b));
 }
 
+array floor_divide(
+    const array& a,
+    const array& b,
+    StreamOrDevice s /* = {} */) {
+  auto dtype = promote_types(a.dtype(), b.dtype());
+  if (is_floating_point(dtype)) {
+    return floor(divide(a, b, s), s);
+  }
+
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
+  return array(
+      inputs[0].shape(), dtype, std::make_unique<Divide>(to_stream(s)), inputs);
+}
+
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
   auto inputs = broadcast_arrays(

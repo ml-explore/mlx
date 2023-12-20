@@ -304,6 +304,32 @@ void init_ops(py::module_& m) {
             array: The quotient ``a / b``.
       )pbdoc");
   m.def(
+      "floor_divide",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return floor_divide(a, b, s);
+      },
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        floor_divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise integer division.
+
+        If either array is a floating point type then it is equivalent to
+        calling :func:`floor` after :func:`divide`.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The quotient ``a // b``.
+      )pbdoc");
+  m.def(
       "remainder",
       [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);

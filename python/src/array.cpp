@@ -636,8 +636,7 @@ void init_array(py::module_& m) {
           "__floordiv__",
           [](const array& a, const ScalarOrArray v) {
             auto b = to_array(v, a.dtype());
-            auto t = promote_types(a.dtype(), b.dtype());
-            return astype(divide(a, b), t);
+            return floor_divide(a, b);
           },
           "other"_a)
       .def(
@@ -650,8 +649,7 @@ void init_array(py::module_& m) {
           "__rfloordiv__",
           [](const array& a, const ScalarOrArray v) {
             auto b = to_array(v, a.dtype());
-            auto t = promote_types(a.dtype(), b.dtype());
-            return astype(divide(b, a), t);
+            return floor_divide(b, a);
           },
           "other"_a)
       .def(
