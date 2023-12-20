@@ -466,6 +466,17 @@ void Reshape::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Round::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  if (not is_integral(in.dtype())) {
+    unary_fp(in, out, RoundOp());
+  } else {
+    // No-op integer types
+    out.copy_shared_buffer(in);
+  }
+}
+
 void Sigmoid::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];

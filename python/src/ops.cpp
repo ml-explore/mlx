@@ -304,6 +304,32 @@ void init_ops(py::module_& m) {
             array: The quotient ``a / b``.
       )pbdoc");
   m.def(
+      "floor_divide",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return floor_divide(a, b, s);
+      },
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        floor_divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise integer division.
+
+        If either array is a floating point type then it is equivalent to
+        calling :func:`floor` after :func:`divide`.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The quotient ``a // b``.
+      )pbdoc");
+  m.def(
       "remainder",
       [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);
@@ -1183,6 +1209,32 @@ void init_ops(py::module_& m) {
         generate numbers is ``dtype(start + step) - dtype(start)``.
         This can lead to unexpected results for example if `start + step`
         is a fractional value and the `dtype` is integral.
+      )pbdoc");
+  m.def(
+      "linspace",
+      [](Scalar start, Scalar stop, int num, Dtype dtype, StreamOrDevice s) {
+        return linspace(
+            scalar_to_double(start), scalar_to_double(stop), num, dtype, s);
+      },
+      "start"_a,
+      "stop"_a,
+      "num"_a = 50,
+      "dtype"_a = float32,
+      "stream"_a = none,
+      R"pbdoc(
+      linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
+
+      Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
+
+      Args:
+          start (scalar): Starting value.
+          stop (scalar): Stopping value.
+          num (int, optional): Number of samples, defaults to ``50``.
+          dtype (Dtype, optional): Specifies the data type of the output,
+          default to ``float32``.
+
+      Returns:
+          array: The range of values.
       )pbdoc");
   m.def(
       "take",
@@ -2921,5 +2973,66 @@ void init_ops(py::module_& m) {
 
         Returns:
             result (array): The output containing elements selected from ``x`` and ``y``.
+      )pbdoc");
+  m.def(
+      "round",
+      [](const array& a, int decimals, StreamOrDevice s) {
+        return round(a, decimals, s);
+      },
+      "a"_a,
+      py::pos_only(),
+      "decimals"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        round(a: array, /, decimals: int = 0, stream: Union[None, Stream, Device] = None) -> array
+
+        Round to the given number of decimals.
+
+        Bascially performs:
+
+        .. code-block:: python
+
+          s = 10**decimals
+          x = round(x * s) / s
+
+        Args:
+          a (array): Input array
+          decimals (int): Number of decimal places to round to. (default: 0)
+
+        Returns:
+          result (array): An array of the same type as ``a`` rounded to the given number of decimals.
+      )pbdoc");
+  m.def(
+      "quantized_matmul",
+      &quantized_matmul,
+      "x"_a,
+      "w"_a,
+      py::pos_only(),
+      "scales"_a,
+      "biases"_a,
+      "groups"_a = 128,
+      "width"_a = 4,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        quantized_matmul(x: array, w: array, scales: array, biases: array, /, groups: int = 128, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Perform the matrix multiplication with the quantized matrix ``w``. The
+        quantization uses one floating point scale and bias per ``groups`` of
+        elements. Each element in ``w`` takes ``width`` bits and is packed in an
+        unsigned 32 bit integer.
+
+        Args:
+          x (array): Input array
+          w (array): Quantized matrix packed in unsigned integers
+          scales (array): The scales to use per ``groups`` elements of ``w``
+          biases (array): The biases to use per ``groups`` elements of ``w``
+          groups (int): The size of the group in ``w`` that shares a scale and
+                        bias. (default: 128)
+          width (int): The bitwidth of the elements in ``w``. (default: 4)
+
+        Returns:
+          result (array): The result of the multiplication of ``x`` with ``w``.
       )pbdoc");
 }

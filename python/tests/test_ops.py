@@ -115,6 +115,7 @@ class TestOps(mlx_tests.MLXTestCase):
             "subtract",
             "multiply",
             "divide",
+            "floor_divide",
             "remainder",
             "equal",
             "not_equal",
@@ -372,7 +373,35 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertListEqual(mx.ceil(x).tolist(), expected)
 
         with self.assertRaises(ValueError):
-            mx.floor(mx.array([22 + 3j, 19 + 98j]))
+            mx.ceil(mx.array([22 + 3j, 19 + 98j]))
+
+    def test_round(self):
+        # float
+        x = mx.array(
+            [0.5, -0.5, 1.5, -1.5, -22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf]
+        )
+        expected = [1, -1, 2, -2, -22, 20, -27, 9, 0, -np.inf, np.inf]
+        self.assertListEqual(mx.round(x).tolist(), expected)
+
+        # complex
+        y = mx.round(mx.array([22.2 + 3.6j, 19.5 + 98.2j]))
+        self.assertListEqual(y.tolist(), [22 + 4j, 20 + 98j])
+
+        # decimals
+        y0 = mx.round(mx.array([15, 122], mx.int32), decimals=0)
+        y1 = mx.round(mx.array([15, 122], mx.int32), decimals=-1)
+        y2 = mx.round(mx.array([15, 122], mx.int32), decimals=-2)
+        self.assertEqual(y0.dtype, mx.int32)
+        self.assertEqual(y1.dtype, mx.int32)
+        self.assertEqual(y2.dtype, mx.int32)
+        self.assertListEqual(y0.tolist(), [15, 122])
+        self.assertListEqual(y1.tolist(), [20, 120])
+        self.assertListEqual(y2.tolist(), [0, 100])
+
+        y1 = mx.round(mx.array([1.537, 1.471], mx.float32), decimals=1)
+        y2 = mx.round(mx.array([1.537, 1.471], mx.float32), decimals=2)
+        self.assertTrue(mx.allclose(y1, mx.array([1.5, 1.5])))
+        self.assertTrue(mx.allclose(y2, mx.array([1.54, 1.47])))
 
     def test_transpose_noargs(self):
         x = mx.array([[0, 1, 1], [1, 0, 0]])
@@ -1068,6 +1097,7 @@ class TestOps(mlx_tests.MLXTestCase):
             "subtract",
             "multiply",
             "divide",
+            "floor_divide",
             "maximum",
             "minimum",
             "power",
@@ -1083,19 +1113,21 @@ class TestOps(mlx_tests.MLXTestCase):
                     "uint32",
                     "uint64",
                 ]
-
                 float_dtypes = ["float16", "float32"]
 
-                dtypes = (
-                    float_dtypes
-                    if op in ("divide", "power")
-                    else (int_dtypes + float_dtypes)
-                )
+                dtypes = {
+                    "divide": float_dtypes,
+                    "power": float_dtypes,
+                    "floor_divide": ["float32"] + int_dtypes,
+                }
+                dtypes = dtypes.get(op, int_dtypes + float_dtypes)
+
                 for dtype in dtypes:
                     atol = 1e-3 if dtype == "float16" else 1e-6
                     with self.subTest(dtype=dtype):
-                        x1_ = x1.astype(getattr(np, dtype))
-                        x2_ = x2.astype(getattr(np, dtype))
+                        m = 10 if dtype in int_dtypes else 1
+                        x1_ = (x1 * m).astype(getattr(np, dtype))
+                        x2_ = (x2 * m).astype(getattr(np, dtype))
                         y1_ = mx.array(x1_)
                         y2_ = mx.array(x2_)
                         test_ops(
@@ -1462,6 +1494,27 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.clip(a, mins, maxs)
         clipped = mx.clip(mx.array(a), mx.array(mins), mx.array(maxs))
         self.assertTrue(np.array_equal(clipped, expected))
+
+    def test_linspace(self):
+        # Test default num = 50
+        a = mx.linspace(0, 1)
+        expected = mx.array(np.linspace(0, 1))
+        self.assertEqualArray(a, expected)
+
+        # Test int32 dtype
+        b = mx.linspace(0, 10, 5, mx.int64)
+        expected = mx.array(np.linspace(0, 10, 5, dtype=int))
+        self.assertEqualArray(b, expected)
+
+        # Test negative sequence with float start and stop
+        c = mx.linspace(-2.7, -0.7, 7)
+        expected = mx.array(np.linspace(-2.7, -0.7, 7))
+        self.assertEqualArray(c, expected)
+
+        # Test irrational step size of 1/9
+        d = mx.linspace(0, 1, 10)
+        expected = mx.array(np.linspace(0, 1, 10))
+        self.assertEqualArray(d, expected)
 
 
 if __name__ == "__main__":

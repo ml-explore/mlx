@@ -862,6 +862,15 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_THROWS_AS(ceil(x), std::invalid_argument);
   }
 
+  // Test round
+  {
+    array x({0.5, -0.5, 1.5, -1.5, 2.3, 2.6});
+    CHECK(array_equal(round(x), array({1, -1, 2, -2, 2, 3})).item<bool>());
+
+    x = array({11, 222, 32});
+    CHECK(array_equal(round(x, -1), array({10, 220, 30})).item<bool>());
+  }
+
   // Test exponential
   {
     array x(0.0);
@@ -2191,4 +2200,18 @@ TEST_CASE("test clipping with only max") {
   array expected({2.0f, 3.0f, 4.0f, 4.0f}, {4});
   auto clipped = clip(a, std::nullopt, array(4.0f));
   CHECK(array_equal(clipped, expected).item<bool>());
+}
+
+TEST_CASE("test linspace") {
+  auto x = linspace(0, 10, 5);
+  auto expected = array({0.0f, 2.5f, 5.0f, 7.5f, 10.0f}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 10, 5, int32);
+  expected = array({0, 2, 5, 7, 10}, {5});
+  CHECK(array_equal(x, expected).item<bool>());
+
+  x = linspace(0, 1, 0);
+  expected = array(std::initializer_list<float>{}, {0});
+  CHECK(array_equal(x, expected).item<bool>());
 }

@@ -1110,6 +1110,29 @@ class Power : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class QuantizedMatmul : public Primitive {
+ public:
+  explicit QuantizedMatmul(Stream stream, int groups, int width)
+      : Primitive(stream), groups_(groups), width_(width){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(QuantizedMatmul)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int groups_;
+  int width_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class RandomBits : public Primitive {
  public:
   explicit RandomBits(Stream stream, const std::vector<int>& shape, int width)
@@ -1203,6 +1226,25 @@ class Reduce : public Primitive {
   ReduceType reduce_type_;
   std::vector<int> axes_;
 
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Round : public Primitive {
+ public:
+  explicit Round(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Round)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
   void eval(const std::vector<array>& inputs, array& out);
 };
 
