@@ -727,6 +727,11 @@ class TestArray(mlx_tests.MLXTestCase):
             np.array_equal(a_np[idx_np, idx_np], np.array(a_mlx[idx_mlx, idx_mlx]))
         )
 
+        # Slicing with negative indices and integer
+        a_np = np.arange(10).reshape(5, 2)
+        a_mlx = mx.array(a_np)
+        self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
+
     def test_setitem(self):
         a = mx.array(0)
         a[None] = 1
