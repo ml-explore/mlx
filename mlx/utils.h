@@ -24,6 +24,7 @@ bool is_same_shape(const std::vector<array>& arrays);
  * https://numpy.org/devdocs/reference/generated/numpy.lib.array_utils.normalize_axis_index.html
  */
 int normalize_axis(int axis, int ndim);
+std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim);
 
 std::ostream& operator<<(std::ostream& os, const Device& d);
 std::ostream& operator<<(std::ostream& os, const Stream& s);
@@ -41,4 +42,8 @@ inline std::ostream& operator<<(std::ostream& os, const float16_t& v) {
 inline std::ostream& operator<<(std::ostream& os, const bfloat16_t& v) {
   return os << static_cast<float>(v);
 }
+/**
+ * Returns the axes vector  [0, 1, ... ndim).
+ */
+std::vector<int> get_shape_reducing_over_all_axes(int ndim);
 } // namespace mlx::core

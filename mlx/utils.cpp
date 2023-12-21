@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include <numeric>
 #include <sstream>
 #include <vector>
 
@@ -72,6 +73,12 @@ int normalize_axis(int axis, int ndim) {
     axis += ndim;
   }
   return axis;
+}
+std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
+  std::vector<int> canonical;
+  for (int ax : axes)
+    canonical.push_back(normalize_axis(ax, ndim));
+  return canonical;
 }
 
 std::ostream& operator<<(std::ostream& os, const Device& d) {
@@ -277,6 +284,12 @@ std::ostream& operator<<(std::ostream& os, const std::vector<size_t>& v) {
   }
   os << ")";
   return os;
+}
+
+std::vector<int> get_shape_reducing_over_all_axes(int ndim) {
+  std::vector<int> shape(ndim);
+  std::iota(shape.begin(), shape.end(), 0);
+  return shape;
 }
 
 } // namespace mlx::core
