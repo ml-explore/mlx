@@ -1718,7 +1718,7 @@ array QuantizedMatmul::jvp(
 
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
   const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
-  return groups_ == qm_other.groups_ && width_ == qm_other.width_;
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_;
 }
 
 std::pair<array, int> RandomBits::vmap(
