@@ -3528,7 +3528,6 @@ array einsum(
     output = equation.substr(pos + 2);
     input = equation.substr(0, pos);
   }
-  // TODO: Is there a better way to do this?
   std::vector<std::string> inputs;
   std::stringstream ss(input);
   std::string token;
