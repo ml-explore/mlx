@@ -2278,3 +2278,8 @@ TEST_CASE("test repeat") {
   // negative repeats
   CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
 }
+TEST_CASE("test einsum") {
+  auto x = einsum("jki", {zeros({2, 3, 4}, float32)});
+  CHECK_EQ(x.shape(), std::vector<int>{4, 2, 3});
+  // CHECK(false);
+}
