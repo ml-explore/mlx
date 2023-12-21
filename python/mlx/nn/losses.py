@@ -1,5 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
+import math
+
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 
@@ -318,7 +320,11 @@ def huber_loss(
 
     .. math::
 
-       L_{\delta}(a) = \left\{ \begin{array}{ll}\frac{1}{2} a^2 & \text{for } |a| \leq \delta, \\\delta \left( |a| - \frac{1}{2} \delta \right) & \text{otherwise.}\end{array} \right.
+        L_{\delta}(a) =
+        \left\{ \begin{array}{ll}
+            \frac{1}{2} a^2 & \text{for } |a| \leq \delta, \\
+            \delta \left( |a| - \frac{1}{2} \delta \right) & \text{otherwise.}
+        \end{array} \right.
 
     Args:
         inputs (array): The predicted values.
@@ -346,9 +352,16 @@ def log_cosh_loss(
     """
     Computes the log cosh loss between inputs and targets.
 
+    Logcosh acts like L2 loss for small errors, ensuring stable gradients,
+    and like L1 loss for large errors, reducing sensitivity to outliers. This
+    dual behavior offers a balanced, robust approach for regression tasks.
+
     .. math::
 
-       \text{logcosh}(y_{\text{true}}, y_{\text{pred}}) = \frac{1}{n} \sum_{i=1}^{n} \log(\cosh(y_{\text{pred}}^{(i)} - y_{\text{true}}^{(i)}))
+       \text{logcosh}(y_{\text{true}}, y_{\text{pred}}) =
+            \frac{1}{n} \sum_{i=1}^{n}
+            \log(\cosh(y_{\text{pred}}^{(i)} - y_{\text{true}}^{(i)}))
+
 
     Args:
         inputs (array): The predicted values.
@@ -360,6 +373,6 @@ def log_cosh_loss(
         array: The computed log cosh loss.
     """
     errors = inputs - targets
-    loss = mx.logaddexp(errors, -errors) - mx.log(mx.array(2.0))
+    loss = mx.logaddexp(errors, -errors) - math.log(2)
 
     return _reduce(loss, reduction)
