@@ -2857,18 +2857,20 @@ void init_ops(py::module_& m) {
       "file"_a,
       "arr"_a,
       py::pos_only(),
-      "retain_graph"_a = true,
+      "retain_graph"_a = std::nullopt,
       py::kw_only(),
       R"pbdoc(
-        save(file: str, arr: array, / , retain_graph: bool = True)
+        save(file: str, arr: array, / , retain_graph: Optional[bool] = None)
 
         Save the array to a binary file in ``.npy`` format.
 
         Args:
             file (str): File to which the array is saved
             arr (array): Array to be saved.
-            retain_graph(bool): Optional argument to retain graph
-              during array evaluation before saving. Default: True
+            retain_graph (bool, optional): Optional argument to retain graph
+              during array evaluation before saving. If not provided the graph
+              is retained if we are during a function transformation. Default:
+              None
 
       )pbdoc");
   m.def(
