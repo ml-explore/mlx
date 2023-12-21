@@ -2039,23 +2039,24 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqualArray(repeat_3, mx.array(expected_3))
     def test_einsum(self):
         self.assertEqualArray(
-            mx.einsum("jki", [mx.full((2, 3, 4), 3.0)]),
+            mx.einsum("jki", mx.full((2, 3, 4), 3.0)),
             mx.array(np.einsum("jki", np.full((2, 3, 4), 3.0))),
         )
         self.assertEqualArray(
-            mx.einsum("ij,jk->ik", [mx.full((2, 2), 2.0), mx.full((2, 2), 3.0)]),
+            mx.einsum("ij,jk->ik", mx.full((2, 2), 2.0), mx.full((2, 2), 3.0)),
             mx.array(
                 np.einsum("ij,jk->ik", np.full((2, 2), 2.0), np.full((2, 2), 3.0))
             ),
         )
         self.assertEqualArray(
-            mx.einsum("i,j->ij", [mx.full((10), 15.0), mx.full((10,), 20.0)]),
+            mx.einsum("i,j->ij", mx.full((10), 15.0), mx.full((10,), 20.0)),
             mx.array(np.einsum("i,j->ij", np.full((10), 15.0), np.full((10,), 20.0))),
         )
         self.assertEqualArray(
             mx.einsum(
                 "ijkl,mlopq->ikmop",
-                [mx.full((4, 5, 9, 4), 20.0), mx.full((14, 4, 16, 7, 5), 10.0)],
+                mx.full((4, 5, 9, 4), 20.0),
+                mx.full((14, 4, 16, 7, 5), 10.0),
             ),
             mx.array(
                 np.einsum(
