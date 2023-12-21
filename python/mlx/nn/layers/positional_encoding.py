@@ -154,10 +154,8 @@ class ALiBi(Module):
         k_sequence_length: int,
         num_heads: int,
         offset: int,
-        mask: Optional[mx.array] = None,
         dtype=mx.float32,
     ):
-
         x1 = mx.arange(offset, q_sequence_length)
         x2 = mx.arange(0, k_sequence_length)
         distance_matrix = -mx.abs(
@@ -165,8 +163,6 @@ class ALiBi(Module):
         )
         alibi_slope = ALiBi.create_alibi_slope(num_heads)
         alibi_matrix = (distance_matrix * alibi_slope).astype(dtype)
-        if mask is not None:
-            alibi_matrix = alibi_matrix + mask
         return alibi_matrix
 
     @staticmethod
@@ -180,12 +176,13 @@ class ALiBi(Module):
         k_sequence_length = attention_scores.shape[-1]
         num_heads = attention_scores.shape[1]
         dtype = attention_scores.dtype
-        alibi_distance_matrix = ALiBi.create_alibi_matrix(
+        alibi_mask = ALiBi.create_alibi_matrix(
             q_sequence_length=q_sequence_length,
             k_sequence_length=k_sequence_length,
             num_heads=num_heads,
             offset=offset,
-            mask=mask,
             dtype=dtype,
         )
-        return attention_scores + alibi_distance_matrix
+        if mask is not None:
+            alibi_mask = alibi_mask + mask
+        return attention_scores + alibi_mask
