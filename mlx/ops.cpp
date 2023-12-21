@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <map>
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -3503,6 +3504,96 @@ array dequantize(
   w_full = reshape(w_full, sshape, s);
 
   return w_full;
+}
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
+std::map<char, int> einsum_ord_helper(std::string inp) {
+  std::map<char, int> counts;
+  for (int i = 0; i < inp.size(); i++) {
+    counts[inp[i]] = i;
+  }
+  return counts;
+}
+
+array einsum(
+    std::string equation,
+    const std::vector<array>& operands,
+    StreamOrDevice s /* = {} */) {
+  std::string output;
+  std::string input = equation;
+  if (equation.find("->") == std::string::npos) {
+    output = std::string(equation);
+    std::sort(output.begin(), output.end());
+  } else {
+    auto pos = equation.find("->");
+    output = equation.substr(pos + 2);
+    input = equation.substr(0, pos);
+  }
+  std::vector<std::string> inputs;
+  size_t pos = 0;
+  if (input.find(",") == std::string::npos) {
+    inputs.push_back(input);
+  } else {
+    while ((pos = input.find(',')) != std::string::npos) {
+      inputs.push_back(input.substr(0, pos));
+      input.erase(0, pos + 1);
+    }
+  }
+  if (operands.size() != inputs.size()) {
+    throw std::runtime_error(
+        "Number of operands must match the number of input characters");
+  }
+
+  std::map<char, int> input_map;
+  for (int i = 0; i < inputs.size(); i++) {
+    auto arr = operands[i];
+    auto inp = inputs[i];
+    for (int j = 0; j < MIN(arr.shape().size(), inp.size()); j++) {
+      input_map[inp[j]] = arr.shape().at(j);
+    }
+  }
+  std::vector<int> broad;
+  for (auto key : input_map) {
+    broad.push_back(key.second);
+  }
+  std::vector<array> inputs_arr;
+  for (int i = 0; i < operands.size(); i++) {
+    auto arr = operands[i];
+    auto ord_map = einsum_ord_helper(inputs[i]);
+    std::vector<int> new_shape;
+    for (auto key : input_map) {
+      if (ord_map.find(key.first) != ord_map.end()) {
+        new_shape.push_back(key.second);
+      } else {
+        new_shape.push_back(1);
+      }
+    }
+    std::vector<int> axis;
+    for (auto key : ord_map) {
+      axis.push_back(key.second);
+    }
+    inputs_arr.push_back(
+        broadcast_to(reshape(transpose(arr, axis, s), new_shape, s), broad, s));
+  }
+
+  auto ord_output = einsum_ord_helper(output);
+  std::vector<int> rhs_order;
+  for (auto key : ord_output) {
+    rhs_order.push_back(key.second);
+  }
+
+  std::vector<int> sum_axis;
+  for (auto key : input_map) {
+    if (ord_output.find(key.first) == ord_output.end()) {
+      sum_axis.push_back(key.second);
+    }
+  }
+
+  auto acc = ones_like(inputs_arr.at(0), s);
+  for (auto arr : inputs_arr) {
+    acc = multiply(acc, arr, s);
+  }
+  return transpose(sum(acc, sum_axis, false, s), rhs_order, s);
 }
 
 array gather_qmm(
