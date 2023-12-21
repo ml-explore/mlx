@@ -161,7 +161,7 @@ class ALiBi(Module):
         distance_matrix = -mx.abs(
             mx.expand_dims(x1[:, None] - x2[None, :], axis=(0, 1))
         )
-        alibi_slope = ALiBi.create_alibi_slope(num_heads)
+        alibi_slope = ALiBi.create_alibi_slope(num_heads=num_heads)
         alibi_mask = (distance_matrix * alibi_slope).astype(dtype)
         return alibi_mask
 
