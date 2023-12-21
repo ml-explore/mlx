@@ -2867,10 +2867,12 @@ array einsum(
   }
 
   std::vector<int> sum_axis;
+  int i = 0;
   for (auto key : input_map) {
     if (ord_output.find(key.first) == ord_output.end()) {
-      sum_axis.push_back(key.second);
+      sum_axis.push_back(i);
     }
+    i += 1;
   }
 
   auto acc = ones_like(inputs_arr.at(0), s);
