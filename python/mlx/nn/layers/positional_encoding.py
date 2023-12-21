@@ -169,16 +169,12 @@ class ALiBi(Module):
         return mx.expand_dims(out, axis=(-1, -2))
 
     def __call__(self, attention_scores, offset=0, mask=None):
-        q_sequence_length = attention_scores.shape[-2] + offset
-        k_sequence_length = attention_scores.shape[-1]
-        num_heads = attention_scores.shape[1]
-        dtype = attention_scores.dtype
         alibi_mask = ALiBi.create_alibi_matrix(
-            q_sequence_length=q_sequence_length,
-            k_sequence_length=k_sequence_length,
-            num_heads=num_heads,
+            q_sequence_length=attention_scores.shape[-2] + offset,
+            k_sequence_length=attention_scores.shape[-1],
+            num_heads=attention_scores.shape[1],
             offset=offset,
-            dtype=dtype,
+            dtype=attention_scores.dtype,
         )
         if mask is not None:
             alibi_mask = alibi_mask + mask
