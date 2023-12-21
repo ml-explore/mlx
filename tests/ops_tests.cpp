@@ -2281,5 +2281,10 @@ TEST_CASE("test repeat") {
 TEST_CASE("test einsum") {
   auto x = einsum("jki", {zeros({2, 3, 4}, float32)});
   CHECK_EQ(x.shape(), std::vector<int>{4, 2, 3});
-  // CHECK(false);
+
+  x = einsum("ij,jk->ik", {full({2, 2}, 2.0f), full({2, 2}, 3.0f)});
+  CHECK_EQ(x.shape(), std::vector<int>{2, 2});
+  CHECK_EQ(x.dtype(), float32);
+  auto expected = array({12.0f, 12.0f, 12.0f, 12.0f}, {2, 2});
+  CHECK_EQ(array_equal(x, expected).item<bool>(), true);
 }

@@ -2817,13 +2817,11 @@ array einsum(
   }
   std::vector<std::string> inputs;
   size_t pos = 0;
-  if (input.find(",") == std::string::npos) {
-    inputs.push_back(input);
-  } else {
-    while ((pos = input.find(',')) != std::string::npos) {
-      inputs.push_back(input.substr(0, pos));
-      input.erase(0, pos + 1);
-    }
+  std::stringstream ss(input);
+  std::string token;
+
+  while (getline(ss, token, ',')) {
+    inputs.push_back(token);
   }
   if (operands.size() != inputs.size()) {
     throw std::runtime_error(
