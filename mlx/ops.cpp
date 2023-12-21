@@ -13,6 +13,8 @@
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
 
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
 namespace mlx::core {
 
 namespace {
@@ -3505,9 +3507,8 @@ array dequantize(
 
   return w_full;
 }
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
 
-std::map<char, int> einsum_ord_helper(std::string inp) {
+std::map<char, int> string_to_char_map(std::string inp) {
   std::map<char, int> counts;
   for (int i = 0; i < inp.size(); i++) {
     counts[inp[i]] = i;
@@ -3529,11 +3530,10 @@ array einsum(
     output = equation.substr(pos + 2);
     input = equation.substr(0, pos);
   }
+  // TODO: Is there a better way to do this?
   std::vector<std::string> inputs;
-  size_t pos = 0;
   std::stringstream ss(input);
   std::string token;
-
   while (getline(ss, token, ',')) {
     inputs.push_back(token);
   }
@@ -3557,7 +3557,7 @@ array einsum(
   std::vector<array> inputs_arr;
   for (int i = 0; i < operands.size(); i++) {
     auto arr = operands[i];
-    auto ord_map = einsum_ord_helper(inputs[i]);
+    auto ord_map = string_to_char_map(inputs[i]);
     std::vector<int> new_shape;
     for (auto key : input_map) {
       if (ord_map.find(key.first) != ord_map.end()) {
@@ -3574,7 +3574,7 @@ array einsum(
         broadcast_to(reshape(transpose(arr, axis, s), new_shape, s), broad, s));
   }
 
-  auto ord_output = einsum_ord_helper(output);
+  auto ord_output = string_to_char_map(output);
   std::vector<int> rhs_order;
   for (auto key : ord_output) {
     rhs_order.push_back(key.second);
