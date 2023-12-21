@@ -27,3 +27,6 @@ Layers
    MultiHeadAttention
    Sequential
    QuantizedLinear
+   Dropout
+   Dropout2d
+
