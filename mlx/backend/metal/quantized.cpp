@@ -58,7 +58,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   if (B == 1) {
     std::ostringstream kname;
     kname << "qmv_" << (w_transposed ? "n_" : "t_") << type_to_name(out)
-          << "_groups_" << groups_ << "_width_" << width_;
+          << "_gs_" << group_size_ << "_b_" << bits_;
 
     // Encode and dispatch kernel
     auto compute_encoder = d.get_command_encoder(s.index);
@@ -87,7 +87,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   else {
     std::ostringstream kname;
     kname << "qmm_" << (w_transposed ? "t_" : "n_") << type_to_name(out)
-          << "_groups_" << groups_ << "_width_" << width_;
+          << "_gs_" << group_size_ << "_b_" << bits_;
 
     // Encode and dispatch kernel
     auto compute_encoder = d.get_command_encoder(s.index);
