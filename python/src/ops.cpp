@@ -3011,28 +3011,126 @@ void init_ops(py::module_& m) {
       py::pos_only(),
       "scales"_a,
       "biases"_a,
-      "groups"_a = 128,
-      "width"_a = 4,
+      "group_size"_a = 64,
+      "bits"_a = 4,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        quantized_matmul(x: array, w: array, scales: array, biases: array, /, groups: int = 128, width: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+        quantized_matmul(x: array, w: array, scales: array, biases: array, /, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
 
         Perform the matrix multiplication with the quantized matrix ``w``. The
-        quantization uses one floating point scale and bias per ``groups`` of
-        elements. Each element in ``w`` takes ``width`` bits and is packed in an
+        quantization uses one floating point scale and bias per ``group_size`` of
+        elements. Each element in ``w`` takes ``bits`` bits and is packed in an
         unsigned 32 bit integer.
 
         Args:
           x (array): Input array
           w (array): Quantized matrix packed in unsigned integers
-          scales (array): The scales to use per ``groups`` elements of ``w``
-          biases (array): The biases to use per ``groups`` elements of ``w``
-          groups (int): The size of the group in ``w`` that shares a scale and
-                        bias. (default: 128)
-          width (int): The bitwidth of the elements in ``w``. (default: 4)
+          scales (array): The scales to use per ``group_size`` elements of ``w``
+          biases (array): The biases to use per ``group_size`` elements of ``w``
+          group_size (int, optional): The size of the group in ``w`` that
+            shares a scale and bias. (default: 64)
+          bits (int, optional): The number of bits occupied by each element in
+            ``w``. (default: 4)
 
         Returns:
           result (array): The result of the multiplication of ``x`` with ``w``.
+      )pbdoc");
+  m.def(
+      "quantize",
+      &quantize,
+      "w"_a,
+      py::pos_only(),
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]
+
+        Quantize the matrix ``w`` using ``bits`` bits per element.
+
+        Note, every ``group_size`` elements in a row of ``w`` are quantized
+        together. Hence, number of columns of ``w`` should be divisible by
+        ``group_size``. In particular, the rows of ``w`` are divided into groups of
+        size ``group_size`` which are quantized together.
+
+        .. warning::
+
+          ``quantize`` currently only supports 2D inputs with dimensions which are multiples of 32
+
+        Formally, for a group of :math:`g` consecutive elements :math:`w_1` to
+        :math:`w_g` in a row of ``w`` we compute the quantized representation
+        of each element :math:`\hat{w_i}` as follows
+
+        .. math::
+
+          \begin{aligned}
+            \alpha &= \max_i w_i \\
+            \beta &= \min_i w_i \\
+            s &= \frac{\alpha - \beta}{2^b - 1} \\
+            \hat{w_i} &= \textrm{round}\left( \frac{w_i - \beta}{s}\right).
+          \end{aligned}
+
+        After the above computation, :math:`\hat{w_i}` fits in :math:`b` bits
+        and is packed in an unsigned 32-bit integer from the lower to upper
+        bits. For instance, for 4-bit quantization we fit 8 elements in an
+        unsigned 32 bit integer where the 1st element occupies the 4 least
+        significant bits, the 2nd bits 4-7 etc.
+
+        In order to be able to dequantize the elements of ``w`` we also need to
+        save :math:`s` and :math:`\beta` which are the returned ``scales`` and
+        ``biases`` respectively.
+
+        Args:
+          w (array): Matrix to be quantized
+          group_size (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. (default: 64)
+          bits (int, optional): The number of bits occupied by each element of
+            ``w`` in the returned quantized matrix. (default: 4)
+
+        Returns:
+          (tuple): A tuple containing
+
+            - w_q (array): The quantized version of ``w``
+            - scales (array): The scale to multiply each element with, namely :math:`s`
+            - biases (array): The biases to add to each element, namely :math:`\beta`
+      )pbdoc");
+  m.def(
+      "dequantize",
+      &dequantize,
+      "w"_a,
+      py::pos_only(),
+      "scales"_a,
+      "biases"_a,
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        dequantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Dequantize the matrix ``w`` using the provided ``scales`` and
+        ``biases`` and the ``group_size`` and ``bits`` configuration.
+
+        Formally, given the notation in :func:`quantize`, we compute
+        :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s` and
+        :math:`\beta` as follows
+
+        .. math::
+
+          w_i = s \hat{w_i} - \beta
+
+        Args:
+          w (array): Matrix to be quantized
+          scales (array): The scales to use per ``group_size`` elements of ``w``
+          biases (array): The biases to use per ``group_size`` elements of ``w``
+          group_size (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. (default: 64)
+          bits (int, optional): The number of bits occupied by each element in
+            ``w``. (default: 4)
+
+        Returns:
+          result (array): The dequantized version of ``w``
       )pbdoc");
 }
