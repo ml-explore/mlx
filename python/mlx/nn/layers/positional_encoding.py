@@ -153,11 +153,12 @@ class ALiBi(Module):
         q_sequence_length: int,
         k_sequence_length: int,
         num_heads: int,
+        offset: int,
         mask: Optional[mx.array] = None,
         dtype=mx.float32,
     ):
 
-        x1 = mx.arange(0, q_sequence_length)
+        x1 = mx.arange(offset, q_sequence_length)
         x2 = mx.arange(0, k_sequence_length)
         distance_matrix = -mx.abs(
             mx.expand_dims(x1[:, None] - x2[None, :], axis=(0, 1))
@@ -174,12 +175,17 @@ class ALiBi(Module):
         out = mx.power(x, -mx.arange(1, num_heads + 1))
         return mx.expand_dims(out, axis=(-1, -2))
 
-    def __call__(self, attention_scores, mask=None):
-        q_sequence_length = attention_scores.shape[-2]
+    def __call__(self, attention_scores, offset=0, mask=None):
+        q_sequence_length = attention_scores.shape[-2] + offset
         k_sequence_length = attention_scores.shape[-1]
         num_heads = attention_scores.shape[1]
         dtype = attention_scores.dtype
         alibi_distance_matrix = ALiBi.create_alibi_matrix(
-            q_sequence_length, k_sequence_length, num_heads, mask, dtype
+            q_sequence_length=q_sequence_length,
+            k_sequence_length=k_sequence_length,
+            num_heads=num_heads,
+            offset=offset,
+            mask=mask,
+            dtype=dtype,
         )
         return attention_scores + alibi_distance_matrix
