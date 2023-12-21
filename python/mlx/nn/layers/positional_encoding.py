@@ -145,9 +145,6 @@ class SinusoidalPositionalEncoding(Module):
 
 
 class ALiBi(Module):
-    def __init__(self):
-        super().__init__()
-
     @staticmethod
     def create_alibi_matrix(
         q_sequence_length: int,
