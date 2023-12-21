@@ -4375,4 +4375,24 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The array with the new type.
       )pbdoc");
+  m.def(
+      "einsum",
+      &einsum,
+      "equation"_a,
+      "operands"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      einsum(equation: str, operands: List[array], /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Perform the Einstein summation convention on the operands.
+
+      Args:
+        equation (str): The Einstein summation convention equation.
+        operands (List[array]): The operands to the Einstein summation convention.
+
+      Returns:
+        result (array): The result of the Einstein summation convention.
+    )pbdoc");
 }
