@@ -19,12 +19,12 @@ void _qmm_t_4_64(
     int M,
     int N,
     int K) {
-  constexpr int width = 4;
-  constexpr int groups = 64;
-  constexpr int bitmask = (1 << width) - 1;
-  constexpr int pack_factor = 32 / width;
-  constexpr int packs_in_group = groups / pack_factor;
-  const int Kg = K / groups;
+  constexpr int bits = 4;
+  constexpr int group_size = 64;
+  constexpr int bitmask = (1 << bits) - 1;
+  constexpr int pack_factor = 32 / bits;
+  constexpr int packs_in_group = group_size / pack_factor;
+  const int Kg = K / group_size;
   const int Kw = K / pack_factor;
 
   for (int m = 0; m < M; m++) {
@@ -35,7 +35,7 @@ void _qmm_t_4_64(
     for (int n = 0; n < N; n++) {
       const simd_float16* x_local = (simd_float16*)x;
       simd_float16 sum = 0;
-      for (int k = 0; k < K; k += groups) {
+      for (int k = 0; k < K; k += group_size) {
         float scale = *scales_local++;
         float bias = *biases_local++;
 
@@ -46,7 +46,7 @@ void _qmm_t_4_64(
             uint32_t wii = *w_local++;
             for (int p = 0; p < 8; p++) {
               wi[e * 8 + p] = wii & bitmask;
-              wii >>= width;
+              wii >>= bits;
             }
           }
           simd_float16 wf = simd_float(wi);
@@ -85,7 +85,7 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
     throw std::runtime_error("x, scales and biases should be row contiguous.");
   }
 
-  if (x.dtype() == float32 && width_ == 4 && groups_ == 64) {
+  if (x.dtype() == float32 && bits_ == 4 && group_size_ == 64) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     int K = x.shape(-1);
     int M = x.size() / K;

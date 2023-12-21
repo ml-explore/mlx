@@ -18,22 +18,22 @@ class TestQuantized(mlx_tests.MLXTestCase):
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
-        for groups in [128, 64]:
-            for width in [2, 4, 8]:
+        for group_size in [128, 64]:
+            for bits in [2, 4, 8]:
                 for M in [8, 32, 33, 64]:
                     for N in [512, 1024]:
                         for K in [512, 1024]:
                             with self.subTest(
-                                shape=(M, N, K), groups=groups, width=width
+                                shape=(M, N, K), group_size=group_size, bits=bits
                             ):
                                 x = mx.random.normal(shape=(M, K), key=k1)
                                 w = mx.random.normal(shape=(N, K), key=k2)
-                                w_q, scales, biases = mx.quantize(w, groups, width)
+                                w_q, scales, biases = mx.quantize(w, group_size, bits)
                                 w_hat = mx.dequantize(
-                                    w_q, scales, biases, groups, width
+                                    w_q, scales, biases, group_size, bits
                                 )
                                 y_q = mx.quantized_matmul(
-                                    x, w_q.T, scales, biases, width=width, groups=groups
+                                    x, w_q.T, scales, biases, group_size, bits
                                 )
                                 y_hat = x @ w_hat.T
                                 self.assertEqual(y_q.shape, y_hat.shape)
@@ -42,16 +42,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
     def test_qmm_shapes(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
-        groups = 64
-        width = 4
+        group_size = 64
+        bits = 4
         w = mx.random.normal(shape=(32, 128), key=k2)
-        w_q, scales, biases = mx.quantize(w, groups, width)
-        w_hat = mx.dequantize(w_q, scales, biases, groups, width)
+        w_q, scales, biases = mx.quantize(w, group_size, bits)
+        w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
         for s in [(3, 128), (2, 1, 7, 128)]:
             x = mx.random.normal(shape=(3, 128), key=k1)
-            y_q = mx.quantized_matmul(
-                x, w_q.T, scales, biases, width=width, groups=groups
-            )
+            y_q = mx.quantized_matmul(x, w_q.T, scales, biases, group_size, bits)
             y_hat = x @ w_hat.T
             self.assertEqual(y_q.shape, y_hat.shape)
             self.assertLess((y_q - y_hat).abs().max(), 1e-3)
@@ -59,17 +57,19 @@ class TestQuantized(mlx_tests.MLXTestCase):
     def test_qmv(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
-        for groups in [128, 64]:
-            for width in [2, 4, 8]:
+        for group_size in [128, 64]:
+            for bits in [2, 4, 8]:
                 for M in [512, 1024]:
                     for N in [512, 1024]:
-                        with self.subTest(shape=(M, N), groups=groups, width=width):
+                        with self.subTest(
+                            shape=(M, N), group_size=group_size, bits=bits
+                        ):
                             x = mx.random.normal(shape=(1, N), key=k1)
                             w = mx.random.normal(shape=(M, N), key=k2)
-                            w_q, scales, biases = mx.quantize(w, groups, width)
-                            w_hat = mx.dequantize(w_q, scales, biases, groups, width)
+                            w_q, scales, biases = mx.quantize(w, group_size, bits)
+                            w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
                             y_q = mx.quantized_matmul(
-                                x, w_q.T, scales, biases, width=width, groups=groups
+                                x, w_q.T, scales, biases, group_size, bits
                             )
                             y_hat = x @ w_hat.T
                             self.assertEqual(y_q.shape, y_hat.shape)
