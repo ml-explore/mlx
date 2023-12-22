@@ -108,6 +108,16 @@ MTL::Library* load_library(
   }
 }
 
+struct PoolHolder {
+  PoolHolder() {
+    p = NS::AutoreleasePool::alloc()->init();
+  }
+  ~PoolHolder() {
+    p->release();
+  }
+  NS::AutoreleasePool* p;
+};
+
 } // namespace
 
 Device::Device()
@@ -124,6 +134,12 @@ Device::~Device() {
   }
   for (auto& l : library_map_) {
     l.second->release();
+  }
+  for (auto& b : buffer_map_) {
+    b.second.second->release();
+  }
+  for (auto& e : encoder_map_) {
+    e.second->release();
   }
   device_->release();
   pool_->release();
@@ -282,9 +298,8 @@ Device& device(mlx::core::Device) {
 }
 
 NS::AutoreleasePool*& thread_autorelease_pool() {
-  static thread_local NS::AutoreleasePool* p =
-      NS::AutoreleasePool::alloc()->init();
-  return p;
+  static thread_local PoolHolder pool{};
+  return pool.p;
 }
 
 void new_stream(Stream stream) {
