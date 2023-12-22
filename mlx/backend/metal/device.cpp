@@ -17,9 +17,10 @@ namespace fs = std::filesystem;
 
 namespace mlx::core::metal {
 
-static Device metal_device_;
-
 namespace {
+
+// Catch things related to the main-thread static variables
+static std::shared_ptr<void> global_memory_pool = new_scoped_memory_pool();
 
 // TODO nicer way to set this or possibly expose as an environment variable
 static constexpr int MAX_BUFFERS_PER_QUEUE = 12;
@@ -112,20 +113,15 @@ MTL::Library* load_library(
 
 } // namespace
 
-Device::Device()
-    : pool_(NS::AutoreleasePool::alloc()->init()),
-      device_(load_device()),
-      library_map_({{"mlx", load_library(device_)}}) {}
+Device::Device() {
+  auto pool = new_scoped_memory_pool();
+  device_ = load_device();
+  library_map_ = {{"mlx", load_library(device_)}};
+}
 
 Device::~Device() {
   for (auto& q : queue_map_) {
     q.second->release();
-  }
-  for (auto& k : kernel_map_) {
-    k.second->release();
-  }
-  for (auto& l : library_map_) {
-    l.second->release();
   }
   for (auto& b : buffer_map_) {
     b.second.second->release();
@@ -133,8 +129,13 @@ Device::~Device() {
   for (auto& e : encoder_map_) {
     e.second->release();
   }
+  for (auto& k : kernel_map_) {
+    k.second->release();
+  }
+  for (auto& l : library_map_) {
+    l.second->release();
+  }
   device_->release();
-  pool_->release();
 }
 
 void Device::new_queue(int index) {
@@ -243,6 +244,7 @@ void Device::register_library(
 MTL::ComputePipelineState* Device::get_kernel(
     const std::string& name,
     const std::string& lib_name /* = "mlx" */) {
+  auto pool = new_scoped_memory_pool();
   // Look for cached kernel
   if (auto it = kernel_map_.find(name); it != kernel_map_.end()) {
     return it->second;
@@ -285,17 +287,18 @@ MTL::ComputePipelineState* Device::get_kernel(
 }
 
 Device& device(mlx::core::Device) {
-  return metal_device_;
+  static Device metal_device;
+  return metal_device;
 }
 
-NS::AutoreleasePool*& thread_autorelease_pool() {
-  static thread_local NS::AutoreleasePool* p =
-      NS::AutoreleasePool::alloc()->init();
-  return p;
+std::shared_ptr<void> new_scoped_memory_pool() {
+  auto dtor = [](void* ptr) {
+    static_cast<NS::AutoreleasePool*>(ptr)->release();
+  };
+  return std::shared_ptr<void>(NS::AutoreleasePool::alloc()->init(), dtor);
 }
 
 void new_stream(Stream stream) {
-  thread_autorelease_pool();
   if (stream.device == mlx::core::Device::gpu) {
     device(stream.device).new_queue(stream.index);
   }
