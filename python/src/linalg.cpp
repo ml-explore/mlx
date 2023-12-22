@@ -1,6 +1,7 @@
 
 // Copyright © 2023 Apple Inc.
 
+#include <limits>
 #include <numeric>
 #include <ostream>
 #include <variant>
@@ -68,6 +69,12 @@ void init_linalg(py::module_& parent_module) {
          const double ord,
          const bool keepdims,
          const StreamOrDevice stream) {
+        if (std::isinf((float)ord) || std::isinf(ord))
+          if (ord > 0)
+            return norm(a, "inf", {}, keepdims, stream);
+          else
+            return norm(a, "-inf", {}, keepdims, stream);
+
         return norm(a, ord, {}, keepdims, stream);
       },
       "a"_a,
@@ -82,6 +89,12 @@ void init_linalg(py::module_& parent_module) {
          const int axis,
          const bool keepdims,
          const StreamOrDevice stream) {
+        if (std::isinf((float)ord) || std::isinf(ord))
+          if (ord > 0)
+            return norm(a, "inf", {axis}, keepdims, stream);
+          else
+            return norm(a, "-inf", {axis}, keepdims, stream);
+
         return norm(a, ord, {axis}, keepdims, stream);
       },
       "a"_a,
@@ -97,6 +110,12 @@ void init_linalg(py::module_& parent_module) {
          const std::vector<int>& axis,
          const bool keepdims,
          const StreamOrDevice stream) {
+        if (std::isinf((float)ord) || std::isinf(ord))
+          if (ord > 0)
+            return norm(a, "inf", axis, keepdims, stream);
+          else
+            return norm(a, "-inf", axis, keepdims, stream);
+
         return norm(a, ord, axis, keepdims, stream);
       },
       "a"_a,
