@@ -181,7 +181,7 @@ class GroupNorm(Module):
         x = group_norm(x)
         return (self.weight * x + self.bias) if "weight" in self else x
 
-   
+
 class BatchNorm(Module):
     r"""Applies Batch Normalization over a 2D or 3D input.
 
@@ -211,7 +211,7 @@ class BatchNorm(Module):
         >>> bn = nn.BatchNorm1d(num_features=4, affine=True)
         >>> output = bn(x)
     """
-    
+
     def __init__(
         self,
         num_features: int,
@@ -239,7 +239,7 @@ class BatchNorm(Module):
 
     def _extra_repr(self):
         return f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, affine={'weight' in self}, track_running_stats={self.track_running_stats}"
-    
+
     def _check_and_expand_dims(self, x: mx.array):
         """
         Check if the input is a 2D or 3D tensor and expand the weight, bias, running mean, and running variance accordingly.
@@ -247,7 +247,7 @@ class BatchNorm(Module):
         Args:
             x (mx.array): Input tensor.
         """
-        
+
         num_dims = len(x.shape)
         dims_dict = {
             2: ((1, self.num_features), (0,)),
@@ -259,17 +259,16 @@ class BatchNorm(Module):
             raise ValueError(f"expected num_dims to be 2, 3, or 4 (got {num_dims})")
 
         shape, self.reduction_axes = dims_dict[num_dims]
-        
+
         if self.affine:
             self.weight = mx.expand_dims(self.weight, self.reduction_axes)
             self.bias = mx.expand_dims(self.bias, self.reduction_axes)
-        
+
         if self.track_running_stats:
             self.running_mean = mx.expand_dims(self.running_mean, self.reduction_axes)
             self.running_var = mx.expand_dims(self.running_var, self.reduction_axes)
-        
-        self.dims_expanded = True
 
+        self.dims_expanded = True
 
     def _calc_stats(self, x: mx.array) -> Tuple[mx.array, mx.array]:
         """
@@ -304,7 +303,7 @@ class BatchNorm(Module):
         Returns:
             mx.array: Output tensor.
         """
-        
+
         if not self.dims_expanded:
             self._check_and_expand_dims(x)
 
