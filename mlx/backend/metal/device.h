@@ -66,10 +66,7 @@ class Device {
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
-  NS::AutoreleasePool*& g_thread_autorelease_pool();
-
  private:
-  NS::AutoreleasePool* pool_;
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;

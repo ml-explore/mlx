@@ -35,6 +35,7 @@ struct StreamThread {
   }
 
   void thread_fn() {
+    auto thread_pool = metal::new_memory_pool();
     metal::new_stream(stream);
     while (true) {
       std::function<void()> task;
