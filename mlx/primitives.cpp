@@ -1696,6 +1696,31 @@ std::pair<array, int> Power::vmap(
   return {power(a, b, stream()), to_ax};
 }
 
+std::pair<array, int> QuantizedMatmul::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  throw std::runtime_error("QuantizedMatmul::vmap NYI");
+}
+
+std::vector<array> QuantizedMatmul::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+}
+
+array QuantizedMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+}
+
+bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
+  const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_;
+}
+
 std::pair<array, int> RandomBits::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -1886,6 +1911,30 @@ std::pair<array, int> Reduce::vmap(
 bool Reduce::is_equivalent(const Primitive& other) const {
   const Reduce& r_other = static_cast<const Reduce&>(other);
   return reduce_type_ == r_other.reduce_type_ && axes_ == r_other.axes_;
+}
+
+std::vector<array> Round::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  return {jvp(primals, {cotan}, argnums)};
+}
+
+array Round::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> Round::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {round(inputs[0], stream()), axes[0]};
 }
 
 std::pair<array, int> Scan::vmap(

@@ -1,6 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
+#ifdef ACCELERATE_NEW_LAPACK
+#include <vecLib/cblas_new.h>
+#else
 #include <cblas.h>
+#endif
 
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
@@ -62,9 +66,11 @@ DEFAULT(NotEqual)
 DEFAULT(Pad)
 DEFAULT(Partition)
 DEFAULT(Power)
+DEFAULT(QuantizedMatmul)
 DEFAULT(RandomBits)
 DEFAULT(Reduce)
 DEFAULT(Reshape)
+DEFAULT(Round)
 DEFAULT(Scan)
 DEFAULT(Scatter)
 DEFAULT(Sigmoid)

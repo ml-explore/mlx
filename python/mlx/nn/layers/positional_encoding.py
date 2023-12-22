@@ -18,15 +18,18 @@ class RoPE(Module):
 
     Args:
         dims (int): The feature dimensions to be rotated. If the input feature
-                    is larger than dims then the rest is left unchanged.
-        traditional (bool): If set to True choose the traditional
-                            implementation which is slightly less efficient.
+            is larger than dims then the rest is left unchanged.
+        traditional (bool, optional): If set to True choose the traditional
+            implementation which is slightly less efficient. Default: ``False``
+        base (float, optional): The base used to compute angular frequency for
+            each dimension in the positional encodings. Default: ``10000``
     """
 
-    def __init__(self, dims: int, traditional: bool = False):
+    def __init__(self, dims: int, traditional: bool = False, base: float = 10000):
         super().__init__()
         self.dims = dims
         self.traditional = traditional
+        self.base = base
 
     def _extra_repr(self):
         return f"{self.dims}, traditional={self.traditional}"
@@ -64,7 +67,7 @@ class RoPE(Module):
         x = mx.reshape(x, (-1, shape[-2], shape[-1]))
         N = x.shape[1] + offset
         costheta, sintheta = RoPE.create_cos_sin_theta(
-            N, self.dims, offset=offset, dtype=x.dtype
+            N, self.dims, offset=offset, base=self.base, dtype=x.dtype
         )
 
         rope = (
@@ -82,10 +85,7 @@ class RoPE(Module):
         positions = mx.arange(offset, N, dtype=dtype)
         freqs = mx.exp(-mx.arange(0.0, D, dtype=dtype) * (math.log(base) / D))
         theta = mx.reshape(positions, (-1, 1)) * mx.reshape(freqs, (1, -1))
-        costheta = mx.cos(theta)
-        sintheta = mx.sin(theta)
-
-        return costheta, sintheta
+        return mx.cos(theta), mx.sin(theta)
 
 
 class SinusoidalPositionalEncoding(Module):
@@ -142,3 +142,40 @@ class SinusoidalPositionalEncoding(Module):
             y = y * self.scale
 
         return y
+
+
+class ALiBi(Module):
+    @staticmethod
+    def create_alibi_matrix(
+        q_sequence_length: int,
+        k_sequence_length: int,
+        num_heads: int,
+        offset: int,
+        dtype=mx.float32,
+    ):
+        x1 = mx.arange(offset, q_sequence_length)
+        x2 = mx.arange(0, k_sequence_length)
+        distance_matrix = -mx.abs(
+            mx.expand_dims(x1[:, None] - x2[None, :], axis=(0, 1))
+        )
+        alibi_slope = ALiBi.create_alibi_slope(num_heads=num_heads)
+        alibi_mask = (distance_matrix * alibi_slope).astype(dtype)
+        return alibi_mask
+
+    @staticmethod
+    def create_alibi_slope(num_heads):
+        x = (2**8) ** (1 / num_heads)
+        out = mx.power(x, -mx.arange(1, num_heads + 1))
+        return mx.expand_dims(out, axis=(-1, -2))
+
+    def __call__(self, attention_scores, offset=0, mask=None):
+        alibi_mask = ALiBi.create_alibi_matrix(
+            q_sequence_length=attention_scores.shape[-2] + offset,
+            k_sequence_length=attention_scores.shape[-1],
+            num_heads=attention_scores.shape[1],
+            offset=offset,
+            dtype=attention_scores.dtype,
+        )
+        if mask is not None:
+            alibi_mask = alibi_mask + mask
+        return attention_scores + alibi_mask

@@ -129,6 +129,27 @@ array arange(int stop, StreamOrDevice s /* = {} */) {
   return arange(0.0, static_cast<double>(stop), 1.0, int32, to_stream(s));
 }
 
+array linspace(
+    double start,
+    double stop,
+    int num /* = 50 */,
+    Dtype dtype /* = float32 */,
+    StreamOrDevice s /* = {} */) {
+  if (num < 0) {
+    std::ostringstream msg;
+    msg << "[linspace] number of samples, " << num << ", must be non-negative.";
+    throw std::invalid_argument(msg.str());
+  }
+  array sequence = arange(0, num, float32, to_stream(s));
+  float step = (stop - start) / (num - 1);
+  return astype(
+      add(multiply(sequence, array(step), to_stream(s)),
+          array(start),
+          to_stream(s)),
+      dtype,
+      to_stream(s));
+}
+
 array astype(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (dtype == a.dtype()) {
     return a;
@@ -218,6 +239,28 @@ array identity(int n, Dtype dtype, StreamOrDevice s /* = {} */) {
   return eye(n, n, 0, dtype, s);
 }
 
+array tri(int n, int m, int k, Dtype type, StreamOrDevice s /* = {} */) {
+  auto l = expand_dims(arange(n, s), 1, s);
+  auto r = expand_dims(arange(-k, m - k, s), 0, s);
+  return astype(greater_equal(l, r, s), type, s);
+}
+
+array tril(array x, int k, StreamOrDevice s /* = {} */) {
+  if (x.ndim() < 2) {
+    throw std::invalid_argument("[tril] array must be atleast 2-D");
+  }
+  auto mask = tri(x.shape(-2), x.shape(-1), k, x.dtype(), s);
+  return where(mask, x, zeros_like(x, s), s);
+}
+
+array triu(array x, int k, StreamOrDevice s /* = {} */) {
+  if (x.ndim() < 2) {
+    throw std::invalid_argument("[triu] array must be atleast 2-D");
+  }
+  auto mask = tri(x.shape(-2), x.shape(-1), k - 1, x.dtype(), s);
+  return where(mask, zeros_like(x, s), x, s);
+}
+
 array reshape(
     const array& a,
     std::vector<int> shape,
@@ -253,6 +296,49 @@ array reshape(
   }
   return array(
       shape, a.dtype(), std::make_unique<Reshape>(to_stream(s), shape), {a});
+}
+
+array flatten(
+    const array& a,
+    int start_axis,
+    int end_axis /* = -1 */,
+    StreamOrDevice s /* = {} */) {
+  auto ndim = static_cast<int>(a.ndim());
+  auto start_ax = start_axis + (start_axis < 0 ? ndim : 0);
+  auto end_ax = end_axis + (end_axis < 0 ? ndim : 0);
+  start_ax = std::max(0, start_ax);
+  end_ax = std::min(ndim - 1, end_ax);
+  if (a.ndim() == 0) {
+    return reshape(a, {1}, s);
+  }
+  if (end_ax < start_ax) {
+    throw std::invalid_argument(
+        "[flatten] start_axis must be less than or equal to end_axis");
+  }
+  if (start_ax >= ndim) {
+    std::ostringstream msg;
+    msg << "[flatten] Invalid start_axis " << start_axis << " for array with "
+        << ndim << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (end_ax < 0) {
+    std::ostringstream msg;
+    msg << "[flatten] Invalid end_axis " << end_axis << " for array with "
+        << ndim << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (start_ax == end_ax) {
+    return a;
+  }
+  std::vector<int> new_shape(a.shape().begin(), a.shape().begin() + start_ax);
+  new_shape.push_back(-1);
+  new_shape.insert(
+      new_shape.end(), a.shape().begin() + end_ax + 1, a.shape().end());
+  return reshape(a, new_shape, s);
+}
+
+array flatten(const array& a, StreamOrDevice s /* = {} */) {
+  return flatten(a, 0, a.ndim() - 1, s);
 }
 
 array squeeze(
@@ -528,6 +614,24 @@ split(const array& a, int num_splits, int axis, StreamOrDevice s /* = {} */) {
 std::vector<array>
 split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
   return split(a, num_splits, 0, to_stream(s));
+}
+
+array clip(
+    const array& a,
+    const std::optional<array>& a_min,
+    const std::optional<array>& a_max,
+    StreamOrDevice s /* = {} */) {
+  if (!a_min.has_value() && !a_max.has_value()) {
+    throw std::invalid_argument("At most one of a_min and a_max may be None");
+  }
+  array result = astype(a, a.dtype(), s);
+  if (a_min.has_value()) {
+    result = maximum(result, a_min.value(), s);
+  }
+  if (a_max.has_value()) {
+    result = minimum(result, a_max.value(), s);
+  }
+  return result;
 }
 
 array concatenate(
@@ -1532,6 +1636,20 @@ array operator/(const array& a, double b) {
   return divide(a, array(b));
 }
 
+array floor_divide(
+    const array& a,
+    const array& b,
+    StreamOrDevice s /* = {} */) {
+  auto dtype = promote_types(a.dtype(), b.dtype());
+  if (is_floating_point(dtype)) {
+    return floor(divide(a, b, s), s);
+  }
+
+  auto inputs = broadcast_arrays({astype(a, dtype, s), astype(b, dtype, s)}, s);
+  return array(
+      inputs[0].shape(), dtype, std::make_unique<Divide>(to_stream(s)), inputs);
+}
+
 array remainder(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
   auto inputs = broadcast_arrays(
@@ -1749,6 +1867,21 @@ array erfinv(const array& a, StreamOrDevice s /* = {} */) {
 array stop_gradient(const array& a, StreamOrDevice s /* = {} */) {
   return array(
       a.shape(), a.dtype(), std::make_unique<StopGradient>(to_stream(s)), {a});
+}
+
+array round(const array& a, int decimals, StreamOrDevice s /* = {} */) {
+  if (decimals == 0) {
+    return array(
+        a.shape(), a.dtype(), std::make_unique<Round>(to_stream(s)), {a});
+  }
+
+  auto dtype = at_least_float(a.dtype());
+  float scale = std::pow(10, decimals);
+  auto result = multiply(a, array(scale, dtype), s);
+  result = round(result, 0, s);
+  result = multiply(result, array(1 / scale, dtype), s);
+
+  return astype(result, a.dtype(), s);
 }
 
 array matmul(
@@ -2443,6 +2576,186 @@ array conv2d(
           dilation_vec,
           std::vector<int>(2, 1)),
       {in, wt});
+}
+
+array quantized_matmul(
+    const array& in_x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size /* = 64 */,
+    int bits /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  auto x = in_x;
+
+  if (w.dtype() != uint32) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] The weight matrix should be uint32 "
+        << "but received" << w.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+  if (w.ndim() != 2) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Batched quantized matmul is not supported for now "
+        << "received w with shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Keep x's batch dimensions to reshape it back after the matmul
+  auto original_shape = x.shape();
+  int x_inner_dims = original_shape.back();
+  original_shape.pop_back();
+
+  // Reshape x into a matrix if it isn't already one
+  if (x.ndim() != 2) {
+    x = reshape(x, {-1, x_inner_dims}, s);
+  }
+
+  int w_inner_dims = w.shape(0) * (32 / bits);
+  if (w_inner_dims != x_inner_dims) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Last dimension of first input with "
+        << "shape (..., " << x_inner_dims
+        << ") does not match the expanded first "
+        << "dimension of the quantized matrix " << w_inner_dims
+        << ", computed from shape " << w.shape()
+        << " with group_size=" << group_size << " and bits=" << bits;
+    throw std::invalid_argument(msg.str());
+  }
+
+  int n_groups = x_inner_dims / group_size;
+  if (scales.shape(-1) != n_groups || biases.shape(-1) != n_groups) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Scales and biases provided do not match the "
+        << "quantization arguments (group_size=" << group_size
+        << ", bits=" << bits << "). Expected shapes (" << w.shape(1) << ", "
+        << x_inner_dims / group_size
+        << "), but got scales.shape=" << scales.shape()
+        << " and biases.shape=" << biases.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out = array(
+      {x.shape(0), w.shape(1)},
+      x.dtype(),
+      std::make_unique<QuantizedMatmul>(to_stream(s), group_size, bits),
+      {x, w, scales, biases});
+
+  // If needed reshape x to the original batch shape
+  if (original_shape.size() != 1) {
+    original_shape.push_back(w.shape(1));
+    out = reshape(out, original_shape, s);
+  }
+
+  return out;
+}
+
+std::tuple<array, array, array> quantize(
+    const array& w,
+    int group_size /* = 64 */,
+    int bits /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  if (w.ndim() != 2) {
+    throw std::invalid_argument("[quantize] Only matrices supported for now");
+  }
+
+  if ((w.shape(0) % 32) != 0) {
+    throw std::invalid_argument(
+        "[quantize] All dimensions should be divisible by 32 for now");
+  }
+
+  if ((w.shape(-1) % group_size) != 0) {
+    std::ostringstream msg;
+    msg << "[quantize] The last dimension of the matrix needs to be divisible by "
+        << "the quantization group size " << group_size
+        << ". However the provided "
+        << " matrix has shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Compute some constants used for the quantization
+  int n_bins = (1 << bits) - 1; // 2**bits - 1
+  int el_per_int = 32 / bits;
+  array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
+  shifts = reshape(shifts, {1, 1, -1}, s);
+
+  // Compute scales and biases
+  array packed_w =
+      reshape(w, {w.shape(0), w.shape(1) / group_size, group_size}, s);
+  array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+  array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+  array delta = divide(subtract(w_max, w_min, s), array(n_bins, w.dtype()), s);
+  array scales = squeeze(delta, -1, s);
+  array biases = squeeze(w_min, -1, s);
+
+  // Quantize and pack w
+  packed_w =
+      astype(round(divide(subtract(packed_w, w_min, s), delta, s), s), uint32);
+  packed_w = reshape(packed_w, {w.shape(0), -1, el_per_int}, s);
+  packed_w = sum(
+      multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+
+  return std::make_tuple(packed_w, scales, biases);
+}
+
+array dequantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size /* = 64 */,
+    int bits /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {
+    throw std::invalid_argument("[dequantize] Only matrices supported for now");
+  }
+
+  if ((w.shape(0) % 32) != 0) {
+    throw std::invalid_argument(
+        "[dequantize] All dimensions should be divisible by 32 for now");
+  }
+
+  if (w.shape(0) != scales.shape(0) || w.shape(0) != biases.shape(0)) {
+    throw std::invalid_argument(
+        "[dequantize] Shape of scales and biases does not match the matrix");
+  }
+
+  if (w.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[dequantize] The matrix should be given as a uint32");
+  }
+
+  // Compute some constants for the dequantization
+  int el_per_int = 32 / bits;
+
+  if (w.shape(1) * el_per_int != scales.shape(1) * group_size) {
+    std::ostringstream msg;
+    msg << "[dequantize] Shape of scales and biases does not match the matrix "
+        << "given the quantization parameters. Provided matrix of shape "
+        << w.shape() << " and scales/biases of shape " << scales.shape()
+        << " with group_size=" << group_size << " and bits=" << bits << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Extract the pieces from the passed quantized matrix
+  std::vector<array> parts;
+  for (int start = 0; start < 32; start += bits) {
+    // TODO: Implement bitwise operators for integral types
+    int shift_left = 32 - (start + bits);
+    int shift_right = shift_left + start;
+    array p = multiply(w, array(1 << shift_left, uint32), s);
+    p = floor_divide(p, array(1 << shift_right, uint32), s);
+    p = expand_dims(p, -1, s);
+    parts.push_back(p);
+  }
+  array w_full = concatenate(parts, -1, s);
+
+  // Dequantize
+  w_full = reshape(w_full, {w.shape(0), -1, group_size}, s);
+  w_full = multiply(w_full, expand_dims(scales, -1, s), s);
+  w_full = add(w_full, expand_dims(biases, -1, s), s);
+  w_full = reshape(w_full, {w.shape(0), -1}, s);
+
+  return w_full;
 }
 
 } // namespace mlx::core

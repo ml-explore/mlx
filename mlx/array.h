@@ -154,8 +154,8 @@ class array {
     };
 
    private:
-    int idx;
     const array& arr;
+    int idx;
   };
 
   ArrayIterator begin() const {

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <optional>
 #include <variant>
 
 #include "array.h"
@@ -19,7 +20,7 @@ Stream to_stream(StreamOrDevice s);
 
 /**
  * A 1D array of numbers starting at `start` (optional),
- * stopping at stop, stepping by `step` (optional). **/
+ * stopping at stop, stepping by `step` (optional). */
 array arange(
     double start,
     double stop,
@@ -35,6 +36,14 @@ array arange(double stop, StreamOrDevice s = {});
 array arange(int start, int stop, int step, StreamOrDevice s = {});
 array arange(int start, int stop, StreamOrDevice s = {});
 array arange(int stop, StreamOrDevice s = {});
+
+/** A 1D array of `num` evenly spaced numbers in the range `[start, stop]` */
+array linspace(
+    double start,
+    double stop,
+    int num = 50,
+    Dtype dtype = float32,
+    StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
 array astype(const array& a, Dtype dtype, StreamOrDevice s = {});
@@ -110,10 +119,28 @@ inline array identity(int n, StreamOrDevice s = {}) {
   return identity(n, float32, s);
 }
 
+array tri(int n, int m, int k, Dtype type, StreamOrDevice s = {});
+inline array tri(int n, Dtype type, StreamOrDevice s = {}) {
+  return tri(n, n, 0, type, s);
+}
+
+array tril(array x, int k, StreamOrDevice s = {});
+array triu(array x, int k, StreamOrDevice s = {});
+
 /** array manipulation */
 
 /** Reshape an array to the given shape. */
 array reshape(const array& a, std::vector<int> shape, StreamOrDevice s = {});
+
+/** Flatten the dimensions in the range `[start_axis, end_axis]` . */
+array flatten(
+    const array& a,
+    int start_axis,
+    int end_axis = -1,
+    StreamOrDevice s = {});
+
+/** Flatten the array to 1D. */
+array flatten(const array& a, StreamOrDevice s = {});
 
 /** Remove singleton dimensions at the given axes. */
 array squeeze(
@@ -166,6 +193,15 @@ std::vector<array> split(
     StreamOrDevice s = {});
 std::vector<array>
 split(const array& a, const std::vector<int>& indices, StreamOrDevice s = {});
+
+/**
+ * Clip (limit) the values in an array.
+ */
+array clip(
+    const array& a,
+    const std::optional<array>& a_min = std::nullopt,
+    const std::optional<array>& a_max = std::nullopt,
+    StreamOrDevice s = {});
 
 /** Concatenate arrays along a given axis. */
 array concatenate(
@@ -673,6 +709,9 @@ array operator/(const array& a, const array& b);
 array operator/(double a, const array& b);
 array operator/(const array& a, double b);
 
+/** Compute integer division. Equivalent to doing floor(a / x). */
+array floor_divide(const array& a, const array& b, StreamOrDevice s = {});
+
 /** Compute the element-wise remainder of division */
 array remainder(const array& a, const array& b, StreamOrDevice s = {});
 array operator%(const array& a, const array& b);
@@ -765,6 +804,12 @@ array erfinv(const array& a, StreamOrDevice s = {});
 
 /** Stop the flow of gradients. */
 array stop_gradient(const array& a, StreamOrDevice s = {});
+
+/** Round a floating point number */
+array round(const array& a, int decimals, StreamOrDevice s = {});
+inline array round(const array& a, StreamOrDevice s = {}) {
+  return round(a, 0, s);
+}
 
 /** Matrix-matrix multiplication. */
 array matmul(const array& a, const array& b, StreamOrDevice s = {});
@@ -985,5 +1030,31 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
 
 /** Load array from file in .npy format */
 array load(const std::string& file, StreamOrDevice s = {});
+
+/** Quantized matmul multiplies x with a quantized matrix w*/
+array quantized_matmul(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size = 64,
+    int bits = 4,
+    StreamOrDevice s = {});
+
+/** Quantize a matrix along its last axis */
+std::tuple<array, array, array> quantize(
+    const array& w,
+    int group_size = 64,
+    int bits = 4,
+    StreamOrDevice s = {});
+
+/** Dequantize a matrix produced by quantize() */
+array dequantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size = 64,
+    int bits = 4,
+    StreamOrDevice s = {});
 
 } // namespace mlx::core
