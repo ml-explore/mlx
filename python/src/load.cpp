@@ -424,7 +424,7 @@ void mlx_savez_helper(
 void mlx_save_safetensor_helper(
     py::object file,
     py::dict d,
-    bool retain_graph) {
+    std::optional<bool> retain_graph) {
   auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
   if (py::isinstance<py::str>(file)) {
     save_safetensor(py::cast<std::string>(file), arrays_map, retain_graph);

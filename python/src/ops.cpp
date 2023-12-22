@@ -2938,14 +2938,14 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         load(file: str, format: Optional[str] = None, /, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
 
-        Load array(s) from a binary file in ``.npy`` or ``.npz`` format.
+        Load array(s) from a binary file in ``.npy``, ``.npz``, or ``.safetensors`` format.
 
         Args:
             file (file, str): File in which the array is saved
             format (str, optional): Format of the file. If ``None``, the format
-              is inferred from the file extension. Supported formats: npy, npz, and safetensors. (default: ``None``)
+              is inferred from the file extension. Supported formats: ``npy``, ``npz``, and ``safetensors``. (default: ``None``)
         Returns:
-            result (array, dict): The loaded array if ``.npy`` file or a dict mapping name to array if ``.npz`` file
+            result (array, dict): The loaded array if ``.npy`` file or a dict mapping name to array if ``.npz`` or ``.safetensors`` file
       )pbdoc");
   m.def(
       "save_safetensor",
@@ -2953,18 +2953,20 @@ void init_ops(py::module_& m) {
       "file"_a,
       "d"_a,
       py::pos_only(),
-      "retain_graph"_a = true,
+      "retain_graph"_a = std::nullopt,
       py::kw_only(),
       R"pbdoc(
-        save_safetensor(file: str, d: Dict[str, array], /, retain_graph: bool = True, *)
+        save_safetensor(file: str, d: Dict[str, array], /, retain_graph: Optional[bool] = None, *)
 
-        Save array(s) to a binary file in ``.safetensors`` format.
+        Save array(s) to a binary file in ``.safetensors`` format. 
+        For more information on the format see https://huggingface.co/docs/safetensors/index.
 
         Args:
             file (file, str): File in which the array is saved
             d (Dict[str, array]): The dict mapping name to array to be saved
-            retain_graph(bool): Optional argument to retain graph
-              during array evaluation before saving. Default: True
+            retain_graph(Optional[bool]): Optional argument to retain graph
+              during array evaluation before saving. If not provided the graph
+              is retained if we are during a function transformation. Default: None
       )pbdoc");
   m.def(
       "where",

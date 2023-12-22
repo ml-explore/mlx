@@ -127,7 +127,7 @@ std::unordered_map<std::string, array> load_safetensor(
 void save_safetensor(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a,
-    bool retain_graph) {
+    std::optional<bool> retain_graph_) {
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
@@ -143,7 +143,7 @@ void save_safetensor(
   });
   size_t offset = 0;
   for (auto& [key, arr] : a) {
-    arr.eval(retain_graph);
+    arr.eval(retain_graph_.value_or(arr.is_tracer()));
     if (arr.nbytes() == 0) {
       throw std::invalid_argument(
           "[save_safetensor] cannot serialize an empty array key: " + key);
@@ -174,7 +174,7 @@ void save_safetensor(
 void save_safetensor(
     const std::string& file_,
     std::unordered_map<std::string, array> a,
-    bool retain_graph) {
+    std::optional<bool> retain_graph) {
   // Open and check file
   std::string file = file_;
 
