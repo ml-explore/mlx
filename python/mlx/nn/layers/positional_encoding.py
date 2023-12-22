@@ -25,7 +25,13 @@ class RoPE(Module):
             each dimension in the positional encodings. Default: ``10000``
     """
 
-    def __init__(self, dims: int, traditional: bool = False, base: float = 10000, scale: float = 1.0):
+    def __init__(
+        self,
+        dims: int,
+        traditional: bool = False,
+        base: float = 10000,
+        scale: float = 1.0,
+    ):
         super().__init__()
         self.dims = dims
         self.traditional = traditional
@@ -80,7 +86,12 @@ class RoPE(Module):
 
     @staticmethod
     def create_cos_sin_theta(
-        N: int, D: int, offset: int = 0, base: float = 10000, scale: float = 1.0, dtype=mx.float32
+        N: int,
+        D: int,
+        offset: int = 0,
+        base: float = 10000,
+        scale: float = 1.0,
+        dtype=mx.float32,
     ):
         D = D // 2
         positions = mx.arange(offset, N, dtype=dtype) * scale
