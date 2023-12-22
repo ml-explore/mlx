@@ -23,6 +23,7 @@ class RoPE(Module):
             implementation which is slightly less efficient. Default: ``False``
         base (float, optional): The base used to compute angular frequency for
             each dimension in the positional encodings. Default: ``10000``
+        scale (float, optional): The scale used to scale the positions. Default: ``1.0``
     """
 
     def __init__(
