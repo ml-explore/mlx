@@ -20,7 +20,7 @@ Layers
    Linear
    Conv1d
    Conv2d
-   BatchNorm1d
+   BatchNorm
    LayerNorm
    RMSNorm
    GroupNorm
