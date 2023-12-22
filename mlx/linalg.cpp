@@ -96,8 +96,7 @@ array norm(
   if (num_axes == 0 || num_axes == 1 || num_axes == 2)
     return sqrt(
         sum(abs(a, s) * abs(a, s),
-            num_axes ? axis
-                     : get_shape_reducing_over_all_axes(a.shape().size()),
+            num_axes ? axis : get_reduce_axes({}, a.ndim()),
             keepdims,
             s),
         s);
@@ -116,7 +115,7 @@ array norm(
   std::vector<int> ax = axis;
 
   if (axis.empty())
-    ax = get_shape_reducing_over_all_axes(a.ndim());
+    ax = get_reduce_axes({}, a.ndim());
   else
     ax = normalize_axes(ax, a.ndim());
 
@@ -140,7 +139,7 @@ array norm(
   std::vector<int> ax = axis;
 
   if (axis.empty())
-    ax = get_shape_reducing_over_all_axes(a.ndim());
+    ax = get_reduce_axes({}, a.ndim());
   else
     ax = normalize_axes(ax, a.ndim());
 

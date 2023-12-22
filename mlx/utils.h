@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <numeric>
 #include "array.h"
 #include "device.h"
 #include "dtype.h"
@@ -42,8 +43,18 @@ inline std::ostream& operator<<(std::ostream& os, const float16_t& v) {
 inline std::ostream& operator<<(std::ostream& os, const bfloat16_t& v) {
   return os << static_cast<float>(v);
 }
-/**
- * Returns the axes vector  [0, 1, ... ndim).
- */
-std::vector<int> get_shape_reducing_over_all_axes(int ndim);
+
+using IntOrVec = std::variant<std::monostate, int, std::vector<int>>;
+inline std::vector<int> get_reduce_axes(const IntOrVec& v, int dims) {
+  std::vector<int> axes;
+  if (std::holds_alternative<std::monostate>(v)) {
+    axes.resize(dims);
+    std::iota(axes.begin(), axes.end(), 0);
+  } else if (auto pv = std::get_if<int>(&v); pv) {
+    axes.push_back(*pv);
+  } else {
+    axes = std::get<std::vector<int>>(v);
+  }
+  return axes;
+}
 } // namespace mlx::core
