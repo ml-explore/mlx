@@ -24,6 +24,12 @@ class TestLinalg(mlx_tests.MLXTestCase):
                         ords = vector_ords
                     else:
                         ords = matrix_ords
+                    for keepdims in [True, False]:
+                        # Test axis provided, no ord provided
+                        out_np = np.linalg.norm(x_np, axis=axis, keepdims=keepdims)
+                        out_mx = mx.linalg.norm(x_mx, axis=axis, keepdims=keepdims)
+                        assert np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
+                    # Test both ord and axis provided
                     for o in ords:
                         for keepdims in [True, False]:
                             if o:
@@ -62,6 +68,16 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 for keepdims in [True, False]:
                     out_np = np.linalg.norm(x_np, ord=o, keepdims=keepdims)
                     out_mx = mx.linalg.norm(x_mx, ord=o, keepdims=keepdims)
+                    assert np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
+
+        # Test no ord and no axis provided
+        for shape in [(3,), (2, 3), (2, 3, 3)]:
+            x_mx = mx.arange(math.prod(shape)).reshape(shape)
+            x_np = np.arange(math.prod(shape)).reshape(shape)
+            for o in [None, 1, -1, float("inf"), -float("inf")]:
+                for keepdims in [True, False]:
+                    out_np = np.linalg.norm(x_np, keepdims=keepdims)
+                    out_mx = mx.linalg.norm(x_mx, keepdims=keepdims)
                     assert np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
 
 

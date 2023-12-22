@@ -44,7 +44,9 @@ void init_linalg(py::module_& parent_module) {
                       return norm(
                           a,
                           "inf",
-                          get_reduce_axes(axis, a.ndim()),
+                          std::holds_alternative<std::monostate>(axis)
+                              ? std::vector<int>()
+                              : get_reduce_axes(axis, a.ndim()),
                           keepdims,
                           stream);
                     }
@@ -56,15 +58,32 @@ void init_linalg(py::module_& parent_module) {
                         stream);
                   }
                   return norm(
-                      a, p, get_reduce_axes(axis, a.ndim()), keepdims, stream);
+                      a,
+                      p,
+                      std::holds_alternative<std::monostate>(axis)
+                          ? std::vector<int>()
+                          : get_reduce_axes(axis, a.ndim()),
+                      keepdims,
+                      stream);
                 },
                 [&](const std::string& p) {
                   return norm(
-                      a, p, get_reduce_axes(axis, a.ndim()), keepdims, stream);
+                      a,
+                      p,
+                      std::holds_alternative<std::monostate>(axis)
+                          ? std::vector<int>()
+                          : get_reduce_axes(axis, a.ndim()),
+                      keepdims,
+                      stream);
                 },
                 [&](const std::monostate _) {
                   return norm(
-                      a, get_reduce_axes(axis, a.ndim()), keepdims, stream);
+                      a,
+                      std::holds_alternative<std::monostate>(axis)
+                          ? std::vector<int>()
+                          : get_reduce_axes(axis, a.ndim()),
+                      keepdims,
+                      stream);
                 }},
             ord);
       },
