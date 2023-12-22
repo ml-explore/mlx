@@ -17,6 +17,8 @@ namespace fs = std::filesystem;
 
 namespace mlx::core::metal {
 
+static Device metal_device_;
+
 namespace {
 
 // TODO nicer way to set this or possibly expose as an environment variable
@@ -107,16 +109,6 @@ MTL::Library* load_library(
     return lib;
   }
 }
-
-struct PoolHolder {
-  PoolHolder() {
-    p = NS::AutoreleasePool::alloc()->init();
-  }
-  ~PoolHolder() {
-    p->release();
-  }
-  NS::AutoreleasePool* p;
-};
 
 } // namespace
 
@@ -293,13 +285,13 @@ MTL::ComputePipelineState* Device::get_kernel(
 }
 
 Device& device(mlx::core::Device) {
-  static Device metal_device_;
   return metal_device_;
 }
 
 NS::AutoreleasePool*& thread_autorelease_pool() {
-  static thread_local PoolHolder pool{};
-  return pool.p;
+  static thread_local NS::AutoreleasePool* p =
+      NS::AutoreleasePool::alloc()->init();
+  return p;
 }
 
 void new_stream(Stream stream) {
