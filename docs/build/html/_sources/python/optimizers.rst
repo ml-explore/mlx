@@ -44,3 +44,4 @@ model's parameters and the **optimizer state**.
    Adam
    AdamW
    Adamax
+   Lion

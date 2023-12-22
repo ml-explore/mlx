@@ -34,6 +34,7 @@ Array
     array.prod
     array.reciprocal
     array.reshape
+    array.round
     array.rsqrt
     array.sin
     array.split
