@@ -123,7 +123,7 @@ To get more detailed information on the arrays in a :class:`Module` you can use
 all the parameters in a :class:`Module` do:
 
 .. code-block:: python
-    
+
    from mlx.utils import tree_map
    shapes = tree_map(lambda p: p.shape, mlp.parameters())
 
@@ -131,7 +131,7 @@ As another example, you can count the number of parameters in a :class:`Module`
 with:
 
 .. code-block:: python
-    
+
    from mlx.utils import tree_flatten
    num_params = sum(v.size for _, v in tree_flatten(mlp.parameters()))
 
