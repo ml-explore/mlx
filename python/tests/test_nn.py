@@ -325,7 +325,7 @@ class TestNN(mlx_tests.MLXTestCase):
         x = mx.random.normal((5, 4), dtype=mx.float32)
 
         # Batch norm
-        bn = nn.BatchNorm1d(num_features=4, affine=True)
+        bn = nn.BatchNorm(num_features=4, affine=True)
         self.assertTrue(mx.allclose(bn.running_mean, mx.zeros_like(bn.running_mean)))
         self.assertTrue(mx.allclose(bn.running_var, mx.ones_like(bn.running_var)))
         y = bn(x)
@@ -362,7 +362,7 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
 
         # test_no_affine
-        bn = nn.BatchNorm1d(num_features=4, affine=False)
+        bn = nn.BatchNorm(num_features=4, affine=False)
         y = bn(x)
         expected_y = mx.array(
             [
@@ -381,7 +381,7 @@ class TestNN(mlx_tests.MLXTestCase):
         x = mx.random.normal((2, 4, 3), dtype=mx.float32)
 
         # Batch norm
-        bn = nn.BatchNorm1d(num_features=4, affine=True)
+        bn = nn.BatchNorm(num_features=4, affine=True)
         self.assertTrue(mx.allclose(bn.running_mean, mx.zeros_like(bn.running_mean)))
         self.assertTrue(mx.allclose(bn.running_var, mx.ones_like(bn.running_var)))
         y = bn(x)
