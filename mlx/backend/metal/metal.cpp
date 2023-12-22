@@ -50,7 +50,7 @@ std::function<void()> make_task(
     bool retain_graph) {
   auto task =
       [retain_graph, arr, deps = std::move(deps), p = std::move(p)]() mutable {
-        auto pool = new_memory_pool();
+        auto pool = new_scoped_memory_pool();
         for (auto& d : deps) {
           d.wait();
         }

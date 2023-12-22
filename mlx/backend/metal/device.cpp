@@ -20,7 +20,7 @@ namespace mlx::core::metal {
 namespace {
 
 // Catch things related to the main-thread static variables
-static std::shared_ptr<void> global_memory_pool = new_memory_pool();
+static std::shared_ptr<void> global_memory_pool = new_scoped_memory_pool();
 
 // TODO nicer way to set this or possibly expose as an environment variable
 static constexpr int MAX_BUFFERS_PER_QUEUE = 12;
@@ -114,7 +114,7 @@ MTL::Library* load_library(
 } // namespace
 
 Device::Device() {
-  auto pool = new_memory_pool();
+  auto pool = new_scoped_memory_pool();
   device_ = load_device();
   library_map_ = {{"mlx", load_library(device_)}};
 }
@@ -244,7 +244,7 @@ void Device::register_library(
 MTL::ComputePipelineState* Device::get_kernel(
     const std::string& name,
     const std::string& lib_name /* = "mlx" */) {
-  auto pool = new_memory_pool();
+  auto pool = new_scoped_memory_pool();
   // Look for cached kernel
   if (auto it = kernel_map_.find(name); it != kernel_map_.end()) {
     return it->second;
@@ -291,7 +291,7 @@ Device& device(mlx::core::Device) {
   return metal_device;
 }
 
-std::shared_ptr<void> new_memory_pool() {
+std::shared_ptr<void> new_scoped_memory_pool() {
   auto dtor = [](void* ptr) {
     static_cast<NS::AutoreleasePool*>(ptr)->release();
   };
