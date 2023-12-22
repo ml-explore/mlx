@@ -41,6 +41,7 @@
       ~Module.trainable_parameters
       ~Module.unfreeze
       ~Module.update
+      ~Module.update_modules
       ~Module.valid_child_filter
       ~Module.valid_parameter_filter
       ~Module.values
