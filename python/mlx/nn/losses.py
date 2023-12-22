@@ -300,7 +300,7 @@ def hinge_loss(
 
     Args:
         inputs (array): The predicted values.
-        targets (array): The target values.
+        targets (array): The target values. They should be -1 or 1.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
@@ -353,7 +353,7 @@ def log_cosh_loss(
     Computes the log cosh loss between inputs and targets.
 
     Logcosh acts like L2 loss for small errors, ensuring stable gradients,
-    and like L1 loss for large errors, reducing sensitivity to outliers. This
+    and like the L1 loss for large errors, reducing sensitivity to outliers. This
     dual behavior offers a balanced, robust approach for regression tasks.
 
     .. math::
