@@ -4,7 +4,7 @@
 
 #include <json.hpp>
 
-#include "mlx/load.h"
+#include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 

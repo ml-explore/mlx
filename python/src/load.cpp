@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include "mlx/load.h"
+#include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 #include "python/src/load.h"

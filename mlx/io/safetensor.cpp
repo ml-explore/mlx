@@ -1,4 +1,4 @@
-#include "mlx/safetensor.h"
+#include "mlx/io/safetensor.h"
 
 #include <stack>
 

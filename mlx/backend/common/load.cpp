@@ -5,7 +5,7 @@
 #include <utility>
 
 #include "mlx/allocator.h"
-#include "mlx/load.h"
+#include "mlx/io/load.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {

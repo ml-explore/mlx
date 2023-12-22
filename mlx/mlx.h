@@ -8,7 +8,6 @@
 #include "mlx/fft.h"
 #include "mlx/ops.h"
 #include "mlx/random.h"
-#include "mlx/safetensor.h"
 #include "mlx/stream.h"
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
