@@ -22,7 +22,10 @@ void mlx_save_safetensor_helper(
     py::dict d,
     bool retain_graph = true);
 
-DictOrArray mlx_load_helper(py::object file, StreamOrDevice s);
+DictOrArray mlx_load_helper(
+    py::object file,
+    std::optional<std::string> format,
+    StreamOrDevice s);
 void mlx_save_helper(
     py::object file,
     array a,

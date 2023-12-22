@@ -232,6 +232,8 @@ array mlx_load_npy_helper(py::object file, StreamOrDevice s) {
     }
     return {arr};
   }
+  throw std::invalid_argument(
+      "[load_npy] Input must be a file-like object, string, or pathlib.Path");
 }
 
 DictOrArray mlx_load_helper(
