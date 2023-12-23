@@ -2129,7 +2129,7 @@ void init_ops(py::module_& m) {
               singleton dimensions, defaults to `False`.
 
         Returns:
-            array: The output array with the indices of the minimum values.
+            array: The output array with the indices of the maximum values.
       )pbdoc");
   m.def(
       "sort",
