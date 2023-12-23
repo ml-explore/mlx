@@ -88,5 +88,3 @@ class Dropout2d(Module):
 
         mask = mx.random.bernoulli(p=self._p_1, shape=mask_shape)
         return (1 / self._p_1) * mask * x
-
-
