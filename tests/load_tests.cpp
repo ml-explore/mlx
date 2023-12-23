@@ -29,7 +29,6 @@ TEST_CASE("test save_safetensor") {
   CHECK_EQ(test.shape(), std::vector<int>({4}));
   CHECK(array_equal(test, array({1.0, 2.0, 3.0, 4.0})).item<bool>());
   array test2 = safeDict.at("test2");
-  MESSAGE("test2: " << test2);
   CHECK_EQ(test2.dtype(), float32);
   CHECK_EQ(test2.shape(), std::vector<int>({2, 2}));
   CHECK(array_equal(test2, ones({2, 2})).item<bool>());
