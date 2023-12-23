@@ -244,6 +244,8 @@ DictOrArray mlx_load_helper(
     std::string fname;
     if (py::isinstance<py::str>(file)) {
       fname = py::cast<std::string>(file);
+    } else if (is_istream_object(file)) {
+      fname = file.attr("name").cast<std::string>();
     } else {
       throw std::invalid_argument(
           "[load] Input must be a file-like object, or string");
