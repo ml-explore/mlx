@@ -2867,11 +2867,9 @@ void init_ops(py::module_& m) {
         Args:
             file (str): File to which the array is saved
             arr (array): Array to be saved.
-            retain_graph (bool, optional): Optional argument to retain graph
-              during array evaluation before saving. If not provided the graph
-              is retained if we are during a function transformation. Default:
-              None
-
+            retain_graph (bool, optional): Whether or not to retain the graph
+              during array evaluation. If left unspecified the graph is retained
+              only if saving is done in a function transformation. Default: ``None``
       )pbdoc");
   m.def(
       "savez",
@@ -2941,32 +2939,36 @@ void init_ops(py::module_& m) {
         Load array(s) from a binary file in ``.npy``, ``.npz``, or ``.safetensors`` format.
 
         Args:
-            file (file, str): File in which the array is saved
+            file (file, str): File in which the array is saved.
             format (str, optional): Format of the file. If ``None``, the format
-              is inferred from the file extension. Supported formats: ``npy``, ``npz``, and ``safetensors``. (default: ``None``)
+              is inferred from the file extension. Supported formats: ``npy``,
+              ``npz``, and ``safetensors``. Default: ``None``.
         Returns:
-            result (array, dict): The loaded array if ``.npy`` file or a dict mapping name to array if ``.npz`` or ``.safetensors`` file
+            result (array, dict):
+                A single array if loading from a ``.npy`` file or a dict mapping
+                names to arrays if loading from a ``.npz`` or ``.safetensors`` file.
       )pbdoc");
   m.def(
-      "save_safetensor",
+      "save_safetensors",
       &mlx_save_safetensor_helper,
       "file"_a,
-      "d"_a,
+      "arrays"_a,
       py::pos_only(),
       "retain_graph"_a = std::nullopt,
       py::kw_only(),
       R"pbdoc(
-        save_safetensor(file: str, d: Dict[str, array], /, retain_graph: Optional[bool] = None, *)
+        save_safetensors(file: str, arrays: Dict[str, array], /, retain_graph: Optional[bool] = None)
 
-        Save array(s) to a binary file in ``.safetensors`` format. 
+        Save array(s) to a binary file in ``.safetensors`` format.
+
         For more information on the format see https://huggingface.co/docs/safetensors/index.
 
         Args:
-            file (file, str): File in which the array is saved
-            d (Dict[str, array]): The dict mapping name to array to be saved
-            retain_graph(Optional[bool]): Optional argument to retain graph
-              during array evaluation before saving. If not provided the graph
-              is retained if we are during a function transformation. Default: None
+            file (file, str): File in which the array is saved>
+            arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+            retain_graph (bool, optional): Whether or not to retain the graph
+              during array evaluation. If left unspecified the graph is retained
+              only if saving is done in a function transformation. Default: ``None``.
       )pbdoc");
   m.def(
       "where",

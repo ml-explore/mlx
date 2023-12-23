@@ -1057,19 +1057,19 @@ array dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-/** Load array map from .safetensor file format */
-std::unordered_map<std::string, array> load_safetensor(
+/** Load array map from .safetensors file format */
+std::unordered_map<std::string, array> load_safetensors(
     std::shared_ptr<io::Reader> in_stream,
     StreamOrDevice s = {});
-std::unordered_map<std::string, array> load_safetensor(
+std::unordered_map<std::string, array> load_safetensors(
     const std::string& file,
     StreamOrDevice s = {});
 
-void save_safetensor(
+void save_safetensors(
     std::shared_ptr<io::Writer> in_stream,
     std::unordered_map<std::string, array>,
     std::optional<bool> retain_graph = std::nullopt);
-void save_safetensor(
+void save_safetensors(
     const std::string& file,
     std::unordered_map<std::string, array>,
     std::optional<bool> retain_graph = std::nullopt);

@@ -69,21 +69,21 @@ Dtype dtype_from_safetensor_str(std::string str) {
 }
 
 /** Load array from reader in safetensor format */
-std::unordered_map<std::string, array> load_safetensor(
+std::unordered_map<std::string, array> load_safetensors(
     std::shared_ptr<io::Reader> in_stream,
     StreamOrDevice s) {
   ////////////////////////////////////////////////////////
   // Open and check file
   if (!in_stream->good() || !in_stream->is_open()) {
     throw std::runtime_error(
-        "[load_safetensor] Failed to open " + in_stream->label());
+        "[load_safetensors] Failed to open " + in_stream->label());
   }
 
   uint64_t jsonHeaderLength = 0;
   in_stream->read(reinterpret_cast<char*>(&jsonHeaderLength), 8);
   if (jsonHeaderLength <= 0) {
     throw std::runtime_error(
-        "[load_safetensor] Invalid json header length " + in_stream->label());
+        "[load_safetensors] Invalid json header length " + in_stream->label());
   }
   // Load the json metadata
   char rawJson[jsonHeaderLength];
@@ -92,7 +92,7 @@ std::unordered_map<std::string, array> load_safetensor(
   // Should always be an object on the top-level
   if (!metadata.is_object()) {
     throw std::runtime_error(
-        "[load_safetensor] Invalid json metadata " + in_stream->label());
+        "[load_safetensors] Invalid json metadata " + in_stream->label());
   }
   size_t offset = jsonHeaderLength + 8;
   // Load the arrays using metadata
@@ -117,14 +117,14 @@ std::unordered_map<std::string, array> load_safetensor(
   return res;
 }
 
-std::unordered_map<std::string, array> load_safetensor(
+std::unordered_map<std::string, array> load_safetensors(
     const std::string& file,
     StreamOrDevice s) {
-  return load_safetensor(std::make_shared<io::FileReader>(file), s);
+  return load_safetensors(std::make_shared<io::FileReader>(file), s);
 }
 
 /** Save array to out stream in .npy format */
-void save_safetensor(
+void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a,
     std::optional<bool> retain_graph_) {
@@ -132,7 +132,7 @@ void save_safetensor(
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
     throw std::runtime_error(
-        "[save_safetensor] Failed to open " + out_stream->label());
+        "[save_safetensors] Failed to open " + out_stream->label());
   }
 
   ////////////////////////////////////////////////////////
@@ -146,12 +146,12 @@ void save_safetensor(
     arr.eval(retain_graph_.value_or(arr.is_tracer()));
     if (arr.nbytes() == 0) {
       throw std::invalid_argument(
-          "[save_safetensor] cannot serialize an empty array key: " + key);
+          "[save_safetensors] cannot serialize an empty array key: " + key);
     }
 
     if (!arr.flags().contiguous) {
       throw std::invalid_argument(
-          "[save_safetensor] cannot serialize a non-contiguous array key: " +
+          "[save_safetensors] cannot serialize a non-contiguous array key: " +
           key);
     }
     json child;
@@ -171,7 +171,7 @@ void save_safetensor(
   }
 }
 
-void save_safetensor(
+void save_safetensors(
     const std::string& file_,
     std::unordered_map<std::string, array> a,
     std::optional<bool> retain_graph) {
@@ -184,7 +184,7 @@ void save_safetensor(
     file += ".safetensors";
 
   // Serialize array
-  save_safetensor(std::make_shared<io::FileWriter>(file), a, retain_graph);
+  save_safetensors(std::make_shared<io::FileWriter>(file), a, retain_graph);
 }
 
 } // namespace mlx::core

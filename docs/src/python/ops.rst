@@ -83,6 +83,7 @@ Operations
    save
    savez
    savez_compressed
+   save_safetensors
    sigmoid
    sign
    sin

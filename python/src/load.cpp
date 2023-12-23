@@ -164,10 +164,10 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
     py::object file,
     StreamOrDevice s) {
   if (py::isinstance<py::str>(file)) { // Assume .safetensors file path string
-    return {load_safetensor(py::cast<std::string>(file), s)};
+    return {load_safetensors(py::cast<std::string>(file), s)};
   } else if (is_istream_object(file)) {
     // If we don't own the stream and it was passed to us, eval immediately
-    auto arr = load_safetensor(std::make_shared<PyFileReader>(file), s);
+    auto arr = load_safetensors(std::make_shared<PyFileReader>(file), s);
     {
       py::gil_scoped_release gil;
       for (auto& [key, arr] : arr) {
@@ -178,7 +178,7 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
   }
 
   throw std::invalid_argument(
-      "[load_safetensor] Input must be a file-like object, or string");
+      "[load_safetensors] Input must be a file-like object, or string");
 }
 
 std::unordered_map<std::string, array> mlx_load_npz_helper(
@@ -427,18 +427,18 @@ void mlx_save_safetensor_helper(
     std::optional<bool> retain_graph) {
   auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
   if (py::isinstance<py::str>(file)) {
-    save_safetensor(py::cast<std::string>(file), arrays_map, retain_graph);
+    save_safetensors(py::cast<std::string>(file), arrays_map, retain_graph);
     return;
   } else if (is_ostream_object(file)) {
     auto writer = std::make_shared<PyFileWriter>(file);
     {
       py::gil_scoped_release gil;
-      save_safetensor(writer, arrays_map, retain_graph);
+      save_safetensors(writer, arrays_map, retain_graph);
     }
 
     return;
   }
 
   throw std::invalid_argument(
-      "[save_safetensor] Input must be a file-like object, or string");
+      "[save_safetensors] Input must be a file-like object, or string");
 }

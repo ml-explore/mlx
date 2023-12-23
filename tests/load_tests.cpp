@@ -14,13 +14,13 @@ std::string get_temp_file(const std::string& name) {
   return std::filesystem::temp_directory_path().append(name);
 }
 
-TEST_CASE("test save_safetensor") {
+TEST_CASE("test save_safetensors") {
   std::string file_path = get_temp_file("test_arr.safetensors");
   auto map = std::unordered_map<std::string, array>();
   map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
   map.insert({"test2", ones({2, 2})});
-  save_safetensor(file_path, map);
-  auto safeDict = load_safetensor(file_path);
+  save_safetensors(file_path, map);
+  auto safeDict = load_safetensors(file_path);
   CHECK_EQ(safeDict.size(), 2);
   CHECK_EQ(safeDict.count("test"), 1);
   CHECK_EQ(safeDict.count("test2"), 1);
