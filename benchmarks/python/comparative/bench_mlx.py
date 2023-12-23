@@ -60,11 +60,11 @@ def matmul(x, y):
 
 
 def quant_matmul(x, w, s, b):
-    groups = x.shape[-1] // s.shape[-1]
-    width = 32 // (x.shape[-1] // w.shape[0])
+    group_size = x.shape[-1] // s.shape[-1]
+    bits = 32 // (x.shape[-1] // w.shape[1])
     ys = []
     for i in range(10):
-        ys.append(mx.quantized_matmul(x, w, s, b, groups=groups, width=width))
+        ys.append(mx.quantized_matmul(x, w, s, b, group_size=group_size, bits=bits))
     mx.eval(ys)
 
 

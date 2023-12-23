@@ -43,75 +43,98 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [scales_transposed, scales_cols, scales] = check_transpose(scales_pre);
   auto [biases_transposed, biases_cols, biases] = check_transpose(biases_pre);
 
-  if (!w_transposed) {
-    throw std::runtime_error("The quantized weight should be transposed.");
-  }
-
   if (x_transposed || scales_transposed || biases_transposed) {
     throw std::runtime_error("x, scales and biases should be row contiguous.");
   }
 
   int D = x.shape(-1);
   int B = x.size() / D;
+  if (w_transposed) {
+    // Route to the qmv kernel
+    if (B == 1) {
+      std::ostringstream kname;
+      kname << "qmv_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+            << bits_;
 
-  // Route to the qmv kernel
-  if (B == 1) {
+      // Encode and dispatch kernel
+      auto compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
+
+      int O = w.size() / w_cols;
+
+      int bo = 32;
+      int bd = 32;
+      MTL::Size group_dims = MTL::Size(bd, bo, 1);
+      MTL::Size grid_dims = MTL::Size(1, O / bo, B);
+
+      set_array_buffer(compute_encoder, w, 0);
+      set_array_buffer(compute_encoder, scales, 1);
+      set_array_buffer(compute_encoder, biases, 2);
+      set_array_buffer(compute_encoder, x, 3);
+      set_array_buffer(compute_encoder, out, 4);
+      compute_encoder->setBytes(&D, sizeof(int), 5);
+      compute_encoder->setBytes(&O, sizeof(int), 6);
+
+      compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    }
+
+    // Route to the qmm kernel
+    else {
+      std::ostringstream kname;
+      kname << "qmm_" << (w_transposed ? "t_" : "n_") << type_to_name(out)
+            << "_gs_" << group_size_ << "_b_" << bits_;
+
+      // Encode and dispatch kernel
+      auto compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
+
+      int O = w.size() / w_cols;
+
+      int wn = 2;
+      int wm = 2;
+      int bm = 32;
+      int bn = 32;
+      int bk = 64;
+      MTL::Size group_dims = MTL::Size(32, wn, wm);
+      MTL::Size grid_dims = MTL::Size(O / bn, (B + bm - 1) / bm, 1);
+
+      set_array_buffer(compute_encoder, x, 0);
+      set_array_buffer(compute_encoder, w, 1);
+      set_array_buffer(compute_encoder, scales, 2);
+      set_array_buffer(compute_encoder, biases, 3);
+      set_array_buffer(compute_encoder, out, 4);
+      compute_encoder->setBytes(&B, sizeof(int), 5);
+      compute_encoder->setBytes(&O, sizeof(int), 6);
+      compute_encoder->setBytes(&D, sizeof(int), 7);
+
+      compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    }
+  } else {
     std::ostringstream kname;
-    kname << "qmv_" << (w_transposed ? "n_" : "t_") << type_to_name(out)
-          << "_gs_" << group_size_ << "_b_" << bits_;
+    kname << "qvm_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+          << bits_;
 
     // Encode and dispatch kernel
     auto compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
-    int O = w.size() / w_cols;
+    int out_vec_size = w_cols * (32 / bits_);
 
     int bo = 32;
     int bd = 32;
     MTL::Size group_dims = MTL::Size(bd, bo, 1);
-    MTL::Size grid_dims = MTL::Size(1, O / bo, B);
-
-    set_array_buffer(compute_encoder, w, 0);
-    set_array_buffer(compute_encoder, scales, 1);
-    set_array_buffer(compute_encoder, biases, 2);
-    set_array_buffer(compute_encoder, x, 3);
-    set_array_buffer(compute_encoder, out, 4);
-    compute_encoder->setBytes(&D, sizeof(int), 5);
-    compute_encoder->setBytes(&O, sizeof(int), 6);
-
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
-  }
-
-  // Route to the qmm kernel
-  else {
-    std::ostringstream kname;
-    kname << "qmm_" << (w_transposed ? "t_" : "n_") << type_to_name(out)
-          << "_gs_" << group_size_ << "_b_" << bits_;
-
-    // Encode and dispatch kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
-    auto kernel = d.get_kernel(kname.str());
-    compute_encoder->setComputePipelineState(kernel);
-
-    int O = w.size() / w_cols;
-
-    int wn = 2;
-    int wm = 2;
-    int bm = 32;
-    int bn = 32;
-    int bk = 64;
-    MTL::Size group_dims = MTL::Size(32, wn, wm);
-    MTL::Size grid_dims = MTL::Size(O / bn, (B + bm - 1) / bm, 1);
+    MTL::Size grid_dims = MTL::Size(1, (w_cols + bo - 1) / bo, B);
 
     set_array_buffer(compute_encoder, x, 0);
     set_array_buffer(compute_encoder, w, 1);
     set_array_buffer(compute_encoder, scales, 2);
     set_array_buffer(compute_encoder, biases, 3);
     set_array_buffer(compute_encoder, out, 4);
-    compute_encoder->setBytes(&B, sizeof(int), 5);
-    compute_encoder->setBytes(&O, sizeof(int), 6);
-    compute_encoder->setBytes(&D, sizeof(int), 7);
+    compute_encoder->setBytes(&D, sizeof(int), 5);
+    compute_encoder->setBytes(&out_vec_size, sizeof(int), 6);
 
     compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
   }

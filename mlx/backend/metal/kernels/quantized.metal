@@ -104,6 +104,108 @@ template <typename T, const int BM, const int BN, const int group_size, const in
 }
 
 
+template <typename T, const int BM, const int BN, const int group_size, const int bits>
+[[kernel]] void qvm(
+    const device T* x [[buffer(0)]],
+    const device uint32_t* w [[buffer(1)]],
+    const device T* scales [[buffer(2)]],
+    const device T* biases [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+
+  static_assert(BM == SIMD_SIZE, "qvm expects BM to be equal to SIMD_SIZE");
+  static_assert(BN == BM, "qvm expects a block size of 32x32");
+
+  (void)lid;
+
+  constexpr int bitmask = (1 << bits) - 1;
+  constexpr int el_per_int = 32 / bits;
+  constexpr int colgroup = BN * el_per_int;
+  constexpr int groups_per_block = colgroup / group_size;
+
+  threadgroup T scales_block[BM * groups_per_block];
+  threadgroup T biases_block[BM * groups_per_block];
+  threadgroup T x_block[BM];
+
+  thread uint32_t w_local;
+  thread T result[el_per_int] = {0};
+  thread T scale = 1;
+  thread T bias = 0;
+  thread T x_local = 0;
+
+  // Adjust positions
+  const int out_vec_size_w = out_vec_size / el_per_int;
+  const int out_vec_size_g = out_vec_size / group_size;
+  int out_col = (tid.y * BN + simd_gid) * el_per_int;
+  w += out_col / el_per_int;
+  scales += out_col / group_size;
+  biases += out_col / group_size;
+  x += tid.z * in_vec_size;
+  y += tid.z * out_vec_size + out_col;
+
+  if (out_col >= out_vec_size) {
+    return;
+  }
+
+  // Loop over in_vec in blocks of colgroup
+  for (int i=0; i<in_vec_size; i+=BM) {
+    // Load the vec to shared memory
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (simd_gid == 0) {
+      x_block[simd_lid] = x[simd_lid + i];
+    }
+
+    // Load the scales and biases to shared memory
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (simd_gid == 0) {
+      #pragma clang loop unroll(full)
+      for (int j=0; j<groups_per_block; j++) {
+        scales_block[simd_lid * groups_per_block + j] = scales[(i + simd_lid) * out_vec_size_g + j];
+      }
+      #pragma clang loop unroll(full)
+      for (int j=0; j<groups_per_block; j++) {
+        biases_block[simd_lid * groups_per_block + j] = biases[(i + simd_lid) * out_vec_size_g + j];
+      }
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Load in_vec, scale, bias to registers
+    x_local = x_block[simd_lid];
+    scale = scales_block[simd_lid * groups_per_block + (simd_gid * el_per_int) / group_size];
+    bias = biases_block[simd_lid * groups_per_block + (simd_gid * el_per_int) / group_size];
+
+    // Load the matrix elements
+    w_local = w[(i + simd_lid) * out_vec_size_w];
+
+    // Do all the work.
+    #pragma clang loop unroll(full)
+    for (int k=0; k<el_per_int; k++) {
+      result[k] += (scale * static_cast<T>(w_local & bitmask) + bias) * x_local;
+      w_local >>= bits;
+    }
+  }
+
+  // Accumulate in the simdgroup
+  #pragma clang loop unroll(full)
+  for (int k=0; k<el_per_int; k++) {
+    result[k] = simd_sum(result[k]);
+  }
+
+  // Store the result
+  if (simd_lid == 0) {
+    #pragma clang loop unroll(full)
+    for (int k=0; k<el_per_int; k++) {
+      y[k] = result[k];
+    }
+  }
+}
+
+
 template <typename T, const int BM, const int BK, const int BN, const int group_size, const int bits>
 [[kernel]] void qmm_t(
     const device T* x [[buffer(0)]],
@@ -232,7 +334,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
 
 #define instantiate_qmv(name, itype, group_size, bits) \
-  template [[host_name("qmv_n_" #name "_gs_" #group_size "_b_" #bits)]] \
+  template [[host_name("qmv_" #name "_gs_" #group_size "_b_" #bits)]] \
   [[kernel]] void qmv<itype, 32, 32, group_size, bits>( \
     const device uint32_t* w [[buffer(0)]], \
     const device itype* scales [[buffer(1)]], \
@@ -257,6 +359,33 @@ instantiate_qmv_types(128, 8)
 instantiate_qmv_types( 64, 2)
 instantiate_qmv_types( 64, 4)
 instantiate_qmv_types( 64, 8)
+
+#define instantiate_qvm(name, itype, group_size, bits) \
+  template [[host_name("qvm_" #name "_gs_" #group_size "_b_" #bits)]] \
+  [[kernel]] void qvm<itype, 32, 32, group_size, bits>( \
+    const device itype* x [[buffer(0)]], \
+    const device uint32_t* w [[buffer(1)]], \
+    const device itype* scales [[buffer(2)]], \
+    const device itype* biases [[buffer(3)]], \
+    device itype* y [[buffer(4)]], \
+    const constant int& in_vec_size [[buffer(5)]], \
+    const constant int& out_vec_size [[buffer(6)]], \
+    uint3 tid [[threadgroup_position_in_grid]], \
+    uint lid [[thread_index_in_threadgroup]], \
+    uint simd_gid [[simdgroup_index_in_threadgroup]], \
+    uint simd_lid [[thread_index_in_simdgroup]]);
+
+#define instantiate_qvm_types(group_size, bits) \
+  instantiate_qvm(float32, float, group_size, bits) \
+  instantiate_qvm(float16, half, group_size, bits) \
+  instantiate_qvm(bfloat16, bfloat16_t, group_size, bits)
+
+instantiate_qvm_types(128, 2)
+instantiate_qvm_types(128, 4)
+instantiate_qvm_types(128, 8)
+instantiate_qvm_types( 64, 2)
+instantiate_qvm_types( 64, 4)
+instantiate_qvm_types( 64, 8)
 
 #define instantiate_qmm_t(name, itype, group_size, bits) \
   template [[host_name("qmm_t_" #name "_gs_" #group_size "_b_" #bits)]] \

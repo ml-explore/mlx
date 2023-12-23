@@ -2646,7 +2646,23 @@ array quantized_matmul(
     x = reshape(x, {-1, x_inner_dims}, s);
   }
 
-  int w_inner_dims = w.shape(0) * (32 / bits);
+  // Calculate w's inner dims
+  int s_shape_0 = scales.shape(0);
+  int s_shape_1 = scales.shape(1) * group_size;
+  int w_shape_0 = w.shape(0);
+  int w_shape_1 = w.shape(1);
+  int w_inner_dims = 0;
+  int w_outer_dims = 0;
+  if (w_shape_0 * (32 / bits) == s_shape_1 && w_shape_1 == s_shape_0) {
+    w_inner_dims = w_shape_0 * (32 / bits);
+    w_outer_dims = w_shape_1;
+  } else if (w_shape_1 * (32 / bits) == s_shape_1 && w_shape_0 == s_shape_0) {
+    w_inner_dims = w_shape_0;
+    w_outer_dims = w_shape_1 * (32 / bits);
+  } else {
+    // TODO: Throw a proper error.
+  }
+
   if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
     msg << "[quantized_matmul] Last dimension of first input with "
@@ -2658,20 +2674,20 @@ array quantized_matmul(
     throw std::invalid_argument(msg.str());
   }
 
-  int n_groups = x_inner_dims / group_size;
-  if (scales.shape(-1) != n_groups || biases.shape(-1) != n_groups) {
-    std::ostringstream msg;
-    msg << "[quantized_matmul] Scales and biases provided do not match the "
-        << "quantization arguments (group_size=" << group_size
-        << ", bits=" << bits << "). Expected shapes (" << w.shape(1) << ", "
-        << x_inner_dims / group_size
-        << "), but got scales.shape=" << scales.shape()
-        << " and biases.shape=" << biases.shape();
-    throw std::invalid_argument(msg.str());
-  }
+  // int n_groups = x_inner_dims / group_size;
+  // if (scales.shape(-1) != n_groups || biases.shape(-1) != n_groups) {
+  //   std::ostringstream msg;
+  //   msg << "[quantized_matmul] Scales and biases provided do not match the "
+  //       << "quantization arguments (group_size=" << group_size
+  //       << ", bits=" << bits << "). Expected shapes (" << w.shape(1) << ", "
+  //       << x_inner_dims / group_size
+  //       << "), but got scales.shape=" << scales.shape()
+  //       << " and biases.shape=" << biases.shape();
+  //   throw std::invalid_argument(msg.str());
+  // }
 
   auto out = array(
-      {x.shape(0), w.shape(1)},
+      {x.shape(0), w_outer_dims},
       x.dtype(),
       std::make_unique<QuantizedMatmul>(to_stream(s), group_size, bits),
       {x, w, scales, biases});
