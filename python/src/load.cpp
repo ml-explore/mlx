@@ -178,7 +178,7 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
   }
 
   throw std::invalid_argument(
-      "[load_safetensor] Input must be a file-like object, string, or pathlib.Path");
+      "[load_safetensor] Input must be a file-like object, or string");
 }
 
 std::unordered_map<std::string, array> mlx_load_npz_helper(
@@ -233,7 +233,7 @@ array mlx_load_npy_helper(py::object file, StreamOrDevice s) {
     return {arr};
   }
   throw std::invalid_argument(
-      "[load_npy] Input must be a file-like object, string, or pathlib.Path");
+      "[load_npy] Input must be a file-like object, or string");
 }
 
 DictOrArray mlx_load_helper(
@@ -244,11 +244,9 @@ DictOrArray mlx_load_helper(
     std::string fname;
     if (py::isinstance<py::str>(file)) {
       fname = py::cast<std::string>(file);
-    } else if (is_istream_object(file)) {
-      fname = file.attr("name").cast<std::string>();
     } else {
       throw std::invalid_argument(
-          "[load] Input must be a file-like object, string, or pathlib.Path");
+          "[load] Input must be a file-like object, or string");
     }
     size_t ext = fname.find_last_of('.');
     if (ext == std::string::npos) {
@@ -364,7 +362,7 @@ void mlx_save_helper(
   }
 
   throw std::invalid_argument(
-      "[save] Input must be a file-like object, string, or pathlib.Path");
+      "[save] Input must be a file-like object, or string");
 }
 
 void mlx_savez_helper(
@@ -440,5 +438,5 @@ void mlx_save_safetensor_helper(
   }
 
   throw std::invalid_argument(
-      "[save_safetensor] Input must be a file-like object, string, or pathlib.Path");
+      "[save_safetensor] Input must be a file-like object, or string");
 }

@@ -20,7 +20,7 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
 void mlx_save_safetensor_helper(
     py::object file,
     py::dict d,
-    bool retain_graph = true);
+    std::optional<bool> retain_graph = std::nullopt);
 
 DictOrArray mlx_load_helper(
     py::object file,
