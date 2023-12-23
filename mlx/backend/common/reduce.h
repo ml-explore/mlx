@@ -126,7 +126,7 @@ struct ReductionPlan {
 ReductionPlan get_reduction_plan(const array& x, const std::vector<int> axes) {
   // The data is all there and we are reducing over everything
   if (x.size() == x.data_size() && axes.size() == x.ndim() &&
-      (x.flags().row_contiguous || x.flags().col_contiguous)) {
+      x.flags().contiguous) {
     return ContiguousAllReduce;
   }
 
