@@ -1322,6 +1322,7 @@ class Scatter : public Primitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
+  DEFINE_GRADS();
   DEFINE_PRINT(Scatter)
   bool is_equivalent(const Primitive& other) const override;
 
