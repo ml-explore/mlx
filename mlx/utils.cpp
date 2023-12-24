@@ -286,10 +286,4 @@ std::ostream& operator<<(std::ostream& os, const std::vector<size_t>& v) {
   return os;
 }
 
-std::vector<int> get_shape_reducing_over_all_axes(int ndim) {
-  std::vector<int> shape(ndim);
-  std::iota(shape.begin(), shape.end(), 0);
-  return shape;
-}
-
 } // namespace mlx::core
