@@ -1,11 +1,10 @@
 // Copyright © 2023 Apple Inc.
 
+#include "mlx/ops.h"
 #include <cmath>
 #include <numeric>
 #include <set>
 #include <sstream>
-
-#include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -716,6 +715,39 @@ array stack(
 }
 array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
   return stack(arrays, 0, s);
+}
+
+/** array repeat with axis */
+array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
+  axis = normalize_axis(axis, arr.ndim());
+
+  if (repeats <= 0) {
+    std::vector<int> new_shape(arr.shape());
+    new_shape[axis] = repeats > 0 ? repeats : 0;
+    return zeros(new_shape, arr.dtype(), s);
+  }
+
+  if (repeats == 1) {
+    return arr;
+  }
+
+  std::vector<array> arrays_to_concat;
+  arrays_to_concat.reserve(repeats * arr.shape(axis));
+
+  for (int i = 0; i < arr.shape(axis); ++i) {
+    std::vector<int> start_indices(arr.ndim(), 0);
+    std::vector<int> stop_indices = arr.shape();
+    start_indices[axis] = i;
+    stop_indices[axis] = i + 1;
+    for (int j = 0; j < repeats; ++j) {
+      arrays_to_concat.push_back(slice(arr, start_indices, stop_indices, s));
+    }
+  }
+  return concatenate(arrays_to_concat, axis, s);
+}
+
+array repeat(const array& arr, int repeats, StreamOrDevice s) {
+  return flatten(repeat(arr, repeats, arr.ndim() - 1, s));
 }
 
 /** Pad an array with a constant value */

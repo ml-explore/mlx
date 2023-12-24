@@ -2233,3 +2233,40 @@ TEST_CASE("test quantize dequantize") {
     CHECK(max_diff <= 127.0 / (1 << i));
   }
 }
+
+TEST_CASE("repeat test with axis") {
+  auto data = array({13, 3, 16, 6, 14, 4, 15, 5, 11, 1, 12, 2}, {3, 2, 2});
+  auto repeat_axis_0 = repeat(data, 2, 0);
+  auto expected_axis_0 = array(
+      {13, 3, 16, 6, 13, 3, 16, 6, 14, 4, 15, 5,
+       14, 4, 15, 5, 11, 1, 12, 2, 11, 1, 12, 2},
+      {6, 2, 2});
+
+  auto repeat_axis_1 = repeat(data, 2, 1);
+  auto expected_axis_1 = array(
+      {13, 3, 13, 3, 16, 6, 16, 6, 14, 4, 14, 4,
+       15, 5, 15, 5, 11, 1, 11, 1, 12, 2, 12, 2},
+      {3, 4, 2});
+
+  auto repeat_axis_2 = repeat(data, 2); // default axis == ndim - 1 == 2
+  auto expected_axis_2 = array(
+      {13, 13, 3, 3, 16, 16, 6, 6, 14, 14, 4, 4,
+       15, 15, 5, 5, 11, 11, 1, 1, 12, 12, 2, 2},
+      {24});
+
+  // check output
+  CHECK(array_equal(repeat_axis_0, expected_axis_0).item<bool>());
+  CHECK(array_equal(repeat_axis_1, expected_axis_1).item<bool>());
+  CHECK(array_equal(repeat_axis_2, expected_axis_2).item<bool>());
+
+  auto data_2 = array({1, 3, 2}, {3});
+  auto repeat_2 = repeat(data_2, 2, 0);
+  auto expected_2 = array({1, 1, 3, 3, 2, 2}, {6});
+  CHECK(array_equal(repeat_2, expected_2).item<bool>());
+
+  auto data_3 = array({1, 2, 3, 4, 5, 4, 0, 1, 2}, {3, 3});
+  auto repeat_3 = repeat(data_2, 2, 0);
+  auto expected_3 =
+      array({1, 2, 3, 1, 2, 3, 4, 5, 4, 4, 5, 4, 0, 1, 2, 0, 1, 2}, {6, 3});
+  CHECK(array_equal(repeat_2, expected_2).item<bool>());
+}

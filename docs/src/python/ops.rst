@@ -77,6 +77,7 @@ Operations
    quantize
    quantized_matmul
    reciprocal
+   repeat
    reshape
    round
    rsqrt
