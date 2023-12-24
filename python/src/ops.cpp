@@ -2419,7 +2419,7 @@ void init_ops(py::module_& m) {
       },
       "array"_a,
       py::pos_only(),
-      "repeats"_a ,
+      "repeats"_a,
       "axis"_a = none,
       py::kw_only(),
       "stream"_a = none,
