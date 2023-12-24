@@ -7,7 +7,7 @@
 namespace mlx::core::metal {
 
 void new_stream(Stream) {}
-std::shared_ptr<void> new_memory_pool() {
+std::shared_ptr<void> new_scoped_memory_pool() {
   return nullptr;
 }
 
