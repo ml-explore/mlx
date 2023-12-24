@@ -23,10 +23,11 @@ class BufferCache {
 
   MTL::Buffer* reuse_from_cache(size_t size);
   void recycle_to_cache(MTL::Buffer* buf);
-  size_t release_cached_buffers(size_t min_bytes_to_free);
+  void release_cached_buffers(size_t min_bytes_to_free);
 
-  bool can_garbage_collect() {
-    return pool_size_ > 0 && device_->currentAllocatedSize() > gc_limit_;
+  // Returnt he size in bytes of cached memory
+  size_t size() {
+    return pool_size_;
   }
 
  private:
@@ -49,7 +50,6 @@ class BufferCache {
   BufferHolder* head_;
   BufferHolder* tail_;
   size_t pool_size_;
-  size_t gc_limit_;
 };
 
 } // namespace
