@@ -510,6 +510,14 @@ void init_array(py::module_& m) {
           "size", &array::size, R"pbdoc(Number of elments in the array.)pbdoc")
       .def_property_readonly(
           "ndim", &array::ndim, R"pbdoc(The array's dimension.)pbdoc")
+      .def_property_readonly(
+          "itemsize",
+          &array::itemsize,
+          R"pbdoc(The size of the array's datatype in bytes.)pbdoc")
+      .def_property_readonly(
+          "nbytes",
+          &array::nbytes,
+          R"pbdoc(The number of bytes in the array.)pbdoc")
       // TODO, this makes a deep copy of the shape
       // implement alternatives to use reference
       // https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html
