@@ -3,7 +3,6 @@
 import os
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
 
 import mlx.core as mx
 import mlx.nn as nn
@@ -342,9 +341,9 @@ class TestNN(mlx_tests.MLXTestCase):
         expected_mean = mx.array([0.008929, 0.005680, -0.016092, 0.027778])
         expected_var = mx.array([0.928435, 1.00455, 1.04117, 0.94258])
         self.assertTrue(x.shape == y.shape)
-        self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
-        self.assertTrue(np.allclose(bn._running_mean, expected_mean, atol=1e-5))
-        self.assertTrue(np.allclose(bn._running_var, expected_var, atol=1e-5))
+        self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
+        self.assertTrue(mx.allclose(bn._running_mean, expected_mean, atol=1e-5))
+        self.assertTrue(mx.allclose(bn._running_var, expected_var, atol=1e-5))
 
         # test eval mode
         bn.eval()
@@ -360,7 +359,7 @@ class TestNN(mlx_tests.MLXTestCase):
         )
 
         self.assertTrue(x.shape == y.shape)
-        self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
 
         # test_no_affine
         bn = nn.BatchNorm(num_features=4, affine=False)
@@ -406,13 +405,13 @@ class TestNN(mlx_tests.MLXTestCase):
                 ],
             ]
         )
-        self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
         expected_mean = mx.array(
             [[[0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]]]
         )
         expected_var = mx.array([[[0.968415, 1.05322, 0.96913, 0.932305, 0.967224]]])
-        self.assertTrue(np.allclose(bn._running_mean, expected_mean, atol=1e-5))
-        self.assertTrue(np.allclose(bn._running_var, expected_var, atol=1e-5))
+        self.assertTrue(mx.allclose(bn._running_mean, expected_mean, atol=1e-5))
+        self.assertTrue(mx.allclose(bn._running_var, expected_var, atol=1e-5))
 
         x = mx.random.normal((N, L, C, L, C), dtype=mx.float32)
         with self.assertRaises(ValueError):

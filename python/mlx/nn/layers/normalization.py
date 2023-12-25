@@ -194,24 +194,31 @@ class BatchNorm(Module):
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
     parameters initialized at 1 and 0 respectively.
 
-    [1]: https://arxiv.org/abs/1502.03167
+    The input shape is specified as ``NC`` or ``NLC``, where ``N`` is the
+    batch, ``C`` is the number of features or channels, and ``L`` is the
+    sequence length. The output has the same shape as the input. For
+    four-dimensional arrays, the shape is ``NHWC``, where ``H`` and ``W`` are
+    the height and width respecitvely.
 
-    The input tensor shape is specified as (N, C) or (N, L, C), representing the batch size (N), the number of features or channels (C), and optionally, the sequence length (L). The output tensor maintains the same shape as the input, adhering to (N, C) or (N, L, C).
-    For three-dimensional tensors, the shape is denoted as (N, H, W, C), where N signifies the batch size, C represents the number of channels, H corresponds to the height, and W denotes the width.
+    For more information on Batch Normalization, see the original paper `Batch
+    Normalization: Accelerating Deep Network Training by Reducing Internal
+    Covariate Shift <https://arxiv.org/abs/1502.03167>`_.
 
     Args:
-        num_features (int): The feature dimension of the input to normalize over.
-        eps (float, optional): A small additive constant for numerical stability. Default is 1e-5.
-        momentum (float, optional): The momentum for updating the running mean and variance. Default is 0.1.
-        affine (bool, optional): If True, learn an affine transform to apply after the normalization. Default is True.
-        track_running_stats (bool, optional): If True, track the running mean and variance. Default is True.
+        num_features (int): The feature dimension to normalize over.
+        eps (float, optional): A small additive constant for numerical
+            stability. Default: ``1e-5``.
+        momentum (float, optional): The momentum for updating the running
+            mean and variance. Default: ``0.1``.
+        affine (bool, optional): If ``True``, apply a learned affine
+            transformation after the normalization. Default: ``True``.
+        track_running_stats (bool, optional): If ``True``, track the
+            running mean and variance. Default: ``True``.
 
     Examples:
         >>> import mlx.core as mx
         >>> import mlx.nn as nn
-        >>> mx.random.seed(42)
-        >>> input = mx.random.normal((5, 4), dtype=mx.float32)
-        >>> # Batch norm
+        >>> x = mx.random.normal((5, 4))
         >>> bn = nn.BatchNorm(num_features=4, affine=True)
         >>> output = bn(x)
     """
@@ -229,10 +236,9 @@ class BatchNorm(Module):
         self.num_features = num_features
         self.eps = eps
         self.momentum = momentum
-        self.affine = affine
         self.track_running_stats = track_running_stats
 
-        if self.affine:
+        if affine:
             self.weight = mx.ones((num_features,))
             self.bias = mx.zeros((num_features,))
 
@@ -241,7 +247,11 @@ class BatchNorm(Module):
             self._running_var = mx.ones((num_features,))
 
     def _extra_repr(self):
-        return f"{self.num_features}, eps={self.eps}, momentum={self.momentum}, affine={'weight' in self}, track_running_stats={self.track_running_stats}"
+        return (
+            f"{self.num_features}, eps={self.eps}, "
+            f"momentum={self.momentum}, affine={'weight' in self}, "
+            f"track_running_stats={self.track_running_stats}"
+        )
 
     def _calc_stats(self, x: mx.array) -> Tuple[mx.array, mx.array]:
         """
@@ -253,9 +263,7 @@ class BatchNorm(Module):
         Returns:
             tuple: Tuple containing mean and variance.
         """
-        reduction_axes = (
-            (0,) if len(x.shape) == 2 else (0, 1) if len(x.shape) == 3 else (0, 1, 2)
-        )
+        reduction_axes = tuple(range(0, x.ndim - 1))
         means = mx.mean(x, axis=reduction_axes, keepdims=True)
         var = mx.var(x, axis=reduction_axes, keepdims=True)
 
@@ -279,7 +287,7 @@ class BatchNorm(Module):
             mx.array: Output tensor.
         """
 
-        if x.ndim not in [2, 3, 4]:
+        if x.ndim < 2 or x.ndim > 4:
             raise ValueError(
                 f"Expected input tensor to have 2, 3 or 4 dimensions, but got {x.ndim}"
             )
