@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-#include <numeric>
 #include <sstream>
 #include <vector>
 
@@ -73,12 +72,6 @@ int normalize_axis(int axis, int ndim) {
     axis += ndim;
   }
   return axis;
-}
-std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim) {
-  std::vector<int> canonical;
-  for (int ax : axes)
-    canonical.push_back(normalize_axis(ax, ndim));
-  return canonical;
 }
 
 std::ostream& operator<<(std::ostream& os, const Device& d) {

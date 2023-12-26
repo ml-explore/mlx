@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <numeric>
 #include "array.h"
 #include "device.h"
 #include "dtype.h"
@@ -25,7 +24,6 @@ bool is_same_shape(const std::vector<array>& arrays);
  * https://numpy.org/devdocs/reference/generated/numpy.lib.array_utils.normalize_axis_index.html
  */
 int normalize_axis(int axis, int ndim);
-std::vector<int> normalize_axes(const std::vector<int>& axes, int ndim);
 
 std::ostream& operator<<(std::ostream& os, const Device& d);
 std::ostream& operator<<(std::ostream& os, const Stream& s);
@@ -42,19 +40,5 @@ inline std::ostream& operator<<(std::ostream& os, const float16_t& v) {
 }
 inline std::ostream& operator<<(std::ostream& os, const bfloat16_t& v) {
   return os << static_cast<float>(v);
-}
-
-using IntOrVec = std::variant<std::monostate, int, std::vector<int>>;
-inline std::vector<int> get_reduce_axes(const IntOrVec& v, int dims) {
-  std::vector<int> axes;
-  if (std::holds_alternative<std::monostate>(v)) {
-    axes.resize(dims);
-    std::iota(axes.begin(), axes.end(), 0);
-  } else if (auto pv = std::get_if<int>(&v); pv) {
-    axes.push_back(*pv);
-  } else {
-    axes = std::get<std::vector<int>>(v);
-  }
-  return axes;
 }
 } // namespace mlx::core

@@ -7,7 +7,6 @@
 
 #include "mlx/fft.h"
 #include "mlx/ops.h"
-#include "mlx/utils.h"
 
 namespace py = pybind11;
 using namespace py::literals;

@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
+#include <numeric>
 #include <variant>
 
 #include <pybind11/complex.h>
@@ -13,9 +14,23 @@ namespace py = pybind11;
 
 using namespace mlx::core;
 
+using IntOrVec = std::variant<std::monostate, int, std::vector<int>>;
 using ScalarOrArray = std::
     variant<py::bool_, py::int_, py::float_, std::complex<float>, py::object>;
 static constexpr std::monostate none{};
+
+inline std::vector<int> get_reduce_axes(const IntOrVec& v, int dims) {
+  std::vector<int> axes;
+  if (std::holds_alternative<std::monostate>(v)) {
+    axes.resize(dims);
+    std::iota(axes.begin(), axes.end(), 0);
+  } else if (auto pv = std::get_if<int>(&v); pv) {
+    axes.push_back(*pv);
+  } else {
+    axes = std::get<std::vector<int>>(v);
+  }
+  return axes;
+}
 
 inline array to_array_with_accessor(py::object obj) {
   if (py::hasattr(obj, "__mlx_array__")) {

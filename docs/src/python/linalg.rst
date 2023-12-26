@@ -1,7 +1,7 @@
 .. _linalg:
 
 Linear Algebra
-=====
+==============
 
 .. currentmodule:: mlx.core.linalg
 
