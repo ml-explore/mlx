@@ -9,8 +9,6 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-#define MIN(x, y) ((x) < (y) ? (x) : (y))
-
 namespace mlx::core {
 
 namespace {
@@ -2797,7 +2795,9 @@ array dequantize(
 std::map<char, int> string_to_char_map(std::string inp) {
   std::map<char, int> counts;
   for (int i = 0; i < inp.size(); i++) {
-    counts[inp[i]] = i;
+    if (inp[i] != ' ') {
+      counts[inp[i]] = i;
+    }
   }
   return counts;
 }
@@ -2807,14 +2807,17 @@ array einsum(
     const std::vector<array>& operands,
     StreamOrDevice s /* = {} */) {
   std::string output;
-  std::string input = equation;
-  if (equation.find("->") == std::string::npos) {
+  std::string input;
+  if (auto pos = equation.find("->"); pos != std::string::npos) {
+    input = equation.substr(0, pos);
+    output = equation.substr(pos + 2);
+  } else {
+    input = equation;
     output = std::string(equation);
     std::sort(output.begin(), output.end());
-  } else {
-    auto pos = equation.find("->");
-    output = equation.substr(pos + 2);
-    input = equation.substr(0, pos);
+  }
+  if (operands.size() < 1) {
+    throw std::runtime_error("[einsum] Must provide at least one operand");
   }
   std::vector<std::string> inputs;
   std::stringstream ss(input);
@@ -2824,15 +2827,15 @@ array einsum(
   }
   if (operands.size() != inputs.size()) {
     throw std::runtime_error(
-        "Number of operands must match the number of input characters");
+        "[einsum] Number of operands must match the number of input characters");
   }
 
   std::map<char, int> input_map;
   for (int i = 0; i < inputs.size(); i++) {
     auto arr = operands[i];
     auto inp = inputs[i];
-    for (int j = 0; j < MIN(arr.shape().size(), inp.size()); j++) {
-      input_map[inp[j]] = arr.shape().at(j);
+    for (int j = 0; j < std::min(arr.shape().size(), inp.size()); j++) {
+      input_map[inp[j]] = arr.shape(j);
     }
   }
   std::vector<int> broad;
@@ -2873,10 +2876,10 @@ array einsum(
     }
     i += 1;
   }
-
+  // TODO: this should just start with the first and then accumulate
   auto acc = ones_like(inputs_arr.at(0), s);
-  for (auto arr : inputs_arr) {
-    acc = multiply(acc, arr, s);
+  for (int i = 0; i < inputs_arr.size(); i++) {
+    acc = multiply(acc, inputs_arr[i], s);
   }
   return transpose(sum(acc, sum_axis, false, s), rhs_order, s);
 }
