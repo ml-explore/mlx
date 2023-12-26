@@ -20,6 +20,7 @@ Layers
    Linear
    Conv1d
    Conv2d
+   BatchNorm
    LayerNorm
    RMSNorm
    GroupNorm
@@ -27,3 +28,11 @@ Layers
    MultiHeadAttention
    Sequential
    QuantizedLinear
+   Dropout
+   Dropout2d
+   RNNCell
+   GRUCell
+   LSTMCell
+   RNN
+   GRU
+   LSTM
