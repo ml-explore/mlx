@@ -81,24 +81,6 @@ void BufferCache::recycle_to_cache(MTL::Buffer* buf) {
   }
 }
 
-void BufferCache::release_cached_buffers(size_t min_bytes_to_free) {
-  if (min_bytes_to_free >= 0.9 * pool_size_) {
-    clear();
-  } else {
-    std::lock_guard<std::mutex> lk(cache_mutex_);
-    size_t total_bytes_freed = 0;
-    while (tail_ && (total_bytes_freed < min_bytes_to_free)) {
-      if (tail_->buf) {
-        total_bytes_freed += tail_->buf->length();
-        tail_->buf->release();
-        tail_->buf = nullptr;
-      }
-      remove_from_list(tail_);
-    }
-    pool_size_ -= total_bytes_freed;
-  }
-}
-
 void BufferCache::add_at_head(BufferCache::BufferHolder* to_add) {
   if (!to_add)
     return;
