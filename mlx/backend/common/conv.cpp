@@ -357,7 +357,7 @@ void explicit_gemm_conv_1D_cpu(
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
   }
 
-  // Peform gemm
+  // Perform gemm
   cblas_sgemm(
       CblasRowMajor,
       CblasNoTrans, // no trans A
@@ -459,7 +459,7 @@ void explicit_gemm_conv_2D_cpu(
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
   }
 
-  // Peform gemm
+  // Perform gemm
   cblas_sgemm(
       CblasRowMajor,
       CblasNoTrans, // no trans A

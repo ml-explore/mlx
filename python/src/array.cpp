@@ -436,10 +436,14 @@ void init_array(py::module_& m) {
           "__repr__",
           [](const Dtype& t) {
             std::ostringstream os;
+            os << "mlx.core.";
             os << t;
             return os.str();
           })
-      .def("__eq__", [](const Dtype& t1, const Dtype& t2) { return t1 == t2; });
+      .def("__eq__", [](const Dtype& t1, const Dtype& t2) { return t1 == t2; })
+      .def("__hash__", [](const Dtype& t) {
+        return static_cast<int64_t>(t.val);
+      });
   m.attr("bool_") = py::cast(bool_);
   m.attr("uint8") = py::cast(uint8);
   m.attr("uint16") = py::cast(uint16);
@@ -454,42 +458,66 @@ void init_array(py::module_& m) {
   m.attr("bfloat16") = py::cast(bfloat16);
   m.attr("complex64") = py::cast(complex64);
 
-  py::class_<array>(m, "array", R"pbdoc(An N-dimensional array object.)pbdoc")
-      .def(
-          py::init([](ScalarOrArray v, std::optional<Dtype> t) {
-            auto arr = to_array(v, t);
+  auto array_class = py::class_<array>(
+      m, "array", R"pbdoc(An N-dimensional array object.)pbdoc");
+
+  {
+    py::options options;
+    options.disable_function_signatures();
+
+    array_class.def(
+        py::init([](std::variant<
+                        py::bool_,
+                        py::int_,
+                        py::float_,
+                        std::complex<float>,
+                        py::list,
+                        py::tuple,
+                        py::array,
+                        py::buffer,
+                        py::object> v,
+                    std::optional<Dtype> t) {
+          if (auto pv = std::get_if<py::bool_>(&v); pv) {
+            return array(py::cast<bool>(*pv), t.value_or(bool_));
+          } else if (auto pv = std::get_if<py::int_>(&v); pv) {
+            return array(py::cast<int>(*pv), t.value_or(int32));
+          } else if (auto pv = std::get_if<py::float_>(&v); pv) {
+            return array(py::cast<float>(*pv), t.value_or(float32));
+          } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
+            return array(static_cast<complex64_t>(*pv), t.value_or(complex64));
+          } else if (auto pv = std::get_if<py::list>(&v); pv) {
+            return array_from_list(*pv, t);
+          } else if (auto pv = std::get_if<py::tuple>(&v); pv) {
+            return array_from_list(*pv, t);
+          } else if (auto pv = std::get_if<py::array>(&v); pv) {
+            return np_array_to_mlx(*pv, t);
+          } else if (auto pv = std::get_if<py::buffer>(&v); pv) {
+            return np_array_to_mlx(*pv, t);
+          } else {
+            auto arr = to_array_with_accessor(std::get<py::object>(v));
             return astype(arr, t.value_or(arr.dtype()));
-          }),
-          "val"_a,
-          "dtype"_a = std::nullopt)
-      .def(
-          py::init([](std::variant<py::list, py::tuple> pl,
-                      std::optional<Dtype> dtype) {
-            if (auto pv = std::get_if<py::list>(&pl); pv) {
-              return array_from_list(*pv, dtype);
-            } else {
-              auto v = std::get<py::tuple>(pl);
-              return array_from_list(v, dtype);
-            }
-          }),
-          "vals"_a,
-          "dtype"_a = std::nullopt)
-      .def(
-          py::init([](py::array np_array, std::optional<Dtype> dtype) {
-            return np_array_to_mlx(np_array, dtype);
-          }),
-          "vals"_a,
-          "dtype"_a = std::nullopt)
-      .def(
-          py::init([](py::buffer np_buffer, std::optional<Dtype> dtype) {
-            return np_array_to_mlx(np_buffer, dtype);
-          }),
-          "vals"_a,
-          "dtype"_a = std::nullopt)
+          }
+        }),
+        "val"_a,
+        "dtype"_a = std::nullopt,
+        R"pbdoc(
+            __init__(self: array, val: Union[scalar, list, tuple, numpy.ndarray, array], dtype: Optional[Dtype] = None)
+          )pbdoc");
+  }
+
+  array_class
       .def_property_readonly(
           "size", &array::size, R"pbdoc(Number of elments in the array.)pbdoc")
       .def_property_readonly(
           "ndim", &array::ndim, R"pbdoc(The array's dimension.)pbdoc")
+      .def_property_readonly(
+          "itemsize",
+          &array::itemsize,
+          R"pbdoc(The size of the array's datatype in bytes.)pbdoc")
+      .def_property_readonly(
+          "nbytes",
+          &array::nbytes,
+          R"pbdoc(The number of bytes in the array.)pbdoc")
       // TODO, this makes a deep copy of the shape
       // implement alternatives to use reference
       // https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html
@@ -603,25 +631,51 @@ void init_array(py::module_& m) {
       .def(
           "__truediv__",
           [](const array& a, const ScalarOrArray v) {
-            return divide(a, to_array(v, float32));
+            return divide(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__div__",
           [](const array& a, const ScalarOrArray v) {
-            return divide(a, to_array(v, float32));
+            return divide(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__floordiv__",
+          [](const array& a, const ScalarOrArray v) {
+            auto b = to_array(v, a.dtype());
+            return floor_divide(a, b);
           },
           "other"_a)
       .def(
           "__rtruediv__",
           [](const array& a, const ScalarOrArray v) {
-            return divide(to_array(v, float32), a);
+            return divide(to_array(v, a.dtype()), a);
+          },
+          "other"_a)
+      .def(
+          "__rfloordiv__",
+          [](const array& a, const ScalarOrArray v) {
+            auto b = to_array(v, a.dtype());
+            return floor_divide(b, a);
           },
           "other"_a)
       .def(
           "__rdiv__",
           [](const array& a, const ScalarOrArray v) {
-            return divide(to_array(v, float32), a);
+            return divide(to_array(v, a.dtype()), a);
+          },
+          "other"_a)
+      .def(
+          "__mod__",
+          [](const array& a, const ScalarOrArray v) {
+            return remainder(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__rmod__",
+          [](const array& a, const ScalarOrArray v) {
+            return remainder(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
@@ -680,6 +734,21 @@ void init_array(py::module_& m) {
             return power(a, to_array(v, a.dtype()));
           },
           "other"_a)
+      .def(
+          "flatten",
+          [](const array& a,
+             int start_axis,
+             int end_axis,
+             const StreamOrDevice& s) {
+            return flatten(a, start_axis, end_axis);
+          },
+          "start_axis"_a = 0,
+          "end_axis"_a = -1,
+          py::kw_only(),
+          "stream"_a = none,
+          R"pbdoc(
+            See :func:`flatten`.
+          )pbdoc")
       .def(
           "reshape",
           [](const array& a, py::args shape, StreamOrDevice s) {
@@ -814,6 +883,22 @@ void init_array(py::module_& m) {
           py::kw_only(),
           "stream"_a = none,
           "See :func:`any`.")
+      .def(
+          "moveaxis",
+          &moveaxis,
+          "source"_a,
+          "destination"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
+      .def(
+          "swapaxes",
+          &swapaxes,
+          "axis1"_a,
+          "axis2"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
       .def(
           "transpose",
           [](const array& a, py::args axes, StreamOrDevice s) {
@@ -1069,5 +1154,15 @@ void init_array(py::module_& m) {
           "reverse"_a = false,
           "inclusive"_a = true,
           "stream"_a = none,
-          "See :func:`cummin`.");
+          "See :func:`cummin`.")
+      .def(
+          "round",
+          [](const array& a, int decimals, StreamOrDevice s) {
+            return round(a, decimals, s);
+          },
+          py::pos_only(),
+          "decimals"_a = 0,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`round`.");
 }

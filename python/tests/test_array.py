@@ -5,9 +5,8 @@ import unittest
 from itertools import permutations
 
 import mlx.core as mx
-import numpy as np
-
 import mlx_tests
+import numpy as np
 
 
 class TestVersion(mlx_tests.MLXTestCase):
@@ -35,19 +34,19 @@ class TestDtypes(mlx_tests.MLXTestCase):
         self.assertEqual(mx.bfloat16.size, 2)
         self.assertEqual(mx.complex64.size, 8)
 
-        self.assertEqual(str(mx.bool_), "bool")
-        self.assertEqual(str(mx.uint8), "uint8")
-        self.assertEqual(str(mx.uint16), "uint16")
-        self.assertEqual(str(mx.uint32), "uint32")
-        self.assertEqual(str(mx.uint64), "uint64")
-        self.assertEqual(str(mx.int8), "int8")
-        self.assertEqual(str(mx.int16), "int16")
-        self.assertEqual(str(mx.int32), "int32")
-        self.assertEqual(str(mx.int64), "int64")
-        self.assertEqual(str(mx.float16), "float16")
-        self.assertEqual(str(mx.float32), "float32")
-        self.assertEqual(str(mx.bfloat16), "bfloat16")
-        self.assertEqual(str(mx.complex64), "complex64")
+        self.assertEqual(str(mx.bool_), "mlx.core.bool")
+        self.assertEqual(str(mx.uint8), "mlx.core.uint8")
+        self.assertEqual(str(mx.uint16), "mlx.core.uint16")
+        self.assertEqual(str(mx.uint32), "mlx.core.uint32")
+        self.assertEqual(str(mx.uint64), "mlx.core.uint64")
+        self.assertEqual(str(mx.int8), "mlx.core.int8")
+        self.assertEqual(str(mx.int16), "mlx.core.int16")
+        self.assertEqual(str(mx.int32), "mlx.core.int32")
+        self.assertEqual(str(mx.int64), "mlx.core.int64")
+        self.assertEqual(str(mx.float16), "mlx.core.float16")
+        self.assertEqual(str(mx.float32), "mlx.core.float32")
+        self.assertEqual(str(mx.bfloat16), "mlx.core.bfloat16")
+        self.assertEqual(str(mx.complex64), "mlx.core.complex64")
 
     def test_scalar_conversion(self):
         dtypes = [
@@ -85,6 +84,8 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array(1)
         self.assertEqual(x.size, 1)
         self.assertEqual(x.ndim, 0)
+        self.assertEqual(x.itemsize, 4)
+        self.assertEqual(x.nbytes, 4)
         self.assertEqual(x.shape, [])
         self.assertEqual(x.dtype, mx.int32)
         self.assertEqual(x.item(), 1)
@@ -728,6 +729,11 @@ class TestArray(mlx_tests.MLXTestCase):
             np.array_equal(a_np[idx_np, idx_np], np.array(a_mlx[idx_mlx, idx_mlx]))
         )
 
+        # Slicing with negative indices and integer
+        a_np = np.arange(10).reshape(5, 2)
+        a_mlx = mx.array(a_np)
+        self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
+
     def test_setitem(self):
         a = mx.array(0)
         a[None] = 1
@@ -903,6 +909,11 @@ class TestArray(mlx_tests.MLXTestCase):
             Ellipsis,
             np.array([0, 1]),
         )
+
+        # Check slice assign with negative indices works
+        a = mx.zeros((5, 5), mx.int32)
+        a[2:-2, 2:-2] = 4
+        self.assertEqual(a[2, 2].item(), 4)
 
     def test_slice_negative_step(self):
         a_np = np.arange(20)

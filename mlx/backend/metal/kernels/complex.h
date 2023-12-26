@@ -110,3 +110,16 @@ constexpr complex64_t operator-(complex64_t a, complex64_t b) {
 constexpr complex64_t operator*(complex64_t a, complex64_t b) {
   return {a.real * b.real - a.imag * b.imag, a.real * b.imag + a.imag * b.real};
 }
+
+constexpr complex64_t operator/(complex64_t a, complex64_t b) {
+  auto denom = b.real * b.real + b.imag * b.imag;
+  auto x = a.real * b.real + a.imag * b.imag;
+  auto y = a.imag * b.real - a.real * b.imag;
+  return {x / denom, y / denom};
+}
+
+constexpr complex64_t operator%(complex64_t a, complex64_t b) {
+  auto real = a.real - (b.real * static_cast<int64_t>(a.real / b.real));
+  auto imag = a.imag - (b.imag * static_cast<int64_t>(a.imag / b.imag));
+  return {real, imag};
+}

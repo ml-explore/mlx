@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import textwrap
-from typing import Any, Callable, List, Union, Optional
+from typing import Any, Callable, List, Optional, Union
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
@@ -257,6 +257,44 @@ class Module(dict):
         """
         filter_fn = filter_fn or Module.valid_parameter_filter
         self.update(self.filter_and_map(filter_fn, map_fn))
+
+    def update_modules(self, modules: dict):
+        """Replace the child modules of this :class:`Module` instance with the
+        provided ones in the dict of dicts and lists.
+
+        It is the equivalent of :meth:`Module.update` but for modules instead
+        of parameters and allows us to flexibly edit complex architectures by
+        programmatically swapping layers.
+
+        The passed in parameters dictionary need not be a full dictionary
+        similar to :meth:`parameters`. Only the provided locations will be
+        updated.
+
+        Args:
+            modules (dict): A complete or partial dictionary of the modules
+                submodules.
+        """
+
+        def apply(dst, modules):
+            if isinstance(modules, dict):
+                for k in modules:
+                    if k in dst:
+                        current_value = dst[k]
+                        new_value = modules[k]
+                        if self.is_module(current_value) and self.is_module(new_value):
+                            dst[k] = new_value
+                        elif isinstance(current_value, (dict, list)):
+                            apply(current_value, new_value)
+            elif isinstance(modules, list):
+                for i in range(len(dst)):
+                    current_value = dst[i]
+                    new_value = modules[i]
+                    if self.is_module(current_value) and self.is_module(new_value):
+                        dst[i] = new_value
+                    elif isinstance(current_value, (dict, list)):
+                        apply(current_value, new_value)
+
+        apply(self, modules)
 
     def apply_to_modules(self, apply_fn: Callable[[str, "mlx.nn.Module"], Any]):
         """Apply a function to all the modules in this instance (including this

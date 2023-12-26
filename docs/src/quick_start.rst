@@ -62,10 +62,3 @@ and :func:`jvp` for Jacobian-vector products.
 
 Use :func:`value_and_grad` to efficiently compute both a function's output and
 gradient with respect to the function's input. 
-
-
-Devices and Streams 
--------------------
-
-
-

@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -441,6 +440,30 @@ bool Broadcast::is_equivalent(const Primitive& other) const {
   return shape_ == b_other.shape_;
 }
 
+std::vector<array> Ceil::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  return {jvp(primals, {cotan}, argnums)};
+}
+
+array Ceil::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> Ceil::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {ceil(inputs[0], stream()), axes[0]};
+}
+
 std::vector<array> Concatenate::vjp(
     const std::vector<array>& primals,
     const array& cotan,
@@ -488,7 +511,26 @@ array Concatenate::jvp(
 std::pair<array, int> Concatenate::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("Concatenate vmap is NYI.");
+  std::vector<array> t_inputs;
+  // Find the first vmapped input
+  int i = 0;
+  for (; i < axes.size(); i++) {
+    t_inputs.push_back(inputs[i]);
+    if (axes[i] >= 0) {
+      break;
+    }
+  }
+  auto out_ax = axes[i++];
+  // Move vmap axes to the same spot.
+  for (; i < axes.size(); ++i) {
+    if (out_ax != axes[i] && axes[i] >= 0) {
+      t_inputs.push_back(moveaxis(inputs[i], axes[i], out_ax, stream()));
+    } else {
+      t_inputs.push_back(inputs[i]);
+    }
+  }
+  auto axis = axis_ + (axis_ >= out_ax);
+  return {concatenate(t_inputs, axis, stream()), out_ax};
 }
 
 bool Concatenate::is_equivalent(const Primitive& other) const {
@@ -738,6 +780,51 @@ std::pair<array, int> Divide::vmap(
   return {divide(a, b, stream()), to_ax};
 }
 
+std::vector<array> Remainder::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      vjps.push_back(cotan);
+    } else {
+      auto x_over_y = divide(primals[0], primals[1], stream());
+      x_over_y = floor(x_over_y, stream());
+      vjps.push_back(negative(multiply(x_over_y, cotan, stream()), stream()));
+    }
+  }
+  return vjps;
+}
+
+array Remainder::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  auto jvp_fun = [&](int i) {
+    int arg = argnums[i];
+    if (arg == 0) {
+      return tangents[i];
+    } else {
+      auto x_over_y = divide(primals[0], primals[1], stream());
+      x_over_y = floor(x_over_y, stream());
+      return negative(multiply(x_over_y, tangents[i], stream()), stream());
+    }
+  };
+  auto out = jvp_fun(0);
+  if (argnums.size() > 1) {
+    out = add(out, jvp_fun(1), stream());
+  }
+  return out;
+}
+
+std::pair<array, int> Remainder::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {remainder(a, b, stream()), to_ax};
+}
+
 std::pair<array, int> Equal::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -929,6 +1016,30 @@ array FFT::jvp(
   }
 }
 
+std::vector<array> Floor::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  return {jvp(primals, {cotan}, argnums)};
+}
+
+array Floor::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> Floor::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {floor(inputs[0], stream()), axes[0]};
+}
+
 std::vector<array> Full::vjp(
     const std::vector<array>& primals,
     const array& cotan,
@@ -961,7 +1072,53 @@ std::pair<array, int> Full::vmap(
 std::pair<array, int> Gather::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("Gather vmap is NYI, please change slices instead");
+  auto& src = inputs[0];
+  std::vector<array> indices(inputs.begin() + 1, inputs.end());
+  auto gather_axes = axes_;
+  auto slice_sizes = slice_sizes_;
+  auto src_vmapped = axes[0] >= 0;
+  auto indices_vmapped =
+      std::any_of(axes.begin() + 1, axes.end(), [](int a) { return a >= 0; });
+  auto out_ax =
+      *std::find_if(axes.begin(), axes.end(), [](int a) { return a >= 0; });
+
+  // Reorder all the index arrays so the vmap axis is in the same spot.
+  for (int i = 1; i < axes.size(); ++i) {
+    if (out_ax != axes[i] && axes[i] >= 0) {
+      indices[i - 1] = moveaxis(indices[i - 1], axes[i], out_ax, stream());
+    }
+  }
+
+  if (src_vmapped) {
+    int max_dims = 0;
+    for (auto& idx : indices) {
+      max_dims = std::max(static_cast<int>(idx.ndim()), max_dims);
+    }
+    auto new_ax_loc =
+        std::find_if(gather_axes.begin(), gather_axes.end(), [&out_ax](int a) {
+          return a >= out_ax;
+        });
+    for (; new_ax_loc < gather_axes.end(); new_ax_loc++) {
+      (*new_ax_loc)++;
+    }
+    if (indices_vmapped) {
+      // Make a new index array for the vmapped dimension
+      // Reshape it so it broadcasts with other index arrays
+      // Update gather axes and slice sizes accordingly
+      auto shape = std::vector<int>(max_dims - out_ax, 1);
+      auto vmap_inds = arange(0, src.shape(out_ax), stream());
+      shape[0] = vmap_inds.shape(0);
+      vmap_inds = reshape(vmap_inds, shape, stream());
+      slice_sizes.insert(slice_sizes.begin() + out_ax, 1);
+      auto new_ax_idx = new_ax_loc - gather_axes.begin();
+      gather_axes.insert(new_ax_loc, out_ax);
+      indices.insert(indices.begin() + new_ax_idx, vmap_inds);
+    } else {
+      slice_sizes.insert(slice_sizes.begin() + axes[0], src.shape(axes[0]));
+      out_ax = max_dims + axes[0];
+    }
+  }
+  return {gather(src, indices, gather_axes, slice_sizes, stream()), out_ax};
 }
 
 std::vector<array> Gather::vjp(
@@ -1539,6 +1696,31 @@ std::pair<array, int> Power::vmap(
   return {power(a, b, stream()), to_ax};
 }
 
+std::pair<array, int> QuantizedMatmul::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  throw std::runtime_error("QuantizedMatmul::vmap NYI");
+}
+
+std::vector<array> QuantizedMatmul::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+}
+
+array QuantizedMatmul::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+}
+
+bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
+  const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_;
+}
+
 std::pair<array, int> RandomBits::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -1731,6 +1913,30 @@ bool Reduce::is_equivalent(const Primitive& other) const {
   return reduce_type_ == r_other.reduce_type_ && axes_ == r_other.axes_;
 }
 
+std::vector<array> Round::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  return {jvp(primals, {cotan}, argnums)};
+}
+
+array Round::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> Round::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {round(inputs[0], stream()), axes[0]};
+}
+
 std::pair<array, int> Scan::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
@@ -1904,8 +2110,15 @@ std::pair<array, int> Sinh::vmap(
 std::pair<array, int> Slice::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  // TODO implement
-  return {array(1.0f), axes[0]};
+  auto start = start_indices_;
+  auto stop = end_indices_;
+  auto strides = strides_;
+  auto ax = axes[0];
+  auto& input = inputs[0];
+  start.insert(start.begin() + ax, 0);
+  stop.insert(stop.begin() + ax, input.shape(ax));
+  strides.insert(strides.begin() + ax, 1);
+  return {slice(input, start, stop, strides, stream()), ax};
 }
 
 std::vector<array> Slice::vjp(

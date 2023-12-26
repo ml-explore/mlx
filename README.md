@@ -16,24 +16,24 @@ Some key features of MLX include:
    MLX has higher-level packages like `mlx.nn` and `mlx.optimizers` with APIs
    that closely follow PyTorch to simplify building more complex models.
 
- - **Composable function transformations**: MLX has composable function
+ - **Composable function transformations**: MLX supports composable function
    transformations for automatic differentiation, automatic vectorization,
    and computation graph optimization.
 
  - **Lazy computation**: Computations in MLX are lazy. Arrays are only
    materialized when needed.
 
- - **Dynamic graph construction**: Computation graphs in MLX are built
+ - **Dynamic graph construction**: Computation graphs in MLX are constructed
    dynamically. Changing the shapes of function arguments does not trigger
    slow compilations, and debugging is simple and intuitive.
 
  - **Multi-device**: Operations can run on any of the supported devices
-   (currently, the CPU and GPU).
+   (currently the CPU and the GPU).
 
  - **Unified memory**: A notable difference from MLX and other frameworks
    is the *unified memory model*. Arrays in MLX live in shared memory.
    Operations on MLX arrays can be performed on any of the supported
-   device types without moving data.
+   device types without transferring data.
 
 MLX is designed by machine learning researchers for machine learning
 researchers. The framework is intended to be user-friendly, but still efficient
@@ -53,7 +53,7 @@ variety of examples, including:
 
 - [Transformer language model](https://github.com/ml-explore/mlx-examples/tree/main/transformer_lm) training.
 - Large-scale text generation with
-  [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llama) and
+  [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llms/llama) and
   finetuning with [LoRA](https://github.com/ml-explore/mlx-examples/tree/main/lora).
 - Generating images with [Stable Diffusion](https://github.com/ml-explore/mlx-examples/tree/main/stable_diffusion).
 - Speech recognition with [OpenAI's Whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper).
@@ -66,7 +66,7 @@ in the documentation.
 
 ## Installation
 
-MLX is available on [PyPi](https://pypi.org/project/mlx/). To install the Python API, run:
+MLX is available on [PyPI](https://pypi.org/project/mlx/). To install the Python API, run:
 
 ```
 pip install mlx
@@ -79,4 +79,28 @@ for more information on building the C++ and Python APIs from source.
 ## Contributing 
 
 Check out the [contribution guidelines](CONTRIBUTING.md) for more information
-on contributing to MLX.
+on contributing to MLX. See the
+[docs](https://ml-explore.github.io/mlx/build/html/install.html) for more
+information on building from source, and running tests.
+
+We are grateful for all of [our
+contributors](ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
+to MLX and wish to be acknowledged, please add your name to to the list in your
+pull request.
+
+## Citing MLX
+
+The MLX software suite was initially developed with equal contribution by Awni
+Hannun, Jagrit Digani, Angelos Katharopoulos, and Ronan Collobert. If you find
+MLX useful in your research and wish to cite it, please use the following
+BibTex entry:
+
+```
+@software{mlx2023,
+  author = {Awni Hannun and Jagrit Digani and Angelos Katharopoulos and Ronan Collobert},
+  title = {{MLX}: Efficient and flexible machine learning on Apple silicon},
+  url = {https://github.com/ml-explore},
+  version = {0.0},
+  year = {2023},
+}
+```

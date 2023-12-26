@@ -67,7 +67,6 @@ class Device {
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
  private:
-  NS::AutoreleasePool* pool_;
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
@@ -78,6 +77,5 @@ class Device {
 };
 
 Device& device(mlx::core::Device);
-NS::AutoreleasePool*& thread_autorelease_pool();
 
 } // namespace mlx::core::metal

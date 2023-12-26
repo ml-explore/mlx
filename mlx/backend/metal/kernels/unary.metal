@@ -43,6 +43,19 @@ struct ArcTanh {
   template <typename T> T operator()(T x) { return metal::precise::atanh(x); };
 };
 
+struct Ceil {
+  template <typename T> T operator()(T x) { return metal::ceil(x); };
+  template <> int8_t operator()(int8_t x) { return x; };
+  template <> int16_t operator()(int16_t x) { return x; };
+  template <> int32_t operator()(int32_t x) { return x; };
+  template <> int64_t operator()(int64_t x) { return x; };
+  template <> uint8_t operator()(uint8_t x) { return x; };
+  template <> uint16_t operator()(uint16_t x) { return x; };
+  template <> uint32_t operator()(uint32_t x) { return x; };
+  template <> uint64_t operator()(uint64_t x) { return x; };
+  template <> bool operator()(bool x) { return x; };
+};
+
 struct Cos {
   template <typename T> T operator()(T x) { return metal::precise::cos(x); };
 
@@ -83,6 +96,19 @@ struct Exp {
   }
 };
 
+struct Floor {
+  template <typename T> T operator()(T x) { return metal::floor(x); };
+  template <> int8_t operator()(int8_t x) { return x; };
+  template <> int16_t operator()(int16_t x) { return x; };
+  template <> int32_t operator()(int32_t x) { return x; };
+  template <> int64_t operator()(int64_t x) { return x; };
+  template <> uint8_t operator()(uint8_t x) { return x; };
+  template <> uint16_t operator()(uint16_t x) { return x; };
+  template <> uint32_t operator()(uint32_t x) { return x; };
+  template <> uint64_t operator()(uint64_t x) { return x; };
+  template <> bool operator()(bool x) { return x; };
+};
+
 struct Log {
   template <typename T> T operator()(T x) { return metal::precise::log(x); };
 };
@@ -105,6 +131,11 @@ struct LogicalNot {
 
 struct Negative {
   template <typename T> T operator()(T x) { return -x; };
+};
+
+struct Round {
+  template <typename T> T operator()(T x) { return metal::round(x); };
+  template <> complex64_t operator()(complex64_t x) { return {metal::round(x.real), metal::round(x.imag)}; };
 };
 
 struct Sigmoid {
@@ -253,9 +284,11 @@ instantiate_unary_float(arcsin, ArcSin)
 instantiate_unary_float(arcsinh, ArcSinh)
 instantiate_unary_float(arctan, ArcTan)
 instantiate_unary_float(arctanh, ArcTanh)
+instantiate_unary_types(ceil, Ceil)
 instantiate_unary_float(cos, Cos)
 instantiate_unary_float(cosh, Cosh)
 instantiate_unary_float(exp, Exp)
+instantiate_unary_types(floor, Floor)
 instantiate_unary_float(log, Log)
 instantiate_unary_float(log2, Log2)
 instantiate_unary_float(log10, Log10)
@@ -272,6 +305,7 @@ instantiate_unary_float(sqrt, Sqrt)
 instantiate_unary_float(rsqrt, Rsqrt)
 instantiate_unary_float(tan, Tan)
 instantiate_unary_float(tanh, Tanh)
+instantiate_unary_float(round, Round)
 
 instantiate_unary_all(abs, complex64, complex64_t, Abs)
 instantiate_unary_all(cos, complex64, complex64_t, Cos)
@@ -282,5 +316,6 @@ instantiate_unary_all(sin, complex64, complex64_t, Sin)
 instantiate_unary_all(sinh, complex64, complex64_t, Sinh)
 instantiate_unary_all(tan, complex64, complex64_t, Tan)
 instantiate_unary_all(tanh, complex64, complex64_t, Tanh)
+instantiate_unary_all(round, complex64, complex64_t, Round)
 
 instantiate_unary_all(lnot, bool_, bool, LogicalNot)

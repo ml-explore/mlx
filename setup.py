@@ -9,7 +9,7 @@ import sysconfig
 from pathlib import Path
 from subprocess import run
 
-from setuptools import Extension, setup, find_namespace_packages
+from setuptools import Command, Extension, find_namespace_packages, setup
 from setuptools.command.build_ext import build_ext
 
 
@@ -125,6 +125,35 @@ class CMakeBuild(build_ext):
                     self.copy_tree(regular_dir, inplace_dir)
 
 
+class GenerateStubs(Command):
+    user_options = []
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self) -> None:
+        subprocess.run(["pybind11-stubgen", "mlx.core", "-o", "python"])
+        # Note, sed inplace on macos requires a backup prefix, delete the file after its generated
+        # this sed is needed to replace references from py::cpp_function to a generic Callable
+        subprocess.run(
+            [
+                "sed",
+                "-i",
+                "''",
+                "s/cpp_function/typing.Callable/g",
+                "python/mlx/core/__init__.pyi",
+            ]
+        )
+        subprocess.run(["rm", "python/mlx/core/__init__.pyi''"])
+
+
+# Read the content of README.md
+with open(Path(__file__).parent / "README.md", encoding="utf-8") as f:
+    long_description = f.read()
+
 # The information here can also be placed in setup.cfg - better separation of
 # logic and declaration, and simpler if you include description/version in a file.
 if __name__ == "__main__":
@@ -136,18 +165,22 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.0.4"),
+        version=get_version("0.0.6"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
-        description="A framework for machine learning on Apple Silicon.",
-        long_description="",
+        description="A framework for machine learning on Apple silicon.",
+        long_description=long_description,
+        long_description_content_type="text/markdown",
         packages=packages,
         package_dir=package_dir,
         package_data=package_data,
         include_package_data=True,
-        extras_require={"testing": ["numpy", "torch"]},
+        extras_require={
+            "testing": ["numpy", "torch"],
+            "dev": ["pre-commit", "pybind11-stubgen"],
+        },
         ext_modules=[CMakeExtension("mlx.core")],
-        cmdclass={"build_ext": CMakeBuild},
+        cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
         zip_safe=False,
         python_requires=">=3.8",
     )

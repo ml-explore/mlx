@@ -49,6 +49,31 @@ std::vector<int> broadcast_shapes(
   return out_shape;
 }
 
+bool is_same_shape(const std::vector<array>& arrays) {
+  if (arrays.empty()) {
+    return true;
+  }
+  return std::all_of(arrays.begin() + 1, arrays.end(), [&](const array& a) {
+    return (a.shape() == arrays[0].shape());
+  });
+}
+
+int normalize_axis(int axis, int ndim) {
+  if (ndim <= 0) {
+    throw std::invalid_argument("Number of dimensions must be positive.");
+  }
+  if (axis < -ndim || axis >= ndim) {
+    std::ostringstream msg;
+    msg << "Axis " << axis << " is out of bounds for array with " << ndim
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (axis < 0) {
+    axis += ndim;
+  }
+  return axis;
+}
+
 std::ostream& operator<<(std::ostream& os, const Device& d) {
   os << "Device(";
   switch (d.type) {

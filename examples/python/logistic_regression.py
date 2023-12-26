@@ -1,7 +1,8 @@
 # Copyright © 2023 Apple Inc.
 
-import mlx.core as mx
 import time
+
+import mlx.core as mx
 
 num_features = 100
 num_examples = 1_000

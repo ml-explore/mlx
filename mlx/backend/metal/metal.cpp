@@ -50,6 +50,7 @@ std::function<void()> make_task(
     bool retain_graph) {
   auto task =
       [retain_graph, arr, deps = std::move(deps), p = std::move(p)]() mutable {
+        auto pool = new_scoped_memory_pool();
         for (auto& d : deps) {
           d.wait();
         }
@@ -66,12 +67,6 @@ std::function<void()> make_task(
                   arr.detach();
                 }
                 p->set_value();
-                // Signal this thread to clear the pool on a synchroniztion.
-                scheduler::enqueue(s, []() {
-                  thread_autorelease_pool()->release();
-                  thread_autorelease_pool() =
-                      NS::AutoreleasePool::alloc()->init();
-                });
                 scheduler::notify_task_completion(s);
               });
           metal::device(s.device).commit_command_buffer(s.index);

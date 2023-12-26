@@ -1,12 +1,11 @@
 # Copyright © 2023 Apple Inc.
 
+import itertools
 import unittest
 
-import itertools
 import mlx.core as mx
-import numpy as np
-
 import mlx_tests
+import numpy as np
 
 
 class TestFFT(mlx_tests.MLXTestCase):

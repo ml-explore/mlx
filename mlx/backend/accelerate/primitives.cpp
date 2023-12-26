@@ -26,12 +26,14 @@ DEFAULT(ArgReduce)
 DEFAULT(ArgSort)
 DEFAULT(AsStrided)
 DEFAULT(Broadcast)
+DEFAULT(Ceil)
 DEFAULT(Concatenate)
 DEFAULT(Copy)
 DEFAULT(Equal)
 DEFAULT(Erf)
 DEFAULT(ErfInv)
 DEFAULT(FFT)
+DEFAULT(Floor)
 DEFAULT(Gather)
 DEFAULT(Greater)
 DEFAULT(GreaterEqual)
@@ -45,6 +47,7 @@ DEFAULT(Pad)
 DEFAULT(Partition)
 DEFAULT(RandomBits)
 DEFAULT(Reshape)
+DEFAULT(Round)
 DEFAULT(Scatter)
 DEFAULT(Sigmoid)
 DEFAULT(Sign)
@@ -322,6 +325,45 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+// TODO: Avoid code duplication with the common backend.
+struct RemainderFn {
+  template <typename T>
+  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    return std::fmod(numerator, denominator);
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_integral_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    return numerator % denominator;
+  }
+};
+
+void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+
+  if (a.dtype() == float32) {
+    binary(
+        a,
+        b,
+        out,
+        RemainderFn{},
+        UseDefaultBinaryOp(),
+        UseDefaultBinaryOp(),
+        [](const auto* a, const auto* b, auto* o, auto n) {
+          int num_el = n;
+          vvremainderf((float*)o, (const float*)a, (const float*)b, &num_el);
+        });
+  } else {
+    binary(a, b, out, RemainderFn{});
+  }
+}
+
 void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
@@ -494,7 +536,7 @@ void Power::eval_cpu(const std::vector<array>& inputs, array& out) {
       b.flags().row_contiguous) {
     int size = a.size();
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    vvpowf(out.data<float>(), a.data<float>(), b.data<float>(), &size);
+    vvpowf(out.data<float>(), b.data<float>(), a.data<float>(), &size);
   } else {
     eval(inputs, out);
   }

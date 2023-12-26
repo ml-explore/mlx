@@ -1,8 +1,8 @@
 # Copyright © 2023 Apple Inc.
 
 import argparse
-import mlx.core as mx
 
+import mlx.core as mx
 from time_utils import time_fn
 
 
