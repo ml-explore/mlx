@@ -510,6 +510,14 @@ void init_array(py::module_& m) {
           "size", &array::size, R"pbdoc(Number of elments in the array.)pbdoc")
       .def_property_readonly(
           "ndim", &array::ndim, R"pbdoc(The array's dimension.)pbdoc")
+      .def_property_readonly(
+          "itemsize",
+          &array::itemsize,
+          R"pbdoc(The size of the array's datatype in bytes.)pbdoc")
+      .def_property_readonly(
+          "nbytes",
+          &array::nbytes,
+          R"pbdoc(The number of bytes in the array.)pbdoc")
       // TODO, this makes a deep copy of the shape
       // implement alternatives to use reference
       // https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html
@@ -636,8 +644,7 @@ void init_array(py::module_& m) {
           "__floordiv__",
           [](const array& a, const ScalarOrArray v) {
             auto b = to_array(v, a.dtype());
-            auto t = promote_types(a.dtype(), b.dtype());
-            return astype(divide(a, b), t);
+            return floor_divide(a, b);
           },
           "other"_a)
       .def(
@@ -650,8 +657,7 @@ void init_array(py::module_& m) {
           "__rfloordiv__",
           [](const array& a, const ScalarOrArray v) {
             auto b = to_array(v, a.dtype());
-            auto t = promote_types(a.dtype(), b.dtype());
-            return astype(divide(b, a), t);
+            return floor_divide(b, a);
           },
           "other"_a)
       .def(
@@ -728,6 +734,21 @@ void init_array(py::module_& m) {
             return power(a, to_array(v, a.dtype()));
           },
           "other"_a)
+      .def(
+          "flatten",
+          [](const array& a,
+             int start_axis,
+             int end_axis,
+             const StreamOrDevice& s) {
+            return flatten(a, start_axis, end_axis);
+          },
+          "start_axis"_a = 0,
+          "end_axis"_a = -1,
+          py::kw_only(),
+          "stream"_a = none,
+          R"pbdoc(
+            See :func:`flatten`.
+          )pbdoc")
       .def(
           "reshape",
           [](const array& a, py::args shape, StreamOrDevice s) {
@@ -862,6 +883,22 @@ void init_array(py::module_& m) {
           py::kw_only(),
           "stream"_a = none,
           "See :func:`any`.")
+      .def(
+          "moveaxis",
+          &moveaxis,
+          "source"_a,
+          "destination"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
+      .def(
+          "swapaxes",
+          &swapaxes,
+          "axis1"_a,
+          "axis2"_a,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`moveaxis`.")
       .def(
           "transpose",
           [](const array& a, py::args axes, StreamOrDevice s) {
@@ -1117,5 +1154,15 @@ void init_array(py::module_& m) {
           "reverse"_a = false,
           "inclusive"_a = true,
           "stream"_a = none,
-          "See :func:`cummin`.");
+          "See :func:`cummin`.")
+      .def(
+          "round",
+          [](const array& a, int decimals, StreamOrDevice s) {
+            return round(a, decimals, s);
+          },
+          py::pos_only(),
+          "decimals"_a = 0,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`round`.");
 }

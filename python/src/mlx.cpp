@@ -17,7 +17,7 @@ void init_random(py::module_&);
 void init_fft(py::module_&);
 
 PYBIND11_MODULE(core, m) {
-  m.doc() = "mlx: A framework for machine learning on Apple Silicon.";
+  m.doc() = "mlx: A framework for machine learning on Apple silicon.";
 
   auto reprlib_fix = py::module_::import("mlx._reprlib_fix");
 

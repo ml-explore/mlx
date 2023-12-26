@@ -357,7 +357,7 @@ template <typename T, typename U, typename Op>
   instantiate_binary_all(name, complex64, complex64_t, bool, op)
 
 instantiate_binary_types(add, Add)
-instantiate_binary_float(div, Divide)
+instantiate_binary_types(div, Divide)
 instantiate_binary_types_bool(eq, Equal)
 instantiate_binary_types_bool(ge, Greater)
 instantiate_binary_types_bool(geq, GreaterEqual)

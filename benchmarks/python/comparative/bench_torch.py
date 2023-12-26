@@ -22,6 +22,16 @@ def none_or_list(x):
         return [int(xi) for xi in x.split(",")]
 
 
+def dtype_from_str(x):
+    if x == "":
+        return torch.float32
+    else:
+        dt = getattr(torch, x)
+        if not isinstance(dt, torch.dtype):
+            raise ValueError(f"{x} is not a torch dtype")
+        return dt
+
+
 def bench(f, *args):
     for i in range(10):
         f(*args)
@@ -312,7 +322,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--fused", action="store_true", help="Use fused functions where possible"
     )
-    parser.add_argument("--dtype", choices=["float32", "float16"], default="float32")
+    parser.add_argument("--dtype", type=dtype_from_str, default=[], action="append")
 
     args = parser.parse_args()
 
@@ -327,9 +337,15 @@ if __name__ == "__main__":
 
     torch.set_num_threads(1)
     device = "cpu" if args.cpu else "mps"
-    dtype = dict(float32=torch.float32, float16=torch.float16)[args.dtype]
+
+    types = args.dtype
+    if not types:
+        types = [torch.float32]
+    if len(types) < len(args.size):
+        types = types + [types[0]] * (len(args.size) - len(types))
+
     xs = []
-    for size in args.size:
+    for size, dtype in zip(args.size, types):
         xs.append(torch.randn(*size).to(device).to(dtype))
     for i, t in enumerate(args.transpose):
         if t is None:

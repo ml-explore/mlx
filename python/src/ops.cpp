@@ -62,6 +62,33 @@ void init_ops(py::module_& m) {
             array: The reshaped array.
       )pbdoc");
   m.def(
+      "flatten",
+      [](const array& a,
+         int start_axis,
+         int end_axis,
+         const StreamOrDevice& s) { return flatten(a, start_axis, end_axis); },
+      "a"_a,
+      py::pos_only(),
+      "start_axis"_a = 0,
+      "end_axis"_a = -1,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      flatten(a: array, /, start_axis: int = 0, end_axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Flatten an array.
+
+      Args:
+          a (array): Input array.
+          start_axis (int, optional): The first dimension to flatten. Defaults to ``0``.
+          end_axis (int, optional): The last dimension to flatten. Defaults to ``-1``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+      Returns:
+          array: The flattened array.
+  )pbdoc");
+  m.def(
       "squeeze",
       [](const array& a, const IntOrVec& v, const StreamOrDevice& s) {
         if (std::holds_alternative<std::monostate>(v)) {
@@ -275,6 +302,32 @@ void init_ops(py::module_& m) {
 
         Returns:
             array: The quotient ``a / b``.
+      )pbdoc");
+  m.def(
+      "floor_divide",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return floor_divide(a, b, s);
+      },
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        floor_divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise integer division.
+
+        If either array is a floating point type then it is equivalent to
+        calling :func:`floor` after :func:`divide`.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The quotient ``a // b``.
       )pbdoc");
   m.def(
       "remainder",
@@ -1158,6 +1211,32 @@ void init_ops(py::module_& m) {
         is a fractional value and the `dtype` is integral.
       )pbdoc");
   m.def(
+      "linspace",
+      [](Scalar start, Scalar stop, int num, Dtype dtype, StreamOrDevice s) {
+        return linspace(
+            scalar_to_double(start), scalar_to_double(stop), num, dtype, s);
+      },
+      "start"_a,
+      "stop"_a,
+      "num"_a = 50,
+      "dtype"_a = float32,
+      "stream"_a = none,
+      R"pbdoc(
+      linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
+
+      Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
+
+      Args:
+          start (scalar): Starting value.
+          stop (scalar): Stopping value.
+          num (int, optional): Number of samples, defaults to ``50``.
+          dtype (Dtype, optional): Specifies the data type of the output,
+          default to ``float32``.
+
+      Returns:
+          array: The range of values.
+      )pbdoc");
+  m.def(
       "take",
       [](const array& a,
          const array& indices,
@@ -1411,6 +1490,72 @@ void init_ops(py::module_& m) {
           array: An identity matrix of size n x n.
       )pbdoc");
   m.def(
+      "tri",
+      [](int n, std::optional<int> m, int k, Dtype dtype, StreamOrDevice s) {
+        return tri(n, m.value_or(n), k, float32, s);
+      },
+      "n"_a,
+      "m"_a = none,
+      "k"_a = 0,
+      "dtype"_a = float32,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        tri(n: int, m: int, k: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+
+        An array with ones at and below the given diagonal and zeros elsewhere.
+
+        Args:
+          n (int): The number of rows in the output.
+          m (int, optional): The number of cols in the output. Defaults to ``None``.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          dtype (Dtype, optional): Data type of the output array. Defaults to ``float32``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+        Returns:
+          array: Array with its lower triangle filled with ones and zeros elsewhere
+      )pbdoc");
+  m.def(
+      "tril",
+      &tril,
+      "x"_a,
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Zeros the array above the given diagonal.
+
+        Args:
+          x (array): input array.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+        Returns:
+          array: Array zeroed above the given diagonal
+    )pbdoc");
+  m.def(
+      "triu",
+      &triu,
+      "x"_a,
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      triu(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Zeros the array below the given diagonal.
+
+        Args:
+          x (array): input array.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+        Returns:
+          array: Array zeroed below the given diagonal
+    )pbdoc");
+  m.def(
       "allclose",
       &allclose,
       "a"_a,
@@ -1554,6 +1699,86 @@ void init_ops(py::module_& m) {
 
         Returns:
             array: The max of ``a`` and ``b``.
+      )pbdoc");
+  m.def(
+      "floor",
+      &mlx::core::floor,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        floor(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise floor.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The floor of ``a``.
+      )pbdoc");
+  m.def(
+      "ceil",
+      &mlx::core::ceil,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        ceil(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise ceil.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The ceil of ``a``.
+      )pbdoc");
+  m.def(
+      "moveaxis",
+      &moveaxis,
+      "a"_a,
+      py::pos_only(),
+      "source"_a,
+      "destiantion"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        moveaxis(a: array, /, source: int, destination: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Move an axis to a new position.
+
+        Args:
+            a (array): Input array.
+            source (int): Specifies the source axis.
+            destination (int): Specifies the destination axis.
+
+        Returns:
+            array: The array with the axis moved.
+      )pbdoc");
+  m.def(
+      "swapaxes",
+      &swapaxes,
+      "a"_a,
+      py::pos_only(),
+      "axis1"_a,
+      "axis2"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        swapaxes(a: array, /, axis1 : int, axis2: int, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Swap two axes of an array.
+
+        Args:
+            a (array): Input array.
+            axis1 (int): Specifies the first axis.
+            axis2 (int): Specifies the second axis.
+
+        Returns:
+            array: The array with swapped axes.
       )pbdoc");
   m.def(
       "transpose",
@@ -1904,7 +2129,7 @@ void init_ops(py::module_& m) {
               singleton dimensions, defaults to `False`.
 
         Returns:
-            array: The output array with the indices of the minimum values.
+            array: The output array with the indices of the maximum values.
       )pbdoc");
   m.def(
       "sort",
@@ -2150,6 +2375,75 @@ void init_ops(py::module_& m) {
         Returns:
             array: The concatenated array.
       )pbdoc");
+  m.def(
+      "stack",
+      [](const std::vector<array>& arrays,
+         std::optional<int> axis,
+         StreamOrDevice s) {
+        if (axis.has_value()) {
+          return stack(arrays, axis.value(), s);
+        } else {
+          return stack(arrays, s);
+        }
+      },
+      "arrays"_a,
+      py::pos_only(),
+      "axis"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      stack(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Stacks the arrays along a new axis.
+
+      Args:
+          arrays (list(array)): A list of arrays to stack.
+          axis (int, optional): The axis in the result array along which the
+            input arrays are stacked. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+      Returns:
+          array: The resulting stacked array.
+    )pbdoc");
+  m.def(
+      "clip",
+      [](const array& a,
+         const std::optional<ScalarOrArray>& min,
+         const std::optional<ScalarOrArray>& max,
+         StreamOrDevice s) {
+        std::optional<array> min_ = std::nullopt;
+        std::optional<array> max_ = std::nullopt;
+        if (min) {
+          min_ = to_array(min.value());
+        }
+        if (max) {
+          max_ = to_array(max.value());
+        }
+        return clip(a, min_, max_, s);
+      },
+      "a"_a,
+      py::pos_only(),
+      "a_min"_a,
+      "a_max"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      clip(a: array, /, a_min: Union[scalar, array, None], a_max: Union[scalar, array, None], *, stream: Union[None, Stream, Device] = None) -> array
+
+      Clip the values of the array between the given minimum and maximum.
+
+      If either ``a_min`` or ``a_max`` are ``None``, then corresponding edge
+      is ignored. At least one of ``a_min`` and ``a_max`` cannot be ``None``.
+      The input ``a`` and the limits must broadcast with one another.
+
+      Args:
+          a (array): Input array.
+          a_min (scalar or array or None): Minimum value to clip to.
+          a_max (scalar or array or None): Maximum value to clip to.
+
+      Returns:
+          array: The clipped array.
+    )pbdoc");
   m.def(
       "pad",
       [](const array& a,
@@ -2563,18 +2857,20 @@ void init_ops(py::module_& m) {
       "file"_a,
       "arr"_a,
       py::pos_only(),
-      "retain_graph"_a = true,
+      "retain_graph"_a = std::nullopt,
       py::kw_only(),
       R"pbdoc(
-        save(file: str, arr: array, / , retain_graph: bool = True)
+        save(file: str, arr: array, / , retain_graph: Optional[bool] = None)
 
         Save the array to a binary file in ``.npy`` format.
 
         Args:
             file (str): File to which the array is saved
             arr (array): Array to be saved.
-            retain_graph(bool): Optional argument to retain graph
-              during array evaluation before saving. Default: True
+            retain_graph (bool, optional): Optional argument to retain graph
+              during array evaluation before saving. If not provided the graph
+              is retained if we are during a function transformation. Default:
+              None
 
       )pbdoc");
   m.def(
@@ -2679,5 +2975,164 @@ void init_ops(py::module_& m) {
 
         Returns:
             result (array): The output containing elements selected from ``x`` and ``y``.
+      )pbdoc");
+  m.def(
+      "round",
+      [](const array& a, int decimals, StreamOrDevice s) {
+        return round(a, decimals, s);
+      },
+      "a"_a,
+      py::pos_only(),
+      "decimals"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        round(a: array, /, decimals: int = 0, stream: Union[None, Stream, Device] = None) -> array
+
+        Round to the given number of decimals.
+
+        Bascially performs:
+
+        .. code-block:: python
+
+          s = 10**decimals
+          x = round(x * s) / s
+
+        Args:
+          a (array): Input array
+          decimals (int): Number of decimal places to round to. (default: 0)
+
+        Returns:
+          result (array): An array of the same type as ``a`` rounded to the given number of decimals.
+      )pbdoc");
+  m.def(
+      "quantized_matmul",
+      &quantized_matmul,
+      "x"_a,
+      "w"_a,
+      py::pos_only(),
+      "scales"_a,
+      "biases"_a,
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        quantized_matmul(x: array, w: array, scales: array, biases: array, /, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Perform the matrix multiplication with the quantized matrix ``w``. The
+        quantization uses one floating point scale and bias per ``group_size`` of
+        elements. Each element in ``w`` takes ``bits`` bits and is packed in an
+        unsigned 32 bit integer.
+
+        Args:
+          x (array): Input array
+          w (array): Quantized matrix packed in unsigned integers
+          scales (array): The scales to use per ``group_size`` elements of ``w``
+          biases (array): The biases to use per ``group_size`` elements of ``w``
+          group_size (int, optional): The size of the group in ``w`` that
+            shares a scale and bias. (default: 64)
+          bits (int, optional): The number of bits occupied by each element in
+            ``w``. (default: 4)
+
+        Returns:
+          result (array): The result of the multiplication of ``x`` with ``w``.
+      )pbdoc");
+  m.def(
+      "quantize",
+      &quantize,
+      "w"_a,
+      py::pos_only(),
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]
+
+        Quantize the matrix ``w`` using ``bits`` bits per element.
+
+        Note, every ``group_size`` elements in a row of ``w`` are quantized
+        together. Hence, number of columns of ``w`` should be divisible by
+        ``group_size``. In particular, the rows of ``w`` are divided into groups of
+        size ``group_size`` which are quantized together.
+
+        .. warning::
+
+          ``quantize`` currently only supports 2D inputs with dimensions which are multiples of 32
+
+        Formally, for a group of :math:`g` consecutive elements :math:`w_1` to
+        :math:`w_g` in a row of ``w`` we compute the quantized representation
+        of each element :math:`\hat{w_i}` as follows
+
+        .. math::
+
+          \begin{aligned}
+            \alpha &= \max_i w_i \\
+            \beta &= \min_i w_i \\
+            s &= \frac{\alpha - \beta}{2^b - 1} \\
+            \hat{w_i} &= \textrm{round}\left( \frac{w_i - \beta}{s}\right).
+          \end{aligned}
+
+        After the above computation, :math:`\hat{w_i}` fits in :math:`b` bits
+        and is packed in an unsigned 32-bit integer from the lower to upper
+        bits. For instance, for 4-bit quantization we fit 8 elements in an
+        unsigned 32 bit integer where the 1st element occupies the 4 least
+        significant bits, the 2nd bits 4-7 etc.
+
+        In order to be able to dequantize the elements of ``w`` we also need to
+        save :math:`s` and :math:`\beta` which are the returned ``scales`` and
+        ``biases`` respectively.
+
+        Args:
+          w (array): Matrix to be quantized
+          group_size (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. (default: 64)
+          bits (int, optional): The number of bits occupied by each element of
+            ``w`` in the returned quantized matrix. (default: 4)
+
+        Returns:
+          (tuple): A tuple containing
+
+            - w_q (array): The quantized version of ``w``
+            - scales (array): The scale to multiply each element with, namely :math:`s`
+            - biases (array): The biases to add to each element, namely :math:`\beta`
+      )pbdoc");
+  m.def(
+      "dequantize",
+      &dequantize,
+      "w"_a,
+      py::pos_only(),
+      "scales"_a,
+      "biases"_a,
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        dequantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Dequantize the matrix ``w`` using the provided ``scales`` and
+        ``biases`` and the ``group_size`` and ``bits`` configuration.
+
+        Formally, given the notation in :func:`quantize`, we compute
+        :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s` and
+        :math:`\beta` as follows
+
+        .. math::
+
+          w_i = s \hat{w_i} - \beta
+
+        Args:
+          w (array): Matrix to be quantized
+          scales (array): The scales to use per ``group_size`` elements of ``w``
+          biases (array): The biases to use per ``group_size`` elements of ``w``
+          group_size (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. (default: 64)
+          bits (int, optional): The number of bits occupied by each element in
+            ``w``. (default: 4)
+
+        Returns:
+          result (array): The dequantized version of ``w``
       )pbdoc");
 }

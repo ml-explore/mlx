@@ -218,7 +218,7 @@ class TransformerDecoderLayer(Module):
             y = self.activation(y)
             y = self.dropout3(y)
             y = self.linear2(y)
-            x = x + y
+            y = x + y
 
         else:
             y = self.self_attention(x, x, x, x_mask)

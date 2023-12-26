@@ -84,6 +84,8 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array(1)
         self.assertEqual(x.size, 1)
         self.assertEqual(x.ndim, 0)
+        self.assertEqual(x.itemsize, 4)
+        self.assertEqual(x.nbytes, 4)
         self.assertEqual(x.shape, [])
         self.assertEqual(x.dtype, mx.int32)
         self.assertEqual(x.item(), 1)
@@ -727,6 +729,11 @@ class TestArray(mlx_tests.MLXTestCase):
             np.array_equal(a_np[idx_np, idx_np], np.array(a_mlx[idx_mlx, idx_mlx]))
         )
 
+        # Slicing with negative indices and integer
+        a_np = np.arange(10).reshape(5, 2)
+        a_mlx = mx.array(a_np)
+        self.assertTrue(np.array_equal(a_np[2:-1, 0], np.array(a_mlx[2:-1, 0])))
+
     def test_setitem(self):
         a = mx.array(0)
         a[None] = 1
@@ -902,6 +909,11 @@ class TestArray(mlx_tests.MLXTestCase):
             Ellipsis,
             np.array([0, 1]),
         )
+
+        # Check slice assign with negative indices works
+        a = mx.zeros((5, 5), mx.int32)
+        a[2:-2, 2:-2] = 4
+        self.assertEqual(a[2, 2].item(), 4)
 
     def test_slice_negative_step(self):
         a_np = np.arange(20)

@@ -53,7 +53,7 @@ variety of examples, including:
 
 - [Transformer language model](https://github.com/ml-explore/mlx-examples/tree/main/transformer_lm) training.
 - Large-scale text generation with
-  [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llama) and
+  [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llms/llama) and
   finetuning with [LoRA](https://github.com/ml-explore/mlx-examples/tree/main/lora).
 - Generating images with [Stable Diffusion](https://github.com/ml-explore/mlx-examples/tree/main/stable_diffusion).
 - Speech recognition with [OpenAI's Whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper).
@@ -79,4 +79,28 @@ for more information on building the C++ and Python APIs from source.
 ## Contributing 
 
 Check out the [contribution guidelines](CONTRIBUTING.md) for more information
-on contributing to MLX.
+on contributing to MLX. See the
+[docs](https://ml-explore.github.io/mlx/build/html/install.html) for more
+information on building from source, and running tests.
+
+We are grateful for all of [our
+contributors](ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
+to MLX and wish to be acknowledged, please add your name to to the list in your
+pull request.
+
+## Citing MLX
+
+The MLX software suite was initially developed with equal contribution by Awni
+Hannun, Jagrit Digani, Angelos Katharopoulos, and Ronan Collobert. If you find
+MLX useful in your research and wish to cite it, please use the following
+BibTex entry:
+
+```
+@software{mlx2023,
+  author = {Awni Hannun and Jagrit Digani and Angelos Katharopoulos and Ronan Collobert},
+  title = {{MLX}: Efficient and flexible machine learning on Apple silicon},
+  url = {https://github.com/ml-explore},
+  version = {0.0},
+  year = {2023},
+}
+```

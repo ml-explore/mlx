@@ -26,12 +26,15 @@ Operations
    argsort
    array_equal
    broadcast_to
+   ceil
+   clip
    concatenate
    convolve
    conv1d
    conv2d
    cos
    cosh
+   dequantize
    divide
    equal
    erf
@@ -39,12 +42,16 @@ Operations
    exp
    expand_dims
    eye
+   flatten
+   floor
+   floor_divide
    full
    greater
    greater_equal
    identity
    less
    less_equal
+   linspace
    load
    log
    log2
@@ -59,6 +66,7 @@ Operations
    mean
    min
    minimum
+   moveaxis
    multiply
    negative
    ones
@@ -66,8 +74,11 @@ Operations
    partition
    pad
    prod
+   quantize
+   quantized_matmul
    reciprocal
    reshape
+   round
    rsqrt
    save
    savez
@@ -82,14 +93,19 @@ Operations
    sqrt
    square
    squeeze
+   stack
    stop_gradient
    subtract
    sum
+   swapaxes
    take
    take_along_axis
    tan
    tanh
    transpose
+   tri
+   tril
+   triu
    var
    where
    zeros
