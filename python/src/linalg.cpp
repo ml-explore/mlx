@@ -1,22 +1,13 @@
-
 // Copyright © 2023 Apple Inc.
 
-#include <limits>
-#include <numeric>
-#include <ostream>
-#include <string>
 #include <variant>
 
-#include <pybind11/iostream.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 #include "mlx/linalg.h"
-#include "mlx/ops.h"
-#include "mlx/utils.h"
 
 #include "python/src/load.h"
-#include "python/src/overloaded.h"
 #include "python/src/utils.h"
 
 namespace py = pybind11;
