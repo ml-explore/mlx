@@ -4,9 +4,7 @@
 #include <ostream>
 #include <vector>
 
-#include "mlx/array.h"
 #include "mlx/linalg.h"
-#include "mlx/ops.h"
 
 namespace mlx::core::linalg {
 
@@ -48,17 +46,28 @@ inline array matrix_norm(
   auto dtype = at_least_float(a.dtype());
   auto row_axis = axis[0];
   auto col_axis = axis[1];
-  if (!keepdims && col_axis > row_axis && col_axis > 0) {
-    col_axis -= 1;
-  }
   if (ord == -1.0) {
+    col_axis -= (!keepdims && col_axis > row_axis && col_axis > 0);
     return astype(
         min(sum(abs(a, s), row_axis, keepdims, s), col_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == 1.0) {
+    col_axis -= (!keepdims && col_axis > row_axis && col_axis > 0);
     return astype(
         max(sum(abs(a, s), row_axis, keepdims, s), col_axis, keepdims, s),
+        dtype,
+        s);
+  } else if (ord == std::numeric_limits<double>::infinity()) {
+    row_axis -= (!keepdims && row_axis > col_axis && row_axis > 0);
+    return astype(
+        max(sum(abs(a, s), col_axis, keepdims, s), row_axis, keepdims, s),
+        dtype,
+        s);
+  } else if (ord == -std::numeric_limits<double>::infinity()) {
+    row_axis -= (!keepdims && row_axis > col_axis && row_axis > 0);
+    return astype(
+        min(sum(abs(a, s), col_axis, keepdims, s), row_axis, keepdims, s),
         dtype,
         s);
   } else if (ord == 2.0 || ord == -2.0) {
@@ -66,7 +75,7 @@ inline array matrix_norm(
         "[linalg::norm] Singular value norms are not implemented.");
   } else {
     std::ostringstream msg;
-    msg << "[linalg::norm] Invalid ord value " << ord << " for matrix norm";
+    msg << "[linalg::norm] Invalid ord " << ord << " for matrix norm.";
     throw std::invalid_argument(msg.str());
   }
 }
@@ -78,13 +87,13 @@ inline array matrix_norm(
     bool keepdims,
     StreamOrDevice s) {
   if (ord == "f" || ord == "fro") {
-    return sqrt(sum(abs(a, s) * abs(a, s), axis, keepdims, s));
+    return sqrt(sum(square(a, s), axis, keepdims, s), s);
   } else if (ord == "nuc") {
     throw std::runtime_error(
         "[linalg::norm] Nuclear norm not yet implemented.");
   } else {
     std::ostringstream msg;
-    msg << "[linalg::norm] Invalid ord value '" << ord << "' for matrix norm";
+    msg << "[linalg::norm] Invalid ord value '" << ord << "' for matrix norm.";
     throw std::invalid_argument(msg.str());
   }
 }
@@ -100,7 +109,7 @@ array norm(
 
   if (axis.value().size() > 2) {
     throw std::invalid_argument(
-        "[linalg::norm] Received too many axes for norm");
+        "[linalg::norm] Received too many axes for norm.");
   }
   return sqrt(sum(square(a, s), axis.value(), keepdims, s), s);
 }
@@ -124,7 +133,7 @@ array norm(
     return matrix_norm(a, ord, ax, keepdims, s);
   } else {
     throw std::invalid_argument(
-        "[linalg::norm] Received too many axes for norm");
+        "[linalg::norm] Received too many axes for norm.");
   }
 }
 

@@ -20,8 +20,8 @@ void init_linalg(py::module_& parent_module) {
   py::options options;
   options.disable_function_signatures();
 
-  auto m =
-      parent_module.def_submodule("linalg", "mlx.core.linalg: Linear Algebra.");
+  auto m = parent_module.def_submodule(
+      "linalg", "mlx.core.linalg: linear algebra routines.");
 
   m.def(
       "norm",
@@ -72,8 +72,8 @@ void init_linalg(py::module_& parent_module) {
             unless ``ord`` is ``None``. If both ``axis`` and ``ord`` are ``None``, the
             2-norm of ``a.flatten`` will be returned.
           ord (scalar or str, optional): Order of the norm (see table under ``Notes``).
-            If ``None``, the 2-norm will be computed along the given ``axis``.
-            Default: ``None``.
+            If ``None``, the 2-norm (or Frobenius norm for matrices) will be computed
+            along the given ``axis``.  Default: ``None``.
           axis (int or list(int), optional): If ``axis`` is an integer, it specifies the
             axis of ``a`` along which to compute the vector norms.  If ``axis`` is a
             2-tuple, it specifies the axes that hold 2-D matrices, and the matrix

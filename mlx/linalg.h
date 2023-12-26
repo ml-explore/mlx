@@ -4,21 +4,22 @@
 
 #include <optional>
 
-#include "array.h"
-#include "device.h"
-#include "ops.h"
-#include "stream.h"
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/ops.h"
+#include "mlx/stream.h"
 
 namespace mlx::core::linalg {
 
-/*
+/**
  * Compute vector or matrix norms.
  *
  * - If axis and ord are both unspecified, computes the 2-norm of flatten(x).
  * - If axis is not provided but ord is, then x must be either 1D or 2D.
- * - If axis is provided, but ord is not, then the 2-norm is computed along the
- *   given axes. At most 2 axes can be specified.
- * - If both axis and ord are provided, then the corresponding matrix of vector
+ * - If axis is provided, but ord is not, then the 2-norm (or Frobenius norm
+ *   for matrices) is computed along the given axes. At most 2 axes can be
+ *   specified.
+ * - If both axis and ord are provided, then the corresponding matrix or vector
  *   norm is computed. At most 2 axes can be specified.
  */
 array norm(
