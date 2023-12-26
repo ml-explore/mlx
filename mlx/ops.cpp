@@ -3541,7 +3541,9 @@ array einsum(
   }
   if (operands.size() != inputs.size()) {
     throw std::runtime_error(
-        "[einsum] Number of operands must match the number of input characters");
+        "[einsum] Number of operands (" + std::to_string(operands.size()) +
+        ") must match the number of input characters(" +
+        std::to_string(inputs.size()) + ")");
   }
 
   std::map<char, int> input_map;
