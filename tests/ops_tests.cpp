@@ -3515,11 +3515,12 @@ TEST_CASE("test einsum") {
   expected = full({10, 10}, 300.0f);
   CHECK_EQ(array_equal(x, expected).item<bool>(), true);
   x = einsum(
-      "ijkl,mlopq->ikmop",
+      "ijkl ,mlopq ->ikmop",
       {full({4, 5, 9, 4}, 20.0f), full({14, 4, 16, 7, 5}, 10.0f)});
   CHECK_EQ(x.shape(), std::vector<int>{4, 9, 14, 16, 7});
   CHECK_EQ(x.dtype(), float32);
   expected = full({4, 9, 14, 16, 7}, 20000.0f);
+  CHECK_EQ(x.shape(), expected.shape());
   CHECK_EQ(array_equal(x, expected).item<bool>(), true);
 
   CHECK_THROWS(einsum("ijk", {full({2, 2}, 2.0f)}));
