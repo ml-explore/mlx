@@ -58,6 +58,9 @@ class TestRandom(mlx_tests.MLXTestCase):
         a = mx.random.uniform(shape=(1000,), low=mx.array(-1), high=5)
         self.assertTrue(mx.all((a > -1) < 5).item())
 
+        a = mx.random.uniform(low=-0.1, high=0.1, shape=(1,), dtype=mx.bfloat16)
+        self.assertEqual(a.dtype, mx.bfloat16)
+
     def test_normal(self):
         key = mx.random.key(0)
         a = mx.random.normal(key=key)

@@ -84,6 +84,8 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array(1)
         self.assertEqual(x.size, 1)
         self.assertEqual(x.ndim, 0)
+        self.assertEqual(x.itemsize, 4)
+        self.assertEqual(x.nbytes, 4)
         self.assertEqual(x.shape, [])
         self.assertEqual(x.dtype, mx.int32)
         self.assertEqual(x.item(), 1)

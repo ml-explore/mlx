@@ -20,6 +20,7 @@ constexpr bool is_available() {
 }
 
 void new_stream(Stream stream);
+std::shared_ptr<void> new_scoped_memory_pool();
 
 std::function<void()> make_task(
     array& arr,
