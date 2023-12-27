@@ -8,21 +8,22 @@ from mlx.nn.layers.base import Module
 
 
 class RoPE(Module):
-    """Implements the rotary positional encoding [1].
+    """Implements the rotary positional encoding.
 
     The traditional implementation rotates consecutive pairs of elements in the
     feature dimension while the default implementation rotates pairs with
     stride half the feature dimensions for efficiency.
 
-    [1]: https://arxiv.org/abs/2104.09864
+    For more details see `RoFormer: Enhanced Transformer with Rotary Position
+    Embedding <https://arxiv.org/abs/2104.09864>`_.
 
     Args:
         dims (int): The feature dimensions to be rotated. If the input feature
             is larger than dims then the rest is left unchanged.
         traditional (bool, optional): If set to True choose the traditional
-            implementation which is slightly less efficient. Default: ``False``
+            implementation which is slightly less efficient. Default: ``False``.
         base (float, optional): The base used to compute angular frequency for
-            each dimension in the positional encodings. Default: ``10000``
+            each dimension in the positional encodings. Default: ``10000``.
     """
 
     def __init__(self, dims: int, traditional: bool = False, base: float = 10000):
@@ -89,19 +90,23 @@ class RoPE(Module):
 
 
 class SinusoidalPositionalEncoding(Module):
-    """Implements sinusoidal positional encoding similar to [1].
+    r"""Implements sinusoidal positional encoding.
 
-    [1]: https://arxiv.org/abs/1706.03762
+    For more details see the paper `Attention Is All You Need
+    <https://arxiv.org/abs/1706.03762>`_.
 
     Args:
         dims (int): The dimensionality of the resulting positional embeddings.
-        min_freq (float): The minimum frequency expected (default: 0.0001)
-        max_freq (float): The maximum frequency expected (default: 1)
-        scale (float): Scale the embeddings by that number (default: sqrt(dims//2))
-        cos_first (bool): If set to True embed using ``[cos(x); sin(x)]``
-            instead of the other way around (default: False)
-        full_turns (bool): If set to True multiply the frequencies
-            with ``2 pi`` (default: False)
+        min_freq (float, optional): The minimum frequency expected. Default:
+            ``0.0001``.
+        max_freq (float, optional): The maximum frequency expected. Default:
+            ``1``.
+        scale (float, optional): A multiplicative scale for the embeddings.
+            Default: ``sqrt(dims//2)``.
+        cos_first (bool, optional): If ``True`` embed using ``[cos(x); sin(x)]``
+            instead of the reverse. Default: ``False``.
+        full_turns (bool, optional): If ``True`` multiply the frequencies with
+            :math:`2\pi`. Default: ``False``.
     """
 
     def __init__(

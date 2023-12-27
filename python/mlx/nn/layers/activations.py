@@ -179,12 +179,12 @@ def selu(x):
 
 
 def prelu(x: mx.array, alpha: mx.array) -> mx.array:
-    r"""Applies the element-wise function:
+    r"""Applies the element-wise parametric ReLU.
 
     .. math::
         \text{PReLU}(x) = \max(0,x) + a * \min(0,x)
 
-    Here :math:`a` is an array.
+    where :math:`a` is an array.
     """
     return mx.maximum(0, x) + alpha * mx.minimum(0, x)
 
