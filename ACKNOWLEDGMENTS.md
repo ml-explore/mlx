@@ -9,6 +9,7 @@ MLX was developed with contributions from the following individuals:
   
 - Juarez Bochi: Fixed bug in cross attention.
 - Justin Deschenaux: Sine, Cosine, arange, randint, truncated normal, bernoulli, lion optimizer, Dropout2d, linear and logistic regression python example.
+- Diogo Da Cruz: Added tri, tril, triu and safetensor support
 
 # Third-Party Software
 
