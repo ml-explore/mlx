@@ -14,6 +14,7 @@ from mlx.nn.layers.activations import (
     SiLU,
     Softplus,
     Step,
+    Tanh,
     celu,
     elu,
     gelu,
@@ -29,6 +30,7 @@ from mlx.nn.layers.activations import (
     silu,
     softplus,
     step,
+    tanh,
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
@@ -41,6 +43,7 @@ from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalE
 from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.nn.layers.transformer import (
     MultiHeadAttention,
+    Transformer,
     TransformerEncoder,
     TransformerEncoderLayer,
 )

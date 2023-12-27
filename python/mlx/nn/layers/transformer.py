@@ -14,26 +14,34 @@ from mlx.nn.layers.normalization import LayerNorm
 class MultiHeadAttention(Module):
     """Implements the scaled dot product attention with multiple heads.
 
-    Given inputs for queries, keys and values the ``MultiHeadAttention`` produces
-    new values by aggregating information from the input values according to
-    the similarities of the input queries and keys.
+    Given inputs for queries, keys and values the ``MultiHeadAttention``
+    produces new values by aggregating information from the input values
+    according to the similarities of the input queries and keys.
 
-    All inputs as well as the output are linearly projected without biases.
+    All inputs as well as the output are linearly projected without biases by
+    default.
 
-    MultiHeadAttention also expects an additive attention mask that should be
-    broadcastable with (batch, num_heads, # queries, # keys). The mask should
-    have ``-inf`` or very negative numbers to the positions that should *not* be
-    attended to.
+    ``MultiHeadAttention`` also takes an optional additive attention mask that
+    should be broadcastable with ``(batch, num_heads, # queries, # keys)``. The
+    mask should have ``-inf`` or very large negative numbers at the positions
+    that should *not* be attended to.
 
     Args:
-        dims (int): The model dimensions. If no other dims are provided then
-            dims is used for queries, keys, values and the output.
-        num_heads (int): How many attention heads to use
-        query_input_dims (int, optional): The input dimensions of the queries (default: dims).
-        key_input_dims (int, optional): The input dimensions of the keys (default: dims).
-        value_input_dims (int, optional): The input dimensions of the values (default: key_input_dims).
-        value_dims (int, optional): The dimensions of the values after the projection (default: dims).
-        value_output_dims (int, optional): The dimensions the new values will be projected to (default: dims).
+        dims (int): The model dimensions. This is also the default
+            value for the queries, keys, values, and the output.
+        num_heads (int): The number of attention heads to use.
+        query_input_dims (int, optional): The input dimensions of the queries.
+            Default: ``dims``.
+        key_input_dims (int, optional): The input dimensions of the keys.
+            Default: ``dims``.
+        value_input_dims (int, optional): The input dimensions of the values.
+            Default: ``key_input_dims``.
+        value_dims (int, optional): The dimensions of the values after the
+            projection. Default: ``dims``.
+        value_output_dims (int, optional): The dimensions the new values will
+            be projected to. Default: ``dims``.
+        bias (bool, optional): Whether or not to use a bias in the projections.
+            Default: ``False``.
     """
 
     def __init__(
@@ -51,7 +59,8 @@ class MultiHeadAttention(Module):
 
         if (dims % num_heads) != 0:
             raise ValueError(
-                f"The input feature dimensions should be divisible by the number of heads ({dims} % {num_heads}) != 0"
+                "The input feature dimensions should be divisible by the "
+                f"number of heads ({dims} % {num_heads}) != 0"
             )
 
         query_input_dims = query_input_dims or dims
@@ -171,9 +180,7 @@ class TransformerEncoder(Module):
     def __call__(self, x, mask):
         for l in self.layers:
             x = l(x, mask)
-        x = self.ln(x)
-
-        return x
+        return self.ln(x)
 
 
 class TransformerDecoderLayer(Module):
@@ -261,32 +268,45 @@ class TransformerDecoder(Module):
     def __call__(self, x, memory, x_mask, memory_mask):
         for l in self.layers:
             x = l(x, memory, x_mask, memory_mask)
-        x = self.ln(x)
-
-        return x
+        return self.ln(x)
 
 
 class Transformer(Module):
     """
-    Implements a standard Transformer model based on the paper "Attention Is All You Need".
+    Implements a standard Transformer model.
 
-    The Transformer model consists of an encoder and a decoder. The encoder processes
-    the input sequence and the decoder generates the output sequence. The interaction
-    between encoder and decoder happens through the attention mechanism.
+    The implementation is based on `Attention Is All You Need
+    <https://arxiv.org/abs/1706.03762>`_.
+
+    The Transformer model contains an encoder and a decoder. The encoder
+    processes the input sequence and the decoder generates the output sequence.
+    The interaction between encoder and decoder happens through the attention
+    mechanism.
 
     Args:
-        dims (int): The number of expected features in the encoder/decoder inputs  (default: 512)
-        num_heads (int): The number of heads in the multi-head attention models (default: 8)
-        num_encoder_layers (int): The number of sub-encoder-layers in the Transformer encoder (default: 6)
-        num_decoder_layers (int): The number of sub-decoder-layers in the Transformer decoder (default: 6)
-        mlp_dims (Optional[int]): The dimensionality of the feedforward network model in each Transformer layer,
-                                  Defaults to 4*dims if not provided (default: None)
-        dropout (float): The dropout value for Transformer encoder/decoder (default: 0.0)
-        activation (Callable[[Any], Any]): the activation function of encoder/decoder intermediate layer (default: relu)
-        custom_encoder (Optional[Any]): A custom encoder to replace the standard Transformer encoder (default: None)
-        custom_decoder (Optional[Any]): A custom decoder to replace the standard Transformer decoder (default: None)
-        norm_first (bool): if ``True``, encoder and decoder layers will perform LayerNorms before
-            other attention and feedforward operations, otherwise after (default: False)
+        dims (int, optional): The number of expected features in the
+            encoder/decoder inputs. Default: ``512``.
+        num_heads (int, optional): The number of attention heads. Default:
+            ``8``.
+        num_encoder_layers (int, optional): The number of encoder layers in the
+            Transformer encoder. Default: ``6``.
+        num_decoder_layers (int, optional): The number of decoder layers in the
+            Transformer decoder. Default: ``6``.
+        mlp_dims (int, optional): The hidden dimension of the MLP block in each
+            Transformer layer. Defaults to ``4*dims`` if not provided. Default:
+            ``None``.
+        dropout (float, optional): The dropout value for the Transformer
+            encoder and decoder. Dropout is used after each attention layer and
+            the activation in the MLP layer. Default: ``0.0``.
+        activation (function, optional): the activation function for the MLP
+            hidden layer. Default: :func:`mlx.nn.relu`.
+        custom_encoder (nn.Module, optional): A custom encoder to replace the
+            standard Transformer encoder. Default: ``None``.
+        custom_decoder (nn.Module, optional): A custom decoder to replace the
+            standard Transformer decoder. Default: ``None``.
+        norm_first (bool, optional): if ``True``, encoder and decoder layers
+            will perform layer normalization before attention and MLP
+            operations, otherwise after. Default: ``False``.
     """
 
     def __init__(
@@ -331,6 +351,4 @@ class Transformer(Module):
 
     def __call__(self, src, tgt, src_mask, tgt_mask, memory_mask):
         memory = self.encoder(src, src_mask)
-        output = self.decoder(tgt, memory, tgt_mask, memory_mask)
-
-        return output
+        return self.decoder(tgt, memory, tgt_mask, memory_mask)
