@@ -723,7 +723,8 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
   axis = normalize_axis(axis, arr.ndim());
 
   if (repeats < 0) {
-    throw std::invalid_argument("Number of repeats cannot be negative");
+    throw std::invalid_argument(
+        "[repeat] Number of repeats cannot be negative");
   }
 
   if (repeats == 0) {
