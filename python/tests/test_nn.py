@@ -736,6 +736,151 @@ class TestNN(mlx_tests.MLXTestCase):
         loss = nn.losses.log_cosh_loss(inputs, targets, reduction="mean")
         self.assertAlmostEqual(loss.item(), 0.433781, places=6)
 
+    def test_rnn_cell(self):
+        # Checks that constructor works
+        cell = nn.RNNCell(input_size=5, hidden_size=12, nonlinearity="tanh", bias=True)
+        cell = nn.RNNCell(input_size=5, hidden_size=12, nonlinearity="relu", bias=False)
+        # Non-batched case
+        x = mx.random.normal(shape=(5,))
+        h = mx.random.normal(shape=(12,))
+
+        out = cell(x, h)
+        self.assertEqual(out.shape, [12])
+        # Batched case
+        x = mx.random.normal(shape=(7, 5))
+        h = mx.random.normal(shape=(7, 12))
+
+        out = cell(x, h)
+        self.assertEqual(out.shape, [7, 12])
+
+        with self.assertRaises(ValueError):
+            nn.RNNCell(5, 12, nonlinearity="tanhh")
+
+    def test_gru_cell(self):
+        cell = nn.GRUCell(5, 12, bias=True)
+        cell = nn.GRUCell(5, 12, bias=False)
+
+        # Non-batched case
+        x = mx.random.normal(shape=(5,))
+        h = mx.random.normal(shape=(12,))
+
+        out = cell(x, h)
+        self.assertEqual(out.shape, [12])
+
+        # Batched case
+        x = mx.random.normal(shape=(7, 5))
+        h = mx.random.normal(shape=(7, 12))
+
+        out = cell(x, h)
+        self.assertEqual(out.shape, [7, 12])
+
+    def test_lstm_cell(self):
+        cell = nn.LSTMCell(5, 12, bias=True)
+        cell = nn.LSTMCell(5, 12, bias=False)
+
+        # Non-batched case
+        x = mx.random.normal(shape=(5,))
+        h = mx.random.normal(shape=(12,))
+        c = mx.random.normal(shape=(12,))
+
+        h_out, c_out = cell(x, h, c)
+        self.assertEqual(h_out.shape, [12])
+        self.assertEqual(c_out.shape, [12])
+
+        # Batched case
+        x = mx.random.normal(shape=(7, 5))
+        h = mx.random.normal(shape=(7, 12))
+        c = mx.random.normal(shape=(7, 12))
+
+        h_out, c_out = cell(x, h, c)
+        self.assertEqual(h_out.shape, [7, 12])
+        self.assertEqual(c_out.shape, [7, 12])
+
+    def test_rnn(self):
+        layer = nn.RNN(5, 12, num_layers=3, bias=True, dropout=0, bidirectional=False)
+        inp = mx.random.normal((2, 25, 5))
+
+        x_out, h_out = layer(inp)
+        self.assertEqual(x_out.shape, [2, 25, 12])
+        self.assertEqual(h_out.shape, [2, 3, 12])
+
+        layer = nn.RNN(
+            5,
+            12,
+            num_layers=3,
+            bias=True,
+            dropout=0,
+            bidirectional=True,
+            nonlinearity="relu",
+        )
+        inp = mx.random.normal((2, 25, 5))
+
+        x_out, h_out = layer(inp)
+        self.assertEqual(x_out.shape, [2, 25, 24])
+        self.assertEqual(h_out.shape, [2, 6, 12])
+
+        with self.assertRaises(ValueError):
+            nn.RNN(5, 12, num_layers=-1)
+
+        with self.assertRaises(ValueError):
+            nn.RNN(5, 12, dropout=1.0)
+
+        with self.assertRaises(ValueError):
+            nn.RNN(5, 12, dropout=-1)
+
+        with self.assertRaises(ValueError):
+            nn.RNN(5, 12, nonlinearity="tanhh")
+
+    def test_gru(self):
+        layer = nn.GRU(5, 12, num_layers=3, bias=True, dropout=0, bidirectional=False)
+        inp = mx.random.normal((2, 25, 5))
+
+        x_out, h_out = layer(inp)
+        self.assertEqual(x_out.shape, [2, 25, 12])
+        self.assertEqual(h_out.shape, [2, 3, 12])
+
+        layer = nn.GRU(5, 12, num_layers=3, bias=True, dropout=0, bidirectional=True)
+        inp = mx.random.normal((2, 25, 5))
+
+        x_out, h_out = layer(inp)
+        self.assertEqual(x_out.shape, [2, 25, 24])
+        self.assertEqual(h_out.shape, [2, 6, 12])
+
+        with self.assertRaises(ValueError):
+            nn.GRU(5, 12, num_layers=-1)
+
+        with self.assertRaises(ValueError):
+            nn.GRU(5, 12, dropout=1.0)
+
+        with self.assertRaises(ValueError):
+            nn.GRU(5, 12, dropout=-1)
+
+    def test_lstm(self):
+        layer = nn.LSTM(5, 12, num_layers=3, bias=True, dropout=0, bidirectional=False)
+        inp = mx.random.normal((2, 25, 5))
+
+        x_out, h_out, c_out = layer(inp)
+        self.assertEqual(x_out.shape, [2, 25, 12])
+        self.assertEqual(h_out.shape, [2, 3, 12])
+        self.assertEqual(c_out.shape, [2, 3, 12])
+
+        layer = nn.LSTM(5, 12, num_layers=3, bias=True, dropout=0, bidirectional=True)
+        inp = mx.random.normal((2, 25, 5))
+
+        x_out, h_out, c_out = layer(inp)
+        self.assertEqual(x_out.shape, [2, 25, 24])
+        self.assertEqual(h_out.shape, [2, 6, 12])
+        self.assertEqual(c_out.shape, [2, 6, 12])
+
+        with self.assertRaises(ValueError):
+            nn.LSTM(5, 12, num_layers=-1)
+
+        with self.assertRaises(ValueError):
+            nn.LSTM(5, 12, dropout=1.0)
+
+        with self.assertRaises(ValueError):
+            nn.LSTM(5, 12, dropout=-1)
+
 
 if __name__ == "__main__":
     unittest.main()
