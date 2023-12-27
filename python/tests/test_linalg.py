@@ -62,6 +62,33 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 with self.subTest(shape=shape, keepdims=keepdims):
                     self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
+    def test_complex_norm(self):
+        for shape in [(3,), (2, 3), (2, 3, 3)]:
+            x_np = np.random.uniform(size=shape).astype(
+                np.float32
+            ) + 1j * np.random.uniform(size=shape).astype(np.float32)
+            x_mx = mx.array(x_np)
+            out_np = np.linalg.norm(x_np)
+            out_mx = mx.linalg.norm(x_mx)
+            with self.subTest(shape=shape):
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
+            for num_axes in range(1, len(shape)):
+                for axis in itertools.combinations(range(len(shape)), num_axes):
+                    out_np = np.linalg.norm(x_np, axis=axis)
+                    out_mx = mx.linalg.norm(x_mx, axis=axis)
+                    with self.subTest(shape=shape, axis=axis):
+                        self.assertTrue(
+                            np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6)
+                        )
+
+        x_np = np.random.uniform(size=(4, 4)).astype(
+            np.float32
+        ) + 1j * np.random.uniform(size=(4, 4)).astype(np.float32)
+        x_mx = mx.array(x_np)
+        out_np = np.linalg.norm(x_np, ord="fro")
+        out_mx = mx.linalg.norm(x_mx, ord="fro")
+        self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
+
 
 if __name__ == "__main__":
     unittest.main()

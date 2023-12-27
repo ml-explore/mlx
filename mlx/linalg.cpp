@@ -13,6 +13,18 @@ Dtype at_least_float(const Dtype& d) {
   return is_floating_point(d) ? d : promote_types(d, float32);
 }
 
+inline array l2_norm(
+    const array& a,
+    const std::vector<int>& axis,
+    bool keepdims,
+    StreamOrDevice s) {
+  if (is_complex(a.dtype())) {
+    return sqrt(sum(abs(a, s) * abs(a, s), axis, keepdims, s), s);
+  } else {
+    return sqrt(sum(square(a, s), axis, keepdims, s), s);
+  }
+}
+
 inline array vector_norm(
     const array& a,
     const double ord,
@@ -25,7 +37,7 @@ inline array vector_norm(
   } else if (ord == 1.0) {
     return astype(sum(abs(a, s), axis, keepdims, s), dtype, s);
   } else if (ord == 2.0) {
-    return sqrt(sum(square(a, s), axis, keepdims, s), s);
+    return l2_norm(a, axis, keepdims, s);
   } else if (ord == std::numeric_limits<double>::infinity()) {
     return astype(max(abs(a, s), axis, keepdims, s), dtype, s);
   } else if (ord == -std::numeric_limits<double>::infinity()) {
@@ -88,10 +100,7 @@ inline array matrix_norm(
     bool keepdims,
     StreamOrDevice s) {
   if (ord == "f" || ord == "fro") {
-    if (is_complex(a.dtype()))
-      return sqrt(sum(abs(a, s) * abs(a, s), axis, keepdims, s), s);
-    else
-      return sqrt(sum(square(a, s), axis, keepdims, s), s);
+    return l2_norm(a, axis, keepdims, s);
   } else if (ord == "nuc") {
     throw std::runtime_error(
         "[linalg::norm] Nuclear norm not yet implemented.");
@@ -115,7 +124,7 @@ array norm(
     throw std::invalid_argument(
         "[linalg::norm] Received too many axes for norm.");
   }
-  return sqrt(sum(square(a, s), axis.value(), keepdims, s), s);
+  return l2_norm(a, axis.value(), keepdims, s);
 }
 
 array norm(
