@@ -3,6 +3,8 @@
 #pragma once
 
 #include <pybind11/pybind11.h>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <variant>
 #include "mlx/ops.h"
@@ -12,7 +14,18 @@ using namespace mlx::core;
 
 using DictOrArray = std::variant<array, std::unordered_map<std::string, array>>;
 
-DictOrArray mlx_load_helper(py::object file, StreamOrDevice s);
+std::unordered_map<std::string, array> mlx_load_safetensor_helper(
+    py::object file,
+    StreamOrDevice s);
+void mlx_save_safetensor_helper(
+    py::object file,
+    py::dict d,
+    std::optional<bool> retain_graph = std::nullopt);
+
+DictOrArray mlx_load_helper(
+    py::object file,
+    std::optional<std::string> format,
+    StreamOrDevice s);
 void mlx_save_helper(
     py::object file,
     array a,
