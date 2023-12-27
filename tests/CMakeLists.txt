@@ -31,6 +31,7 @@ target_sources(tests PRIVATE
   scheduler_tests.cpp
   utils_tests.cpp
   vmap_tests.cpp
+  linalg_tests.cpp
   ${METAL_TEST_SOURCES}
 )
 
