@@ -2265,8 +2265,16 @@ TEST_CASE("repeat test") {
   CHECK(array_equal(repeat_2, expected_2).item<bool>());
 
   auto data_3 = array({1, 2, 3, 4, 5, 4, 0, 1, 2}, {3, 3});
-  auto repeat_3 = repeat(data_2, 2, 0);
+  auto repeat_3 = repeat(data_3, 2, 0);
   auto expected_3 =
       array({1, 2, 3, 1, 2, 3, 4, 5, 4, 4, 5, 4, 0, 1, 2, 0, 1, 2}, {6, 3});
+  CHECK(array_equal(repeat_3, expected_3).item<bool>());
+
+  // 0 repeats
+  auto repeat_4 = repeat(data_3, 0, 0);
+  auto expected_4 = array({});
   CHECK(array_equal(repeat_2, expected_2).item<bool>());
+
+  // negative repeats
+  CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
 }

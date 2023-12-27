@@ -722,10 +722,12 @@ array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
 array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
   axis = normalize_axis(axis, arr.ndim());
 
-  if (repeats <= 0) {
-    std::vector<int> new_shape(arr.shape());
-    new_shape[axis] = repeats > 0 ? repeats : 0;
-    return zeros(new_shape, arr.dtype(), s);
+  if (repeats < 0) {
+    throw std::invalid_argument("Number of repeats cannot be negative");
+  }
+
+  if (repeats == 0) {
+    return array({}, arr.dtype());
   }
 
   if (repeats == 1) {
