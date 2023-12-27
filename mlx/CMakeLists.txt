@@ -14,6 +14,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h
 )
 
