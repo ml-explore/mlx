@@ -1516,6 +1516,37 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array(np.linspace(0, 1, 10))
         self.assertEqualArray(d, expected)
 
+    def test_repeat(self):
+        # Setup data for the tests
+        data = np.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
+        # Test repeat along axis 0
+        repeat_axis_0 = mx.repeat(mx.array(data), 2, axis=0)
+        expected_axis_0 = np.repeat(data, 2, axis=0)
+
+        self.assertEqualArray(repeat_axis_0, mx.array(expected_axis_0))
+
+        # Test repeat along axis 1
+        repeat_axis_1 = mx.repeat(mx.array(data), 2, axis=1)
+        expected_axis_1 = np.repeat(data, 2, axis=1)
+        self.assertEqualArray(repeat_axis_1, mx.array(expected_axis_1))
+
+        # Test repeat along the last axis (default)
+        repeat_axis_2 = mx.repeat(mx.array(data), 2)
+        expected_axis_2 = np.repeat(data, 2)
+        self.assertEqualArray(repeat_axis_2, mx.array(expected_axis_2))
+
+        # Test repeat with a 1D array along axis 0
+        data_2 = mx.array([1, 3, 2])
+        repeat_2 = mx.repeat(mx.array(data_2), 3, axis=0)
+        expected_2 = np.repeat(data_2, 3)
+        self.assertEqualArray(repeat_2, mx.array(expected_2))
+
+        # Test repeat with a 2D array along axis 0
+        data_3 = mx.array([[1, 2, 3], [4, 5, 4], [0, 1, 2]])
+        repeat_3 = mx.repeat(mx.array(data_3), 2, axis=0)
+        expected_3 = np.repeat(data_3, 2, axis=0)
+        self.assertEqualArray(repeat_3, mx.array(expected_3))
+
 
 if __name__ == "__main__":
     unittest.main()
