@@ -2234,7 +2234,7 @@ TEST_CASE("test quantize dequantize") {
   }
 }
 
-TEST_CASE("repeat test") {
+TEST_CASE("test repeat") {
   auto data = array({13, 3, 16, 6, 14, 4, 15, 5, 11, 1, 12, 2}, {3, 2, 2});
   auto repeat_axis_0 = repeat(data, 2, 0);
   auto expected_axis_0 = array(
