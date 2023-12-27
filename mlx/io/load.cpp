@@ -6,7 +6,7 @@
 #include <limits>
 #include <sstream>
 
-#include "mlx/load.h"
+#include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
