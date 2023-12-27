@@ -734,7 +734,6 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
 
   std::vector<int> new_shape(arr.shape());
   new_shape[axis] *= repeats;
-  int concat_axes = arr.ndim() - axis;
 
   std::vector<array> repeated_arrays;
   repeated_arrays.reserve(repeats);
@@ -742,8 +741,7 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
   for (int i = 0; i < repeats; ++i) {
     repeated_arrays.push_back(expand_dims(arr, -1, s));
   }
-  array repeated =
-      flatten(concatenate(repeated_arrays, -1 * concat_axes, s), s);
+  array repeated = concatenate(repeated_arrays, axis + 1, s);
   return reshape(repeated, new_shape, s);
 }
 

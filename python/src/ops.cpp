@@ -2426,12 +2426,14 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       repeat(array: array, repeats: int, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Repeate an array along a specified axis
+      Repeate an array along a specified axis.
 
       Args:
           array (array): Input array.
           repeats (int): The number of repetitions for each element.
-          axis (int, optional): The axis in which to repeat the array along. Defaults to ``None``.
+          axis (int, optional): The axis in which to repeat the array along. If
+            unspecified it uses the flattened array of the input and repeates 
+            along the 0 axis.
           stream (Stream, optional): Stream or device. Defaults to ``None``.
 
       Returns:
