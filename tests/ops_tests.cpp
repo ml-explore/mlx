@@ -2360,6 +2360,7 @@ TEST_CASE("inner") {
   CHECK(array_equal(z, expected).item<bool>());
 }
 TEST_CASE("test einsum") {
+  CHECK_THROWS(einsum("", {}));
   auto x = einsum("jki", {full({2, 3, 4}, 3.0f)});
   CHECK_EQ(x.shape(), std::vector<int>{4, 2, 3});
   CHECK_EQ(x.dtype(), float32);
