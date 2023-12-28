@@ -646,7 +646,7 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0, 6.0, 0.0])))
         self.assertEqual(y.shape, [5])
         self.assertEqual(y.dtype, mx.float32)
-        
+
     def test_softmax(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.softmax(x)
@@ -688,7 +688,7 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
-        
+
     def test_log_softmax(self):
         x = mx.array([1.0, 2.0, 3.0])
         y = nn.log_softmax(x)
@@ -697,7 +697,6 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
-
 
     def test_log_sigmoid(self):
         x = mx.array([1.0, -1.0, 0.0])
@@ -719,7 +718,7 @@ class TestNN(mlx_tests.MLXTestCase):
             nn.Mish()(mx.array([1.0, -1.0, 0.0, 0.5])),
             mx.array([0.8651, -0.3034, 0.0000, 0.3752]),
         )
-        
+
     def test_hardswish(self):
         x = mx.array([-3.0, -1.5, 0.0, 1.5, 3.0])
         y = nn.hardswish(x)
@@ -728,7 +727,6 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [5])
         self.assertEqual(y.dtype, mx.float32)
-
 
     def test_rope(self):
         for kwargs in [{}, {"traditional": False}, {"base": 10000}]:
