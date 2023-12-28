@@ -262,10 +262,10 @@ class ReLU6(Module):
 
     See :func:`relu6`, for the functional equivalent.
     """
-    
+
     def __init__(self):
         super().__init__()
-        
+
     def __call__(self, x):
         return relu6(x)
 
@@ -274,13 +274,13 @@ class ReLU6(Module):
 class Softplus(Module):
     r"""Applies the Softplus function.
         Applies :math:`\log(1 + \exp(x))` element wise.
-        
+
     See :func:`softplus`, for the functional equivalent.
     """
-    
+
     def __init__(self):
         super().__init__()
-        
+
     def __call__(self, x):
         return softplus(x)
 
@@ -289,13 +289,13 @@ class Softplus(Module):
 class Softsign(Module):
     r"""Applies the Softsign function.
         Applies :math:`\frac{x}{1 + |x|}` element wise.
-        
+
     See :func:`softsign`, for the functional equivalent.
     """
-    
+
     def __init__(self):
         super().__init__()
-        
+
     def __call__(self, x):
         return softsign(x)
 
@@ -321,12 +321,33 @@ class CELU(Module):
 
 @_make_activation_module(silu)
 class SiLU(Module):
-    pass
+    r"""Applies the Sigmoid Linear Unit. Also known as Swish.
+        Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
+        the logistic sigmoid.
+
+    See :func:`silu`, for the functional equivalent.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return silu(x)
 
 
 @_make_activation_module(log_sigmoid)
 class LogSigmoid(Module):
-    pass
+    r"""Applies the Log Sigmoid function.
+        Applies :math:`\log(\sigma(x)) = -\log(1 + e^{-x})` element wise.
+
+    See :func:`log_sigmoid`, for the functional equivalent.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return log_sigmoid(x)
 
 
 class PReLU(Module):
@@ -389,7 +410,17 @@ def tanh(x):
 
 @_make_activation_module(tanh)
 class Tanh(Module):
-    pass
+    r"""Applies the hyperbolic tangent function.
+        Applies :math:`\tanh(x)` element wise.
+
+    See :func:`tanh`, for the functional equivalent.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return tanh(x)
 
 
 class Step(Module):
@@ -418,4 +449,16 @@ class Step(Module):
 
 @_make_activation_module(selu)
 class SELU(Module):
-    pass
+    r"""Applies the Scaled Exponential Linear Unit.
+        Applies :math:`\lambda x` if :math:`x > 0` and
+        :math:`\lambda \alpha (\exp(x) - 1)` if :math:`x \leq 0`, where
+        :math:`\lambda = 1.0507` and :math:`\alpha = 1.67326`.
+
+    See :func:`selu`, for the functional equivalent.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return selu(x)
