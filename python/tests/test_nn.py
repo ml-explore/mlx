@@ -655,6 +655,15 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
+        
+    def test_softsign(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.softsign(x)
+        epsilon = 1e-4
+        expected_y = mx.array([0.5, -0.5, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
 
     def test_celu(self):
         x = mx.array([1.0, -1.0, 0.0])

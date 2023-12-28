@@ -29,6 +29,7 @@ from mlx.nn.layers.activations import (
     selu,
     silu,
     softplus,
+    softsign,
     step,
     tanh,
 )

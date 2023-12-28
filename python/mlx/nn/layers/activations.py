@@ -63,6 +63,13 @@ def softplus(x):
     """
     return mx.logaddexp(x, 0)
 
+def softsign(x):
+    r"""Applies the Softsign function.
+
+    Applies :math:`\frac{x}{1 + |x|}` element wise.
+    """
+    return mx.divide(x, 1 + mx.abs(x))
+
 
 def celu(x, alpha=1.0):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.
