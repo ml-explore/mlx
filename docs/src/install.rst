@@ -74,11 +74,24 @@ Then simply build and install it using pip:
 
    env CMAKE_BUILD_PARALLEL_LEVEL="" pip install .
 
+or
+
+.. code-block:: shell
+
+  make install
+
 For developing use an editable install:
 
 .. code-block:: shell
 
   env CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e .
+
+
+or
+
+.. code-block:: shell
+
+  make dev
 
 To make sure the install is working run the tests with:
 
@@ -87,12 +100,26 @@ To make sure the install is working run the tests with:
   pip install ".[testing]"
   python -m unittest discover python/tests
 
+or
+
+.. code-block:: shell
+
+  make test
+
 Optional: Install stubs to enable auto completions and type checking from your IDE:
 
 .. code-block:: shell
 
   pip install ".[dev]"
   python setup.py generate_stubs
+
+
+or
+
+.. code-block:: shell
+
+  make stub
+
 
 C++ API
 ^^^^^^^
