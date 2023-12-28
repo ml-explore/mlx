@@ -2806,6 +2806,9 @@ array einsum(
     std::string equation,
     const std::vector<array>& operands,
     StreamOrDevice s /* = {} */) {
+  if (operands.empty()) {
+    throw std::runtime_error("[einsum] Must provide at least one operand");
+  }
   std::string output;
   std::string input;
   if (auto pos = equation.find("->"); pos != std::string::npos) {
@@ -2815,9 +2818,6 @@ array einsum(
     input = equation;
     output = std::string(equation);
     std::sort(output.begin(), output.end());
-  }
-  if (operands.size() < 1) {
-    throw std::runtime_error("[einsum] Must provide at least one operand");
   }
   std::vector<std::string> inputs;
   std::stringstream ss(input);
