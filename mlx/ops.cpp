@@ -3508,9 +3508,11 @@ array dequantize(
 
 std::map<char, int> string_to_char_map(std::string inp) {
   std::map<char, int> counts;
-  for (int i = 0; i < inp.size(); i++) {
-    if (inp[i] != ' ') {
-      counts[inp[i]] = i;
+  int i = 0;
+  for (auto c : inp) {
+    if (c != ' ' && counts.find(c) == counts.end()) {
+      counts[c] = i;
+      i += 1;
     }
   }
   return counts;
@@ -3531,8 +3533,10 @@ array einsum(
   } else {
     input = equation;
     output = std::string(equation);
+    output.erase(std::remove(output.begin(), output.end(), ','), output.end());
     std::sort(output.begin(), output.end());
   }
+
   std::vector<std::string> inputs;
   std::stringstream ss(input);
   std::string token;
