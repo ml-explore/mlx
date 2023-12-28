@@ -13,6 +13,7 @@ from mlx.nn.layers.activations import (
     ReLU6,
     SiLU,
     Softplus,
+    Softsign,
     Step,
     Tanh,
     celu,
