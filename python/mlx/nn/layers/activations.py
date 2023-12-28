@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
+from typing import Optional
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -40,6 +41,19 @@ def leaky_relu(x, negative_slope=0.01):
     return mx.maximum(negative_slope * x, x)
 
 
+def log_softmax(x, axis: Optional[int] = -1):
+    """Applies the Log Softmax function.
+
+    Applies :math:`\log(\frac{e^{x_i}}{\sum_j e^{x_j}})` element wise.
+    """
+    x_max = mx.max(x, axis=axis, keepdims=True)
+    sub_tmp = mx.subtract(x, x_max)
+    ret = mx.sum(mx.exp(sub_tmp), axis=axis, keepdims=True)
+    ret = mx.log(ret)
+    ret = mx.subtract(sub_tmp, ret)
+    return ret
+
+
 def elu(x, alpha=1.0):
     """Applies the Exponential Linear Unit.
 
@@ -54,6 +68,16 @@ def relu6(x):
     Applies :math:`\min(\max(x, 0), 6)` element wise.
     """
     return mx.minimum(mx.maximum(x, 0), 6.0)
+
+
+def softmax(x, axis: Optional[int] = None):
+    """Applies the Softmax function.
+
+    Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
+    """
+    axis = -1 if axis is None else axis
+    exp_x = mx.exp(x - mx.max(x, axis=axis, keepdims=True))
+    return mx.divide(exp_x, mx.sum(exp_x, axis=axis, keepdims=True))
 
 
 def softplus(x):
@@ -199,7 +223,6 @@ def prelu(x: mx.array, alpha: mx.array) -> mx.array:
 
 def mish(x: mx.array) -> mx.array:
     r"""Applies the Mish function, element-wise.
-    Mish: A Self Regularized Non-Monotonic Neural Activation Function.
 
     Reference: https://arxiv.org/abs/1908.08681
 
@@ -210,14 +233,47 @@ def mish(x: mx.array) -> mx.array:
     return x * mx.tanh(softplus(x))
 
 
+def hardswish(x):
+    """Applies the hardswish function, element-wise.
+
+    .. math::
+        \text{Hardswish}(x) = x * \text{min}(\text{max}(x + 3, 0), 6) / 6
+    """
+    max_x_3 = mx.maximum(x + 3, 0)
+    return x * mx.minimum(max_x_3, 6) / 6
+
+
 @_make_activation_module(mish)
 class Mish(Module):
-    pass
+    r"""Applies the Mish function, element-wise.
+
+    Reference: https://arxiv.org/abs/1908.08681
+
+    .. math::
+        \text{Mish}(x) = x * \text{Tanh}(\text{Softplus}(x))
+
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return mish(x)
 
 
 @_make_activation_module(relu)
 class ReLU(Module):
-    pass
+    r"""Applies the Rectified Linear Unit.
+        Simply ``mx.maximum(x, 0)``.
+
+    See :func:`relu`, for the functional equivalent.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return relu(x)
 
 
 class LeakyReLU(Module):
@@ -268,6 +324,21 @@ class ReLU6(Module):
 
     def __call__(self, x):
         return relu6(x)
+
+
+@_make_activation_module(softmax)
+class Softmax(Module):
+    r"""Applies the Softmax function.
+        Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
+
+    See :func:`softmax`, for the functional equivalent.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return softmax(x)
 
 
 @_make_activation_module(softplus)
@@ -333,6 +404,20 @@ class SiLU(Module):
 
     def __call__(self, x):
         return silu(x)
+
+
+@_make_activation_module(log_softmax)
+class LogSoftmax(Module):
+    r"""Applies the Log Softmax function.
+
+    Applies :math:`\log(\frac{e^{x_i}}{\sum_j e^{x_j}})` element wise.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return log_softmax(x)
 
 
 @_make_activation_module(log_sigmoid)
@@ -421,6 +506,21 @@ class Tanh(Module):
 
     def __call__(self, x):
         return tanh(x)
+
+
+@_make_activation_module(hardswish)
+class Hardswish(Module):
+    r"""Applies the hardswish function, element-wise.
+
+    .. math::
+        \text{Hardswish}(x) = x * \text{min}(\text{max}(x + 3, 0), 6) / 6
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def __call__(self, x):
+        return hardswish(x)
 
 
 class Step(Module):
