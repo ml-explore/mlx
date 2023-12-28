@@ -257,17 +257,47 @@ class ELU(Module):
 
 @_make_activation_module(relu6)
 class ReLU6(Module):
-    pass
+    r"""Applies the Rectified Linear Unit 6.
+        Applies :math:`\min(\max(x, 0), 6)` element wise.
+
+    See :func:`relu6`, for the functional equivalent.
+    """
+    
+    def __init__(self):
+        super().__init__()
+        
+    def __call__(self, x):
+        return relu6(x)
 
 
 @_make_activation_module(softplus)
 class Softplus(Module):
-    pass
+    r"""Applies the Softplus function.
+        Applies :math:`\log(1 + \exp(x))` element wise.
+        
+    See :func:`softplus`, for the functional equivalent.
+    """
+    
+    def __init__(self):
+        super().__init__()
+        
+    def __call__(self, x):
+        return softplus(x)
 
 
 @_make_activation_module(softsign)
 class Softsign(Module):
-    pass
+    r"""Applies the Softsign function.
+        Applies :math:`\frac{x}{1 + |x|}` element wise.
+        
+    See :func:`softsign`, for the functional equivalent.
+    """
+    
+    def __init__(self):
+        super().__init__()
+        
+    def __call__(self, x):
+        return softsign(x)
 
 
 class CELU(Module):
