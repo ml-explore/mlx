@@ -265,6 +265,11 @@ class Softplus(Module):
     pass
 
 
+@_make_activation_module(softsign)
+class Softsign(Module):
+    pass
+
+
 class CELU(Module):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.
         Applies :math:`\max(0, x) + \min(0, \alpha * (\exp(x / \alpha) - 1))`
