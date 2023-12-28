@@ -35,7 +35,7 @@ from mlx.nn.layers.activations import (
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
 from mlx.nn.layers.convolution import Conv1d, Conv2d
-from mlx.nn.layers.dropout import Dropout, Dropout2d
+from mlx.nn.layers.dropout import Dropout, Dropout2d, Dropout3d
 from mlx.nn.layers.embedding import Embedding
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.normalization import BatchNorm, GroupNorm, LayerNorm, RMSNorm
