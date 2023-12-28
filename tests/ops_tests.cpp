@@ -2506,7 +2506,9 @@ TEST_CASE("test divmod") {
 }
 
 TEST_CASE("test einsum") {
+  CHECK_THROWS(einsum("ijk", {full({2, 2}, 2.0f)}));
   CHECK_THROWS(einsum("", {}));
+
   auto x = einsum("jki", {full({2, 3, 4}, 3.0f)});
   CHECK_EQ(x.shape(), std::vector<int>{4, 2, 3});
   CHECK_EQ(x.dtype(), float32);
@@ -2530,6 +2532,4 @@ TEST_CASE("test einsum") {
   expected = full({4, 9, 14, 16, 7}, 20000.0f);
   CHECK_EQ(x.shape(), expected.shape());
   CHECK_EQ(array_equal(x, expected).item<bool>(), true);
-
-  CHECK_THROWS(einsum("ijk", {full({2, 2}, 2.0f)}));
 }
