@@ -63,6 +63,7 @@ def softplus(x):
     """
     return mx.logaddexp(x, 0)
 
+
 def softsign(x):
     r"""Applies the Softsign function.
 
