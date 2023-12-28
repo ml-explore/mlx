@@ -19,7 +19,7 @@ class Dropout(Module):
         super().__init__()
 
         if p < 0 or p >= 1:
-            raise ValueError("The dropout probability should be in [0, 1)")
+            raise ValueError("The dropout probability {p} is not in [0, 1)")
 
         self._p_1 = 1 - p
 
@@ -62,7 +62,7 @@ class Dropout2d(Module):
         super().__init__()
 
         if p < 0 or p >= 1:
-            raise ValueError("The dropout probability should be in [0, 1)")
+            raise ValueError(f"The dropout probability {p} is not in [0, 1)")
 
         self._p_1 = 1 - p
 
