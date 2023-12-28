@@ -90,5 +90,5 @@ NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
 NO_GPU_MULTI(DivMod)
-
+NO_GPU_MULTI(QRF)
 } // namespace mlx::core

@@ -769,4 +769,8 @@ void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void QRF::eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs) {
+  throw std::runtime_error("Metal QR factorization not yet implemented");
+}
+
 } // namespace mlx::core
