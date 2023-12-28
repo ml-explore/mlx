@@ -15,7 +15,7 @@ test:
 	python -m unittest discover python/tests
 
 .PHONY: stub
-	# Install stubs to enable auto completions and type checking from your IDE:
 stub:
+	# Install stubs to enable auto completions and type checking from your IDE:
 	pip install ".[dev]"
 	python setup.py generate_stubs
