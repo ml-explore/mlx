@@ -1625,4 +1625,17 @@ class Transpose : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class QRF : public Primitive {
+ public:
+  explicit QRF(Stream stream) : Primitive(stream) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_PRINT(QRF)
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 } // namespace mlx::core

@@ -12,3 +12,4 @@
 #include "mlx/stream.h"
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
+#include "mlx/linalg.h"

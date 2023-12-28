@@ -6,6 +6,7 @@
 
 #include "mlx/dtype.h"
 #include "mlx/linalg.h"
+#include "primitives.h"
 
 namespace mlx::core::linalg {
 
@@ -170,6 +171,13 @@ array norm(
     throw std::invalid_argument(msg.str());
   }
   return matrix_norm(a, ord, ax, keepdims, s);
+}
+
+array qrf(const array& a, StreamOrDevice s /* = {} */) {
+  return array(
+    a.shape(),
+    a.dtype(),
+    std::make_unique<QRF>(to_stream(s)));
 }
 
 } // namespace mlx::core::linalg
