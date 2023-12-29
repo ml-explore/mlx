@@ -51,7 +51,7 @@ MTL::Buffer* BufferCache::reuse_from_cache(size_t size) {
   // Find the closest buffer in pool
   MTL::Buffer* pbuf = nullptr;
 
-  // Make sure we use > 50% of the available memory
+  // Make sure we use most of the available memory
   if (auto it = buffer_pool_.lower_bound(size); it != buffer_pool_.end() &&
       it->first < std::min(2 * size, size + vm_page_size)) {
     // Collect from the cache
