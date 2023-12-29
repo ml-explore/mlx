@@ -104,6 +104,7 @@ Operations
    take_along_axis
    tan
    tanh
+   tile
    transpose
    tri
    tril

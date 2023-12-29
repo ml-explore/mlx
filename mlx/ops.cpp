@@ -753,6 +753,41 @@ array repeat(const array& arr, int repeats, StreamOrDevice s) {
   return repeat(flatten(arr, s), repeats, 0, s);
 }
 
+/** Replicating array a specified number of times along each axis */
+array tile(const array& a, std::vector<int> repeats, StreamOrDevice s) {
+  if (repeats.size() == 0) {
+    return a;
+  }
+
+  int d = repeats.size();
+  array arr = copy(a, s);
+
+  if (d < arr.ndim()) {
+    repeats.insert(repeats.begin(), arr.ndim() - d, 1);
+  } else if (d > arr.ndim()) {
+    arr = expand_dims(arr, std::vector<int>(d - arr.ndim(), 0), s);
+  }
+
+  std::vector<int> shape_out;
+
+  for (size_t i = 0; i < arr.shape().size(); i++) {
+    shape_out.push_back(arr.shape()[i] * repeats[i]);
+  }
+
+  int n = arr.size();
+  std::vector<int> old_shape = arr.shape();
+  if (n > 0) {
+    for (size_t i = 0; i < old_shape.size(); i++) {
+      if (repeats[i] != 1) {
+        arr = repeat(reshape(arr, {-1, n}, s), repeats[i], 0, s);
+      }
+      n /= old_shape[i];
+    }
+  }
+
+  return reshape(arr, shape_out, s);
+}
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,

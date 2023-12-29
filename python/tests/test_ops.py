@@ -1518,7 +1518,10 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_repeat(self):
         # Setup data for the tests
-        data = np.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
+        data = np.array(
+            [[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]],
+            dtype=np.float32,
+        )
         # Test repeat along axis 0
         repeat_axis_0 = mx.repeat(mx.array(data), 2, axis=0)
         expected_axis_0 = np.repeat(data, 2, axis=0)
@@ -1546,6 +1549,49 @@ class TestOps(mlx_tests.MLXTestCase):
         repeat_3 = mx.repeat(mx.array(data_3), 2, axis=0)
         expected_3 = np.repeat(data_3, 2, axis=0)
         self.assertEqualArray(repeat_3, mx.array(expected_3))
+
+    def test_tile(self):
+        data = np.array(
+            [
+                [[6.0, 10.0], [1.0, 3.0]],
+                [[9.0, 5.0], [9.0, 2.0]],
+                [[5.0, 3.0], [3.0, 4.0]],
+            ],
+            dtype=np.float32,
+        )
+
+        expected_1 = mx.tile(mx.array(data), [3])
+        tiled_1 = np.tile(data, [3])
+        self.assertEqualArray(expected_1, mx.array(tiled_1))
+
+        data_2 = np.array(
+            [
+                [[4.0, 4.0], [9.0, 7.0]],
+                [[7.0, 3.0], [6.0, 8.0]],
+                [[8.0, 3.0], [8.0, 7.0]],
+            ],
+            dtype=np.float32,
+        )
+
+        expected_2 = mx.tile(mx.array(data_2), [1, 3, 2])
+        tiled_2 = np.tile(data_2, [1, 3, 2])
+        self.assertEqualArray(expected_2, mx.array(tiled_2))
+
+        expected_3 = mx.tile(mx.array(data_2), [3, 2, 2])
+        tiled_3 = np.tile(data_2, (3, 2, 2))
+        self.assertEqualArray(expected_3, mx.array(tiled_3))
+
+        expected_4 = mx.tile(mx.array(data_2), [3, 2, 2, 2])
+        tiled_4 = np.tile(data_2, (3, 2, 2, 2))
+        self.assertEqualArray(expected_4, mx.array(tiled_4))
+
+        expected_5 = mx.tile(mx.array(data_2), [1, 1, 1])
+        tiled_5 = np.tile(data_2, (1, 1, 1))
+        self.assertEqualArray(expected_5, mx.array(tiled_5))
+
+        expected_6 = mx.tile(mx.array(data_2), [1, 1, 1, 1])
+        tiled_6 = np.tile(data_2, (1, 1, 1, 1))
+        self.assertEqualArray(expected_6, mx.array(tiled_6))
 
 
 if __name__ == "__main__":
