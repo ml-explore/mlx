@@ -26,7 +26,7 @@ def sigmoid(x):
 
 
 def relu(x):
-    """Applies the Rectified Linear Unit.
+    r"""Applies the Rectified Linear Unit.
 
     Simply ``mx.maximum(x, 0)``.
     """
@@ -34,7 +34,7 @@ def relu(x):
 
 
 def leaky_relu(x, negative_slope=0.01):
-    """Applies the Leaky Rectified Linear Unit.
+    r"""Applies the Leaky Rectified Linear Unit.
 
     Simply ``mx.maximum(negative_slope * x, x)``.
     """
@@ -42,20 +42,15 @@ def leaky_relu(x, negative_slope=0.01):
 
 
 def log_softmax(x, axis=-1):
-    """Applies the Log Softmax function.
+    r"""Applies the Log Softmax function.
 
-    Applies :math:`\log(\frac{e^{x_i}}{\sum_j e^{x_j}})` element wise.
+    Applies :math:`x + \log \sum_i e^{x_i}` element wise.
     """
-    x_max = mx.max(x, axis=axis, keepdims=True)
-    sub_tmp = mx.subtract(x, x_max)
-    ret = mx.sum(mx.exp(sub_tmp), axis=axis, keepdims=True)
-    ret = mx.log(ret)
-    ret = mx.subtract(sub_tmp, ret)
-    return ret
+    return x -  mx.logsumexp(x, axis=axis, keepdims=True)
 
 
 def elu(x, alpha=1.0):
-    """Applies the Exponential Linear Unit.
+    r"""Applies the Exponential Linear Unit.
 
     Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
     """
@@ -71,13 +66,12 @@ def relu6(x):
 
 
 def softmax(x, axis: Optional[int] = None):
-    """Applies the Softmax function.
+    r"""Applies the Softmax function.
 
     Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
     """
     axis = -1 if axis is None else axis
-    exp_x = mx.exp(x - mx.max(x, axis=axis, keepdims=True))
-    return mx.divide(exp_x, mx.sum(exp_x, axis=axis, keepdims=True))
+    return mx.softmax(x, axis=axis)
 
 
 def softplus(x):
@@ -172,7 +166,7 @@ def gelu_fast_approx(x):
 
 @_make_activation_module
 class Sigmoid(Module):
-    r"""Applies the element-wise function:
+    r"""Applies the sigmoid function, element-wise.
 
     .. math::
         \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
@@ -240,10 +234,10 @@ def mish(x: mx.array) -> mx.array:
 
 
 def hardswish(x):
-    """Applies the hardswish function, element-wise.
+    r"""Applies the hardswish function, element-wise.
 
     .. math::
-        \text{Hardswish}(x) = x * \text{min}(\text{max}(x + 3, 0), 6) / 6
+        \text{Hardswish}(x) = x * \min(\max(x + 3, 0), 6) / 6
     """
     max_x_3 = mx.maximum(x + 3, 0)
     return x * mx.minimum(max_x_3, 6) / 6
@@ -310,7 +304,6 @@ class ELU(Module):
 @_make_activation_module(relu6)
 class ReLU6(Module):
     r"""Applies the Rectified Linear Unit 6.
-        Applies :math:`\min(\max(x, 0), 6)` element wise.
 
     See :func:`relu6`, for the functional equivalent.
     """
@@ -320,7 +313,6 @@ class ReLU6(Module):
 @_make_activation_module(softmax)
 class Softmax(Module):
     r"""Applies the Softmax function.
-        Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
 
     See :func:`softmax`, for the functional equivalent.
     """
@@ -330,7 +322,6 @@ class Softmax(Module):
 @_make_activation_module(softplus)
 class Softplus(Module):
     r"""Applies the Softplus function.
-        Applies :math:`\log(1 + \exp(x))` element wise.
 
     See :func:`softplus`, for the functional equivalent.
     """
@@ -340,7 +331,6 @@ class Softplus(Module):
 @_make_activation_module(softsign)
 class Softsign(Module):
     r"""Applies the Softsign function.
-        Applies :math:`\frac{x}{1 + |x|}` element wise.
 
     See :func:`softsign`, for the functional equivalent.
     """
@@ -369,8 +359,6 @@ class CELU(Module):
 @_make_activation_module(silu)
 class SiLU(Module):
     r"""Applies the Sigmoid Linear Unit. Also known as Swish.
-        Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
-        the logistic sigmoid.
 
     See :func:`silu`, for the functional equivalent.
     """
@@ -381,7 +369,7 @@ class SiLU(Module):
 class LogSoftmax(Module):
     r"""Applies the Log Softmax function.
 
-    Applies :math:`\log(\frac{e^{x_i}}{\sum_j e^{x_j}})` element wise.
+    See :func:`log_softmax`, for the functional equivalent.
     """
     pass
 
@@ -389,7 +377,6 @@ class LogSoftmax(Module):
 @_make_activation_module(log_sigmoid)
 class LogSigmoid(Module):
     r"""Applies the Log Sigmoid function.
-        Applies :math:`\log(\sigma(x)) = -\log(1 + e^{-x})` element wise.
 
     See :func:`log_sigmoid`, for the functional equivalent.
     """
@@ -468,7 +455,6 @@ def tanh(x):
 @_make_activation_module(tanh)
 class Tanh(Module):
     r"""Applies the hyperbolic tangent function.
-        Applies :math:`\tanh(x)` element wise.
 
     See :func:`tanh`, for the functional equivalent.
     """
@@ -479,8 +465,7 @@ class Tanh(Module):
 class Hardswish(Module):
     r"""Applies the hardswish function, element-wise.
 
-    .. math::
-        \text{Hardswish}(x) = x * \text{min}(\text{max}(x + 3, 0), 6) / 6
+    See :func:`hardswish`, for the functional equivalent.
     """
     pass
 
@@ -512,9 +497,6 @@ class Step(Module):
 @_make_activation_module(selu)
 class SELU(Module):
     r"""Applies the Scaled Exponential Linear Unit.
-        Applies :math:`\lambda x` if :math:`x > 0` and
-        :math:`\lambda \alpha (\exp(x) - 1)` if :math:`x \leq 0`, where
-        :math:`\lambda = 1.0507` and :math:`\alpha = 1.67326`.
 
     See :func:`selu`, for the functional equivalent.
     """
