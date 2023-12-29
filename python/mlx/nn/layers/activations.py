@@ -1,7 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import Optional
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -46,7 +45,7 @@ def log_softmax(x, axis=-1):
 
     Applies :math:`x + \log \sum_i e^{x_i}` element wise.
     """
-    return x -  mx.logsumexp(x, axis=axis, keepdims=True)
+    return x - mx.logsumexp(x, axis=axis, keepdims=True)
 
 
 def elu(x, alpha=1.0):
@@ -65,12 +64,11 @@ def relu6(x):
     return mx.minimum(mx.maximum(x, 0), 6.0)
 
 
-def softmax(x, axis: Optional[int] = None):
+def softmax(x, axis=-1):
     r"""Applies the Softmax function.
 
     Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
     """
-    axis = -1 if axis is None else axis
     return mx.softmax(x, axis=axis)
 
 
