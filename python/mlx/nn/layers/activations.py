@@ -41,7 +41,7 @@ def leaky_relu(x, negative_slope=0.01):
     return mx.maximum(negative_slope * x, x)
 
 
-def log_softmax(x, axis: Optional[int] = -1):
+def log_softmax(x, axis=-1):
     """Applies the Log Softmax function.
 
     Applies :math:`\log(\frac{e^{x_i}}{\sum_j e^{x_j}})` element wise.
@@ -172,6 +172,11 @@ def gelu_fast_approx(x):
 
 @_make_activation_module
 class Sigmoid(Module):
+    r"""Applies the element-wise function:
+
+    .. math::
+        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
+    """
     pass
 
 
@@ -223,6 +228,7 @@ def prelu(x: mx.array, alpha: mx.array) -> mx.array:
 
 def mish(x: mx.array) -> mx.array:
     r"""Applies the Mish function, element-wise.
+    Mish: A Self Regularized Non-Monotonic Neural Activation Function.
 
     Reference: https://arxiv.org/abs/1908.08681
 
@@ -253,12 +259,7 @@ class Mish(Module):
         \text{Mish}(x) = x * \text{Tanh}(\text{Softplus}(x))
 
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return mish(x)
+    pass
 
 
 @_make_activation_module(relu)
@@ -268,12 +269,7 @@ class ReLU(Module):
 
     See :func:`relu`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return relu(x)
+    pass
 
 
 class LeakyReLU(Module):
@@ -318,12 +314,7 @@ class ReLU6(Module):
 
     See :func:`relu6`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return relu6(x)
+    pass
 
 
 @_make_activation_module(softmax)
@@ -333,12 +324,7 @@ class Softmax(Module):
 
     See :func:`softmax`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return softmax(x)
+    pass
 
 
 @_make_activation_module(softplus)
@@ -348,12 +334,7 @@ class Softplus(Module):
 
     See :func:`softplus`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return softplus(x)
+    pass
 
 
 @_make_activation_module(softsign)
@@ -363,12 +344,7 @@ class Softsign(Module):
 
     See :func:`softsign`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return softsign(x)
+    pass
 
 
 class CELU(Module):
@@ -398,12 +374,7 @@ class SiLU(Module):
 
     See :func:`silu`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return silu(x)
+    pass
 
 
 @_make_activation_module(log_softmax)
@@ -412,12 +383,7 @@ class LogSoftmax(Module):
 
     Applies :math:`\log(\frac{e^{x_i}}{\sum_j e^{x_j}})` element wise.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return log_softmax(x)
+    pass
 
 
 @_make_activation_module(log_sigmoid)
@@ -427,15 +393,21 @@ class LogSigmoid(Module):
 
     See :func:`log_sigmoid`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return log_sigmoid(x)
+    pass
 
 
 class PReLU(Module):
+    r"""Applies the element-wise parametric ReLU.
+        Applies :math:`\max(0, x) + a * \min(0, x)` element wise, where :math:`a`
+        is an array.
+
+    See :func:`prelu`, for the functional equivalent.
+
+    Args:
+        num_parameters: number of :math:`a` to learn. Default: 1
+        init: the initial value of :math:`a`. Default: 0.25
+    """
+
     def __init__(self, num_parameters=1, init=0.25):
         super().__init__()
         self.weight = mx.full([num_parameters], init)
@@ -500,12 +472,7 @@ class Tanh(Module):
 
     See :func:`tanh`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return tanh(x)
+    pass
 
 
 @_make_activation_module(hardswish)
@@ -515,12 +482,7 @@ class Hardswish(Module):
     .. math::
         \text{Hardswish}(x) = x * \text{min}(\text{max}(x + 3, 0), 6) / 6
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return hardswish(x)
+    pass
 
 
 class Step(Module):
@@ -556,9 +518,4 @@ class SELU(Module):
 
     See :func:`selu`, for the functional equivalent.
     """
-
-    def __init__(self):
-        super().__init__()
-
-    def __call__(self, x):
-        return selu(x)
+    pass
