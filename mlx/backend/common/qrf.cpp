@@ -31,6 +31,8 @@ void QRF::eval(const std::vector<array>& inputs, array& out) {
   int info;
 
   std::cout << "A:" << A << "\n";
+  auto fnormA = sqrt(sum(square(A)));
+  std::cout << "fnorm A: " << fnormA << "\n";
 
   // Compute workspace size
   sgeqrf_(
@@ -90,7 +92,12 @@ void QRF::eval(const std::vector<array>& inputs, array& out) {
 
   std::cout << "Q:" << C << "\n";
   std::cout << "R:" << R << "\n";
-  std::cout << "QR: " << matmul(C, R) << "\n";
+  auto qr = matmul(C, R);
+  std::cout << "QR: " << qr << "\n";
+  auto diff = subtract(A, qr);
+  std::cout << "A - QR: " << diff << "\n";
+  auto fnorm = sqrt(sum(square(diff)));
+  std::cout << "fnorm: " << fnorm << "\n";
 
   out.set_data(
     allocator::malloc_or_wait(C.nbytes()),
