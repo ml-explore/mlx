@@ -16,17 +16,22 @@
 #endif
 
 namespace mlx::core {
-
 void QRF::eval(const std::vector<array>& inputs, array& out) {
-  auto& in = inputs[0];
+  assert(inputs.size() == 1);
 
-  array A = in;
-  const int M = in.shape(0);
-  const int N = in.shape(1);
+  array A = inputs[0];
+
+  if (!is_floating_point(A.dtype())) {
+    throw std::runtime_error(
+            "QR factorization is only supported for floating point types.");
+  }
+
+  const int M = A.shape(0);
+  const int N = A.shape(1);
   const int lda =  std::max(M, N);
   array tau = zeros({std::min(M, N)}, default_device()); // scalar factors of the elementary reflectors
   tau.eval();
-  array work = array(1, in.dtype());
+  array work = array(1, A.dtype());
   int lwork = -1;
   int info;
 
@@ -48,7 +53,7 @@ void QRF::eval(const std::vector<array>& inputs, array& out) {
 
   // Update workspace size
   lwork = work.item<float>();
-  work = array(std::max(1, lwork), in.dtype());
+  work = array(std::max(1, lwork), A.dtype());
 
   // Solve
   sgeqrf_(
