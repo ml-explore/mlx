@@ -66,4 +66,3 @@ inline array qrf(const array& a, int axis, StreamOrDevice s = {}) {
 }
 
 } // namespace mlx::core::linalg
-

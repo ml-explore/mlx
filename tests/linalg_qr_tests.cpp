@@ -2,13 +2,13 @@
 
 #include "doctest/doctest.h"
 
-#include "mlx/mlx.h"
 #include <iostream>
+#include "mlx/mlx.h"
 
 using namespace mlx::core;
 
 TEST_CASE("test QR factorization") {
-  array A = array({{2., 1., 1., 2.}, {2,2}});
+  array A = array({{2., 1., 1., 2.}, {2, 2}});
   array out = linalg::qrf(A, default_stream(Device::cpu));
   out.eval();
 
