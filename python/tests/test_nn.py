@@ -791,7 +791,24 @@ class TestNN(mlx_tests.MLXTestCase):
         targets = mx.zeros((2, 4))
         loss = nn.losses.log_cosh_loss(inputs, targets, reduction="mean")
         self.assertAlmostEqual(loss.item(), 0.433781, places=6)
-
+        
+    def test_dropout(self):
+        x = mx.ones((2, 4))
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+        
+    def test_dropout2d(self):
+        x = mx.ones((2, 4, 4, 4))
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+        
+    def test_dropout3d(self):
+        x = mx.ones((2, 4, 4, 4, 4))
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
 
 if __name__ == "__main__":
     unittest.main()
