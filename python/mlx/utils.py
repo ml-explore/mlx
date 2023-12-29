@@ -137,8 +137,8 @@ def tree_unflatten(tree):
         keys = sorted((int(idx), idx) for idx in children.keys())
         l = []
         for i, k in keys:
-            if i > len(l):
-                l.extend([{} for _ in range(i - len(l))])
+            # if i <= len(l), no {} will be appended.
+            l.extend([{} for _ in range(i - len(l))])
             l.append(tree_unflatten(children[k]))
         return l
     else:
