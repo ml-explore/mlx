@@ -68,10 +68,10 @@ def quant_matmul(x, w, s, b):
     mx.eval(ys)
 
 
-def conv1d(x, y):
+def conv1d(x, y, groups):
     ys = []
     for i in range(10):
-        ys.append(mx.conv1d(x, y))
+        ys.append(mx.conv1d(x, y, groups=groups))
     mx.eval(ys)
 
 
