@@ -50,7 +50,7 @@ class Linear(Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        scale = math.sqrt(1. / self.input_dims)
+        scale = math.sqrt(1.0 / self.input_dims)
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
@@ -92,7 +92,9 @@ class Bilinear(Module):
           not use a bias. Default ``True``.
     """
 
-    def __init__(self, input1_dims: int, input2_dims: int, output_dims: int, bias: bool = True):
+    def __init__(
+        self, input1_dims: int, input2_dims: int, output_dims: int, bias: bool = True
+    ):
         super().__init__()
         self.input1_dims = input1_dims
         self.input2_dims = input2_dims
@@ -104,7 +106,7 @@ class Bilinear(Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        scale = math.sqrt(1. / self.input1_dims)
+        scale = math.sqrt(1.0 / self.input1_dims)
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
@@ -118,8 +120,10 @@ class Bilinear(Module):
             )
 
     def _extra_repr(self):
-        return (f"input1_dims={self.input1_dims}, input2_dims={self.input2_dims}, output_dims={self.output_dims}, "
-                f"bias={'bias' in self}")
+        return (
+            f"input1_dims={self.input1_dims}, input2_dims={self.input2_dims}, output_dims={self.output_dims}, "
+            f"bias={'bias' in self}"
+        )
 
     def __call__(self, input1, input2):
         output = (input1 @ self.weight * input2.reshape(1, *input2.shape)).sum(-1).T
