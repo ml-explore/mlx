@@ -16,13 +16,6 @@
 namespace py = pybind11;
 using namespace py::literals;
 
-enum PyScalarT {
-  pybool = 0,
-  pyint = 1,
-  pyfloat = 2,
-  pycomplex = 3,
-};
-
 template <typename T>
 py::list to_list(array& a, size_t index, int dim) {
   py::list pl;
@@ -113,6 +106,89 @@ void fill_vector(T list, std::vector<U>& vals) {
       fill_vector(l.template cast<py::list>(), vals);
     } else if (py::isinstance<py::tuple>(*list.begin())) {
       fill_vector(l.template cast<py::tuple>(), vals);
+    } else if (py::isinstance<array>(l)) {
+      auto arr = py::cast<array>(l);
+      arr.eval();
+      switch (arr.dtype()) {
+        case bool_:
+          vals.insert(
+              vals.end(),
+              arr.template data<bool>(),
+              arr.template data<bool>() + arr.size());
+          break;
+        case uint8:
+          vals.insert(
+              vals.end(),
+              arr.template data<uint8_t>(),
+              arr.template data<uint8_t>() + arr.size());
+          break;
+        case uint16:
+          vals.insert(
+              vals.end(),
+              arr.template data<uint16_t>(),
+              arr.template data<uint16_t>() + arr.size());
+          break;
+        case uint32:
+          vals.insert(
+              vals.end(),
+              arr.template data<uint32_t>(),
+              arr.template data<uint32_t>() + arr.size());
+          break;
+        case uint64:
+          vals.insert(
+              vals.end(),
+              arr.template data<uint64_t>(),
+              arr.template data<uint64_t>() + arr.size());
+          break;
+        case int8:
+          vals.insert(
+              vals.end(),
+              arr.template data<int8_t>(),
+              arr.template data<int8_t>() + arr.size());
+          break;
+        case int16:
+          vals.insert(
+              vals.end(),
+              arr.template data<int16_t>(),
+              arr.template data<int16_t>() + arr.size());
+          break;
+        case int32:
+          vals.insert(
+              vals.end(),
+              arr.template data<int32_t>(),
+              arr.template data<int32_t>() + arr.size());
+          break;
+        case int64:
+          vals.insert(
+              vals.end(),
+              arr.template data<int64_t>(),
+              arr.template data<int64_t>() + arr.size());
+          break;
+        case float16:
+          vals.insert(
+              vals.end(),
+              arr.template data<float16_t>(),
+              arr.template data<float16_t>() + arr.size());
+          break;
+        case float32:
+          vals.insert(
+              vals.end(),
+              arr.template data<float>(),
+              arr.template data<float>() + arr.size());
+          break;
+        case bfloat16:
+          vals.insert(
+              vals.end(),
+              arr.template data<bfloat16_t>(),
+              arr.template data<bfloat16_t>() + arr.size());
+          break;
+        case complex64:
+          vals.insert(
+              vals.end(),
+              arr.template data<complex64_t>(),
+              arr.template data<complex64_t>() + arr.size());
+          break;
+      }
     } else {
       vals.push_back(l.template cast<U>());
     }
@@ -120,7 +196,7 @@ void fill_vector(T list, std::vector<U>& vals) {
 }
 
 template <typename T>
-PyScalarT validate_shape(T list, const std::vector<int>& shape, int idx) {
+Dtype validate_shape(T list, const std::vector<int>& shape, int idx) {
   if (idx >= shape.size()) {
     throw std::invalid_argument("Initialization encountered extra dimension.");
   }
@@ -131,30 +207,42 @@ PyScalarT validate_shape(T list, const std::vector<int>& shape, int idx) {
   }
 
   if (s == 0) {
-    return pyfloat;
+    return float32;
   }
 
-  PyScalarT type = pybool;
+  Dtype type = bool_;
   for (auto l : list) {
-    PyScalarT t;
+    Dtype t = bool_;
     if (py::isinstance<py::list>(l)) {
       t = validate_shape(l.template cast<py::list>(), shape, idx + 1);
     } else if (py::isinstance<py::tuple>(*list.begin())) {
       t = validate_shape(l.template cast<py::tuple>(), shape, idx + 1);
     } else if (py::isinstance<py::bool_>(l)) {
-      t = pybool;
+      t = bool_;
     } else if (py::isinstance<py::int_>(l)) {
-      t = pyint;
+      t = int32;
     } else if (py::isinstance<py::float_>(l)) {
-      t = pyfloat;
+      t = float32;
     } else if (PyComplex_Check(l.ptr())) {
-      t = pycomplex;
+      t = complex64;
+    } else if (py::isinstance<array>(l)) {
+      auto arr = py::cast<array>(l);
+      if (arr.shape().size() + idx + 1 == shape.size() &&
+          std::equal(
+              arr.shape().cbegin(),
+              arr.shape().cend(),
+              shape.cbegin() + idx + 1)) {
+        t = arr.dtype();
+      } else {
+        throw std::invalid_argument(
+            "Initialization encountered non-uniform length.");
+      }
     } else {
       std::ostringstream msg;
       msg << "Invalid type in array initialization" << l.get_type() << ".";
       throw std::invalid_argument(msg.str());
     }
-    type = std::max(type, t);
+    type = promote_types(type, t);
   }
   return type;
 }
@@ -168,9 +256,27 @@ void get_shape(T list, std::vector<int>& shape) {
       return get_shape(l.template cast<py::list>(), shape);
     } else if (py::isinstance<py::tuple>(l)) {
       return get_shape(l.template cast<py::tuple>(), shape);
+    } else if (py::isinstance<array>(l)) {
+      auto arr = py::cast<array>(l);
+      shape.insert(shape.end(), arr.shape().begin(), arr.shape().end());
+      return;
     }
   }
 }
+
+using array_init_type = std::variant<
+    py::bool_,
+    py::int_,
+    py::float_,
+    std::complex<float>,
+    py::list,
+    py::tuple,
+    py::array,
+    py::buffer,
+    py::object>;
+
+// Forward declaration
+array create_array(array_init_type v, std::optional<Dtype> t);
 
 template <typename T>
 array array_from_list(T pl, std::optional<Dtype> dtype) {
@@ -181,37 +287,43 @@ array array_from_list(T pl, std::optional<Dtype> dtype) {
   // Validate the shape and type
   auto type = validate_shape(pl, shape, 0);
 
-  size_t size = 1;
-  for (auto s : shape) {
-    size *= s;
+  // check when shape is [0]
+  if (shape.size() == 1 && shape[0] == 0) {
+    return array(std::initializer_list<float>(), dtype.value_or(type));
   }
 
-  // Make the array
-  switch (type) {
-    case pybool: {
-      std::vector<bool> vals;
-      fill_vector(pl, vals);
-      return array(vals.begin(), shape, dtype.value_or(bool_));
-    }
-    case pyint: {
-      std::vector<int> vals;
-      fill_vector(pl, vals);
-      return array(vals.begin(), shape, dtype.value_or(int32));
-    }
-    case pyfloat: {
-      std::vector<float> vals;
-      fill_vector(pl, vals);
-      return array(vals.begin(), shape, dtype.value_or(float32));
-    }
-    case pycomplex: {
-      std::vector<std::complex<float>> vals;
-      fill_vector(pl, vals);
-      return array(
-          reinterpret_cast<complex64_t*>(vals.data()),
-          shape,
-          dtype.value_or(complex64));
+  std::vector<array> arrays;
+  for (auto l : pl) {
+    if (py::isinstance<py::list>(l)) {
+      arrays.push_back(
+          create_array(l.template cast<py::list>(), dtype.value_or(type)));
+    } else if (py::isinstance<py::tuple>(l)) {
+      arrays.push_back(
+          create_array(l.template cast<py::tuple>(), dtype.value_or(type)));
+    } else if (py::isinstance<py::bool_>(l)) {
+      arrays.push_back(
+          create_array(py::cast<py::bool_>(l), dtype.value_or(type)));
+    } else if (py::isinstance<py::int_>(l)) {
+      arrays.push_back(
+          create_array(py::cast<py::int_>(l), dtype.value_or(type)));
+    } else if (py::isinstance<py::float_>(l)) {
+      arrays.push_back(
+          create_array(py::cast<py::float_>(l), dtype.value_or(type)));
+    } else if (PyComplex_Check(l.ptr())) {
+      arrays.push_back(
+          create_array(py::cast<std::complex<float>>(l), dtype.value_or(type)));
+    } else if (py::isinstance<py::array>(l)) {
+      arrays.push_back(
+          create_array(py::cast<py::array>(l), dtype.value_or(type)));
+    } else if (py::isinstance<py::buffer>(l)) {
+      arrays.push_back(
+          create_array(py::cast<py::buffer>(l), dtype.value_or(type)));
+    } else {
+      arrays.push_back(
+          create_array(py::cast<py::object>(l), dtype.value_or(type)));
     }
   }
+  return stack(arrays);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -419,6 +531,29 @@ array np_array_to_mlx(py::array np_array, std::optional<Dtype> dtype) {
 // Module
 ///////////////////////////////////////////////////////////////////////////////
 
+array create_array(array_init_type v, std::optional<Dtype> t) {
+  if (auto pv = std::get_if<py::bool_>(&v); pv) {
+    return array(py::cast<bool>(*pv), t.value_or(bool_));
+  } else if (auto pv = std::get_if<py::int_>(&v); pv) {
+    return array(py::cast<int>(*pv), t.value_or(int32));
+  } else if (auto pv = std::get_if<py::float_>(&v); pv) {
+    return array(py::cast<float>(*pv), t.value_or(float32));
+  } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
+    return array(static_cast<complex64_t>(*pv), t.value_or(complex64));
+  } else if (auto pv = std::get_if<py::list>(&v); pv) {
+    return array_from_list(*pv, t);
+  } else if (auto pv = std::get_if<py::tuple>(&v); pv) {
+    return array_from_list(*pv, t);
+  } else if (auto pv = std::get_if<py::array>(&v); pv) {
+    return np_array_to_mlx(*pv, t);
+  } else if (auto pv = std::get_if<py::buffer>(&v); pv) {
+    return np_array_to_mlx(*pv, t);
+  } else {
+    auto arr = to_array_with_accessor(std::get<py::object>(v));
+    return astype(arr, t.value_or(arr.dtype()));
+  }
+}
+
 void init_array(py::module_& m) {
   // Types
   py::class_<Dtype>(
@@ -466,37 +601,8 @@ void init_array(py::module_& m) {
     options.disable_function_signatures();
 
     array_class.def(
-        py::init([](std::variant<
-                        py::bool_,
-                        py::int_,
-                        py::float_,
-                        std::complex<float>,
-                        py::list,
-                        py::tuple,
-                        py::array,
-                        py::buffer,
-                        py::object> v,
-                    std::optional<Dtype> t) {
-          if (auto pv = std::get_if<py::bool_>(&v); pv) {
-            return array(py::cast<bool>(*pv), t.value_or(bool_));
-          } else if (auto pv = std::get_if<py::int_>(&v); pv) {
-            return array(py::cast<int>(*pv), t.value_or(int32));
-          } else if (auto pv = std::get_if<py::float_>(&v); pv) {
-            return array(py::cast<float>(*pv), t.value_or(float32));
-          } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
-            return array(static_cast<complex64_t>(*pv), t.value_or(complex64));
-          } else if (auto pv = std::get_if<py::list>(&v); pv) {
-            return array_from_list(*pv, t);
-          } else if (auto pv = std::get_if<py::tuple>(&v); pv) {
-            return array_from_list(*pv, t);
-          } else if (auto pv = std::get_if<py::array>(&v); pv) {
-            return np_array_to_mlx(*pv, t);
-          } else if (auto pv = std::get_if<py::buffer>(&v); pv) {
-            return np_array_to_mlx(*pv, t);
-          } else {
-            auto arr = to_array_with_accessor(std::get<py::object>(v));
-            return astype(arr, t.value_or(arr.dtype()));
-          }
+        py::init([](array_init_type v, std::optional<Dtype> t) {
+          return create_array(v, t);
         }),
         "val"_a,
         "dtype"_a = std::nullopt,
