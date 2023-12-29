@@ -6,7 +6,7 @@
 
 #include "mlx/dtype.h"
 #include "mlx/linalg.h"
-#include "primitives.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core::linalg {
 
