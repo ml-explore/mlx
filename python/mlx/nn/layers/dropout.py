@@ -87,13 +87,14 @@ class Dropout2d(Module):
         mask = mx.random.bernoulli(p=self._p_1, shape=mask_shape)
         return (1 / self._p_1) * mask * x
 
+
 class Dropout3d(Module):
     r"""Apply 3D channel-wise dropout during training.
 
     Randomly zero out entire channels independently with probability :math:`p`.
     This layer expects the channels to be last, i.e., the input shape should be
-    `NDHWC` or `DHWC` where: `N` is the batch dimension, `D` is the depth, 
-    `H` is the input image height, `W` is the input image width, and `C` is 
+    `NDHWC` or `DHWC` where: `N` is the batch dimension, `D` is the depth,
+    `H` is the input image height, `W` is the input image width, and `C` is
     the number of input channels.
 
     The remaining channels are scaled by :math:`\frac{1}{1-p}` to
