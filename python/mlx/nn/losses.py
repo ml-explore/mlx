@@ -372,12 +372,13 @@ def log_cosh_loss(
 
     return _reduce(loss, reduction)
 
+
 def focal_loss(
     inputs: mx.array,
     targets: mx.array,
     alpha: float = 0.25,
     gamma: float = 2.0,
-    reduction: str = "none"
+    reduction: str = "none",
 ) -> mx.array:
     r"""
     Computes the Focal Loss between inputs and targets, which is designed to address
@@ -400,26 +401,24 @@ def focal_loss(
     """
     if gamma < 0:
         raise ValueError(f"Focal loss gamma must be non-negative, got {gamma}.")
-    
+
     # Calculating the cross-entropy loss
     ce_loss = mx.logaddexp(0.0, inputs) - targets * inputs
-    
+
     # Calculating the probability
     pt = mx.exp(-ce_loss)
-    
+
     # Calculating Focal Loss
     focal_loss = -alpha * ((1 - pt) ** gamma) * ce_loss
-    
+
     return _reduce(focal_loss, reduction)
 
+
 def dice_loss(
-    inputs: mx.array,
-    targets: mx.array,
-    epsilon: float = 1e-6,
-    reduction: str = "none"
+    inputs: mx.array, targets: mx.array, epsilon: float = 1e-6, reduction: str = "none"
 ) -> mx.array:
     r"""
-    Computes the Dice Loss, which is a measure of overlap between two samples. 
+    Computes the Dice Loss, which is a measure of overlap between two samples.
     This loss is commonly used for binary segmentation tasks.
 
     .. math::
@@ -438,19 +437,17 @@ def dice_loss(
     """
     intersection = mx.sum(inputs * targets, axis=1)
     cardinality = mx.sum(inputs + targets, axis=1)
-    dice_score = (2. * intersection + epsilon) / (cardinality + epsilon)
+    dice_score = (2.0 * intersection + epsilon) / (cardinality + epsilon)
     loss = 1 - dice_score
 
     return _reduce(loss, reduction)
 
+
 def iou_loss(
-    inputs: mx.array,
-    targets: mx.array,
-    epsilon: float = 1e-6,
-    reduction: str = "none"
+    inputs: mx.array, targets: mx.array, epsilon: float = 1e-6, reduction: str = "none"
 ) -> mx.array:
     r"""
-    Computes the Intersection over Union (IoU) Loss, which is a measure of the 
+    Computes the Intersection over Union (IoU) Loss, which is a measure of the
     overlap between two sets, typically used in segmentation tasks.
 
     .. math::
@@ -474,13 +471,14 @@ def iou_loss(
 
     return _reduce(loss, reduction)
 
+
 def contrastive_loss(
     anchors: mx.array,
     positives: mx.array,
     negatives: mx.array,
     margin: float = 1.0,
     p: int = 2,
-    reduction: str = "none"
+    reduction: str = "none",
 ) -> mx.array:
     r"""
     Computes the Contrastive Loss for a set of anchor, positive, and negative samples.
@@ -504,8 +502,9 @@ def contrastive_loss(
     positive_distance = mx.sqrt(mx.power(anchors - positives, p).sum(axis=1))
     negative_distance = mx.sqrt(mx.power(anchors - negatives, p).sum(axis=1))
     loss = mx.maximum(positive_distance - negative_distance + margin, 0)
-    
+
     return _reduce(loss, reduction)
+
 
 def tversky_loss(
     inputs: mx.array,
@@ -513,7 +512,7 @@ def tversky_loss(
     alpha: float = 0.5,
     beta: float = 0.5,
     epsilon: float = 1e-6,
-    reduction: str = "none"
+    reduction: str = "none",
 ) -> mx.array:
     r"""
     Computes the Tversky Loss, a generalization of the Dice Loss, allowing more control over false
@@ -538,7 +537,9 @@ def tversky_loss(
     intersection = mx.sum(inputs * targets, axis=1)
     false_negatives = mx.sum(inputs * (1 - targets), axis=1)
     false_positives = mx.sum((1 - inputs) * targets, axis=1)
-    tversky_index = (intersection + epsilon) / (intersection + alpha * false_negatives + beta * false_positives + epsilon)
+    tversky_index = (intersection + epsilon) / (
+        intersection + alpha * false_negatives + beta * false_positives + epsilon
+    )
     loss = 1 - tversky_index
 
     return _reduce(loss, reduction)
