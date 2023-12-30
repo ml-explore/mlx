@@ -1337,12 +1337,18 @@ array var(
     bool keepdims /* = false */,
     int ddof /* = 0*/,
     StreamOrDevice s /* = {}*/) {
-  auto nelements = compute_number_of_elements(a, axes);
   auto dtype = at_least_float(a.dtype());
   auto mu2 = square(mean(a, axes, keepdims, s), s);
   auto a2 = mean(square(a, s), axes, keepdims, s);
-  float factor = nelements / (nelements - ddof);
-  return multiply(subtract(a2, mu2, s), array(factor, dtype), s);
+  auto v = subtract(a2, mu2, s);
+
+  if (ddof != 0) {
+    auto nelements = compute_number_of_elements(a, axes);
+    float factor = nelements / (nelements - ddof);
+    v = multiply(v, array(factor, dtype), s);
+  }
+
+  return v;
 }
 
 array var(
