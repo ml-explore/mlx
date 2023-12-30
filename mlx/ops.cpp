@@ -1339,9 +1339,10 @@ array var(
     StreamOrDevice s /* = {}*/) {
   auto nelements = compute_number_of_elements(a, axes);
   auto dtype = at_least_float(a.dtype());
-  auto mu = mean(a, axes, true, s);
-  auto S = sum(square(subtract(a, mu, s), s), axes, keepdims, s);
-  return multiply(S, array(1.0 / (nelements - ddof), dtype), s);
+  auto mu2 = square(mean(a, axes, keepdims, s), s);
+  auto a2 = mean(square(a, s), axes, keepdims, s);
+  float factor = nelements / (nelements - ddof);
+  return multiply(subtract(a2, mu2, s), array(factor, dtype), s);
 }
 
 array var(
