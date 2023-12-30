@@ -791,6 +791,70 @@ class TestNN(mlx_tests.MLXTestCase):
         targets = mx.zeros((2, 4))
         loss = nn.losses.log_cosh_loss(inputs, targets, reduction="mean")
         self.assertAlmostEqual(loss.item(), 0.433781, places=6)
+        
+    def test_focal_loss(self):
+        inputs = mx.array([[2.0, -1.0, 3.0, 0.1], [-1.0, 2.0, -0.5, 0.2]])
+        targets = mx.array([[1.0, 0.0, 0.0, 1.0], [0.0, 1.0, 0.0, 1.0]])
+        alpha = 0.25
+        gamma = 2.0
+        ce_loss = mx.logaddexp(0.0, inputs) - targets * inputs
+        pt = mx.exp(-ce_loss)
+        expected_loss = -alpha * ((1 - pt) ** gamma) * ce_loss
+        expected_loss = mx.mean(expected_loss)
+        loss = nn.losses.focal_loss(inputs, targets, alpha=alpha, gamma=gamma, reduction="mean")
+        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=6)
+        
+    def test_dice_loss(self):
+        inputs = mx.array([[1, 0, 1, 1], [0, 1, 1, 0]])
+        targets = mx.array([[1, 1, 1, 0], [0, 0, 1, 1]])
+        epsilon = 1e-6
+        intersection = mx.sum(inputs * targets, axis=1)
+        cardinality = mx.sum(inputs + targets, axis=1)
+        dice_score = (2. * intersection + epsilon) / (cardinality + epsilon)
+        expected_loss = 1 - dice_score
+        expected_loss = mx.mean(expected_loss)
+        loss = nn.losses.dice_loss(inputs, targets, epsilon=epsilon, reduction="mean")
+        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=6)
+
+    def test_iou_loss(self):
+        inputs = mx.array([[1, 0, 1, 1], [0, 1, 1, 0]])
+        targets = mx.array([[1, 1, 1, 0], [0, 0, 1, 1]])
+        epsilon = 1e-6
+        intersection = mx.sum(inputs * targets, axis=1)
+        union = mx.sum(inputs + targets - inputs * targets, axis=1)
+        iou_score = (intersection + epsilon) / (union + epsilon)
+        expected_loss = 1 - iou_score
+        expected_loss = mx.mean(expected_loss)
+        loss = nn.losses.iou_loss(inputs, targets, epsilon=epsilon, reduction="mean")
+        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=6)
+        
+    def test_contrastive_loss(self):
+        anchors = mx.array([[1, 2], [3, 4]])
+        positives = mx.array([[1, 3], [2, 4]])
+        negatives = mx.array([[5, 6], [7, 8]])
+        margin = 1.0
+        p = 2
+        positive_distance = mx.sqrt(mx.power(anchors - positives, p).sum(axis=1))
+        negative_distance = mx.sqrt(mx.power(anchors - negatives, p).sum(axis=1))
+        expected_loss = mx.maximum(positive_distance - negative_distance + margin, 0)
+        expected_loss = mx.mean(expected_loss)
+        loss = nn.losses.contrastive_loss(anchors, positives, negatives, margin=margin, p=p, reduction="mean")
+        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=6)
+        
+    def test_tversky_loss(self):
+        inputs = mx.array([[1, 0, 1, 1], [0, 1, 1, 0]])
+        targets = mx.array([[1, 1, 1, 0], [0, 0, 1, 1]])
+        alpha = 0.5
+        beta = 0.5
+        epsilon = 1e-6
+        intersection = mx.sum(inputs * targets, axis=1)
+        false_negatives = mx.sum(inputs * (1 - targets), axis=1)
+        false_positives = mx.sum((1 - inputs) * targets, axis=1)
+        tversky_index = (intersection + epsilon) / (intersection + alpha * false_negatives + beta * false_positives + epsilon)
+        expected_loss = 1 - tversky_index
+        expected_loss = mx.mean(expected_loss)
+        loss = nn.losses.tversky_loss(inputs, targets, alpha=alpha, beta=beta, epsilon=epsilon, reduction="mean")
+        self.assertAlmostEqual(loss.item(), expected_loss.item(), places=6)
 
 
 if __name__ == "__main__":
