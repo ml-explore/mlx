@@ -4,7 +4,9 @@ from mlx.nn.layers.activations import (
     CELU,
     ELU,
     GELU,
+    GLU,
     SELU,
+    GatedActivation,
     Hardswish,
     LeakyReLU,
     LogSigmoid,
@@ -21,9 +23,11 @@ from mlx.nn.layers.activations import (
     Tanh,
     celu,
     elu,
+    gated_activation,
     gelu,
     gelu_approx,
     gelu_fast_approx,
+    glu,
     hardswish,
     leaky_relu,
     log_sigmoid,
@@ -39,10 +43,6 @@ from mlx.nn.layers.activations import (
     softsign,
     step,
     tanh,
-    glu,
-    gated_activation,
-    GLU,
-    GatedActivation,
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
