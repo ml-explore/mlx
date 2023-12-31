@@ -2695,7 +2695,7 @@ array quantized_matmul(
 
   // If needed reshape x to the original batch shape
   if (original_shape.size() != 1) {
-    original_shape.push_back(w.shape(1));
+    original_shape.push_back(w_outer_dims);
     out = reshape(out, original_shape, s);
   }
 

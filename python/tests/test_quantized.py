@@ -24,34 +24,54 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 for M in [8, 32, 33, 64]:
                     for N in [512, 1024]:
                         for K in [512, 1024]:
-                            with self.subTest(
-                                shape=(M, N, K), group_size=group_size, bits=bits
-                            ):
-                                x = mx.random.normal(shape=(M, K), key=k1)
-                                w = mx.random.normal(shape=(N, K), key=k2)
-                                w_q, scales, biases = mx.quantize(w, group_size, bits)
-                                w_hat = mx.dequantize(
-                                    w_q, scales, biases, group_size, bits
-                                )
-                                y_q = mx.quantized_matmul(
-                                    x, w_q.T, scales, biases, group_size, bits
-                                )
-                                y_hat = x @ w_hat.T
-                                self.assertEqual(y_q.shape, y_hat.shape)
-                                self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+                            for transposed in [True, False]:
+                                with self.subTest(
+                                    shape=(M, N, K),
+                                    group_size=group_size,
+                                    bits=bits,
+                                    transposed=transposed,
+                                ):
+                                    x = mx.random.normal(shape=(M, K), key=k1)
+                                    w = mx.random.normal(
+                                        shape=(N, K) if transposed else (K, N), key=k2
+                                    )
+                                    w_q, scales, biases = mx.quantize(
+                                        w, group_size, bits
+                                    )
+                                    w_hat = mx.dequantize(
+                                        w_q, scales, biases, group_size, bits
+                                    )
+                                    w_q = w_q.T if transposed else w_q
+                                    w_hat = w_hat.T if transposed else w_hat
+                                    y_q = mx.quantized_matmul(
+                                        x, w_q, scales, biases, group_size, bits
+                                    )
+                                    y_hat = x @ w_hat
+                                    self.assertEqual(y_q.shape, y_hat.shape)
+                                    self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
     def test_qmm_shapes(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
         group_size = 64
         bits = 4
-        w = mx.random.normal(shape=(32, 128), key=k2)
+        w = mx.random.normal(shape=(32, 256), key=k2)
         w_q, scales, biases = mx.quantize(w, group_size, bits)
         w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
-        for s in [(3, 128), (2, 1, 7, 128)]:
-            x = mx.random.normal(shape=(3, 128), key=k1)
+        for s in [(3, 256), (2, 1, 7, 256)]:
+            x = mx.random.normal(shape=s, key=k1)
             y_q = mx.quantized_matmul(x, w_q.T, scales, biases, group_size, bits)
             y_hat = x @ w_hat.T
+            self.assertEqual(y_q.shape, y_hat.shape)
+            self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        w = mx.random.normal(shape=(256, 256), key=k2)
+        w_q, scales, biases = mx.quantize(w, group_size, bits)
+        w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+        for s in [(3, 256), (2, 1, 7, 256)]:
+            x = mx.random.normal(shape=s, key=k1)
+            y_q = mx.quantized_matmul(x, w_q, scales, biases, group_size, bits)
+            y_hat = x @ w_hat
             self.assertEqual(y_q.shape, y_hat.shape)
             self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
@@ -73,6 +93,27 @@ class TestQuantized(mlx_tests.MLXTestCase):
                                 x, w_q.T, scales, biases, group_size, bits
                             )
                             y_hat = x @ w_hat.T
+                            self.assertEqual(y_q.shape, y_hat.shape)
+                            self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+    def test_qvm(self):
+        key = mx.random.key(0)
+        k1, k2 = mx.random.split(key)
+        for group_size in [128, 64]:
+            for bits in [2, 4, 8]:
+                for M in [512, 1024]:
+                    for N in [512, 1024]:
+                        with self.subTest(
+                            shape=(M, N), group_size=group_size, bits=bits
+                        ):
+                            x = mx.random.normal(shape=(1, N), key=k1)
+                            w = mx.random.normal(shape=(N, M), key=k2)
+                            w_q, scales, biases = mx.quantize(w, group_size, bits)
+                            w_hat = mx.dequantize(w_q, scales, biases, group_size, bits)
+                            y_q = mx.quantized_matmul(
+                                x, w_q, scales, biases, group_size, bits
+                            )
+                            y_hat = x @ w_hat
                             self.assertEqual(y_q.shape, y_hat.shape)
                             self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
