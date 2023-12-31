@@ -51,7 +51,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int B = x.size() / D;
   if (w_transposed) {
     // Route to the qmv kernel
-    if (B == 1) {
+    if (B < 6) {
       std::ostringstream kname;
       kname << "qmv_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
             << bits_;
@@ -79,11 +79,11 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
     }
 
-    // Route to the qmm kernel
+    // Route to the qmm_t kernel
     else {
       std::ostringstream kname;
-      kname << "qmm_" << (w_transposed ? "t_" : "n_") << type_to_name(out)
-            << "_gs_" << group_size_ << "_b_" << bits_;
+      kname << "qmm_t_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+            << bits_;
 
       // Encode and dispatch kernel
       auto compute_encoder = d.get_command_encoder(s.index);
@@ -112,31 +112,74 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
     }
   } else {
-    std::ostringstream kname;
-    kname << "qvm_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
-          << bits_;
+    // Route to the qvm kernel
+    if (B < 4) {
+      std::ostringstream kname;
+      kname << "qvm_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+            << bits_;
 
-    // Encode and dispatch kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
-    auto kernel = d.get_kernel(kname.str());
-    compute_encoder->setComputePipelineState(kernel);
+      // Encode and dispatch kernel
+      auto compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
 
-    int out_vec_size = w_cols * (32 / bits_);
+      int out_vec_size = w_cols * (32 / bits_);
 
-    int bo = 32;
-    int bd = 32;
-    MTL::Size group_dims = MTL::Size(bd, bo, 1);
-    MTL::Size grid_dims = MTL::Size(1, (w_cols + bo - 1) / bo, B);
+      int bo = 32;
+      int bd = 32;
+      MTL::Size group_dims = MTL::Size(bd, bo, 1);
+      MTL::Size grid_dims = MTL::Size(1, (w_cols + bo - 1) / bo, B);
 
-    set_array_buffer(compute_encoder, x, 0);
-    set_array_buffer(compute_encoder, w, 1);
-    set_array_buffer(compute_encoder, scales, 2);
-    set_array_buffer(compute_encoder, biases, 3);
-    set_array_buffer(compute_encoder, out, 4);
-    compute_encoder->setBytes(&D, sizeof(int), 5);
-    compute_encoder->setBytes(&out_vec_size, sizeof(int), 6);
+      set_array_buffer(compute_encoder, x, 0);
+      set_array_buffer(compute_encoder, w, 1);
+      set_array_buffer(compute_encoder, scales, 2);
+      set_array_buffer(compute_encoder, biases, 3);
+      set_array_buffer(compute_encoder, out, 4);
+      compute_encoder->setBytes(&D, sizeof(int), 5);
+      compute_encoder->setBytes(&out_vec_size, sizeof(int), 6);
 
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+      compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    }
+
+    // Route to the qmm_n kernel
+    else {
+      std::ostringstream kname;
+      kname << "qmm_n_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+            << bits_;
+
+      // Encode and dispatch kernel
+      auto compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
+
+      int O = w_cols * (32 / bits_);
+
+      int wn = 2;
+      int wm = 2;
+      int bm = 32;
+      int bn = 64;
+      int bk = 32;
+      MTL::Size group_dims = MTL::Size(32, wn, wm);
+      MTL::Size grid_dims = MTL::Size(O / bn, (B + bm - 1) / bm, 1);
+
+      if ((O % bn) != 0) {
+        std::ostringstream msg;
+        msg << "[quantized_matmul] The output size should be divisible by "
+            << bn << " but received " << O << ".";
+        throw std::runtime_error(msg.str());
+      }
+
+      set_array_buffer(compute_encoder, x, 0);
+      set_array_buffer(compute_encoder, w, 1);
+      set_array_buffer(compute_encoder, scales, 2);
+      set_array_buffer(compute_encoder, biases, 3);
+      set_array_buffer(compute_encoder, out, 4);
+      compute_encoder->setBytes(&B, sizeof(int), 5);
+      compute_encoder->setBytes(&O, sizeof(int), 6);
+      compute_encoder->setBytes(&D, sizeof(int), 7);
+
+      compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    }
   }
 
   d.get_command_buffer(s.index)->addCompletedHandler(
