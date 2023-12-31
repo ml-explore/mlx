@@ -759,6 +759,13 @@ array tile(const array& a, std::vector<int> repeats, StreamOrDevice s) {
     return a;
   }
 
+  for (size_t i = 0; i < repeats.size(); i++) {
+    if (repeats[i] < 0) {
+      throw std::invalid_argument(
+          "[tile] Negative repeat value found at index " + std::to_string(i));
+    }
+  }
+
   int d = repeats.size();
   array arr = copy(a, s);
 
@@ -768,24 +775,19 @@ array tile(const array& a, std::vector<int> repeats, StreamOrDevice s) {
     arr = expand_dims(arr, std::vector<int>(d - arr.ndim(), 0), s);
   }
 
-  std::vector<int> shape_out;
-
   for (size_t i = 0; i < arr.shape().size(); i++) {
-    shape_out.push_back(arr.shape()[i] * repeats[i]);
-  }
-
-  int n = arr.size();
-  std::vector<int> old_shape = arr.shape();
-  if (n > 0) {
-    for (size_t i = 0; i < old_shape.size(); i++) {
-      if (repeats[i] != 1) {
-        arr = repeat(reshape(arr, {-1, n}, s), repeats[i], 0, s);
-      }
-      n /= old_shape[i];
+    if (repeats[i] != 1) {
+      arr = expand_dims(arr, i, s);
+      std::vector<int> new_shape(arr.shape());
+      new_shape[i] *= repeats[i];
+      arr = broadcast_to(arr, new_shape, s);
+      new_shape[i] = -1;
+      new_shape.erase(new_shape.begin() + i + 1);
+      arr = reshape(arr, new_shape, s);
     }
   }
 
-  return reshape(arr, shape_out, s);
+  return arr;
 }
 
 /** Pad an array with a constant value */
