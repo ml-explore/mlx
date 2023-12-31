@@ -749,7 +749,7 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(y.dtype, mx.float32)
 
     def test_rope(self):
-        for kwargs in [{}, {"traditional": False}, {"base": 10000}]:
+        for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
             rope = nn.RoPE(4, **kwargs)
             shape = (1, 3, 4)
             x = mx.random.uniform(shape=shape)
