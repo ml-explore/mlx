@@ -88,6 +88,10 @@ contributors](ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
 to MLX and wish to be acknowledged, please add your name to the list in your
 pull request.
 
+<a href="https://github.com/ml-explore/mlx/graphs/contributors">
+  <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
+</a>
+
 ## Citing MLX
 
 The MLX software suite was initially developed with equal contribution by Awni
