@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <memory>
+
 namespace mlx::core {
 
 // Forward declaration
