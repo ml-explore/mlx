@@ -7,9 +7,8 @@
 namespace mlx::core {
 
 const std::vector<array>& GraphNode::inputs() const {
-  // TODO this is a hack
   static std::vector<array> empty{};
-  if (has_primitive()) {
+  if (graph_node_ != nullptr) {
     return graph_node_->inputs;
   } else {
     return empty;
@@ -17,9 +16,8 @@ const std::vector<array>& GraphNode::inputs() const {
 }
 
 const std::vector<array>& GraphNode::outputs() const {
-  // TODO this is a hack
   static std::vector<array> empty{};
-  if (has_primitive()) {
+  if (graph_node_ != nullptr) {
     return graph_node_->outputs;
   } else {
     return empty;

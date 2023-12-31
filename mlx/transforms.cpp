@@ -655,8 +655,8 @@ std::vector<array> vmap_replace(
   }
 
   std::unordered_map<std::uintptr_t, std::pair<array, int>> tmap;
-  std::unordered_set<std::uintptr_t> input_set;
   std::unordered_set<std::uintptr_t> needs_vmap;
+  std::unordered_set<std::uintptr_t> cache;
   for (int i = 0; i < s_inputs.size(); ++i) {
     auto in = s_inputs[i];
     if (in_axes[i] != -1) {
@@ -664,12 +664,11 @@ std::vector<array> vmap_replace(
       needs_vmap.insert(in.id());
       in.set_tracer(false);
     }
-    input_set.insert(in.id());
+    cache.insert(in.graph_node().id());
   }
 
   // Topologically sort the graph
   std::vector<GraphNode> tape;
-  std::unordered_set<std::uintptr_t> cache;
 
   std::function<void(const GraphNode&)> recurse;
 
@@ -681,10 +680,7 @@ std::vector<array> vmap_replace(
     cache.insert(id);
     // Recurse on any child nodes
     for (auto& input : a.inputs()) {
-      if (input.has_primitive() &&
-          input_set.find(input.id()) == input_set.end()) {
-        recurse(input.graph_node());
-      }
+      recurse(input.graph_node());
     }
     // If any input needs a vmap, then the outputs also need
     // a vmap
