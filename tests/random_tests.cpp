@@ -260,6 +260,10 @@ TEST_CASE("test random uniform") {
     // Non float type throws
     CHECK_THROWS_AS(random::uniform({}, int32), std::invalid_argument);
 
+    // dtype respected
+    x = random::uniform(-.1, .1, {0}, bfloat16);
+    CHECK_EQ(x.dtype(), bfloat16);
+
     // Check broadcasting
     x = random::uniform(zeros({3, 1}), ones({1, 3}), {3, 3});
     CHECK_EQ(x.shape(), std::vector<int>{3, 3});

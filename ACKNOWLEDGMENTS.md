@@ -6,9 +6,11 @@ with a short description of your contribution(s) below. For example:
 - Jane Smith: Added the `foo` and `bar` ops.
 
 MLX was developed with contributions from the following individuals:
-  
+
+- Nripesh Niketan: Added `softsign`, `softmax`, `hardswish`, `logsoftmax` activation functions.
 - Juarez Bochi: Fixed bug in cross attention.
 - Justin Deschenaux: Sine, Cosine, arange, randint, truncated normal, bernoulli, lion optimizer, Dropout2d, linear and logistic regression python example.
+- Diogo Da Cruz: Added tri, tril, triu and safetensor support
 
 # Third-Party Software
 

@@ -77,12 +77,14 @@ Operations
    quantize
    quantized_matmul
    reciprocal
+   repeat
    reshape
    round
    rsqrt
    save
    savez
    savez_compressed
+   save_safetensors
    sigmoid
    sign
    sin

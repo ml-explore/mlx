@@ -8,17 +8,17 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/graph_utils.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h
 )
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
-
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
 if (MLX_BUILD_ACCELERATE) 
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate)
 else()

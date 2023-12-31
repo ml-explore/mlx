@@ -133,10 +133,6 @@ def mse_loss(
             f"targets shape {targets.shape}."
         )
 
-    assert (
-        predictions.shape == targets.shape
-    ), f"Shape of predictions {predictions.shape} and targets {targets.shape} must match"
-
     loss = mx.square(predictions - targets)
     return _reduce(loss, reduction)
 
@@ -290,7 +286,7 @@ def _reduce(loss: mx.array, reduction: str = "none"):
 def hinge_loss(
     inputs: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
-    """
+    r"""
     Computes the hinge loss between inputs and targets.
 
     .. math::
@@ -315,7 +311,7 @@ def hinge_loss(
 def huber_loss(
     inputs: mx.array, targets: mx.array, delta: float = 1.0, reduction: str = "none"
 ) -> mx.array:
-    """
+    r"""
     Computes the Huber loss between inputs and targets.
 
     .. math::
@@ -349,7 +345,7 @@ def huber_loss(
 def log_cosh_loss(
     inputs: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
-    """
+    r"""
     Computes the log cosh loss between inputs and targets.
 
     Logcosh acts like L2 loss for small errors, ensuring stable gradients,

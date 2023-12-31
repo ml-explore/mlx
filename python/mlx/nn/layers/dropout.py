@@ -5,7 +5,7 @@ from mlx.nn.layers.base import Module
 
 
 class Dropout(Module):
-    """Randomly zero a portion of the elements during training.
+    r"""Randomly zero a portion of the elements during training.
 
     The remaining elements are multiplied with :math:`\frac{1}{1-p}` where
     :math:`p` is the probability of zeroing an element. This is done so the
@@ -19,7 +19,7 @@ class Dropout(Module):
         super().__init__()
 
         if p < 0 or p >= 1:
-            raise ValueError("The dropout probability should be in [0, 1)")
+            raise ValueError(f"The dropout probability {p} is not in [0, 1)")
 
         self._p_1 = 1 - p
 
@@ -36,15 +36,13 @@ class Dropout(Module):
 
 
 class Dropout2d(Module):
-    """Apply 2D channel-wise dropout during training.
+    r"""Apply 2D channel-wise dropout during training.
 
     Randomly zero out entire channels independently with probability :math:`p`.
     This layer expects the channels to be last, i.e. the input shape should be
-    ``NWHC`` or ``WHC`` where:
-        - ``N`` is the batch dimension
-        - ``H`` is the input image height
-        - ``W`` is the input image width
-        - ``C`` is the number of input channels
+    ``NWHC`` or ``WHC`` where:``N`` is the batch dimension,``H`` is the input
+    image height,``W`` is the input image width, and``C`` is the number of
+    input channels
 
     The remaining channels are scaled by :math:`\frac{1}{1-p}` to
     maintain the expected value of each element. Unlike traditional dropout,
@@ -64,7 +62,7 @@ class Dropout2d(Module):
         super().__init__()
 
         if p < 0 or p >= 1:
-            raise ValueError("The dropout probability should be in [0, 1)")
+            raise ValueError(f"The dropout probability {p} is not in [0, 1)")
 
         self._p_1 = 1 - p
 

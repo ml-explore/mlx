@@ -11,6 +11,7 @@ pybind11_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/stream.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/transforms.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
 )
 
 if (NOT MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY)

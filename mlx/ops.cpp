@@ -718,6 +718,41 @@ array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
   return stack(arrays, 0, s);
 }
 
+/** array repeat with axis */
+array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
+  axis = normalize_axis(axis, arr.ndim());
+
+  if (repeats < 0) {
+    throw std::invalid_argument(
+        "[repeat] Number of repeats cannot be negative");
+  }
+
+  if (repeats == 0) {
+    return array({}, arr.dtype());
+  }
+
+  if (repeats == 1) {
+    return arr;
+  }
+
+  // Broadcast to (S_1, S_2, ..., S_axis, repeats, S_axis+1, ...)
+  std::vector<int> shape(arr.shape());
+  shape.insert(shape.begin() + axis + 1, repeats);
+  array out = expand_dims(arr, axis + 1, s);
+  out = broadcast_to(out, shape, s);
+
+  // Reshape back into a contiguous array where S_axis is now S_axis * repeats
+  shape.erase(shape.begin() + axis + 1);
+  shape[axis] *= repeats;
+  out = reshape(out, shape, s);
+
+  return out;
+}
+
+array repeat(const array& arr, int repeats, StreamOrDevice s) {
+  return repeat(flatten(arr, s), repeats, 0, s);
+}
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,

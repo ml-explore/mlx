@@ -57,6 +57,7 @@ are the CPU and GPU.
    python/random
    python/transforms
    python/fft
+   python/linalg
    python/nn
    python/optimizers
    python/tree_utils

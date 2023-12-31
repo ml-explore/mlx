@@ -7,7 +7,7 @@
 
 #include "array.h"
 #include "device.h"
-#include "load.h"
+#include "io/load.h"
 #include "stream.h"
 
 namespace mlx::core {
@@ -213,6 +213,10 @@ array concatenate(const std::vector<array>& arrays, StreamOrDevice s = {});
 /** Stack arrays along a new axis. */
 array stack(const std::vector<array>& arrays, int axis, StreamOrDevice s = {});
 array stack(const std::vector<array>& arrays, StreamOrDevice s = {});
+
+/** Repeate an array along an axis. */
+array repeat(const array& arr, int repeats, int axis, StreamOrDevice s = {});
+array repeat(const array& arr, int repeats, StreamOrDevice s = {});
 
 /** Permutes the dimensions according to the given axes. */
 array transpose(const array& a, std::vector<int> axes, StreamOrDevice s = {});
@@ -1057,4 +1061,20 @@ array dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
+/** Load array map from .safetensors file format */
+std::unordered_map<std::string, array> load_safetensors(
+    std::shared_ptr<io::Reader> in_stream,
+    StreamOrDevice s = {});
+std::unordered_map<std::string, array> load_safetensors(
+    const std::string& file,
+    StreamOrDevice s = {});
+
+void save_safetensors(
+    std::shared_ptr<io::Writer> in_stream,
+    std::unordered_map<std::string, array>,
+    std::optional<bool> retain_graph = std::nullopt);
+void save_safetensors(
+    const std::string& file,
+    std::unordered_map<std::string, array>,
+    std::optional<bool> retain_graph = std::nullopt);
 } // namespace mlx::core

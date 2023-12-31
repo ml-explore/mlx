@@ -53,7 +53,7 @@ variety of examples, including:
 
 - [Transformer language model](https://github.com/ml-explore/mlx-examples/tree/main/transformer_lm) training.
 - Large-scale text generation with
-  [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llama) and
+  [LLaMA](https://github.com/ml-explore/mlx-examples/tree/main/llms/llama) and
   finetuning with [LoRA](https://github.com/ml-explore/mlx-examples/tree/main/lora).
 - Generating images with [Stable Diffusion](https://github.com/ml-explore/mlx-examples/tree/main/stable_diffusion).
 - Speech recognition with [OpenAI's Whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper).
@@ -85,7 +85,7 @@ information on building from source, and running tests.
 
 We are grateful for all of [our
 contributors](ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
-to MLX and wish to be acknowledged, please add your name to to the list in your
+to MLX and wish to be acknowledged, please add your name to the list in your
 pull request.
 
 ## Citing MLX
