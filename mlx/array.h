@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
-#include <iostream> // TODO
 #include <memory>
 #include <vector>
 

@@ -1,4 +1,3 @@
-#include <iostream> // TODO
 // Copyright © 2023 Apple Inc.
 
 #include <algorithm>
