@@ -39,6 +39,10 @@ from mlx.nn.layers.activations import (
     softsign,
     step,
     tanh,
+    glu,
+    gated_activation,
+    GLU,
+    GatedActivation,
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential

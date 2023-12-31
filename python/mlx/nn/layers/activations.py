@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
+from typing import Callable
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -160,6 +161,60 @@ def gelu_fast_approx(x):
     where :math:`\sigma(\cdot)` is the logistic sigmoid.
     """
     return x * mx.sigmoid(1.773 * x)
+
+
+def glu(x: mx.array) -> mx.array:
+    """Applies the gated linear unit function.
+
+    This function splits the last dimension of the input into two halves
+    (a and b) and applies :math:`a * \sigma(b)`.
+
+    .. math::
+        \\textrm{GLU}(x) = a * \sigma(b)
+    """
+    a, b = mx.split(x, indices_or_sections=2, axis=-1)
+    return a * mx.sigmoid(b)
+
+
+def gated_activation(x: mx.array, activation_function: Callable) -> mx.array:
+    """Applies gated activation function.
+
+    This function splits the last dimension of the input into two halves
+    (a and b) and applies :math:`f(a) * \sigma(b)`
+    where :math:`f` is the `activation_function` parameter.
+    """
+    a, b = mx.split(x, indices_or_sections=2, axis=-1)
+    return activation_function(a) * mx.sigmoid(b)
+
+
+@_make_activation_module(glu)
+class GLU(Module):
+    """Applies the gated linear unit function.
+
+    This function splits the last dimension of the input into two halves
+    (a and b) and applies :math:`a * \sigma(b)`.
+
+    .. math::
+        \\textrm{GLU}(x) = a * \sigma(b)
+    """
+
+    pass
+
+
+class GatedActivation(Module):
+    """Applies gated activation function.
+
+    This function splits the last dimension of the input into two halves
+    (a and b) and applies :math:`f(a) * \sigma(b)`
+    where :math:`f` is the `activation_function` parameter.
+    """
+
+    def __init__(self, activation_function: Callable):
+        super().__init__()
+        self.activation_function = activation_function
+
+    def __call__(self, x: mx.array) -> mx.array:
+        return gated_activation(x, self.activation_function)
 
 
 @_make_activation_module

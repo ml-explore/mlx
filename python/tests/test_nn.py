@@ -792,6 +792,18 @@ class TestNN(mlx_tests.MLXTestCase):
         loss = nn.losses.log_cosh_loss(inputs, targets, reduction="mean")
         self.assertAlmostEqual(loss.item(), 0.433781, places=6)
 
+    def test_glu(self):
+        x = mx.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=mx.float32)
+        y = mx.array([[[0.952574, 1.96403]]], dtype=mx.float32)
+        out = nn.glu(x)
+        self.assertEqualArray(out, y)
+
+    def test_gated_activation(self):
+        x = mx.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=mx.float32)
+        y = mx.array([[[0.696388, 1.72991]]], dtype=mx.float32)
+        out = nn.gated_activation(x, nn.silu)
+        self.assertEqualArray(out, y)
+
 
 if __name__ == "__main__":
     unittest.main()
