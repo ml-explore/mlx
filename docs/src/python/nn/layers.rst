@@ -28,6 +28,7 @@ Layers
    GroupNorm
    Dropout
    Dropout2d
+   Dropout3d
    Transformer
    MultiHeadAttention
    ALiBi
