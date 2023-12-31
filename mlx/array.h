@@ -4,15 +4,17 @@
 #include <algorithm>
 #include <cstdint>
 #include <functional>
+#include <iostream> // TODO
 #include <memory>
 #include <vector>
 
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
+#include "mlx/graph.h"
 
 namespace mlx::core {
 
-// Forward declaration
+// Forward declarations
 class Primitive;
 using deleter_t = std::function<void(allocator::Buffer)>;
 
@@ -171,6 +173,7 @@ class array {
    * API may change.
    */
 
+  // TODO, an rvalue version of this.
   array(
       const std::vector<int>& shape,
       Dtype dtype,
@@ -204,26 +207,24 @@ class array {
     bool col_contiguous : 1;
   };
 
+  const GraphNode& graph_node() const {
+    return array_desc_->graph_node;
+  };
+
   /** The array's primitive. */
   Primitive& primitive() const {
-    return *(array_desc_->primitive);
+    return array_desc_->graph_node.primitive();
   };
 
   /** Check if the array has an attached primitive or is a leaf node. */
   bool has_primitive() const {
-    return array_desc_->primitive != nullptr;
+    return array_desc_->graph_node.has_primitive();
   };
 
   /** The array's inputs. */
   const std::vector<array>& inputs() const {
-    return array_desc_->inputs;
+    return array_desc_->graph_node.inputs();
   };
-
-  /** A non-const reference to the array's inputs so that they can be used to
-   * edit the graph. */
-  std::vector<array>& editable_inputs() {
-    return array_desc_->inputs;
-  }
 
   /** Detach the array from the graph. */
   void detach();
@@ -289,6 +290,22 @@ class array {
     array_desc_ = other.array_desc_;
   }
 
+  // TODO r-value version of this.
+  static void register_primitive(
+      std::unique_ptr<Primitive> primitive,
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs);
+
+  ~array() {
+    // When the last array other than the reference held by the graph goes out
+    // of scope it has to signal to the graph node that it is gone. This way
+    // the graph node will be destroyed once all of its outputs are destroyed
+    // and we avoid a circular reference resource leak.
+    if (array_desc_ && has_primitive() && array_desc_.use_count() == 2) {
+      detach();
+    }
+  }
+
  private:
   // Initialize the arrays data
   template <typename It>
@@ -299,7 +316,7 @@ class array {
     std::vector<size_t> strides;
     size_t size;
     Dtype dtype;
-    std::unique_ptr<Primitive> primitive{nullptr};
+    GraphNode graph_node;
 
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph
@@ -320,15 +337,7 @@ class array {
     // Contains useful meta data about the array
     Flags flags;
 
-    std::vector<array> inputs;
-
     explicit ArrayDesc(const std::vector<int>& shape, Dtype dtype);
-
-    explicit ArrayDesc(
-        const std::vector<int>& shape,
-        Dtype dtype,
-        std::unique_ptr<Primitive> primitive,
-        const std::vector<array>& inputs);
 
     ~ArrayDesc();
   };

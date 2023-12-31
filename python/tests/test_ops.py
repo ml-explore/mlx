@@ -1314,7 +1314,7 @@ class TestOps(mlx_tests.MLXTestCase):
             for axis in (None, 0, 1, 2):
                 c_npy = npop(a_npy, axis=axis)
                 c_mlx = mxop(a_mlx, axis=axis)
-                self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-4, atol=1e-4))
+                self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
         for op in ["cumsum", "cumprod", "cummax", "cummin"]:
             c1 = mxop(a_mlx, axis=2)

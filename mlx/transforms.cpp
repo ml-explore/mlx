@@ -1,3 +1,4 @@
+#include <iostream> // TODO
 // Copyright © 2023 Apple Inc.
 
 #include <algorithm>
@@ -26,138 +27,138 @@ namespace mlx::core {
 int detail::InTracing::tracing_counter{0};
 
 void simplify(const std::vector<array>& outputs) {
-  std::function<void(const array&)> recurse;
-  std::queue<array> tape;
-  std::unordered_set<std::uintptr_t> cache;
-  std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>
-      parents_map;
+  /*  std::function<void(const array&)> recurse;
+    std::queue<array> tape;
+    std::unordered_set<std::uintptr_t> cache;
+    std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>
+        parents_map;
 
-  // Helpers to identify identical scalars
-  std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
-  auto is_scalar = [](const array& a) {
-    return a.is_evaled() && a.ndim() == 0;
-  };
-  auto get_scalar_rep = [](const array& a) {
-    uint64_t v = 0;
-    int dtype;
-    switch (a.dtype().size) {
-      case 1:
-        v = *a.data<uint8_t>();
-        break;
-      case 4:
-        v = *a.data<uint32_t>();
-        break;
-      case 8:
-        v = *a.data<uint64_t>();
-        break;
-    }
-    return std::make_pair(v, a.dtype().val);
-  };
+    // Helpers to identify identical scalars
+    std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
+    auto is_scalar = [](const array& a) {
+      return a.is_evaled() && a.ndim() == 0;
+    };
+    auto get_scalar_rep = [](const array& a) {
+      uint64_t v = 0;
+      int dtype;
+      switch (a.dtype().size) {
+        case 1:
+          v = *a.data<uint8_t>();
+          break;
+        case 4:
+          v = *a.data<uint32_t>();
+          break;
+        case 8:
+          v = *a.data<uint64_t>();
+          break;
+      }
+      return std::make_pair(v, a.dtype().val);
+    };
 
-  // DFS the graph to log the parents
-  recurse = [&](const array& a) {
-    auto id = a.id();
-    if (cache.find(id) != cache.end()) {
-      return;
-    }
-    for (int i = 0; i < a.inputs().size(); i++) {
-      auto& in = a.inputs()[i];
-      parents_map[in.id()].push_back({a, i});
-      recurse(in);
-    }
-    cache.insert(id);
-    tape.push(a);
-    if (is_scalar(a)) {
-      scalars.insert({get_scalar_rep(a), a});
-    }
-  };
-  for (auto& a : outputs) {
-    recurse(a);
-  }
-
-  // Helper that fuses two arrays in the graph by setting the parents of the
-  // source to point to the destination
-  auto fuse = [&](array& dst, array& src) {
-    auto src_parents = parents_map.find(src.id());
-    if (src_parents == parents_map.end()) {
-      return;
+    // DFS the graph to log the parents
+    recurse = [&](const array& a) {
+      auto id = a.id();
+      if (cache.find(id) != cache.end()) {
+        return;
+      }
+      for (int i = 0; i < a.inputs().size(); i++) {
+        auto& in = a.inputs()[i];
+        parents_map[in.id()].push_back({a, i});
+        recurse(in);
+      }
+      cache.insert(id);
+      tape.push(a);
+      if (is_scalar(a)) {
+        scalars.insert({get_scalar_rep(a), a});
+      }
+    };
+    for (auto& a : outputs) {
+      recurse(a);
     }
 
-    auto& pairs = parents_map[dst.id()];
-    for (auto& parent : src_parents->second) {
-      parent.first.editable_inputs()[parent.second] = dst;
-      pairs.push_back(parent);
-    }
-  };
+    // Helper that fuses two arrays in the graph by setting the parents of the
+    // source to point to the destination
+    auto fuse = [&](array& dst, array& src) {
+      auto src_parents = parents_map.find(src.id());
+      if (src_parents == parents_map.end()) {
+        return;
+      }
 
-  // Walk the graph
-  cache.clear();
+      auto& pairs = parents_map[dst.id()];
+      for (auto& parent : src_parents->second) {
+        parent.first.editable_inputs()[parent.second] = dst;
+        pairs.push_back(parent);
+      }
+    };
 
-  // Depth-1 array equivalence check.
-  auto array_equivalent = [](const array& a, const array& b) {
-    if (!a.has_primitive() || !b.has_primitive()) {
-      return false;
-    }
-    const auto& pa = a.primitive();
-    const auto& pb = b.primitive();
-    if (typeid(pa) != typeid(pb)) {
-      return false;
-    }
+    // Walk the graph
+    cache.clear();
 
-    if (a.inputs().size() != b.inputs().size()) {
-      return false;
-    }
-
-    for (int i = 0; i < a.inputs().size(); i++) {
-      if (a.inputs()[i].id() != b.inputs()[i].id()) {
+    // Depth-1 array equivalence check.
+    auto array_equivalent = [](const array& a, const array& b) {
+      if (!a.has_primitive() || !b.has_primitive()) {
         return false;
       }
-    }
-
-    return pa.is_equivalent(pb);
-  };
-
-  while (!tape.empty()) {
-    auto arr = std::move(tape.front());
-    tape.pop();
-
-    if (cache.find(arr.id()) != cache.end()) {
-      continue;
-    }
-
-    // Check if we can fuse scalars
-    if (is_scalar(arr)) {
-      auto scalar = scalars.find(get_scalar_rep(arr));
-      if (scalar->second.id() != arr.id()) {
-        fuse(scalar->second, arr);
-        arr = scalar->second;
+      const auto& pa = a.primitive();
+      const auto& pb = b.primitive();
+      if (typeid(pa) != typeid(pb)) {
+        return false;
       }
-    }
 
-    // Check if we can fuse the parents of this array
-    auto parents = parents_map.find(arr.id());
-    if (parents != parents_map.end()) {
-      std::vector<bool> mask(parents->second.size(), false);
-      auto N = parents->second.size();
-      for (int i = 0; i < N; i++) {
-        if (mask[i]) {
-          continue;
+      if (a.inputs().size() != b.inputs().size()) {
+        return false;
+      }
+
+      for (int i = 0; i < a.inputs().size(); i++) {
+        if (a.inputs()[i].id() != b.inputs()[i].id()) {
+          return false;
         }
-        for (int j = i + 1; j < N; j++) {
-          if (mask[j]) {
+      }
+
+      return pa.is_equivalent(pb);
+    };
+
+    while (!tape.empty()) {
+      auto arr = std::move(tape.front());
+      tape.pop();
+
+      if (cache.find(arr.id()) != cache.end()) {
+        continue;
+      }
+
+      // Check if we can fuse scalars
+      if (is_scalar(arr)) {
+        auto scalar = scalars.find(get_scalar_rep(arr));
+        if (scalar->second.id() != arr.id()) {
+          fuse(scalar->second, arr);
+          arr = scalar->second;
+        }
+      }
+
+      // Check if we can fuse the parents of this array
+      auto parents = parents_map.find(arr.id());
+      if (parents != parents_map.end()) {
+        std::vector<bool> mask(parents->second.size(), false);
+        auto N = parents->second.size();
+        for (int i = 0; i < N; i++) {
+          if (mask[i]) {
             continue;
           }
-          auto& src = parents->second[j].first;
-          auto& dst = parents->second[i].first;
-          if (src.id() != dst.id() && array_equivalent(src, dst)) {
-            cache.insert(src.id());
-            fuse(dst, src);
-            mask[j] = true;
+          for (int j = i + 1; j < N; j++) {
+            if (mask[j]) {
+              continue;
+            }
+            auto& src = parents->second[j].first;
+            auto& dst = parents->second[i].first;
+            if (src.id() != dst.id() && array_equivalent(src, dst)) {
+              cache.insert(src.id());
+              fuse(dst, src);
+              mask[j] = true;
+            }
           }
         }
       }
-    }
-  }
+    }*/
 }
 
 void eval(const std::vector<array>& outputs) {
@@ -166,16 +167,18 @@ void eval(const std::vector<array>& outputs) {
   std::unordered_set<std::uintptr_t> cache;
   std::unordered_map<std::uintptr_t, std::shared_future<void>> deps;
 
-  recurse = [&](const array& a) {
+  recurse = [&](const GraphNode& a) {
     auto id = a.id();
     if (cache.find(id) != cache.end()) {
       return;
     }
-    for (auto in : a.inputs()) {
+    for (auto in_arr : a.inputs()) {
+      auto& in = in_arr.graph_node();
+
       recurse(in);
       // If one of the inputs is being computed on a different
       // stream, we need to manage the dependency.
-      if (!in.is_evaled()) {
+      if (!in_arr.is_evaled()) {
         if (a.primitive().stream() != in.primitive().stream()) {
           deps.insert({in.id(), std::shared_future<void>{}});
         }
@@ -196,14 +199,14 @@ void eval(const std::vector<array>& outputs) {
       recurse(arr);
       // Insert a dependency for every output to synchronize
       // with at the end.
-      if (!arr.is_evaled()) {
-        deps.insert({arr.id(), std::shared_future<void>{}});
+      if (!arr.is_evaled() && deps.find(g.id()) == deps.end()) {
+        deps.insert({g.id(), std::shared_future<void>{}});
       }
     }
   }
 
   while (!tape.empty()) {
-    auto arr = std::move(tape.front());
+    auto g = std::move(tape.front());
     tape.pop();
     if (arr.is_evaled()) {
       if (!arr.is_tracer() && arr.has_primitive()) {
@@ -212,20 +215,22 @@ void eval(const std::vector<array>& outputs) {
       continue;
     }
 
-    auto stream = arr.primitive().stream();
-    std::vector<std::shared_future<void>> arr_deps;
-    for (auto& in : arr.inputs()) {
-      if (auto it = deps.find(in.id()); it != deps.end()) {
-        arr_deps.push_back(it->second);
+    auto stream = g.primitive().stream();
+    std::vector<std::shared_future<void>> g_deps;
+    for (auto& in : g.inputs()) {
+      if (in.has_primitive()) {
+        if (auto it = deps.find(in.graph_node().id()); it != deps.end()) {
+          g_deps.push_back(it->second);
+        }
       }
     }
     std::shared_ptr<std::promise<void>> p{nullptr};
-    if (auto it = deps.find(arr.id()); it != deps.end()) {
+    if (auto it = deps.find(g.id()); it != deps.end()) {
       p = std::make_unique<std::promise<void>>();
       it->second = p->get_future().share();
     }
 
-    if (arr.primitive().device() == Device::gpu) {
+    if (g.primitive().device() == Device::gpu) {
       if (!metal::is_available()) {
         throw std::runtime_error("Metal GPU is not available.");
       }
@@ -234,9 +239,10 @@ void eval(const std::vector<array>& outputs) {
     } else {
       auto task = [arr,
                    stream,
-                   arr_deps = std::move(arr_deps),
+                   g = std::move(g),
+                   deps = std::move(g_deps),
                    p = std::move(p)]() mutable {
-        for (auto& d : arr_deps) {
+        for (auto& d : deps) {
           d.wait();
         }
         scheduler::notify_new_task(stream);
@@ -253,8 +259,9 @@ void eval(const std::vector<array>& outputs) {
     }
   }
   for (auto& arr : outputs) {
-    if (auto it = deps.find(arr.id()); it != deps.end()) {
+    if (auto it = deps.find(arr.graph_node().id()); it != deps.end()) {
       it->second.wait();
+      deps.erase(it);
     }
   }
 }
@@ -301,49 +308,52 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     output_cotan_pairs.emplace_back(i, cotan_index++);
   }
 
-  // Topologically sort the compute graph, record outputs
-  // in the tape if a gradient is needed.
+  // Topologically sort the compute graph, add graph nodes
+  // to the tape which need a gradient.
   std::unordered_set<std::uintptr_t> cache;
   std::unordered_set<std::uintptr_t> calc_grad;
   for (auto& primal : primals_) {
     primal.set_tracer(false);
     calc_grad.insert(primal.id());
-    cache.insert(primal.id());
+    cache.insert(primal.graph_node().id());
   }
 
-  std::vector<array> tape;
+  std::vector<GraphNode> tape;
 
-  std::function<void(array&)> recurse;
-  recurse = [&](auto& a) {
-    auto id = a.id();
-    a.set_tracer(false);
-
+  std::function<void(const GraphNode&)> recurse;
+  recurse = [&](const auto& a) {
     // Check if visited and add to cache if not
-    if (auto inserted = cache.insert(id); !inserted.second) {
+    if (auto inserted = cache.insert(a.id()); !inserted.second) {
       return;
     }
 
-    for (auto& input : a.editable_inputs()) {
-      recurse(input);
+    for (auto input : a.inputs()) {
+      input.set_tracer(false);
+      recurse(input.graph_node());
     }
 
     // Stop grad
-    if (a.has_primitive() && typeid(a.primitive()) == typeid(StopGradient)) {
-      return;
+    if (a.has_primitive()) {
+      if (auto& p = a.primitive(); typeid(p) == typeid(StopGradient)) {
+        return;
+      }
     }
 
     // Calculate gradient if any inputs require gradient
     for (auto& input : a.inputs()) {
       if (calc_grad.find(input.id()) != calc_grad.end()) {
         tape.push_back(a);
-        calc_grad.insert(id);
+        for (auto& output : a.outputs()) {
+          calc_grad.insert(output.id());
+        }
         break;
       }
     }
   };
 
-  for (auto& out : outputs) {
-    recurse(out);
+  for (auto out : outputs) {
+    out.set_tracer(false);
+    recurse(out.graph_node());
   }
 
   // Run the tape backwards, computing vector-jacobian
@@ -363,14 +373,24 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       }
     }
 
-    auto cotan_it = cotan_map.find(a.id());
-    if (cotan_it == cotan_map.end()) {
+    auto has_cotans = std::any_of(
+        a.outputs().cbegin(), a.outputs().cend(), [&cotan_map](auto& o) {
+          return cotan_map.find(o.id()) != cotan_map.end();
+        });
+    if (!has_cotans) {
       continue;
     }
 
-    auto cotan = cotan_map.extract(cotan_it).mapped();
-    auto vjps = a.primitive().vjp(a.inputs(), cotan, argnums);
     auto s = a.primitive().stream();
+    std::vector<array> cotangents;
+    for (auto& o : a.outputs()) {
+      if (auto cotan_it = cotan_map.find(o.id()); cotan_it != cotan_map.end()) {
+        cotangents.push_back(cotan_map.extract(cotan_it).mapped());
+      } else {
+        cotangents.push_back(zeros_like(o, s));
+      }
+    }
+    auto vjps = a.primitive().vjp(a.inputs(), cotangents, argnums);
     // Accumulate the vector-jacobian products for each input
     for (int i = 0; i < argnums.size(); ++i) {
       auto in_id = a.inputs()[argnums[i]].id();
@@ -444,40 +464,44 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     cache.insert(primal.id());
   }
 
-  std::vector<array> tape;
+  std::vector<GraphNode> tape;
 
-  std::function<void(array&)> recurse;
-  recurse = [&](auto& a) {
-    auto id = a.id();
-    a.set_tracer(false);
-
+  std::function<void(const GraphNode&)> recurse;
+  recurse = [&](const auto& a) {
     // Check if visited and add to cache if not
-    if (auto inserted = cache.insert(id); !inserted.second) {
+    if (auto inserted = cache.insert(a.id()); !inserted.second) {
       return;
     }
 
-    for (auto& input : a.editable_inputs()) {
-      recurse(input);
+    for (auto input : a.inputs()) {
+      input.set_tracer(false);
+      recurse(input.graph_node());
     }
 
     // Stop grad
-    if (a.has_primitive() && typeid(a.primitive()) == typeid(StopGradient)) {
-      return;
+    if (a.has_primitive()) {
+      if (auto& p = a.primitive(); typeid(p) == typeid(StopGradient)) {
+        return;
+      }
     }
 
     // Calculate gradient if any inputs require gradient
     for (auto& input : a.inputs()) {
       if (calc_grad.find(input.id()) != calc_grad.end()) {
         tape.push_back(a);
-        calc_grad.insert(id);
+        for (auto& output : a.outputs()) {
+          calc_grad.insert(output.id());
+        }
         break;
       }
     }
   };
 
-  for (auto& out : outputs) {
-    recurse(out);
+  for (auto out : outputs) {
+    out.set_tracer(false);
+    recurse(out.graph_node());
   }
+
   std::unordered_map<std::uintptr_t, array> tan_map;
   for (int i = 0; i < primals_.size(); ++i) {
     tan_map.insert({primals_[i].id(), tangents[i]});
@@ -494,8 +518,13 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       }
     }
 
-    auto jvp = a.primitive().jvp(a.inputs(), tangents, argnums);
-    tan_map.insert({a.id(), jvp});
+    // TODO, this should be one jvp per output argument
+    auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
+    for (int i = 0; i < jvps.size(); ++i) {
+      // for (int i = 0; i < argnums.size(); ++i) {
+      tan_map.insert({a.outputs()[i].id(), jvps[i]});
+      // tan_map.insert({a.outputs()[argnums[i]].id(), jvps[i]});
+    }
   }
 
   std::vector<array> jvps;
@@ -604,6 +633,7 @@ std::pair<std::vector<array>, std::vector<array>> vmap_trace(
 
       std::vector<int> shape = inputs[i].shape();
       shape.erase(shape.begin() + in_axes[i]);
+      // TODO, awni, check this works with graph node
       array in(shape, inputs[i].dtype(), nullptr, {});
       s_inputs.push_back(in);
       s_inputs.back().set_tracer(true);
@@ -626,49 +656,55 @@ std::vector<array> vmap_replace(
   }
 
   std::unordered_map<std::uintptr_t, std::pair<array, int>> tmap;
+  std::unordered_set<std::uintptr_t> input_set;
   std::unordered_set<std::uintptr_t> needs_vmap;
-  for (int i = 0; i < s_inputs.size(); ++i) {
-    if (in_axes[i] != -1) {
-      tmap.insert({s_inputs[i].id(), {inputs[i], in_axes[i]}});
-      needs_vmap.insert(s_inputs[i].id());
-    }
-  }
-
-  // Topologically sort the graph
-  std::unordered_set<std::uintptr_t> cache;
   for (int i = 0; i < s_inputs.size(); ++i) {
     auto in = s_inputs[i];
     if (in_axes[i] != -1) {
+      tmap.insert({in.id(), {inputs[i], in_axes[i]}});
+      needs_vmap.insert(in.id());
       in.set_tracer(false);
     }
-    cache.insert(in.id());
+    input_set.insert(in.id());
   }
-  std::vector<array> tape;
 
-  std::function<void(const array&)> recurse;
+  // Topologically sort the graph
+  std::vector<GraphNode> tape;
+  std::unordered_set<std::uintptr_t> cache;
 
-  recurse = [&](const array& a) {
-    // Stop at inputs to the vmap function
+  std::function<void(const GraphNode&)> recurse;
+
+  recurse = [&](const GraphNode& a) {
     auto id = a.id();
     if (cache.find(id) != cache.end()) {
       return;
     }
-    for (auto& input : a.inputs()) {
-      recurse(input);
-    }
     cache.insert(id);
+    // Recurse on any child nodes
+    for (auto& input : a.inputs()) {
+      if (input.has_primitive() &&
+          input_set.find(input.id()) == input_set.end()) {
+        recurse(input.graph_node());
+      }
+    }
+    // If any input needs a vmap, then the outputs also need
+    // a vmap
     for (auto& input : a.inputs()) {
       if (needs_vmap.find(input.id()) != needs_vmap.end()) {
-        needs_vmap.insert(id);
         tape.push_back(a);
-        tape.back().set_tracer(false);
+        for (auto o : a.outputs()) {
+          needs_vmap.insert(o.id());
+          o.set_tracer(false);
+        }
         break;
       }
     }
   };
 
   for (auto& out : s_outputs) {
-    recurse(out);
+    if (out.has_primitive()) {
+      recurse(out.graph_node());
+    }
   }
 
   // Transform each primitive in the graph with
@@ -686,16 +722,18 @@ std::vector<array> vmap_replace(
         v_axes.push_back(-1);
       }
     }
-    auto out_and_axis = a.primitive().vmap(v_inputs, v_axes);
-    tmap.insert({a.id(), out_and_axis});
+    auto [v_outputs, v_out_axes] = a.primitive().vmap(v_inputs, v_axes);
+    // For each primitives outputs add its id, the vout id and the vax
+    for (int i = 0; i < v_outputs.size(); ++i) {
+      tmap.insert({a.outputs()[i].id(), {v_outputs[i], v_out_axes[i]}});
+    }
   }
 
   // Populate the outputs and make sure all the output axes are
   // in the right place
   std::vector<array> outputs;
   for (int i = 0; i < s_outputs.size(); ++i) {
-    auto map_it = tmap.find(s_outputs[i].id());
-    if (map_it != tmap.end()) {
+    if (auto map_it = tmap.find(s_outputs[i].id()); map_it != tmap.end()) {
       auto& [out, vdim] = map_it->second;
       if (vdim != out_axes[i]) {
         if (out_axes[i] >= out.ndim()) {
@@ -704,11 +742,7 @@ std::vector<array> vmap_replace(
               << out.ndim() << " dimensions.";
           throw std::invalid_argument(msg.str());
         }
-        std::vector<int> reorder(out.ndim());
-        std::iota(reorder.begin(), reorder.end(), 0);
-        reorder.erase(reorder.begin() + vdim);
-        reorder.insert(reorder.begin() + out_axes[i], vdim);
-        out = transpose(out, reorder);
+        out = moveaxis(out, vdim, out_axes[i]);
       }
       outputs.push_back(out);
     } else {

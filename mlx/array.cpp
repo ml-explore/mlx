@@ -3,6 +3,7 @@
 #include <functional>
 
 #include "mlx/array.h"
+#include "mlx/graph.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -41,11 +42,11 @@ array::array(
     Dtype dtype,
     std::unique_ptr<Primitive> primitive,
     const std::vector<array>& inputs)
-    : array_desc_(std::make_shared<ArrayDesc>(
-          shape,
-          dtype,
-          std::move(primitive),
-          inputs)) {}
+    : array_desc_(std::make_shared<ArrayDesc>(shape, dtype)) {
+  std::vector<array> outputs;
+  outputs.push_back(*this);
+  register_primitive(std::move(primitive), inputs, outputs);
+}
 
 array::array(std::initializer_list<float> data)
     : array_desc_(std::make_shared<ArrayDesc>(
@@ -65,8 +66,8 @@ array::array(
 }
 
 void array::detach() {
-  array_desc_->inputs.clear();
-  array_desc_->primitive = nullptr;
+  // Clear out the graph node
+  array_desc_->graph_node = GraphNode{};
 }
 
 void array::eval() {
@@ -124,18 +125,19 @@ array::ArrayDesc::ArrayDesc(const std::vector<int>& shape, Dtype dtype)
   std::tie(size, strides) = cum_prod(shape);
 }
 
-array::ArrayDesc::ArrayDesc(
-    const std::vector<int>& shape,
-    Dtype dtype,
+void array::register_primitive(
     std::unique_ptr<Primitive> primitive,
-    const std::vector<array>& inputs)
-    : shape(shape),
-      dtype(dtype),
-      primitive(std::move(primitive)),
-      inputs(inputs) {
-  std::tie(size, strides) = cum_prod(shape);
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto g = GraphNode(std::move(primitive), inputs, outputs);
+  bool is_tracer = false;
   for (auto& in : inputs) {
     is_tracer |= in.is_tracer();
+  }
+  for (auto& o : outputs) {
+    // TODO encapsulate
+    o.array_desc_->graph_node = g;
+    o.set_tracer(is_tracer);
   }
 }
 

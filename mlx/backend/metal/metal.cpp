@@ -4,7 +4,6 @@
 #include <future>
 #include <memory>
 
-#include "mlx/array.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -44,7 +43,7 @@ MTL::CommandBuffer* increment_command_buffer(Stream s) {
 }
 
 std::function<void()> make_task(
-    array& arr,
+    GraphNode g,
     std::vector<std::shared_future<void>> deps,
     std::shared_ptr<std::promise<void>> p) {
   auto task = [arr, deps = std::move(deps), p = std::move(p)]() mutable {
@@ -52,9 +51,9 @@ std::function<void()> make_task(
     for (auto& d : deps) {
       d.wait();
     }
-    auto s = arr.primitive().stream();
+    auto s = g.primitive().stream();
     auto command_buffer = increment_command_buffer(s);
-    arr.primitive().eval_gpu(arr.inputs(), arr);
+    g.primitive().eval_gpu(g.inputs(), g.outputs());
     if (p) {
       metal::device(s.device).end_encoding(s.index);
       scheduler::notify_new_task(s);

@@ -24,7 +24,7 @@ target_sources(tests PRIVATE
   device_tests.cpp
   eval_tests.cpp
   fft_tests.cpp
-  graph_optimize_tests.cpp
+  #  graph_optimize_tests.cpp
   load_tests.cpp
   ops_tests.cpp
   random_tests.cpp

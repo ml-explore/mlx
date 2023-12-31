@@ -37,60 +37,46 @@ struct ArrayNames {
 };
 
 void depth_first_traversal(
-    std::function<void(OptionalArrayRef, const array&, int)> callback,
+    std::function<void(GraphNode)> callback,
     const std::vector<array>& outputs) {
-  std::function<void(OptionalArrayRef, const array&, int)> recurse;
+  std::function<void(const GraphNode&)> recurse;
   std::unordered_set<std::uintptr_t> cache;
-  recurse = [&](OptionalArrayRef parent, const array& x, int input_index) {
+  recurse = [&](const GraphNode& x) {
     auto id = x.id();
     if (cache.find(id) != cache.end()) {
       return;
     }
     cache.insert(id);
-    for (int i = 0; i < x.inputs().size(); i++) {
-      recurse(x, x.inputs()[i], i);
+    for (auto& in : x.inputs()) {
+      recurse(in.graph_node());
     }
-    callback(parent, x, input_index);
+    callback(x);
   };
 
-  for (auto x : outputs) {
-    recurse(std::nullopt, x, 0);
+  for (auto& o : outputs) {
+    recurse(o.graph_node());
   }
 }
 
-void depth_first_traversal(
-    std::function<void(const array&)> callback,
-    const std::vector<array>& outputs) {
-  depth_first_traversal(
-      [&callback](OptionalArrayRef p, const array& x, int input_index) {
-        callback(x);
-      },
-      outputs);
-}
-
 void print_graph(std::ostream& os, const std::vector<array>& outputs) {
-  std::vector<array> tape;
+  std::vector<GraphNode> tape;
   std::vector<array> inputs;
 
   depth_first_traversal(
-      [&](const array& x) {
+      [&](const GraphNode& x) {
         if (x.has_primitive()) {
           tape.push_back(x);
         } else {
-          inputs.push_back(x);
+          inputs.insert(inputs.end(), x.inputs().begin(), x.inputs().end());
         }
       },
       outputs);
 
   ArrayNames namer;
-  auto print_arr = [&namer, &os](const array& a) {
-    os << namer.get_name(a);
-    os << " [" << a.shape() << ", " << a.dtype() << "]";
-  };
-
-  auto print_arrs = [&](const std::vector<array>& arrs) {
+  auto print_arrs = [&namer, &os](const std::vector<array>& arrs) {
     for (auto& arr : arrs) {
-      print_arr(arr);
+      os << namer.get_name(arr);
+      os << " [" << arr.shape() << ", " << arr.dtype() << "]";
       if (&arr != &arrs.back()) {
         os << ", ";
       }
@@ -108,7 +94,7 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
     os << " ";
     print_arrs(arr.inputs());
     os << " -> ";
-    print_arr(arr);
+    print_arrs(arr.outputs());
     os << "\n";
   }
 }
@@ -116,26 +102,34 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
 void export_to_dot(std::ostream& os, const std::vector<array>& outputs) {
   os << "digraph {" << std::endl;
 
+  std::unordered_set<std::uintptr_t> output_set;
+  for (auto& o : outputs) {
+    output_set.insert(o.id());
+  }
+  std::unordered_set<std::uintptr_t> input_set;
   ArrayNames namer;
   depth_first_traversal(
-      [&namer, &os](auto parent, const array& x, int input_index) {
-        os << "{ ";
-        if (!x.has_primitive()) {
-          os << "rank=source; ";
+      [&](const GraphNode& x) {
+        for (auto& a : x.inputs()) {
+          // Record inputs
+          if (!a.has_primitive() && input_set.find(a.id()) != input_set.end()) {
+            input_set.insert(a.id());
+            os << "{ rank=source; " << namer.get_name(a) << "; }" << std::endl;
+          }
         }
-        if (!parent) {
-          os << "rank=sink; ";
-        }
-        os << namer.get_name(x);
-        if (x.has_primitive()) {
+        for (auto& a : x.outputs()) {
+          os << "{ ";
+          if (output_set.find(a.id()) != output_set.end()) {
+            os << "rank=sink; ";
+          }
+          os << namer.get_name(a);
           os << " [label =\"";
           x.primitive().print(os);
           os << "\"]";
-        }
-        os << "; }" << std::endl;
-
-        for (auto c : x.inputs()) {
-          os << namer.get_name(c) << " -> " << namer.get_name(x) << std::endl;
+          os << "; }" << std::endl;
+          for (auto c : x.inputs()) {
+            os << namer.get_name(c) << " -> " << namer.get_name(a) << std::endl;
+          }
         }
       },
       outputs);

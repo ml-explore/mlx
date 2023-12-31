@@ -2,20 +2,25 @@
 
 #pragma once
 
-#include "array.h"
-#include "device.h"
-#include "io/load.h"
-#include "stream.h"
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/io/load.h"
+#include "mlx/stream.h"
+
+#define DEFINE_VMAP()                                                 \
+  virtual std::pair<std::vector<array>, std::vector<int>> vmap(       \
+      const std::vector<array>& inputs, const std::vector<int>& axes) \
+      override;
 
 #define DEFINE_GRADS()                           \
-  array jvp(                                     \
+  std::vector<array> jvp(                        \
       const std::vector<array>& primals,         \
       const std::vector<array>& tangents,        \
       const std::vector<int>& argnums) override; \
                                                  \
   std::vector<array> vjp(                        \
       const std::vector<array>& primals,         \
-      const array& cotan,                        \
+      const std::vector<array>& cotangents,      \
       const std::vector<int>& argnums) override;
 
 #define DEFINE_PRINT(PRIMITIVE)           \
@@ -47,18 +52,22 @@ class Primitive {
 
   /**
    * A primitive must know how to evaluate itself on
-   * the CPU/GPU for the given inputs and populate the output array.
+   * the CPU/GPU for the given inputs and populate the output arrays.
    *
    * To avoid unnecessary allocations, the evaluation function
    * is responsible for allocating space for the array.
    */
-  virtual void eval_cpu(const std::vector<array>& inputs, array& out) = 0;
-  virtual void eval_gpu(const std::vector<array>& inputs, array& out) = 0;
+  virtual void eval_cpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) = 0;
+  virtual void eval_gpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) = 0;
 
   /**
    * The Jacobian-vector product.
    */
-  virtual array jvp(
+  virtual std::vector<array> jvp(
       const std::vector<array>& primals,
       const std::vector<array>& tangents,
       const std::vector<int>& argnums);
@@ -68,16 +77,16 @@ class Primitive {
    */
   virtual std::vector<array> vjp(
       const std::vector<array>& primals,
-      const array& cotan,
+      const std::vector<array>& cotangents,
       const std::vector<int>& argnums);
 
   /**
    * The primitive must know how to vectorize itself across
-   * the given axes. The output is a pair containing the array
-   * representing the vectorized computation and the axis which
-   * corresponds to the output vectorized dimension.
+   * the given axes. The output is a pair containing the output arrays
+   * representing the vectorized computation and the axes which
+   * corresponds to the vectorized dimensions of each output.
    */
-  virtual std::pair<array, int> vmap(
+  virtual std::pair<std::vector<array>, std::vector<int>> vmap(
       const std::vector<array>& inputs,
       const std::vector<int>& axes);
 
@@ -100,17 +109,42 @@ class Primitive {
   Stream stream_;
 };
 
-class Abs : public Primitive {
+class UnaryPrimitive : public Primitive {
+  /**
+   * An abstract base class for a primitive with a single output.
+   */
  public:
-  explicit Abs(Stream stream) : Primitive(stream){};
+  explicit UnaryPrimitive(Stream stream) : Primitive(stream) {}
+
+  virtual void eval_cpu(const std::vector<array>& inputs, array& output) = 0;
+  virtual void eval_gpu(const std::vector<array>& inputs, array& output) = 0;
+
+  inline void eval_cpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) override {
+    eval_cpu(inputs, outputs[0]);
+  }
+  inline void eval_gpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) override {
+    eval_gpu(inputs, outputs[0]);
+  }
+
+  virtual ~UnaryPrimitive() = default;
+  UnaryPrimitive(const UnaryPrimitive& other) = delete;
+  UnaryPrimitive(UnaryPrimitive&& other) = delete;
+  UnaryPrimitive& operator=(const UnaryPrimitive& other) = delete;
+  UnaryPrimitive& operator=(UnaryPrimitive&& other) = delete;
+};
+
+class Abs : public UnaryPrimitive {
+ public:
+  explicit Abs(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Abs)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -119,17 +153,14 @@ class Abs : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Add : public Primitive {
+class Add : public UnaryPrimitive {
  public:
-  explicit Add(Stream stream) : Primitive(stream){};
+  explicit Add(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Add)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -138,10 +169,10 @@ class Add : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Arange : public Primitive {
+class Arange : public UnaryPrimitive {
  public:
   explicit Arange(Stream stream, double start, double stop, double step)
-      : Primitive(stream), start_(start), stop_(stop), step_(step){};
+      : UnaryPrimitive(stream), start_(start), stop_(stop), step_(step){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -157,17 +188,14 @@ class Arange : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArcCos : public Primitive {
+class ArcCos : public UnaryPrimitive {
  public:
-  explicit ArcCos(Stream stream) : Primitive(stream){};
+  explicit ArcCos(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcCos)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -176,17 +204,14 @@ class ArcCos : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArcCosh : public Primitive {
+class ArcCosh : public UnaryPrimitive {
  public:
-  explicit ArcCosh(Stream stream) : Primitive(stream){};
+  explicit ArcCosh(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcCosh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -195,17 +220,14 @@ class ArcCosh : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArcSin : public Primitive {
+class ArcSin : public UnaryPrimitive {
  public:
-  explicit ArcSin(Stream stream) : Primitive(stream){};
+  explicit ArcSin(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcSin)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -214,17 +236,14 @@ class ArcSin : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArcSinh : public Primitive {
+class ArcSinh : public UnaryPrimitive {
  public:
-  explicit ArcSinh(Stream stream) : Primitive(stream){};
+  explicit ArcSinh(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcSinh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -233,17 +252,14 @@ class ArcSinh : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArcTan : public Primitive {
+class ArcTan : public UnaryPrimitive {
  public:
-  explicit ArcTan(Stream stream) : Primitive(stream){};
+  explicit ArcTan(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcTan)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -252,17 +268,14 @@ class ArcTan : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArcTanh : public Primitive {
+class ArcTanh : public UnaryPrimitive {
  public:
-  explicit ArcTanh(Stream stream) : Primitive(stream){};
+  explicit ArcTanh(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcTanh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -271,18 +284,15 @@ class ArcTanh : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArgPartition : public Primitive {
+class ArgPartition : public UnaryPrimitive {
  public:
   explicit ArgPartition(Stream stream, int kth, int axis)
-      : Primitive(stream), kth_(kth), axis_(axis){};
+      : UnaryPrimitive(stream), kth_(kth), axis_(axis){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_PRINT(ArgPartition)
   bool is_equivalent(const Primitive& other) const override;
 
@@ -293,7 +303,7 @@ class ArgPartition : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArgReduce : public Primitive {
+class ArgReduce : public UnaryPrimitive {
  public:
   enum ReduceType {
     ArgMin,
@@ -301,7 +311,7 @@ class ArgReduce : public Primitive {
   };
 
   explicit ArgReduce(Stream stream, ReduceType reduce_type, int axis)
-      : Primitive(stream), reduce_type_(reduce_type), axis_(axis){};
+      : UnaryPrimitive(stream), reduce_type_(reduce_type), axis_(axis){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -316,17 +326,15 @@ class ArgReduce : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ArgSort : public Primitive {
+class ArgSort : public UnaryPrimitive {
  public:
-  explicit ArgSort(Stream stream, int axis) : Primitive(stream), axis_(axis){};
+  explicit ArgSort(Stream stream, int axis)
+      : UnaryPrimitive(stream), axis_(axis){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_PRINT(ArgSort)
   bool is_equivalent(const Primitive& other) const override;
 
@@ -336,18 +344,15 @@ class ArgSort : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class AsType : public Primitive {
+class AsType : public UnaryPrimitive {
  public:
   explicit AsType(Stream stream, Dtype dtype)
-      : Primitive(stream), dtype_(dtype){};
+      : UnaryPrimitive(stream), dtype_(dtype){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(AsType)
   bool is_equivalent(const Primitive& other) const override;
@@ -358,14 +363,17 @@ class AsType : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class AsStrided : public Primitive {
+class AsStrided : public UnaryPrimitive {
  public:
   explicit AsStrided(
       Stream stream,
       const std::vector<int>& shape,
       const std::vector<size_t>& strides,
       size_t offset)
-      : Primitive(stream), shape_(shape), strides_(strides), offset_(offset){};
+      : UnaryPrimitive(stream),
+        shape_(shape),
+        strides_(strides),
+        offset_(offset){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -382,18 +390,15 @@ class AsStrided : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Broadcast : public Primitive {
+class Broadcast : public UnaryPrimitive {
  public:
   explicit Broadcast(Stream stream, const std::vector<int>& shape)
-      : Primitive(stream), shape_(shape){};
+      : UnaryPrimitive(stream), shape_(shape){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Broadcast)
   bool is_equivalent(const Primitive& other) const override;
@@ -404,17 +409,14 @@ class Broadcast : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Ceil : public Primitive {
+class Ceil : public UnaryPrimitive {
  public:
-  explicit Ceil(Stream stream) : Primitive(stream){};
+  explicit Ceil(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Ceil)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -423,18 +425,15 @@ class Ceil : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Concatenate : public Primitive {
+class Concatenate : public UnaryPrimitive {
  public:
   explicit Concatenate(Stream stream, int axis)
-      : Primitive(stream), axis_(axis){};
+      : UnaryPrimitive(stream), axis_(axis){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Concatenate)
   bool is_equivalent(const Primitive& other) const override;
@@ -445,7 +444,7 @@ class Concatenate : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Convolution : public Primitive {
+class Convolution : public UnaryPrimitive {
  public:
   explicit Convolution(
       Stream stream,
@@ -453,7 +452,7 @@ class Convolution : public Primitive {
       const std::vector<int>& kernel_strides,
       const std::vector<int>& kernel_dilation,
       const std::vector<int>& input_dilation)
-      : Primitive(stream),
+      : UnaryPrimitive(stream),
         padding_(padding),
         kernel_strides_(kernel_strides),
         kernel_dilation_(kernel_dilation),
@@ -464,7 +463,7 @@ class Convolution : public Primitive {
 
   std::vector<array> vjp(
       const std::vector<array>& primals,
-      const array& cotan,
+      const std::vector<array>& cotangents,
       const std::vector<int>& argnums) override;
 
   DEFINE_PRINT(Convolution)
@@ -479,17 +478,14 @@ class Convolution : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Copy : public Primitive {
+class Copy : public UnaryPrimitive {
  public:
-  explicit Copy(Stream stream) : Primitive(stream){};
+  explicit Copy(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Copy)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -498,17 +494,14 @@ class Copy : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Cos : public Primitive {
+class Cos : public UnaryPrimitive {
  public:
-  explicit Cos(Stream stream) : Primitive(stream){};
+  explicit Cos(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Cos)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -517,17 +510,14 @@ class Cos : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Cosh : public Primitive {
+class Cosh : public UnaryPrimitive {
  public:
-  explicit Cosh(Stream stream) : Primitive(stream){};
+  explicit Cosh(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Cosh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -536,17 +526,14 @@ class Cosh : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Divide : public Primitive {
+class Divide : public UnaryPrimitive {
  public:
-  explicit Divide(Stream stream) : Primitive(stream){};
+  explicit Divide(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Divide)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -555,17 +542,31 @@ class Divide : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Remainder : public Primitive {
+/*class DivMod: public Primitive {
  public:
-  explicit Remainder(Stream stream) : Primitive(stream){};
+  explicit Divide(Stream stream) : UnaryPrimitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+override; void eval_gpu(const std::vector<array>& inputs, std::vector<array>&
+outputs) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(DivMod)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+};*/
+
+class Remainder : public UnaryPrimitive {
+ public:
+  explicit Remainder(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Remainder)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -574,18 +575,15 @@ class Remainder : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Equal : public Primitive {
+class Equal : public UnaryPrimitive {
  public:
   explicit Equal(Stream stream, bool equal_nan = false)
-      : Primitive(stream), equal_nan_(equal_nan){};
+      : UnaryPrimitive(stream), equal_nan_(equal_nan){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Equal)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -595,17 +593,14 @@ class Equal : public Primitive {
   bool equal_nan_;
 };
 
-class Erf : public Primitive {
+class Erf : public UnaryPrimitive {
  public:
-  explicit Erf(Stream stream) : Primitive(stream){};
+  explicit Erf(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Erf)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -614,17 +609,14 @@ class Erf : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class ErfInv : public Primitive {
+class ErfInv : public UnaryPrimitive {
  public:
-  explicit ErfInv(Stream stream) : Primitive(stream){};
+  explicit ErfInv(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ErfInv)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -633,17 +625,14 @@ class ErfInv : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Exp : public Primitive {
+class Exp : public UnaryPrimitive {
  public:
-  explicit Exp(Stream stream) : Primitive(stream){};
+  explicit Exp(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Exp)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -652,22 +641,19 @@ class Exp : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class FFT : public Primitive {
+class FFT : public UnaryPrimitive {
  public:
   explicit FFT(
       Stream stream,
       const std::vector<size_t>& axes,
       bool inverse,
       bool real)
-      : Primitive(stream), axes_(axes), inverse_(inverse), real_(real){};
+      : UnaryPrimitive(stream), axes_(axes), inverse_(inverse), real_(real){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(FFT)
 
@@ -681,17 +667,14 @@ class FFT : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Floor : public Primitive {
+class Floor : public UnaryPrimitive {
  public:
-  explicit Floor(Stream stream) : Primitive(stream){};
+  explicit Floor(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Floor)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -700,17 +683,14 @@ class Floor : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Full : public Primitive {
+class Full : public UnaryPrimitive {
  public:
-  explicit Full(Stream stream) : Primitive(stream){};
+  explicit Full(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Full)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -719,21 +699,18 @@ class Full : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Gather : public Primitive {
+class Gather : public UnaryPrimitive {
  public:
   explicit Gather(
       Stream stream,
       const std::vector<int>& axes,
       const std::vector<int>& slice_sizes)
-      : Primitive(stream), axes_(axes), slice_sizes_(slice_sizes){};
+      : UnaryPrimitive(stream), axes_(axes), slice_sizes_(slice_sizes){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Gather)
   bool is_equivalent(const Primitive& other) const override;
@@ -744,17 +721,14 @@ class Gather : public Primitive {
   std::vector<int> slice_sizes_;
 };
 
-class Greater : public Primitive {
+class Greater : public UnaryPrimitive {
  public:
-  explicit Greater(Stream stream) : Primitive(stream){};
+  explicit Greater(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Greater)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -763,17 +737,14 @@ class Greater : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class GreaterEqual : public Primitive {
+class GreaterEqual : public UnaryPrimitive {
  public:
-  explicit GreaterEqual(Stream stream) : Primitive(stream){};
+  explicit GreaterEqual(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(GreaterEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -782,17 +753,14 @@ class GreaterEqual : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Less : public Primitive {
+class Less : public UnaryPrimitive {
  public:
-  explicit Less(Stream stream) : Primitive(stream){};
+  explicit Less(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Less)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -801,17 +769,14 @@ class Less : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class LessEqual : public Primitive {
+class LessEqual : public UnaryPrimitive {
  public:
-  explicit LessEqual(Stream stream) : Primitive(stream){};
+  explicit LessEqual(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(LessEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -820,14 +785,14 @@ class LessEqual : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Load : public Primitive {
+class Load : public UnaryPrimitive {
  public:
   explicit Load(
       Stream stream,
       std::shared_ptr<io::Reader> reader,
       size_t offset,
       bool swap_endianness = false)
-      : Primitive(stream),
+      : UnaryPrimitive(stream),
         reader_(reader),
         offset_(offset),
         swap_endianness_(swap_endianness){};
@@ -844,19 +809,17 @@ class Load : public Primitive {
   bool swap_endianness_;
 };
 
-class Log : public Primitive {
+class Log : public UnaryPrimitive {
  public:
   enum Base { two, ten, e };
 
-  explicit Log(Stream stream, Base base) : Primitive(stream), base_(base){};
+  explicit Log(Stream stream, Base base)
+      : UnaryPrimitive(stream), base_(base){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Log)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -866,17 +829,14 @@ class Log : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Log1p : public Primitive {
+class Log1p : public UnaryPrimitive {
  public:
-  explicit Log1p(Stream stream) : Primitive(stream){};
+  explicit Log1p(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Log1p)
 
@@ -884,17 +844,14 @@ class Log1p : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class LogicalNot : public Primitive {
+class LogicalNot : public UnaryPrimitive {
  public:
-  explicit LogicalNot(Stream stream) : Primitive(stream){};
+  explicit LogicalNot(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(LogicalNot)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -903,17 +860,14 @@ class LogicalNot : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class LogicalAnd : public Primitive {
+class LogicalAnd : public UnaryPrimitive {
  public:
-  explicit LogicalAnd(Stream stream) : Primitive(stream){};
+  explicit LogicalAnd(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(LogicalAnd)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -922,17 +876,14 @@ class LogicalAnd : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class LogicalOr : public Primitive {
+class LogicalOr : public UnaryPrimitive {
  public:
-  explicit LogicalOr(Stream stream) : Primitive(stream){};
+  explicit LogicalOr(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(LogicalOr)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -941,17 +892,14 @@ class LogicalOr : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class LogAddExp : public Primitive {
+class LogAddExp : public UnaryPrimitive {
  public:
-  explicit LogAddExp(Stream stream) : Primitive(stream){};
+  explicit LogAddExp(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(LogAddExp)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -960,37 +908,30 @@ class LogAddExp : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Matmul : public Primitive {
+class Matmul : public UnaryPrimitive {
  public:
-  explicit Matmul(Stream stream) : Primitive(stream){};
+  explicit Matmul(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   std::vector<array> vjp(
       const std::vector<array>& primals,
-      const array& cotan,
+      const std::vector<array>& cotangents,
       const std::vector<int>& argnums) override;
-
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
 
   DEFINE_PRINT(Matmul)
   DEFINE_DEFAULT_IS_EQUIVALENT()
 };
 
-class Maximum : public Primitive {
+class Maximum : public UnaryPrimitive {
  public:
-  explicit Maximum(Stream stream) : Primitive(stream){};
+  explicit Maximum(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Maximum)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -999,17 +940,14 @@ class Maximum : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Minimum : public Primitive {
+class Minimum : public UnaryPrimitive {
  public:
-  explicit Minimum(Stream stream) : Primitive(stream){};
+  explicit Minimum(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Minimum)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1018,17 +956,14 @@ class Minimum : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Multiply : public Primitive {
+class Multiply : public UnaryPrimitive {
  public:
-  explicit Multiply(Stream stream) : Primitive(stream){};
+  explicit Multiply(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Multiply)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1037,17 +972,14 @@ class Multiply : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Negative : public Primitive {
+class Negative : public UnaryPrimitive {
  public:
-  explicit Negative(Stream stream) : Primitive(stream){};
+  explicit Negative(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Negative)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1056,17 +988,14 @@ class Negative : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class NotEqual : public Primitive {
+class NotEqual : public UnaryPrimitive {
  public:
-  explicit NotEqual(Stream stream) : Primitive(stream){};
+  explicit NotEqual(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(NotEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1075,14 +1004,14 @@ class NotEqual : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Pad : public Primitive {
+class Pad : public UnaryPrimitive {
  public:
   explicit Pad(
       Stream stream,
       const std::vector<int>& axes,
       const std::vector<int>& low_pad_size,
       const std::vector<int>& high_pad_size)
-      : Primitive(stream),
+      : UnaryPrimitive(stream),
         axes_(axes),
         low_pad_size_(low_pad_size),
         high_pad_size_(high_pad_size){};
@@ -1090,10 +1019,7 @@ class Pad : public Primitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Pad)
   bool is_equivalent(const Primitive& other) const override;
@@ -1106,18 +1032,15 @@ class Pad : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Partition : public Primitive {
+class Partition : public UnaryPrimitive {
  public:
   explicit Partition(Stream stream, int kth, int axis)
-      : Primitive(stream), kth_(kth), axis_(axis){};
+      : UnaryPrimitive(stream), kth_(kth), axis_(axis){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Partition)
   bool is_equivalent(const Primitive& other) const override;
@@ -1129,17 +1052,14 @@ class Partition : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Power : public Primitive {
+class Power : public UnaryPrimitive {
  public:
-  explicit Power(Stream stream) : Primitive(stream){};
+  explicit Power(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Power)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1148,14 +1068,14 @@ class Power : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class QuantizedMatmul : public Primitive {
+class QuantizedMatmul : public UnaryPrimitive {
  public:
   explicit QuantizedMatmul(
       Stream stream,
       int group_size,
       int bits,
       bool transpose)
-      : Primitive(stream),
+      : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
         transpose_(transpose){};
@@ -1163,10 +1083,7 @@ class QuantizedMatmul : public Primitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(QuantizedMatmul)
   bool is_equivalent(const Primitive& other) const override;
@@ -1179,18 +1096,15 @@ class QuantizedMatmul : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class RandomBits : public Primitive {
+class RandomBits : public UnaryPrimitive {
  public:
   explicit RandomBits(Stream stream, const std::vector<int>& shape, int width)
-      : Primitive(stream), shape_(shape), width_(width){};
+      : UnaryPrimitive(stream), shape_(shape), width_(width){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_PRINT(RandomBits)
   bool is_equivalent(const Primitive& other) const override;
 
@@ -1201,18 +1115,15 @@ class RandomBits : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Reshape : public Primitive {
+class Reshape : public UnaryPrimitive {
  public:
   explicit Reshape(Stream stream, const std::vector<int>& shape)
-      : Primitive(stream), shape_(shape){};
+      : UnaryPrimitive(stream), shape_(shape){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Reshape)
   bool is_equivalent(const Primitive& other) const override;
@@ -1223,7 +1134,7 @@ class Reshape : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Reduce : public Primitive {
+class Reduce : public UnaryPrimitive {
  public:
   enum ReduceType { And, Or, Sum, Prod, Min, Max };
 
@@ -1231,17 +1142,16 @@ class Reduce : public Primitive {
       Stream stream,
       ReduceType reduce_type,
       const std::vector<int>& axes)
-      : Primitive(stream), reduce_type_(reduce_type), axes_(axes){};
+      : UnaryPrimitive(stream), reduce_type_(reduce_type), axes_(axes){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
+  DEFINE_VMAP()
+
   std::vector<array> vjp(
       const std::vector<array>& primals,
-      const array& cotan,
+      const std::vector<array>& cotangents,
       const std::vector<int>& argnums) override;
 
   void print(std::ostream& os) override {
@@ -1275,17 +1185,14 @@ class Reduce : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Round : public Primitive {
+class Round : public UnaryPrimitive {
  public:
-  explicit Round(Stream stream) : Primitive(stream){};
+  explicit Round(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Round)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1294,7 +1201,7 @@ class Round : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Scan : public Primitive {
+class Scan : public UnaryPrimitive {
  public:
   enum ReduceType { Max, Min, Sum, Prod };
 
@@ -1304,7 +1211,7 @@ class Scan : public Primitive {
       int axis,
       bool reverse,
       bool inclusive)
-      : Primitive(stream),
+      : UnaryPrimitive(stream),
         reduce_type_(reduce_type),
         axis_(axis),
         reverse_(reverse),
@@ -1313,11 +1220,9 @@ class Scan : public Primitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS();
+
   void print(std::ostream& os) override {
     os << "Cum";
     switch (reduce_type_) {
@@ -1347,7 +1252,7 @@ class Scan : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Scatter : public Primitive {
+class Scatter : public UnaryPrimitive {
  public:
   enum ReduceType { Max, Min, Sum, Prod, None };
 
@@ -1355,7 +1260,7 @@ class Scatter : public Primitive {
       Stream stream,
       ReduceType reduce_type,
       const std::vector<int>& axes)
-      : Primitive(stream), reduce_type_(reduce_type), axes_(axes){};
+      : UnaryPrimitive(stream), reduce_type_(reduce_type), axes_(axes){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1369,17 +1274,14 @@ class Scatter : public Primitive {
   std::vector<int> axes_;
 };
 
-class Sigmoid : public Primitive {
+class Sigmoid : public UnaryPrimitive {
  public:
-  explicit Sigmoid(Stream stream) : Primitive(stream){};
+  explicit Sigmoid(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Sigmoid)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1388,17 +1290,14 @@ class Sigmoid : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Sign : public Primitive {
+class Sign : public UnaryPrimitive {
  public:
-  explicit Sign(Stream stream) : Primitive(stream){};
+  explicit Sign(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Sign)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1407,17 +1306,14 @@ class Sign : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Sin : public Primitive {
+class Sin : public UnaryPrimitive {
  public:
-  explicit Sin(Stream stream) : Primitive(stream){};
+  explicit Sin(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Sin)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1426,17 +1322,14 @@ class Sin : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Sinh : public Primitive {
+class Sinh : public UnaryPrimitive {
  public:
-  explicit Sinh(Stream stream) : Primitive(stream){};
+  explicit Sinh(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Sinh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1445,14 +1338,14 @@ class Sinh : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Slice : public Primitive {
+class Slice : public UnaryPrimitive {
  public:
   explicit Slice(
       Stream stream,
       const std::vector<int>& start_indices,
       const std::vector<int>& end_indices,
       const std::vector<int>& strides)
-      : Primitive(stream),
+      : UnaryPrimitive(stream),
         start_indices_(start_indices),
         end_indices_(end_indices),
         strides_(strides){};
@@ -1460,10 +1353,7 @@ class Slice : public Primitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Slice)
   bool is_equivalent(const Primitive& other) const override;
@@ -1476,17 +1366,14 @@ class Slice : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Softmax : public Primitive {
+class Softmax : public UnaryPrimitive {
  public:
-  explicit Softmax(Stream stream) : Primitive(stream){};
+  explicit Softmax(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Softmax)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1495,17 +1382,15 @@ class Softmax : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Sort : public Primitive {
+class Sort : public UnaryPrimitive {
  public:
-  explicit Sort(Stream stream, int axis) : Primitive(stream), axis_(axis){};
+  explicit Sort(Stream stream, int axis)
+      : UnaryPrimitive(stream), axis_(axis){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Sort)
   bool is_equivalent(const Primitive& other) const override;
@@ -1516,17 +1401,14 @@ class Sort : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Square : public Primitive {
+class Square : public UnaryPrimitive {
  public:
-  explicit Square(Stream stream) : Primitive(stream){};
+  explicit Square(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Square)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1535,18 +1417,15 @@ class Square : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Sqrt : public Primitive {
+class Sqrt : public UnaryPrimitive {
  public:
   explicit Sqrt(Stream stream, bool recip = false)
-      : Primitive(stream), recip_(recip){};
+      : UnaryPrimitive(stream), recip_(recip){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Sqrt)
   bool is_equivalent(const Primitive& other) const override;
@@ -1556,17 +1435,14 @@ class Sqrt : public Primitive {
   bool recip_;
 };
 
-class StopGradient : public Primitive {
+class StopGradient : public UnaryPrimitive {
  public:
-  explicit StopGradient(Stream stream) : Primitive(stream){};
+  explicit StopGradient(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_PRINT(StopGradient)
   DEFINE_DEFAULT_IS_EQUIVALENT()
 
@@ -1574,17 +1450,14 @@ class StopGradient : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Subtract : public Primitive {
+class Subtract : public UnaryPrimitive {
  public:
-  explicit Subtract(Stream stream) : Primitive(stream){};
+  explicit Subtract(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Subtract)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1593,17 +1466,14 @@ class Subtract : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Tan : public Primitive {
+class Tan : public UnaryPrimitive {
  public:
-  explicit Tan(Stream stream) : Primitive(stream){};
+  explicit Tan(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Tan)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1612,17 +1482,14 @@ class Tan : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Tanh : public Primitive {
+class Tanh : public UnaryPrimitive {
  public:
-  explicit Tanh(Stream stream) : Primitive(stream){};
+  explicit Tanh(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Tanh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1631,17 +1498,14 @@ class Tanh : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Uniform : public Primitive {
+class Uniform : public UnaryPrimitive {
  public:
-  explicit Uniform(Stream stream) : Primitive(stream){};
+  explicit Uniform(Stream stream) : UnaryPrimitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_PRINT(Uniform)
   DEFINE_DEFAULT_IS_EQUIVALENT()
 
@@ -1649,18 +1513,15 @@ class Uniform : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Transpose : public Primitive {
+class Transpose : public UnaryPrimitive {
  public:
   explicit Transpose(Stream stream, const std::vector<int>& axes)
-      : Primitive(stream), axes_(axes){};
+      : UnaryPrimitive(stream), axes_(axes){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
-  std::pair<array, int> vmap(
-      const std::vector<array>& inputs,
-      const std::vector<int>& axes) override;
-
+  DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Transpose)
   bool is_equivalent(const Primitive& other) const override;
