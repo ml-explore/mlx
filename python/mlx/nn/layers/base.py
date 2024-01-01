@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import textwrap
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
@@ -87,11 +87,77 @@ class Module(dict):
     def __setattr__(self, key: str, val: Any):
         self[key] = val
 
-    def load_weights(self, file: str):
+    def load_weights(
+        self, file_or_weights: Union[str, List[Tuple[str, mx.array]]], strict=True
+    ):
         """
-        Load and update the model's weights from a `.npz` file.
+        Update the model's weights from a ``.npz`` file or list.
+
+        Args:
+            file_or_weights (str or list(tuple(str, mx.array))): The path to
+                the weights ``.npz`` file or a list of pairs of parameter names
+                and arrays.
+            strict (bool, optional): If ``True`` then checks that the provided
+              weights exactly match the parameters of the model. Otherwise,
+              only the weights actually contained in the model are loaded and
+              shapes are not checked. Default: ``True``.
+
+        Example:
+
+            .. code-block:: python
+
+                import mlx.core as mx
+                import mlx.nn as nn
+                model = nn.Linear(10, 10)
+
+                # Load from file
+                model.load_weights("weights.npz")
+
+                # Load from list
+                weights = [
+                    ("weight", mx.random.uniform(shape=(10, 10))),
+                    ("bias",  mx.zeros((10,))),
+                ]
+                model.load_weights(weights)
+
+                # Missing weight
+                weights = [
+                    ("weight", mx.random.uniform(shape=(10, 10))),
+                ]
+
+                # Raises a ValueError exception
+                model.load_weights(weights)
+
+                # Ok, only updates the weight but not the bias
+                model.load_weights(weights, strict=False)
         """
-        self.update(tree_unflatten(list(mx.load(file).items())))
+        weights = file_or_weights
+        if isinstance(weights, str):
+            weights = list(mx.load(weights).items())
+
+        if strict:
+            new_weights = dict(weights)
+            curr_weights = dict(tree_flatten(self.parameters()))
+            if extras := (new_weights.keys() - curr_weights.keys()):
+                extras = " ".join(extras)
+                raise ValueError(f"Received parameters not in model: {extras}.")
+            if missing := (curr_weights.keys() - new_weights.keys()):
+                missing = " ".join(missing)
+                raise ValueError(f"Missing parameters: {missing}.")
+            for k, v in curr_weights.items():
+                v_new = new_weights[k]
+                if not isinstance(v_new, mx.array):
+                    raise ValueError(
+                        "Expected mx.array but received "
+                        f"{type(v_new)} for parameter {k}"
+                    )
+                if v_new.shape != v.shape:
+                    raise ValueError(
+                        f"Expected shape {v.shape} but received "
+                        f" shape {v_new.shape} for parameter {k}"
+                    )
+
+        self.update(tree_unflatten(weights))
 
     def save_weights(self, file: str):
         """

@@ -170,11 +170,15 @@ In detail:
   :meth:`mlx.core.value_and_grad`
 
 .. autosummary::
-   :recursive:
    :toctree: _autosummary
 
    value_and_grad
-   Module
+
+.. autosummary::
+   :toctree: _autosummary
+   :template: module-base-class.rst
+
+    Module
 
 .. toctree::
 
