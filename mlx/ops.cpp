@@ -1737,6 +1737,21 @@ array operator%(const array& a, const array& b) {
   return remainder(a, b);
 }
 
+std::vector<array>
+divmod(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  auto dtype = promote_types(a.dtype(), b.dtype());
+  if (is_complex(dtype)) {
+    throw std::invalid_argument("[divmod] Complex type not supported.");
+  }
+  auto inputs = broadcast_arrays(
+      {astype(a, dtype, s), astype(b, dtype, to_stream(s))}, s);
+  return array::make_arrays(
+      {inputs[0].shape(), inputs[0].shape()},
+      {inputs[0].dtype(), inputs[0].dtype()},
+      std::make_unique<DivMod>(to_stream(s)),
+      inputs);
+}
+
 array maximum(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto out_type = promote_types(a.dtype(), b.dtype());
   auto inputs =

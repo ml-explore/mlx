@@ -48,6 +48,21 @@ array::array(
   register_primitive(std::move(primitive), inputs, outputs);
 }
 
+std::vector<array> array::make_arrays(
+    const std::vector<std::vector<int>>& shapes,
+    const std::vector<Dtype>& dtypes,
+    std::unique_ptr<Primitive> primitive,
+    const std::vector<array>& inputs) {
+  std::vector<array> outputs;
+  for (int i = 0; i < shapes.size(); ++i) {
+    // TODO this is a bit wasteful since it
+    // makes an array with a graph node then we immediately destroy it below
+    outputs.push_back(array(shapes[i], dtypes[i], nullptr, {}));
+  }
+  register_primitive(std::move(primitive), inputs, outputs);
+  return outputs;
+}
+
 array::array(std::initializer_list<float> data)
     : array_desc_(std::make_shared<ArrayDesc>(
           std::vector<int>{static_cast<int>(data.size())},

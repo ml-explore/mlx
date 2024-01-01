@@ -542,13 +542,14 @@ class Divide : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-/*class DivMod: public Primitive {
+class DivMod : public Primitive {
  public:
-  explicit Divide(Stream stream) : UnaryPrimitive(stream){};
+  explicit DivMod(Stream stream) : Primitive(stream){};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
-override; void eval_gpu(const std::vector<array>& inputs, std::vector<array>&
-outputs) override;
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
 
   DEFINE_VMAP()
   DEFINE_GRADS()
@@ -557,7 +558,7 @@ outputs) override;
 
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
-};*/
+};
 
 class Remainder : public UnaryPrimitive {
  public:

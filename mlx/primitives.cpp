@@ -753,22 +753,13 @@ std::vector<array> Divide::vjp(
   return vjps;
 }
 
-/*std::vector<array> DivMod::vjp(
+std::vector<array> DivMod::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums) {
   std::vector<array> vjps;
   for (auto arg : argnums) {
-    if (arg == 0) {
-      vjps.push_back(divide(cotangents[0], primals[1], stream()));
-    } else {
-      vjps.push_back(negative(
-          divide(
-              multiply(cotangents[0], primals[0], stream()),
-              square(primals[1], stream()),
-              stream()),
-          stream()));
-    }
+    vjps.push_back(zeros_like(primals[arg], stream()));
   }
   return vjps;
 }
@@ -777,32 +768,18 @@ std::vector<array> DivMod::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  auto jvp_fun = [&](int i) {
-    int arg = argnums[i];
-    if (arg == 0) {
-      return divide(tangents[i], primals[1], stream());
-    } else {
-      return negative(
-          divide(
-              multiply(tangents[i], primals[0], stream()),
-              square(primals[1], stream()),
-              stream()),
-          stream());
-    }
-  };
-  auto out = jvp_fun(0);
-  if (argnums.size() > 1) {
-    out = add(out, jvp_fun(1), stream());
-  }
-  return {out};
+  // TODO
+  // Promote types
+  // Broadcast
+  return {zeros_like(primals[0])};
 }
 
 std::pair<std::vector<array>, std::vector<int>> DivMod::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{divide(a, b, stream())}, {to_ax}};
-}*/
+  return {divmod(a, b, stream()), {to_ax}};
+}
 
 std::vector<array> Divide::jvp(
     const std::vector<array>& primals,

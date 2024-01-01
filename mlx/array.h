@@ -179,6 +179,12 @@ class array {
       std::unique_ptr<Primitive> primitive,
       const std::vector<array>& inputs);
 
+  static std::vector<array> make_arrays(
+      const std::vector<std::vector<int>>& shapes,
+      const std::vector<Dtype>& dtypes,
+      std::unique_ptr<Primitive> primitive,
+      const std::vector<array>& inputs);
+
   /** A unique identifier for an array. */
   std::uintptr_t id() const {
     return reinterpret_cast<std::uintptr_t>(array_desc_.get());
@@ -290,11 +296,6 @@ class array {
   }
 
   // TODO r-value version of this.
-  static void register_primitive(
-      std::unique_ptr<Primitive> primitive,
-      const std::vector<array>& inputs,
-      std::vector<array>& outputs);
-
   ~array() {
     // When the last array other than the reference held by the graph goes out
     // of scope it has to signal to the graph node that it is gone. This way
@@ -346,6 +347,13 @@ class array {
   // the primitive which knows how to compute the array's data from its inputs
   // and a the list of array's inputs for the primitive.
   std::shared_ptr<ArrayDesc> array_desc_{nullptr};
+
+  // Register a set of arrays with a primitive which has the given
+  // inputs and outputs
+  static void register_primitive(
+      std::unique_ptr<Primitive> primitive,
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs);
 };
 
 template <typename T>

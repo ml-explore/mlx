@@ -1,3 +1,4 @@
+#include <iostream> // TODO
 // Copyright © 2023 Apple Inc.
 #include <cmath>
 #include <numeric>
@@ -2396,4 +2397,28 @@ TEST_CASE("inner") {
   z = inner(eye(2), array(7.));
   expected = array({7., 0., 0., 7.}, {2, 2});
   CHECK(array_equal(z, expected).item<bool>());
+}
+
+TEST_CASE("test divmod") {
+  auto x = array({1, 2, 3});
+  auto y = array({1, 1, 1});
+  auto out = divmod(x, y);
+  CHECK(array_equal(out[0], array({1, 2, 3})).item<bool>());
+  CHECK(array_equal(out[1], array({0, 0, 0})).item<bool>());
+
+  x = array({5, 6, 7});
+  y = array({2, 2, 2});
+  out = divmod(x, y);
+  CHECK(array_equal(out[0], array({2, 3, 3})).item<bool>());
+  CHECK(array_equal(out[1], array({1, 0, 1})).item<bool>());
+
+  x = array({5.0, 6.0, 7.0});
+  y = array({2.0, 2.0, 2.0});
+  out = divmod(x, y);
+  CHECK(array_equal(out[0], array({2.0, 3.0, 3.0})).item<bool>());
+  CHECK(array_equal(out[1], array({1.0, 0.0, 1.0})).item<bool>());
+
+  x = array({1.0}, complex64);
+  y = array({2.0}, complex64);
+  CHECK_THROWS(divmod(x, y));
 }
