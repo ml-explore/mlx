@@ -2,10 +2,10 @@
 
 #include "mlx/primitives.h"
 
-#define NO_GPU_MULTI(func)                                                   \
-  void func::eval_gpu(                                                       \
-      const std::vector<array>& inputs, const std::vector<array>& outputs) { \
-    throw std::runtime_error(#func " has no GPU implementation.");           \
+#define NO_GPU_MULTI(func)                                             \
+  void func::eval_gpu(                                                 \
+      const std::vector<array>& inputs, std::vector<array>& outputs) { \
+    throw std::runtime_error(#func " has no GPU implementation.");     \
   }
 
 #define NO_GPU(func)                                                  \
