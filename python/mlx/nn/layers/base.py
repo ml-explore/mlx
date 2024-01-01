@@ -439,3 +439,11 @@ class Module(dict):
 
     def eval(self):
         self.train(False)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("_compiled_call_impl", None)
+        return state
+    
+    def __setstate__(self, state):
+        self.__dict__.update(state)
