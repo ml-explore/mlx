@@ -16,7 +16,7 @@
     primitive::eval(inputs, out);                                          \
   }
 
-#define DEFAULT(primitive)                                             \
+#define DEFAULT_MULTI(primitive)                                       \
   void primitive::eval_cpu(                                            \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
     primitive::eval(inputs, outputs);                                  \
