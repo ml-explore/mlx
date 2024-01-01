@@ -6,6 +6,7 @@ import unittest
 
 import mlx.core as mx
 import mlx.nn as nn
+
 import mlx_tests
 import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
@@ -40,8 +41,8 @@ class TestNN(mlx_tests.MLXTestCase):
     def test_l1_loss(self):
         predictions = mx.array([0.5, 0.2, 0.9, 0.0])
         targets = mx.array([0.5, 0.2, 0.9, 0.0])
-        losses = nn.losses.l1_loss(predictions, targets, reduction="none")
-        self.assertEqual(losses, 0.0)
+        losses_none = nn.losses.l1_loss(predictions, targets, reduction="none")
+        self.assertEqual(losses_none, 0.0)
 
     def test_mse_loss(self):
         predictions = mx.array([0.5, 0.2, 0.9, 0.0])
@@ -168,6 +169,126 @@ class TestNN(mlx_tests.MLXTestCase):
         # Test with reduction 'sum'
         loss_module_sum = nn.losses.BCELoss(reduction="sum")
         losses_sum = loss_module_sum(inputs, targets)
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_hinge_loss(self):
+        predictions = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[1, -1, 1, -1], [-1, 1, -1, 1]])
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.hinge_loss(predictions, targets, reduction="none")
+        expected_none = mx.array([[0.5, 1.5, 0.8, 1.9], [1.1, 0.7, 1.5, 0.5]])
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.hinge_loss(predictions, targets, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.hinge_loss(predictions, targets, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_huber_loss(self):
+        predictions = mx.array([1.5, 2.5, 3.5, 4.5])
+        targets = mx.array([1, 2, 3, 4])
+        delta = 1.0
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.huber_loss(predictions, targets, delta, reduction="none")
+        expected_none = mx.array([0.125, 0.125, 0.125, 0.125])  # Example expected values
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.huber_loss(predictions, targets, delta, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.huber_loss(predictions, targets, delta, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_dice_loss(self):
+        inputs = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[1, 0, 1, 0], [0, 1, 0, 1]])
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.dice_loss(inputs, targets, reduction="none")
+        expected_none = mx.array([0.658536, 0.529412])  # Example expected values
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.dice_loss(inputs, targets, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.dice_loss(inputs, targets, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_focal_loss(self):
+        inputs = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[1, 0, 1, 0], [0, 1, 0, 1]])
+        alpha = 0.25
+        gamma = 2.0
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.focal_loss(inputs, targets, alpha, gamma, reduction="none")
+        expected_none = mx.array([[0.0433217, 0.0433217, 0.25751, 0.466273], [0.000263401, 0.147487, 0.0433217, 0.0433217]])
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.focal_loss(inputs, targets, alpha, gamma, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.focal_loss(inputs, targets, alpha, gamma, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_contrastive_loss(self):
+        embeddings1 = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        embeddings2 = mx.array([[0.6, 0.4, 0.3, 0.8], [0.2, 0.5, 0.6, 0.4]])
+        targets = mx.array([1, 0])
+        margin = 1.0
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.contrastive_loss(embeddings1, embeddings2, targets, margin, reduction="none")
+        expected_none = mx.array([0.2, 0.735425])
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.contrastive_loss(embeddings1, embeddings2, targets, margin, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.contrastive_loss(embeddings1, embeddings2, targets, margin, reduction="sum")
+        expected_sum = mx.sum(expected_none)
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_cosine_similarity_loss(self):
+        embeddings1 = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        embeddings2 = mx.array([[0.6, 0.4, 0.3, 0.8], [0.2, 0.5, 0.6, 0.4]])
+        targets = mx.array([1, -1]) 
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.cosine_similarity_loss(embeddings1, embeddings2, targets, reduction="none")
+        expected_none = mx.array([0.0146555, 0.961074])
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.cosine_similarity_loss(embeddings1, embeddings2, targets, reduction="mean")
+        expected_mean = mx.mean(expected_none)
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.cosine_similarity_loss(embeddings1, embeddings2, targets, reduction="sum")
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
