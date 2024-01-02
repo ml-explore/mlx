@@ -241,7 +241,7 @@ struct BlockMMA {
       }
 
       simdgroup_barrier(mem_flags::mem_none);
-// Multiply and accumulate into resulr simdgroup matrices
+// Multiply and accumulate into result simdgroup matrices
 #pragma clang loop unroll(full)
       for (short i = 0; i < TM; i++) {
 #pragma clang loop unroll(full)
