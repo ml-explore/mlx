@@ -155,7 +155,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   // Read and check version
   if (read_magic_and_ver[6] != 1 && read_magic_and_ver[6] != 2) {
     throw std::runtime_error(
-        "[load] Unsupport npy format version in " + in_stream->label());
+        "[load] Unsupported npy format version in " + in_stream->label());
   }
 
   // Read header len and header
