@@ -507,7 +507,7 @@ void init_array(py::module_& m) {
 
   array_class
       .def_property_readonly(
-          "size", &array::size, R"pbdoc(Number of elments in the array.)pbdoc")
+          "size", &array::size, R"pbdoc(Number of elements in the array.)pbdoc")
       .def_property_readonly(
           "ndim", &array::ndim, R"pbdoc(The array's dimension.)pbdoc")
       .def_property_readonly(
