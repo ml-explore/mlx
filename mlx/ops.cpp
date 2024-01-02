@@ -2838,14 +2838,11 @@ array tensordot(
   auto x = a;
   auto y = b;
   for (int i = 0; i < dims[0].size(); i++) {
-    size_t xs = x.shape(dims[0].at(i));
-    size_t ys = y.shape(dims[1].at(i));
-    if (ys == 1) {
-      x = sum(x, dims[0].at(i), true, s);
-    } else if (xs == 1) {
-      y = sum(y, dims[1].at(i), true, s);
+    if (x.shape(dims[0].at(i)) == y.shape(dims[1].at(i))) {
+      csize *= x.shape(dims[0].at(i));
     } else {
-      csize *= xs;
+      throw std::invalid_argument(
+          "[tensordot] a and b must have the same shape on the contracted axes.");
     }
   }
 
@@ -2861,11 +2858,8 @@ array tensordot(
   }
 
   std::vector<int> t1;
-  t1.reserve(a.ndim());
   std::vector<int> t2;
-  t2.reserve(b.ndim());
   std::vector<int> rshape;
-  rshape.reserve(a.ndim() + b.ndim() * dims[0].size());
   int size1 = 1;
   int size2 = 1;
   for (int i = 0; i < a.ndim(); i++) {

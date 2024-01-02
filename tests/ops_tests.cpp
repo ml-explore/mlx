@@ -2288,19 +2288,8 @@ TEST_CASE("tensordot") {
   CHECK(array_equal(z, expected).item<bool>());
   x = reshape(arange(360.), {3, 4, 5, 6});
   y = reshape(arange(360.), {6, 4, 5, 3});
-  z = tensordot(x, y, {{2, 1, 3}, {1, 2, 0}});
-  expected = array(
-      {1326270,
-       1333410,
-       1340550,
-       3896670,
-       3918210,
-       3939750,
-       6467070,
-       6503010,
-       6538950},
-      {3, 3});
-  CHECK(array_equal(z, expected).item<bool>());
+  CHECK_THROWS_AS(
+      tensordot(x, y, {{2, 1, 3}, {1, 2, 0}}), std::invalid_argument);
   x = reshape(arange(60.), {3, 4, 5});
   y = reshape(arange(120.), {4, 5, 6});
   z = tensordot(x, y, 2);
