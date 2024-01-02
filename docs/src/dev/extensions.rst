@@ -15,7 +15,7 @@ Introducing the Example
 -----------------------
 
 Let's say that you would like an operation that takes in two arrays, 
-``x`` and ``y``, scales them both by some coefficents ``alpha`` and ``beta``
+``x`` and ``y``, scales them both by some coefficients ``alpha`` and ``beta``
 respectively, and then adds them together to get the result 
 ``z = alpha * x + beta * y``. Well, you can very easily do that by just 
 writing out a function as follows:
