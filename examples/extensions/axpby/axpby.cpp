@@ -192,7 +192,7 @@ void Axpby::eval_cpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
-#else // Accelerate not avaliable
+#else // Accelerate not available
 
 /** Evaluate primitive on CPU falling back to common backend */
 void Axpby::eval_cpu(const std::vector<array>& inputs, array& out) {
