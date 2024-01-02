@@ -165,10 +165,10 @@ void multi_block_sort(
     dev_idxs_out = ping ? dev_idxs_0 : dev_idxs_1;
     ping = !ping;
 
-    // Do partiton
+    // Do partition
     {
       std::ostringstream kname;
-      kname << "mb_block_partiton_" << type_to_name(dev_vals_in) << "_"
+      kname << "mb_block_partition_" << type_to_name(dev_vals_in) << "_"
             << type_to_name(dev_idxs_in) << "_bn" << bn << "_tn" << tn;
 
       auto kernel = d.get_kernel(kname.str());

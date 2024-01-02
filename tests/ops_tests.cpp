@@ -1411,7 +1411,7 @@ TEST_CASE("test broadcast") {
   x.eval();
   CHECK_EQ(x.strides(), std::vector<size_t>{0, 0, 1});
 
-  // Broadcast on transposed arrray works
+  // Broadcast on transposed array works
   x = array({0, 1, 2, 3, 4, 5}, {2, 3});
   x = broadcast_to(transpose(x), {2, 3, 2});
   CHECK_EQ(x.shape(), std::vector<int>{2, 3, 2});
@@ -1733,7 +1733,7 @@ TEST_CASE("test scatter") {
   out = scatter(in, inds, updates, 0);
   CHECK(array_equal(out, reshape(arange(16, float32), {4, 4})).item<bool>());
 
-  // Irregular strided index and reduce collison test
+  // Irregular strided index and reduce collision test
   in = zeros({10}, float32);
   inds = broadcast_to(array(3), {10});
   updates = ones({10, 1}, float32);
@@ -1750,7 +1750,7 @@ TEST_CASE("test scatter") {
   out = scatter_max(array(1), {}, array(2), std::vector<int>{});
   CHECK_EQ(out.item<int>(), 2);
 
-  // Irregularaly strided updates test
+  // Irregularly strided updates test
   in = ones({3, 3});
   updates = broadcast_to(array({0, 0, 0}), {1, 3, 3});
   inds = array({0});

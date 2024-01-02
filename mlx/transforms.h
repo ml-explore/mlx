@@ -80,7 +80,7 @@ ValueAndGradFn value_and_grad(
 
 /**
  *  Returns a function which computes the value and gradient of the input
- *  function with repsect to a single input array.
+ *  function with respect to a single input array.
  **/
 ValueAndGradFn inline value_and_grad(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
@@ -132,7 +132,7 @@ std::function<std::vector<array>(const std::vector<array>&)> inline grad(
 
 /**
  *  Returns a function which computes the gradient of the input function with
- *  repsect to a single input array.
+ *  respect to a single input array.
  *
  *  The function being differentiated takes a vector of arrays and returns an
  *  array. The optional `argnum` index specifies which the argument to compute

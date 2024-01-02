@@ -165,7 +165,7 @@ Buffer MetalAllocator::malloc(size_t size) {
 
   // Prepare to allocate new memory as needed
   if (!buf) {
-    // If we are under very high memoory pressure, we don't allocate further
+    // If we are under very high memory pressure, we don't allocate further
     if (device_->currentAllocatedSize() >= block_limit_) {
       return Buffer{nullptr};
     }
