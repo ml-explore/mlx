@@ -105,7 +105,7 @@ void axpby_impl(
 
 /** Fall back implementation for evaluation on CPU */
 void Axpby::eval(const std::vector<array>& inputs, array& out) {
-  // Check the inputs (registered in the op while contructing the out array)
+  // Check the inputs (registered in the op while constructing the out array)
   assert(inputs.size() == 2);
   auto& x = inputs[0];
   auto& y = inputs[1];
