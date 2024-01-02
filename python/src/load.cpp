@@ -6,12 +6,11 @@
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
-#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
-#include "mlx/load.h"
+#include "mlx/io/load.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 #include "python/src/load.h"
@@ -26,7 +25,7 @@ using namespace mlx::core;
 ///////////////////////////////////////////////////////////////////////////////
 
 bool is_istream_object(const py::object& file) {
-  return py::hasattr(file, "read") && py::hasattr(file, "seek") &&
+  return py::hasattr(file, "readinto") && py::hasattr(file, "seek") &&
       py::hasattr(file, "tell") && py::hasattr(file, "closed");
 }
 
@@ -161,41 +160,69 @@ class PyFileReader : public io::Reader {
   py::object tell_func_;
 };
 
-DictOrArray mlx_load_helper(py::object file, StreamOrDevice s) {
-  py::module_ zipfile = py::module_::import("zipfile");
-
-  // Assume .npz file if it is zipped
-  if (is_zip_file(zipfile, file)) {
-    // Output dictionary filename in zip -> loaded array
-    std::unordered_map<std::string, array> array_dict;
-
-    // Create python ZipFile object
-    ZipFileWrapper zipfile_object(zipfile, file);
-    for (const std::string& st : zipfile_object.namelist()) {
-      // Open zip file as a python file stream
-      py::object sub_file = zipfile_object.open(st);
-
-      // Create array from python fille stream
-      auto arr = load(std::make_shared<PyFileReader>(sub_file), s);
-
-      // Remove .npy from file if it is there
-      auto key = st;
-      if (st.length() > 4 && st.substr(st.length() - 4, 4) == ".npy")
-        key = st.substr(0, st.length() - 4);
-
-      // Add array to dict
-      array_dict.insert({key, arr});
-    }
-
+std::unordered_map<std::string, array> mlx_load_safetensor_helper(
+    py::object file,
+    StreamOrDevice s) {
+  if (py::isinstance<py::str>(file)) { // Assume .safetensors file path string
+    return load_safetensors(py::cast<std::string>(file), s);
+  } else if (is_istream_object(file)) {
     // If we don't own the stream and it was passed to us, eval immediately
-    for (auto& [key, arr] : array_dict) {
+    auto arr = load_safetensors(std::make_shared<PyFileReader>(file), s);
+    {
       py::gil_scoped_release gil;
-      arr.eval();
+      for (auto& [key, arr] : arr) {
+        arr.eval();
+      }
     }
+    return arr;
+  }
 
-    return {array_dict};
-  } else if (py::isinstance<py::str>(file)) { // Assume .npy file path string
-    return {load(py::cast<std::string>(file), s)};
+  throw std::invalid_argument(
+      "[load_safetensors] Input must be a file-like object, or string");
+}
+
+std::unordered_map<std::string, array> mlx_load_npz_helper(
+    py::object file,
+    StreamOrDevice s) {
+  py::module_ zipfile = py::module_::import("zipfile");
+  if (!is_zip_file(zipfile, file)) {
+    throw std::invalid_argument(
+        "[load_npz] Input must be a zip file or a file-like object that can be "
+        "opened with zipfile.ZipFile");
+  }
+  // Output dictionary filename in zip -> loaded array
+  std::unordered_map<std::string, array> array_dict;
+
+  // Create python ZipFile object
+  ZipFileWrapper zipfile_object(zipfile, file);
+  for (const std::string& st : zipfile_object.namelist()) {
+    // Open zip file as a python file stream
+    py::object sub_file = zipfile_object.open(st);
+
+    // Create array from python fille stream
+    auto arr = load(std::make_shared<PyFileReader>(sub_file), s);
+
+    // Remove .npy from file if it is there
+    auto key = st;
+    if (st.length() > 4 && st.substr(st.length() - 4, 4) == ".npy")
+      key = st.substr(0, st.length() - 4);
+
+    // Add array to dict
+    array_dict.insert({key, arr});
+  }
+
+  // If we don't own the stream and it was passed to us, eval immediately
+  for (auto& [key, arr] : array_dict) {
+    py::gil_scoped_release gil;
+    arr.eval();
+  }
+
+  return array_dict;
+}
+
+array mlx_load_npy_helper(py::object file, StreamOrDevice s) {
+  if (py::isinstance<py::str>(file)) { // Assume .npy file path string
+    return load(py::cast<std::string>(file), s);
   } else if (is_istream_object(file)) {
     // If we don't own the stream and it was passed to us, eval immediately
     auto arr = load(std::make_shared<PyFileReader>(file), s);
@@ -203,11 +230,43 @@ DictOrArray mlx_load_helper(py::object file, StreamOrDevice s) {
       py::gil_scoped_release gil;
       arr.eval();
     }
-    return {arr};
+    return arr;
+  }
+  throw std::invalid_argument(
+      "[load_npy] Input must be a file-like object, or string");
+}
+
+DictOrArray mlx_load_helper(
+    py::object file,
+    std::optional<std::string> format,
+    StreamOrDevice s) {
+  if (!format.has_value()) {
+    std::string fname;
+    if (py::isinstance<py::str>(file)) {
+      fname = py::cast<std::string>(file);
+    } else if (is_istream_object(file)) {
+      fname = file.attr("name").cast<std::string>();
+    } else {
+      throw std::invalid_argument(
+          "[load] Input must be a file-like object, or string");
+    }
+    size_t ext = fname.find_last_of('.');
+    if (ext == std::string::npos) {
+      throw std::invalid_argument(
+          "[load] Could not infer file format from extension");
+    }
+    format.emplace(fname.substr(ext + 1));
   }
 
-  throw std::invalid_argument(
-      "[load] Input must be a file-like object, string, or pathlib.Path");
+  if (format.value() == "safetensors") {
+    return mlx_load_safetensor_helper(file, s);
+  } else if (format.value() == "npz") {
+    return mlx_load_npz_helper(file, s);
+  } else if (format.value() == "npy") {
+    return mlx_load_npy_helper(file, s);
+  } else {
+    throw std::invalid_argument("[load] Unknown file format " + format.value());
+  }
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -286,7 +345,11 @@ class PyFileWriter : public io::Writer {
   py::object tell_func_;
 };
 
-void mlx_save_helper(py::object file, array a, bool retain_graph) {
+void mlx_save_helper(
+    py::object file,
+    array a,
+    std::optional<bool> retain_graph_) {
+  bool retain_graph = retain_graph_.value_or(a.is_tracer());
   if (py::isinstance<py::str>(file)) {
     save(py::cast<std::string>(file), a, retain_graph);
     return;
@@ -301,7 +364,7 @@ void mlx_save_helper(py::object file, array a, bool retain_graph) {
   }
 
   throw std::invalid_argument(
-      "[save] Input must be a file-like object, string, or pathlib.Path");
+      "[save] Input must be a file-like object, or string");
 }
 
 void mlx_savez_helper(
@@ -351,9 +414,31 @@ void mlx_savez_helper(
     auto writer = std::make_shared<PyFileWriter>(py_ostream);
     {
       py::gil_scoped_release gil;
-      save(writer, a);
+      save(writer, a, /*retain_graph=*/a.is_tracer());
     }
   }
 
   return;
+}
+
+void mlx_save_safetensor_helper(
+    py::object file,
+    py::dict d,
+    std::optional<bool> retain_graph) {
+  auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
+  if (py::isinstance<py::str>(file)) {
+    save_safetensors(py::cast<std::string>(file), arrays_map, retain_graph);
+    return;
+  } else if (is_ostream_object(file)) {
+    auto writer = std::make_shared<PyFileWriter>(file);
+    {
+      py::gil_scoped_release gil;
+      save_safetensors(writer, arrays_map, retain_graph);
+    }
+
+    return;
+  }
+
+  throw std::invalid_argument(
+      "[save_safetensors] Input must be a file-like object, or string");
 }

@@ -1,7 +1,9 @@
 # Copyright © 2023 Apple Inc.
 
+from collections import defaultdict
 
-def tree_map(fn, tree, *rest):
+
+def tree_map(fn, tree, *rest, is_leaf=None):
     """Applies ``fn`` to the leaves of the python tree ``tree`` and
     returns a new collection with the results.
 
@@ -9,6 +11,9 @@ def tree_map(fn, tree, *rest):
     and the corresponding leaves are provided as extra positional arguments to
     ``fn``. In that respect, :meth:`tree_map` is closer to :func:`itertools.starmap`
     than to :func:`map`.
+
+    The keyword argument ``is_leaf`` decides what constitutes a leaf from
+    ``tree`` similar to :func:`tree_flatten`.
 
     .. code-block:: python
 
@@ -26,21 +31,24 @@ def tree_map(fn, tree, *rest):
         fn (Callable): The function that processes the leaves of the tree
         tree (Any): The main python tree that will be iterated upon
         rest (Tuple[Any]): Extra trees to be iterated together with tree
+        is_leaf (Optional[Callable]): An optional callable that returns True if
+            the passed object is considered a leaf or False otherwise.
 
     Returns:
         A python tree with the new values returned by ``fn``.
     """
-    if isinstance(tree, list):
-        return [
-            tree_map(fn, child, *(r[i] for r in rest)) for i, child in enumerate(tree)
-        ]
-    elif isinstance(tree, tuple):
-        return tuple(
-            tree_map(fn, child, *(r[i] for r in rest)) for i, child in enumerate(tree)
+    if is_leaf is not None and is_leaf(tree):
+        return fn(tree, *rest)
+    elif isinstance(tree, (list, tuple)):
+        TreeType = type(tree)
+        return TreeType(
+            tree_map(fn, child, *(r[i] for r in rest), is_leaf=is_leaf)
+            for i, child in enumerate(tree)
         )
     elif isinstance(tree, dict):
         return {
-            k: tree_map(fn, child, *(r[k] for r in rest)) for k, child in tree.items()
+            k: tree_map(fn, child, *(r[k] for r in rest), is_leaf=is_leaf)
+            for k, child in tree.items()
         }
     else:
         return fn(tree, *rest)
@@ -118,12 +126,10 @@ def tree_unflatten(tree):
         is_list = False
 
     # collect children
-    children = {}
+    children = defaultdict(list)
     for key, value in tree:
         current_idx, *next_idx = key.split(".", maxsplit=1)
         next_idx = "" if not next_idx else next_idx[0]
-        if current_idx not in children:
-            children[current_idx] = []
         children[current_idx].append((next_idx, value))
 
     # recursively map them to the original container
@@ -131,8 +137,8 @@ def tree_unflatten(tree):
         keys = sorted((int(idx), idx) for idx in children.keys())
         l = []
         for i, k in keys:
-            while i > len(l):
-                l.append({})
+            # if i <= len(l), no {} will be appended.
+            l.extend([{} for _ in range(i - len(l))])
             l.append(tree_unflatten(children[k]))
         return l
     else:

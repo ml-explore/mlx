@@ -62,7 +62,7 @@ def make_predicate(positive_filter, negative_filter):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run comparisons agains PyTorch")
+    parser = argparse.ArgumentParser(description="Run comparisons against PyTorch")
     parser.add_argument(
         "--filter", "-f", help="Regex filter to select benchmarks", nargs="+"
     )
@@ -125,6 +125,14 @@ if __name__ == "__main__":
     compare_filtered("sum_axis --size 16x128x1024 --axis 1")
     compare_filtered("sum_axis --size 16x128x1024 --axis 0 --cpu")
     compare_filtered("sum_axis --size 16x128x1024 --axis 0")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,1 --cpu")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,1")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,2 --cpu")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,2")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,1 --transpose 0,2,1 --cpu")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,1 --transpose 0,2,1")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,2 --transpose 0,2,1 --cpu")
+    compare_filtered("sum_axis --size 16x128x1024 --axis 0,2 --transpose 0,2,1")
     compare_filtered("argmax --size 10x1024x128 --axis 1 --cpu")
     compare_filtered("argmax --size 10x1024x128 --axis 1")
     compare_filtered("argmax --size 10x1024x128 --axis 2 --cpu")

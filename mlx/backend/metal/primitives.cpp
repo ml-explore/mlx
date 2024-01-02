@@ -215,7 +215,8 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
       arange_set_scalars<float>(start_, start_ + step_, compute_encoder);
       break;
     case bfloat16:
-      throw std::runtime_error("[Arange::eval_gpu] Does not support bfloat16");
+      arange_set_scalars<bfloat16_t>(start_, start_ + step_, compute_encoder);
+      break;
     case complex64:
       throw std::runtime_error("[Arange::eval_gpu] Does not support complex64");
   }
@@ -450,6 +451,14 @@ void Minimum::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "min");
 }
 
+void Floor::eval_gpu(const std::vector<array>& inputs, array& out) {
+  unary_op(inputs, out, "floor");
+}
+
+void Ceil::eval_gpu(const std::vector<array>& inputs, array& out) {
+  unary_op(inputs, out, "ceil");
+}
+
 void Multiply::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "mul");
 }
@@ -552,6 +561,17 @@ void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
     out.copy_shared_buffer(in, out.strides(), flags, in.data_size());
   } else {
     copy_gpu(in, out, CopyType::General);
+  }
+}
+
+void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (not is_integral(in.dtype())) {
+    unary_op(inputs, out, "round");
+  } else {
+    // No-op integer types
+    out.copy_shared_buffer(in);
   }
 }
 

@@ -65,7 +65,7 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
     in += grid_size * N_READS;
   }
 
-  // Sepate case for the last set as we close the reduction size 
+  // Separate case for the last set as we close the reduction size 
   size_t curr_idx = (gid + r * (size_t)grid_size) * N_READS;
   if (curr_idx < in_size) {
     int max_reads = in_size - curr_idx;
@@ -113,87 +113,32 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
 
 
 ///////////////////////////////////////////////////////////////////////////////
-// General reduce
-///////////////////////////////////////////////////////////////////////////////
-
-template <typename T, typename U, typename Op>
-[[kernel]] void general_reduce(
-    const device T *in [[buffer(0)]],
-    device mlx_atomic<U> *out [[buffer(1)]],
-    const device int *in_shape [[buffer(2)]],
-    const device size_t *in_strides [[buffer(3)]],
-    const device size_t *out_strides [[buffer(4)]],
-    const device size_t& ndim [[buffer(5)]],
-    uint gid [[thread_position_in_grid]]) {
-  Op op;
-  auto in_idx = elem_to_loc(gid, in_shape, in_strides, ndim);
-  auto out_idx = elem_to_loc(gid, in_shape, out_strides, ndim);
-  op.atomic_update(out, static_cast<U>(in[in_idx]), out_idx);
-}
-
-template <typename T, typename U, typename Op, int NDIM>
-[[kernel]] void general_reduce(
-    const device T *in [[buffer(0)]],
-    device mlx_atomic<U> *out [[buffer(1)]],
-    const device int *in_shape [[buffer(2)]],
-    const device size_t *in_strides [[buffer(3)]],
-    const device size_t *out_strides [[buffer(4)]],
-    uint gid [[thread_position_in_grid]]) {
-  Op op;
-  auto in_idx = elem_to_loc_nd<NDIM>(gid, in_shape, in_strides);
-  auto out_idx = elem_to_loc_nd<NDIM>(gid, in_shape, out_strides);
-  op.atomic_update(out, static_cast<U>(in[in_idx]), out_idx);
-}
-
-#define instantiate_general_reduce_helper(name, itype, otype, op) \
-  template [[host_name("general_reduce_" #name)]] \
-  [[kernel]] void general_reduce<itype, otype, op>( \
-      const device itype *in [[buffer(0)]], \
-      device mlx_atomic<otype> *out [[buffer(1)]], \
-      const device int *in_shape [[buffer(2)]], \
-      const device size_t *in_strides [[buffer(3)]], \
-      const device size_t *out_strides [[buffer(4)]], \
-      const device size_t& ndim [[buffer(5)]], \
-      uint gid [[thread_position_in_grid]]);
-
-#define instantiate_general_reduce_helper_nd(name, itype, otype, op, n) \
-  template [[host_name("general_reduce_" #name "_dim_" #n)]] \
-  [[kernel]] void general_reduce<itype, otype, op, n>( \
-      const device itype *in [[buffer(0)]], \
-      device mlx_atomic<otype> *out [[buffer(1)]], \
-      const device int *in_shape [[buffer(2)]], \
-      const device size_t *in_strides [[buffer(3)]], \
-      const device size_t *out_strides [[buffer(4)]], \
-      uint gid [[thread_position_in_grid]]);
-
-#define instantiate_general_reduce(name, itype, otype, op) \
-  instantiate_general_reduce_helper(name, itype, otype, op) \
-  instantiate_general_reduce_helper_nd(name, itype, otype, op, 1) \
-  instantiate_general_reduce_helper_nd(name, itype, otype, op, 2) \
-  instantiate_general_reduce_helper_nd(name, itype, otype, op, 3) \
-  instantiate_general_reduce_helper_nd(name, itype, otype, op, 4)
-
-
-///////////////////////////////////////////////////////////////////////////////
 // Row atomics
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
-[[kernel]] void row_reduce(
+[[kernel]] void row_reduce_general(
     const device T *in [[buffer(0)]],
-    device U *out [[buffer(1)]],
-    const device size_t& reduction_size [[buffer(2)]],
-    uint lid [[thread_position_in_threadgroup]],
-    uint lsize [[threads_per_threadgroup]],
-    uint tid [[threadgroup_position_in_grid]],
+    device mlx_atomic<U> *out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& out_size [[buffer(3)]],
+    const constant int* shape [[buffer(4)]],
+    const constant size_t* strides [[buffer(5)]],
+    const constant int& ndim [[buffer(6)]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint3 lsize [[threads_per_threadgroup]],
+    uint3 tid [[threadgroup_position_in_grid]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_per_group [[simdgroups_per_threadgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
 
   Op op;
 
-  // Each threadgroup handles 1 reduction 
-  in += tid * reduction_size + lid * N_READS;
+  // Each threadgroup handles 1 reduction
+  // TODO: Specializing elem_to_loc would be slightly faster
+  int idx = tid.y * out_size + tid.x;
+  int extra_offset = elem_to_loc(idx, shape, strides, ndim);
+  in += extra_offset + lid.x * N_READS;
   
   // The reduction is accumulated here
   U total_val = Op::init;
@@ -201,7 +146,7 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
 
   // Loop over the reduction size within thread group
   int r = 0;
-  for (; r < (int)ceildiv(reduction_size, N_READS*lsize) - 1; r++) {
+  for (; r < (int)ceildiv(reduction_size, N_READS*lsize.x) - 1; r++) {
     T vals[N_READS]; 
     for(int i = 0; i < N_READS; i++) {
       vals[i] = in[i];
@@ -210,11 +155,11 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
       total_val = op(static_cast<U>(vals[i]), total_val);
     }
 
-    in += lsize * N_READS;
+    in += lsize.x * N_READS;
   }
 
-  // Sepate case for the last set as we close the reduction size   
-  size_t reduction_index = (lid + (size_t)lsize * r) * N_READS;
+  // Separate case for the last set as we close the reduction size   
+  size_t reduction_index = (lid.x + (size_t)lsize.x * r) * N_READS;
   if(reduction_index < reduction_size) {
     int max_reads = reduction_size - reduction_index;
 
@@ -240,26 +185,30 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
   // Reduction within thread group
   //    Only needed if multiple simd groups
   if(reduction_size > simd_size) {
-    total_val = lid < simd_per_group ? local_vals[lid] : op.init;
+    total_val = lid.x < simd_per_group ? local_vals[lid.x] : op.init;
     total_val = op.simd_reduce(total_val);
   }
   // Update output
-  if (lid == 0) {
-    out[tid] = total_val;
+  if (lid.x == 0) {
+    op.atomic_update(out, total_val, tid.x);
   }
 }
 
-#define instantiate_row_reduce(name, itype, otype, op) \
-  template [[host_name("row_reduce_" #name)]] \
-  [[kernel]] void row_reduce<itype, otype, op>( \
-      const device itype *in [[buffer(0)]], \
-      device otype *out [[buffer(1)]], \
-      const device size_t& reduction_size [[buffer(2)]], \
-      uint lid [[thread_position_in_threadgroup]], \
-      uint lsize [[threads_per_threadgroup]], \
-      uint tid [[threadgroup_position_in_grid]], \
-      uint simd_lane_id [[thread_index_in_simdgroup]], \
-      uint simd_per_group [[simdgroups_per_threadgroup]], \
+#define instantiate_row_reduce_general(name, itype, otype, op) \
+  template [[host_name("row_reduce_general_" #name)]] \
+  [[kernel]] void row_reduce_general<itype, otype, op>( \
+      const device itype *in [[buffer(0)]],  \
+      device mlx_atomic<otype> *out [[buffer(1)]],  \
+      const constant size_t& reduction_size [[buffer(2)]],  \
+      const constant size_t& out_size [[buffer(3)]],  \
+      const constant int* shape [[buffer(4)]],  \
+      const constant size_t* strides [[buffer(5)]],  \
+      const constant int& ndim [[buffer(6)]],  \
+      uint3 lid [[thread_position_in_threadgroup]],  \
+      uint3 lsize [[threads_per_threadgroup]],  \
+      uint3 tid [[threadgroup_position_in_grid]],  \
+      uint simd_lane_id [[thread_index_in_simdgroup]],  \
+      uint simd_per_group [[simdgroups_per_threadgroup]],  \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
 
@@ -311,148 +260,57 @@ inline void _contiguous_strided_reduce(
 }
 
 template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
-[[kernel]] void col_reduce(
+[[kernel]] void col_reduce_general(
     const device T *in [[buffer(0)]],
     device mlx_atomic<U> *out [[buffer(1)]],
     const constant size_t& reduction_size [[buffer(2)]],
     const constant size_t& reduction_stride [[buffer(3)]],
     const constant size_t& out_size [[buffer(4)]], 
+    const constant int* shape [[buffer(5)]],
+    const constant size_t* strides [[buffer(6)]],
+    const constant int& ndim [[buffer(7)]],
     threadgroup U *local_data [[threadgroup(0)]],
-    uint2 tid [[threadgroup_position_in_grid]], 
-    uint2 lid [[thread_position_in_threadgroup]], 
-    uint2 lsize [[threads_per_threadgroup]]) {
-  auto out_idx = tid.x * lsize.x + lid.x;  
-  
+    uint3 tid [[threadgroup_position_in_grid]], 
+    uint3 lid [[thread_position_in_threadgroup]], 
+    uint3 lsize [[threads_per_threadgroup]]) {
+  auto out_idx = tid.x * lsize.x + lid.x;
+  auto in_idx = elem_to_loc(
+    out_idx + tid.z * out_size,
+    shape,
+    strides,
+    ndim
+  );
+
   if(out_idx < out_size) {
     _contiguous_strided_reduce<T, U, Op, N_READS>(
       in, 
       out, 
       local_data, 
-      out_idx, 
+      in_idx,
       out_idx, 
       reduction_size, 
       reduction_stride, 
-      tid, 
-      lid, 
-      lsize); 
+      tid.xy, 
+      lid.xy, 
+      lsize.xy); 
   }
 }
 
-#define instantiate_col_reduce(name, itype, otype, op) \
-  template [[host_name("col_reduce_" #name)]] \
-  [[kernel]] void col_reduce<itype, otype, op>( \
+#define instantiate_col_reduce_general(name, itype, otype, op) \
+  template [[host_name("col_reduce_general_" #name)]] \
+  [[kernel]] void col_reduce_general<itype, otype, op>( \
       const device itype *in [[buffer(0)]], \
       device mlx_atomic<otype> *out [[buffer(1)]], \
       const constant size_t& reduction_size [[buffer(2)]], \
       const constant size_t& reduction_stride [[buffer(3)]], \
       const constant size_t& out_size [[buffer(4)]], \
+      const constant int* shape [[buffer(5)]],  \
+      const constant size_t* strides [[buffer(6)]],  \
+      const constant int& ndim [[buffer(7)]],  \
       threadgroup otype *local_data [[threadgroup(0)]], \
-      uint2 tid [[threadgroup_position_in_grid]], \
-      uint2 lid [[thread_position_in_threadgroup]], \
-      uint2 lsize [[threads_per_threadgroup]]);
-
-template <typename T, typename U, typename Op, int NDIM, int N_READS = 16>
-[[kernel]] void contiguous_strided_reduce(
-    const device T *in [[buffer(0)]],
-    device mlx_atomic<U> *out [[buffer(1)]],
-    const constant size_t& reduction_size [[buffer(2)]],
-    const constant size_t& reduction_stride [[buffer(3)]],
-    const constant size_t& out_size [[buffer(4)]], 
-    const device int* in_shape [[buffer(5)]],
-    const device size_t* in_strides [[buffer(6)]],
-    threadgroup U *local_data [[threadgroup(0)]],
-    uint2 tid [[threadgroup_position_in_grid]], 
-    uint2 lid [[thread_position_in_threadgroup]], 
-    uint2 lsize [[threads_per_threadgroup]]) {
-  
-  auto out_idx = tid.x * lsize.x + lid.x; 
-  auto in_idx = elem_to_loc_nd<NDIM>(out_idx, in_shape, in_strides);
-  
-  if(out_idx < out_size) {
-    _contiguous_strided_reduce<T, U, Op, N_READS>(
-      in, 
-      out, 
-      local_data, 
-      in_idx, 
-      out_idx, 
-      reduction_size, 
-      reduction_stride, 
-      tid, 
-      lid, 
-      lsize); 
-  }
-}
-
-template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
-[[kernel]] void contiguous_strided_reduce(
-    const device T *in [[buffer(0)]],
-    device mlx_atomic<U> *out [[buffer(1)]],
-    const constant size_t& reduction_size [[buffer(2)]],
-    const constant size_t& reduction_stride [[buffer(3)]],
-    const constant size_t& out_size [[buffer(4)]], 
-    const device int* in_shape [[buffer(5)]],
-    const device size_t* in_strides [[buffer(6)]],
-    const device size_t& in_dim [[buffer(7)]], 
-    threadgroup U *local_data [[threadgroup(0)]],
-    uint2 tid [[threadgroup_position_in_grid]], 
-    uint2 lid [[thread_position_in_threadgroup]], 
-    uint2 lsize [[threads_per_threadgroup]]) {
-  
-  auto out_idx = tid.x * lsize.x + lid.x; 
-  auto in_idx = elem_to_loc(out_idx, in_shape, in_strides, in_dim);
-  
-  if(out_idx < out_size) {
-    _contiguous_strided_reduce<T, U, Op, N_READS>(
-      in, 
-      out, 
-      local_data, 
-      in_idx, 
-      out_idx, 
-      reduction_size, 
-      reduction_stride, 
-      tid, 
-      lid, 
-      lsize); 
-  }
-}
-
-#define instantiate_contiguous_strided_helper(name, itype, otype, op) \
-  template [[host_name("contiguous_strided_reduce_" #name)]] \
-  [[kernel]] void contiguous_strided_reduce<itype, otype, op>( \
-      const device itype *in [[buffer(0)]], \
-      device mlx_atomic<otype> *out [[buffer(1)]], \
-      const constant size_t& reduction_size [[buffer(2)]], \
-      const constant size_t& reduction_stride [[buffer(3)]], \
-      const constant size_t& out_size [[buffer(4)]], \
-      const device int* in_shape [[buffer(5)]], \
-      const device size_t* in_strides [[buffer(6)]], \
-      const device size_t& in_dim [[buffer(7)]], \
-      threadgroup otype *local_data [[threadgroup(0)]], \
-      uint2 tid [[threadgroup_position_in_grid]], \
-      uint2 lid [[thread_position_in_threadgroup]], \
-      uint2 lsize [[threads_per_threadgroup]]);
-
-#define instantiate_contiguous_strided_helper_nd(name, itype, otype, op, n) \
-  template [[host_name("contiguous_strided_reduce_" #name "_dim_" #n)]] \
-  [[kernel]] void contiguous_strided_reduce<itype, otype, op, n>( \
-      const device itype *in [[buffer(0)]], \
-      device mlx_atomic<otype> *out [[buffer(1)]], \
-      const constant size_t& reduction_size [[buffer(2)]], \
-      const constant size_t& reduction_stride [[buffer(3)]], \
-      const constant size_t& out_size [[buffer(4)]], \
-      const device int* in_shape [[buffer(5)]], \
-      const device size_t* in_strides [[buffer(6)]], \
-      threadgroup otype *local_data [[threadgroup(0)]], \
-      uint2 tid [[threadgroup_position_in_grid]],  \
-      uint2 lid [[thread_position_in_threadgroup]],  \
-      uint2 lsize [[threads_per_threadgroup]]);
-
-#define instantiate_contiguous_strided(name, itype, otype, op) \
-  instantiate_contiguous_strided_helper(name, itype, otype, op) \
-  instantiate_contiguous_strided_helper_nd(name, itype, otype, op, 1) \
-  instantiate_contiguous_strided_helper_nd(name, itype, otype, op, 2) \
-  instantiate_contiguous_strided_helper_nd(name, itype, otype, op, 3) \
-  instantiate_contiguous_strided_helper_nd(name, itype, otype, op, 4)
+      uint3 tid [[threadgroup_position_in_grid]], \
+      uint3 lid [[thread_position_in_threadgroup]], \
+      uint3 lsize [[threads_per_threadgroup]]);
 
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -461,10 +319,8 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
 
 #define instantiate_reduce(name, itype, otype, op) \
   instantiate_all_reduce(name, itype, otype, op) \
-  instantiate_row_reduce(name, itype, otype, op) \
-  instantiate_col_reduce(name, itype, otype, op) \
-  instantiate_contiguous_strided(name, itype, otype, op) \
-  instantiate_general_reduce(name, itype, otype, op)
+  instantiate_row_reduce_general(name, itype, otype, op) \
+  instantiate_col_reduce_general(name, itype, otype, op)
 
 #define instantiate_same_reduce(name, tname, type, op) \
   instantiate_init_reduce(name ##tname, type, op<type>) \

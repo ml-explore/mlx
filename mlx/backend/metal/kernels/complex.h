@@ -45,7 +45,7 @@ struct complex64_t {
       typename = typename enable_if<can_convert_to_complex64<T>>::type>
   constexpr complex64_t(T x) constant : real(x), imag(0) {}
 
-  // Converstions from complex64_t
+  // Conversions from complex64_t
   template <
       typename T,
       typename = typename enable_if<can_convert_from_complex64<T>>::type>
@@ -109,6 +109,13 @@ constexpr complex64_t operator-(complex64_t a, complex64_t b) {
 
 constexpr complex64_t operator*(complex64_t a, complex64_t b) {
   return {a.real * b.real - a.imag * b.imag, a.real * b.imag + a.imag * b.real};
+}
+
+constexpr complex64_t operator/(complex64_t a, complex64_t b) {
+  auto denom = b.real * b.real + b.imag * b.imag;
+  auto x = a.real * b.real + a.imag * b.imag;
+  auto y = a.imag * b.real - a.real * b.imag;
+  return {x / denom, y / denom};
 }
 
 constexpr complex64_t operator%(complex64_t a, complex64_t b) {

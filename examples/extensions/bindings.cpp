@@ -23,7 +23,7 @@ PYBIND11_MODULE(mlx_sample_extensions, m) {
       py::kw_only(),
       "stream"_a = py::none(),
       R"pbdoc(
-        Scale and sum two vectors elementwise
+        Scale and sum two vectors element-wise
         ``z = alpha * x + beta * y``
         
         Follows numpy style broadcasting between ``x`` and ``y``

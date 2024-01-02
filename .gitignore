@@ -6,11 +6,16 @@ __pycache__/
 # C extensions
 *.so
 
+# tensor files
+*.safe
+*.safetensors
+
 # Metal libraries
 *.metallib
 venv/
 
 # Distribution / packaging
+python/mlx/core
 python/mlx/share
 python/mlx/include
 .Python

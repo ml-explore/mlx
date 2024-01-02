@@ -4,7 +4,7 @@
 
 #include "array.h"
 #include "device.h"
-#include "load.h"
+#include "io/load.h"
 #include "stream.h"
 
 #define DEFINE_GRADS()                           \
@@ -49,7 +49,7 @@ class Primitive {
    * A primitive must know how to evaluate itself on
    * the CPU/GPU for the given inputs and populate the output array.
    *
-   * To avoid unecessary allocations, the evaluation function
+   * To avoid unnecessary allocations, the evaluation function
    * is responsible for allocating space for the array.
    */
   virtual void eval_cpu(const std::vector<array>& inputs, array& out) = 0;
@@ -72,7 +72,7 @@ class Primitive {
       const std::vector<int>& argnums);
 
   /**
-   * The primitive must know how to vectorize itself accross
+   * The primitive must know how to vectorize itself across
    * the given axes. The output is a pair containing the array
    * representing the vectorized computation and the axis which
    * corresponds to the output vectorized dimension.
@@ -84,7 +84,7 @@ class Primitive {
   /** Print the primitive. */
   virtual void print(std::ostream& os) = 0;
 
-  /** Equivalence check defaults to false unless overriden by the primitive */
+  /** Equivalence check defaults to false unless overridden by the primitive */
   virtual bool is_equivalent(const Primitive& other) const {
     return false;
   }
@@ -404,6 +404,25 @@ class Broadcast : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Ceil : public Primitive {
+ public:
+  explicit Ceil(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Ceil)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Concatenate : public Primitive {
  public:
   explicit Concatenate(Stream stream, int axis)
@@ -659,6 +678,25 @@ class FFT : public Primitive {
   bool inverse_;
   bool real_;
 
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Floor : public Primitive {
+ public:
+  explicit Floor(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Floor)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
   void eval(const std::vector<array>& inputs, array& out);
 };
 
@@ -1072,6 +1110,29 @@ class Power : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class QuantizedMatmul : public Primitive {
+ public:
+  explicit QuantizedMatmul(Stream stream, int group_size, int bits)
+      : Primitive(stream), group_size_(group_size), bits_(bits){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(QuantizedMatmul)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int group_size_;
+  int bits_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class RandomBits : public Primitive {
  public:
   explicit RandomBits(Stream stream, const std::vector<int>& shape, int width)
@@ -1165,6 +1226,25 @@ class Reduce : public Primitive {
   ReduceType reduce_type_;
   std::vector<int> axes_;
 
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Round : public Primitive {
+ public:
+  explicit Round(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(Round)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
   void eval(const std::vector<array>& inputs, array& out);
 };
 

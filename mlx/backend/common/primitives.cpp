@@ -167,6 +167,17 @@ void Broadcast::eval(const std::vector<array>& inputs, array& out) {
   out.copy_shared_buffer(in, strides, flags, in.data_size());
 }
 
+void Ceil::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  if (not is_integral(in.dtype())) {
+    unary_fp(in, out, [](auto x) { return std::ceil(x); });
+  } else {
+    // No-op integer types
+    out.copy_shared_buffer(in);
+  }
+}
+
 void Concatenate::eval(const std::vector<array>& inputs, array& out) {
   std::vector<int> sizes;
   sizes.push_back(0);
@@ -284,6 +295,17 @@ void Exp::eval(const std::vector<array>& inputs, array& out) {
     throw std::invalid_argument(
         "[exp] Cannot exponentiate elements in array"
         " with non floating point type.");
+  }
+}
+
+void Floor::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  if (not is_integral(in.dtype())) {
+    unary_fp(in, out, [](auto x) { return std::floor(x); });
+  } else {
+    // No-op integer types
+    out.copy_shared_buffer(in);
   }
 }
 
@@ -441,6 +463,17 @@ void Reshape::eval(const std::vector<array>& inputs, array& out) {
     out.copy_shared_buffer(in, out.strides(), flags, in.data_size());
   } else {
     copy(in, out, in.data_size() == 1 ? CopyType::Scalar : CopyType::General);
+  }
+}
+
+void Round::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  if (not is_integral(in.dtype())) {
+    unary_fp(in, out, RoundOp());
+  } else {
+    // No-op integer types
+    out.copy_shared_buffer(in);
   }
 }
 

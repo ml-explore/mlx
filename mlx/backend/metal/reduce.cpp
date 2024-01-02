@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <sstream>
 
 #include "mlx/backend/common/reduce.h"
+#include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/utils.h"
@@ -38,7 +40,7 @@ void all_reduce_dispatch(
   // Set grid dimensions
 
   // We make sure each thread has enough to do by making it read in
-  // atleast n_reads inputs
+  // at least n_reads inputs
   int n_reads = REDUCE_N_READS;
 
   // mod_in_size gives us the groups of n_reads needed to go over the entire
@@ -61,22 +63,47 @@ void all_reduce_dispatch(
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
 
-void row_reduce_dispatch(
+void row_reduce_general_dispatch(
     const array& in,
     array& out,
     const std::string& op_name,
-    const std::vector<int>& axes_,
+    const ReductionPlan& plan,
+    const std::vector<int>& axes,
     MTL::ComputeCommandEncoder* compute_encoder,
     metal::Device& d) {
-  auto kernel = d.get_kernel("row_reduce_" + op_name + type_to_name(in));
+  auto kernel =
+      d.get_kernel("row_reduce_general_" + op_name + type_to_name(in));
 
+  // Prepare the arguments for the kernel
   int n_reads = REDUCE_N_READS;
-  size_t reduction_size = in.size() / out.size();
+  size_t reduction_size = plan.shape.back();
+  size_t out_size = out.size();
+  auto shape = plan.shape;
+  auto strides = plan.strides;
+  shape.pop_back();
+  strides.pop_back();
+  size_t non_row_reductions = 1;
+  for (auto s : shape) {
+    non_row_reductions *= static_cast<size_t>(s);
+  }
+  auto [rem_shape, rem_strides] = shapes_without_reduction_axes(in, axes);
+  for (auto s : rem_shape) {
+    shape.push_back(s);
+  }
+  for (auto s : rem_strides) {
+    strides.push_back(s);
+  }
+  int ndim = shape.size();
 
+  // Set the arguments for the kernel
   compute_encoder->setComputePipelineState(kernel);
   set_array_buffer(compute_encoder, in, 0);
   set_array_buffer(compute_encoder, out, 1);
   compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+  compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
+  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
+  compute_encoder->setBytes(&ndim, sizeof(int), 6);
 
   // Each thread group is responsible for 1 output
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
@@ -91,92 +118,54 @@ void row_reduce_dispatch(
 
   // Launch enough thread groups for each output
   size_t n_threads = out.size() * thread_group_size;
-  MTL::Size grid_dims = MTL::Size(n_threads, 1, 1);
+  MTL::Size grid_dims = MTL::Size(n_threads, non_row_reductions, 1);
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
 
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
 
-void col_reduce_dispatch(
+void strided_reduce_general_dispatch(
     const array& in,
     array& out,
     const std::string& op_name,
-    const std::vector<int>& axes_,
+    const ReductionPlan& plan,
+    const std::vector<int>& axes,
     MTL::ComputeCommandEncoder* compute_encoder,
     metal::Device& d) {
-  std::ostringstream kernel_name;
+  auto kernel =
+      d.get_kernel("col_reduce_general_" + op_name + type_to_name(in));
 
-  bool encode_in_shape = false;
-  bool encode_ndim = false;
-
-  // If the slowest moving axis can be merged into the reductions,
-  // we call the column reduce kernel
-  // In this case, a linear index in the output corresponds to the
-  // linear index in the input where the reduction starts
-  if (axes_[axes_.size() - 1] == (axes_.size() - 1)) {
-    kernel_name << "col_reduce_" << op_name << type_to_name(in);
-  }
-  // Otherwise, while all the reduction axes can be merged, the mapping between
-  // indices in the output and input require resolving using shapes and strides
-  else {
-    kernel_name << "contiguous_strided_reduce_" << op_name << type_to_name(in);
-    encode_in_shape = true;
-
-    // We check for a viable template with the required number of dimensions
-    // we only care about encoding non-reduced shapes and strides in the input
-    size_t non_reducing_dims = in.ndim() - axes_.size();
-    if (non_reducing_dims >= 1 &&
-        non_reducing_dims <= MAX_REDUCE_SPECIALIZED_DIMS) {
-      kernel_name << "_dim_" << non_reducing_dims;
-    } else {
-      encode_ndim = true;
-    }
-  }
-
-  auto kernel = d.get_kernel(kernel_name.str());
-  size_t in_size = in.size();
+  // Prepare the arguments for the kernel
+  size_t reduction_size = plan.shape.back();
+  size_t reduction_stride = plan.strides.back();
   size_t out_size = out.size();
+  auto shape = plan.shape;
+  auto strides = plan.strides;
+  shape.pop_back();
+  strides.pop_back();
+  size_t non_col_reductions = 1;
+  for (auto s : shape) {
+    non_col_reductions *= static_cast<size_t>(s);
+  }
+  auto [rem_shape, rem_strides] = shapes_without_reduction_axes(in, axes);
+  for (auto s : rem_shape) {
+    shape.push_back(s);
+  }
+  for (auto s : rem_strides) {
+    strides.push_back(s);
+  }
+  int ndim = shape.size();
 
+  // Set the arguments for the kernel
   compute_encoder->setComputePipelineState(kernel);
   set_array_buffer(compute_encoder, in, 0);
   set_array_buffer(compute_encoder, out, 1);
-
-  // Calculate the number of inputs to reduce and the stride b/w them
-  size_t reduction_size = 1;
-  size_t in_ndim = in.ndim();
-  size_t reduction_stride = in_size;
-
-  for (int i : axes_) {
-    reduction_size *= in.shape(i);
-    reduction_stride = std::min(reduction_stride, in.strides()[i]);
-  }
-
   compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
   compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
   compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
-  if (encode_in_shape) {
-    // Obtain the non-reducing shape and strides of the input to encode
-    std::vector<int> inp_shape_mod;
-    std::vector<size_t> inp_strides_mod;
-
-    for (size_t i = 0, j = 0; i < in.ndim(); i++) {
-      if (j < axes_.size() && axes_[j] == i) {
-        j++;
-      } else {
-        inp_shape_mod.push_back(in.shape(i));
-        inp_strides_mod.push_back(in.strides()[i]);
-      }
-    }
-
-    size_t ndim = inp_shape_mod.size();
-
-    compute_encoder->setBytes(inp_shape_mod.data(), ndim * sizeof(int), 5);
-    compute_encoder->setBytes(inp_strides_mod.data(), ndim * sizeof(size_t), 6);
-
-    if (encode_ndim) {
-      compute_encoder->setBytes(&ndim, sizeof(size_t), 7);
-    }
-  }
+  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 5);
+  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 6);
+  compute_encoder->setBytes(&ndim, sizeof(int), 7);
 
   // Select block dimensions
 
@@ -187,7 +176,7 @@ void col_reduce_dispatch(
 
   // We spread outputs over the x dimension and inputs over the y dimension
   // Threads with the same lid.x in a given threadgroup work on the same
-  // output and each thread in the y dimension accumlates for that output
+  // output and each thread in the y dimension accumulates for that output
   uint threadgroup_dim_x = std::min(out_size, 128ul);
   uint threadgroup_dim_y =
       kernel->maxTotalThreadsPerThreadgroup() / threadgroup_dim_x;
@@ -200,7 +189,8 @@ void col_reduce_dispatch(
       (n_threads_per_output + threadgroup_dim_y - 1) / threadgroup_dim_y;
 
   // Launch enough thread groups for each output
-  MTL::Size grid_dims = MTL::Size(n_threadgroups_x, n_threadgroups_y, 1);
+  MTL::Size grid_dims =
+      MTL::Size(n_threadgroups_x, n_threadgroups_y, non_col_reductions);
   MTL::Size group_dims = MTL::Size(threadgroup_dim_x, threadgroup_dim_y, 1);
 
   // We set shared memory to be exploited here for reductions within a
@@ -216,60 +206,6 @@ void col_reduce_dispatch(
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 }
 
-void general_reduce_dispatch(
-    const array& in,
-    array& out,
-    const std::string& op_name,
-    const std::vector<int>& axes_,
-    MTL::ComputeCommandEncoder* compute_encoder,
-    metal::Device& d) {
-  bool encode_ndim = true;
-  std::ostringstream kernel_name;
-  kernel_name << "general_reduce_" << op_name << type_to_name(in);
-
-  // Check for specialzed kernels for input ndim
-  if (in.ndim() >= 1 && in.ndim() <= MAX_REDUCE_SPECIALIZED_DIMS) {
-    kernel_name << "_dim_" << in.ndim();
-    encode_ndim = false;
-  }
-  auto kernel = d.get_kernel(kernel_name.str());
-  size_t in_size = in.size();
-  size_t ndim = in.ndim();
-
-  // We set the reducing strides to 0 to induce collisions for the reduction
-  std::vector<size_t> out_strides(ndim);
-  size_t stride = 1;
-  for (int i = ndim - 1, j = axes_.size() - 1; i >= 0; --i) {
-    if (j >= 0 && axes_[j] == i) {
-      out_strides[i] = 0;
-      --j;
-    } else {
-      out_strides[i] = stride;
-      stride *= in.shape(i);
-    }
-  }
-
-  compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in, 0);
-  set_array_buffer(compute_encoder, out, 1);
-  compute_encoder->setBytes(in.shape().data(), ndim * sizeof(int), 2);
-  compute_encoder->setBytes(in.strides().data(), ndim * sizeof(size_t), 3);
-  compute_encoder->setBytes(out_strides.data(), ndim * sizeof(size_t), 4);
-  if (encode_ndim) {
-    compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
-  }
-
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size > in_size) {
-    thread_group_size = in_size;
-  }
-  size_t nthreads = in_size;
-
-  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
-}
-
 } // namespace
 
 //////////////////////////////////////////////////////////////////////
@@ -278,7 +214,7 @@ void general_reduce_dispatch(
 
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
-  auto& in = inputs[0];
+  array in = inputs[0];
 
   // TODO: Allow specific row and column reductions with types disabled
   // due to atomics ?
@@ -335,36 +271,46 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Reduce
   {
-    // Check for contiguous data
-    if (in.size() == in.data_size() &&
-        (in.flags().row_contiguous || in.flags().col_contiguous)) {
-      // Go to all reduce if reducing over all axes
-      if (axes_.size() == in.ndim()) {
-        all_reduce_dispatch(in, out, op_name, compute_encoder, d);
-        return;
-      }
-      // Use specialized kernels if the input is row contiguous and
-      // the reducing axes can be merged into one
-      else if (
-          in.flags().row_contiguous && in.strides().back() == 1 &&
-          (axes_.back() - axes_.front()) == axes_.size() - 1) {
-        // If the fastest moving axis is being reduced, go to row reduce
-        if (axes_[0] == (in.ndim() - axes_.size())) {
-          row_reduce_dispatch(in, out, op_name, axes_, compute_encoder, d);
-          return;
-        }
-        // Otherwise go to to generalized strided reduce
-        // Note: bool isn't support here yet due to the use of atomics
-        //       once that is updated, this should be the else condition of this
-        //       branch
-        else if (in.dtype() != bool_) {
-          col_reduce_dispatch(in, out, op_name, axes_, compute_encoder, d);
-          return;
-        }
-      }
+    std::vector<array> copies;
+    ReductionPlan plan = get_reduction_plan(in, axes_);
+
+    // If it is a general reduce then copy the input to a contiguous array and
+    // recompute the plan.
+    if (plan.type == GeneralReduce) {
+      array in_copy(in.shape(), in.dtype(), nullptr, {});
+      copy_gpu(in, in_copy, CopyType::General, s);
+      copies.push_back(in_copy);
+      in = in_copy;
+      plan = get_reduction_plan(in, axes_);
     }
-    // Fall back to the general case
-    general_reduce_dispatch(in, out, op_name, axes_, compute_encoder, d);
+
+    // Reducing over everything and the data is all there no broadcasting or
+    // slicing etc.
+    if (plan.type == ContiguousAllReduce) {
+      all_reduce_dispatch(in, out, op_name, compute_encoder, d);
+    }
+
+    // At least the last dimension is row contiguous and we are reducing over
+    // the last dim.
+    else if (
+        plan.type == ContiguousReduce || plan.type == GeneralContiguousReduce) {
+      row_reduce_general_dispatch(
+          in, out, op_name, plan, axes_, compute_encoder, d);
+    }
+
+    // At least the last two dimensions are contiguous and we are doing a
+    // strided reduce over these.
+    else if (
+        plan.type == ContiguousStridedReduce ||
+        plan.type == GeneralStridedReduce) {
+      strided_reduce_general_dispatch(
+          in, out, op_name, plan, axes_, compute_encoder, d);
+    }
+
+    if (!copies.empty()) {
+      d.get_command_buffer(s.index)->addCompletedHandler(
+          [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+    }
   }
 }
 

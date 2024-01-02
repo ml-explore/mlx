@@ -103,7 +103,9 @@ array uniform(
   }
 
   auto stream = to_stream(s);
-  auto range = subtract(high, low, stream);
+  auto lo = astype(low, dtype, stream);
+  auto hi = astype(high, dtype, stream);
+  auto range = subtract(hi, lo, stream);
   auto out_shape = broadcast_shapes(shape, range.shape());
   if (out_shape != shape) {
     std::ostringstream msg;
@@ -136,7 +138,7 @@ array uniform(
   auto out = bits(shape, size_of(dtype), key, stream);
   out = astype(divide(out, maxval, stream), dtype, stream);
   out = minimum(out, upper, stream);
-  return add(multiply(range, out, stream), low, stream);
+  return add(multiply(range, out, stream), lo, stream);
 }
 
 array uniform(
@@ -230,7 +232,7 @@ array truncated_normal(
   auto u = uniform(a, b, shape, dtype, key, s);
   auto out = multiply(sqrt2, erfinv(u, s), s);
 
-  // Clip in bouds
+  // Clip in bounds
   return maximum(minimum(upper_t, out, s), lower_t, s);
 }
 

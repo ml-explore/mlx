@@ -114,7 +114,7 @@ template <typename T, typename Op, int N_READS>
   //    4. Reduce among them and go to 3
   //    4. Reduce in each simd_group
   //    6. Write in the thread local memory
-  //    6. Reduce them accross thread group
+  //    6. Reduce them across thread group
   //    7. Write the output without need for atomic
   Op op;
 
