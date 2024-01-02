@@ -1733,7 +1733,7 @@ TEST_CASE("test scatter") {
   out = scatter(in, inds, updates, 0);
   CHECK(array_equal(out, reshape(arange(16, float32), {4, 4})).item<bool>());
 
-  // Irregular strided index and reduce collison test
+  // Irregular strided index and reduce collision test
   in = zeros({10}, float32);
   inds = broadcast_to(array(3), {10});
   updates = ones({10, 1}, float32);
