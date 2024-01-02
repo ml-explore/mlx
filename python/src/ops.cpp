@@ -3198,7 +3198,8 @@ void init_ops(py::module_& m) {
       "tensordot",
       [](const array& a,
          const array& b,
-         const IntOrIntVec& dims,
+         const std::variant<std::monostate, int, std::vector<std::vector<int>>>&
+             dims,
          StreamOrDevice s) {
         if (std::holds_alternative<std::monostate>(dims)) {
           return tensordot(a, b, 2, s);
