@@ -99,7 +99,7 @@ struct BlockLoader {
           tmp_val[j] = src[i * src_ld + tmp_idx[j]];
         }
 
-        // Zero out uneeded values
+        // Zero out unneeded values
 #pragma clang loop unroll(full)
         for (short j = 0; j < vec_size; j++) {
           tmp_val[j] = bj + j < src_tile_dim.x ? tmp_val[j] : T(0);
