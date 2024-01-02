@@ -12,7 +12,7 @@ namespace mlx::core {
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
- *  Scale and sum two vectors elementwise
+ *  Scale and sum two vectors element-wise
  *  z = alpha * x + beta * y
  *
  *  Follow numpy style broadcasting between x and y

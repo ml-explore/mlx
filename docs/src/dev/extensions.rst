@@ -69,7 +69,7 @@ C++ API:
 .. code-block:: C++
 
     /**
-    *  Scale and sum two vectors elementwise
+    *  Scale and sum two vectors element-wise
     *  z = alpha * x + beta * y
     *
     *  Follow numpy style broadcasting between x and y
@@ -284,7 +284,7 @@ pointwise. This is captured in the templated function :meth:`axpby_impl`.
         T alpha = static_cast<T>(alpha_);
         T beta = static_cast<T>(beta_);
 
-        // Do the elementwise operation for each output
+        // Do the element-wise operation for each output
         for (size_t out_idx = 0; out_idx < out.size(); out_idx++) {
             // Map linear indices to offsets in x and y
             auto x_offset = elem_to_loc(out_idx, x.shape(), x.strides());
@@ -697,7 +697,7 @@ are already provided, adding our :meth:`axpby` becomes very simple!
             py::kw_only(),
             "stream"_a = py::none(),
             R"pbdoc(
-                Scale and sum two vectors elementwise
+                Scale and sum two vectors element-wise
                 ``z = alpha * x + beta * y``
                 
                 Follows numpy style broadcasting between ``x`` and ``y``
