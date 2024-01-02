@@ -442,7 +442,6 @@ class Module(dict):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state.pop("_compiled_call_impl", None)
         return state
 
     def __setstate__(self, state):
