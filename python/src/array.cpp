@@ -559,7 +559,7 @@ void init_array(py::module_& m) {
                 If the array has more than one dimension then the result is a nested
                 list of lists.
 
-                The value type of the list correpsonding to the last dimension is either
+                The value type of the list corresponding to the last dimension is either
                 ``bool``, ``int`` or ``float`` depending on the ``dtype`` of the array.
           )pbdoc")
       .def("__array__", &mlx_array_to_np)
