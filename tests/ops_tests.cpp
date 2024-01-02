@@ -1750,7 +1750,7 @@ TEST_CASE("test scatter") {
   out = scatter_max(array(1), {}, array(2), std::vector<int>{});
   CHECK_EQ(out.item<int>(), 2);
 
-  // Irregularaly strided updates test
+  // Irregularly strided updates test
   in = ones({3, 3});
   updates = broadcast_to(array({0, 0, 0}), {1, 3, 3});
   inds = array({0});
