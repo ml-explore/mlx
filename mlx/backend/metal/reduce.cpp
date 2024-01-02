@@ -176,7 +176,7 @@ void strided_reduce_general_dispatch(
 
   // We spread outputs over the x dimension and inputs over the y dimension
   // Threads with the same lid.x in a given threadgroup work on the same
-  // output and each thread in the y dimension accumlates for that output
+  // output and each thread in the y dimension accumulates for that output
   uint threadgroup_dim_x = std::min(out_size, 128ul);
   uint threadgroup_dim_y =
       kernel->maxTotalThreadsPerThreadgroup() / threadgroup_dim_x;
