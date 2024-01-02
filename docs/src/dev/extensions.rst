@@ -568,7 +568,7 @@ below.
         // Fix the 3D size of the launch grid (in terms of threads)
         MTL::Size grid_dims = MTL::Size(nelem, 1, 1);
 
-        // Launch the grid with the given number of threads divded among
+        // Launch the grid with the given number of threads divided among
         // the given threadgroups
         compute_encoder->dispatchThreads(grid_dims, group_dims);
     }
