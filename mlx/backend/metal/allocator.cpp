@@ -148,7 +148,7 @@ MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
       buffer_cache_(device_),
       peak_allocated_size_(0),
-      block_limit_(device_->recommendedMaxWorkingSetSize()),
+      block_limit_(1.5 * device_->recommendedMaxWorkingSetSize()),
       gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()) {}
 
 Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
