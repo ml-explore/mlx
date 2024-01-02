@@ -2432,7 +2432,7 @@ void init_ops(py::module_& m) {
           array (array): Input array.
           repeats (int): The number of repetitions for each element.
           axis (int, optional): The axis in which to repeat the array along. If
-            unspecified it uses the flattened array of the input and repeates 
+            unspecified it uses the flattened array of the input and repeats 
             along axis 0.
           stream (Stream, optional): Stream or device. Defaults to ``None``.
 
