@@ -81,12 +81,12 @@ class TestBlas(mlx_tests.MLXTestCase):
 
             for B, M, N, K in shapes:
 
-                with self.subTest(tranpose="nn"):
+                with self.subTest(transpose="nn"):
                     shape_a = (B, M, K)
                     shape_b = (B, K, N)
                     self.__gemm_test(shape_a, shape_b, np_dtype)
 
-                with self.subTest(tranpose="nt"):
+                with self.subTest(transpose="nt"):
                     shape_a = (B, M, K)
                     shape_b = (B, N, K)
                     self.__gemm_test(
@@ -97,7 +97,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                         f_mx_b=lambda x: mx.transpose(x, (0, 2, 1)),
                     )
 
-                with self.subTest(tranpose="tn"):
+                with self.subTest(transpose="tn"):
                     shape_a = (B, K, M)
                     shape_b = (B, K, N)
                     self.__gemm_test(
@@ -108,7 +108,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                         f_mx_a=lambda x: mx.transpose(x, (0, 2, 1)),
                     )
 
-                with self.subTest(tranpose="tt"):
+                with self.subTest(transpose="tt"):
                     shape_a = (B, K, M)
                     shape_b = (B, N, K)
                     self.__gemm_test(

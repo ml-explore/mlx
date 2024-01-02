@@ -517,7 +517,7 @@ array slice(
       // Gather moves the axis up, remainder needs to be squeezed
       out_reshape[i] = indices[i].size();
 
-      // Gather moves the axis up, needs to be tranposed
+      // Gather moves the axis up, needs to be transposed
       t_axes[ax] = i;
     }
 
