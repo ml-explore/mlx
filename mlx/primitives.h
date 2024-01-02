@@ -84,7 +84,7 @@ class Primitive {
   /** Print the primitive. */
   virtual void print(std::ostream& os) = 0;
 
-  /** Equivalence check defaults to false unless overriden by the primitive */
+  /** Equivalence check defaults to false unless overridden by the primitive */
   virtual bool is_equivalent(const Primitive& other) const {
     return false;
   }
