@@ -1597,6 +1597,28 @@ class TestOps(mlx_tests.MLXTestCase):
             np.outer,
         )
 
+    def test_divmod(self):
+        # A few sizes for the inputs with and without broadcasting
+        sizes = [
+            ((1,), (1,)),
+            ((1,), (10,)),
+            ((10,), (1,)),
+            ((3,), (3,)),
+            ((2, 2, 2), (1, 2, 1)),
+            ((2, 1, 2), (1, 2, 1)),
+            ((2, 2, 2, 2), (2, 2, 2, 2)),
+        ]
+        types = [np.uint16, np.uint32, np.int32, np.float16, np.float32]
+        for s1, s2 in sizes:
+            for t in types:
+                a_np = (100 * np.random.uniform(size=s1)).astype(t)
+                b_np = (100 * np.random.uniform(size=s2)).astype(t)
+                np_out = np.divmod(a_np, b_np)
+                mx_out = mx.divmod(mx.array(a_np), mx.array(b_np))
+                self.assertTrue(
+                    np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
