@@ -2140,6 +2140,15 @@ std::vector<array> Scatter::vjp(
   const array& updates = primals.back();
   const std::vector<array> indices(primals.begin() + 1, primals.end() - 1);
 
+  // Store result of scatter if needed for reuse in vjp
+  auto get_result = [&]() {
+    switch (reduce_type_) {
+      case Scatter::Max:
+        return scatter_max(values, indices, updates, axes_, stream());
+    }
+  };
+  array result = get_result();
+
   std::vector<array> vjps;
   for (auto num : argnums) {
     // Gradient wrt to the input array
@@ -2159,7 +2168,6 @@ std::vector<array> Scatter::vjp(
           vjps.push_back(cotangents[0]);
           break;
         case Scatter::Max: {
-          auto result = scatter_max(values, indices, updates, axes_, stream());
           auto mask = where(result == values, array({1}), array({0}));
           vjps.push_back(multiply(cotangents[0], mask));
           break;
@@ -2186,7 +2194,6 @@ std::vector<array> Scatter::vjp(
           for (auto ax : axes_) {
             slice_sizes[ax] = 1;
           }
-          auto result = scatter_max(values, indices, updates, axes_, stream());
           auto gathered_cotan =
               gather(cotangents[0], indices, axes_, slice_sizes, stream());
           auto gathered_result =
