@@ -732,9 +732,9 @@ class StepLR(LRScheduler):
         gamma: float = 0.1,
         last_epoch: int = -1,
     ):
+        super().__init__(optimizer, last_epoch)
         self.step_size = step_size
         self.gamma = gamma
-        super().__init__(optimizer, last_epoch)
 
     def get_lr(self) -> float:
         return self.base_lr * self.gamma ** (self.last_epoch // self.step_size)
@@ -750,8 +750,8 @@ class ExponentialLR(LRScheduler):
     """
 
     def __init__(self, optimizer: Optimizer, gamma: float, last_epoch: int = -1):
-        self.gamma = gamma
         super().__init__(optimizer, last_epoch)
+        self.gamma = gamma
 
     def get_lr(self) -> float:
         return self.base_lr * self.gamma**self.last_epoch
@@ -774,9 +774,9 @@ class MultiStepLR(LRScheduler):
         gamma: float = 0.1,
         last_epoch: int = -1,
     ):
+        super().__init__(optimizer, last_epoch)
         self.milestones = sorted(milestones)
         self.gamma = gamma
-        super().__init__(optimizer, last_epoch)
 
     def get_lr(self) -> float:
         factor = self.gamma ** sum(
@@ -800,8 +800,8 @@ class LambdaLR(LRScheduler):
         lr_lambda: Callable,
         last_epoch: int = -1,
     ):
-        self.lr_lambda = lr_lambda
         super().__init__(optimizer, last_epoch)
+        self.lr_lambda = lr_lambda
 
     def get_lr(self) -> float:
         return self.base_lr * self.lr_lambda(self.last_epoch)
@@ -826,10 +826,10 @@ class PolynomialLR(LRScheduler):
         power: float,
         last_epoch: int = -1,
     ):
+        super().__init__(optimizer, last_epoch)
         self.max_decay_steps = max_decay_steps
         self.end_lr = end_lr
         self.power = power
-        super().__init__(optimizer, last_epoch)
 
     def get_lr(self) -> float:
         decay_steps = min(self.last_epoch, self.max_decay_steps)
@@ -850,9 +850,9 @@ class CosineAnnealingLR(LRScheduler):
     def __init__(
         self, optimizer: Optimizer, T_max: int, eta_min: float = 0, last_epoch: int = -1
     ):
+        super().__init__(optimizer, last_epoch)
         self.T_max = T_max
         self.eta_min = eta_min
-        super().__init__(optimizer, last_epoch)
 
     def get_lr(self) -> float:
         if self.last_epoch == 0:
@@ -877,10 +877,10 @@ class SequentialLR(LRScheduler):
     def __init__(
         self, schedulers: List[LRScheduler], milestones: List[int], last_epoch: int = -1
     ):
+        super().__init__(self.current_scheduler.optimizer, last_epoch)
         self.schedulers = schedulers
         self.milestones = milestones
         self.current_scheduler = self.schedulers[0]
-        super().__init__(self.current_scheduler.optimizer, last_epoch)
 
     def step(self, epoch: int = None):
         if epoch is None:
