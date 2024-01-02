@@ -64,7 +64,7 @@ auto to_scalar(array& a) {
     case float32:
       return py::cast(a.item<float>(retain_graph));
     case bfloat16:
-      return py::cast(static_cast<float>(a.item<float16_t>(retain_graph)));
+      return py::cast(static_cast<float>(a.item<bfloat16_t>(retain_graph)));
     case complex64:
       return py::cast(a.item<std::complex<float>>(retain_graph));
   }
