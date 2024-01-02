@@ -64,7 +64,7 @@ auto to_scalar(array& a) {
     case float32:
       return py::cast(a.item<float>(retain_graph));
     case bfloat16:
-      return py::cast(static_cast<float>(a.item<float16_t>(retain_graph)));
+      return py::cast(static_cast<float>(a.item<bfloat16_t>(retain_graph)));
     case complex64:
       return py::cast(a.item<std::complex<float>>(retain_graph));
   }
@@ -507,7 +507,7 @@ void init_array(py::module_& m) {
 
   array_class
       .def_property_readonly(
-          "size", &array::size, R"pbdoc(Number of elments in the array.)pbdoc")
+          "size", &array::size, R"pbdoc(Number of elements in the array.)pbdoc")
       .def_property_readonly(
           "ndim", &array::ndim, R"pbdoc(The array's dimension.)pbdoc")
       .def_property_readonly(
@@ -559,7 +559,7 @@ void init_array(py::module_& m) {
                 If the array has more than one dimension then the result is a nested
                 list of lists.
 
-                The value type of the list correpsonding to the last dimension is either
+                The value type of the list corresponding to the last dimension is either
                 ``bool``, ``int`` or ``float`` depending on the ``dtype`` of the array.
           )pbdoc")
       .def("__array__", &mlx_array_to_np)

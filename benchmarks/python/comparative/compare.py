@@ -62,7 +62,7 @@ def make_predicate(positive_filter, negative_filter):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run comparisons agains PyTorch")
+    parser = argparse.ArgumentParser(description="Run comparisons against PyTorch")
     parser.add_argument(
         "--filter", "-f", help="Regex filter to select benchmarks", nargs="+"
     )
