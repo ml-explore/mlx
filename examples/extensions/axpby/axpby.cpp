@@ -254,7 +254,7 @@ void Axpby::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setComputePipelineState(kernel);
 
   // Kernel parameters are registered with buffer indices corresponding to
-  // those in the kernel decelaration at axpby.metal
+  // those in the kernel declaration at axpby.metal
   int ndim = out.ndim();
   size_t nelem = out.size();
 
