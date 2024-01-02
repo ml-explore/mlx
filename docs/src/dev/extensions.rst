@@ -485,7 +485,7 @@ each data type.
 
     instantiate_axpby(float32, float);
     instantiate_axpby(float16, half);
-    instantiate_axpby(bflot16, bfloat16_t);
+    instantiate_axpby(bfloat16, bfloat16_t);
     instantiate_axpby(complex64, complex64_t);
 
 This kernel will be compiled into a metal library ``mlx_ext.metallib`` as we 
