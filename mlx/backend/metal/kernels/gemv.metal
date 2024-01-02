@@ -42,7 +42,7 @@ struct GEMVKernel {
   // Edge case handling:
   // - The threadgroup with the largest tid will have blocks that exceed the matrix
   //   * The blocks that start outside the matrix are never read (thread results remain zero)
-  //   * The last thread that partialy overlaps with the matrix is shifted inwards 
+  //   * The last thread that partially overlaps with the matrix is shifted inwards 
   //     such that the thread block fits exactly in the matrix
 
   MLX_MTL_CONST short tgp_mem_size = BN * TN * 2;
@@ -180,7 +180,7 @@ struct GEMVTKernel {
   // Edge case handling:
   // - The threadgroup with the largest tid will have blocks that exceed the matrix
   //   * The blocks that start outside the matrix are never read (thread results remain zero)
-  //   * The last thread that partialy overlaps with the matrix is shifted inwards 
+  //   * The last thread that partially overlaps with the matrix is shifted inwards 
   //     such that the thread block fits exactly in the matrix
 
 
