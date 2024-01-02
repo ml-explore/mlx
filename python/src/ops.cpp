@@ -3050,7 +3050,7 @@ void init_ops(py::module_& m) {
 
         Round to the given number of decimals.
 
-        Bascially performs:
+        Basically performs:
 
         .. code-block:: python
 
