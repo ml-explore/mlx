@@ -34,6 +34,30 @@ TEST_CASE("test save_safetensors") {
   CHECK(array_equal(test2, ones({2, 2})).item<bool>());
 }
 
+TEST_CASE("test gguf") {
+  std::string file_path = get_temp_file("test_arr.gguf");
+  printf("file_path: %s\n", file_path.c_str());
+  auto map = std::unordered_map<std::string, array>();
+  map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
+  map.insert({"test2", ones({3, 2})});
+  save_gguf(file_path, map);
+  printf("saved gguf\n");
+  printf("loading gguf\n");
+  auto safeDict = load_gguf(file_path);
+  printf("loaded gguf\n");
+  CHECK_EQ(safeDict.size(), 2);
+  CHECK_EQ(safeDict.count("test"), 1);
+  CHECK_EQ(safeDict.count("test2"), 1);
+  array test = safeDict.at("test");
+  CHECK_EQ(test.dtype(), float32);
+  CHECK_EQ(test.shape(), std::vector<int>({4}));
+  CHECK(array_equal(test, array({1.0, 2.0, 3.0, 4.0})).item<bool>());
+  array test2 = safeDict.at("test2");
+  CHECK_EQ(test2.dtype(), float32);
+  CHECK_EQ(test2.shape(), std::vector<int>({3, 2}));
+  CHECK(array_equal(test2, ones({3, 2})).item<bool>());
+}
+
 TEST_CASE("test single array serialization") {
   // Basic test
   {

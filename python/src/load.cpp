@@ -181,6 +181,16 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
       "[load_safetensors] Input must be a file-like object, or string");
 }
 
+std::unordered_map<std::string, array> mlx_load_gguf_helper(
+    py::object file,
+    StreamOrDevice s) {
+  if (py::isinstance<py::str>(file)) { // Assume .safetensors file path string
+    return load_gguf(py::cast<std::string>(file), s);
+  }
+
+  throw std::invalid_argument("[load_gguf] Input must be a string");
+}
+
 std::unordered_map<std::string, array> mlx_load_npz_helper(
     py::object file,
     StreamOrDevice s) {
@@ -264,6 +274,8 @@ DictOrArray mlx_load_helper(
     return mlx_load_npz_helper(file, s);
   } else if (format.value() == "npy") {
     return mlx_load_npy_helper(file, s);
+  } else if (format.value() == "gguf") {
+    return mlx_load_gguf_helper(file, s);
   } else {
     throw std::invalid_argument("[load] Unknown file format " + format.value());
   }
