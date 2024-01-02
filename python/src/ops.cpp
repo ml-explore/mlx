@@ -2426,7 +2426,7 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       repeat(array: array, repeats: int, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Repeate an array along a specified axis.
+      Repeat an array along a specified axis.
 
       Args:
           array (array): Input array.
