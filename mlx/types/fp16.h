@@ -68,7 +68,7 @@ struct _MLX_Float16 {
       inf_scale.u = uint32_t(0x77800000);
       zero_scale.u = uint32_t(0x08800000);
 
-      // Combine with magic and let addition do rouding
+      // Combine with magic and let addition do rounding
       magic_bits.u = x_expo_32;
       magic_bits.f += (std::abs(x) * inf_scale.f) * zero_scale.f;
 
