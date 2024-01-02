@@ -1742,7 +1742,7 @@ void init_ops(py::module_& m) {
       "a"_a,
       py::pos_only(),
       "source"_a,
-      "destiantion"_a,
+      "destination"_a,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
