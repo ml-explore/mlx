@@ -2253,7 +2253,7 @@ void init_ops(py::module_& m) {
               will be of elements less or equal to the element at the ``kth``
               index and all indices after will be of elements greater or equal
               to the element at the ``kth`` index.
-            axis (int or None, optional): Optional axis to partiton over.
+            axis (int or None, optional): Optional axis to partition over.
               If ``None``, this partitions over the flattened array.
               If unspecified, it defaults to ``-1``.
 
