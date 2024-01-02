@@ -102,6 +102,9 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.item(), 1)
         self.assertTrue(isinstance(x.item(), int))
 
+        x = mx.array(1, mx.bfloat16)
+        self.assertEqual(x.item(), 1.0)
+
         x = mx.array(1.0)
         self.assertEqual(x.size, 1)
         self.assertEqual(x.ndim, 0)
