@@ -581,7 +581,7 @@ to give us the active metal compute command encoder instead of building a
 new one and calling :meth:`compute_encoder->end_encoding` at the end. 
 MLX keeps adding kernels (compute pipelines) to the active command encoder 
 until some specified limit is hit or the compute encoder needs to be flushed 
-for synchronization. MLX also handles enqueuing and commiting the associated 
+for synchronization. MLX also handles enqueuing and committing the associated 
 command buffers as needed. We suggest taking a deeper dive into 
 :class:`metal::Device` if you would like to study this routine further.
 
