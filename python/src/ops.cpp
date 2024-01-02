@@ -3194,4 +3194,26 @@ void init_ops(py::module_& m) {
         Returns:
           result (array): The dequantized version of ``w``
       )pbdoc");
+  m.def(
+      "tensordot",
+      [](const array& a,
+         const array& b,
+         const IntOrIntVec& dims,
+         StreamOrDevice s) {
+        if (std::holds_alternative<std::monostate>(dims)) {
+          return tensordot(a, b, 2, s);
+        } else if (auto pv = std::get_if<int>(&dims); pv) {
+          return tensordot(a, b, *pv, s);
+        } else {
+          return tensordot(
+              a, b, std::get<std::vector<std::vector<int>>>(dims), s);
+        }
+      },
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      "dims"_a = 2,
+      py::kw_only(),
+      "stream"_a = none,
+      "");
 }

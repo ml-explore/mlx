@@ -15,6 +15,8 @@ namespace py = pybind11;
 using namespace mlx::core;
 
 using IntOrVec = std::variant<std::monostate, int, std::vector<int>>;
+using IntOrIntVec =
+    std::variant<std::monostate, int, std::vector<std::vector<int>>>;
 using ScalarOrArray = std::
     variant<py::bool_, py::int_, py::float_, std::complex<float>, py::object>;
 static constexpr std::monostate none{};
