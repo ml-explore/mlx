@@ -291,7 +291,7 @@ pointwise. This is captured in the templated function :meth:`axpby_impl`.
             auto y_offset = elem_to_loc(out_idx, y.shape(), y.strides());
 
             // We allocate the output to be contiguous and regularly strided
-            // (defaults to row major) and hence it doesn't need additonal mapping
+            // (defaults to row major) and hence it doesn't need additional mapping
             out_ptr[out_idx] = alpha * x_ptr[x_offset] + beta * y_ptr[y_offset];
         }
     }
