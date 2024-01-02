@@ -1,5 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
+from typing import Tuple
+
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 
@@ -251,4 +253,122 @@ class GroupNorm(Module):
             else self._group_norm
         )
         x = group_norm(x)
+        return (self.weight * x + self.bias) if "weight" in self else x
+
+
+class BatchNorm(Module):
+    r"""Applies Batch Normalization over a 2D or 3D input.
+
+    Computes
+
+    .. math::
+
+        y = \frac{x - E[x]}{\sqrt{Var[x]} + \epsilon} \gamma + \beta,
+
+    where :math:`\gamma` and :math:`\beta` are learned per feature dimension
+    parameters initialized at 1 and 0 respectively.
+
+    The input shape is specified as ``NC`` or ``NLC``, where ``N`` is the
+    batch, ``C`` is the number of features or channels, and ``L`` is the
+    sequence length. The output has the same shape as the input. For
+    four-dimensional arrays, the shape is ``NHWC``, where ``H`` and ``W`` are
+    the height and width respecitvely.
+
+    For more information on Batch Normalization, see the original paper `Batch
+    Normalization: Accelerating Deep Network Training by Reducing Internal
+    Covariate Shift <https://arxiv.org/abs/1502.03167>`_.
+
+    Args:
+        num_features (int): The feature dimension to normalize over.
+        eps (float, optional): A small additive constant for numerical
+            stability. Default: ``1e-5``.
+        momentum (float, optional): The momentum for updating the running
+            mean and variance. Default: ``0.1``.
+        affine (bool, optional): If ``True``, apply a learned affine
+            transformation after the normalization. Default: ``True``.
+        track_running_stats (bool, optional): If ``True``, track the
+            running mean and variance. Default: ``True``.
+
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> x = mx.random.normal((5, 4))
+        >>> bn = nn.BatchNorm(num_features=4, affine=True)
+        >>> output = bn(x)
+    """
+
+    def __init__(
+        self,
+        num_features: int,
+        eps: float = 1e-5,
+        momentum: float = 0.1,
+        affine: bool = True,
+        track_running_stats: bool = True,
+    ):
+        super().__init__()
+
+        self.num_features = num_features
+        self.eps = eps
+        self.momentum = momentum
+        self.track_running_stats = track_running_stats
+
+        if affine:
+            self.weight = mx.ones((num_features,))
+            self.bias = mx.zeros((num_features,))
+
+        if self.track_running_stats:
+            self._running_mean = mx.zeros((num_features,))
+            self._running_var = mx.ones((num_features,))
+
+    def _extra_repr(self):
+        return (
+            f"{self.num_features}, eps={self.eps}, "
+            f"momentum={self.momentum}, affine={'weight' in self}, "
+            f"track_running_stats={self.track_running_stats}"
+        )
+
+    def _calc_stats(self, x: mx.array) -> Tuple[mx.array, mx.array]:
+        """
+        Calculate the mean and variance of the input tensor.
+
+        Args:
+            x (mx.array): Input tensor.
+
+        Returns:
+            tuple: Tuple containing mean and variance.
+        """
+        reduction_axes = tuple(range(0, x.ndim - 1))
+        means = mx.mean(x, axis=reduction_axes, keepdims=True)
+        var = mx.var(x, axis=reduction_axes, keepdims=True)
+
+        if self.track_running_stats and self.training:
+            self._running_mean = (
+                1 - self.momentum
+            ) * self._running_mean + self.momentum * means
+            self._running_var = (
+                1 - self.momentum
+            ) * self._running_var + self.momentum * var
+        return means, var
+
+    def __call__(self, x: mx.array) -> mx.array:
+        """
+        Forward pass of BatchNorm.
+
+        Args:
+            x (mx.array): Input tensor.
+
+        Returns:
+            mx.array: Output tensor.
+        """
+
+        if x.ndim < 2 or x.ndim > 4:
+            raise ValueError(
+                f"Expected input tensor to have 2, 3 or 4 dimensions, but got {x.ndim}"
+            )
+
+        if self.training or not self.track_running_stats:
+            means, var = self._calc_stats(x)
+        else:
+            means, var = self._running_mean, self._running_var
+        x = (x - means) * mx.rsqrt(var + self.eps)
         return (self.weight * x + self.bias) if "weight" in self else x

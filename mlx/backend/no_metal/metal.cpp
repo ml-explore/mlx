@@ -7,6 +7,9 @@
 namespace mlx::core::metal {
 
 void new_stream(Stream) {}
+std::shared_ptr<void> new_scoped_memory_pool() {
+  return nullptr;
+}
 
 std::function<void()> make_task(
     array& arr,

@@ -33,10 +33,16 @@ from mlx.nn.layers.activations import (
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
 from mlx.nn.layers.convolution import Conv1d, Conv2d
-from mlx.nn.layers.dropout import Dropout
+from mlx.nn.layers.dropout import Dropout, Dropout2d
 from mlx.nn.layers.embedding import Embedding
 from mlx.nn.layers.linear import Linear
-from mlx.nn.layers.normalization import GroupNorm, InstanceNorm, LayerNorm, RMSNorm
+from mlx.nn.layers.normalization import (
+    BatchNorm,
+    GroupNorm,
+    InstanceNorm,
+    LayerNorm,
+    RMSNorm,
+)
 from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalEncoding
 from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.nn.layers.transformer import (
