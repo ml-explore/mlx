@@ -53,10 +53,10 @@ class TestBlas(mlx_tests.MLXTestCase):
         for dtype in self.dtypes:
             np_dtype = getattr(np, dtype)
             base_shapes = [4, 8, 16, 32, 64, 128]
-            pertubations = [-2, -1, 0, 1, 2]
+            perturbations = [-2, -1, 0, 1, 2]
 
             for dim in base_shapes:
-                for p in pertubations:
+                for p in perturbations:
                     shape_a = (dim + p, dim + p)
                     shape_b = (dim + p, dim + p)
                     self.__gemm_test(shape_a, shape_b, np_dtype)
