@@ -107,6 +107,15 @@ target_include_directories(
     $<INSTALL_INTERFACE:include/json>
 )
 
+# MESSAGE(STATUS "Downloading gguflib")
+# FetchContent_Declare(gguflib URL https://github.com/antirez/gguf-tools/archive/refs/heads/main.zip)
+# FetchContent_MakeAvailable(gguflib)
+# target_include_directories(
+#     mlx PUBLIC
+#     $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>
+#     $<INSTALL_INTERFACE:include/gguflib>
+# )
+
 find_library(ACCELERATE_LIBRARY Accelerate)
 if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
   message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")

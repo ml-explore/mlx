@@ -3,4 +3,7 @@ target_sources(
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/safetensor.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/gguflib/fp16.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/gguflib/gguflib.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/gguf.cpp
 )

@@ -1104,4 +1104,14 @@ void save_safetensors(
 void save_safetensors(
     const std::string& file,
     std::unordered_map<std::string, array>);
+
+/** Load array map from .gguf file format */
+std::unordered_map<std::string, array> load_gguf(
+    const std::string& file,
+    StreamOrDevice s = {});
+
+void save_gguf(
+    const std::string& file_,
+    std::unordered_map<std::string, array> a);
+
 } // namespace mlx::core
