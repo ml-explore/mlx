@@ -230,7 +230,7 @@ Let's re-implement our operation now in terms of our :class:`Axpby` primitive.
 
 This operation now handles the following:
 
-#. Upcast inputs and resolve the the output data type.
+#. Upcast inputs and resolve the output data type.
 #. Broadcast the inputs and resolve the output shape.
 #. Construct the primitive :class:`Axpby` using the given stream, ``alpha``, and ``beta``.
 #. Construct the output :class:`array` using the primitive and the inputs.
@@ -601,7 +601,7 @@ us the following :meth:`Axpby::jvp` and :meth:`Axpby::vjp` implementations.
             const std::vector<array>& tangents,
             const std::vector<int>& argnums) {
         // Forward mode diff that pushes along the tangents
-        // The jvp transform on the the primitive can built with ops
+        // The jvp transform on the primitive can built with ops
         // that are scheduled on the same stream as the primitive
 
         // If argnums = {0}, we only push along x in which case the

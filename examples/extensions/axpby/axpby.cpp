@@ -311,7 +311,7 @@ array Axpby::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   // Forward mode diff that pushes along the tangents
-  // The jvp transform on the the primitive can built with ops
+  // The jvp transform on the primitive can built with ops
   // that are scheduled on the same stream as the primitive
 
   // If argnums = {0}, we only push along x in which case the
