@@ -40,7 +40,7 @@ void all_reduce_dispatch(
   // Set grid dimensions
 
   // We make sure each thread has enough to do by making it read in
-  // atleast n_reads inputs
+  // at least n_reads inputs
   int n_reads = REDUCE_N_READS;
 
   // mod_in_size gives us the groups of n_reads needed to go over the entire
