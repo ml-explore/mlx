@@ -12,11 +12,24 @@ from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 
 class TestNN(mlx_tests.MLXTestCase):
+    def test_identity(self):
+        inputs = mx.zeros((10, 4))
+        layer = nn.Identity()
+        outputs = layer(inputs)
+        self.assertEqual(tuple(inputs.shape), tuple(outputs.shape))
+
     def test_linear(self):
         inputs = mx.zeros((10, 4))
         layer = nn.Linear(input_dims=4, output_dims=8)
         outputs = layer(inputs)
         self.assertEqual(tuple(outputs.shape), (10, 8))
+
+    def test_bilinear(self):
+        inputs1 = mx.zeros((10, 2))
+        inputs2 = mx.zeros((10, 4))
+        layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
+        outputs = layer(inputs1, inputs2)
+        self.assertEqual(tuple(outputs.shape), (10, 6))
 
     def test_cross_entropy(self):
         logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
