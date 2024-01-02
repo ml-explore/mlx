@@ -666,7 +666,7 @@ Let's look at the overall directory structure first.
 | └── setup.py
 
 * ``extensions/axpby/`` defines the C++ extension library
-* ``extensions/mlx_sample_extensions`` sets out the strucutre for the 
+* ``extensions/mlx_sample_extensions`` sets out the structure for the 
   associated python package
 * ``extensions/bindings.cpp`` provides python bindings for our operation
 * ``extensions/CMakeLists.txt`` holds CMake rules to build the library and 
@@ -840,7 +840,7 @@ This will result in a directory structure as follows:
 | ...
 
 When you try to install using the command ``python -m pip install .`` 
-(in ``extensions/``), the package will be installed with the same strucutre as 
+(in ``extensions/``), the package will be installed with the same structure as 
 ``extensions/mlx_sample_extensions`` and the C++ and metal library will be 
 copied along with the python binding since they are specified as ``package_data``.
 
