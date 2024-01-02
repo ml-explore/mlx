@@ -247,7 +247,7 @@ array tri(int n, int m, int k, Dtype type, StreamOrDevice s /* = {} */) {
 
 array tril(array x, int k, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
-    throw std::invalid_argument("[tril] array must be atleast 2-D");
+    throw std::invalid_argument("[tril] array must be at least 2-D");
   }
   auto mask = tri(x.shape(-2), x.shape(-1), k, x.dtype(), s);
   return where(mask, x, zeros_like(x, s), s);
@@ -255,7 +255,7 @@ array tril(array x, int k, StreamOrDevice s /* = {} */) {
 
 array triu(array x, int k, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
-    throw std::invalid_argument("[triu] array must be atleast 2-D");
+    throw std::invalid_argument("[triu] array must be at least 2-D");
   }
   auto mask = tri(x.shape(-2), x.shape(-1), k - 1, x.dtype(), s);
   return where(mask, zeros_like(x, s), x, s);
@@ -350,7 +350,7 @@ array squeeze(
     ax = ax < 0 ? ax + a.ndim() : ax;
     if (ax < 0 || ax >= a.ndim()) {
       std::ostringstream msg;
-      msg << "[squeeze] Invalid axies " << ax << " for array with " << a.ndim()
+      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
           << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
@@ -405,7 +405,7 @@ array expand_dims(
     ax = ax < 0 ? ax + out_ndim : ax;
     if (ax < 0 || ax >= out_ndim) {
       std::ostringstream msg;
-      msg << "[squeeze] Invalid axies " << ax << " for output array with "
+      msg << "[squeeze] Invalid axes " << ax << " for output array with "
           << a.ndim() << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
@@ -478,7 +478,7 @@ array slice(
 
   // If strides are negative, slice and then make a copy with axes flipped
   if (negatively_strided_axes.size() > 0) {
-    // First, take the slice of the positvely strided axes
+    // First, take the slice of the positively strided axes
     auto out = array(
         out_shape,
         a.dtype(),
@@ -517,7 +517,7 @@ array slice(
       // Gather moves the axis up, remainder needs to be squeezed
       out_reshape[i] = indices[i].size();
 
-      // Gather moves the axis up, needs to be tranposed
+      // Gather moves the axis up, needs to be transposed
       t_axes[ax] = i;
     }
 

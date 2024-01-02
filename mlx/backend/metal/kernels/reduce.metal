@@ -65,7 +65,7 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
     in += grid_size * N_READS;
   }
 
-  // Sepate case for the last set as we close the reduction size 
+  // Separate case for the last set as we close the reduction size 
   size_t curr_idx = (gid + r * (size_t)grid_size) * N_READS;
   if (curr_idx < in_size) {
     int max_reads = in_size - curr_idx;

@@ -198,7 +198,7 @@ class BatchNorm(Module):
     batch, ``C`` is the number of features or channels, and ``L`` is the
     sequence length. The output has the same shape as the input. For
     four-dimensional arrays, the shape is ``NHWC``, where ``H`` and ``W`` are
-    the height and width respecitvely.
+    the height and width respectively.
 
     For more information on Batch Normalization, see the original paper `Batch
     Normalization: Accelerating Deep Network Training by Reducing Internal

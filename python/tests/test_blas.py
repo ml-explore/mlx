@@ -53,10 +53,10 @@ class TestBlas(mlx_tests.MLXTestCase):
         for dtype in self.dtypes:
             np_dtype = getattr(np, dtype)
             base_shapes = [4, 8, 16, 32, 64, 128]
-            pertubations = [-2, -1, 0, 1, 2]
+            perturbations = [-2, -1, 0, 1, 2]
 
             for dim in base_shapes:
-                for p in pertubations:
+                for p in perturbations:
                     shape_a = (dim + p, dim + p)
                     shape_b = (dim + p, dim + p)
                     self.__gemm_test(shape_a, shape_b, np_dtype)
@@ -81,12 +81,12 @@ class TestBlas(mlx_tests.MLXTestCase):
 
             for B, M, N, K in shapes:
 
-                with self.subTest(tranpose="nn"):
+                with self.subTest(transpose="nn"):
                     shape_a = (B, M, K)
                     shape_b = (B, K, N)
                     self.__gemm_test(shape_a, shape_b, np_dtype)
 
-                with self.subTest(tranpose="nt"):
+                with self.subTest(transpose="nt"):
                     shape_a = (B, M, K)
                     shape_b = (B, N, K)
                     self.__gemm_test(
@@ -97,7 +97,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                         f_mx_b=lambda x: mx.transpose(x, (0, 2, 1)),
                     )
 
-                with self.subTest(tranpose="tn"):
+                with self.subTest(transpose="tn"):
                     shape_a = (B, K, M)
                     shape_b = (B, K, N)
                     self.__gemm_test(
@@ -108,7 +108,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                         f_mx_a=lambda x: mx.transpose(x, (0, 2, 1)),
                     )
 
-                with self.subTest(tranpose="tt"):
+                with self.subTest(transpose="tt"):
                     shape_a = (B, K, M)
                     shape_b = (B, N, K)
                     self.__gemm_test(
@@ -191,7 +191,7 @@ class TestBlas(mlx_tests.MLXTestCase):
         self.assertListEqual(list(c_npy.shape), list(c_mlx.shape))
         self.assertTrue(np.allclose(c_mlx, c_npy, atol=1e-6))
 
-        # Batched matmul with simple broadast
+        # Batched matmul with simple broadcast
         a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (16, 16)).astype(np.float32)
         c_npy = a_npy @ b_npy
@@ -213,7 +213,7 @@ class TestBlas(mlx_tests.MLXTestCase):
         self.assertListEqual(list(e_npy.shape), list(e_mlx.shape))
         self.assertTrue(np.allclose(e_mlx, e_npy, atol=1e-6))
 
-        # Batched and transposed matmul with simple broadast
+        # Batched and transposed matmul with simple broadcast
         a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (128, 16)).astype(np.float32)
         a_mlx = mx.array(a_npy)

@@ -88,7 +88,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a.dtype, mx.float32)
         self.assertEqual(a.item(), 3.0)
 
-        # Check comibinations with mlx arrays
+        # Check combinations with mlx arrays
         a = mx.add(mx.array(True), False)
         self.assertEqual(a.dtype, mx.bool_)
         self.assertEqual(a.item(), True)
