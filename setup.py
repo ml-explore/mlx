@@ -5,7 +5,6 @@ import os
 import re
 import subprocess
 import sys
-import sysconfig
 from pathlib import Path
 from subprocess import run
 
