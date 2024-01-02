@@ -100,7 +100,7 @@ void binary_op(
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
-    size_t nthreads = bopt == General ? out.size() : out.data_size();
+    size_t nthreads = out.data_size();
     MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
