@@ -312,7 +312,7 @@ array Axpby::jvp(
     const std::vector<int>& argnums) {
   // Forward mode diff that pushes along the tangents
   // The jvp transform on the the primitive can built with ops
-  // that are scheduled on the same stream as the primtive
+  // that are scheduled on the same stream as the primitive
 
   // If argnums = {0}, we only push along x in which case the
   // jvp is just the tangent scaled by alpha
@@ -345,7 +345,7 @@ std::vector<array> Axpby::vjp(
   return vjps;
 }
 
-/** Vectorize primitve along given axis */
+/** Vectorize primitive along given axis */
 std::pair<array, int> Axpby::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
