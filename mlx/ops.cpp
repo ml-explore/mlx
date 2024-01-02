@@ -350,7 +350,7 @@ array squeeze(
     ax = ax < 0 ? ax + a.ndim() : ax;
     if (ax < 0 || ax >= a.ndim()) {
       std::ostringstream msg;
-      msg << "[squeeze] Invalid axies " << ax << " for array with " << a.ndim()
+      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
           << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
@@ -405,7 +405,7 @@ array expand_dims(
     ax = ax < 0 ? ax + out_ndim : ax;
     if (ax < 0 || ax >= out_ndim) {
       std::ostringstream msg;
-      msg << "[squeeze] Invalid axies " << ax << " for output array with "
+      msg << "[squeeze] Invalid axes " << ax << " for output array with "
           << a.ndim() << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
