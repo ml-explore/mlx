@@ -12,11 +12,24 @@ from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 
 class TestNN(mlx_tests.MLXTestCase):
+    def test_identity(self):
+        inputs = mx.zeros((10, 4))
+        layer = nn.Identity()
+        outputs = layer(inputs)
+        self.assertEqual(tuple(inputs.shape), tuple(outputs.shape))
+
     def test_linear(self):
         inputs = mx.zeros((10, 4))
         layer = nn.Linear(input_dims=4, output_dims=8)
         outputs = layer(inputs)
         self.assertEqual(tuple(outputs.shape), (10, 8))
+
+    def test_bilinear(self):
+        inputs1 = mx.zeros((10, 2))
+        inputs2 = mx.zeros((10, 4))
+        layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
+        outputs = layer(inputs1, inputs2)
+        self.assertEqual(tuple(outputs.shape), (10, 6))
 
     def test_cross_entropy(self):
         logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
@@ -517,8 +530,8 @@ class TestNN(mlx_tests.MLXTestCase):
 
         # Batch norm
         bn = nn.BatchNorm(num_features=4, affine=True)
-        self.assertTrue(mx.allclose(bn._running_mean, mx.zeros_like(bn._running_mean)))
-        self.assertTrue(mx.allclose(bn._running_var, mx.ones_like(bn._running_var)))
+        self.assertTrue(mx.allclose(bn.running_mean, mx.zeros_like(bn.running_mean)))
+        self.assertTrue(mx.allclose(bn.running_var, mx.ones_like(bn.running_var)))
         y = bn(x)
         expected_y = mx.array(
             [
@@ -533,8 +546,8 @@ class TestNN(mlx_tests.MLXTestCase):
         expected_var = mx.array([0.928435, 1.00455, 1.04117, 0.94258])
         self.assertTrue(x.shape == y.shape)
         self.assertTrue(mx.allclose(y, expected_y, atol=1e-5))
-        self.assertTrue(mx.allclose(bn._running_mean, expected_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(bn._running_var, expected_var, atol=1e-5))
+        self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
+        self.assertTrue(mx.allclose(bn.running_var, expected_var, atol=1e-5))
 
         # test eval mode
         bn.eval()
@@ -576,8 +589,8 @@ class TestNN(mlx_tests.MLXTestCase):
 
         # Batch norm
         bn = nn.BatchNorm(num_features=C, affine=True)
-        self.assertTrue(mx.allclose(bn._running_mean, mx.zeros_like(bn._running_mean)))
-        self.assertTrue(mx.allclose(bn._running_var, mx.ones_like(bn._running_var)))
+        self.assertTrue(mx.allclose(bn.running_mean, mx.zeros_like(bn.running_mean)))
+        self.assertTrue(mx.allclose(bn.running_var, mx.ones_like(bn.running_var)))
         y = bn(x)
         self.assertTrue(x.shape == y.shape)
         expected_y = mx.array(
@@ -601,12 +614,32 @@ class TestNN(mlx_tests.MLXTestCase):
             [[[0.00207845, -5.3259e-05, 0.04755, -0.0697296, 0.0236228]]]
         )
         expected_var = mx.array([[[0.968415, 1.05322, 0.96913, 0.932305, 0.967224]]])
-        self.assertTrue(mx.allclose(bn._running_mean, expected_mean, atol=1e-5))
-        self.assertTrue(mx.allclose(bn._running_var, expected_var, atol=1e-5))
+        self.assertTrue(mx.allclose(bn.running_mean, expected_mean, atol=1e-5))
+        self.assertTrue(mx.allclose(bn.running_var, expected_var, atol=1e-5))
 
         x = mx.random.normal((N, L, C, L, C), dtype=mx.float32)
         with self.assertRaises(ValueError):
             y = bn(x)
+
+        # Check that the running stats are in the param dictionary
+        bn_parameters = bn.parameters()
+        self.assertIn("running_mean", bn_parameters)
+        self.assertIn("running_var", bn_parameters)
+        self.assertIn("weight", bn_parameters)
+        self.assertIn("bias", bn_parameters)
+
+        bn_trainable = bn.trainable_parameters()
+        self.assertNotIn("running_mean", bn_trainable)
+        self.assertNotIn("running_var", bn_trainable)
+        self.assertIn("weight", bn_trainable)
+        self.assertIn("bias", bn_trainable)
+
+        bn.unfreeze()
+        bn_trainable = bn.trainable_parameters()
+        self.assertNotIn("running_mean", bn_trainable)
+        self.assertNotIn("running_var", bn_trainable)
+        self.assertIn("weight", bn_trainable)
+        self.assertIn("bias", bn_trainable)
 
     def test_batch_norm_stats(self):
         batch_size = 2
@@ -618,8 +651,8 @@ class TestNN(mlx_tests.MLXTestCase):
         batch_norm = nn.BatchNorm(num_features)
 
         batch_norm.train()
-        running_mean = np.array(batch_norm._running_mean)
-        running_var = np.array(batch_norm._running_var)
+        running_mean = np.array(batch_norm.running_mean)
+        running_var = np.array(batch_norm.running_var)
 
         data = mx.random.normal((batch_size, num_features))
 
@@ -629,14 +662,14 @@ class TestNN(mlx_tests.MLXTestCase):
         variances = np.var(np_data, axis=0)
         running_mean = (1 - momentum) * running_mean + momentum * means
         running_var = (1 - momentum) * running_var + momentum * variances
-        self.assertTrue(np.allclose(batch_norm._running_mean, running_mean, atol=1e-5))
-        self.assertTrue(np.allclose(batch_norm._running_var, running_var, atol=1e-5))
+        self.assertTrue(np.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
+        self.assertTrue(np.allclose(batch_norm.running_var, running_var, atol=1e-5))
 
         batch_norm = nn.BatchNorm(num_features)
 
         batch_norm.train()
-        running_mean = np.array(batch_norm._running_mean)
-        running_var = np.array(batch_norm._running_var)
+        running_mean = np.array(batch_norm.running_mean)
+        running_var = np.array(batch_norm.running_var)
         data = mx.random.normal((batch_size, h, w, num_features))
 
         normalized_data = batch_norm(data)
@@ -645,8 +678,8 @@ class TestNN(mlx_tests.MLXTestCase):
         variances = np.var(np_data, axis=(0, 1, 2))
         running_mean = (1 - momentum) * running_mean + momentum * means
         running_var = (1 - momentum) * running_var + momentum * variances
-        self.assertTrue(np.allclose(batch_norm._running_mean, running_mean, atol=1e-5))
-        self.assertTrue(np.allclose(batch_norm._running_var, running_var, atol=1e-5))
+        self.assertTrue(np.allclose(batch_norm.running_mean, running_mean, atol=1e-5))
+        self.assertTrue(np.allclose(batch_norm.running_var, running_var, atol=1e-5))
 
     def test_conv1d(self):
         N = 5
@@ -838,11 +871,29 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, [5])
         self.assertEqual(y.dtype, mx.float32)
 
+    def test_softmax(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.softmax(x)
+        epsilon = 1e-4
+        expected_y = mx.array([0.6652, 0.0900, 0.2447])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
     def test_softplus(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.softplus(x)
         epsilon = 1e-4
         expected_y = mx.array([1.3133, 0.3133, 0.6931])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_softsign(self):
+        x = mx.array([1.0, -1.0, 0.0])
+        y = nn.softsign(x)
+        epsilon = 1e-4
+        expected_y = mx.array([0.5, -0.5, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
@@ -858,6 +909,15 @@ class TestNN(mlx_tests.MLXTestCase):
 
         y = nn.CELU(alpha=1.1)(x)
         expected_y = mx.array([1.0, -0.6568, 0.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.dtype, mx.float32)
+
+    def test_log_softmax(self):
+        x = mx.array([1.0, 2.0, 3.0])
+        y = nn.log_softmax(x)
+        epsilon = 1e-4
+        expected_y = mx.array([-2.4076, -1.4076, -0.4076])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
         self.assertEqual(y.shape, [3])
         self.assertEqual(y.dtype, mx.float32)
@@ -883,8 +943,17 @@ class TestNN(mlx_tests.MLXTestCase):
             mx.array([0.8651, -0.3034, 0.0000, 0.3752]),
         )
 
+    def test_hardswish(self):
+        x = mx.array([-3.0, -1.5, 0.0, 1.5, 3.0])
+        y = nn.hardswish(x)
+        epsilon = 1e-4
+        expected_y = mx.array([0.0, -0.375, 0.0, 1.125, 3.0])
+        self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
+        self.assertEqual(y.shape, [5])
+        self.assertEqual(y.dtype, mx.float32)
+
     def test_rope(self):
-        for kwargs in [{}, {"traditional": False}, {"base": 10000}]:
+        for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
             rope = nn.RoPE(4, **kwargs)
             shape = (1, 3, 4)
             x = mx.random.uniform(shape=shape)
@@ -926,6 +995,54 @@ class TestNN(mlx_tests.MLXTestCase):
         targets = mx.zeros((2, 4))
         loss = nn.losses.log_cosh_loss(inputs, targets, reduction="mean")
         self.assertAlmostEqual(loss.item(), 0.433781, places=6)
+
+    def test_dropout(self):
+        x = mx.ones((2, 4))
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4), dtype=mx.bfloat16)
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4), dtype=mx.float16)
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
+
+    def test_dropout2d(self):
+        x = mx.ones((2, 4, 4, 4))
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4, 4, 4), dtype=mx.bfloat16)
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4, 4, 4), dtype=mx.float16)
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
+
+    def test_dropout3d(self):
+        x = mx.ones((2, 4, 4, 4, 4))
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.bfloat16)
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.float16)
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
 
 
 if __name__ == "__main__":

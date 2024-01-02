@@ -1263,7 +1263,7 @@ void init_ops(py::module_& m) {
         If the axis is not specified the array is treated as a flattened
         1-D array prior to performing the take.
 
-        As an example, if the ``axis=1`` this is equialent to ``a[:, indices, ...]``.
+        As an example, if the ``axis=1`` this is equivalent to ``a[:, indices, ...]``.
 
         Args:
             a (array): Input array.
@@ -1742,7 +1742,7 @@ void init_ops(py::module_& m) {
       "a"_a,
       py::pos_only(),
       "source"_a,
-      "destiantion"_a,
+      "destination"_a,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -2253,7 +2253,7 @@ void init_ops(py::module_& m) {
               will be of elements less or equal to the element at the ``kth``
               index and all indices after will be of elements greater or equal
               to the element at the ``kth`` index.
-            axis (int or None, optional): Optional axis to partiton over.
+            axis (int or None, optional): Optional axis to partition over.
               If ``None``, this partitions over the flattened array.
               If unspecified, it defaults to ``-1``.
 
@@ -2404,6 +2404,40 @@ void init_ops(py::module_& m) {
 
       Returns:
           array: The resulting stacked array.
+    )pbdoc");
+  m.def(
+      "repeat",
+      [](const array& array,
+         int repeats,
+         std::optional<int> axis,
+         StreamOrDevice s) {
+        if (axis.has_value()) {
+          return repeat(array, repeats, axis.value(), s);
+        } else {
+          return repeat(array, repeats, s);
+        }
+      },
+      "array"_a,
+      py::pos_only(),
+      "repeats"_a,
+      "axis"_a = none,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      repeat(array: array, repeats: int, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Repeat an array along a specified axis.
+
+      Args:
+          array (array): Input array.
+          repeats (int): The number of repetitions for each element.
+          axis (int, optional): The axis in which to repeat the array along. If
+            unspecified it uses the flattened array of the input and repeats 
+            along axis 0.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+      Returns:
+          array: The resulting repeated array.
     )pbdoc");
   m.def(
       "clip",
@@ -2867,11 +2901,9 @@ void init_ops(py::module_& m) {
         Args:
             file (str): File to which the array is saved
             arr (array): Array to be saved.
-            retain_graph (bool, optional): Optional argument to retain graph
-              during array evaluation before saving. If not provided the graph
-              is retained if we are during a function transformation. Default:
-              None
-
+            retain_graph (bool, optional): Whether or not to retain the graph
+              during array evaluation. If left unspecified the graph is retained
+              only if saving is done in a function transformation. Default: ``None``
       )pbdoc");
   m.def(
       "savez",
@@ -2932,18 +2964,45 @@ void init_ops(py::module_& m) {
       &mlx_load_helper,
       "file"_a,
       py::pos_only(),
+      "format"_a = none,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        load(file: str, /, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
+        load(file: str, /, format: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
 
-        Load array(s) from a binary file in ``.npy`` or ``.npz`` format.
+        Load array(s) from a binary file in ``.npy``, ``.npz``, or ``.safetensors`` format.
 
         Args:
-            file (file, str): File in which the array is saved
-
+            file (file, str): File in which the array is saved.
+            format (str, optional): Format of the file. If ``None``, the format
+              is inferred from the file extension. Supported formats: ``npy``,
+              ``npz``, and ``safetensors``. Default: ``None``.
         Returns:
-            result (array, dict): The loaded array if ``.npy`` file or a dict mapping name to array if ``.npz`` file
+            result (array, dict):
+                A single array if loading from a ``.npy`` file or a dict mapping
+                names to arrays if loading from a ``.npz`` or ``.safetensors`` file.
+      )pbdoc");
+  m.def(
+      "save_safetensors",
+      &mlx_save_safetensor_helper,
+      "file"_a,
+      "arrays"_a,
+      py::pos_only(),
+      "retain_graph"_a = std::nullopt,
+      py::kw_only(),
+      R"pbdoc(
+        save_safetensors(file: str, arrays: Dict[str, array], /, retain_graph: Optional[bool] = None)
+
+        Save array(s) to a binary file in ``.safetensors`` format.
+
+        For more information on the format see https://huggingface.co/docs/safetensors/index.
+
+        Args:
+            file (file, str): File in which the array is saved>
+            arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+            retain_graph (bool, optional): Whether or not to retain the graph
+              during array evaluation. If left unspecified the graph is retained
+              only if saving is done in a function transformation. Default: ``None``.
       )pbdoc");
   m.def(
       "where",
@@ -2991,7 +3050,7 @@ void init_ops(py::module_& m) {
 
         Round to the given number of decimals.
 
-        Bascially performs:
+        Basically performs:
 
         .. code-block:: python
 

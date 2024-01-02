@@ -19,7 +19,7 @@ class Dropout(Module):
         super().__init__()
 
         if p < 0 or p >= 1:
-            raise ValueError("The dropout probability should be in [0, 1)")
+            raise ValueError(f"The dropout probability {p} is not in [0, 1)")
 
         self._p_1 = 1 - p
 
@@ -62,7 +62,7 @@ class Dropout2d(Module):
         super().__init__()
 
         if p < 0 or p >= 1:
-            raise ValueError("The dropout probability should be in [0, 1)")
+            raise ValueError(f"The dropout probability {p} is not in [0, 1)")
 
         self._p_1 = 1 - p
 
@@ -83,6 +83,55 @@ class Dropout2d(Module):
         # 4D input: (B, 1, 1, C)
         mask_shape = x.shape
         mask_shape[-2] = mask_shape[-3] = 1
+
+        mask = mx.random.bernoulli(p=self._p_1, shape=mask_shape)
+        return (1 / self._p_1) * mask * x
+
+
+class Dropout3d(Module):
+    r"""Apply 3D channel-wise dropout during training.
+
+    Randomly zero out entire channels independently with probability :math:`p`.
+    This layer expects the channels to be last, i.e., the input shape should be
+    `NDHWC` or `DHWC` where: `N` is the batch dimension, `D` is the depth,
+    `H` is the input image height, `W` is the input image width, and `C` is
+    the number of input channels.
+
+    The remaining channels are scaled by :math:`\frac{1}{1-p}` to
+    maintain the expected value of each element. Unlike traditional dropout,
+    which zeros individual entries, this layer zeros entire channels. This is
+    often beneficial for convolutional layers processing 3D data, like in
+    medical imaging or video processing.
+
+    Args:
+        p (float): Probability of zeroing a channel during training.
+    """
+
+    def __init__(self, p: float = 0.5):
+        super().__init__()
+
+        if p < 0 or p >= 1:
+            raise ValueError(f"The dropout probability {p} is not in [0, 1)")
+
+        self._p_1 = 1 - p
+
+    def _extra_repr(self):
+        return f"p={1-self._p_1}"
+
+    def __call__(self, x):
+        if x.ndim not in (4, 5):
+            raise ValueError(
+                f"Received input with {x.ndim} dimensions. Expected 4 or 5 dimensions."
+            )
+
+        if self._p_1 == 1 or not self.training:
+            return x
+
+        # Dropout is applied on the whole channel
+        # 4D input: (1, 1, 1, C)
+        # 5D input: (B, 1, 1, 1, C)
+        mask_shape = list(x.shape)
+        mask_shape[-2] = mask_shape[-3] = mask_shape[-4] = 1
 
         mask = mx.random.bernoulli(p=self._p_1, shape=mask_shape)
         return (1 / self._p_1) * mask * x

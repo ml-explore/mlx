@@ -98,6 +98,15 @@ elseif (MLX_BUILD_METAL)
     ${QUARTZ_LIB})
 endif()
 
+MESSAGE(STATUS "Downloading json")
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+FetchContent_MakeAvailable(json)
+target_include_directories(
+    mlx PUBLIC
+    $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>
+    $<INSTALL_INTERFACE:include/json>
+)
+
 find_library(ACCELERATE_LIBRARY Accelerate)
 if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
   message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
@@ -151,6 +160,8 @@ endif()
 if (MLX_BUILD_BENCHMARKS)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/benchmarks/cpp)
 endif()
+
+
 
 # ----------------------------- Installation -----------------------------
 include(GNUInstallDirs)

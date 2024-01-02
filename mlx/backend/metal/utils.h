@@ -18,7 +18,7 @@ void set_array_buffer(
   auto offset = a.data<char>() -
       static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
   enc->setBuffer(a_buf, offset, idx);
-  // MTL::Resource usage through argument buffer needs to be explicity
+  // MTL::Resource usage through argument buffer needs to be explicitly
   // flagged to enable hazard tracking
   compute_encoder->useResource(a_buf, MTL::ResourceUsageRead);
 }
