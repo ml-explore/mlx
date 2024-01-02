@@ -478,7 +478,7 @@ array slice(
 
   // If strides are negative, slice and then make a copy with axes flipped
   if (negatively_strided_axes.size() > 0) {
-    // First, take the slice of the positvely strided axes
+    // First, take the slice of the positively strided axes
     auto out = array(
         out_shape,
         a.dtype(),
