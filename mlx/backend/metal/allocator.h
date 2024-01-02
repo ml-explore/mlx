@@ -23,6 +23,7 @@ class BufferCache {
 
   MTL::Buffer* reuse_from_cache(size_t size);
   void recycle_to_cache(MTL::Buffer* buf);
+  void release_cached_buffers(size_t min_bytes_to_free);
 
  private:
   struct BufferHolder {
@@ -65,6 +66,7 @@ class MetalAllocator : public allocator::Allocator {
   // Allocation stats
   size_t peak_allocated_size_;
   size_t block_limit_;
+  size_t gc_limit_;
 };
 
 MetalAllocator& allocator();
