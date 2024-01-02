@@ -105,7 +105,7 @@ struct Conv2DInputBlockLoader {
         }
       }
 
-      // Zero pad otherwize
+      // Zero pad otherwise
       else {
 #pragma clang loop unroll(full)
         for (short j = 0; j < vec_size; ++j) {
