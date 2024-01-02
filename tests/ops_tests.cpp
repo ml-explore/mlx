@@ -1411,7 +1411,7 @@ TEST_CASE("test broadcast") {
   x.eval();
   CHECK_EQ(x.strides(), std::vector<size_t>{0, 0, 1});
 
-  // Broadcast on transposed arrray works
+  // Broadcast on transposed array works
   x = array({0, 1, 2, 3, 4, 5}, {2, 3});
   x = broadcast_to(transpose(x), {2, 3, 2});
   CHECK_EQ(x.shape(), std::vector<int>{2, 3, 2});
