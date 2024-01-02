@@ -1263,7 +1263,7 @@ void init_ops(py::module_& m) {
         If the axis is not specified the array is treated as a flattened
         1-D array prior to performing the take.
 
-        As an example, if the ``axis=1`` this is equialent to ``a[:, indices, ...]``.
+        As an example, if the ``axis=1`` this is equivalent to ``a[:, indices, ...]``.
 
         Args:
             a (array): Input array.
