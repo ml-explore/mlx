@@ -102,6 +102,9 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(x.item(), 1)
         self.assertTrue(isinstance(x.item(), int))
 
+        x = mx.array(1, mx.bfloat16)
+        self.assertEqual(x.item(), 1.0)
+
         x = mx.array(1.0)
         self.assertEqual(x.size, 1)
         self.assertEqual(x.ndim, 0)
@@ -949,7 +952,7 @@ class TestArray(mlx_tests.MLXTestCase):
         b_mx = a_mx[25:-50:-3]
         self.assertTrue(np.array_equal(b_np, b_mx))
 
-        # Negatie slice and ascending bounds
+        # Negative slice and ascending bounds
         b_np = a_np[0:20:-3]
         b_mx = a_mx[0:20:-3]
         self.assertTrue(np.array_equal(b_np, b_mx))

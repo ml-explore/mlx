@@ -212,7 +212,7 @@ void init_random(py::module_& parent_module) {
             upper (scalar or array): Upper bound of the domain.
             shape (list(int), optional): The shape of the output.
               Default is ``()``.
-            dtype (Dtype, optinoal): The data type of the output.
+            dtype (Dtype, optional): The data type of the output.
               Default is ``float32``.
             key (array, optional): A PRNG key. Default: None.
 

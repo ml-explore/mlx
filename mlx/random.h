@@ -16,7 +16,7 @@ class KeySequence {
   void seed(uint64_t seed);
   array next();
 
-  // static defualt
+  // static default
   static KeySequence& default_() {
     static KeySequence ks(0);
     return ks;

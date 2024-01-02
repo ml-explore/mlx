@@ -37,7 +37,7 @@ void free(Buffer buffer);
 Buffer malloc_or_wait(size_t size);
 
 class Allocator {
-  /** Abstract base clase for a memory allocator. */
+  /** Abstract base class for a memory allocator. */
  public:
   virtual Buffer malloc(size_t size) = 0;
   virtual void free(Buffer buffer) = 0;

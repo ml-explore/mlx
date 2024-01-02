@@ -57,7 +57,7 @@ void array_basics() {
   assert(z.shape(0) == 2);
   assert(z.shape(1) == 2);
 
-  // To actually run the compuation you must evaluate `z`.
+  // To actually run the computation you must evaluate `z`.
   // Under the hood, mlx records operations in a graph.
   // The variable `z` is a node in the graph which points to its operation
   // and inputs. When `eval` is called on an array (or arrays), the array and

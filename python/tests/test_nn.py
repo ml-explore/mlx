@@ -749,7 +749,7 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(y.dtype, mx.float32)
 
     def test_rope(self):
-        for kwargs in [{}, {"traditional": False}, {"base": 10000}]:
+        for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
             rope = nn.RoPE(4, **kwargs)
             shape = (1, 3, 4)
             x = mx.random.uniform(shape=shape)
@@ -863,6 +863,54 @@ class TestNN(mlx_tests.MLXTestCase):
             inputs, targets, alpha=alpha, beta=beta, epsilon=epsilon, reduction="mean"
         )
         self.assertAlmostEqual(loss.item(), expected_loss.item(), places=6)
+
+    def test_dropout(self):
+        x = mx.ones((2, 4))
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4), dtype=mx.bfloat16)
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4), dtype=mx.float16)
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
+
+    def test_dropout2d(self):
+        x = mx.ones((2, 4, 4, 4))
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4, 4, 4), dtype=mx.bfloat16)
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4, 4, 4), dtype=mx.float16)
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
+
+    def test_dropout3d(self):
+        x = mx.ones((2, 4, 4, 4, 4))
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.bfloat16)
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.float16)
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
 
 
 if __name__ == "__main__":

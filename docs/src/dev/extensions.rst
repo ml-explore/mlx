@@ -15,7 +15,7 @@ Introducing the Example
 -----------------------
 
 Let's say that you would like an operation that takes in two arrays, 
-``x`` and ``y``, scales them both by some coefficents ``alpha`` and ``beta``
+``x`` and ``y``, scales them both by some coefficients ``alpha`` and ``beta``
 respectively, and then adds them together to get the result 
 ``z = alpha * x + beta * y``. Well, you can very easily do that by just 
 writing out a function as follows:
@@ -69,7 +69,7 @@ C++ API:
 .. code-block:: C++
 
     /**
-    *  Scale and sum two vectors elementwise
+    *  Scale and sum two vectors element-wise
     *  z = alpha * x + beta * y
     *
     *  Follow numpy style broadcasting between x and y
@@ -230,7 +230,7 @@ Let's re-implement our operation now in terms of our :class:`Axpby` primitive.
 
 This operation now handles the following:
 
-#. Upcast inputs and resolve the the output data type.
+#. Upcast inputs and resolve the output data type.
 #. Broadcast the inputs and resolve the output shape.
 #. Construct the primitive :class:`Axpby` using the given stream, ``alpha``, and ``beta``.
 #. Construct the output :class:`array` using the primitive and the inputs.
@@ -284,14 +284,14 @@ pointwise. This is captured in the templated function :meth:`axpby_impl`.
         T alpha = static_cast<T>(alpha_);
         T beta = static_cast<T>(beta_);
 
-        // Do the elementwise operation for each output
+        // Do the element-wise operation for each output
         for (size_t out_idx = 0; out_idx < out.size(); out_idx++) {
             // Map linear indices to offsets in x and y
             auto x_offset = elem_to_loc(out_idx, x.shape(), x.strides());
             auto y_offset = elem_to_loc(out_idx, y.shape(), y.strides());
 
             // We allocate the output to be contiguous and regularly strided
-            // (defaults to row major) and hence it doesn't need additonal mapping
+            // (defaults to row major) and hence it doesn't need additional mapping
             out_ptr[out_idx] = alpha * x_ptr[x_offset] + beta * y_ptr[y_offset];
         }
     }
@@ -305,7 +305,7 @@ if we encounter an unexpected type.
 
     /** Fall back implementation for evaluation on CPU */
     void Axpby::eval(const std::vector<array>& inputs, array& out) {
-        // Check the inputs (registered in the op while contructing the out array)
+        // Check the inputs (registered in the op while constructing the out array)
         assert(inputs.size() == 2);
         auto& x = inputs[0];
         auto& y = inputs[1];
@@ -485,7 +485,7 @@ each data type.
 
     instantiate_axpby(float32, float);
     instantiate_axpby(float16, half);
-    instantiate_axpby(bflot16, bfloat16_t);
+    instantiate_axpby(bfloat16, bfloat16_t);
     instantiate_axpby(complex64, complex64_t);
 
 This kernel will be compiled into a metal library ``mlx_ext.metallib`` as we 
@@ -537,7 +537,7 @@ below.
         compute_encoder->setComputePipelineState(kernel);
 
         // Kernel parameters are registered with buffer indices corresponding to
-        // those in the kernel decelaration at axpby.metal
+        // those in the kernel declaration at axpby.metal
         int ndim = out.ndim();
         size_t nelem = out.size();
 
@@ -568,7 +568,7 @@ below.
         // Fix the 3D size of the launch grid (in terms of threads)
         MTL::Size grid_dims = MTL::Size(nelem, 1, 1);
 
-        // Launch the grid with the given number of threads divded among
+        // Launch the grid with the given number of threads divided among
         // the given threadgroups
         compute_encoder->dispatchThreads(grid_dims, group_dims);
     }
@@ -581,7 +581,7 @@ to give us the active metal compute command encoder instead of building a
 new one and calling :meth:`compute_encoder->end_encoding` at the end. 
 MLX keeps adding kernels (compute pipelines) to the active command encoder 
 until some specified limit is hit or the compute encoder needs to be flushed 
-for synchronization. MLX also handles enqueuing and commiting the associated 
+for synchronization. MLX also handles enqueuing and committing the associated 
 command buffers as needed. We suggest taking a deeper dive into 
 :class:`metal::Device` if you would like to study this routine further.
 
@@ -601,8 +601,8 @@ us the following :meth:`Axpby::jvp` and :meth:`Axpby::vjp` implementations.
             const std::vector<array>& tangents,
             const std::vector<int>& argnums) {
         // Forward mode diff that pushes along the tangents
-        // The jvp transform on the the primitive can built with ops
-        // that are scheduled on the same stream as the primtive
+        // The jvp transform on the primitive can built with ops
+        // that are scheduled on the same stream as the primitive
 
         // If argnums = {0}, we only push along x in which case the
         // jvp is just the tangent scaled by alpha
@@ -642,7 +642,7 @@ own :class:`Primitive`.
 
 .. code-block:: C++
 
-    /** Vectorize primitve along given axis */
+    /** Vectorize primitive along given axis */
     std::pair<array, int> Axpby::vmap(
             const std::vector<array>& inputs,
             const std::vector<int>& axes) {
@@ -666,7 +666,7 @@ Let's look at the overall directory structure first.
 | └── setup.py
 
 * ``extensions/axpby/`` defines the C++ extension library
-* ``extensions/mlx_sample_extensions`` sets out the strucutre for the 
+* ``extensions/mlx_sample_extensions`` sets out the structure for the 
   associated python package
 * ``extensions/bindings.cpp`` provides python bindings for our operation
 * ``extensions/CMakeLists.txt`` holds CMake rules to build the library and 
@@ -697,7 +697,7 @@ are already provided, adding our :meth:`axpby` becomes very simple!
             py::kw_only(),
             "stream"_a = py::none(),
             R"pbdoc(
-                Scale and sum two vectors elementwise
+                Scale and sum two vectors element-wise
                 ``z = alpha * x + beta * y``
                 
                 Follows numpy style broadcasting between ``x`` and ``y``
@@ -840,7 +840,7 @@ This will result in a directory structure as follows:
 | ...
 
 When you try to install using the command ``python -m pip install .`` 
-(in ``extensions/``), the package will be installed with the same strucutre as 
+(in ``extensions/``), the package will be installed with the same structure as 
 ``extensions/mlx_sample_extensions`` and the C++ and metal library will be 
 copied along with the python binding since they are specified as ``package_data``.
 
