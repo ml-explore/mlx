@@ -1611,8 +1611,8 @@ class TestOps(mlx_tests.MLXTestCase):
         types = [np.uint16, np.uint32, np.int32, np.float16, np.float32]
         for s1, s2 in sizes:
             for t in types:
-                a_np = (100 * np.random.uniform(size=s1)).astype(t)
-                b_np = (100 * np.random.uniform(size=s2)).astype(t)
+                a_np = np.random.uniform(1, 100, size=s1).astype(t)
+                b_np = np.random.uniform(1, 100, size=s2).astype(t)
                 np_out = np.divmod(a_np, b_np)
                 mx_out = mx.divmod(mx.array(a_np), mx.array(b_np))
                 self.assertTrue(
