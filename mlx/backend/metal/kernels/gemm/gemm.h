@@ -93,7 +93,7 @@ struct BlockLoader {
           tmp_idx[j] = bj + j < src_tile_dim.x ? j : 0;
         }
 
-        // Read all valid indcies into tmp_val
+        // Read all valid indices into tmp_val
 #pragma clang loop unroll(full)
         for (short j = 0; j < vec_size; j++) {
           tmp_val[j] = src[i * src_ld + tmp_idx[j]];
