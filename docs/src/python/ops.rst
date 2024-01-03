@@ -104,6 +104,7 @@ Operations
    take_along_axis
    tan
    tanh
+   tensordot
    transpose
    tri
    tril
