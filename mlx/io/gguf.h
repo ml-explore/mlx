@@ -9,6 +9,4 @@ extern "C" {
 #include <gguflib.h>
 }
 
-namespace mlx::core {
-
-} // namespace mlx::core
+namespace mlx::core {} // namespace mlx::core
