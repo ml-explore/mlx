@@ -82,8 +82,8 @@ class QuantizedLinear(Module):
         x = mx.quantized_matmul(
             x,
             self.weight.T,
-            scales=self.scales,
-            biases=self.biases,
+            scales=self.scales.T,
+            biases=self.biases.T,
             group_size=self.group_size,
             bits=self.bits,
         )

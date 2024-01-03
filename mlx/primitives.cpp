@@ -1715,8 +1715,8 @@ std::vector<array> QuantizedMatmul::vjp(
       vjps.push_back(quantized_matmul(
           cotan,
           transpose(primals[1], {1, 0}, stream()),
-          primals[2],
-          primals[3],
+          transpose(primals[2], {1, 0}, stream()),
+          transpose(primals[3], {1, 0}, stream()),
           group_size_,
           bits_,
           stream()));
@@ -1725,7 +1725,7 @@ std::vector<array> QuantizedMatmul::vjp(
     // gradient wrt to w_q, scales or biases
     else {
       throw std::runtime_error(
-          "QuantizedMatmul::vjp cannot compute gradient wrt the quantized matrix.");
+          "QuantizedMatmul::vjp no gradient wrt the quantized matrix yet.");
     }
   }
   return vjps;
@@ -1735,7 +1735,7 @@ array QuantizedMatmul::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+  throw std::runtime_error("QuantizedMatmul::jvp NYI");
 }
 
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
