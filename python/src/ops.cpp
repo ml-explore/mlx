@@ -3091,7 +3091,7 @@ void init_ops(py::module_& m) {
           scales (array): The scales to use per ``group_size`` elements of ``w``
           biases (array): The biases to use per ``group_size`` elements of ``w``
           transpose (bool, optional): Defines whether to multiply with the
-            transposed ``w`` or not, namelye whether we are performing
+            transposed ``w`` or not, namely whether we are performing
             ``x @ w.T`` or ``x @ w``. (default: ``True``)
           group_size (int, optional): The size of the group in ``w`` that
             shares a scale and bias. (default: ``64``)
