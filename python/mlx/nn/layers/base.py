@@ -89,10 +89,12 @@ class Module(dict):
         self[key] = val
 
     def load_weights(
-        self, file_or_weights: Union[str, List[Tuple[str, mx.array]]], strict=True
+        self,
+        file_or_weights: Union[str, List[Tuple[str, mx.array]]],
+        strict: bool = True,
     ):
         """
-        Update the model's weights from a ``.npz`` file or list.
+        Update the model's weights from a ``.npz`` or a list.
 
         Args:
             file_or_weights (str or list(tuple(str, mx.array))): The path to
@@ -162,7 +164,7 @@ class Module(dict):
 
     def save_weights(self, file: str):
         """
-        Save the model's weights to a `.npz` file.
+        Save the model's weights to a ``.npz`` file.
         """
         mx.savez(file, **dict(tree_flatten(self.parameters())))
 
