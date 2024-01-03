@@ -89,7 +89,7 @@ void save_gguf(
     std::optional<bool> retain_graph) {
   std::string file = file_;
 
-  // Add .safetensors to file name if it is not there
+  // Add .gguf to file name if it is not there
   if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf")
     file += ".gguf";
 
