@@ -1547,6 +1547,33 @@ class TestOps(mlx_tests.MLXTestCase):
                     dims=([2, 1, 3], [1, 2, 0]),
                 )
 
+    def test_inner(self):
+        x = mx.array([1.0, 2.0, 3.0])
+        y = mx.array([0.0, 1.0, 0.0])
+        self.assertEqualArray(
+            mx.inner(x, y), mx.array(np.inner(np.array(x), np.array(y)))
+        )
+        x = mx.random.normal((1, 1, 2))
+        y = mx.random.normal((3, 2))
+        self.assertEqualArray(
+            mx.inner(x, y), mx.array(np.inner(np.array(x), np.array(y)))
+        )
+        x = mx.random.normal((2, 3, 4))
+        y = mx.random.normal((4,))
+        self.assertEqualArray(
+            mx.inner(x, y), mx.array(np.inner(np.array(x), np.array(y)))
+        )
+
+    def test_outer(self):
+        x = mx.ones((5,))
+        y = mx.linspace(-2, 2, 5)
+        self.assertEqualArray(mx.outer(x, y), mx.array(np.outer(x, y)))
+        x = 1j * mx.linspace(2, -2, 5)
+        y = mx.ones(
+            5,
+        )
+        self.assertEqualArray(mx.outer(x, y), mx.array(np.outer(x, y)))
+
 
 if __name__ == "__main__":
     unittest.main()
