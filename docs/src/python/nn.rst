@@ -170,14 +170,13 @@ In detail:
   :meth:`mlx.core.value_and_grad`
 
 .. autosummary::
-   :recursive:
    :toctree: _autosummary
 
    value_and_grad
-   Module
 
 .. toctree::
 
+   nn/module
    nn/layers
    nn/functions
    nn/losses

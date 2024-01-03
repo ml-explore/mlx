@@ -1061,6 +1061,19 @@ array dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
+/** TensorDot returns a contraction of a and b over multiple dimensions. */
+array tensordot(
+    const array& a,
+    const array& b,
+    const int dims = 2,
+    StreamOrDevice s = {});
+
+array tensordot(
+    const array& a,
+    const array& b,
+    const std::pair<std::vector<int>, std::vector<int>>& dims,
+    StreamOrDevice s = {});
+
 /** Load array map from .safetensors file format */
 std::unordered_map<std::string, array> load_safetensors(
     std::shared_ptr<io::Reader> in_stream,
