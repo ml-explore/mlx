@@ -2905,4 +2905,27 @@ array tensordot(
   return reshape(matmul(x, y, s), rshape, s);
 }
 
+array outer(const array& a, const array& b, StreamOrDevice s /** = {}*/) {
+  if (a.ndim() != 1 || b.ndim() != 1) {
+    throw std::invalid_argument("[outer] a and b must be 1-dimensional.");
+  }
+
+  return multiply(reshape(a, {a.shape(0), 1}, s), b, s);
+}
+
+array inner(const array& a, const array& b, StreamOrDevice s /** = {}*/) {
+  if (a.dtype() != b.dtype()) {
+    throw std::invalid_argument("[inner] a and b must have the same dtype.");
+  }
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    return multiply(a, b, s);
+  }
+  if (a.shape(-1) != b.shape(-1)) {
+    throw std::invalid_argument(
+        "[inner] a and b must have the same last dimension.");
+  }
+
+  return tensordot(a, b, {{-1}, {-1}}, s);
+}
+
 } // namespace mlx::core
