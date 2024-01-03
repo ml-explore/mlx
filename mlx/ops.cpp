@@ -753,6 +753,43 @@ array repeat(const array& arr, int repeats, StreamOrDevice s) {
   return repeat(flatten(arr, s), repeats, 0, s);
 }
 
+/** Replicating array a specified number of times along each axis */
+array tile(const array& a, std::vector<int> repeats, StreamOrDevice s) {
+  if (repeats.size() == 0) {
+    return a;
+  }
+
+  for (size_t i = 0; i < repeats.size(); i++) {
+    if (repeats[i] < 0) {
+      throw std::invalid_argument(
+          "[tile] Negative repeat value found at index " + std::to_string(i));
+    }
+  }
+
+  int d = repeats.size();
+  array arr = copy(a, s);
+
+  if (d < arr.ndim()) {
+    repeats.insert(repeats.begin(), arr.ndim() - d, 1);
+  } else if (d > arr.ndim()) {
+    arr = expand_dims(arr, std::vector<int>(d - arr.ndim(), 0), s);
+  }
+
+  for (size_t i = 0; i < arr.shape().size(); i++) {
+    if (repeats[i] != 1) {
+      arr = expand_dims(arr, i, s);
+      std::vector<int> new_shape(arr.shape());
+      new_shape[i] *= repeats[i];
+      arr = broadcast_to(arr, new_shape, s);
+      new_shape[i] = -1;
+      new_shape.erase(new_shape.begin() + i + 1);
+      arr = reshape(arr, new_shape, s);
+    }
+  }
+
+  return arr;
+}
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,

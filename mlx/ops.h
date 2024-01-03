@@ -218,6 +218,9 @@ array stack(const std::vector<array>& arrays, StreamOrDevice s = {});
 array repeat(const array& arr, int repeats, int axis, StreamOrDevice s = {});
 array repeat(const array& arr, int repeats, StreamOrDevice s = {});
 
+/** Replicating array a specified number of times along each axis */
+array tile(const array& arr, std::vector<int> repeats, StreamOrDevice s = {});
+
 /** Permutes the dimensions according to the given axes. */
 array transpose(const array& a, std::vector<int> axes, StreamOrDevice s = {});
 inline array transpose(

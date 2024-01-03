@@ -2440,6 +2440,29 @@ void init_ops(py::module_& m) {
           array: The resulting repeated array.
     )pbdoc");
   m.def(
+      "tile",
+      [](const array& array, std::vector<int> repeats, StreamOrDevice s) {
+        return tile(array, repeats, s);
+      },
+      "array"_a,
+      py::pos_only(),
+      "repeats"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      tile(array: array, repeats: array, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Replicating array a specified number of times along each axis.
+
+      Args:
+          array (array): Input array.
+          repeats (array): The number of repetitions along each axis.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
+
+      Returns:
+          array: The resulting tiled array.
+    )pbdoc");
+  m.def(
       "clip",
       [](const array& a,
          const std::optional<ScalarOrArray>& min,
