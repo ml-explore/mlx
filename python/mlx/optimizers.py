@@ -790,7 +790,7 @@ class LambdaLR(LRScheduler):
 
     Args:
         optimizer (Optimizer): The optimizer for which to adjust the learning rate.
-        lr_lambda (Callable): A function or a list of functions defining the decay factor.
+        lr_lambda (Callable): A function defining the decay factor.
         last_epoch (int, optional): The index of the last epoch. Default: -1.
     """
 
