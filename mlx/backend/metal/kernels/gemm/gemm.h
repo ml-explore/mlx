@@ -93,13 +93,13 @@ struct BlockLoader {
           tmp_idx[j] = bj + j < src_tile_dim.x ? j : 0;
         }
 
-        // Read all valid indcies into tmp_val
+        // Read all valid indices into tmp_val
 #pragma clang loop unroll(full)
         for (short j = 0; j < vec_size; j++) {
           tmp_val[j] = src[i * src_ld + tmp_idx[j]];
         }
 
-        // Zero out uneeded values
+        // Zero out unneeded values
 #pragma clang loop unroll(full)
         for (short j = 0; j < vec_size; j++) {
           tmp_val[j] = bj + j < src_tile_dim.x ? tmp_val[j] : T(0);
@@ -241,7 +241,7 @@ struct BlockMMA {
       }
 
       simdgroup_barrier(mem_flags::mem_none);
-// Multiply and accumulate into resulr simdgroup matrices
+// Multiply and accumulate into result simdgroup matrices
 #pragma clang loop unroll(full)
       for (short i = 0; i < TM; i++) {
 #pragma clang loop unroll(full)

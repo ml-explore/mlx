@@ -49,7 +49,7 @@ class Primitive {
    * A primitive must know how to evaluate itself on
    * the CPU/GPU for the given inputs and populate the output array.
    *
-   * To avoid unecessary allocations, the evaluation function
+   * To avoid unnecessary allocations, the evaluation function
    * is responsible for allocating space for the array.
    */
   virtual void eval_cpu(const std::vector<array>& inputs, array& out) = 0;
@@ -84,7 +84,7 @@ class Primitive {
   /** Print the primitive. */
   virtual void print(std::ostream& os) = 0;
 
-  /** Equivalence check defaults to false unless overriden by the primitive */
+  /** Equivalence check defaults to false unless overridden by the primitive */
   virtual bool is_equivalent(const Primitive& other) const {
     return false;
   }

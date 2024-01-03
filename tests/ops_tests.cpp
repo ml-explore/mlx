@@ -1411,7 +1411,7 @@ TEST_CASE("test broadcast") {
   x.eval();
   CHECK_EQ(x.strides(), std::vector<size_t>{0, 0, 1});
 
-  // Broadcast on transposed arrray works
+  // Broadcast on transposed array works
   x = array({0, 1, 2, 3, 4, 5}, {2, 3});
   x = broadcast_to(transpose(x), {2, 3, 2});
   CHECK_EQ(x.shape(), std::vector<int>{2, 3, 2});
@@ -1733,7 +1733,7 @@ TEST_CASE("test scatter") {
   out = scatter(in, inds, updates, 0);
   CHECK(array_equal(out, reshape(arange(16, float32), {4, 4})).item<bool>());
 
-  // Irregular strided index and reduce collison test
+  // Irregular strided index and reduce collision test
   in = zeros({10}, float32);
   inds = broadcast_to(array(3), {10});
   updates = ones({10, 1}, float32);
@@ -1750,7 +1750,7 @@ TEST_CASE("test scatter") {
   out = scatter_max(array(1), {}, array(2), std::vector<int>{});
   CHECK_EQ(out.item<int>(), 2);
 
-  // Irregularaly strided updates test
+  // Irregularly strided updates test
   in = ones({3, 3});
   updates = broadcast_to(array({0, 0, 0}), {1, 3, 3});
   inds = array({0});
@@ -2352,4 +2352,40 @@ TEST_CASE("test tile") {
   CHECK(array_equal({expected_6}, {tiled_6}).item<bool>());
 
   CHECK_THROWS_AS(tile(data_2, {-1, 2}), std::invalid_argument);
+}
+TEST_CASE("tensordot") {
+  auto x = reshape(arange(60.), {3, 4, 5});
+  auto y = reshape(arange(24.), {4, 3, 2});
+  auto z = tensordot(x, y, {{1, 0}, {0, 1}});
+  auto expected = array(
+      {4400, 4730, 4532, 4874, 4664, 5018, 4796, 5162, 4928, 5306}, {5, 2});
+  CHECK(array_equal(z, expected).item<bool>());
+  x = reshape(arange(360.), {3, 4, 5, 6});
+  y = reshape(arange(360.), {6, 4, 5, 3});
+  CHECK_THROWS_AS(
+      tensordot(x, y, {{2, 1, 3}, {1, 2, 0}}), std::invalid_argument);
+  x = reshape(arange(60.), {3, 4, 5});
+  y = reshape(arange(120.), {4, 5, 6});
+  z = tensordot(x, y, 2);
+  expected = array(
+      {14820.,
+       15010.,
+       15200.,
+       15390.,
+       15580.,
+       15770.,
+       37620.,
+       38210.,
+       38800.,
+       39390.,
+       39980.,
+       40570.,
+       60420.,
+       61410.,
+       62400.,
+       63390.,
+       64380.,
+       65370.},
+      {3, 6});
+  CHECK(array_equal(z, expected).item<bool>());
 }

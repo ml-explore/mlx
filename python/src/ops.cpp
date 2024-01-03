@@ -1263,7 +1263,7 @@ void init_ops(py::module_& m) {
         If the axis is not specified the array is treated as a flattened
         1-D array prior to performing the take.
 
-        As an example, if the ``axis=1`` this is equialent to ``a[:, indices, ...]``.
+        As an example, if the ``axis=1`` this is equivalent to ``a[:, indices, ...]``.
 
         Args:
             a (array): Input array.
@@ -1742,7 +1742,7 @@ void init_ops(py::module_& m) {
       "a"_a,
       py::pos_only(),
       "source"_a,
-      "destiantion"_a,
+      "destination"_a,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -2253,7 +2253,7 @@ void init_ops(py::module_& m) {
               will be of elements less or equal to the element at the ``kth``
               index and all indices after will be of elements greater or equal
               to the element at the ``kth`` index.
-            axis (int or None, optional): Optional axis to partiton over.
+            axis (int or None, optional): Optional axis to partition over.
               If ``None``, this partitions over the flattened array.
               If unspecified, it defaults to ``-1``.
 
@@ -2426,13 +2426,13 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       repeat(array: array, repeats: int, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Repeate an array along a specified axis.
+      Repeat an array along a specified axis.
 
       Args:
           array (array): Input array.
           repeats (int): The number of repetitions for each element.
           axis (int, optional): The axis in which to repeat the array along. If
-            unspecified it uses the flattened array of the input and repeates 
+            unspecified it uses the flattened array of the input and repeats 
             along axis 0.
           stream (Stream, optional): Stream or device. Defaults to ``None``.
 
@@ -3073,7 +3073,7 @@ void init_ops(py::module_& m) {
 
         Round to the given number of decimals.
 
-        Bascially performs:
+        Basically performs:
 
         .. code-block:: python
 
@@ -3216,5 +3216,45 @@ void init_ops(py::module_& m) {
 
         Returns:
           result (array): The dequantized version of ``w``
+      )pbdoc");
+  m.def(
+      "tensordot",
+      [](const array& a,
+         const array& b,
+         const std::variant<int, std::vector<std::vector<int>>>& dims,
+         StreamOrDevice s) {
+        if (auto pv = std::get_if<int>(&dims); pv) {
+          return tensordot(a, b, *pv, s);
+        } else {
+          auto x = std::get<std::vector<std::vector<int>>>(dims);
+          if (x.size() != 2) {
+            throw std::invalid_argument(
+                "[tensordot] dims must be a list of two lists.");
+          }
+          return tensordot(a, b, {x[0], x[1]}, s);
+        }
+      },
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      "dims"_a = 2,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        tensordot(a: array, b: array, /, dims: Union[int, List[List[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Compute the tensor dot product along the specified axes.
+
+        Args:
+          a (array): Input array
+          b (array): Input array
+          dims (int or list(list(int)), optional): The number of dimensions to
+            sum over. If an integer is provided, then sum over the last
+            ``dims`` dimensions of ``a`` and the first ``dims`` dimensions of
+            ``b``. If a list of lists is provided, then sum over the
+            corresponding dimensions of ``a`` and ``b``. (default: 2)
+        
+        Returns:
+          result (array): The tensor dot product.
       )pbdoc");
 }

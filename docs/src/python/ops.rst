@@ -105,6 +105,7 @@ Operations
    tan
    tanh
    tile
+   tensordot
    transpose
    tri
    tril

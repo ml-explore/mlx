@@ -7,7 +7,7 @@
 using namespace mlx::core;
 
 TEST_CASE("test arange") {
-  // Check type is inferred correclty
+  // Check type is inferred correctly
   {
     auto x = arange(10);
     CHECK_EQ(x.dtype(), int32);

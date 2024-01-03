@@ -88,7 +88,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a.dtype, mx.float32)
         self.assertEqual(a.item(), 3.0)
 
-        # Check comibinations with mlx arrays
+        # Check combinations with mlx arrays
         a = mx.add(mx.array(True), False)
         self.assertEqual(a.dtype, mx.bool_)
         self.assertEqual(a.item(), True)
@@ -1592,6 +1592,23 @@ class TestOps(mlx_tests.MLXTestCase):
         expected_6 = mx.tile(mx.array(data_2), [1, 1, 1, 1])
         tiled_6 = np.tile(data_2, (1, 1, 1, 1))
         self.assertEqualArray(expected_6, mx.array(tiled_6))
+
+
+    def test_tensordot(self):
+        x = mx.arange(60.0).reshape(3, 4, 5)
+        y = mx.arange(24.0).reshape(4, 3, 2)
+        z = mx.tensordot(x, y, dims=([1, 0], [0, 1]))
+        self.assertEqualArray(z, mx.array(np.tensordot(x, y, axes=([1, 0], [0, 1]))))
+        x = mx.random.normal((3, 4, 5))
+        y = mx.random.normal((4, 5, 6))
+        z = mx.tensordot(x, y, dims=2)
+        self.assertEqualArray(z, mx.array(np.tensordot(x, y, axes=2)))
+        x = mx.random.normal((3, 5, 4, 6))
+        y = mx.random.normal((6, 4, 5, 3))
+        z = mx.tensordot(x, y, dims=([2, 1, 3], [1, 2, 0]))
+        self.assertEqualArray(
+            z, mx.array(np.tensordot(x, y, axes=([2, 1, 3], [1, 2, 0])))
+        )
 
 
 if __name__ == "__main__":

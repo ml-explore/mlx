@@ -12,7 +12,7 @@ namespace mlx::core {
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
- *  Scale and sum two vectors elementwise
+ *  Scale and sum two vectors element-wise
  *  z = alpha * x + beta * y
  *
  *  Follow numpy style broadcasting between x and y
@@ -39,7 +39,7 @@ class Axpby : public Primitive {
    * A primitive must know how to evaluate itself on the CPU/GPU
    * for the given inputs and populate the output array.
    *
-   * To avoid unecessary allocations, the evaluation function
+   * To avoid unnecessary allocations, the evaluation function
    * is responsible for allocating space for the array.
    */
   void eval_cpu(const std::vector<array>& inputs, array& out) override;

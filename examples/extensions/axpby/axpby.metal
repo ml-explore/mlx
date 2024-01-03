@@ -59,5 +59,5 @@ template <typename T>
 
 instantiate_axpby(float32, float);
 instantiate_axpby(float16, half);
-instantiate_axpby(bflot16, bfloat16_t);
+instantiate_axpby(bfloat16, bfloat16_t);
 instantiate_axpby(complex64, complex64_t);

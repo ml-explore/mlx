@@ -247,7 +247,7 @@ array tri(int n, int m, int k, Dtype type, StreamOrDevice s /* = {} */) {
 
 array tril(array x, int k, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
-    throw std::invalid_argument("[tril] array must be atleast 2-D");
+    throw std::invalid_argument("[tril] array must be at least 2-D");
   }
   auto mask = tri(x.shape(-2), x.shape(-1), k, x.dtype(), s);
   return where(mask, x, zeros_like(x, s), s);
@@ -255,7 +255,7 @@ array tril(array x, int k, StreamOrDevice s /* = {} */) {
 
 array triu(array x, int k, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
-    throw std::invalid_argument("[triu] array must be atleast 2-D");
+    throw std::invalid_argument("[triu] array must be at least 2-D");
   }
   auto mask = tri(x.shape(-2), x.shape(-1), k - 1, x.dtype(), s);
   return where(mask, zeros_like(x, s), x, s);
@@ -350,7 +350,7 @@ array squeeze(
     ax = ax < 0 ? ax + a.ndim() : ax;
     if (ax < 0 || ax >= a.ndim()) {
       std::ostringstream msg;
-      msg << "[squeeze] Invalid axies " << ax << " for array with " << a.ndim()
+      msg << "[squeeze] Invalid axes " << ax << " for array with " << a.ndim()
           << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
@@ -405,7 +405,7 @@ array expand_dims(
     ax = ax < 0 ? ax + out_ndim : ax;
     if (ax < 0 || ax >= out_ndim) {
       std::ostringstream msg;
-      msg << "[squeeze] Invalid axies " << ax << " for output array with "
+      msg << "[squeeze] Invalid axes " << ax << " for output array with "
           << a.ndim() << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
@@ -478,7 +478,7 @@ array slice(
 
   // If strides are negative, slice and then make a copy with axes flipped
   if (negatively_strided_axes.size() > 0) {
-    // First, take the slice of the positvely strided axes
+    // First, take the slice of the positively strided axes
     auto out = array(
         out_shape,
         a.dtype(),
@@ -517,7 +517,7 @@ array slice(
       // Gather moves the axis up, remainder needs to be squeezed
       out_reshape[i] = indices[i].size();
 
-      // Gather moves the axis up, needs to be tranposed
+      // Gather moves the axis up, needs to be transposed
       t_axes[ax] = i;
     }
 
@@ -2828,6 +2828,96 @@ array dequantize(
   w_full = reshape(w_full, {w.shape(0), -1}, s);
 
   return w_full;
+}
+
+array tensordot(
+    const array& a,
+    const array& b,
+    const int dims /* = 2 */,
+    StreamOrDevice s /* = {} */
+) {
+  if (dims < 0) {
+    throw std::invalid_argument(
+        "[tensordot] dims must be greater or equal to 0.");
+  }
+  if (dims > std::min(a.ndim(), b.ndim())) {
+    throw std::invalid_argument(
+        "[tensordot] dims must be less than the number of dimensions of a and b.");
+  }
+  std::vector<int> adims;
+  std::vector<int> bdims;
+  for (int i = 0; i < dims; i++) {
+    bdims.emplace_back(i);
+    adims.emplace_back(-dims + i);
+  }
+  return tensordot(a, b, {adims, bdims}, s);
+}
+
+array tensordot(
+    const array& a,
+    const array& b,
+    const std::pair<std::vector<int>, std::vector<int>>& dims,
+    StreamOrDevice s /* = {} */
+) {
+  if (dims.first.size() != dims.second.size()) {
+    throw std::invalid_argument(
+        "[tensordot] dims[0] and dims[1] must have the same number of dimensions.");
+  }
+  if (a.dtype() != b.dtype()) {
+    throw std::invalid_argument(
+        "[tensordot] a and b must have the same dtype.");
+  }
+  int csize = 1;
+  auto x = a;
+  auto y = b;
+  for (int i = 0; i < dims.first.size(); i++) {
+    if (x.shape(dims.first.at(i)) == y.shape(dims.second.at(i))) {
+      csize *= x.shape(dims.first.at(i));
+    } else {
+      throw std::invalid_argument(
+          "[tensordot] a and b must have the same shape on the contracted axes.");
+    }
+  }
+
+  std::vector<bool> cdims1(x.ndim(), false);
+  std::vector<bool> cdims2(y.ndim(), false);
+  for (const auto n : dims.first) {
+    int n_ = (n < 0) ? n + x.ndim() : n;
+    cdims1[n_] = true;
+  }
+  for (const auto n : dims.second) {
+    int n_ = (n < 0) ? n + y.ndim() : n;
+    cdims2[n_] = true;
+  }
+
+  std::vector<int> t1;
+  std::vector<int> t2;
+  std::vector<int> rshape;
+  int size1 = 1;
+  int size2 = 1;
+  for (int i = 0; i < a.ndim(); i++) {
+    if (!cdims1[i]) {
+      t1.emplace_back(i);
+      size1 *= a.shape(i);
+      rshape.emplace_back(a.shape(i));
+    }
+  }
+  for (const auto x : dims.first) {
+    t1.emplace_back(x);
+  }
+  for (const auto x : dims.second) {
+    t2.emplace_back(x);
+  }
+  for (int i = 0; i < b.ndim(); i++) {
+    if (!cdims2[i]) {
+      t2.emplace_back(i);
+      size2 *= b.shape(i);
+      rshape.emplace_back(b.shape(i));
+    }
+  }
+  x = reshape(transpose(x, t1, s), {size1, csize}, s);
+  y = reshape(transpose(y, t2, s), {csize, size2}, s);
+  return reshape(matmul(x, y, s), rshape, s);
 }
 
 } // namespace mlx::core
