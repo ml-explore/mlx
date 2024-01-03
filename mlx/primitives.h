@@ -1112,8 +1112,15 @@ class Power : public Primitive {
 
 class QuantizedMatmul : public Primitive {
  public:
-  explicit QuantizedMatmul(Stream stream, int group_size, int bits)
-      : Primitive(stream), group_size_(group_size), bits_(bits){};
+  explicit QuantizedMatmul(
+      Stream stream,
+      int group_size,
+      int bits,
+      bool transpose)
+      : Primitive(stream),
+        group_size_(group_size),
+        bits_(bits),
+        transpose_(transpose){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1129,6 +1136,7 @@ class QuantizedMatmul : public Primitive {
  private:
   int group_size_;
   int bits_;
+  bool transpose_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };

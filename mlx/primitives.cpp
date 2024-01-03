@@ -1706,14 +1706,37 @@ std::vector<array> QuantizedMatmul::vjp(
     const std::vector<array>& primals,
     const array& cotan,
     const std::vector<int>& argnums) {
-  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+  std::vector<array> vjps;
+
+  // We rely on the fact that w is always 2D so transpose is simple
+  for (auto arg : argnums) {
+    // gradient wrt to x
+    if (arg == 0) {
+      vjps.push_back(quantized_matmul(
+          cotan,
+          primals[1],
+          primals[2],
+          primals[3],
+          !transpose_,
+          group_size_,
+          bits_,
+          stream()));
+    }
+
+    // gradient wrt to w_q, scales or biases
+    else {
+      throw std::runtime_error(
+          "QuantizedMatmul::vjp no gradient wrt the quantized matrix yet.");
+    }
+  }
+  return vjps;
 }
 
 array QuantizedMatmul::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  throw std::runtime_error("QuantizedMatmul::vjp NYI");
+  throw std::runtime_error("QuantizedMatmul::jvp NYI");
 }
 
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
