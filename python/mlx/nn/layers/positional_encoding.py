@@ -96,7 +96,7 @@ class RoPE(Module):
         dtype=mx.float32,
     ):
         D = D // 2
-        positions = mx.arange(offset, N, dtype=dtype) * scale
+        positions = mx.arange(offset, N, dtype=dtype) / scale
         freqs = mx.exp(-mx.arange(0.0, D, dtype=dtype) * (math.log(base) / D))
         theta = mx.reshape(positions, (-1, 1)) * mx.reshape(freqs, (1, -1))
         return mx.cos(theta), mx.sin(theta)
