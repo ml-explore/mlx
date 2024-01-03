@@ -4,7 +4,10 @@
 
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
-#include "mlx/io/gguflib/gguflib.h"
+
+extern "C" {
+#include <gguflib.h>
+}
 
 namespace mlx::core {
 
