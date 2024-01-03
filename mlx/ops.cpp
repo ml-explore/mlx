@@ -2819,14 +2819,10 @@ array tensordot(
 array tensordot(
     const array& a,
     const array& b,
-    const std::vector<std::vector<int>>& dims,
+    const std::pair<std::vector<int>, std::vector<int>>& dims,
     StreamOrDevice s /* = {} */
 ) {
-  if (dims.size() != 2) {
-    throw std::invalid_argument(
-        "[tensordot] dims must be a vector of two vectors.");
-  }
-  if (dims[0].size() != dims[1].size()) {
+  if (dims.first.size() != dims.second.size()) {
     throw std::invalid_argument(
         "[tensordot] dims[0] and dims[1] must have the same number of dimensions.");
   }
@@ -2837,9 +2833,9 @@ array tensordot(
   int csize = 1;
   auto x = a;
   auto y = b;
-  for (int i = 0; i < dims[0].size(); i++) {
-    if (x.shape(dims[0].at(i)) == y.shape(dims[1].at(i))) {
-      csize *= x.shape(dims[0].at(i));
+  for (int i = 0; i < dims.first.size(); i++) {
+    if (x.shape(dims.first.at(i)) == y.shape(dims.second.at(i))) {
+      csize *= x.shape(dims.first.at(i));
     } else {
       throw std::invalid_argument(
           "[tensordot] a and b must have the same shape on the contracted axes.");
@@ -2848,11 +2844,11 @@ array tensordot(
 
   std::vector<bool> cdims1(x.ndim(), false);
   std::vector<bool> cdims2(y.ndim(), false);
-  for (const auto n : dims[0]) {
+  for (const auto n : dims.first) {
     int n_ = (n < 0) ? n + x.ndim() : n;
     cdims1[n_] = true;
   }
-  for (const auto n : dims[1]) {
+  for (const auto n : dims.second) {
     int n_ = (n < 0) ? n + y.ndim() : n;
     cdims2[n_] = true;
   }
@@ -2869,10 +2865,10 @@ array tensordot(
       rshape.emplace_back(a.shape(i));
     }
   }
-  for (const auto x : dims[0]) {
+  for (const auto x : dims.first) {
     t1.emplace_back(x);
   }
-  for (const auto x : dims[1]) {
+  for (const auto x : dims.second) {
     t2.emplace_back(x);
   }
   for (int i = 0; i < b.ndim(); i++) {

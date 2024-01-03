@@ -3203,8 +3203,12 @@ void init_ops(py::module_& m) {
         if (auto pv = std::get_if<int>(&dims); pv) {
           return tensordot(a, b, *pv, s);
         } else {
-          return tensordot(
-              a, b, std::get<std::vector<std::vector<int>>>(dims), s);
+          auto x = std::get<std::vector<std::vector<int>>>(dims);
+          if (x.size() != 2) {
+            throw std::invalid_argument(
+                "[tensordot] dims must be a list of two lists.");
+          }
+          return tensordot(a, b, {x[0], x[1]}, s);
         }
       },
       "a"_a,

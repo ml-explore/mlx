@@ -1071,7 +1071,7 @@ array tensordot(
 array tensordot(
     const array& a,
     const array& b,
-    const std::vector<std::vector<int>>& dims,
+    const std::pair<std::vector<int>, std::vector<int>>& dims,
     StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */
