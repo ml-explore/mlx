@@ -2684,7 +2684,8 @@ array quantized_matmul(
     throw std::invalid_argument(
         "[quantized_matmul] The shapes of the weight and scales are "
         "not compatible. Make sure that if you are transposing `w` you "
-        "are also transposing `scales` and `biases`.");
+        "are also transposing `scales` and `biases` and that you are "
+        "using the correct `group_size` and `bits`.");
   }
 
   if (w_inner_dims != x_inner_dims) {

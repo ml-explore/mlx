@@ -76,16 +76,12 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& scales = inputs[2];
   auto& biases = inputs[3];
 
-  if (w.strides()[0] != 1) {
-    throw std::runtime_error("The quantized weight should be transposed");
-  }
+  bool condition =
+      (w.strides()[0] == 1 && x.flags().row_contiguous &&
+       scales.flags().row_contiguous && biases.flags().row_contiguous &&
+       x.dtype() == float32 && bits_ == 4 && group_size_ == 64);
 
-  if (!x.flags().row_contiguous || !scales.flags().row_contiguous ||
-      !biases.flags().row_contiguous) {
-    throw std::runtime_error("x, scales and biases should be row contiguous.");
-  }
-
-  if (x.dtype() == float32 && bits_ == 4 && group_size_ == 64) {
+  if (condition) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     int K = x.shape(-1);
     int M = x.size() / K;
