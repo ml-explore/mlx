@@ -3092,11 +3092,11 @@ void init_ops(py::module_& m) {
           biases (array): The biases to use per ``group_size`` elements of ``w``
           transpose (bool, optional): Defines whether to multiply with the
             transposed ``w`` or not, namelye whether we are performing
-            ``x @ w.T`` or ``x @ w``. (default: True)
+            ``x @ w.T`` or ``x @ w``. (default: ``True``)
           group_size (int, optional): The size of the group in ``w`` that
-            shares a scale and bias. (default: 64)
+            shares a scale and bias. (default: ``64``)
           bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: 4)
+            ``w``. (default: ``4``)
 
         Returns:
           result (array): The result of the multiplication of ``x`` with ``w``.
@@ -3150,9 +3150,9 @@ void init_ops(py::module_& m) {
         Args:
           w (array): Matrix to be quantized
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: 64)
+            scale and bias. (default: ``64``)
           bits (int, optional): The number of bits occupied by each element of
-            ``w`` in the returned quantized matrix. (default: 4)
+            ``w`` in the returned quantized matrix. (default: ``4``)
 
         Returns:
           (tuple): A tuple containing
@@ -3191,9 +3191,9 @@ void init_ops(py::module_& m) {
           scales (array): The scales to use per ``group_size`` elements of ``w``
           biases (array): The biases to use per ``group_size`` elements of ``w``
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: 64)
+            scale and bias. (default: ``64``)
           bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: 4)
+            ``w``. (default: ``4``)
 
         Returns:
           result (array): The dequantized version of ``w``
