@@ -43,8 +43,13 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [scales_transposed, scales_cols, scales] = check_transpose(scales_pre);
   auto [biases_transposed, biases_cols, biases] = check_transpose(biases_pre);
 
-  if (x_transposed || scales_transposed || biases_transposed) {
-    throw std::runtime_error("x, scales and biases should be row contiguous.");
+  // TODO: Change the following fatal errors to copies.
+  if (x_transposed) {
+    throw std::runtime_error("[quantized_matmul] x should be row contiguous.");
+  }
+  if (w_transposed != scales_transposed || w_transposed != biases_transposed) {
+    throw std::runtime_error(
+        "[quantized_matmul] w, scales and biases should be transposed together.");
   }
 
   int D = x.shape(-1);
