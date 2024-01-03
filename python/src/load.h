@@ -19,6 +19,14 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
     StreamOrDevice s);
 void mlx_save_safetensor_helper(py::object file, py::dict d);
 
+std::unordered_map<std::string, array> mlx_load_gguf_helper(
+    py::object file,
+    StreamOrDevice s);
+void mlx_save_gguf_helper(
+    py::object file,
+    py::dict d,
+    std::optional<bool> retain_graph = std::nullopt);
+
 DictOrArray mlx_load_helper(
     py::object file,
     std::optional<std::string> format,

@@ -3048,7 +3048,7 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         load(file: str, /, format: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
 
-        Load array(s) from a binary file in ``.npy``, ``.npz``, or ``.safetensors`` format.
+        Load array(s) from a binary file in ``.npy``, ``.npz``, ``.safetensors``, or ``.gguf`` format.
 
         Args:
             file (file, str): File in which the array is saved.
@@ -3073,7 +3073,29 @@ void init_ops(py::module_& m) {
         For more information on the format see https://huggingface.co/docs/safetensors/index.
 
         Args:
-            file (file, str): File in which the array is saved>
+            file (file, str): File in which the array is saved.
+            arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+            retain_graph (bool, optional): Whether or not to retain the graph
+              during array evaluation. If left unspecified the graph is retained
+              only if saving is done in a function transformation. Default: ``None``.
+      )pbdoc");
+  m.def(
+      "save_gguf",
+      &mlx_save_gguf_helper,
+      "file"_a,
+      "arrays"_a,
+      py::pos_only(),
+      "retain_graph"_a = std::nullopt,
+      py::kw_only(),
+      R"pbdoc(
+        save_gguf(file: str, arrays: Dict[str, array], /, retain_graph: Optional[bool] = None)
+
+        Save array(s) to a binary file in ``.gguf`` format.
+
+        For more information on the format see https://github.com/ggerganov/ggml/blob/master/docs/gguf.md.
+
+        Args:
+            file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
       )pbdoc");
   m.def(

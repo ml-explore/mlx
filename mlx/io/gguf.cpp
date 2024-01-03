@@ -39,7 +39,6 @@ void save_gguf(
     const std::string& file_,
     std::unordered_map<std::string, array> a,
     std::optional<bool> retain_graph) {
-  // Open and check file
   std::string file = file_;
 
   // Add .safetensors to file name if it is not there

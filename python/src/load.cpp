@@ -447,3 +447,16 @@ void mlx_save_safetensor_helper(py::object file, py::dict d) {
   throw std::invalid_argument(
       "[save_safetensors] Input must be a file-like object, or string");
 }
+
+void mlx_save_gguf_helper(
+    py::object file,
+    py::dict d,
+    std::optional<bool> retain_graph) {
+  auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
+  if (py::isinstance<py::str>(file)) {
+    save_gguf(py::cast<std::string>(file), arrays_map, retain_graph);
+    return;
+  }
+
+  throw std::invalid_argument("[save_safetensors] Input must be a string");
+}
