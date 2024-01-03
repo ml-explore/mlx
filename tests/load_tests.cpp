@@ -41,10 +41,7 @@ TEST_CASE("test gguf") {
   map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
   map.insert({"test2", ones({3, 2})});
   save_gguf(file_path, map);
-  printf("saved gguf\n");
-  printf("loading gguf\n");
   auto safeDict = load_gguf(file_path);
-  printf("loaded gguf\n");
   CHECK_EQ(safeDict.size(), 2);
   CHECK_EQ(safeDict.count("test"), 1);
   CHECK_EQ(safeDict.count("test2"), 1);
