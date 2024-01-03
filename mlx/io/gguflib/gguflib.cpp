@@ -431,7 +431,7 @@ gguf_ctx *gguf_create(const char *filename) {
     hdr.tensor_count = 0;
     hdr.metadata_kv_count = 0;
 
-    FILE *fp = fopen(filename,"wx");
+    FILE *fp = fopen(filename,"w");
     if (fp == NULL) return NULL;
     if (fwrite(&hdr,1,sizeof(hdr),fp) != sizeof(hdr)) {
         fclose(fp);
@@ -461,7 +461,7 @@ int gguf_append_kv(gguf_ctx *ctx, const char *keyname, uint64_t keylen, uint32_t
     if (write(ctx->fd,keyname,keylen) != (ssize_t)keylen) return 0;
     if (write(ctx->fd,&type,sizeof(type)) != sizeof(type)) return 0;
     if (write(ctx->fd,val,len) != (ssize_t)len) return 0;
-    gguf_remap(ctx);
+    if (gguf_remap(ctx) == 0) return 0;
     ctx->header->metadata_kv_count++;
     return 1;
 }
@@ -479,7 +479,7 @@ int gguf_append_tensor_info(gguf_ctx *ctx, const char *tensorname, uint64_t name
     }
     if (write(ctx->fd,&type,sizeof(type)) != sizeof(type)) return 0;
     if (write(ctx->fd,&offset,sizeof(offset)) != sizeof(offset)) return 0;
-    gguf_remap(ctx);
+    if (gguf_remap(ctx) == 0) return 0;
     ctx->header->tensor_count++;
     return 1;
 }
@@ -494,15 +494,13 @@ int gguf_append_tensor_data(gguf_ctx *ctx, void *tensor, uint64_t tensor_size) {
     uint64_t padding = gguf_get_alignment_padding(ctx->alignment,ctx->size);
     ssize_t wrote = write(ctx->fd,padding_data,padding);
     if (wrote != (ssize_t)padding) {
-        printf("wrote padding: %zd, padding: %llu\n", wrote, padding);
         return 0;
     }
     ssize_t wrote2 = write(ctx->fd,tensor,tensor_size);
     if (wrote2 != (ssize_t)tensor_size) {
-        printf("wrote tensor: %zd, size: %llu\n", wrote, tensor_size);
         return 0;
     }
-    gguf_remap(ctx);
+    if (gguf_remap(ctx) == 0) return 0;
     return 1;
 }
 

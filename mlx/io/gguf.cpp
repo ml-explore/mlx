@@ -14,13 +14,6 @@ std::unordered_map<std::string, array> load_gguf(
   gguf_tensor tensor;
   uint64_t params = 0;
   while (gguf_get_tensor(ctx,&tensor)) {
-    printf("\n[load_gguf] %s tensor %.*s @%llu, %llu weights, %llu bytes\n",
-        gguf_get_tensor_type_name(tensor.type),
-        (int)tensor.namelen,
-        tensor.name,
-        tensor.offset,
-        tensor.num_weights,
-        tensor.bsize);
     params += tensor.num_weights;
 
     std::vector<int> shape;
@@ -31,17 +24,13 @@ std::unordered_map<std::string, array> load_gguf(
     if (data == NULL) {
       throw std::runtime_error("[load_gguf] gguf_tensor_to_float failed");
     }
-    for (int i = 0; i < tensor.num_weights; i++) {
-      printf("data %d: %f ", i, data[i]);
-    }
-    array loaded_array = ones(shape, float32, s);
-    // loaded_array.set_data((float*)data);
+    allocator::Buffer buffer = allocator::malloc(tensor.bsize);
+    std::copy(data, data + tensor.num_weights, (float *) buffer.raw_ptr());
+    array loaded_array = array(data, shape, float32);
     
     std::string name = std::string(tensor.name, tensor.namelen);
     result.insert({name, loaded_array});
   }
-  printf("[load_gguf] parameters: %.02fB\n",
-    (double)params/1000000000);
   gguf_end(ctx);
   return result;
 }
@@ -68,6 +57,8 @@ void save_gguf(
   
   // First, append the tensor info
   for (auto& [key, arr] : a) {
+    arr.eval(retain_graph.value_or(arr.is_tracer()));
+
     tensor_offset += gguf_get_alignment_padding(ctx->alignment, tensor_offset);
     if (arr.dtype() != float32) {
       throw std::runtime_error("[save_gguf] only float32 supported");
@@ -80,17 +71,15 @@ void save_gguf(
     for (int i = 0; i < num_dim; i++) {
       dim[i] = arr.shape()[i];
     }
-    printf("info: %s; nbytes: %zu; offset: %llu\n", tensorname, arr.nbytes(), tensor_offset);
     if (!gguf_append_tensor_info(ctx, tensorname, namelen, num_dim, dim, type, tensor_offset)) {
       throw std::runtime_error("[save_gguf] gguf_append_tensor_info failed");
     }
     tensor_offset += arr.nbytes();
   }
 
-  // Then, append the tensors weights
-  for (auto& [key, arr] : a) {
-    printf("weights: %s, nbytes: %zu\n", key.c_str(), arr.nbytes());
-    if (!gguf_append_tensor_data(ctx, arr.data<float>(), arr.nbytes())) {
+  // Then, append the tensor weights
+  for (const auto& [key, arr] : a) {
+    if (!gguf_append_tensor_data(ctx, (void *) arr.data<float>(), arr.nbytes())) {
       throw std::runtime_error("[save_gguf] gguf_append_tensor_data failed");
     }
   }
