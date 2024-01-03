@@ -62,9 +62,9 @@ class InstanceNorm(Module):
         mean = mx.mean(x, axis=reduction_axes, keepdims=True)
         var = mx.var(x, axis=reduction_axes, keepdims=True)
         # Normalize
-        normalized = (x - mean) * mx.rsqrt(var + self.eps)
+        x = (x - mean) * mx.rsqrt(var + self.eps)
         # Scale and shift if necessary
-        return self.weight * normalized + self.bias if "weight" in self else normalized
+        return (self.weight * x + self.bias) if "weight" in self else x
 
 
 class LayerNorm(Module):
