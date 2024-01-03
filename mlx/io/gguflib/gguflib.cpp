@@ -177,7 +177,7 @@ int gguf_get_key(gguf_ctx *ctx, gguf_key *key) {
     key->val = (gguf_value *)(ctx->data+ctx->off);
 
     /* Update the context with the alignmnet data, if needed. */
-    const char *alignment_key = "general.alignmnet";
+    const char *alignment_key = "general.alignment";
     if (key->type == GGUF_VALUE_TYPE_UINT32 &&
         key->namelen == strlen(alignment_key) &&
         memcmp(alignment_key, key->name, key->namelen) == 0)
