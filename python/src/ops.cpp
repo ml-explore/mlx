@@ -3262,7 +3262,7 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       inner(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Compute the inner product of two 1-D arrays.  
+      Ordinary inner product of vectors for 1-D arrays, in higher dimensions a sum product over the last axes.
 
       Args:
         a (array): Input array
@@ -3283,7 +3283,7 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       outer(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Compute the outer product of two arrays. If a and b are non-scalar, than their last dimensions must match.
+      Compute the outer product of two 1-D arrays.
 
       Args:
         a (array): Input array
