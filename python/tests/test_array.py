@@ -231,6 +231,7 @@ class TestArray(mlx_tests.MLXTestCase):
             mx.int64,
             mx.float16,
             mx.float32,
+            mx.bfloat16,
             mx.complex64,
         ]
         for x_t, y_t in permutations(dtypes, 2):
