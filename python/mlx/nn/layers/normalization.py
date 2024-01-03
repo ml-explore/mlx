@@ -16,27 +16,27 @@ class InstanceNorm(Module):
         y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x] + \epsilon}} * \gamma + \beta,
 
     where :math:`\gamma` and :math:`\beta` are learned per feature dimension
-    parameters initialized at 1 and 0 respectively. Both are of size dims,
+    parameters initialized at 1 and 0 respectively. Both are of size :attr:`dims`,
     if :attr:`affine` is ``True``.
-
-    [1]: https://arxiv.org/abs/1607.08022
 
     Args:
         dims (int): The number of features of the input.
         eps (float): A value added to the denominator for numerical stability. Default: ``1e-5``.
-        affine (bool): A boolean value that indicates whether this module has learnable affine parameters,
-            initialized the same way as done for batch normalization.
-            Default: ``False``.
+        affine (bool): Default: ``False``.
+
     Shape:
-        - Input: :math:`(N, L, C)` or :math:`(N, H, W, C)` or :math:`(N, D, H, W, C)`
-        - Output: :math:`(N, L, C)` or :math:`(N, H, W, C)` or :math:`(N, D, H, W, C)` (same shape as input)
+      - Input: :math:`(..., C)` where :math:`C` is equal to :attr:`dims`.
+      - Output: Same shape as the input.
 
     Examples:
         >>> import mlx.core as mx
         >>> import mlx.nn as nn
         >>> x = mx.random.normal((8, 4, 4, 16))
-        >>> inorm = nn.InstanceNorm(dims=16, affine=True)
+        >>> inorm = nn.InstanceNorm(dims=16)
         >>> output = inorm(x)
+
+    References:
+        [1]: https://arxiv.org/abs/1607.08022
     """
 
     def __init__(
@@ -51,7 +51,6 @@ class InstanceNorm(Module):
             self.bias = mx.zeros((dims,))
         self.dims = dims
         self.eps = eps
-        self.affine = affine
 
     def _extra_repr(self):
         return f"{self.dims}, eps={self.eps}, affine={'weight' in self}"
