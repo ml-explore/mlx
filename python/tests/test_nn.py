@@ -117,7 +117,6 @@ class TestBase(mlx_tests.MLXTestCase):
 
 
 class TestLayers(mlx_tests.MLXTestCase):
-
     def test_identity(self):
         inputs = mx.zeros((10, 4))
         layer = nn.Identity()

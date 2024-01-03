@@ -61,6 +61,7 @@ class Module(dict):
 
     @property
     def training(self):
+        """Boolean indicating if the model is in training mode."""
         return self._training
 
     def _extra_repr(self):
@@ -417,23 +418,26 @@ class Module(dict):
         """Freeze the Module's parameters or some of them. Freezing a parameter means not
         computing gradients for it.
 
-        This function is idempotent ie freezing a frozen model is a noop.
+        This function is idempotent i.e. freezing a frozen model is a no-op.
 
-        For instance to only train the attention parameters from a transformer:
+        Example:
+            For instance to only train the attention parameters from a Transformer:
 
-            model = ...
-            model.freeze()
-            model.apply_to_modules(lambda k, v: v.unfreeze() if k.endswith("attention") else None)
+            .. code-block:: python
+
+                model = nn.Transformer()
+                model.freeze()
+                model.apply_to_modules(lambda k, v: v.unfreeze() if k.endswith("attention") else None)
 
         Args:
             recurse (bool, optional): If True then freeze the parameters of the
-                submodules as well (default: True).
+                submodules as well. Default: ``True``.
             keys (str or list[str], optional): If provided then only these
                 parameters will be frozen otherwise all the parameters of a
                 module. For instance freeze all biases by calling
                 ``module.freeze(keys="bias")``.
-            strict (bool, optional): If set to True validate that the passed keys exist
-                (default: False).
+            strict (bool, optional): If set to ``True`` validate that the passed keys exist.
+                Default: ``False``.
         """
 
         def _freeze_impl(_, m):
@@ -467,21 +471,25 @@ class Module(dict):
         This function is idempotent ie unfreezing a model that is not frozen is
         a noop.
 
-        For instance to only train the biases one can do:
+        Example:
 
-            model = ...
-            model.freeze()
-            model.unfreeze(keys="bias")
+            For instance to only train the biases of a Transformer one can do:
+
+            .. code-block:: python
+
+                model = nn.Transformer()
+                model.freeze()
+                model.unfreeze(keys="bias")
 
         Args:
             recurse (bool, optional): If True then unfreeze the parameters of the
-                submodules as well (default: True).
+                submodules as well. Default: ``True``.
             keys (str or list[str], optional): If provided then only these
                 parameters will be unfrozen otherwise all the parameters of a
                 module. For instance unfreeze all biases by calling
                 ``module.unfreeze(keys="bias")``.
-            strict (bool, optional): If set to True validate that the passed keys exist
-                (default: False).
+            strict (bool, optional): If set to ``True`` validate that the passed keys exist.
+                Default: ``False``.
         """
 
         def _unfreeze_impl(_, m):
@@ -498,10 +506,25 @@ class Module(dict):
             _unfreeze_impl("", self)
 
     def train(self, mode: bool = True):
+        """Set the model in or out of training mode.
+
+        Training mode only applies to certain layers. For example
+        :obj:`Dropout` applies a random mask in training mode, but is the
+        identity in evaluation mode.
+
+        Args:
+            mode (bool): Indicate if the model should be in training or
+                evaluation mode. Default: ``True``.
+        """
+
         def _set_train(_, m):
             m._training = mode
 
         self.apply_to_modules(_set_train)
 
     def eval(self):
+        """Set the model to evaluation mode.
+
+        See :func:`train`.
+        """
         self.train(False)
