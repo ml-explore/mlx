@@ -107,7 +107,6 @@ void save_gguf(
 
     tensor_offset += gguf_get_alignment_padding(ctx->alignment, tensor_offset);
     const std::optional<uint32_t> gguf_type = dtype_to_gguf_type(arr.dtype());
-
     if (!gguf_type.has_value()) {
       throw std::runtime_error("[save_gguf] dtype is not supported");
     }
