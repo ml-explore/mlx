@@ -122,13 +122,13 @@ class Bilinear(Module):
         out, in2, in1 = self.weight.shape
         xshape = x1.shape[:-1]
         x1 = x1.reshape(-1, in1)
-        x2 = x2.reshape(-1, in2)
+        x2 = x2.reshape(-1, 1, in2)
 
         # Perform the bilinear transformation
-        w = self.weight.reshape(in2 * out, in1)
+        w = self.weight.reshape(out * in2, in1)
         y = x1 @ w.T
         y = y.reshape(-1, out, in2).swapaxes(-2, -1)
-        y = x2[:, None, :] @ y
+        y = x2 @ y
         y = y.squeeze(1)
 
         # Reset the shape
