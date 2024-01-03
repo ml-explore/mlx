@@ -1041,6 +1041,7 @@ array quantized_matmul(
     const array& w,
     const array& scales,
     const array& biases,
+    bool transpose = true,
     int group_size = 64,
     int bits = 4,
     StreamOrDevice s = {});

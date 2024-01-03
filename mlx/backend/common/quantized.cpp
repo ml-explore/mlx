@@ -181,11 +181,11 @@ void _qmm_dispatch(
     const array& scales,
     const array& biases,
     int bits,
-    int group_size) {
+    int group_size,
+    bool transposed_w) {
   int K = x.shape(-1);
   int M = x.size() / K;
   int N = out.shape(-1);
-  bool transposed_w = w.strides().back() != 1;
 
   switch (x.dtype()) {
     case float32:
@@ -246,36 +246,23 @@ void QuantizedMatmul::eval(const std::vector<array>& inputs, array& out) {
   auto& scales_pre = inputs[2];
   auto& biases_pre = inputs[3];
 
-  auto check_transpose = [](const array& arr) {
-    auto stx = arr.strides()[arr.ndim() - 2];
-    auto sty = arr.strides()[arr.ndim() - 1];
-    if (stx == arr.shape(-1) && sty == 1) {
-      return std::make_tuple(false, arr);
-    } else if (stx == 1 && sty == arr.shape(-2)) {
-      return std::make_tuple(true, arr);
+  auto ensure_row_contiguous = [](const array& arr) {
+    if (arr.flags().row_contiguous) {
+      return arr;
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
       copy(arr, arr_copy, CopyType::General);
-      size_t stx = arr.shape(-1);
-      return std::make_tuple(false, arr_copy);
+      return arr_copy;
     }
   };
 
-  auto [x_transposed, x] = check_transpose(x_pre);
-  auto [w_transposed, w] = check_transpose(w_pre);
-  auto [scales_transposed, scales] = check_transpose(scales_pre);
-  auto [biases_transposed, biases] = check_transpose(biases_pre);
-
-  if (x_transposed) {
-    throw std::runtime_error("[quantized_matmul] x should be row contiguous.");
-  }
-  if (w_transposed != scales_transposed || w_transposed != biases_transposed) {
-    throw std::runtime_error(
-        "[quantized_matmul] w, scales and biases should be transposed together.");
-  }
+  auto x = ensure_row_contiguous(x_pre);
+  auto w = ensure_row_contiguous(w_pre);
+  auto scales = ensure_row_contiguous(scales_pre);
+  auto biases = ensure_row_contiguous(biases_pre);
 
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
-  _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_);
+  _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
 }
 
 } // namespace mlx::core

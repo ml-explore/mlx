@@ -77,7 +77,7 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& biases = inputs[3];
 
   bool condition =
-      (w.strides()[0] == 1 && x.flags().row_contiguous &&
+      (transpose_ && x.flags().row_contiguous && w.flags().row_contiguous &&
        scales.flags().row_contiguous && biases.flags().row_contiguous &&
        x.dtype() == float32 && bits_ == 4 && group_size_ == 64);
 
@@ -85,7 +85,7 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     int K = x.shape(-1);
     int M = x.size() / K;
-    int N = w.shape(1);
+    int N = out.shape(-1);
     _qmm_t_4_64(
         out.data<float>(),
         x.data<float>(),

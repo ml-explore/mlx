@@ -1714,9 +1714,10 @@ std::vector<array> QuantizedMatmul::vjp(
     if (arg == 0) {
       vjps.push_back(quantized_matmul(
           cotan,
-          transpose(primals[1], {1, 0}, stream()),
-          transpose(primals[2], {1, 0}, stream()),
-          transpose(primals[3], {1, 0}, stream()),
+          primals[1],
+          primals[2],
+          primals[3],
+          !transpose_,
           group_size_,
           bits_,
           stream()));

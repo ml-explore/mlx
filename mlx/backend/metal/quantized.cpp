@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
-#include <iostream>
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -23,38 +22,25 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& biases_pre = inputs[3];
 
   std::vector<array> copies;
-  auto check_transpose = [&copies, &s](const array& arr) {
-    auto stx = arr.strides()[arr.ndim() - 2];
-    auto sty = arr.strides()[arr.ndim() - 1];
-    if (stx == arr.shape(-1) && sty == 1) {
-      return std::make_tuple(false, stx, arr);
-    } else if (stx == 1 && sty == arr.shape(-2)) {
-      return std::make_tuple(true, sty, arr);
+  auto ensure_row_contiguous = [&copies, &s](const array& arr) {
+    if (arr.flags().row_contiguous) {
+      return arr;
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
       copy_gpu(arr, arr_copy, CopyType::General, s);
       copies.push_back(arr_copy);
-      size_t stx = arr.shape(-1);
-      return std::make_tuple(false, stx, arr_copy);
+      return arr_copy;
     }
   };
-  auto [x_transposed, x_cols, x] = check_transpose(x_pre);
-  auto [w_transposed, w_cols, w] = check_transpose(w_pre);
-  auto [scales_transposed, scales_cols, scales] = check_transpose(scales_pre);
-  auto [biases_transposed, biases_cols, biases] = check_transpose(biases_pre);
-
-  // TODO: Change the following fatal errors to copies.
-  if (x_transposed) {
-    throw std::runtime_error("[quantized_matmul] x should be row contiguous.");
-  }
-  if (w_transposed != scales_transposed || w_transposed != biases_transposed) {
-    throw std::runtime_error(
-        "[quantized_matmul] w, scales and biases should be transposed together.");
-  }
+  auto x = ensure_row_contiguous(x_pre);
+  auto w = ensure_row_contiguous(w_pre);
+  auto scales = ensure_row_contiguous(scales_pre);
+  auto biases = ensure_row_contiguous(biases_pre);
 
   int D = x.shape(-1);
   int B = x.size() / D;
-  if (w_transposed) {
+  int O = out.shape(-1);
+  if (transpose_) {
     // Route to the qmv kernel
     if (B < 6) {
       std::ostringstream kname;
@@ -65,8 +51,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
-
-      int O = w.size() / w_cols;
 
       int bo = 32;
       int bd = 32;
@@ -94,8 +78,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
-
-      int O = w.size() / w_cols;
 
       int wn = 2;
       int wm = 2;
@@ -128,12 +110,10 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
-      int out_vec_size = w_cols * (32 / bits_);
-
       int bo = 32;
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, bo, 1);
-      MTL::Size grid_dims = MTL::Size(1, (w_cols + bo - 1) / bo, B);
+      MTL::Size grid_dims = MTL::Size(1, (w.shape(1) + bo - 1) / bo, B);
 
       set_array_buffer(compute_encoder, x, 0);
       set_array_buffer(compute_encoder, w, 1);
@@ -141,7 +121,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       set_array_buffer(compute_encoder, biases, 3);
       set_array_buffer(compute_encoder, out, 4);
       compute_encoder->setBytes(&D, sizeof(int), 5);
-      compute_encoder->setBytes(&out_vec_size, sizeof(int), 6);
+      compute_encoder->setBytes(&O, sizeof(int), 6);
 
       compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
     }
@@ -156,8 +136,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
-
-      int O = w_cols * (32 / bits_);
 
       int wn = 2;
       int wm = 2;

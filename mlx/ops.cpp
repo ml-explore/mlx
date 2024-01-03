@@ -2618,6 +2618,7 @@ array quantized_matmul(
     const array& w,
     const array& scales,
     const array& biases,
+    bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
@@ -2647,46 +2648,26 @@ array quantized_matmul(
     x = reshape(x, {-1, x_inner_dims}, s);
   }
 
-  if (scales.shape() != biases.shape()) {
+  if (scales.ndim() != 2 || scales.shape() != biases.shape()) {
     std::ostringstream msg;
-    msg << "[quantized_matmul] Scales and biases should have the same shape. "
+    msg << "[quantized_matmul] Scales and biases should have the same 2D shape. "
         << "Received scales with shape " << scales.shape()
         << " and biases with " << biases.shape();
     throw std::invalid_argument(msg.str());
   }
 
-  // Calculate w's inner dims
-  int s_shape_0 = scales.shape(0);
-  int s_shape_1 = scales.shape(1);
-  int w_shape_0 = w.shape(0);
-  int w_shape_1 = w.shape(1);
-  int w_inner_dims = 0;
-  int w_outer_dims = 0;
-
-  // Case 1: The weight, scales and biases are all transposed
-  if (w_shape_0 * (32 / bits) == s_shape_0 * group_size &&
-      w_shape_1 == s_shape_1) {
-    w_inner_dims = s_shape_0 * group_size;
-    w_outer_dims = s_shape_1;
-  }
-
-  // Case 2: Not transposed
-  else if (
-      w_shape_0 == s_shape_0 &&
-      w_shape_1 * (32 / bits) == s_shape_1 * group_size) {
-    w_inner_dims = s_shape_0;
-    w_outer_dims = s_shape_1 * group_size;
-  }
-
-  // Case 3: Something was passed incorrectly
-  else {
+  if (w.shape(1) * 32 / bits != scales.shape(1) * group_size) {
     std::ostringstream msg;
-    throw std::invalid_argument(
-        "[quantized_matmul] The shapes of the weight and scales are "
-        "not compatible. Make sure that if you are transposing `w` you "
-        "are also transposing `scales` and `biases` and that you are "
-        "using the correct `group_size` and `bits`.");
+    msg << "[quantized_matmul] The shapes of the weight and scales are "
+        << "incompatible based on bits and group_size. w.shape() == "
+        << w.shape() << " and scales.shape() == " << scales.shape()
+        << " with group_size=" << group_size << " and bits=" << bits;
+    throw std::invalid_argument(msg.str());
   }
+
+  // Calculate the expanded w's dims
+  int w_inner_dims = (transpose) ? w.shape(1) * 32 / bits : w.shape(0);
+  int w_outer_dims = (transpose) ? w.shape(0) : w.shape(1) * 32 / bits;
 
   if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
@@ -2694,14 +2675,16 @@ array quantized_matmul(
         << "shape (..., " << x_inner_dims << ") does not match "
         << "the expanded quantized matrix (" << w_inner_dims << ", "
         << w_outer_dims << ") computed from shape " << w.shape()
-        << " with group_size=" << group_size << " and bits=" << bits;
+        << " with group_size=" << group_size << ", bits=" << bits
+        << " and transpose=" << std::boolalpha << transpose;
     throw std::invalid_argument(msg.str());
   }
 
   auto out = array(
       {x.shape(0), w_outer_dims},
       dtype,
-      std::make_unique<QuantizedMatmul>(to_stream(s), group_size, bits),
+      std::make_unique<QuantizedMatmul>(
+          to_stream(s), group_size, bits, transpose),
       {x, w, astype(scales, dtype, s), astype(biases, dtype, s)});
 
   // If needed reshape x to the original batch shape

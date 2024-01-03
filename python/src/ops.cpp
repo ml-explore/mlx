@@ -3072,12 +3072,13 @@ void init_ops(py::module_& m) {
       py::pos_only(),
       "scales"_a,
       "biases"_a,
+      "transpose"_a = true,
       "group_size"_a = 64,
       "bits"_a = 4,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        quantized_matmul(x: array, w: array, scales: array, biases: array, /, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+        quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
 
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -3089,6 +3090,9 @@ void init_ops(py::module_& m) {
           w (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w``
           biases (array): The biases to use per ``group_size`` elements of ``w``
+          transpose (bool, optional): Defines whether to multiply with the
+            transposed ``w`` or not, namelye whether we are performing
+            ``x @ w.T`` or ``x @ w``. (default: True)
           group_size (int, optional): The size of the group in ``w`` that
             shares a scale and bias. (default: 64)
           bits (int, optional): The number of bits occupied by each element in
