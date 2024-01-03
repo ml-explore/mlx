@@ -89,6 +89,7 @@ Operations
    save
    savez
    savez_compressed
+   save_gguf
    save_safetensors
    sigmoid
    sign
