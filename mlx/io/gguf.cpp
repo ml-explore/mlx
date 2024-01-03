@@ -67,9 +67,7 @@ std::unordered_map<std::string, array> load_gguf(
   }
   gguf_skip_key_values_section(ctx);
   gguf_tensor tensor;
-  uint64_t params = 0;
   while (gguf_get_tensor(ctx, &tensor)) {
-    params += tensor.num_weights;
     std::vector<int> shape;
     for (int i = 0; i < tensor.ndim; i++) {
       shape.push_back(tensor.dim[i]);
