@@ -2,7 +2,7 @@
 
 namespace mlx::core {
 
-std::optional<uint32_t> dtype_to_gguf_type(const Dtype& dtype) {
+std::optional<uint32_t> dtype_to_gguf_tensor_type(const Dtype& dtype) {
   switch (dtype) {
     case float32:
       return GGUF_TYPE_F32;
@@ -106,7 +106,8 @@ void save_gguf(
     arr.eval(retain_graph.value_or(arr.is_tracer()));
 
     tensor_offset += gguf_get_alignment_padding(ctx->alignment, tensor_offset);
-    const std::optional<uint32_t> gguf_type = dtype_to_gguf_type(arr.dtype());
+    const std::optional<uint32_t> gguf_type =
+        dtype_to_gguf_tensor_type(arr.dtype());
     if (!gguf_type.has_value()) {
       throw std::runtime_error("[save_gguf] dtype is not supported");
     }
@@ -136,6 +137,7 @@ void save_gguf(
       throw std::runtime_error("[save_gguf] gguf_append_tensor_data failed");
     }
   }
+  gguf_end(ctx);
 }
 
 } // namespace mlx::core
