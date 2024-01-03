@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include <cstdio>
 #include <filesystem>
 #include <stdexcept>
 #include <vector>
@@ -36,7 +37,7 @@ TEST_CASE("test save_safetensors") {
 
 TEST_CASE("test gguf") {
   std::string file_path = get_temp_file("test_arr.gguf");
-  printf("file_path: %s\n", file_path.c_str());
+  remove(file_path.c_str());
   auto map = std::unordered_map<std::string, array>();
   map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
   map.insert({"test2", ones({3, 2})});
