@@ -184,7 +184,7 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
 std::unordered_map<std::string, array> mlx_load_gguf_helper(
     py::object file,
     StreamOrDevice s) {
-  if (py::isinstance<py::str>(file)) { // Assume .safetensors file path string
+  if (py::isinstance<py::str>(file)) { // Assume .gguf file path string
     return load_gguf(py::cast<std::string>(file), s);
   }
 
