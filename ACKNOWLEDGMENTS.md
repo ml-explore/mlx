@@ -13,6 +13,10 @@ MLX was developed with contributions from the following individuals:
 - Diogo Da Cruz: Added `tri`, `tril`, `triu`, `tensordot` and safetensor support
 - Gabrijel Boduljak: Added `mlx.core.linalg`, implemented `norm` method and `InstanceNorm` layer.
 
+<a href="https://github.com/ml-explore/mlx/graphs/contributors">
+  <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
+</a>
+
 # Third-Party Software
 
 MLX leverages several third-party software, listed here together with
