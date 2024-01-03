@@ -2622,8 +2622,7 @@ array quantized_matmul(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
-  auto dtype = promote_types(in_x.dtype(), scales.dtype());
-  auto x = astype(in_x, dtype, s);
+  array x = in_x;
 
   if (w.dtype() != uint32) {
     std::ostringstream msg;
@@ -2680,12 +2679,16 @@ array quantized_matmul(
     throw std::invalid_argument(msg.str());
   }
 
+  auto dtype = result_type({x, scales, biases});
   auto out = array(
       {x.shape(0), w_outer_dims},
       dtype,
       std::make_unique<QuantizedMatmul>(
           to_stream(s), group_size, bits, transpose),
-      {x, w, astype(scales, dtype, s), astype(biases, dtype, s)});
+      {astype(x, dtype, s),
+       w,
+       astype(scales, dtype, s),
+       astype(biases, dtype, s)});
 
   // If needed reshape x to the original batch shape
   if (original_shape.size() != 1) {
