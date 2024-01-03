@@ -174,14 +174,9 @@ In detail:
 
    value_and_grad
 
-.. autosummary::
-   :toctree: _autosummary
-   :template: module-base-class.rst
-
-    Module
-
 .. toctree::
 
+   nn/module
    nn/layers
    nn/functions
    nn/losses
