@@ -530,9 +530,3 @@ class Module(dict):
         See :func:`train`.
         """
         self.train(False)
-
-    def __getstate__(self):
-        return self.__dict__.copy()
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
