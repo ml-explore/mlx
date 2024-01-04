@@ -153,8 +153,6 @@ MetalAllocator::MetalAllocator()
       gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()) {}
 
 Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
-  auto thread_pool = metal::new_scoped_memory_pool();
-
   // Align up memory
   if (size > vm_page_size) {
     size = vm_page_size * ((size + vm_page_size - 1) / vm_page_size);
@@ -168,6 +166,8 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     if (!allow_swap && device_->currentAllocatedSize() + size >= block_limit_) {
       return Buffer{nullptr};
     }
+
+    auto thread_pool = metal::new_scoped_memory_pool();
 
     // If we have a lot of memory pressure, check if we can reclaim some memory
     // from the cache
