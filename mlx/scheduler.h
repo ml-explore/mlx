@@ -50,8 +50,10 @@ struct StreamThread {
       // pool scoped to the task
       auto thread_pool = metal::new_scoped_memory_pool();
 
-      // cannot initialize on thread start because metal-cpp static initializers
-      // may not have run yet
+      // thread_fn may be called from a static initializer and we cannot
+      // call metal-cpp until all static initializers have completed. waiting
+      // for a task to arrive means that user code is running so metal-cpp
+      // can safely be called.
       if (!initialized) {
         initialized = true;
         metal::new_stream(stream);
