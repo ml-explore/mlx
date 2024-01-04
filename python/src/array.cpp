@@ -157,7 +157,7 @@ Dtype validate_shape(
     } else if (py::isinstance<array>(l)) {
       all_python_primitive_elements = false;
       auto arr = py::cast<array>(l);
-      if (arr.shape().size() + idx + 1 == shape.size() &&
+      if (arr.ndim() + idx + 1 == shape.size() &&
           std::equal(
               arr.shape().cbegin(),
               arr.shape().cend(),
