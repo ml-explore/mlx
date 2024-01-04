@@ -1516,7 +1516,8 @@ class TestOps(mlx_tests.MLXTestCase):
         )
 
     def test_tensordot(self):
-        if mx.default_device() == mx.cpu:
+        # No fp16 matmuls on linux
+        if self.is_linux:
             dtypes = [mx.float32]
         else:
             dtypes = [mx.float16, mx.float32]
