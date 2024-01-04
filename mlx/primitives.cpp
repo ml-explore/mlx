@@ -1805,7 +1805,7 @@ std::vector<array> QuantizedMatmul::vjp(
     // gradient wrt to x
     if (arg == 0) {
       vjps.push_back(quantized_matmul(
-          cotan,
+          cotangents[0],
           primals[1],
           primals[2],
           primals[3],
