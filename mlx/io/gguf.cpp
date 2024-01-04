@@ -53,8 +53,9 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   if (data == NULL) {
     throw std::runtime_error("[load_gguf] gguf_tensor_to_float failed");
   }
-  allocator::Buffer buffer = allocator::malloc(tensor->bsize);
-  memcpy(buffer.raw_ptr(), data, tensor->bsize);
+  const size_t new_size = tensor->num_weights * sizeof(float);
+  allocator::Buffer buffer = allocator::malloc(new_size);
+  memcpy(buffer.raw_ptr(), data, new_size);
   return {buffer, float32};
 }
 
