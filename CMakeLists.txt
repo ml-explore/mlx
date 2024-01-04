@@ -109,9 +109,8 @@ target_include_directories(
 
 MESSAGE(STATUS "Downloading gguflib")
 FetchContent_Declare(gguflib
-    # TODO: revert back to antirez once PR is merged.
-    GIT_REPOSITORY     https://github.com/jbochi/gguf-tools/
-    GIT_TAG            int_type_features
+    GIT_REPOSITORY     https://github.com/antirez/gguf-tools/
+    GIT_TAG            e48ca317eadc1c1af3cf3bcbb2f9ea04e060dac1
 )
 FetchContent_MakeAvailable(gguflib)
 target_include_directories(
