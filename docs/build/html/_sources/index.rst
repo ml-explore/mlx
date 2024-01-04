@@ -19,7 +19,7 @@ The main differences between MLX and NumPy are:
 
 The design of MLX is inspired by frameworks like `PyTorch
 <https://pytorch.org/>`_, `Jax <https://github.com/google/jax>`_, and
-`ArrayFire <https://arrayfire.org/>`_. A noteable difference from these
+`ArrayFire <https://arrayfire.org/>`_. A notable difference from these
 frameworks and MLX is the *unified memory model*. Arrays in MLX live in shared
 memory. Operations on MLX arrays can be performed on any of the supported
 device types without performing data copies. Currently supported device types
@@ -57,6 +57,7 @@ are the CPU and GPU.
    python/random
    python/transforms
    python/fft
+   python/linalg
    python/nn
    python/optimizers
    python/tree_utils
