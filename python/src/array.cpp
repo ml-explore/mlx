@@ -16,6 +16,13 @@
 namespace py = pybind11;
 using namespace py::literals;
 
+enum PyScalarT {
+  pybool = 0,
+  pyint = 1,
+  pyfloat = 2,
+  pycomplex = 3,
+};
+
 template <typename T>
 py::list to_list(array& a, size_t index, int dim) {
   py::list pl;
@@ -113,7 +120,7 @@ void fill_vector(T list, std::vector<U>& vals) {
 }
 
 template <typename T>
-Dtype validate_shape(
+PyScalarT validate_shape(
     T list,
     const std::vector<int>& shape,
     int idx,
@@ -128,12 +135,12 @@ Dtype validate_shape(
   }
 
   if (s == 0) {
-    return float32;
+    return pyfloat;
   }
 
-  Dtype type = bool_;
+  PyScalarT type = pybool;
   for (auto l : list) {
-    Dtype t = bool_;
+    PyScalarT t;
     if (py::isinstance<py::list>(l)) {
       t = validate_shape(
           l.template cast<py::list>(),
@@ -147,13 +154,13 @@ Dtype validate_shape(
           idx + 1,
           all_python_primitive_elements);
     } else if (py::isinstance<py::bool_>(l)) {
-      t = bool_;
+      t = pybool;
     } else if (py::isinstance<py::int_>(l)) {
-      t = int32;
+      t = pyint;
     } else if (py::isinstance<py::float_>(l)) {
-      t = float32;
+      t = pyfloat;
     } else if (PyComplex_Check(l.ptr())) {
-      t = complex64;
+      t = pycomplex;
     } else if (py::isinstance<array>(l)) {
       all_python_primitive_elements = false;
       auto arr = py::cast<array>(l);
@@ -162,7 +169,7 @@ Dtype validate_shape(
               arr.shape().cbegin(),
               arr.shape().cend(),
               shape.cbegin() + idx + 1)) {
-        t = arr.dtype();
+        t = pybool;
       } else {
         throw std::invalid_argument(
             "Initialization encountered non-uniform length.");
@@ -172,7 +179,7 @@ Dtype validate_shape(
       msg << "Invalid type in array initialization" << l.get_type() << ".";
       throw std::invalid_argument(msg.str());
     }
-    type = promote_types(type, t);
+    type = std::max(type, t);
   }
   return type;
 }
@@ -211,33 +218,33 @@ array create_array(array_init_type v, std::optional<Dtype> t);
 template <typename T>
 array array_from_list(
     T pl,
-    const Dtype& inferred_type,
+    const PyScalarT& inferred_type,
     std::optional<Dtype> specified_type,
     const std::vector<int>& shape) {
   // Make the array
   switch (inferred_type) {
-    case bool_: {
+    case pybool: {
       std::vector<bool> vals;
       fill_vector(pl, vals);
-      return array(vals.begin(), shape, specified_type.value_or(inferred_type));
+      return array(vals.begin(), shape, specified_type.value_or(bool_));
     }
-    case int32: {
+    case pyint: {
       std::vector<int> vals;
       fill_vector(pl, vals);
-      return array(vals.begin(), shape, specified_type.value_or(inferred_type));
+      return array(vals.begin(), shape, specified_type.value_or(int32));
     }
-    case float32: {
+    case pyfloat: {
       std::vector<float> vals;
       fill_vector(pl, vals);
-      return array(vals.begin(), shape, specified_type.value_or(inferred_type));
+      return array(vals.begin(), shape, specified_type.value_or(float32));
     }
-    case complex64: {
+    case pycomplex: {
       std::vector<std::complex<float>> vals;
       fill_vector(pl, vals);
       return array(
           reinterpret_cast<complex64_t*>(vals.data()),
           shape,
-          specified_type.value_or(inferred_type));
+          specified_type.value_or(complex64));
     }
     default: {
       std::ostringstream msg;
@@ -266,8 +273,7 @@ array array_from_list(T pl, std::optional<Dtype> dtype) {
   // `pl` contains mlx arrays
   std::vector<array> arrays;
   for (auto l : pl) {
-    arrays.push_back(
-        create_array(py::cast<array_init_type>(l), dtype.value_or(type)));
+    arrays.push_back(create_array(py::cast<array_init_type>(l), dtype));
   }
   return stack(arrays);
 }
