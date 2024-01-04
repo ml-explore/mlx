@@ -7,7 +7,7 @@ with a short description of your contribution(s) below. For example:
 
 MLX was developed with contributions from the following individuals:
 
-- Manish Aradwad: Added support for deepcopy.
+- Manish Aradwad: Added support to pickle `nn.Module`.
 - Nripesh Niketan: Added `softsign`, `softmax`, `hardswish`, `logsoftmax` activation functions. Added `dropout3d` ops.
 - Juarez Bochi: Fixed bug in cross attention.
 - Justin Deschenaux: Sine, Cosine, arange, randint, truncated normal, bernoulli, lion optimizer, Dropout2d, linear and logistic regression python example.
