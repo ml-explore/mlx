@@ -292,12 +292,9 @@ Device& device(mlx::core::Device) {
 
 std::shared_ptr<void> new_scoped_memory_pool() {
   auto dtor = [](void* ptr) {
-    //      printf("free autoreleasepool %p\n", ptr);
     static_cast<NS::AutoreleasePool*>(ptr)->release();
   };
-  auto pool = NS::AutoreleasePool::alloc()->init();
-  //    printf("new autoreleasepool %p\n", x);
-  return std::shared_ptr<void>(pool, dtor);
+  return std::shared_ptr<void>(NS::AutoreleasePool::alloc()->init(), dtor);
 }
 
 void new_stream(Stream stream) {
