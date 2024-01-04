@@ -138,6 +138,8 @@ Device::~Device() {
 }
 
 void Device::new_queue(int index) {
+  auto thread_pool = metal::new_scoped_memory_pool();
+  
   // Multiple threads can ask the device for queues
   // We lock this as a critical section for safety
   const std::lock_guard<std::mutex> lock(mtx_);

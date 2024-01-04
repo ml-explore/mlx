@@ -47,8 +47,6 @@ struct StreamThread {
         task = std::move(q.front());
         q.pop();
       }
-      // pool scoped to the task
-      auto thread_pool = metal::new_scoped_memory_pool();
 
       // thread_fn may be called from a static initializer and we cannot
       // call metal-cpp until all static initializers have completed. waiting
@@ -58,6 +56,7 @@ struct StreamThread {
         initialized = true;
         metal::new_stream(stream);
       }
+
       task();
     }
   }
