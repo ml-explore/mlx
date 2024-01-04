@@ -3,7 +3,6 @@
 #include <functional>
 
 #include "mlx/array.h"
-#include "mlx/graph.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -40,15 +39,15 @@ array::array(const std::complex<float>& val, Dtype dtype /* = complex64 */)
 array::array(
     const std::vector<int>& shape,
     Dtype dtype,
-    std::unique_ptr<Primitive> primitive,
+    std::shared_ptr<Primitive> primitive,
     const std::vector<array>& inputs)
-    : array_desc_(std::make_shared<ArrayDesc>(shape, dtype)) {
-  std::vector<array> outputs;
-  outputs.push_back(*this);
-  register_primitive(std::move(primitive), inputs, outputs);
-}
+    : array_desc_(std::make_shared<ArrayDesc>(
+          shape,
+          dtype,
+          std::move(primitive),
+          inputs)) {}
 
-std::vector<array> array::make_arrays(
+/*std::vector<array> array::make_arrays(
     const std::vector<std::vector<int>>& shapes,
     const std::vector<Dtype>& dtypes,
     std::unique_ptr<Primitive> primitive,
@@ -61,7 +60,7 @@ std::vector<array> array::make_arrays(
   }
   register_primitive(std::move(primitive), inputs, outputs);
   return outputs;
-}
+}*/
 
 array::array(std::initializer_list<float> data)
     : array_desc_(std::make_shared<ArrayDesc>(
@@ -81,8 +80,11 @@ array::array(
 }
 
 void array::detach() {
-  // Clear out the graph node
-  array_desc_->graph_node = GraphNode{};
+  array_desc_->inputs.clear();
+  array_desc_->primitive = nullptr;
+  for (auto& s : array_desc_->siblings) {
+    s.detach();
+  }
 }
 
 void array::eval() {
@@ -140,24 +142,24 @@ array::ArrayDesc::ArrayDesc(const std::vector<int>& shape, Dtype dtype)
   std::tie(size, strides) = cum_prod(shape);
 }
 
-void array::register_primitive(
-    std::unique_ptr<Primitive> primitive,
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
-  auto g = GraphNode(std::move(primitive), inputs, outputs);
-  bool is_tracer = false;
+array::ArrayDesc::ArrayDesc(
+    const std::vector<int>& shape,
+    Dtype dtype,
+    std::shared_ptr<Primitive> primitive,
+    const std::vector<array>& inputs)
+    : shape(shape),
+      dtype(dtype),
+      primitive(std::move(primitive)),
+      inputs(inputs) {
+  std::tie(size, strides) = cum_prod(shape);
   for (auto& in : inputs) {
     is_tracer |= in.is_tracer();
-  }
-  for (auto& o : outputs) {
-    // TODO encapsulate
-    o.array_desc_->graph_node = g;
-    o.set_tracer(is_tracer);
   }
 }
 
 // Needed because the Primitive type used in array.h is incomplete and the
 // compiler needs to see the call to the destructor after the type is complete.
+// TODO can probably remove this
 array::ArrayDesc::~ArrayDesc() = default;
 
 array::ArrayIterator::reference array::ArrayIterator::operator*() const {

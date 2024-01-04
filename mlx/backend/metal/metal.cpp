@@ -43,38 +43,44 @@ MTL::CommandBuffer* increment_command_buffer(Stream s) {
 }
 
 std::function<void()> make_task(
-    GraphNode g,
+    array& arr,
     std::vector<std::shared_future<void>> deps,
     std::shared_ptr<std::promise<void>> p) {
-  auto task = [arr, deps = std::move(deps), p = std::move(p)]() mutable {
-    auto pool = new_scoped_memory_pool();
-    for (auto& d : deps) {
-      d.wait();
-    }
-    auto s = g.primitive().stream();
-    auto command_buffer = increment_command_buffer(s);
-    g.primitive().eval_gpu(g.inputs(), g.outputs());
-    if (p) {
-      metal::device(s.device).end_encoding(s.index);
-      scheduler::notify_new_task(s);
-      command_buffer->addCompletedHandler(
-          [s, arr, p = std::move(p)](MTL::CommandBuffer*) mutable {
-            if (!arr.is_tracer()) {
-              arr.detach();
-            }
-            p->set_value();
-            scheduler::notify_task_completion(s);
-          });
-      metal::device(s.device).commit_command_buffer(s.index);
-    } else {
-      command_buffer->addCompletedHandler(
-          [s, arr](MTL::CommandBuffer*) mutable {
-            if (!arr.is_tracer()) {
-              arr.detach();
-            }
-          });
-    }
-  };
+  auto task =
+      [arr, deps = std::move(deps), p = std::move(p)]() mutable {
+        auto pool = new_scoped_memory_pool();
+        for (auto& d : deps) {
+          d.wait();
+        }
+        auto s = arr.primitive().stream();
+        auto command_buffer = increment_command_buffer(s);
+        std::vector<array> outputs{arr};
+        for (auto& s : arr.siblings()) {
+          outputs.push_back(s);
+        }
+        arr.primitive().eval_gpu(arr.inputs(), outputs);
+        if (p) {
+          metal::device(s.device).end_encoding(s.index);
+          scheduler::notify_new_task(s);
+          command_buffer->addCompletedHandler(
+              [s, arr, p = std::move(p)](
+                  MTL::CommandBuffer*) mutable {
+                if (!arr.is_tracer()) {
+                  arr.detach();
+                }
+                p->set_value();
+                scheduler::notify_task_completion(s);
+              });
+          metal::device(s.device).commit_command_buffer(s.index);
+        } else {
+          command_buffer->addCompletedHandler(
+              [s, arr](MTL::CommandBuffer*) mutable {
+                if (!arr.is_tracer()) {
+                  arr.detach();
+                }
+              });
+        }
+      };
   return task;
 }
 

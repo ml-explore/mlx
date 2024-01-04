@@ -6,9 +6,8 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/graph.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/graph_utils.cpp
+  #  ${CMAKE_CURRENT_SOURCE_DIR}/graph_utils.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/random.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/scheduler.cpp

@@ -9,11 +9,10 @@
 
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
-#include "mlx/graph.h"
 
 namespace mlx::core {
 
-// Forward declarations
+// Forward declaration
 class Primitive;
 using deleter_t = std::function<void(allocator::Buffer)>;
 
@@ -176,7 +175,7 @@ class array {
   array(
       const std::vector<int>& shape,
       Dtype dtype,
-      std::unique_ptr<Primitive> primitive,
+      std::shared_ptr<Primitive> primitive,
       const std::vector<array>& inputs);
 
   static std::vector<array> make_arrays(
@@ -212,23 +211,28 @@ class array {
     bool col_contiguous : 1;
   };
 
-  const GraphNode& graph_node() const {
-    return array_desc_->graph_node;
-  };
-
   /** The array's primitive. */
   Primitive& primitive() const {
-    return array_desc_->graph_node.primitive();
+    return *(array_desc_->primitive);
   };
 
   /** Check if the array has an attached primitive or is a leaf node. */
   bool has_primitive() const {
-    return array_desc_->graph_node.has_primitive();
+    return array_desc_->primitive != nullptr;
   };
 
   /** The array's inputs. */
   const std::vector<array>& inputs() const {
-    return array_desc_->graph_node.inputs();
+    return array_desc_->inputs;
+  };
+
+  std::vector<array>& editable_inputs() {
+    return array_desc_->inputs;
+  }
+
+  /** The array's siblings. */
+  const std::vector<array>& siblings() const {
+    return array_desc_->siblings;
   };
 
   /** Detach the array from the graph. */
@@ -295,17 +299,6 @@ class array {
     array_desc_ = other.array_desc_;
   }
 
-  // TODO r-value version of this.
-  ~array() {
-    // When the last array other than the reference held by the graph goes out
-    // of scope it has to signal to the graph node that it is gone. This way
-    // the graph node will be destroyed once all of its outputs are destroyed
-    // and we avoid a circular reference resource leak.
-    if (array_desc_ && has_primitive() && array_desc_.use_count() == 2) {
-      detach();
-    }
-  }
-
  private:
   // Initialize the arrays data
   template <typename It>
@@ -316,7 +309,7 @@ class array {
     std::vector<size_t> strides;
     size_t size;
     Dtype dtype;
-    GraphNode graph_node;
+    std::shared_ptr<Primitive> primitive{nullptr};
 
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph
@@ -337,7 +330,18 @@ class array {
     // Contains useful meta data about the array
     Flags flags;
 
+    std::vector<array> inputs;
+    // An array to keep track of the siblings from a multi-output
+    // primitive.
+    std::vector<array> siblings;
+
     explicit ArrayDesc(const std::vector<int>& shape, Dtype dtype);
+
+    explicit ArrayDesc(
+        const std::vector<int>& shape,
+        Dtype dtype,
+        std::shared_ptr<Primitive> primitive,
+        const std::vector<array>& inputs);
 
     ~ArrayDesc();
   };
@@ -347,13 +351,6 @@ class array {
   // the primitive which knows how to compute the array's data from its inputs
   // and a the list of array's inputs for the primitive.
   std::shared_ptr<ArrayDesc> array_desc_{nullptr};
-
-  // Register a set of arrays with a primitive which has the given
-  // inputs and outputs
-  static void register_primitive(
-      std::unique_ptr<Primitive> primitive,
-      const std::vector<array>& inputs,
-      std::vector<array>& outputs);
 };
 
 template <typename T>
