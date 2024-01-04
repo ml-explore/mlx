@@ -9,7 +9,7 @@ Layers
    :toctree: _autosummary
    :template: nn-module-template.rst
 
-   Embedding
+   Sequential
    ReLU
    PReLU
    GELU
@@ -17,13 +17,21 @@ Layers
    Step
    SELU
    Mish
+   Embedding
    Linear
+   QuantizedLinear
    Conv1d
    Conv2d
+   BatchNorm
    LayerNorm
    RMSNorm
    GroupNorm
-   RoPE
+   InstanceNorm
+   Dropout
+   Dropout2d
+   Dropout3d
+   Transformer
    MultiHeadAttention
-   Sequential
-   QuantizedLinear
+   ALiBi
+   RoPE
+   SinusoidalPositionalEncoding
