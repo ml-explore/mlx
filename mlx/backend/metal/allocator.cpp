@@ -29,6 +29,7 @@ BufferCache::BufferCache(MTL::Device* device)
     : device_(device), head_(nullptr), tail_(nullptr), pool_size_(0) {}
 
 BufferCache::~BufferCache() {
+  auto thread_pool = metal::new_scoped_memory_pool();
   clear();
 }
 
@@ -152,6 +153,8 @@ MetalAllocator::MetalAllocator()
       gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()) {}
 
 Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
+  auto thread_pool = metal::new_scoped_memory_pool();
+
   // Align up memory
   if (size > vm_page_size) {
     size = vm_page_size * ((size + vm_page_size - 1) / vm_page_size);

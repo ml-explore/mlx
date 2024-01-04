@@ -35,8 +35,7 @@ struct StreamThread {
   }
 
   void thread_fn() {
-    auto thread_pool = metal::new_scoped_memory_pool();
-    metal::new_stream(stream);
+    bool initialized = false;
     while (true) {
       std::function<void()> task;
       {
@@ -47,6 +46,15 @@ struct StreamThread {
         }
         task = std::move(q.front());
         q.pop();
+      }
+      // pool scoped to the task
+      auto thread_pool = metal::new_scoped_memory_pool();
+
+      // cannot initialize on thread start because metal-cpp static initializers
+      // may not have run yet
+      if (!initialized) {
+        initialized = true;
+        metal::new_stream(stream);
       }
       task();
     }

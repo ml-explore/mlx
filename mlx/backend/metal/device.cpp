@@ -20,7 +20,7 @@ namespace mlx::core::metal {
 namespace {
 
 // Catch things related to the main-thread static variables
-static std::shared_ptr<void> global_memory_pool = new_scoped_memory_pool();
+// static std::shared_ptr<void> global_memory_pool = new_scoped_memory_pool();
 
 // TODO nicer way to set this or possibly expose as an environment variable
 static constexpr int MAX_BUFFERS_PER_QUEUE = 12;
@@ -28,7 +28,8 @@ static constexpr int MAX_BUFFERS_PER_QUEUE = 12;
 static constexpr const char* default_mtllib_path = METAL_PATH;
 
 auto load_device() {
-  MTL::Device* device = MTL::CreateSystemDefaultDevice();
+  auto devices = MTL::CopyAllDevices();
+  auto device = static_cast<MTL::Device*>(devices->object(0));
   if (!device) {
     throw std::runtime_error("Failed to load device");
   }
@@ -120,6 +121,7 @@ Device::Device() {
 }
 
 Device::~Device() {
+  auto pool = new_scoped_memory_pool();
   for (auto& q : queue_map_) {
     q.second->release();
   }
@@ -293,9 +295,12 @@ Device& device(mlx::core::Device) {
 
 std::shared_ptr<void> new_scoped_memory_pool() {
   auto dtor = [](void* ptr) {
+    //      printf("free autoreleasepool %p\n", ptr);
     static_cast<NS::AutoreleasePool*>(ptr)->release();
   };
-  return std::shared_ptr<void>(NS::AutoreleasePool::alloc()->init(), dtor);
+  auto pool = NS::AutoreleasePool::alloc()->init();
+  //    printf("new autoreleasepool %p\n", x);
+  return std::shared_ptr<void>(pool, dtor);
 }
 
 void new_stream(Stream stream) {
