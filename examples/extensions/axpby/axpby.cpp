@@ -26,7 +26,7 @@ namespace mlx::core {
 ///////////////////////////////////////////////////////////////////////////////
 
 /**
- *  Scale and sum two vectors elementwise
+ *  Scale and sum two vectors element-wise
  *  z = alpha * x + beta * y
  *
  *  Follow numpy style broadcasting between x and y
@@ -91,21 +91,21 @@ void axpby_impl(
   T alpha = static_cast<T>(alpha_);
   T beta = static_cast<T>(beta_);
 
-  // Do the elementwise operation for each output
+  // Do the element-wise operation for each output
   for (size_t out_idx = 0; out_idx < out.size(); out_idx++) {
     // Map linear indices to offsets in x and y
     auto x_offset = elem_to_loc(out_idx, x.shape(), x.strides());
     auto y_offset = elem_to_loc(out_idx, y.shape(), y.strides());
 
     // We allocate the output to be contiguous and regularly strided
-    // (defaults to row major) and hence it doesn't need additonal mapping
+    // (defaults to row major) and hence it doesn't need additional mapping
     out_ptr[out_idx] = alpha * x_ptr[x_offset] + beta * y_ptr[y_offset];
   }
 }
 
 /** Fall back implementation for evaluation on CPU */
 void Axpby::eval(const std::vector<array>& inputs, array& out) {
-  // Check the inputs (registered in the op while contructing the out array)
+  // Check the inputs (registered in the op while constructing the out array)
   assert(inputs.size() == 2);
   auto& x = inputs[0];
   auto& y = inputs[1];
@@ -192,7 +192,7 @@ void Axpby::eval_cpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
-#else // Accelerate not avaliable
+#else // Accelerate not available
 
 /** Evaluate primitive on CPU falling back to common backend */
 void Axpby::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -254,7 +254,7 @@ void Axpby::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setComputePipelineState(kernel);
 
   // Kernel parameters are registered with buffer indices corresponding to
-  // those in the kernel decelaration at axpby.metal
+  // those in the kernel declaration at axpby.metal
   int ndim = out.ndim();
   size_t nelem = out.size();
 
@@ -287,7 +287,7 @@ void Axpby::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Fix the 3D size of the launch grid (in terms of threads)
   MTL::Size grid_dims = MTL::Size(nelem, 1, 1);
 
-  // Launch the grid with the given number of threads divded among
+  // Launch the grid with the given number of threads divided among
   // the given threadgroups
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
@@ -311,8 +311,8 @@ array Axpby::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   // Forward mode diff that pushes along the tangents
-  // The jvp transform on the the primitive can built with ops
-  // that are scheduled on the same stream as the primtive
+  // The jvp transform on the primitive can built with ops
+  // that are scheduled on the same stream as the primitive
 
   // If argnums = {0}, we only push along x in which case the
   // jvp is just the tangent scaled by alpha
@@ -345,7 +345,7 @@ std::vector<array> Axpby::vjp(
   return vjps;
 }
 
-/** Vectorize primitve along given axis */
+/** Vectorize primitive along given axis */
 std::pair<array, int> Axpby::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

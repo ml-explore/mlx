@@ -989,7 +989,7 @@ TEST_CASE("test as_strided grads") {
 }
 
 TEST_CASE("test jvp from vjp") {
-  // Unary elementwise ops
+  // Unary element-wise ops
   {
     auto x = random::uniform({5, 10});
     eval(x);
@@ -1022,7 +1022,7 @@ TEST_CASE("test jvp from vjp") {
     CHECK(compute_derivs(mlx::core::rsqrt));
   }
 
-  // Binary elementwise ops
+  // Binary element-wise ops
   {
     auto x = random::uniform({5, 10});
     auto y = random::uniform({5, 10});

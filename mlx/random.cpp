@@ -232,7 +232,7 @@ array truncated_normal(
   auto u = uniform(a, b, shape, dtype, key, s);
   auto out = multiply(sqrt2, erfinv(u, s), s);
 
-  // Clip in bouds
+  // Clip in bounds
   return maximum(minimum(upper_t, out, s), lower_t, s);
 }
 

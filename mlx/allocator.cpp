@@ -9,7 +9,7 @@
 namespace mlx::core::allocator {
 
 Buffer malloc(size_t size) {
-  auto buffer = allocator().malloc(size);
+  auto buffer = allocator().malloc(size, /* allow_swap */ true);
   if (size && !buffer.ptr()) {
     std::ostringstream msg;
     msg << "[malloc] Unable to allocate " << size << " bytes.";
@@ -22,7 +22,7 @@ void free(Buffer buffer) {
   return allocator().free(buffer);
 }
 
-Buffer CommonAllocator::malloc(size_t size) {
+Buffer CommonAllocator::malloc(size_t size, bool) {
   return Buffer{std::malloc(size)};
 }
 
@@ -36,6 +36,11 @@ Buffer malloc_or_wait(size_t size) {
   while (size && !buffer.ptr() && scheduler::n_active_tasks() > 0) {
     scheduler::wait_for_one();
     buffer = allocator().malloc(size);
+  }
+
+  // Try swapping if needed
+  if (size && !buffer.ptr()) {
+    buffer = allocator().malloc(size, /* allow_swap = */ true);
   }
 
   if (size && !buffer.ptr()) {

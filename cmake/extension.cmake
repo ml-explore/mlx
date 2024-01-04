@@ -12,7 +12,7 @@ include(CMakeParseArguments)
 #     OUTPUT_DIRECTORY: Where to place ${TITLE}.metallib
 #     SOURCES: List of source files
 #     INCLUDE_DIRS: List of include dirs
-#     DEPS: List of depedency files (like headers)
+#     DEPS: List of dependency files (like headers)
 #
 macro(mlx_build_metallib)
   # Parse args
@@ -32,7 +32,7 @@ macro(mlx_build_metallib)
   # Collect compile options 
   set(MTLLIB_COMPILE_OPTIONS -Wall -Wextra -fno-fast-math)
 
-  # Prepare metllib build command
+  # Prepare metallib build command
   add_custom_command(
     OUTPUT ${MTLLIB_BUILD_TARGET}
     COMMAND xcrun -sdk macosx metal 

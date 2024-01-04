@@ -133,7 +133,7 @@ def get_gbyte_size(in_vec_len, out_vec_len, np_dtype):
     return float(N_iter_bench * N_iter_func * n_elem * item_size) / float(1024**3)
 
 
-def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, tranpose):
+def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, transpose):
     np_dtype = getattr(np, dtype)
     mlx_gb_s = []
     mlx_gflops = []
@@ -164,7 +164,7 @@ def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, tranpose):
     ax.legend()
 
 
-def bench_with_out_len(ax, out_vec_len, in_vector_lens, dtype, tranpose):
+def bench_with_out_len(ax, out_vec_len, in_vector_lens, dtype, transpose):
     np_dtype = getattr(np, dtype)
     mlx_gb_s = []
     mlx_gflops = []

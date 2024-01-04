@@ -45,7 +45,7 @@ array fft_impl(
     throw std::invalid_argument(msg.str());
   }
 
-  // In the following shape manipulations there are three cases to consdier:
+  // In the following shape manipulations there are three cases to consider:
   // 1. In a complex to complex transform (fftn / ifftn) the output
   //    and input shapes are the same.
   // 2. In a real to complex transform (rfftn) n specifies the input dims
