@@ -129,7 +129,7 @@ array::ArrayDesc::ArrayDesc(
 }
 
 // Needed because the Primitive type used in array.h is incomplete and the
-// compiler needs to see the call to the desctructor after the type is complete.
+// compiler needs to see the call to the destructor after the type is complete.
 array::ArrayDesc::~ArrayDesc() = default;
 
 array::ArrayIterator::reference array::ArrayIterator::operator*() const {

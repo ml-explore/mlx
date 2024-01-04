@@ -85,7 +85,7 @@ information on building from source, and running tests.
 
 We are grateful for all of [our
 contributors](ACKNOWLEDGMENTS.md#Individual-Contributors). If you contribute
-to MLX and wish to be acknowledged, please add your name to to the list in your
+to MLX and wish to be acknowledged, please add your name to the list in your
 pull request.
 
 ## Citing MLX

@@ -23,11 +23,7 @@ class BufferCache {
 
   MTL::Buffer* reuse_from_cache(size_t size);
   void recycle_to_cache(MTL::Buffer* buf);
-  size_t release_cached_buffers(size_t min_bytes_to_free);
-
-  bool can_garbage_collect() {
-    return pool_size_ > 0 && device_->currentAllocatedSize() > gc_limit_;
-  }
+  void release_cached_buffers(size_t min_bytes_to_free);
 
  private:
   struct BufferHolder {
@@ -49,7 +45,6 @@ class BufferCache {
   BufferHolder* head_;
   BufferHolder* tail_;
   size_t pool_size_;
-  size_t gc_limit_;
 };
 
 } // namespace
@@ -57,7 +52,7 @@ class BufferCache {
 class MetalAllocator : public allocator::Allocator {
   /** Allocator for Metal GPUs. */
  public:
-  virtual Buffer malloc(size_t size) override;
+  virtual Buffer malloc(size_t size, bool allow_swap = false) override;
   virtual void free(Buffer buffer) override;
 
  private:
@@ -71,6 +66,7 @@ class MetalAllocator : public allocator::Allocator {
   // Allocation stats
   size_t peak_allocated_size_;
   size_t block_limit_;
+  size_t gc_limit_;
 };
 
 MetalAllocator& allocator();

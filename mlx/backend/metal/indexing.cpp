@@ -102,7 +102,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         static_cast<size_t*>(idx_strides_buf.raw_ptr()) + i * idx_ndim);
   }
 
-  // Allocate the argument bufer
+  // Allocate the argument buffer
   auto arg_buf = allocator::malloc_or_wait(arg_enc->encodedLength());
 
   // Register data with the encoder
@@ -246,7 +246,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         static_cast<size_t*>(idx_strides_buf.raw_ptr()) + i * idx_ndim);
   }
 
-  // Allocate the argument bufer
+  // Allocate the argument buffer
   auto arg_buf = allocator::malloc_or_wait(arg_enc->encodedLength());
 
   // Register data with the encoder

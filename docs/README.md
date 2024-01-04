@@ -26,7 +26,7 @@ python -m http.server <port>
 
 and point your browser to `http://localhost:<port>`.
 
-### Push to Github Pages
+### Push to GitHub Pages
 
 Check-out the `gh-pages` branch (`git switch gh-pages`) and build
 the docs. Then force add the `build/html` directory:

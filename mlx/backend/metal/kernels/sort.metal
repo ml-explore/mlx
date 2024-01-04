@@ -592,7 +592,7 @@ template <
     bool ARG_SORT,
     short BLOCK_THREADS,
     short N_PER_THREAD>
-[[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void mb_block_partiton(
+[[kernel, max_total_threads_per_threadgroup(BLOCK_THREADS)]] void mb_block_partition(
     device idx_t* block_partitions [[buffer(0)]],
     const device val_t* dev_vals [[buffer(1)]],
     const device idx_t* dev_idxs [[buffer(2)]],
@@ -777,8 +777,8 @@ template <
       const device size_t* nc_strides [[buffer(7)]], \
       uint3 tid [[threadgroup_position_in_grid]], \
       uint3 lid [[thread_position_in_threadgroup]]); \
-  template [[host_name("mb_block_partiton_" #vtname "_" #itname "_bn" #bn "_tn" #tn)]] \
-  [[kernel]] void mb_block_partiton<vtype, itype, arg_sort, bn, tn>( \
+  template [[host_name("mb_block_partition_" #vtname "_" #itname "_bn" #bn "_tn" #tn)]] \
+  [[kernel]] void mb_block_partition<vtype, itype, arg_sort, bn, tn>( \
     device itype* block_partitions [[buffer(0)]], \
     const device vtype* dev_vals [[buffer(1)]], \
     const device itype* dev_idxs [[buffer(2)]], \

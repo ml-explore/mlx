@@ -68,7 +68,7 @@ void explicit_gemm_conv_1D_gpu(
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy_gpu(in_strided_view, in_strided, CopyType::General, s);
 
-  // Peform gemm
+  // Perform gemm
   std::vector<array> copies = {in_padded, in_strided};
   mlx_matmul(
       s,
@@ -260,7 +260,7 @@ void explicit_gemm_conv_2D_gpu(
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy_gpu(in_strided_view, in_strided, CopyType::General, s);
 
-  // Peform gemm
+  // Perform gemm
   std::vector<array> copies = {in_padded, in_strided};
   mlx_matmul(
       s,

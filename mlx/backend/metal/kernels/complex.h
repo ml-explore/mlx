@@ -45,7 +45,7 @@ struct complex64_t {
       typename = typename enable_if<can_convert_to_complex64<T>>::type>
   constexpr complex64_t(T x) constant : real(x), imag(0) {}
 
-  // Converstions from complex64_t
+  // Conversions from complex64_t
   template <
       typename T,
       typename = typename enable_if<can_convert_from_complex64<T>>::type>

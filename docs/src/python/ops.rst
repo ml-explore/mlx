@@ -77,12 +77,14 @@ Operations
    quantize
    quantized_matmul
    reciprocal
+   repeat
    reshape
    round
    rsqrt
    save
    savez
    savez_compressed
+   save_safetensors
    sigmoid
    sign
    sin
@@ -102,6 +104,7 @@ Operations
    take_along_axis
    tan
    tanh
+   tensordot
    transpose
    tri
    tril

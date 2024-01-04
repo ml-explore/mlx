@@ -105,7 +105,7 @@ struct Conv2DInputBlockLoader {
         }
       }
 
-      // Zero pad otherwize
+      // Zero pad otherwise
       else {
 #pragma clang loop unroll(full)
         for (short j = 0; j < vec_size; ++j) {
@@ -334,7 +334,7 @@ struct Conv2DBlockMMA {
       }
 
       simdgroup_barrier(mem_flags::mem_none);
-// Multiply and accumulate into resulr simdgroup matrices
+// Multiply and accumulate into result simdgroup matrices
 #pragma clang loop unroll(full)
       for (short i = 0; i < TM; i++) {
 #pragma clang loop unroll(full)

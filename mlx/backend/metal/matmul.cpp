@@ -61,7 +61,7 @@ inline void mps_matmul(
   //  2. Only one of a or b has batch_size_out matrices worth of data and
   //     the other has matrix worth of data
 
-  // The matrix dimsenisons of a and b are sure to be regularly strided
+  // The matrix dimensions of a and b are sure to be regularly strided
   if (batch_size_out > 1) {
     // No broadcasting defaults
     auto batch_size_a = a.data_size() / (M * K);
