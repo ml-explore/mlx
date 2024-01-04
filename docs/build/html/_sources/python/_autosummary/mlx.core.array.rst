@@ -63,6 +63,8 @@
    
       ~array.T
       ~array.dtype
+      ~array.itemsize
+      ~array.nbytes
       ~array.ndim
       ~array.shape
       ~array.size
