@@ -19,9 +19,6 @@ namespace mlx::core::metal {
 
 namespace {
 
-// Catch things related to the main-thread static variables
-// static std::shared_ptr<void> global_memory_pool = new_scoped_memory_pool();
-
 // TODO nicer way to set this or possibly expose as an environment variable
 static constexpr int MAX_BUFFERS_PER_QUEUE = 12;
 
