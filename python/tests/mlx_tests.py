@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import os
+import platform
 import unittest
 from typing import Any, Callable, List, Tuple, Union
 
@@ -9,6 +10,10 @@ import numpy as np
 
 
 class MLXTestCase(unittest.TestCase):
+    @property
+    def is_linux(self):
+        return platform.system() == "Linux"
+
     def setUp(self):
         self.default = mx.default_device()
         device = os.getenv("DEVICE", None)
