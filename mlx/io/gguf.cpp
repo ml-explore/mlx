@@ -47,13 +47,14 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
         tensor->num_weights * equivalent_dtype.value().size);
     return {buffer, equivalent_dtype.value()};
   }
-  // Otherwise, we need to convert to float32.
+  // Otherwise, we convert to float32.
+  // TODO: Add other dequantization options.
   const float* data = gguf_tensor_to_float(tensor);
   if (data == NULL) {
     throw std::runtime_error("[load_gguf] gguf_tensor_to_float failed");
   }
   allocator::Buffer buffer = allocator::malloc(tensor->bsize);
-  std::copy(data, data + tensor->num_weights, (float*)buffer.raw_ptr());
+  memcpy(buffer.raw_ptr(), data, tensor->bsize);
   return {buffer, float32};
 }
 
