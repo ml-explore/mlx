@@ -71,7 +71,7 @@ std::unordered_map<std::string, array> load_gguf(
   gguf_tensor tensor;
   while (gguf_get_tensor(ctx, &tensor)) {
     std::vector<int> shape;
-    for (int i = 0; i < tensor.ndim; i++) {
+    for (int i = tensor.ndim - 1; i >= 0; i--) {
       shape.push_back(tensor.dim[i]);
     }
     const auto& [data, dtype] = extract_tensor_data(&tensor);
@@ -116,7 +116,7 @@ void save_gguf(
     const uint32_t num_dim = arr.shape().size();
     uint64_t dim[num_dim];
     for (int i = 0; i < num_dim; i++) {
-      dim[i] = arr.shape()[i];
+      dim[i] = arr.shape()[num_dim - i - 1];
     }
     if (!gguf_append_tensor_info(
             ctx,
