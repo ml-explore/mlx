@@ -13,6 +13,7 @@ from mlx.nn.layers.activations import (
     PReLU,
     ReLU,
     ReLU6,
+    Sigmoid,
     SiLU,
     Softmax,
     Softplus,

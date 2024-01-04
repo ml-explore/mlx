@@ -162,15 +162,6 @@ def gelu_fast_approx(x):
     return x * mx.sigmoid(1.773 * x)
 
 
-@_make_activation_module
-class Sigmoid(Module):
-    r"""Applies the sigmoid function, element-wise.
-
-    .. math::
-        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
-    """
-
-
 def step(x: mx.array, threshold: float = 0.0):
     r"""Applies the Step Activation Function.
 
@@ -238,6 +229,15 @@ def hardswish(x):
     """
     max_x_3 = mx.maximum(x + 3, 0)
     return x * mx.minimum(max_x_3, 6) / 6
+
+
+@_make_activation_module(mx.sigmoid)
+class Sigmoid(Module):
+    r"""Applies the sigmoid function, element-wise.
+
+    .. math::
+        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
+    """
 
 
 @_make_activation_module(mish)
