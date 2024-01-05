@@ -34,7 +34,6 @@ class TestLoad(mlx_tests.MLXTestCase):
         cls.test_dir_fid.cleanup()
 
     def test_save_and_load(self):
-
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
@@ -92,7 +91,6 @@ class TestLoad(mlx_tests.MLXTestCase):
                         )
 
     def test_save_and_load_fs(self):
-
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
@@ -165,7 +163,6 @@ class TestLoad(mlx_tests.MLXTestCase):
                     (save_file_npy_uncomp, save_file_mlx_uncomp),
                     (save_file_npy_comp, save_file_mlx_comp),
                 ):
-
                     # Load array saved by mlx as mlx array
                     load_arr_mlx_mlx = mx.load(save_file_mlx)
                     for k, v in load_arr_mlx_mlx.items():
