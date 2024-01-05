@@ -325,6 +325,8 @@ class TestOps(mlx_tests.MLXTestCase):
         for shape in [[4], [4, 4], [2, 10]]:
             for diag in [-1, 0, 1, -2]:
                 self.assertCmpNumpy(shape, mx.tri, np.tri, k=diag)
+        self.assertEqual(mx.tri(1, 1).dtype, mx.float32)
+        self.assertEqual(mx.tri(1, 1, dtype=mx.bfloat16).dtype, mx.bfloat16)
 
     def test_tril(self):
         for diag in [-1, 0, 1, -2]:
