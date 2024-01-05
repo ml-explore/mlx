@@ -37,6 +37,18 @@ def time_add():
     time_fn(mid_slice_add, a, b)
 
 
+def time_exp():
+    a = mx.random.uniform(shape=(1000, 100))
+    mx.eval(a)
+    time_fn(mx.exp, a)
+
+
+def time_logsumexp():
+    a = mx.random.uniform(shape=(64, 10, 10000))
+    mx.eval(a)
+    time_fn(mx.logsumexp, a, axis=-1)
+
+
 def time_matmul():
     a = mx.random.uniform(shape=(1024, 1024))
     b = mx.random.uniform(shape=(1024, 1024))
@@ -56,16 +68,14 @@ def time_negative():
     time_fn(negative, a)
 
 
-def time_exp():
-    a = mx.random.uniform(shape=(1000, 100))
-    mx.eval(a)
-    time_fn(mx.exp, a)
+def time_reshape_transposed():
+    x = mx.random.uniform(shape=(256, 256, 128))
+    mx.eval(x)
 
+    def reshape_transposed():
+        return mx.reshape(mx.transpose(x, (1, 0, 2)), (-1,))
 
-def time_logsumexp():
-    a = mx.random.uniform(shape=(64, 10, 10000))
-    mx.eval(a)
-    time_fn(mx.logsumexp, a, axis=-1)
+    time_fn(reshape_transposed)
 
 
 def time_take():
@@ -78,16 +88,6 @@ def time_take():
         return [mx.take(a, idx, 0) for idx in ids]
 
     time_fn(random_take)
-
-
-def time_reshape_transposed():
-    x = mx.random.uniform(shape=(256, 256, 128))
-    mx.eval(x)
-
-    def reshape_transposed():
-        return mx.reshape(mx.transpose(x, (1, 0, 2)), (-1,))
-
-    time_fn(reshape_transposed)
 
 
 if __name__ == "__main__":

@@ -7,29 +7,6 @@ import mlx.core as mx
 from mlx.utils import tree_map
 
 
-class OptimizerState(dict):
-    """The optimizer state implements a recursively defined
-    :class:`collections.defaultdict`, namely a missing key in an optimizer
-    state is an :class:`OptimizerState`.
-
-    .. note::
-       :meth:`OptimizerState.get` in contrast to a normal dictionary also sets
-       the key to the ``default`` value if the ``key`` was not present in the
-       dictionary.
-    """
-
-    def __getitem__(self, key):
-        if key not in self:
-            self[key] = OptimizerState()
-        return super().__getitem__(key)
-
-    def get(self, key, default):
-        """If ``key`` doesn't exist set its value to ``default`` and then return it."""
-        if key not in self:
-            self[key] = default
-        return super().__getitem__(key)
-
-
 class Optimizer:
     """The base class for all optimizers. It allows us to implement an
     optimizer on a per-parameter basis and apply it to a parameter tree.
@@ -73,6 +50,29 @@ class Optimizer:
         """To be extended by the children classes to implement each optimizer's
         update."""
         raise NotImplementedError()
+
+
+class OptimizerState(dict):
+    """The optimizer state implements a recursively defined
+    :class:`collections.defaultdict`, namely a missing key in an optimizer
+    state is an :class:`OptimizerState`.
+
+    .. note::
+       :meth:`OptimizerState.get` in contrast to a normal dictionary also sets
+       the key to the ``default`` value if the ``key`` was not present in the
+       dictionary.
+    """
+
+    def __getitem__(self, key):
+        if key not in self:
+            self[key] = OptimizerState()
+        return super().__getitem__(key)
+
+    def get(self, key, default):
+        """If ``key`` doesn't exist set its value to ``default`` and then return it."""
+        if key not in self:
+            self[key] = default
+        return super().__getitem__(key)
 
 
 class SGD(Optimizer):
@@ -345,6 +345,62 @@ class Adam(Optimizer):
         return parameter - lr * m / (mx.sqrt(v) + eps)
 
 
+class Lion(Optimizer):
+    r"""Implementation of the Lion optimizer [1].
+
+    Since updates are computed through the sign operation, they tend to
+    have larger norm than for other optimizers such as SGD and Adam.
+    We recommend a learning rate that is 3-10x smaller than AdamW and a
+    weight decay 3-10x larger than AdamW to maintain the strength
+    (lr * wd). Our Lion implementation follows the original paper. In
+    detail,
+
+    [1]: Chen, X. Symbolic Discovery of Optimization Algorithms. arXiv
+    preprint arXiv:2302.06675.
+
+    .. math::
+
+        c_{t + 1} &= \beta_1 m_t + (1 - \beta_1) g_t
+        m_{t + 1} &= \beta_2 m_t + (1 - \beta_2) g_t
+        w_{t + 1} &= w_t - \eta (\text{sign}(c_t) + \lambda w_t)
+
+    Args:
+        learning_rate (float): The learning rate :math:`\eta`.
+        betas (Tuple[float, float], optional): The coefficients
+          :math:`(\beta_1, \beta_2)` used for computing the gradient
+          momentum and update direction. Default: ``(0.9, 0.99)``
+        weight_decay (float, optional): The weight decay :math:`\lambda`. Default: ``0.0``
+    """
+
+    def __init__(
+        self,
+        learning_rate: float,
+        betas: List[float] = [0.9, 0.99],
+        weight_decay: float = 0.0,
+    ):
+        super().__init__()
+
+        self.learning_rate = learning_rate
+        self.betas = betas
+        self.weight_decay = weight_decay
+
+    def apply_single(
+        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
+    ):
+        """Performs the Lion parameter update and stores :math:`m`
+        in the optimizer state."""
+        lr = self.learning_rate
+        b1, b2 = self.betas
+        weight_decay = self.weight_decay
+
+        m = state.get("m", gradient)
+        c = b1 * m + (1 - b1) * gradient
+        state["m"] = b2 * m + (1 - b2) * gradient
+        if weight_decay > 0:
+            parameter = (1 - lr * weight_decay) * parameter
+        return parameter - lr * mx.sign(c)
+
+
 class AdamW(Adam):
     r"""Implementation of the AdamW optimizer [1].
 
@@ -442,59 +498,3 @@ class Adamax(Adam):
         state["v"] = v
 
         return parameter - lr * m / (v + eps)
-
-
-class Lion(Optimizer):
-    r"""Implementation of the Lion optimizer [1].
-
-    Since updates are computed through the sign operation, they tend to
-    have larger norm than for other optimizers such as SGD and Adam.
-    We recommend a learning rate that is 3-10x smaller than AdamW and a
-    weight decay 3-10x larger than AdamW to maintain the strength
-    (lr * wd). Our Lion implementation follows the original paper. In
-    detail,
-
-    [1]: Chen, X. Symbolic Discovery of Optimization Algorithms. arXiv
-    preprint arXiv:2302.06675.
-
-    .. math::
-
-        c_{t + 1} &= \beta_1 m_t + (1 - \beta_1) g_t
-        m_{t + 1} &= \beta_2 m_t + (1 - \beta_2) g_t
-        w_{t + 1} &= w_t - \eta (\text{sign}(c_t) + \lambda w_t)
-
-    Args:
-        learning_rate (float): The learning rate :math:`\eta`.
-        betas (Tuple[float, float], optional): The coefficients
-          :math:`(\beta_1, \beta_2)` used for computing the gradient
-          momentum and update direction. Default: ``(0.9, 0.99)``
-        weight_decay (float, optional): The weight decay :math:`\lambda`. Default: ``0.0``
-    """
-
-    def __init__(
-        self,
-        learning_rate: float,
-        betas: List[float] = [0.9, 0.99],
-        weight_decay: float = 0.0,
-    ):
-        super().__init__()
-
-        self.learning_rate = learning_rate
-        self.betas = betas
-        self.weight_decay = weight_decay
-
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
-        """Performs the Lion parameter update and stores :math:`m`
-        in the optimizer state."""
-        lr = self.learning_rate
-        b1, b2 = self.betas
-        weight_decay = self.weight_decay
-
-        m = state.get("m", gradient)
-        c = b1 * m + (1 - b1) * gradient
-        state["m"] = b2 * m + (1 - b2) * gradient
-        if weight_decay > 0:
-            parameter = (1 - lr * weight_decay) * parameter
-        return parameter - lr * mx.sign(c)

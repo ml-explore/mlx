@@ -5,14 +5,9 @@
 import os
 import subprocess
 
-# -- Project information -----------------------------------------------------
-
-project = "MLX"
-copyright = "2023, MLX Contributors"
 author = "MLX Contributors"
-version = "0.0.7"
-release = "0.0.7"
-
+autosummary_generate = True
+copyright = "2023, MLX Contributors"
 # -- General configuration ---------------------------------------------------
 
 extensions = [
@@ -21,36 +16,32 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
 ]
-
-python_use_unqualified_type_names = True
-autosummary_generate = True
-
-intersphinx_mapping = {
-    "https://docs.python.org/3": None,
-    "https://numpy.org/doc/stable/": None,
-}
-
-templates_path = ["_templates"]
-html_static_path = ["_static"]
-source_suffix = ".rst"
-master_doc = "index"
 highlight_language = "python"
-pygments_style = "sphinx"
-
+html_logo = "_static/mlx_logo.png"
+html_static_path = ["_static"]
 # -- Options for HTML output -------------------------------------------------
 
 html_theme = "sphinx_book_theme"
-
 html_theme_options = {
     "show_toc_level": 2,
     "repository_url": "https://github.com/ml-explore/mlx",
     "use_repository_button": True,
     "navigation_with_keys": False,
 }
-
-html_logo = "_static/mlx_logo.png"
-
-
 # -- Options for HTMLHelp output ---------------------------------------------
 
 htmlhelp_basename = "mlx_doc"
+intersphinx_mapping = {
+    "https://docs.python.org/3": None,
+    "https://numpy.org/doc/stable/": None,
+}
+master_doc = "index"
+# -- Project information -----------------------------------------------------
+
+project = "MLX"
+pygments_style = "sphinx"
+python_use_unqualified_type_names = True
+release = "0.0.7"
+source_suffix = ".rst"
+templates_path = ["_templates"]
+version = "0.0.7"

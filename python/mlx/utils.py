@@ -3,6 +3,50 @@
 from collections import defaultdict
 
 
+def tree_flatten(tree, prefix="", is_leaf=None):
+    """Flattens a python tree to a list of key, value tuples.
+
+    The keys are using the dot notation to define trees of arbitrary depth and
+    complexity.
+
+    .. code-block:: python
+
+        from mlx.utils import tree_flatten
+
+        print(tree_flatten([[[0]]]))
+        # [("0.0.0", 0)]
+
+        print(tree_flatten([[[0]]], ".hello"))
+        # [("hello.0.0.0", 0)]
+
+    .. note::
+       Dictionaries should have keys that are valid python identifiers.
+
+    Args:
+        tree (Any): The python tree to be flattened.
+        prefix (str): A prefix to use for the keys. The first character is
+            always discarded.
+        is_leaf (Callable): An optional callable that returns True if the
+            passed object is considered a leaf or False otherwise.
+
+    Returns:
+        List[Tuple[str, Any]]: The flat representation of the python tree.
+    """
+    flat_tree = []
+
+    if is_leaf is None or not is_leaf(tree):
+        if isinstance(tree, (list, tuple)):
+            for i, t in enumerate(tree):
+                flat_tree.extend(tree_flatten(t, f"{prefix}.{i}", is_leaf))
+            return flat_tree
+        if isinstance(tree, dict):
+            for k, t in tree.items():
+                flat_tree.extend(tree_flatten(t, f"{prefix}.{k}", is_leaf))
+            return flat_tree
+
+    return [(prefix[1:], tree)]
+
+
 def tree_map(fn, tree, *rest, is_leaf=None):
     """Applies ``fn`` to the leaves of the python tree ``tree`` and
     returns a new collection with the results.
@@ -52,50 +96,6 @@ def tree_map(fn, tree, *rest, is_leaf=None):
         }
     else:
         return fn(tree, *rest)
-
-
-def tree_flatten(tree, prefix="", is_leaf=None):
-    """Flattens a python tree to a list of key, value tuples.
-
-    The keys are using the dot notation to define trees of arbitrary depth and
-    complexity.
-
-    .. code-block:: python
-
-        from mlx.utils import tree_flatten
-
-        print(tree_flatten([[[0]]]))
-        # [("0.0.0", 0)]
-
-        print(tree_flatten([[[0]]], ".hello"))
-        # [("hello.0.0.0", 0)]
-
-    .. note::
-       Dictionaries should have keys that are valid python identifiers.
-
-    Args:
-        tree (Any): The python tree to be flattened.
-        prefix (str): A prefix to use for the keys. The first character is
-            always discarded.
-        is_leaf (Callable): An optional callable that returns True if the
-            passed object is considered a leaf or False otherwise.
-
-    Returns:
-        List[Tuple[str, Any]]: The flat representation of the python tree.
-    """
-    flat_tree = []
-
-    if is_leaf is None or not is_leaf(tree):
-        if isinstance(tree, (list, tuple)):
-            for i, t in enumerate(tree):
-                flat_tree.extend(tree_flatten(t, f"{prefix}.{i}", is_leaf))
-            return flat_tree
-        if isinstance(tree, dict):
-            for k, t in tree.items():
-                flat_tree.extend(tree_flatten(t, f"{prefix}.{k}", is_leaf))
-            return flat_tree
-
-    return [(prefix[1:], tree)]
 
 
 def tree_unflatten(tree):

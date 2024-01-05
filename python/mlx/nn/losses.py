@@ -6,6 +6,44 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
+def _reduce(loss: mx.array, reduction: str = "none"):
+    if reduction == "mean":
+        return mx.mean(loss)
+    elif reduction == "sum":
+        return mx.sum(loss)
+    elif reduction == "none":
+        return loss
+    else:
+        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
+
+
+def binary_cross_entropy(
+    logits: mx.array, targets: mx.array, reduction: str = "none"
+) -> mx.array:
+    """
+    Computes the binary cross entropy loss.
+
+    Args:
+        logits (array): The unnormalized (pre-sigmoid) predicted logits.
+        targets (array): The binary target values in {0, 1}.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: The computed binary cross entropy loss.
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> inputs = mx.array([0.105361, 0.223144, 1.20397, 0.916291])
+        >>> targets = mx.array([0, 0, 1, 1])
+        >>> loss = nn.losses.binary_cross_entropy(inputs, targets, "mean")
+        >>> loss
+        array([0.612192], dtype=float32)
+    """
+    loss = mx.logaddexp(0.0, logits) - targets * logits
+    return _reduce(loss, reduction)
+
+
 def cross_entropy(
     logits: mx.array,
     targets: mx.array,
@@ -60,30 +98,89 @@ def cross_entropy(
     return _reduce(loss, reduction)
 
 
-def binary_cross_entropy(
-    logits: mx.array, targets: mx.array, reduction: str = "none"
+def hinge_loss(
+    inputs: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
-    """
-    Computes the binary cross entropy loss.
+    r"""
+    Computes the hinge loss between inputs and targets.
+
+    .. math::
+
+       \text{hinge}(y, y_{\text{pred}}) = \max(0, 1 - y \cdot y_{\text{pred}})
+
 
     Args:
-        logits (array): The unnormalized (pre-sigmoid) predicted logits.
-        targets (array): The binary target values in {0, 1}.
+        inputs (array): The predicted values.
+        targets (array): The target values. They should be -1 or 1.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        array: The computed binary cross entropy loss.
-    Examples:
-        >>> import mlx.core as mx
-        >>> import mlx.nn as nn
-        >>> inputs = mx.array([0.105361, 0.223144, 1.20397, 0.916291])
-        >>> targets = mx.array([0, 0, 1, 1])
-        >>> loss = nn.losses.binary_cross_entropy(inputs, targets, "mean")
-        >>> loss
-        array([0.612192], dtype=float32)
+        array: The computed hinge loss.
     """
-    loss = mx.logaddexp(0.0, logits) - targets * logits
+    loss = mx.maximum(1 - inputs * targets, 0)
+
+    return _reduce(loss, reduction)
+
+
+def huber_loss(
+    inputs: mx.array, targets: mx.array, delta: float = 1.0, reduction: str = "none"
+) -> mx.array:
+    r"""
+    Computes the Huber loss between inputs and targets.
+
+    .. math::
+
+        L_{\delta}(a) =
+        \left\{ \begin{array}{ll}
+            \frac{1}{2} a^2 & \text{for } |a| \leq \delta, \\
+            \delta \left( |a| - \frac{1}{2} \delta \right) & \text{otherwise.}
+        \end{array} \right.
+
+    Args:
+        inputs (array): The predicted values.
+        targets (array): The target values.
+        delta (float, optional): The threshold at which to change between L1 and L2 loss.
+          Default: ``1.0``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: The computed Huber loss.
+    """
+    errors = inputs - targets
+    abs_errors = mx.abs(errors)
+    quadratic = mx.minimum(abs_errors, delta)
+    linear = abs_errors - quadratic
+    loss = 0.5 * quadratic**2 + delta * linear
+
+    return _reduce(loss, reduction)
+
+
+def kl_div_loss(
+    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+) -> mx.array:
+    """
+    Computes the Kullback-Leibler divergence loss.
+
+    Computes the following when ``reduction == 'none'``:
+
+    .. code-block:: python
+
+        mx.exp(targets) * (targets - inputs).sum(axis)
+
+    Args:
+        inputs (array): Log probabilities for the predicted distribution.
+        targets (array): Log probabilities for the target distribution.
+        axis (int, optional): The distribution axis. Default: ``-1``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: The computed Kullback-Leibler divergence loss.
+    """
+    loss = mx.sum(mx.exp(targets) * (targets - inputs), axis)
+
     return _reduce(loss, reduction)
 
 
@@ -108,6 +205,38 @@ def l1_loss(
             f"targets shape {targets.shape}."
         )
     loss = mx.abs(predictions - targets)
+
+    return _reduce(loss, reduction)
+
+
+def log_cosh_loss(
+    inputs: mx.array, targets: mx.array, reduction: str = "none"
+) -> mx.array:
+    r"""
+    Computes the log cosh loss between inputs and targets.
+
+    Logcosh acts like L2 loss for small errors, ensuring stable gradients,
+    and like the L1 loss for large errors, reducing sensitivity to outliers. This
+    dual behavior offers a balanced, robust approach for regression tasks.
+
+    .. math::
+
+       \text{logcosh}(y_{\text{true}}, y_{\text{pred}}) =
+            \frac{1}{n} \sum_{i=1}^{n}
+            \log(\cosh(y_{\text{pred}}^{(i)} - y_{\text{true}}^{(i)}))
+
+
+    Args:
+        inputs (array): The predicted values.
+        targets (array): The target values.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Returns:
+        array: The computed log cosh loss.
+    """
+    errors = inputs - targets
+    loss = mx.logaddexp(errors, -errors) - math.log(2)
 
     return _reduce(loss, reduction)
 
@@ -154,33 +283,6 @@ def nll_loss(
         array: The computed NLL loss.
     """
     loss = -mx.take_along_axis(inputs, targets[..., None], axis).squeeze(-1)
-
-    return _reduce(loss, reduction)
-
-
-def kl_div_loss(
-    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
-) -> mx.array:
-    """
-    Computes the Kullback-Leibler divergence loss.
-
-    Computes the following when ``reduction == 'none'``:
-
-    .. code-block:: python
-
-        mx.exp(targets) * (targets - inputs).sum(axis)
-
-    Args:
-        inputs (array): Log probabilities for the predicted distribution.
-        targets (array): Log probabilities for the target distribution.
-        axis (int, optional): The distribution axis. Default: ``-1``.
-        reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
-
-    Returns:
-        array: The computed Kullback-Leibler divergence loss.
-    """
-    loss = mx.sum(mx.exp(targets) * (targets - inputs), axis)
 
     return _reduce(loss, reduction)
 
@@ -269,106 +371,4 @@ def triplet_loss(
         + margin,
         0,
     )
-    return _reduce(loss, reduction)
-
-
-def _reduce(loss: mx.array, reduction: str = "none"):
-    if reduction == "mean":
-        return mx.mean(loss)
-    elif reduction == "sum":
-        return mx.sum(loss)
-    elif reduction == "none":
-        return loss
-    else:
-        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
-
-
-def hinge_loss(
-    inputs: mx.array, targets: mx.array, reduction: str = "none"
-) -> mx.array:
-    r"""
-    Computes the hinge loss between inputs and targets.
-
-    .. math::
-
-       \text{hinge}(y, y_{\text{pred}}) = \max(0, 1 - y \cdot y_{\text{pred}})
-
-
-    Args:
-        inputs (array): The predicted values.
-        targets (array): The target values. They should be -1 or 1.
-        reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
-
-    Returns:
-        array: The computed hinge loss.
-    """
-    loss = mx.maximum(1 - inputs * targets, 0)
-
-    return _reduce(loss, reduction)
-
-
-def huber_loss(
-    inputs: mx.array, targets: mx.array, delta: float = 1.0, reduction: str = "none"
-) -> mx.array:
-    r"""
-    Computes the Huber loss between inputs and targets.
-
-    .. math::
-
-        L_{\delta}(a) =
-        \left\{ \begin{array}{ll}
-            \frac{1}{2} a^2 & \text{for } |a| \leq \delta, \\
-            \delta \left( |a| - \frac{1}{2} \delta \right) & \text{otherwise.}
-        \end{array} \right.
-
-    Args:
-        inputs (array): The predicted values.
-        targets (array): The target values.
-        delta (float, optional): The threshold at which to change between L1 and L2 loss.
-          Default: ``1.0``.
-        reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
-
-    Returns:
-        array: The computed Huber loss.
-    """
-    errors = inputs - targets
-    abs_errors = mx.abs(errors)
-    quadratic = mx.minimum(abs_errors, delta)
-    linear = abs_errors - quadratic
-    loss = 0.5 * quadratic**2 + delta * linear
-
-    return _reduce(loss, reduction)
-
-
-def log_cosh_loss(
-    inputs: mx.array, targets: mx.array, reduction: str = "none"
-) -> mx.array:
-    r"""
-    Computes the log cosh loss between inputs and targets.
-
-    Logcosh acts like L2 loss for small errors, ensuring stable gradients,
-    and like the L1 loss for large errors, reducing sensitivity to outliers. This
-    dual behavior offers a balanced, robust approach for regression tasks.
-
-    .. math::
-
-       \text{logcosh}(y_{\text{true}}, y_{\text{pred}}) =
-            \frac{1}{n} \sum_{i=1}^{n}
-            \log(\cosh(y_{\text{pred}}^{(i)} - y_{\text{true}}^{(i)}))
-
-
-    Args:
-        inputs (array): The predicted values.
-        targets (array): The target values.
-        reduction (str, optional): Specifies the reduction to apply to the output:
-          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
-
-    Returns:
-        array: The computed log cosh loss.
-    """
-    errors = inputs - targets
-    loss = mx.logaddexp(errors, -errors) - math.log(2)
-
     return _reduce(loss, reduction)

@@ -10,28 +10,14 @@ import mlx.core as mx
 import numpy as np
 import torch
 
-results_dir = "./results"
-
-if not os.path.isdir(results_dir):
-    os.mkdir(results_dir)
-
-device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
-device_name = device_name.decode("utf-8").strip("\n")
-
-N_warmup = 5
 N_iter_bench = 50
 N_iter_func = 20
-
-out_vec_sizes = [128, 512, 2048, 4096]
-in_vec_sizes = [128, 512, 2048, 4096]
-
+N_warmup = 5
 benchmark_vector_lens = []
-benchmark_vector_lens += [(i + 1) * 4096 for i in range(8)][::2]
-benchmark_vector_lens += [(i + 1) * 4095 for i in range(8)][::2]
-benchmark_vector_lens += [(i + 1) * 4097 for i in range(8)][::2]
-benchmark_vector_lens += [64, 128, 512, 1024, 2048, 11008, 32000]
-
-benchmark_vector_lens.sort()
+device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
+in_vec_sizes = [128, 512, 2048, 4096]
+out_vec_sizes = [128, 512, 2048, 4096]
+results_dir = "./results"
 
 
 def bench(f, m, v):
@@ -44,44 +30,6 @@ def bench(f, m, v):
         f(m, v)
     e = time.perf_counter_ns()
     return (e - s) * 1e-9
-
-
-def gemv_mlx(m, v):
-    ys = []
-    for i in range(N_iter_func):
-        y = m @ v
-        ys.append(y)
-    mx.eval(ys)
-    return ys
-
-
-def gemv_t_mlx(m, v):
-    ys = []
-    for i in range(N_iter_func):
-        y = v @ m
-        ys.append(y)
-    mx.eval(ys)
-    return ys
-
-
-@torch.no_grad()
-def gemv_torch(m, v):
-    ys = []
-    for i in range(N_iter_func):
-        y = m @ v
-        ys.append(y)
-    torch.mps.synchronize()
-    return ys
-
-
-@torch.no_grad()
-def gemv_t_torch(m, v):
-    ys = []
-    for i in range(N_iter_func):
-        y = v @ m
-        ys.append(y)
-    torch.mps.synchronize()
-    return ys
 
 
 def bench_lens(in_vec_len, out_vec_len, np_dtype, transpose=False):
@@ -119,18 +67,6 @@ def bench_lens(in_vec_len, out_vec_len, np_dtype, transpose=False):
         )
 
     return time_mlx, time_torch
-
-
-def get_gflop_count(in_vec_len, out_vec_len):
-    return float(2.0 * N_iter_bench * N_iter_func * in_vec_len * out_vec_len) / float(
-        1024**3
-    )
-
-
-def get_gbyte_size(in_vec_len, out_vec_len, np_dtype):
-    n_elem = in_vec_len * out_vec_len + in_vec_len + out_vec_len
-    item_size = 4 if np_dtype == np.float32 else 2
-    return float(N_iter_bench * N_iter_func * n_elem * item_size) / float(1024**3)
 
 
 def bench_with_in_len(ax, in_vec_len, out_vector_lens, dtype, transpose):
@@ -193,6 +129,68 @@ def bench_with_out_len(ax, out_vec_len, in_vector_lens, dtype, transpose):
     ax.set_title(title)
     ax.set(xlabel="in_vector_len", ylabel="Performance (GB/s)")
     ax.legend()
+
+
+def gemv_mlx(m, v):
+    ys = []
+    for i in range(N_iter_func):
+        y = m @ v
+        ys.append(y)
+    mx.eval(ys)
+    return ys
+
+
+def gemv_t_mlx(m, v):
+    ys = []
+    for i in range(N_iter_func):
+        y = v @ m
+        ys.append(y)
+    mx.eval(ys)
+    return ys
+
+
+@torch.no_grad()
+def gemv_t_torch(m, v):
+    ys = []
+    for i in range(N_iter_func):
+        y = v @ m
+        ys.append(y)
+    torch.mps.synchronize()
+    return ys
+
+
+@torch.no_grad()
+def gemv_torch(m, v):
+    ys = []
+    for i in range(N_iter_func):
+        y = m @ v
+        ys.append(y)
+    torch.mps.synchronize()
+    return ys
+
+
+def get_gbyte_size(in_vec_len, out_vec_len, np_dtype):
+    n_elem = in_vec_len * out_vec_len + in_vec_len + out_vec_len
+    item_size = 4 if np_dtype == np.float32 else 2
+    return float(N_iter_bench * N_iter_func * n_elem * item_size) / float(1024**3)
+
+
+def get_gflop_count(in_vec_len, out_vec_len):
+    return float(2.0 * N_iter_bench * N_iter_func * in_vec_len * out_vec_len) / float(
+        1024**3
+    )
+
+
+device_name = device_name.decode("utf-8").strip("\n")
+
+if not os.path.isdir(results_dir):
+    os.mkdir(results_dir)
+benchmark_vector_lens += [(i + 1) * 4096 for i in range(8)][::2]
+benchmark_vector_lens += [(i + 1) * 4095 for i in range(8)][::2]
+benchmark_vector_lens += [(i + 1) * 4097 for i in range(8)][::2]
+benchmark_vector_lens += [64, 128, 512, 1024, 2048, 11008, 32000]
+
+benchmark_vector_lens.sort()
 
 
 for transpose in (False, True):

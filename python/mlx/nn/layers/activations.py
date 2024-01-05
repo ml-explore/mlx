@@ -15,79 +15,6 @@ def _make_activation_module(f):
     return decorator
 
 
-def sigmoid(x):
-    r"""Applies the element-wise function:
-
-    .. math::
-        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
-    """
-    return mx.sigmoid(x)
-
-
-def relu(x):
-    r"""Applies the Rectified Linear Unit.
-
-    Simply ``mx.maximum(x, 0)``.
-    """
-    return mx.maximum(x, 0)
-
-
-def leaky_relu(x, negative_slope=0.01):
-    r"""Applies the Leaky Rectified Linear Unit.
-
-    Simply ``mx.maximum(negative_slope * x, x)``.
-    """
-    return mx.maximum(negative_slope * x, x)
-
-
-def log_softmax(x, axis=-1):
-    r"""Applies the Log Softmax function.
-
-    Applies :math:`x + \log \sum_i e^{x_i}` element wise.
-    """
-    return x - mx.logsumexp(x, axis=axis, keepdims=True)
-
-
-def elu(x, alpha=1.0):
-    r"""Applies the Exponential Linear Unit.
-
-    Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
-    """
-    return mx.where(x > 0, x, alpha * (mx.exp(x) - 1))
-
-
-def relu6(x):
-    r"""Applies the Rectified Linear Unit 6.
-
-    Applies :math:`\min(\max(x, 0), 6)` element wise.
-    """
-    return mx.minimum(mx.maximum(x, 0), 6.0)
-
-
-def softmax(x, axis=-1):
-    r"""Applies the Softmax function.
-
-    Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
-    """
-    return mx.softmax(x, axis=axis)
-
-
-def softplus(x):
-    r"""Applies the Softplus function.
-
-    Applies :math:`\log(1 + \exp(x))` element wise.
-    """
-    return mx.logaddexp(x, 0)
-
-
-def softsign(x):
-    r"""Applies the Softsign function.
-
-    Applies :math:`\frac{x}{1 + |x|}` element wise.
-    """
-    return mx.divide(x, 1 + mx.abs(x))
-
-
 def celu(x, alpha=1.0):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.
 
@@ -97,21 +24,12 @@ def celu(x, alpha=1.0):
     return mx.maximum(x, 0.0) + alpha * (mx.exp(mx.minimum(x, 0.0) / alpha) - 1)
 
 
-def silu(x):
-    r"""Applies the Sigmoid Linear Unit. Also known as Swish.
+def elu(x, alpha=1.0):
+    r"""Applies the Exponential Linear Unit.
 
-    Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
-    the logistic sigmoid.
+    Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
     """
-    return x * mx.sigmoid(x)
-
-
-def log_sigmoid(x):
-    r"""Applies the Log Sigmoid function.
-
-    Applies :math:`\log(\sigma(x)) = -\log(1 + e^{-x})` element wise.
-    """
-    return -softplus(-x)
+    return mx.where(x > 0, x, alpha * (mx.exp(x) - 1))
 
 
 def gelu(x):
@@ -162,6 +80,138 @@ def gelu_fast_approx(x):
     return x * mx.sigmoid(1.773 * x)
 
 
+def hardswish(x):
+    r"""Applies the hardswish function, element-wise.
+
+    .. math::
+        \text{Hardswish}(x) = x * \min(\max(x + 3, 0), 6) / 6
+    """
+    max_x_3 = mx.maximum(x + 3, 0)
+    return x * mx.minimum(max_x_3, 6) / 6
+
+
+def leaky_relu(x, negative_slope=0.01):
+    r"""Applies the Leaky Rectified Linear Unit.
+
+    Simply ``mx.maximum(negative_slope * x, x)``.
+    """
+    return mx.maximum(negative_slope * x, x)
+
+
+def log_sigmoid(x):
+    r"""Applies the Log Sigmoid function.
+
+    Applies :math:`\log(\sigma(x)) = -\log(1 + e^{-x})` element wise.
+    """
+    return -softplus(-x)
+
+
+def log_softmax(x, axis=-1):
+    r"""Applies the Log Softmax function.
+
+    Applies :math:`x + \log \sum_i e^{x_i}` element wise.
+    """
+    return x - mx.logsumexp(x, axis=axis, keepdims=True)
+
+
+def mish(x: mx.array) -> mx.array:
+    r"""Applies the Mish function, element-wise.
+    Mish: A Self Regularized Non-Monotonic Neural Activation Function.
+
+    Reference: https://arxiv.org/abs/1908.08681
+
+    .. math::
+        \text{Mish}(x) = x * \text{Tanh}(\text{Softplus}(x))
+
+    """
+    return x * mx.tanh(softplus(x))
+
+
+def prelu(x: mx.array, alpha: mx.array) -> mx.array:
+    r"""Applies the element-wise parametric ReLU.
+
+    .. math::
+        \text{PReLU}(x) = \max(0,x) + a * \min(0,x)
+
+    where :math:`a` is an array.
+    """
+    return mx.maximum(0, x) + alpha * mx.minimum(0, x)
+
+
+def relu(x):
+    r"""Applies the Rectified Linear Unit.
+
+    Simply ``mx.maximum(x, 0)``.
+    """
+    return mx.maximum(x, 0)
+
+
+def relu6(x):
+    r"""Applies the Rectified Linear Unit 6.
+
+    Applies :math:`\min(\max(x, 0), 6)` element wise.
+    """
+    return mx.minimum(mx.maximum(x, 0), 6.0)
+
+
+def selu(x):
+    r"""Applies the Scaled Exponential Linear Unit.
+
+    .. math::
+        \text{selu}(x) = \begin{cases}
+        \lambda x & \text{if } x > 0 \\
+        \lambda \alpha (\exp(x) - 1) & \text{if } x \leq 0
+        \end{cases}
+
+    where :math:`\lambda = 1.0507` and :math:`\alpha = 1.67326`.
+
+    See also :func:`elu`.
+    """
+    return elu(x, 1.67326) * 1.0507
+
+
+def sigmoid(x):
+    r"""Applies the element-wise function:
+
+    .. math::
+        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
+    """
+    return mx.sigmoid(x)
+
+
+def silu(x):
+    r"""Applies the Sigmoid Linear Unit. Also known as Swish.
+
+    Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
+    the logistic sigmoid.
+    """
+    return x * mx.sigmoid(x)
+
+
+def softmax(x, axis=-1):
+    r"""Applies the Softmax function.
+
+    Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
+    """
+    return mx.softmax(x, axis=axis)
+
+
+def softplus(x):
+    r"""Applies the Softplus function.
+
+    Applies :math:`\log(1 + \exp(x))` element wise.
+    """
+    return mx.logaddexp(x, 0)
+
+
+def softsign(x):
+    r"""Applies the Softsign function.
+
+    Applies :math:`\frac{x}{1 + |x|}` element wise.
+    """
+    return mx.divide(x, 1 + mx.abs(x))
+
+
 def step(x: mx.array, threshold: float = 0.0):
     r"""Applies the Step Activation Function.
 
@@ -181,54 +231,12 @@ def step(x: mx.array, threshold: float = 0.0):
     return mx.where(x > threshold, 1, 0)
 
 
-def selu(x):
-    r"""Applies the Scaled Exponential Linear Unit.
+def tanh(x):
+    """Applies the hyperbolic tangent function.
 
-    .. math::
-        \text{selu}(x) = \begin{cases}
-        \lambda x & \text{if } x > 0 \\
-        \lambda \alpha (\exp(x) - 1) & \text{if } x \leq 0
-        \end{cases}
-
-    where :math:`\lambda = 1.0507` and :math:`\alpha = 1.67326`.
-
-    See also :func:`elu`.
+    Simply ``mx.tanh(x)``.
     """
-    return elu(x, 1.67326) * 1.0507
-
-
-def prelu(x: mx.array, alpha: mx.array) -> mx.array:
-    r"""Applies the element-wise parametric ReLU.
-
-    .. math::
-        \text{PReLU}(x) = \max(0,x) + a * \min(0,x)
-
-    where :math:`a` is an array.
-    """
-    return mx.maximum(0, x) + alpha * mx.minimum(0, x)
-
-
-def mish(x: mx.array) -> mx.array:
-    r"""Applies the Mish function, element-wise.
-    Mish: A Self Regularized Non-Monotonic Neural Activation Function.
-
-    Reference: https://arxiv.org/abs/1908.08681
-
-    .. math::
-        \text{Mish}(x) = x * \text{Tanh}(\text{Softplus}(x))
-
-    """
-    return x * mx.tanh(softplus(x))
-
-
-def hardswish(x):
-    r"""Applies the hardswish function, element-wise.
-
-    .. math::
-        \text{Hardswish}(x) = x * \min(\max(x + 3, 0), 6) / 6
-    """
-    max_x_3 = mx.maximum(x + 3, 0)
-    return x * mx.minimum(max_x_3, 6) / 6
+    return mx.tanh(x)
 
 
 @_make_activation_module(mx.sigmoid)
@@ -430,14 +438,6 @@ class GELU(Module):
 
     def __call__(self, x):
         return self._act(x)
-
-
-def tanh(x):
-    """Applies the hyperbolic tangent function.
-
-    Simply ``mx.tanh(x)``.
-    """
-    return mx.tanh(x)
 
 
 @_make_activation_module(tanh)
