@@ -1294,10 +1294,7 @@ std::vector<std::tuple<
     std::string,
     std::vector<std::string>,
     bool>>
-einsum_path(
-    const std::string& equation,
-    const std::vector<array>& operands,
-    StreamOrDevice s = {});
+einsum_path(const std::string& equation, const std::vector<array>& operands);
 
 /** Compute D = beta * C + alpha * (A @ B) */
 array addmm(
