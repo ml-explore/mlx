@@ -3,6 +3,7 @@
 #pragma once
 
 #include <optional>
+#include <set>
 #include <variant>
 
 #include "array.h"
@@ -1080,6 +1081,16 @@ array outer(const array& a, const array& b, StreamOrDevice s = {});
 
 /** Compute the inner product of two vectors. */
 array inner(const array& a, const array& b, StreamOrDevice s = {});
+std::vector<std::tuple<
+    std::vector<int>,
+    std::set<char>,
+    std::string,
+    std::vector<std::string>,
+    bool>>
+einsum_path(
+    const std::string& equation,
+    const std::vector<array>& operands,
+    StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */
 std::unordered_map<std::string, array> load_safetensors(
