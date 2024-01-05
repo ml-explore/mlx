@@ -3,7 +3,6 @@
 #pragma once
 
 #include <optional>
-#include <set>
 #include <variant>
 
 #include "mlx/array.h"
