@@ -3526,3 +3526,13 @@ TEST_CASE("test einsum") {
   CHECK_EQ(x.shape(), expected.shape());
   CHECK_EQ(array_equal(x, expected).item<bool>(), true);
 }
+
+#include <exception>
+
+TEST_CASE("einsum_path") {
+  auto x = einsum_path("ij,jk,kl", {ones({2, 2}), ones({2, 2}), ones({2, 2})});
+  MESSAGE("len " << x.size());
+  for (auto& s : x) {
+    MESSAGE("" << std::get<2>(s));
+  }
+};
