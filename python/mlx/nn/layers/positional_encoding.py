@@ -25,7 +25,18 @@ class RoPE(Module):
         base (float, optional): The base used to compute angular frequency for
             each dimension in the positional encodings. Default: ``10000``.
         scale (float, optional): The scale used to scale the positions. Default: ``1.0``.
+        max_position (int, optional): The maximum position for which to precompute the sin and cos values. Default: 2048.
+        dtype: Data type of the computation. Default: mx.float32.
+
+    Attributes:
+        _cos_sin_theta_key (tuple): Cached key for the precomputed cosine and sine values.
+        _cos_sin_theta_value (tuple): Cached cosine and sine values.
+        _freq (mx.ndarray): Frequency terms used in computing theta values.
     """
+
+    _cos_sin_theta_key = None
+    _cos_sin_theta_value = None
+    _freq = None
 
     def __init__(
         self,
@@ -33,12 +44,16 @@ class RoPE(Module):
         traditional: bool = False,
         base: float = 10000,
         scale: float = 1.0,
+        max_position: int = 2048,
+        dtype=mx.float32,
     ):
         super().__init__()
         self.dims = dims
         self.traditional = traditional
         self.base = base
         self.scale = scale
+        self.max_position = max_position
+        self._set_cos_sin_cache(dims, max_position, base=base, scale=scale, dtype=dtype)
 
     def _extra_repr(self):
         return f"{self.dims}, traditional={self.traditional}"
@@ -75,31 +90,43 @@ class RoPE(Module):
         shape = x.shape
         x = mx.reshape(x, (-1, shape[-2], shape[-1]))
         N = x.shape[1] + offset
-        costheta, sintheta = RoPE.create_cos_sin_theta(
-            N, self.dims, offset=offset, base=self.base, scale=self.scale, dtype=x.dtype
-        )
+        if N > self.max_position:
+            self._set_cos_sin_cache(
+                self.dims,
+                self.max_position,
+                seq_len=N,
+                base=self.base,
+                scale=self.scale,
+                dtype=x.dtype,
+            )
 
         rope = (
             self._compute_traditional_rope if self.traditional else self._compute_rope
         )
-        rx = rope(costheta, sintheta, x)
+
+        costheta, sintheta = self._cos_sin_theta_value
+        rx = rope(costheta[offset:N], sintheta[offset:N], x)
 
         return mx.reshape(rx, shape)
 
-    @staticmethod
-    def create_cos_sin_theta(
-        N: int,
-        D: int,
-        offset: int = 0,
+    @classmethod
+    def _set_cos_sin_cache(
+        cls,
+        dims: int,
+        seq_len: int,
         base: float = 10000,
         scale: float = 1.0,
         dtype=mx.float32,
     ):
-        D = D // 2
-        positions = mx.arange(offset, N, dtype=dtype) * scale
-        freqs = mx.exp(-mx.arange(0.0, D, dtype=dtype) * (math.log(base) / D))
-        theta = mx.reshape(positions, (-1, 1)) * mx.reshape(freqs, (1, -1))
-        return mx.cos(theta), mx.sin(theta)
+        if (dims, seq_len, base, scale, dtype) != cls._cos_sin_theta_key:
+            D = dims // 2
+            cls._freqs = mx.exp(-mx.arange(0.0, D, dtype=dtype) * (math.log(base) / D))
+            positions = mx.arange(0, seq_len, dtype=dtype) * scale
+            theta = mx.reshape(positions, (-1, 1)) * mx.reshape(cls._freqs, (1, -1))
+            cls._cos_sin_theta_key = (dims, seq_len, base, scale, dtype)
+            cls._cos_sin_theta_value = (mx.cos(theta), mx.sin(theta))
+
+        return cls._cos_sin_theta_value
 
 
 class SinusoidalPositionalEncoding(Module):
