@@ -13,26 +13,6 @@ from setuptools import Command, Extension, find_namespace_packages, setup
 from setuptools.command.build_ext import build_ext
 
 
-def get_version(version):
-    if "PYPI_RELEASE" not in os.environ:
-        today = datetime.date.today()
-        version = f"{version}.dev{today.year}{today.month}{today.day}"
-
-        if "DEV_RELEASE" not in os.environ:
-            git_hash = (
-                run(
-                    "git rev-parse --short HEAD".split(),
-                    capture_output=True,
-                    check=True,
-                )
-                .stdout.strip()
-                .decode()
-            )
-            version = f"{version}+{git_hash}"
-
-    return version
-
-
 # A CMakeExtension needs a sourcedir instead of a file list.
 # The name must be the _single_ output extension from the CMake build.
 # If you need multiple extensions, see scikit-build.
@@ -148,6 +128,26 @@ class GenerateStubs(Command):
             ]
         )
         subprocess.run(["rm", "python/mlx/core/__init__.pyi''"])
+
+
+def get_version(version):
+    if "PYPI_RELEASE" not in os.environ:
+        today = datetime.date.today()
+        version = f"{version}.dev{today.year}{today.month}{today.day}"
+
+        if "DEV_RELEASE" not in os.environ:
+            git_hash = (
+                run(
+                    "git rev-parse --short HEAD".split(),
+                    capture_output=True,
+                    check=True,
+                )
+                .stdout.strip()
+                .decode()
+            )
+            version = f"{version}+{git_hash}"
+
+    return version
 
 
 # Read the content of README.md

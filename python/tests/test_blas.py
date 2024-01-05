@@ -80,7 +80,6 @@ class TestBlas(mlx_tests.MLXTestCase):
             np_dtype = getattr(np, dtype)
 
             for B, M, N, K in shapes:
-
                 with self.subTest(tranpose="nn"):
                     shape_a = (B, M, K)
                     shape_b = (B, K, N)
@@ -151,7 +150,6 @@ class TestBlas(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-6))
 
     def test_matmul_dtypes(self):
-
         for dt in self.dtypes:
             a_npy = np.random.normal(0.0, 1.0 / 256, (16, 16, 16)).astype(
                 getattr(np, dt)

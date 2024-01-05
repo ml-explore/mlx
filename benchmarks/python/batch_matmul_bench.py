@@ -6,8 +6,8 @@ import mlx.core as mx
 from time_utils import time_fn
 
 B = 8
-T = 1024
 D = 512
+T = 1024
 
 
 def time_batch_matmul():
