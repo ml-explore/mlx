@@ -1100,10 +1100,7 @@ std::vector<std::tuple<
     std::string,
     std::vector<std::string>,
     bool>>
-einsum_path(
-    const std::string& equation,
-    const std::vector<array>& operands,
-    StreamOrDevice s = {});
+einsum_path(const std::string& equation, const std::vector<array>& operands);
 
 /** Load array map from .safetensors file format */
 std::unordered_map<std::string, array> load_safetensors(
