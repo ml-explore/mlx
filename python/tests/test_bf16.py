@@ -122,7 +122,6 @@ class TestBF16(mlx_tests.MLXTestCase):
 
         for op in ("min", "max"):
             with self.subTest(op=op):
-
                 for axes in (0, 1, 2, (0, 1), (0, 2), (1, 2), (0, 1, 2)):
                     with self.subTest(axes=axes):
                         np_args = (x.astype(np.float32),)
