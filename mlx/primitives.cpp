@@ -797,6 +797,23 @@ std::pair<std::vector<array>, std::vector<int>> Cosh::vmap(
   return {{cosh(inputs[0], stream())}, axes};
 }
 
+std::vector<array> CustomVJP::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  std::vector<array> inputs(primals.begin(), primals.end() - 1);
+  auto all_vjps = vjp_fun_(inputs, cotan);
+  all_vjps.push_back(ones_like(primals.back()));
+
+  std::vector<array> vjps;
+  vjps.reserve(argnums.size());
+  for (auto arg : argnums) {
+    vjps.push_back(all_vjps[arg]);
+  }
+
+  return vjps;
+}
+
 std::vector<array> Divide::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

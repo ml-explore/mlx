@@ -232,6 +232,11 @@ void Cosh::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void CustomVJP::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() >= 1);
+  out.copy_shared_buffer(inputs.back());
+}
+
 void Erf::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];

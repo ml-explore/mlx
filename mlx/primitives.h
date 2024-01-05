@@ -552,6 +552,31 @@ class Cosh : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class CustomVJP : public Primitive {
+ public:
+  explicit CustomVJP(
+      Stream stream,
+      std::function<std::vector<array>(const std::vector<array>&, const array&)>
+          fun)
+      : Primitive(stream), vjp_fun_(std::move(fun)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const array& cotan,
+      const std::vector<int>& argnums) override;
+
+  DEFINE_PRINT(CustomVJP);
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+
+  std::function<std::vector<array>(const std::vector<array>&, const array&)>
+      vjp_fun_;
+};
+
 class Divide : public UnaryPrimitive {
  public:
   explicit Divide(Stream stream) : UnaryPrimitive(stream){};

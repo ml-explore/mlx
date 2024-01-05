@@ -7,6 +7,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -3325,6 +3326,37 @@ array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
+}
+
+array checkpoint(
+    std::function<array(const std::vector<array>&)> fun,
+    const std::vector<array>& args) {
+  auto out = stop_gradient(fun(args));
+
+  // Create the checkpointing gradient where the forward pass is run again
+  auto fun_multi_output =
+      [fun = std::move(fun)](const std::vector<array>& inputs) {
+        return std::vector<array>{fun(inputs)};
+      };
+  auto fun_vjp = [fun_multi_output = std::move(fun_multi_output)](
+                     const std::vector<array>& primals,
+                     const array& cotan) -> std::vector<array> {
+    auto [outputs, vjps] = vjp(fun_multi_output, primals, {cotan});
+    return vjps;
+  };
+
+  // Prepare the inputs for the CustomVJP primitive
+  std::vector<array> inputs = args;
+  inputs.push_back(out);
+
+  // Compute the stream
+  Stream s = (out.has_primitive()) ? out.primitive().stream() : to_stream({});
+
+  return array(
+      out.shape(),
+      out.dtype(),
+      std::make_unique<CustomVJP>(s, std::move(fun_vjp)),
+      inputs);
 }
 
 } // namespace mlx::core
