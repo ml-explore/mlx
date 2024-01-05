@@ -714,6 +714,7 @@ array stack(
   }
   return concatenate(new_arrays, axis, s);
 }
+
 array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
   return stack(arrays, 0, s);
 }
