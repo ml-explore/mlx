@@ -71,6 +71,7 @@ std::unordered_map<std::string, array> load_gguf(
   gguf_tensor tensor;
   while (gguf_get_tensor(ctx, &tensor)) {
     std::vector<int> shape;
+    // The dimension order in GGML is the reverse of the order used in MLX.
     for (int i = tensor.ndim - 1; i >= 0; i--) {
       shape.push_back(tensor.dim[i]);
     }
