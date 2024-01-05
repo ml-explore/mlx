@@ -268,7 +268,6 @@ einsum_path(
       result;
 
   for (int i = 0; i < path.size(); i++) {
-    printf("path: %d\n", i);
     auto curr = path[i];
     std::sort(curr.begin(), curr.end(), std::greater<int>());
     auto cont = find_contraction(curr, in_sets, out_set);
