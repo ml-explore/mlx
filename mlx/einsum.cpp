@@ -10,7 +10,8 @@
 
 namespace mlx::core {
 
-std::pair<std::string, std::string> parse_path(const std::string& equation) {
+std::pair<std::vector<std::string>, std::string> parse_path(
+    const std::string& equation) {
   std::string lhs, rhs;
   if (equation.find("->") != std::string::npos) {
     auto pos = equation.find("->");
@@ -35,8 +36,18 @@ std::pair<std::string, std::string> parse_path(const std::string& equation) {
       }
     }
   }
-  return {lhs, rhs};
+  std::vector<std::string> input_list;
+  std::stringstream ss(lhs);
+  std::string token;
+  while (getline(ss, token, ',')) {
+    input_list.push_back(token);
+  }
+  return {input_list, rhs};
 }
+
+/**
+ * Calculates the size of a term
+ */
 template <typename Iter>
 size_t term_size(Iter begin, Iter end, std::unordered_map<char, int> dict) {
   size_t size = 1;
@@ -55,12 +66,7 @@ size_t flop_count(
     bool inner,
     int num_terms,
     std::unordered_map<char, int> dict) {
-  size_t size = 0;
-  while (begin != end) {
-    auto c = *begin;
-    ++begin;
-    size *= dict[c];
-  }
+  size_t size = term_size(begin, end, dict);
   auto op_factor = 1;
   if ((num_terms - 1) > op_factor) {
     op_factor = num_terms - 1;
@@ -112,6 +118,7 @@ find_contraction(
       idx_contracted_remaining, remaining_sets, idx_removed, idx_contracted};
 }
 
+/** helper functions */
 std::vector<int> rangeHelper(int r) {
   std::vector<int> result(r);
   std::iota(result.begin(), result.end(), 0);
@@ -148,7 +155,8 @@ std::vector<std::vector<int>> optimal_path(
         temp;
     for (auto curr : results) {
       for (auto j : combinations(rangeHelper(in_sets.size() - i))) {
-        auto cont = find_contraction({j.first, j.second}, in_sets, out_set);
+        auto cont =
+            find_contraction({j.first, j.second}, std::get<2>(curr), out_set);
         auto size = term_size(
             std::get<0>(cont).begin(), std::get<0>(cont).end(), dim_dict);
         if (size > max_size) {
@@ -320,35 +328,26 @@ bool can_dot(
   return true;
 }
 
+/** Computes the optimal einsum_path */
 std::vector<std::tuple<
     std::vector<int>,
     std::set<char>,
     std::string,
     std::vector<std::string>,
     bool>>
-einsum_path(
-    const std::string& equation,
-    const std::vector<array>& operands,
-    StreamOrDevice s /** = {} */
-) {
+einsum_path(const std::string& equation, const std::vector<array>& operands) {
   auto extract = parse_path(equation);
-  std::vector<std::string> input_list;
-  std::stringstream ss(extract.first);
-  std::string token;
-  while (getline(ss, token, ',')) {
-    input_list.push_back(token);
-  }
   std::vector<std::set<char>> in_sets;
   std::set<char> out_set(extract.second.begin(), extract.second.end());
-  for (auto& input : input_list) {
+  for (auto& input : extract.first) {
     std::set<char> temp(input.begin(), input.end());
     in_sets.push_back(temp);
   }
-  std::unordered_map<char, int> dim_dict;
+  std::unordered_map<char, int> dim_map;
   std::vector<std::set<char>> broadcast_indicies;
 
-  for (int i = 0; i < input_list.size(); i++) {
-    auto input = input_list[i];
+  for (int i = 0; i < extract.first.size(); i++) {
+    auto input = extract.first[i];
     broadcast_indicies.push_back(std::set<char>());
     for (int j = 0; j < input.size(); j++) {
       auto c = input[j];
@@ -356,25 +355,25 @@ einsum_path(
       if (dim == 1) {
         broadcast_indicies.at(i).insert(c);
       }
-      if (dim_dict.find(c) != dim_dict.end()) {
-        if (dim != 1 && dim_dict[c] != dim) {
+      if (dim_map.find(c) != dim_map.end()) {
+        if (dim != 1 && dim_map[c] != dim) {
           throw new std::runtime_error("[einsum_path] dimension mismatch");
         }
-        dim_dict[c] = std::max(dim_dict[c], dim);
+        dim_map[c] = std::max(dim_map[c], dim);
       } else {
-        dim_dict[c] = dim;
+        dim_map[c] = dim;
       }
     }
   }
 
   size_t max_size =
-      term_size(extract.second.begin(), extract.second.end(), dim_dict);
-  for (auto input : input_list) {
+      term_size(extract.second.begin(), extract.second.end(), dim_map);
+  for (auto input : extract.first) {
     max_size =
-        std::max(max_size, term_size(input.begin(), input.end(), dim_dict));
+        std::max(max_size, term_size(input.begin(), input.end(), dim_map));
   }
-
-  auto path = optimal_path(in_sets, out_set, dim_dict, max_size);
+  // calculate the optimal path
+  auto path = optimal_path(in_sets, out_set, dim_map, max_size);
   std::vector<std::tuple<
       std::vector<int>,
       std::set<char>,
@@ -392,8 +391,8 @@ einsum_path(
     std::set<char> bcast;
     std::vector<std::string> tmp_inputs;
     for (auto j : curr) {
-      tmp_inputs.push_back(input_list.at(j));
-      input_list.erase(input_list.begin() + j);
+      tmp_inputs.push_back(extract.first.at(j));
+      extract.first.erase(extract.first.begin() + j);
       bcast.insert(
           broadcast_indicies.at(j).begin(), broadcast_indicies.at(j).end());
       broadcast_indicies.erase(broadcast_indicies.begin() + j);
@@ -404,14 +403,14 @@ einsum_path(
     std::string ein_res = extract.second;
     if ((i - path.size()) != -1) {
       std::string tmp(std::get<0>(cont).begin(), std::get<0>(cont).end());
-      std::sort(tmp.begin(), tmp.end(), [dim_dict](char a, char b) {
-        auto pa = dim_dict.find(a)->second;
-        auto pb = dim_dict.find(b)->second;
-        return pa > pb;
+      std::sort(tmp.begin(), tmp.end(), [dim_map](char a, char b) {
+        auto pa = dim_map.find(a)->second;
+        auto pb = dim_map.find(b)->second;
+        return pa < pb;
       });
       ein_res = tmp;
     }
-    input_list.emplace_back(ein_res);
+    extract.first.emplace_back(ein_res);
     std::set<char> new_bcast;
     std::set_difference(
         bcast.begin(),
@@ -424,10 +423,11 @@ einsum_path(
       new_ein_res += ti;
       new_ein_res += ",";
     }
+    new_ein_res.pop_back();
     new_ein_res += "->";
     new_ein_res += ein_res;
     broadcast_indicies.emplace_back(new_bcast);
-    auto in_list_cp = input_list;
+    auto in_list_cp = extract.first;
     result.emplace_back(
         curr, std::get<2>(cont), new_ein_res, in_list_cp, do_blas);
   }
