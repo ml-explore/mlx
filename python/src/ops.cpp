@@ -1212,14 +1212,22 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "linspace",
-      [](Scalar start, Scalar stop, int num, Dtype dtype, StreamOrDevice s) {
+      [](Scalar start,
+         Scalar stop,
+         int num,
+         std::optional<Dtype> dtype,
+         StreamOrDevice s) {
         return linspace(
-            scalar_to_double(start), scalar_to_double(stop), num, dtype, s);
+            scalar_to_double(start),
+            scalar_to_double(stop),
+            num,
+            dtype.value_or(float32),
+            s);
       },
       "start"_a,
       "stop"_a,
       "num"_a = 50,
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       "stream"_a = none,
       R"pbdoc(
       linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
@@ -1356,11 +1364,11 @@ void init_ops(py::module_& m) {
         }
       },
       "shape"_a,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        zeros(shape: Union[int, List[int]], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        zeros(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
         Construct an array of zeros.
 
@@ -1403,11 +1411,11 @@ void init_ops(py::module_& m) {
         }
       },
       "shape"_a,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        ones(shape: Union[int, List[int]], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        ones(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
         Construct an array of ones.
 
@@ -1449,11 +1457,11 @@ void init_ops(py::module_& m) {
       "n"_a,
       "m"_a = py::none(),
       "k"_a = 0,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-      eye(n: int, m: Optional[int] = None, k: int = 0, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+      eye(n: int, m: Optional[int] = None, k: int = 0, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
       Create an identity matrix or a general diagonal matrix.
 
@@ -1473,11 +1481,11 @@ void init_ops(py::module_& m) {
         return identity(n, dtype.value_or(float32), s);
       },
       "n"_a,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-      identity(n: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+      identity(n: int, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
       Create a square identity matrix.
 
@@ -1491,13 +1499,17 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "tri",
-      [](int n, std::optional<int> m, int k, Dtype dtype, StreamOrDevice s) {
-        return tri(n, m.value_or(n), k, float32, s);
+      [](int n,
+         std::optional<int> m,
+         int k,
+         std::optional<Dtype> type,
+         StreamOrDevice s) {
+        return tri(n, m.value_or(n), k, type.value_or(float32), s);
       },
       "n"_a,
       "m"_a = none,
       "k"_a = 0,
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -2432,7 +2444,7 @@ void init_ops(py::module_& m) {
           array (array): Input array.
           repeats (int): The number of repetitions for each element.
           axis (int, optional): The axis in which to repeat the array along. If
-            unspecified it uses the flattened array of the input and repeats 
+            unspecified it uses the flattened array of the input and repeats
             along axis 0.
           stream (Stream, optional): Stream or device. Defaults to ``None``.
 
