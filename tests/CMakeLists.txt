@@ -22,6 +22,7 @@ target_sources(tests PRIVATE
   blas_tests.cpp
   creations_tests.cpp
   device_tests.cpp
+  einsum_tests.cpp
   eval_tests.cpp
   fft_tests.cpp
   graph_optimize_tests.cpp
