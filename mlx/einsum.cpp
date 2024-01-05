@@ -204,6 +204,122 @@ bool has_intersection(std::set<char> a, std::set<char> b) {
   return intersection.size() > 0;
 }
 
+template <typename Map>
+bool comp_map(Map const& lhs, Map const& rhs) {
+  return lhs.size() == rhs.size() &&
+      std::equal(lhs.begin(), lhs.end(), rhs.begin());
+}
+
+template <typename Map>
+bool comp_keys(Map const& lhs, Map const& rhs) {
+  return lhs.size() == rhs.size() &&
+      std::equal(
+             lhs.begin(),
+             lhs.end(),
+             rhs.begin(),
+             [](auto const& lhs_pair, auto const& rhs_pair) {
+               return lhs_pair.first == rhs_pair.first;
+             });
+}
+
+bool can_dot(
+    std::vector<std::string> inputs,
+    std::set<char> result,
+    std::set<char> idx_removed) {
+  if (idx_removed.size() == 0) {
+    return false;
+  }
+  if (inputs.size() != 2) {
+    return false;
+  }
+  std::unordered_map<char, int> lhs_count;
+  for (auto c : inputs.at(0)) {
+    if (lhs_count.find(c) != lhs_count.end()) {
+      lhs_count[c] += 1;
+    } else {
+      lhs_count[c] = 1;
+    }
+  }
+  std::unordered_map<char, int> rhs_count;
+  for (auto c : inputs.at(1)) {
+    if (rhs_count.find(c) != rhs_count.end()) {
+      rhs_count[c] += 1;
+    } else {
+      rhs_count[c] = 1;
+    }
+  }
+  if (comp_map(lhs_count, rhs_count)) {
+    return true;
+  }
+  for (auto k : lhs_count) {
+    auto rc = 0;
+    if (rhs_count.find(k.first) != rhs_count.end()) {
+      rc = rhs_count[k.first];
+    }
+    if (k.second > 1 || rc > 1 || (k.second + rc > 2)) {
+      return false;
+    }
+    auto fc = 0;
+    if (result.find(k.first) != result.end()) {
+      fc = 1;
+    }
+    if ((k.second + rc - 1) == fc) {
+      return false;
+    }
+  }
+  for (auto k : rhs_count) {
+    auto lc = 0;
+    if (lhs_count.find(k.first) != lhs_count.end()) {
+      lc = lhs_count[k.first];
+    }
+    if (k.second > 1 || lc > 1 || (k.second + lc > 2)) {
+      return false;
+    }
+    auto fc = 0;
+    if (result.find(k.first) != result.end()) {
+      fc = 1;
+    }
+    if ((k.second + lc - 1) == fc) {
+      return false;
+    }
+  }
+  if (comp_keys(lhs_count, rhs_count)) {
+    return false;
+  }
+  auto rs = idx_removed.size();
+  if (inputs.at(0).substr(0, rs) == inputs.at(1).substr(0, rs)) {
+    return true;
+  }
+  if (inputs.at(0).substr(0, rs) ==
+      inputs.at(1).substr(inputs.at(1).size() - rs)) {
+    return true;
+  }
+  if (inputs.at(0).substr(inputs.at(0).size() - rs) ==
+      inputs.at(1).substr(0, rs)) {
+    return true;
+  }
+  if (inputs.at(0).substr(inputs.at(0).size() - rs) ==
+      inputs.at(1).substr(inputs.at(1).size() - rs)) {
+    return true;
+  }
+  std::set<char> kleft;
+  std::set<char> kright;
+  for (auto k : lhs_count) {
+    if (idx_removed.find(k.first) == idx_removed.end()) {
+      kleft.insert(k.first);
+    }
+  }
+  for (auto k : rhs_count) {
+    if (idx_removed.find(k.first) == idx_removed.end()) {
+      kright.insert(k.first);
+    }
+  }
+  if (kleft.size() == 0 || kright.size() == 0) {
+    return false;
+  }
+  return true;
+}
+
 std::vector<std::tuple<
     std::vector<int>,
     std::set<char>,
@@ -282,13 +398,18 @@ einsum_path(
           broadcast_indicies.at(j).begin(), broadcast_indicies.at(j).end());
       broadcast_indicies.erase(broadcast_indicies.begin() + j);
     }
-    if (has_intersection(std::get<2>(cont), bcast)) {
-      do_blas = true;
-      // can_dot(tmp_inputs, std::get<0>(cont), std::get<2>(cont));
+    if (!has_intersection(std::get<2>(cont), bcast)) {
+      do_blas = can_dot(tmp_inputs, std::get<0>(cont), std::get<2>(cont));
     }
     std::string ein_res = extract.second;
     if ((i - path.size()) != -1) {
-      // TODO: do this....
+      std::string tmp(std::get<0>(cont).begin(), std::get<0>(cont).end());
+      std::sort(tmp.begin(), tmp.end(), [dim_dict](char a, char b) {
+        auto pa = dim_dict.find(a)->second;
+        auto pb = dim_dict.find(b)->second;
+        return pa > pb;
+      });
+      ein_res = tmp;
     }
     input_list.emplace_back(ein_res);
     std::set<char> new_bcast;

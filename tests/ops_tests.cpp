@@ -3531,8 +3531,15 @@ TEST_CASE("test einsum") {
 
 TEST_CASE("einsum_path") {
   auto x = einsum_path("ij,jk,kl", {ones({2, 2}), ones({2, 2}), ones({2, 2})});
-  MESSAGE("len " << x.size());
-  for (auto& s : x) {
-    MESSAGE("" << std::get<2>(s));
-  }
+  CHECK_EQ(x.size(), 2);
+  CHECK_EQ(std::get<0>(x.at(0)), std::vector<int>({1, 0}));
+  CHECK_EQ(std::get<1>(x.at(0)), std::set<char>({'j'}));
+  CHECK_EQ(std::get<2>(x.at(0)), "jk,ij,->ik");
+  CHECK_EQ(std::get<3>(x.at(0)), std::vector<std::string>({"kl", "ik"}));
+  CHECK_EQ(std::get<4>(x.at(0)), true);
+  CHECK_EQ(std::get<0>(x.at(1)), std::vector<int>({1, 0}));
+  CHECK_EQ(std::get<1>(x.at(1)), std::set<char>({'k'}));
+  CHECK_EQ(std::get<2>(x.at(1)), "ik,kl,->il");
+  CHECK_EQ(std::get<3>(x.at(1)), std::vector<std::string>({"il"}));
+  CHECK_EQ(std::get<4>(x.at(1)), true);
 };
