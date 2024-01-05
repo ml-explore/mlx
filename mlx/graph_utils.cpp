@@ -37,33 +37,33 @@ struct ArrayNames {
 };
 
 void depth_first_traversal(
-    std::function<void(GraphNode)> callback,
+    std::function<void(array)> callback,
     const std::vector<array>& outputs) {
-  std::function<void(const GraphNode&)> recurse;
+  std::function<void(const array&)> recurse;
   std::unordered_set<std::uintptr_t> cache;
-  recurse = [&](const GraphNode& x) {
+  recurse = [&](const array& x) {
     auto id = x.id();
     if (cache.find(id) != cache.end()) {
       return;
     }
     cache.insert(id);
     for (auto& in : x.inputs()) {
-      recurse(in.graph_node());
+      recurse(in);
     }
     callback(x);
   };
 
   for (auto& o : outputs) {
-    recurse(o.graph_node());
+    recurse(o);
   }
 }
 
 void print_graph(std::ostream& os, const std::vector<array>& outputs) {
-  std::vector<GraphNode> tape;
+  std::vector<array> tape;
   std::vector<array> inputs;
 
   depth_first_traversal(
-      [&](const GraphNode& x) {
+      [&](const array& x) {
         if (x.has_primitive()) {
           tape.push_back(x);
         } else {
@@ -73,7 +73,7 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
       outputs);
 
   ArrayNames namer;
-  auto print_arrs = [&namer, &os](const std::vector<array>& arrs) {
+  auto print_arrs = [&namer, &os](std::vector<array> arrs) {
     for (auto& arr : arrs) {
       os << namer.get_name(arr);
       os << " [" << arr.shape() << ", " << arr.dtype() << "]";
@@ -109,7 +109,7 @@ void export_to_dot(std::ostream& os, const std::vector<array>& outputs) {
   std::unordered_set<std::uintptr_t> input_set;
   ArrayNames namer;
   depth_first_traversal(
-      [&](const GraphNode& x) {
+      [&](const array& x) {
         for (auto& a : x.inputs()) {
           // Record inputs
           if (!a.has_primitive() && input_set.find(a.id()) != input_set.end()) {

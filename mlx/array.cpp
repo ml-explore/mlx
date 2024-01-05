@@ -47,20 +47,22 @@ array::array(
           std::move(primitive),
           inputs)) {}
 
-/*std::vector<array> array::make_arrays(
+std::vector<array> array::make_arrays(
     const std::vector<std::vector<int>>& shapes,
     const std::vector<Dtype>& dtypes,
-    std::unique_ptr<Primitive> primitive,
+    std::shared_ptr<Primitive> primitive,
     const std::vector<array>& inputs) {
   std::vector<array> outputs;
   for (int i = 0; i < shapes.size(); ++i) {
-    // TODO this is a bit wasteful since it
-    // makes an array with a graph node then we immediately destroy it below
-    outputs.push_back(array(shapes[i], dtypes[i], nullptr, {}));
+    outputs.push_back(array(shapes[i], dtypes[i], primitive, inputs));
   }
-  register_primitive(std::move(primitive), inputs, outputs);
+  for (int i = 0; i < outputs.size(); ++i) {
+    auto siblings = outputs;
+    siblings.erase(siblings.begin() + i);
+    outputs[i].set_siblings(std::move(siblings), i);
+  }
   return outputs;
-}*/
+}
 
 array::array(std::initializer_list<float> data)
     : array_desc_(std::make_shared<ArrayDesc>(
@@ -82,9 +84,6 @@ array::array(
 void array::detach() {
   array_desc_->inputs.clear();
   array_desc_->primitive = nullptr;
-  for (auto& s : array_desc_->siblings) {
-    s.detach();
-  }
 }
 
 void array::eval() {
@@ -156,11 +155,6 @@ array::ArrayDesc::ArrayDesc(
     is_tracer |= in.is_tracer();
   }
 }
-
-// Needed because the Primitive type used in array.h is incomplete and the
-// compiler needs to see the call to the destructor after the type is complete.
-// TODO can probably remove this
-array::ArrayDesc::~ArrayDesc() = default;
 
 array::ArrayIterator::reference array::ArrayIterator::operator*() const {
   auto start = std::vector<int>(arr.ndim(), 0);

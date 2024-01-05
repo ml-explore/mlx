@@ -54,10 +54,7 @@ std::function<void()> make_task(
         }
         auto s = arr.primitive().stream();
         auto command_buffer = increment_command_buffer(s);
-        std::vector<array> outputs{arr};
-        for (auto& s : arr.siblings()) {
-          outputs.push_back(s);
-        }
+        auto outputs = arr.outputs();
         arr.primitive().eval_gpu(arr.inputs(), outputs);
         if (p) {
           metal::device(s.device).end_encoding(s.index);
@@ -67,6 +64,9 @@ std::function<void()> make_task(
                   MTL::CommandBuffer*) mutable {
                 if (!arr.is_tracer()) {
                   arr.detach();
+                  for (auto s : arr.siblings()) {
+                    s.detach();
+                  }
                 }
                 p->set_value();
                 scheduler::notify_task_completion(s);
