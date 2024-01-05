@@ -8,6 +8,7 @@
 #include "mlx/device.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/ops.h"
+#include "mlx/einsum.h"
 #include "mlx/fast.h"
 #include "mlx/fft.h"
 #include "mlx/io.h"
