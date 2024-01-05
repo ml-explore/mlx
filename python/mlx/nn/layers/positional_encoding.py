@@ -40,16 +40,12 @@ class RoPE(Module):
         traditional: bool = False,
         base: float = 10000,
         scale: float = 1.0,
-        max_position: int = 2048,
-        dtype=mx.float32,
     ):
         super().__init__()
         self.dims = dims
         self.traditional = traditional
         self.base = base
         self.scale = scale
-        self.max_position = max_position
-        self._set_cos_sin_cache(dims, max_position, base=base, scale=scale, dtype=dtype)
 
     def _extra_repr(self):
         return f"{self.dims}, traditional={self.traditional}"
@@ -86,22 +82,14 @@ class RoPE(Module):
         shape = x.shape
         x = mx.reshape(x, (-1, shape[-2], shape[-1]))
         N = x.shape[1] + offset
-        if N > self.max_position:
-            self._set_cos_sin_cache(
-                self.dims,
-                self.max_position,
-                seq_len=N,
-                base=self.base,
-                scale=self.scale,
-                dtype=x.dtype,
-            )
+        costheta, sintheta = RoPE.create_cos_sin_theta(
+            N, self.dims, offset=offset, base=self.base, scale=self.scale, dtype=x.dtype
+        )
 
         rope = (
             self._compute_traditional_rope if self.traditional else self._compute_rope
         )
-
-        costheta, sintheta = self._cos_sin_theta_value
-        rx = rope(costheta[offset:N], sintheta[offset:N], x)
+        rx = rope(costheta, sintheta, x)
 
         return mx.reshape(rx, shape)
 
