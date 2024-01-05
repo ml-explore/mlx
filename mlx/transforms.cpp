@@ -24,170 +24,172 @@ namespace mlx::core {
 // are currently under a function transformation.
 int detail::InTracing::tracing_counter{0};
 
-// void simplify(const std::vector<array>& outputs) {
-//   // Some notes about how this function works
-//   //
-//   // Step 1: Traverse the graph and build a tape. During the graph
-//   // traversal we:
-//   //      - Build a map of inputs to their parents.
-//   //      - Record scalar inputs in a map in order to fuse them.
-//   // Step 2: Process the tape. A node in the tape has inputs and outputs.
-//   //      - Scalar inputs are replaced with their canoncial scalar
-//   //      - We check each inputs output nodes. Every output node that matches
-//   //        the current node gets fused into the current node.
-//   std::function<void(const GraphNode&)> recurse;
-//   std::queue<GraphNode> tape;
-//   std::unordered_set<std::uintptr_t> cache;
-//   std::unordered_map<std::uintptr_t, std::vector<std::pair<GraphNode, int>>>
-//       parents_map;
-//
-//   // Helpers to identify identical scalars
-//   std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
-//   auto is_scalar = [](const array& a) {
-//     return a.is_evaled() && a.ndim() == 0;
-//   };
-//   auto get_scalar_rep = [](const array& a) {
-//     uint64_t v = 0;
-//     int dtype;
-//     switch (a.dtype().size) {
-//       case 1:
-//         v = *a.data<uint8_t>();
-//         break;
-//       case 4:
-//         v = *a.data<uint32_t>();
-//         break;
-//       case 8:
-//         v = *a.data<uint64_t>();
-//         break;
-//     }
-//     return std::make_pair(v, a.dtype().val);
-//   };
-//
-//   // DFS the graph to build the tape, and log parents and scalars
-//   recurse = [&](const GraphNode& a) {
-//     // Ignore leaf nodes
-//     if (!a.has_primitive()) {
-//       return;
-//     }
-//
-//     auto id = a.id();
-//     if (cache.find(id) != cache.end()) {
-//       return;
-//     }
-//     for (int i = 0; i < a.inputs().size(); i++) {
-//       auto& in = a.inputs()[i];
-//       parents_map[in.id()].push_back({a, i});
-//       recurse(in.graph_node());
-//     }
-//     cache.insert(id);
-//
-//     tape.push(a);
-//     for (auto& i : a.inputs()) {
-//       if (is_scalar(i)) {
-//         scalars.insert({get_scalar_rep(i), i});
-//       }
-//     }
-//   };
-//   for (auto& o : outputs) {
-//     if (is_scalar(o)) {
-//       scalars.insert({get_scalar_rep(o), o});
-//     }
-//     recurse(o.graph_node());
-//   }
-//
-//   // Helper that fuses two nodes in the graph by setting the parents of the
-//   // source to point to the destination
-//   auto fuse = [&](GraphNode& dst, GraphNode& src) {
-//     for (int i = 0; i < src.outputs().size(); ++i) {
-//       auto src_parents = parents_map.find(src.outputs()[i].id());
-//       if (src_parents == parents_map.end()) {
-//         continue;
-//       }
-//
-//       auto& pairs = parents_map[dst.outputs()[i].id()];
-//       for (auto& parent : src_parents->second) {
-//         parent.first.inputs()[parent.second] = dst.outputs()[i];
-//         pairs.push_back(parent);
-//       }
-//     }
-//   };
-//
-//   cache.clear();
-//
-//   // Depth-1 equivalence check.
-//   auto node_equivalent = [](const GraphNode& a, const GraphNode& b) {
-//     if (!a.has_primitive() || !b.has_primitive()) {
-//       return false;
-//     }
-//     const auto& pa = a.primitive();
-//     const auto& pb = b.primitive();
-//     if (typeid(pa) != typeid(pb)) {
-//       return false;
-//     }
-//
-//     if (a.inputs().size() != b.inputs().size()) {
-//       return false;
-//     }
-//
-//     for (int i = 0; i < a.inputs().size(); i++) {
-//       if (a.inputs()[i].id() != b.inputs()[i].id()) {
-//         return false;
-//       }
-//     }
-//
-//     return pa.is_equivalent(pb);
-//   };
-//
-//   while (!tape.empty()) {
-//     auto g = std::move(tape.front());
-//     tape.pop();
-//     if (cache.find(g.id()) != cache.end()) {
-//       continue;
-//     }
-//
-//     // Check if we can fuse scalars
-//     for (int i = 0; i < g.inputs().size(); ++i) {
-//       auto& arr = g.inputs()[i];
-//       if (is_scalar(arr)) {
-//         auto scalar = scalars.find(get_scalar_rep(arr));
-//         if (scalar->second.id() != arr.id()) {
-//           arr = scalar->second;
-//           auto parents = parents_map.find(scalar->second.id());
-//           parents->second.push_back({g, i});
-//         }
-//       }
-//     }
-//
-//     // Check if we can fuse nodes themselves
-//     // This node along with all of its inputs output nodes
-//     for (auto& arr : g.inputs()) {
-//       if (auto parents = parents_map.find(arr.id());
-//           parents != parents_map.end()) {
-//         // Check all pairs of parents and look for nodes
-//         // that are fusable.
-//         auto N = parents->second.size();
-//         std::vector<bool> mask(N, false);
-//         for (int i = 0; i < N; i++) {
-//           if (mask[i]) {
-//             continue;
-//           }
-//           for (int j = i + 1; j < N; j++) {
-//             if (mask[j]) {
-//               continue;
-//             }
-//             auto& src = parents->second[j].first;
-//             auto& dst = parents->second[i].first;
-//             if (src.id() != dst.id() && node_equivalent(src, dst)) {
-//               cache.insert(src.id());
-//               fuse(dst, src);
-//               mask[j] = true;
-//             }
-//           }
-//         }
-//       }
-//     }
-//   }
-// }
+void simplify(const std::vector<array>& outputs) {
+  //   // Some notes about how this function works
+  //   //
+  //   // Step 1: Traverse the graph and build a tape. During the graph
+  //   // traversal we:
+  //   //      - Build a map of inputs to their parents.
+  //   //      - Record scalar inputs in a map in order to fuse them.
+  //   // Step 2: Process the tape. A node in the tape has inputs and outputs.
+  //   //      - Scalar inputs are replaced with their canoncial scalar
+  //   //      - We check each inputs output nodes. Every output node that
+  //   matches
+  //   //        the current node gets fused into the current node.
+  //   std::function<void(const GraphNode&)> recurse;
+  //   std::queue<GraphNode> tape;
+  //   std::unordered_set<std::uintptr_t> cache;
+  //   std::unordered_map<std::uintptr_t, std::vector<std::pair<GraphNode,
+  //   int>>>
+  //       parents_map;
+  //
+  //   // Helpers to identify identical scalars
+  //   std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
+  //   auto is_scalar = [](const array& a) {
+  //     return a.is_evaled() && a.ndim() == 0;
+  //   };
+  //   auto get_scalar_rep = [](const array& a) {
+  //     uint64_t v = 0;
+  //     int dtype;
+  //     switch (a.dtype().size) {
+  //       case 1:
+  //         v = *a.data<uint8_t>();
+  //         break;
+  //       case 4:
+  //         v = *a.data<uint32_t>();
+  //         break;
+  //       case 8:
+  //         v = *a.data<uint64_t>();
+  //         break;
+  //     }
+  //     return std::make_pair(v, a.dtype().val);
+  //   };
+  //
+  //   // DFS the graph to build the tape, and log parents and scalars
+  //   recurse = [&](const GraphNode& a) {
+  //     // Ignore leaf nodes
+  //     if (!a.has_primitive()) {
+  //       return;
+  //     }
+  //
+  //     auto id = a.id();
+  //     if (cache.find(id) != cache.end()) {
+  //       return;
+  //     }
+  //     for (int i = 0; i < a.inputs().size(); i++) {
+  //       auto& in = a.inputs()[i];
+  //       parents_map[in.id()].push_back({a, i});
+  //       recurse(in.graph_node());
+  //     }
+  //     cache.insert(id);
+  //
+  //     tape.push(a);
+  //     for (auto& i : a.inputs()) {
+  //       if (is_scalar(i)) {
+  //         scalars.insert({get_scalar_rep(i), i});
+  //       }
+  //     }
+  //   };
+  //   for (auto& o : outputs) {
+  //     if (is_scalar(o)) {
+  //       scalars.insert({get_scalar_rep(o), o});
+  //     }
+  //     recurse(o.graph_node());
+  //   }
+  //
+  //   // Helper that fuses two nodes in the graph by setting the parents of the
+  //   // source to point to the destination
+  //   auto fuse = [&](GraphNode& dst, GraphNode& src) {
+  //     for (int i = 0; i < src.outputs().size(); ++i) {
+  //       auto src_parents = parents_map.find(src.outputs()[i].id());
+  //       if (src_parents == parents_map.end()) {
+  //         continue;
+  //       }
+  //
+  //       auto& pairs = parents_map[dst.outputs()[i].id()];
+  //       for (auto& parent : src_parents->second) {
+  //         parent.first.inputs()[parent.second] = dst.outputs()[i];
+  //         pairs.push_back(parent);
+  //       }
+  //     }
+  //   };
+  //
+  //   cache.clear();
+  //
+  //   // Depth-1 equivalence check.
+  //   auto node_equivalent = [](const GraphNode& a, const GraphNode& b) {
+  //     if (!a.has_primitive() || !b.has_primitive()) {
+  //       return false;
+  //     }
+  //     const auto& pa = a.primitive();
+  //     const auto& pb = b.primitive();
+  //     if (typeid(pa) != typeid(pb)) {
+  //       return false;
+  //     }
+  //
+  //     if (a.inputs().size() != b.inputs().size()) {
+  //       return false;
+  //     }
+  //
+  //     for (int i = 0; i < a.inputs().size(); i++) {
+  //       if (a.inputs()[i].id() != b.inputs()[i].id()) {
+  //         return false;
+  //       }
+  //     }
+  //
+  //     return pa.is_equivalent(pb);
+  //   };
+  //
+  //   while (!tape.empty()) {
+  //     auto g = std::move(tape.front());
+  //     tape.pop();
+  //     if (cache.find(g.id()) != cache.end()) {
+  //       continue;
+  //     }
+  //
+  //     // Check if we can fuse scalars
+  //     for (int i = 0; i < g.inputs().size(); ++i) {
+  //       auto& arr = g.inputs()[i];
+  //       if (is_scalar(arr)) {
+  //         auto scalar = scalars.find(get_scalar_rep(arr));
+  //         if (scalar->second.id() != arr.id()) {
+  //           arr = scalar->second;
+  //           auto parents = parents_map.find(scalar->second.id());
+  //           parents->second.push_back({g, i});
+  //         }
+  //       }
+  //     }
+  //
+  //     // Check if we can fuse nodes themselves
+  //     // This node along with all of its inputs output nodes
+  //     for (auto& arr : g.inputs()) {
+  //       if (auto parents = parents_map.find(arr.id());
+  //           parents != parents_map.end()) {
+  //         // Check all pairs of parents and look for nodes
+  //         // that are fusable.
+  //         auto N = parents->second.size();
+  //         std::vector<bool> mask(N, false);
+  //         for (int i = 0; i < N; i++) {
+  //           if (mask[i]) {
+  //             continue;
+  //           }
+  //           for (int j = i + 1; j < N; j++) {
+  //             if (mask[j]) {
+  //               continue;
+  //             }
+  //             auto& src = parents->second[j].first;
+  //             auto& dst = parents->second[i].first;
+  //             if (src.id() != dst.id() && node_equivalent(src, dst)) {
+  //               cache.insert(src.id());
+  //               fuse(dst, src);
+  //               mask[j] = true;
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+  //   }
+}
 
 void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
   std::function<void(const array&)> recurse;
