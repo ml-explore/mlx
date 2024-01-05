@@ -222,6 +222,8 @@ TEST_CASE("test array types") {
 
   // complex64
   {
+    CHECK_EQ(sizeof(complex64_t), sizeof(std::complex<float>));
+
     complex64_t v = {1.0f, 1.0f};
     array x(v);
     CHECK_EQ(x.dtype(), complex64);
