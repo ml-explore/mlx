@@ -1317,6 +1317,30 @@ void init_ops(py::module_& m) {
             array: The output array with the specified shape and values.
       )pbdoc");
   m.def(
+      "scatter",
+      &scatter,
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "mode"_a = Scatter::ReduceType::None,
+      "stream"_a = none,
+      R"pbdoc(
+        Scatter updates to given indices.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): List of index arrays.
+            updates (array): Updates array.
+            axes (list[int]): List of axes along which to perform the scatter operation.
+            mode (str, optional): Reduce type. Defaults to None.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
       "full",
       [](const std::variant<int, std::vector<int>>& shape,
          const ScalarOrArray& vals,
