@@ -19,16 +19,14 @@ namespace mlx::core::metal {
 
 namespace {
 
-// Catch things related to the main-thread static variables
-static std::shared_ptr<void> global_memory_pool = new_scoped_memory_pool();
-
 // TODO nicer way to set this or possibly expose as an environment variable
 static constexpr int MAX_BUFFERS_PER_QUEUE = 12;
 
 static constexpr const char* default_mtllib_path = METAL_PATH;
 
 auto load_device() {
-  MTL::Device* device = MTL::CreateSystemDefaultDevice();
+  auto devices = MTL::CopyAllDevices();
+  auto device = static_cast<MTL::Device*>(devices->object(0));
   if (!device) {
     throw std::runtime_error("Failed to load device");
   }
@@ -120,6 +118,7 @@ Device::Device() {
 }
 
 Device::~Device() {
+  auto pool = new_scoped_memory_pool();
   for (auto& q : queue_map_) {
     q.second->release();
   }
@@ -139,6 +138,8 @@ Device::~Device() {
 }
 
 void Device::new_queue(int index) {
+  auto thread_pool = metal::new_scoped_memory_pool();
+
   // Multiple threads can ask the device for queues
   // We lock this as a critical section for safety
   const std::lock_guard<std::mutex> lock(mtx_);

@@ -29,6 +29,7 @@ BufferCache::BufferCache(MTL::Device* device)
     : device_(device), head_(nullptr), tail_(nullptr), pool_size_(0) {}
 
 BufferCache::~BufferCache() {
+  auto thread_pool = metal::new_scoped_memory_pool();
   clear();
 }
 
@@ -165,6 +166,8 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     if (!allow_swap && device_->currentAllocatedSize() + size >= block_limit_) {
       return Buffer{nullptr};
     }
+
+    auto thread_pool = metal::new_scoped_memory_pool();
 
     // If we have a lot of memory pressure, check if we can reclaim some memory
     // from the cache

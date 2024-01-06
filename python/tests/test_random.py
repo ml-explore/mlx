@@ -61,6 +61,8 @@ class TestRandom(mlx_tests.MLXTestCase):
         a = mx.random.uniform(low=-0.1, high=0.1, shape=(1,), dtype=mx.bfloat16)
         self.assertEqual(a.dtype, mx.bfloat16)
 
+        self.assertEqual(mx.random.uniform().dtype, mx.random.uniform(dtype=None).dtype)
+
     def test_normal(self):
         key = mx.random.key(0)
         a = mx.random.normal(key=key)
@@ -77,6 +79,8 @@ class TestRandom(mlx_tests.MLXTestCase):
         for t in [mx.float16, mx.bfloat16]:
             a = mx.random.normal(dtype=t)
             self.assertEqual(a.dtype, t)
+
+        self.assertEqual(mx.random.normal().dtype, mx.random.normal(dtype=None).dtype)
 
     def test_randint(self):
         a = mx.random.randint(0, 1, [])
@@ -108,6 +112,10 @@ class TestRandom(mlx_tests.MLXTestCase):
 
         a = mx.random.randint(10, -10, [1000, 1000])
         self.assertTrue(mx.all(a == 10).item())
+
+        self.assertEqual(
+            mx.random.randint(0, 1).dtype, mx.random.randint(0, 1, dtype=None).dtype
+        )
 
     def test_bernoulli(self):
         a = mx.random.bernoulli()
@@ -159,6 +167,11 @@ class TestRandom(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.random.truncated_normal(lower, higher)  # Bad shape
 
+        self.assertEqual(
+            mx.random.truncated_normal(0, 1).dtype,
+            mx.random.truncated_normal(0, 1, dtype=None).dtype,
+        )
+
     def test_gumbel(self):
         samples = mx.random.gumbel(shape=(100, 100))
         self.assertEqual(samples.shape, [100, 100])
@@ -167,6 +180,10 @@ class TestRandom(mlx_tests.MLXTestCase):
         # Std deviation of the sample mean is small (<0.02),
         # so this test is pretty conservative
         self.assertTrue(mx.abs(mx.mean(samples) - mean) < 0.2)
+
+        self.assertEqual(
+            mx.random.gumbel((1, 1)).dtype, mx.random.gumbel((1, 1), dtype=None).dtype
+        )
 
     def test_categorical(self):
         logits = mx.zeros((10, 20))

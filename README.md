@@ -61,7 +61,7 @@ variety of examples, including:
 ## Quickstart
 
 See the [quick start
-guide](https://ml-explore.github.io/mlx/build/html/quick_start.html)
+guide](https://ml-explore.github.io/mlx/build/html/usage/quick_start.html)
 in the documentation.
 
 ## Installation

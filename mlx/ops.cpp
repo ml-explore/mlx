@@ -714,6 +714,7 @@ array stack(
   }
   return concatenate(new_arrays, axis, s);
 }
+
 array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
   return stack(arrays, 0, s);
 }
@@ -1947,6 +1948,13 @@ array matmul(
   }
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
+  if (!is_floating_point(out_type) || is_complex(out_type)) {
+    std::ostringstream msg;
+    msg << "[matmul] Only real floating point types are supported but "
+        << a.dtype() << " and " << b.dtype() << " were provided which results"
+        << " in " << out_type << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
   if (a.dtype() != out_type) {
     a = astype(a, out_type, s);
   }
