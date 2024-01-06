@@ -1264,7 +1264,6 @@ class TestArray(mlx_tests.MLXTestCase):
                     f(a_tf),
                     atol=0,
                     rtol=0,
-                    msg=f"{mlx_dtype}{tf_dtype}",
                 )
 
 
