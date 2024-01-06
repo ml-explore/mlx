@@ -1609,28 +1609,28 @@ array logical_not(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-    // Broadcast arrays to a common shape
-    auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
+  // Broadcast arrays to a common shape
+  auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
 
-    return array(
-        inputs[0].shape(),
-        bool_,
-        std::make_unique<LogicalAnd>(to_stream(s)),
-        inputs);
+  return array(
+      inputs[0].shape(),
+      bool_,
+      std::make_unique<LogicalAnd>(to_stream(s)),
+      inputs);
 }
 array operator&&(const array& a, const array& b) {
   return logical_and(a, b);
 }
 
 array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-    // Broadcast arrays to a common shape
-    auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
+  // Broadcast arrays to a common shape
+  auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
 
-    return array(
-        inputs[0].shape(),
-        bool_,
-        std::make_unique<LogicalOr>(to_stream(s)),
-        inputs);
+  return array(
+      inputs[0].shape(),
+      bool_,
+      std::make_unique<LogicalOr>(to_stream(s)),
+      inputs);
 }
 array operator||(const array& a, const array& b) {
   return logical_or(a, b);

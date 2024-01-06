@@ -1343,8 +1343,14 @@ std::vector<array> LogicalAnd::vjp(
     const array& cotan,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
-  return {jvp(primals, {cotan, cotan}, argnums)};
+
+  if (argnums.size() == 1) {
+    // If derivative is with respect to only one argument
+    return {argnums[0] == 0 ? cotan : zeros_like(cotan, stream())};
+  } else {
+    // If derivative is with respect to both arguments
+    return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
+  }
 }
 
 array LogicalAnd::jvp(
@@ -1352,10 +1358,15 @@ array LogicalAnd::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  assert(tangents.size() == 2);
-  assert(argnums.size() == 2);
+  assert(argnums.size() <= 2);
 
-  return zeros_like(primals[0], stream());
+  if (argnums.size() == 1) {
+    // If derivative is with respect to only one argument
+    return argnums[0] == 0 ? tangents[0] : zeros_like(tangents[0], stream());
+  } else {
+    // If derivative is with respect to both arguments
+    return zeros_like(tangents[0], stream());
+  }
 }
 
 std::pair<array, int> LogicalAnd::vmap(
@@ -1368,14 +1379,19 @@ std::pair<array, int> LogicalAnd::vmap(
   return {logical_and(a, b, stream()), to_ax};
 }
 
-
 std::vector<array> LogicalOr::vjp(
     const std::vector<array>& primals,
     const array& cotan,
-    const std::vector<int>& argnums) {
+    const std::.vector<int>& argnums) {
   assert(primals.size() == 2);
-  assert(argnums.size() == 2);
-  return {jvp(primals, {cotan, cotan}, argnums)};
+
+  if (argnums.size() == 1) {
+    // If derivative is with respect to only one argument
+    return {argnums[0] == 0 ? cotan : zeros_like(cotan, stream())};
+  } else {
+    // If derivative is with respect to both arguments
+    return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
+  }
 }
 
 array LogicalOr::jvp(
@@ -1383,9 +1399,15 @@ array LogicalOr::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-  assert(tangents.size() == 2);
-  assert(argnums.size() == 2);
-  return zeros_like(primals[0], stream());
+  assert(argnums.size() <= 2);
+
+  if (argnums.size() == 1) {
+    // If derivative is with respect to only one argument
+    return argnums[0] == 0 ? tangents[0] : zeros_like(tangents[0], stream());
+  } else {
+    // If derivative is with respect to both arguments
+    return zeros_like(tangents[0], stream());
+  }
 }
 
 std::pair<array, int> LogicalOr::vmap(
