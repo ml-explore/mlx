@@ -795,6 +795,44 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_EQ(y.item<bool>(), true);
   }
 
+  // Test logical and
+  {
+    array x(true);
+    array y(true);
+    CHECK_EQ(logical_and(x, y).item<bool>(), true);
+
+    x = array(1.0f);
+    y = array(1.0f);
+    auto z = logical_and(x, y);
+    CHECK_EQ(z.dtype(), bool_);
+    CHECK_EQ(z.item<bool>(), true);
+
+    x = array(0);
+    y = array(1.0f);
+    z = logical_and(x, y);
+    CHECK_EQ(z.dtype(), bool_);
+    CHECK_EQ(z.item<bool>(), false);
+  }
+
+  // Test logical or
+  {
+    array x(false);
+    array y(false);
+    CHECK_EQ(logical_or(x, y).item<bool>(), false);
+
+    x = array(1.0f);
+    y = array(1.0f);
+    auto z = logical_or(x, y);
+    CHECK_EQ(z.dtype(), bool_);
+    CHECK_EQ(z.item<bool>(), true);
+
+    x = array(0);
+    y = array(1.0f);
+    z = logical_or(x, y);
+    CHECK_EQ(z.dtype(), bool_);
+    CHECK_EQ(z.item<bool>(), true);
+  }
+
   // Test abs
   {
     array x({-1.0f, 0.0f, 1.0f});

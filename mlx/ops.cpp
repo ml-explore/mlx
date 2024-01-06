@@ -1608,6 +1608,33 @@ array logical_not(const array& a, StreamOrDevice s /* = {} */) {
       {astype(a, bool_, s)});
 }
 
+array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+    // Ensure both arrays have the same shape
+    if (a.shape() != b.shape()) {
+        throw std::invalid_argument("Arrays must have the same shape for logical_and");
+    }
+
+    return array(
+        a.shape(),
+        bool_,
+        std::make_unique<LogicalAnd>(to_stream(s)),
+        {astype(a, bool_, s), astype(b, bool_, s)});
+}
+
+array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+    // Ensure both arrays have the same shape
+    if (a.shape() != b.shape()) {
+        throw std::invalid_argument("Arrays must have the same shape for logical_or");
+    }
+
+    return array(
+        a.shape(),
+        bool_,
+        std::make_unique<LogicalOr>(to_stream(s)),
+        {astype(a, bool_, s), astype(b, bool_, s)});
+}
+
+
 array reciprocal(const array& a, StreamOrDevice s /* = {} */) {
   auto dtype = at_least_float(a.dtype());
   return divide(array(1.0f, dtype), a, to_stream(s));

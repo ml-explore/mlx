@@ -1338,6 +1338,64 @@ std::pair<array, int> LogicalNot::vmap(
   return {logical_not(inputs[0], stream()), axes[0]};
 }
 
+std::vector<array> LogicalAnd::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  assert(argnums.size() == 2);
+  return {jvp(primals, {cotan, cotan}, argnums)};
+}
+
+array LogicalAnd::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  assert(tangents.size() == 2);
+  assert(argnums.size() == 2);
+  // Gradient of AND is zero w.r.t. both inputs when both are true or false.
+  // When they differ, the gradient is non-zero only w.r.t. the true input.
+  return logical_and(primals[0], tangents[1], stream()) + logical_and(tangents[0], primals[1], stream());
+}
+
+std::pair<array, int> LogicalAnd::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+  return {logical_and(inputs[0], inputs[1], stream()), axes[0]};
+}
+
+std::vector<array> LogicalOr::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  assert(argnums.size() == 2);
+  return {jvp(primals, {cotan, cotan}, argnums)};
+}
+
+array LogicalOr::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  assert(tangents.size() == 2);
+  assert(argnums.size() == 2);
+  // Gradient of OR is zero w.r.t. both inputs when both are true or false.
+  // When they differ, the gradient is non-zero only w.r.t. the false input.
+  return logical_or(primals[0], tangents[1], stream()) + logical_or(tangents[0], primals[1], stream());
+}
+
+std::pair<array, int> LogicalOr::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+  return {logical_or(inputs[0], inputs[1], stream()), axes[0]};
+}
+
 std::vector<array> LogAddExp::vjp(
     const std::vector<array>& primals,
     const array& cotan,

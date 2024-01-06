@@ -439,6 +439,14 @@ void LogicalNot::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "lnot");
 }
 
+void LogicalAnd::eval_gpu(const std::vector<array>& inputs, array& out) {
+  binary_op(inputs, out, "land"); // Assume "land" is the operation identifier for logical AND
+}
+
+void LogicalOr::eval_gpu(const std::vector<array>& inputs, array& out) {
+  binary_op(inputs, out, "lor"); // Assume "lor" is the operation identifier for logical OR
+}
+
 void LogAddExp::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "lae");
 }

@@ -41,6 +41,8 @@ class TestVmap(mlx_tests.MLXTestCase):
             "log2",
             "log10",
             "logical_not",
+            "logical_or",
+            "logical_and",
             "negative",
             "reciprocal",
             "rsqrt",

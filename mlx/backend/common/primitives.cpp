@@ -12,6 +12,7 @@
 #include "mlx/backend/common/erf.h"
 #include "mlx/backend/common/threefry.h"
 #include "mlx/backend/common/unary.h"
+#include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -363,6 +364,21 @@ void LogicalNot::eval(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
   unary(in, out, [](auto x) { return !x; });
 }
+
+void LogicalAnd::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2); // LogicalAnd requires two input arrays
+  auto& in1 = inputs[0];
+  auto& in2 = inputs[1];
+  binary(in1, in2, out, [](auto x, auto y) { return x && y; });
+}
+
+void LogicalOr::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2); // LogicalOr requires two input arrays
+  auto& in1 = inputs[0];
+  auto& in2 = inputs[1];
+  binary(in1, in2, out, [](auto x, auto y) { return x || y; });
+}
+
 
 void Negative::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);

@@ -671,6 +671,49 @@ void init_ops(py::module_& m) {
             array: The boolean array containing the logical not of ``a``.
       )pbdoc");
   m.def(
+    "logical_and",
+    [](const ScalarOrArray& a, const ScalarOrArray& b, StreamOrDevice s) {
+        return logical_and(to_array(a), to_array(b), s);
+    },
+    "a"_a, "b"_a,
+    py::pos_only(),
+    py::kw_only(),
+    "stream"_a = none,
+    R"pbdoc(
+        logical_and(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise logical and.
+
+        Args:
+            a (array): First input array or scalar.
+            b (array): Second input array or scalar.
+
+        Returns:
+            array: The boolean array containing the logical and of ``a`` and ``b``.
+    )pbdoc");
+
+m.def(
+    "logical_or",
+    [](const ScalarOrArray& a, const ScalarOrArray& b, StreamOrDevice s) {
+        return logical_or(to_array(a), to_array(b), s);
+    },
+    "a"_a, "b"_a,
+    py::pos_only(),
+    py::kw_only(),
+    "stream"_a = none,
+    R"pbdoc(
+        logical_or(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Element-wise logical or.
+
+        Args:
+            a (array): First input array or scalar.
+            b (array): Second input array or scalar.
+
+        Returns:
+            array: The boolean array containing the logical or of ``a`` and ``b``.
+    )pbdoc");
+  m.def(
       "logaddexp",
       [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
         auto [a, b] = to_arrays(a_, b_);

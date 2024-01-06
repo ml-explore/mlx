@@ -903,6 +903,44 @@ class LogicalNot : public Primitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class LogicalAnd : public Primitive {
+ public:
+  explicit LogicalAnd(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(LogicalAnd)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class LogicalOr : public Primitive {
+ public:
+  explicit LogicalOr(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::pair<array, int> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  DEFINE_GRADS()
+  DEFINE_PRINT(LogicalOr)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class LogAddExp : public Primitive {
  public:
   explicit LogAddExp(Stream stream) : Primitive(stream){};

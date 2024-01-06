@@ -609,6 +609,20 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.logical_not(a)
         expected = np.logical_not(a)
         self.assertTrue(np.array_equal(result, expected))
+        
+    def test_logical_and(self):
+        a = mx.array([True, False, True, False])
+        b = mx.array([True, True, False, False])
+        result = mx.logical_and(a, b)
+        expected = np.logical_and(a, b)
+        self.assertTrue(np.array_equal(result, expected))
+        
+    def test_logical_or(self):
+        a = mx.array([True, False, True, False])
+        b = mx.array([True, True, False, False])
+        result = mx.logical_or(a, b)
+        expected = np.logical_or(a, b)
+        self.assertTrue(np.array_equal(result, expected))
 
     def test_square(self):
         a = mx.array([0.1, 0.5, 1.0, 10.0])

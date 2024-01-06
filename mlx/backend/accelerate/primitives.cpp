@@ -10,6 +10,7 @@
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/unary.h"
+#include "mlx/backend/common/binary.h"
 #include "mlx/primitives.h"
 
 #define DEFAULT(primitive)                                                 \
@@ -41,6 +42,8 @@ DEFAULT(Less)
 DEFAULT(LessEqual)
 DEFAULT(Load)
 DEFAULT(LogicalNot)
+DEFAULT(LogicalAnd)
+DEFAULT(LogicalOr)
 DEFAULT(LogAddExp)
 DEFAULT(NotEqual)
 DEFAULT(Pad)
