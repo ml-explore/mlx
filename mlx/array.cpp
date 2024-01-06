@@ -83,6 +83,8 @@ array::array(
 
 void array::detach() {
   array_desc_->inputs.clear();
+  array_desc_->siblings.clear();
+  array_desc_->position = 0;
   array_desc_->primitive = nullptr;
 }
 
