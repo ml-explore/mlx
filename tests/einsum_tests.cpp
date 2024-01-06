@@ -3,6 +3,7 @@
 #include <set>
 
 #include "doctest/doctest.h"
+#include "mlx/einsum.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -28,6 +29,29 @@ TEST_CASE("einsum_path") {
                         std::vector<std::string>,
                         bool>({1, 0}, {'k'}, "ik,kl->il", {"il"}, true));
   auto x = einsum_path("ij,jk,kl", {ones({2, 2}), ones({2, 2}), ones({2, 2})});
+  CHECK_EQ(x.size(), expected.size());
+  for (int i = 0; i < x.size(); i++) {
+    CHECK_EQ(std::get<0>(x.at(i)), std::get<0>(expected.at(i)));
+    CHECK_EQ(std::get<1>(x.at(i)), std::get<1>(expected.at(i)));
+    CHECK_EQ(std::get<2>(x.at(i)), std::get<2>(expected.at(i)));
+    CHECK_EQ(std::get<3>(x.at(i)), std::get<3>(expected.at(i)));
+    CHECK_EQ(std::get<4>(x.at(i)), std::get<4>(expected.at(i)));
+  }
+  expected.clear();
+  expected.emplace_back(std::make_tuple<
+                        std::vector<int>,
+                        std::set<char>,
+                        std::string,
+                        std::vector<std::string>,
+                        bool>(
+      {
+          0,
+      },
+      {},
+      "jki->ijk",
+      {"ijk"},
+      false));
+  x = einsum_path("jki", {ones({2, 3, 4})});
   CHECK_EQ(x.size(), expected.size());
   for (int i = 0; i < x.size(); i++) {
     CHECK_EQ(std::get<0>(x.at(i)), std::get<0>(expected.at(i)));
