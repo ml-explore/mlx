@@ -668,6 +668,7 @@ array sign(const array& a, StreamOrDevice s = {});
 /** Logical not of an array */
 array logical_not(const array& a, StreamOrDevice s = {});
 
+/** Logical and of two arrays */
 array logical_and(const array& a, const array& b, StreamOrDevice s = {});
 
 /** Logical or of two arrays */

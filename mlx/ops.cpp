@@ -1609,31 +1609,25 @@ array logical_not(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  // Ensure both arrays have the same shape
-  if (a.shape() != b.shape()) {
-    throw std::invalid_argument(
-        "Arrays must have the same shape for logical_and");
-  }
+    // Broadcast arrays to a common shape
+    auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
 
-  return array(
-      a.shape(),
-      bool_,
-      std::make_unique<LogicalAnd>(to_stream(s)),
-      {astype(a, bool_, s), astype(b, bool_, s)});
+    return array(
+        inputs[0].shape(),
+        bool_,
+        std::make_unique<LogicalAnd>(to_stream(s)),
+        inputs);
 }
 
 array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  // Ensure both arrays have the same shape
-  if (a.shape() != b.shape()) {
-    throw std::invalid_argument(
-        "Arrays must have the same shape for logical_or");
-  }
+    // Broadcast arrays to a common shape
+    auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
 
-  return array(
-      a.shape(),
-      bool_,
-      std::make_unique<LogicalOr>(to_stream(s)),
-      {astype(a, bool_, s), astype(b, bool_, s)});
+    return array(
+        inputs[0].shape(),
+        bool_,
+        std::make_unique<LogicalOr>(to_stream(s)),
+        inputs);
 }
 
 array reciprocal(const array& a, StreamOrDevice s /* = {} */) {
