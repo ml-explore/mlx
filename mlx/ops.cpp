@@ -8,6 +8,7 @@
 #include <set>
 #include <sstream>
 
+#include "mlx/einsum.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -3506,102 +3507,44 @@ array dequantize(
   return w_full;
 }
 
-std::map<char, int> string_to_char_map(std::string inp) {
-  std::map<char, int> counts;
-  int i = 0;
-  for (auto c : inp) {
-    if (c != ' ' && counts.find(c) == counts.end()) {
-      counts[c] = i;
-      i += 1;
-    }
-  }
-  return counts;
-}
-
 array einsum(
     std::string equation,
     const std::vector<array>& operands,
     StreamOrDevice s /* = {} */) {
-  if (operands.empty()) {
-    throw std::runtime_error("[einsum] Must provide at least one operand");
-  }
-  std::string output;
-  std::string input;
-  if (auto pos = equation.find("->"); pos != std::string::npos) {
-    input = equation.substr(0, pos);
-    output = equation.substr(pos + 2);
-  } else {
-    input = equation;
-    output = std::string(equation);
-    output.erase(std::remove(output.begin(), output.end(), ','), output.end());
-    std::sort(output.begin(), output.end());
-  }
+  std::vector<array> inputs = operands;
+  auto path = einsum_path(equation, inputs);
+  printf("path size %d\n", path.size());
+  for (auto step : path) {
+    auto pos1 = std::get<0>(step).at(0);
+    auto pos2 = std::get<0>(step).at(1);
 
-  std::vector<std::string> inputs;
-  std::stringstream ss(input);
-  std::string token;
-  while (getline(ss, token, ',')) {
-    inputs.push_back(token);
-  }
-  if (operands.size() != inputs.size()) {
-    throw std::runtime_error(
-        "[einsum] Number of operands (" + std::to_string(operands.size()) +
-        ") must match the number of input characters(" +
-        std::to_string(inputs.size()) + ")");
-  }
+    array arg1 = inputs.at(pos1);
+    array arg2 = inputs.at(pos2);
+    inputs.erase(inputs.begin() + pos1);
+    inputs.erase(inputs.begin() + pos2);
+    if (std::get<4>(step)) {
+      // dot
 
-  std::map<char, int> input_map;
-  for (int i = 0; i < inputs.size(); i++) {
-    auto arr = operands[i];
-    auto inp = inputs[i];
-    for (int j = 0; j < std::min(arr.shape().size(), inp.size()); j++) {
-      input_map[inp[j]] = arr.shape(j);
-    }
-  }
-  std::vector<int> broad;
-  for (auto key : input_map) {
-    broad.push_back(key.second);
-  }
-  std::vector<array> inputs_arr;
-  for (int i = 0; i < operands.size(); i++) {
-    auto arr = operands[i];
-    auto ord_map = string_to_char_map(inputs[i]);
-    std::vector<int> new_shape;
-    for (auto key : input_map) {
-      if (ord_map.find(key.first) != ord_map.end()) {
-        new_shape.push_back(key.second);
-      } else {
-        new_shape.push_back(1);
+      auto extract = einsum_parse(std::get<2>(step));
+      auto left_ord = str_idx_map(extract.first.at(0));
+      auto right_ord = str_idx_map(extract.first.at(1));
+
+      std::vector<int> left_axes;
+      std::vector<int> right_axes;
+      for (auto c : std::get<1>(step)) {
+        printf("%c %d %d\n", c, left_ord.at(c), right_ord.at(c));
+        left_axes.push_back(left_ord.at(c));
+        right_axes.push_back(right_ord.at(c));
       }
+      auto res = tensordot(arg1, arg2, {left_axes, right_axes}, s);
+      inputs.emplace_back(res);
+    } else {
+      // naive
+      array res = einsum_naive(std::get<2>(step), inputs, s);
+      inputs.emplace_back(res);
     }
-    std::vector<int> axis;
-    for (auto key : ord_map) {
-      axis.push_back(key.second);
-    }
-    inputs_arr.push_back(
-        broadcast_to(reshape(transpose(arr, axis, s), new_shape, s), broad, s));
   }
-
-  auto ord_output = string_to_char_map(output);
-  std::vector<int> rhs_order;
-  for (auto key : ord_output) {
-    rhs_order.push_back(key.second);
-  }
-
-  std::vector<int> sum_axis;
-  int i = 0;
-  for (auto key : input_map) {
-    if (ord_output.find(key.first) == ord_output.end()) {
-      sum_axis.push_back(i);
-    }
-    i += 1;
-  }
-  // TODO: this should just start with the first and then accumulate
-  auto acc = ones_like(inputs_arr.at(0), s);
-  for (int i = 0; i < inputs_arr.size(); i++) {
-    acc = multiply(acc, inputs_arr[i], s);
-  }
-  return transpose(sum(acc, sum_axis, false, s), rhs_order, s);
+  return inputs.front();
 }
 
 array gather_qmm(

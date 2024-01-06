@@ -1414,6 +1414,12 @@ array operator>>(const array& a, const array& b);
 array view(const array& a, const Dtype& dtype, StreamOrDevice s = {});
 /** @} */
 
+/** computes einsum */
+array einsum_naive(
+    std::string equation,
+    const std::vector<array>& operands,
+    StreamOrDevice s = {});
+
 array einsum(
     std::string equation,
     const std::vector<array>& operands,
