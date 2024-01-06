@@ -14,11 +14,11 @@ namespace mlx::core {
 
 using OptionalArrayRef = std::optional<std::reference_wrapper<const array>>;
 
-struct ArrayNames {
+struct NodeNamer {
   std::unordered_map<std::uintptr_t, std::string> names;
 
-  std::string get_name(const array& x) {
-    auto it = names.find(x.id());
+  std::string get_name(uintptr_t id) {
+    auto it = names.find(id);
     if (it == names.end()) {
       // Get the next name in the sequence
       // [A, B, ..., Z, AA, AB, ...]
@@ -29,10 +29,14 @@ struct ArrayNames {
         var_num = (var_num - 1) / 26;
       }
       std::string name(letters.rbegin(), letters.rend());
-      names.insert({x.id(), name});
+      names.insert({id, name});
       return name;
     }
     return it->second;
+  }
+
+  std::string get_name(const array& x) {
+    return get_name(x.id());
   }
 };
 
@@ -47,6 +51,9 @@ void depth_first_traversal(
       return;
     }
     cache.insert(id);
+    for (auto& s : x.siblings()) {
+      cache.insert(s.id());
+    }
     for (auto& in : x.inputs()) {
       recurse(in);
     }
@@ -72,7 +79,7 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
       },
       outputs);
 
-  ArrayNames namer;
+  NodeNamer namer;
   auto print_arrs = [&namer, &os](std::vector<array> arrs) {
     for (auto& arr : arrs) {
       os << namer.get_name(arr);
@@ -107,28 +114,41 @@ void export_to_dot(std::ostream& os, const std::vector<array>& outputs) {
     output_set.insert(o.id());
   }
   std::unordered_set<std::uintptr_t> input_set;
-  ArrayNames namer;
+  NodeNamer namer;
   depth_first_traversal(
       [&](const array& x) {
-        for (auto& a : x.inputs()) {
-          // Record inputs
-          if (!a.has_primitive() && input_set.find(a.id()) != input_set.end()) {
-            input_set.insert(a.id());
-            os << "{ rank=source; " << namer.get_name(a) << "; }" << std::endl;
+        if (!x.has_primitive()) {
+          input_set.insert(x.id());
+          os << "{ rank=source; " << namer.get_name(x) << "; }" << std::endl;
+          return;
+        }
+
+        // Node for primitive
+        if (x.has_primitive()) {
+          os << "{ ";
+          os << namer.get_name(x.primitive_id());
+          os << " [label =\"";
+          x.primitive().print(os);
+          os << "\", shape=rectangle]";
+          os << "; }" << std::endl;
+          // Arrows to primitive's inputs
+          for (auto& a : x.inputs()) {
+            os << namer.get_name(x.primitive_id()) << " -> "
+               << namer.get_name(a) << std::endl;
           }
         }
+
+        // Point outputs to their primitive
         for (auto& a : x.outputs()) {
           os << "{ ";
           if (output_set.find(a.id()) != output_set.end()) {
             os << "rank=sink; ";
           }
           os << namer.get_name(a);
-          os << " [label =\"";
-          x.primitive().print(os);
-          os << "\"]";
           os << "; }" << std::endl;
-          for (auto c : x.inputs()) {
-            os << namer.get_name(c) << " -> " << namer.get_name(a) << std::endl;
+          if (x.has_primitive()) {
+            os << namer.get_name(a) << " -> "
+               << namer.get_name(x.primitive_id()) << std::endl;
           }
         }
       },

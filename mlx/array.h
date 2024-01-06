@@ -229,7 +229,7 @@ class array {
     return array_desc_->inputs;
   };
 
-  std::vector<array>& editable_inputs() {
+  std::vector<array>& inputs() {
     return array_desc_->inputs;
   }
 
@@ -241,6 +241,10 @@ class array {
   void set_siblings(std::vector<array> siblings, uint16_t position) {
     array_desc_->siblings = std::move(siblings);
     array_desc_->position = position;
+  }
+
+  uint32_t position() const {
+    return array_desc_->position;
   }
 
   /** The outputs of the array's primitive (i.e. this array and
