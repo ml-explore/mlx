@@ -29,9 +29,9 @@ class Pooling(Module):
                 + [(self.padding, self.padding)] * len(features_sizes)
                 + [(0, 0)]
             )
-        if len(self.stride) != len(features_sizes):
+        if len(self.padding) != len(features_sizes):
             raise ValueError(
-                "the number of provided strides must match the number of feature axes"
+                "the number of provided padding values must match the number of feature axes"
             )
         return [(0, 0)] + self.padding + [(0, 0)]
 
