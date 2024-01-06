@@ -2848,10 +2848,6 @@ array tensordot(
     throw std::invalid_argument(
         "[tensordot] dims[0] and dims[1] must have the same number of dimensions.");
   }
-  if (a.dtype() != b.dtype()) {
-    throw std::invalid_argument(
-        "[tensordot] a and b must have the same dtype.");
-  }
   int csize = 1;
   auto x = a;
   auto y = b;
@@ -2905,18 +2901,15 @@ array tensordot(
   return reshape(matmul(x, y, s), rshape, s);
 }
 
-array outer(const array& a, const array& b, StreamOrDevice s /** = {}*/) {
-  if (a.ndim() != 1 || b.ndim() != 1) {
-    throw std::invalid_argument("[outer] a and b must be 1-dimensional.");
+array outer(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  auto t_a = a;
+  if (a.ndim() > 0) {
+    t_a = flatten(a, s);
   }
-
-  return multiply(reshape(a, {a.shape(0), 1}, s), b, s);
+  return multiply(reshape(t_a, {t_a.shape(0), 1}, s), flatten(b, s), s);
 }
 
-array inner(const array& a, const array& b, StreamOrDevice s /** = {}*/) {
-  if (a.dtype() != b.dtype()) {
-    throw std::invalid_argument("[inner] a and b must have the same dtype.");
-  }
+array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   if (a.ndim() == 0 || b.ndim() == 0) {
     return multiply(a, b, s);
   }

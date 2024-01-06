@@ -2317,8 +2317,6 @@ TEST_CASE("tensordot") {
 }
 
 TEST_CASE("outer") {
-  CHECK_THROWS_AS(
-      outer(reshape(arange(5), {1, 5}), arange(5)), std::invalid_argument);
   auto x = arange(1.0, 5.0);
   auto y = arange(1.0, 4.0);
   auto z = outer(x, y);
