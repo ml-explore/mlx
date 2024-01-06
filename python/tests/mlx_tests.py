@@ -52,10 +52,21 @@ class MLXTestCase(unittest.TestCase):
         atol=1e-2,
         rtol=1e-2,
     ):
-        assert tuple(mx_res.shape) == tuple(
-            expected.shape
-        ), f"shape mismatch expected={expected.shape} got={mx_res.shape}"
-        assert (
-            mx_res.dtype == expected.dtype
-        ), f"dtype mismatch expected={expected.dtype} got={mx_res.dtype}"
-        np.testing.assert_allclose(mx_res, expected, rtol=rtol, atol=atol)
+        self.assertEqual(
+            tuple(mx_res.shape),
+            tuple(expected.shape),
+            msg=f"shape mismatch expected={expected.shape} got={mx_res.shape}",
+        )
+        self.assertEqual(
+            mx_res.dtype,
+            expected.dtype,
+            msg=f"dtype mismatch expected={expected.dtype} got={mx_res.dtype}",
+        )
+        if not isinstance(mx_res, mx.array) and not isinstance(expected, mx.array):
+            np.testing.assert_allclose(mx_res, expected, rtol=rtol, atol=atol)
+        elif not isinstance(mx_res, mx.array):
+            mx_res = mx.array(mx_res)
+            self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))
+        elif not isinstance(expected, mx.array):
+            expected = mx.array(expected)
+            self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))
