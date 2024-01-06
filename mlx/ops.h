@@ -1104,6 +1104,12 @@ void save_safetensors(
     const std::string& file,
     std::unordered_map<std::string, array>,
     std::optional<bool> retain_graph = std::nullopt);
+
+/** computes einsum */
+array einsum_naive(
+    std::string equation,
+    const std::vector<array>& operands,
+    StreamOrDevice s = {});
 array einsum(
     std::string equation,
     const std::vector<array>& operands,
