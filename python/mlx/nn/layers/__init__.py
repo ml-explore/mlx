@@ -53,7 +53,7 @@ from mlx.nn.layers.normalization import (
     LayerNorm,
     RMSNorm,
 )
-from mlx.nn.layers.pooling import MaxPooling2d
+from mlx.nn.layers.pooling import Pooling
 from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalEncoding
 from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.nn.layers.transformer import (
