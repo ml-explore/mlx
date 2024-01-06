@@ -1328,6 +1328,8 @@ void init_ops(py::module_& m) {
       "mode"_a = Scatter::ReduceType::None,
       "stream"_a = none,
       R"pbdoc(
+        scatter(a: array, /, indices: List[array], updates: array, axes: List[int],
+                    mode: int = Scatter::None, *, stream: Union[None, Stream, Device] = None) -> array
         Scatter updates to given indices.
 
         Args:
