@@ -79,6 +79,9 @@ class Pooling(Module):
             raise AssertionError(f"unsupported pooling mode")
         self.mode = mode
 
+    def _extra_repr(self):
+        return f"{self.kernel_size}, stride={self.stride}, padding={self.padding}, mode={self.mode}"
+
     def _get_padding(self, features_sizes: List[int]) -> List[int]:
         if isinstance(self.padding, int):
             return (
@@ -119,7 +122,8 @@ class Pooling(Module):
         # Select pooling operator
         pool = {"max": mx.max, "mean": mx.mean}[self.mode]
         # Pad if necessary
-        a = self._pad(a)
+        if self.padding != 0:
+            a = self._pad(a)
         # Assumes a.shape = (batch_size, ..., num_channels)
         batch_size, batch_stride = a.shape[0], a.strides[0]
         feature_size, feature_strides = a.shape[1:-1], a.strides[1:-1]

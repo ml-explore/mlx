@@ -1081,6 +1081,11 @@ class TestLayers(mlx_tests.MLXTestCase):
                 expected_avg_pool_output,
             )
         )
+        # Test repr
+        self.assertTrue(
+            str(nn.Pooling(kernel_size=3, stride=2, padding=1, mode="max"))
+            == "Pooling(3, stride=2, padding=1, mode=max)"
+        )
 
 
 if __name__ == "__main__":
