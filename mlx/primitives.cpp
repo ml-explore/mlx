@@ -1382,7 +1382,7 @@ std::pair<array, int> LogicalAnd::vmap(
 std::vector<array> LogicalOr::vjp(
     const std::vector<array>& primals,
     const array& cotan,
-    const std::.vector<int>& argnums) {
+    const std::vector<int>& argnums) {
   assert(primals.size() == 2);
 
   if (argnums.size() == 1) {
