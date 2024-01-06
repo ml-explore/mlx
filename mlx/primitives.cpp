@@ -1356,7 +1356,8 @@ array LogicalAnd::jvp(
   assert(argnums.size() == 2);
   // Gradient of AND is zero w.r.t. both inputs when both are true or false.
   // When they differ, the gradient is non-zero only w.r.t. the true input.
-  return logical_and(primals[0], tangents[1], stream()) + logical_and(tangents[0], primals[1], stream());
+  return logical_and(primals[0], tangents[1], stream()) +
+      logical_and(tangents[0], primals[1], stream());
 }
 
 std::pair<array, int> LogicalAnd::vmap(
@@ -1385,7 +1386,8 @@ array LogicalOr::jvp(
   assert(argnums.size() == 2);
   // Gradient of OR is zero w.r.t. both inputs when both are true or false.
   // When they differ, the gradient is non-zero only w.r.t. the false input.
-  return logical_or(primals[0], tangents[1], stream()) + logical_or(tangents[0], primals[1], stream());
+  return logical_or(primals[0], tangents[1], stream()) +
+      logical_or(tangents[0], primals[1], stream());
 }
 
 std::pair<array, int> LogicalOr::vmap(

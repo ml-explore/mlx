@@ -10,7 +10,6 @@
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/unary.h"
-#include "mlx/backend/common/binary.h"
 #include "mlx/primitives.h"
 
 #define DEFAULT(primitive)                                                 \
