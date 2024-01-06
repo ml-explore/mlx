@@ -18,6 +18,9 @@ struct NodeNamer {
   std::unordered_map<std::uintptr_t, std::string> names;
 
   std::string get_name(uintptr_t id) {
+    std::ostringstream msg;
+    msg << id;
+    return msg.str();
     auto it = names.find(id);
     if (it == names.end()) {
       // Get the next name in the sequence

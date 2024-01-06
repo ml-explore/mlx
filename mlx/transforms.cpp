@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 #include <algorithm>
 #include <future>
-#include <iostream> // TODO
 #include <map>
 #include <numeric>
 #include <set>
@@ -122,7 +121,9 @@ void simplify(const std::vector<array>& outputs) {
     if (!a.has_primitive() || !b.has_primitive()) {
       return false;
     }
-
+    if (a.primitive_id() == b.primitive_id()) {
+      return false;
+    }
     const auto& pa = a.primitive();
     const auto& pb = b.primitive();
     if (typeid(pa) != typeid(pb)) {
@@ -153,40 +154,41 @@ void simplify(const std::vector<array>& outputs) {
     if (is_scalar(arr)) {
       auto scalar = scalars.find(get_scalar_rep(arr));
       if (scalar->second.id() != arr.id()) {
-        std::cout << "FUSING SCALAR" << std::endl;
         fuse(scalar->second, arr);
         arr = scalar->second;
       }
     }
 
-    // Check if we can fuse the parents of this array
-    std::cout << "FUSER " << arr.id() << std::endl;
-    auto parents = parents_map.find(arr.id());
-    if (parents != parents_map.end()) {
-      auto N = parents->second.size();
-      std::cout << "NPARENTS " << N << std::endl;
-      std::vector<bool> mask(N, false);
-      for (int i = 0; i < N; i++) {
-        if (mask[i]) {
-          continue;
-        }
-        for (int j = i + 1; j < N; j++) {
-          if (mask[j]) {
+    // Helper to check if we can fuse the parents of the
+    // given array
+    auto maybe_fuse_parents = [&](auto& a) {
+      auto parents = parents_map.find(a.id());
+      if (parents != parents_map.end()) {
+        auto N = parents->second.size();
+        std::vector<bool> mask(N, false);
+        for (int i = 0; i < N; i++) {
+          if (mask[i]) {
             continue;
           }
-          auto& src = parents->second[j].first;
-          auto& dst = parents->second[i].first;
-          std::cout << "FUSING " << src.id() << " " << dst.id() << " - "
-                    << array_equivalent(src, dst) << std::endl;
-          if (src.id() != dst.id() && array_equivalent(src, dst)) {
-            //          std::cout << "TRY FUSING " << src.id() << " " <<
-            //          dst.id() << std::endl;
-            cache.insert(src.id());
-            fuse(dst, src);
-            mask[j] = true;
+          for (int j = i + 1; j < N; j++) {
+            if (mask[j]) {
+              continue;
+            }
+            auto& src = parents->second[j].first;
+            auto& dst = parents->second[i].first;
+            if (src.id() != dst.id() && array_equivalent(src, dst)) {
+              cache.insert(src.id());
+              fuse(dst, src);
+              mask[j] = true;
+            }
           }
         }
       }
+    };
+
+    maybe_fuse_parents(arr);
+    for (auto& s : arr.siblings()) {
+      maybe_fuse_parents(s);
     }
   }
 }
