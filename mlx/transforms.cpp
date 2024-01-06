@@ -19,6 +19,38 @@
 
 namespace mlx::core {
 
+namespace {
+
+static std::atomic<int> _tracing_counter = 0;
+
+// Create an InTracing object during tracing operations to signify to the rest
+// of the codebase that we are during tracing so evals should not throw away
+// the graph.
+struct InTracing {
+ public:
+  InTracing() {
+    tracing_counter++;
+  }
+  ~InTracing() {
+    tracing_counter--;
+  }
+
+  static bool currently_tracing() {
+    return tracing_counter > 0;
+  }
+
+ private:
+  static std::atomic<int> tracing_counter;
+};
+
+std::atomic<int> InTracing::tracing_counter{0};
+
+} // namespace
+
+bool currently_tracing() {
+  return InTracing::currently_tracing();
+}
+
 void simplify(const std::vector<array>& outputs) {
   std::function<void(const array&)> recurse;
   std::queue<array> tape;
@@ -155,15 +187,6 @@ void simplify(const std::vector<array>& outputs) {
 }
 
 void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
-  if (!retain_graph) {
-    for (auto& out : outputs) {
-      if (out.has_primitive() && out.is_tracer()) {
-        throw std::invalid_argument(
-            "[eval] Illegal to eval an array during "
-            "function transform without graph retention.");
-      }
-    }
-  }
   std::function<void(const array&)> recurse;
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;
@@ -185,7 +208,7 @@ void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
       }
     }
     cache.insert(id);
-    if (!a.is_evaled() || (!retain_graph && a.has_primitive())) {
+    if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
       if (!a.has_primitive()) {
         throw std::invalid_argument(
             "[eval] Attempting to eval an array without a primitive.");
@@ -195,7 +218,7 @@ void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
   };
 
   for (auto& arr : outputs) {
-    if (!arr.is_evaled() || (!retain_graph && arr.has_primitive())) {
+    if (!arr.is_evaled() || (!arr.is_tracer() && arr.has_primitive())) {
       recurse(arr);
       // Insert a dependency for every output to synchronize
       // with at the end.
@@ -209,7 +232,7 @@ void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
     auto arr = std::move(tape.front());
     tape.pop();
     if (arr.is_evaled()) {
-      if (!retain_graph && arr.has_primitive()) {
+      if (!arr.is_tracer() && arr.has_primitive()) {
         arr.detach();
       }
       continue;
@@ -233,12 +256,9 @@ void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
         throw std::runtime_error("Metal GPU is not available.");
       }
       scheduler::enqueue(
-          stream,
-          metal::make_task(
-              arr, std::move(arr_deps), std::move(p), retain_graph));
+          stream, metal::make_task(arr, std::move(arr_deps), std::move(p)));
     } else {
-      auto task = [retain_graph,
-                   arr,
+      auto task = [arr,
                    stream,
                    arr_deps = std::move(arr_deps),
                    p = std::move(p)]() mutable {
@@ -247,7 +267,7 @@ void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
         }
         scheduler::notify_new_task(stream);
         arr.primitive().eval_cpu(arr.inputs(), arr);
-        if (!retain_graph) {
+        if (!arr.is_tracer()) {
           arr.detach();
         }
         if (p) {
@@ -269,6 +289,9 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& primals,
     const std::vector<array>& cotans) {
+  // Set the global tracing flag.
+  InTracing in_tracing;
+
   // Make tracers from given primals
   std::vector<array> primals_;
   for (auto& p : primals) {
@@ -425,6 +448,9 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     }
   }
 
+  // Set the global tracing flag.
+  InTracing in_tracing;
+
   std::vector<array> primals_;
   for (auto& p : primals) {
     auto s = p.has_primitive() ? p.primitive().stream()
@@ -578,6 +604,9 @@ std::pair<std::vector<array>, std::vector<array>> vmap_trace(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& inputs,
     const std::vector<int>& in_axes) {
+  // Set the global tracing flag
+  InTracing in_tracing;
+
   if (in_axes.size() != inputs.size()) {
     throw std::invalid_argument(
         "[vmap] The number of in axes must match the number of inputs.");

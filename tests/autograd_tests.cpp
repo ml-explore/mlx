@@ -1192,3 +1192,17 @@ TEST_CASE("test scan grads") {
     CHECK(array_equal(out, expected).item<bool>());
   }
 }
+
+TEST_CASE("test update state") {
+  auto y = array({1.0});
+  auto x = array({1.0, 1.0});
+  auto state = array({0.0, 0.0});
+  auto fn = [&state, &x](array y) {
+    x = y * x;
+    state = state + x;
+    return sum(x);
+  };
+  grad(fn)(y);
+  eval(state);
+  CHECK(array_equal(state, array({1.0, 1.0})).item<bool>());
+}
