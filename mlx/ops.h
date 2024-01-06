@@ -1077,6 +1077,8 @@ array tensordot(
 
 /** Compute the outer product of two vectors. */
 array outer(const array& a, const array& b, StreamOrDevice s = {});
+
+/** Compute the inner product of two vectors. */
 array inner(const array& a, const array& b, StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */

@@ -3283,7 +3283,7 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       outer(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Compute the outer product of two 1-D arrays.
+      Compute the outer product of two 1-D arrays, if the array's passed are not 1-D a flatten op will be run beforehand.
 
       Args:
         a (array): Input array
