@@ -40,10 +40,10 @@ struct InTracing {
   }
 
  private:
-  static std::atomic<int> tracing_counter;
+  static int tracing_counter;
 };
 
-std::atomic<int> InTracing::tracing_counter{0};
+int InTracing::tracing_counter{0};
 
 } // namespace
 
@@ -186,7 +186,7 @@ void simplify(const std::vector<array>& outputs) {
   }
 }
 
-void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
+void eval(const std::vector<array>& outputs) {
   std::function<void(const array&)> recurse;
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;

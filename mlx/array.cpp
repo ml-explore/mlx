@@ -62,8 +62,8 @@ void array::detach() {
   array_desc_->primitive = nullptr;
 }
 
-void array::eval(bool retain_graph /* = false */) {
-  mlx::core::eval({*this}, retain_graph);
+void array::eval() {
+  mlx::core::eval({*this});
 }
 
 void array::set_data(allocator::Buffer buffer, deleter_t d) {
