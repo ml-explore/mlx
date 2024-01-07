@@ -1267,7 +1267,25 @@ class Scatter : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_GRADS();
-  DEFINE_PRINT(Scatter)
+  void print(std::ostream& os) override {
+    os << "Scatter";
+    switch (reduce_type_) {
+      case Sum:
+        os << " Sum";
+        break;
+      case Prod:
+        os << " Prod";
+        break;
+      case Min:
+        os << " Min";
+        break;
+      case Max:
+        os << " Max";
+        break;
+      case None:
+        break;
+    }
+  }
   bool is_equivalent(const Primitive& other) const override;
 
  private:

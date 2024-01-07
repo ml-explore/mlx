@@ -2126,9 +2126,13 @@ std::vector<array> Scatter::vjp(
     const std::vector<array>& primals,
     const array& cotan,
     const std::vector<int>& argnums) {
-  if (reduce_type_ != Scatter::None) {
-    throw std::runtime_error(
-        "[scatter] VJP implemented only for scatter assignment");
+  switch (reduce_type_) {
+    case Scatter::None:
+    case Scatter::Sum:
+      break;
+    default:
+      throw std::runtime_error(
+          "[scatter] VJP implemented only for scatter assignment");
   }
 
   const array& values = primals[0];
@@ -2145,13 +2149,18 @@ std::vector<array> Scatter::vjp(
           vjps.push_back(scatter(
               cotan, indices, zeros_like(updates, stream()), axes_, stream()));
           break;
+        case Scatter::Sum:
+          // The input array values are kept so they all get gradients
+          vjps.push_back(cotan);
+          break;
         default:
           // Should never reach here
           throw std::invalid_argument("");
       }
     } else if (num == primals.size() - 1) {
       switch (reduce_type_) {
-        case Scatter::None: {
+        case Scatter::None:
+        case Scatter::Sum: {
           // Gather the values from the cotangent
           auto slice_sizes = cotan.shape();
           for (auto ax : axes_) {
