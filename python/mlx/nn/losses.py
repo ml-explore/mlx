@@ -6,6 +6,17 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
+def _reduce(loss: mx.array, reduction: str = "none"):
+    if reduction == "mean":
+        return mx.mean(loss)
+    elif reduction == "sum":
+        return mx.sum(loss)
+    elif reduction == "none":
+        return loss
+    else:
+        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
+
+
 def cross_entropy(
     logits: mx.array,
     targets: mx.array,
@@ -270,17 +281,6 @@ def triplet_loss(
         0,
     )
     return _reduce(loss, reduction)
-
-
-def _reduce(loss: mx.array, reduction: str = "none"):
-    if reduction == "mean":
-        return mx.mean(loss)
-    elif reduction == "sum":
-        return mx.sum(loss)
-    elif reduction == "none":
-        return loss
-    else:
-        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
 
 
 def hinge_loss(
