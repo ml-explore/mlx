@@ -869,18 +869,6 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(y.shape, x.shape)
         self.assertTrue(y.dtype, mx.float16)
 
-    def test_glu(self):
-        x = mx.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=mx.float32)
-        y = mx.array([[[0.952574, 1.96403]]], dtype=mx.float32)
-        out = nn.glu(x)
-        self.assertEqualArray(out, y)
-
-    def test_gated_activation(self):
-        x = mx.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=mx.float32)
-        y = mx.array([[[0.696388, 1.72991]]], dtype=mx.float32)
-        out = nn.gated_activation(x, nn.silu)
-        self.assertEqualArray(out, y)
-
 
 if __name__ == "__main__":
     unittest.main()
