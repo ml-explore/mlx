@@ -377,23 +377,16 @@ def log_cosh_loss(
 def cosine_similarity_loss(
     inputs: mx.array,
     targets: mx.array,
+    axis: int = -1,
     eps: float = 1e-8,
     reduction: str = "none",
 ) -> mx.array:
     r"""
     Computes the Cosine Similarity loss between inputs and targets.
+    The cosine similarity loss is given by
 
-    Note that inputs must be between -1 and 1. When it is a negative number
-    between -1 and 0, 0 indicates orthogonality and values closer to -1 indicate
-    greater similarity. The values closer to 1 indicate greater dissimilarity.
-    This makes it usable as a loss function in a setting where you try to
-    maximize the proximity between predictions and targets. If either
-    `inputs` or `targets` is a zero vector, cosine similarity will be 0
-    regardless of the proximity between predictions and targets.
-
-    .. math::
-
-        \text{cosine_similiarity_loss} = \frac{\sum_{i} e_{1,i} \cdot e_{2,i}}{\max(\|e_1\|, \varepsilon) \cdot \max(\|e_2\|, \varepsilon)}
+        .. math::
+        \frac{x_1 \cdot x_2}{\max(\|x_1\|  \cdot \|x_2\|, \repsilon)}
 
 
     Args:
@@ -407,10 +400,10 @@ def cosine_similarity_loss(
     Returns:
         mx.array: The computed Cosine Similarity loss.
     """
-    inputs_norm = mx.maximum(mx.sqrt(mx.sum(mx.square(inputs), axis=1)), eps)
-    targets_norm = mx.maximum(mx.sqrt(mx.sum(mx.square(targets), axis=1)), eps)
+    inputs_norm = mx.sqrt(mx.sum(mx.square(inputs), axis=axis))
+    targets_norm = mx.sqrt(mx.sum(mx.square(targets), axis=axis))
 
     dot_product = mx.sum(inputs * targets, axis=1)
 
-    loss = dot_product / (inputs_norm * targets_norm)
+    loss = dot_product / mx.maximum(inputs_norm * targets_norm, eps)
     return _reduce(loss, reduction)

@@ -279,17 +279,17 @@ class TestLosses(mlx_tests.MLXTestCase):
         targets = mx.array([[0.6, 0.4, 0.3, 0.8], [0.2, 0.5, 0.6, 0.4]])
 
         # Test with reduction 'none'
-        losses_none = nn.losses.triplet_loss(inputs, targets, reduction="none")
+        losses_none = nn.losses.cosine_similarity_loss(inputs, targets, reduction="none")
         expected_none = mx.array([-0.985344, -0.961074])
         self.assertTrue(mx.allclose(losses_none, expected_none))
 
         # Test with reduction 'mean'
-        losses_mean = nn.losses.triplet_loss(inputs, targets, reduction="mean")
+        losses_mean = nn.losses.cosine_similarity_loss(inputs, targets, reduction="mean")
         expected_mean = mx.mean(expected_none)
         self.assertTrue(mx.allclose(losses_mean, expected_mean))
 
         # Test with reduction 'sum'
-        losses_sum = nn.losses.triplet_loss(inputs, targets, reduction="sum")
+        losses_sum = nn.losses.cosine_similarity_loss(inputs, targets, reduction="sum")
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
