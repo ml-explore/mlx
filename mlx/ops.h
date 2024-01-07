@@ -670,25 +670,33 @@ array logical_not(const array& a, StreamOrDevice s = {});
 
 /** Logical and of two arrays */
 array logical_and(const array& a, const array& b, StreamOrDevice s = {});
-array operator&&(const array& a, const array& b);
-template <typename T>
-array operator&&(T a, const array& b) {
+
+// Overload for array-array logical AND
+array operator&&(const array& a, const array& b) {
+  return logical_and(a, b);
+}
+
+// Overload for scalar-array and array-scalar logical AND
+array operator&&(bool a, const array& b) {
   return logical_and(array(a), b);
 }
-template <typename T>
-array operator&&(const array& a, T b) {
+array operator&&(const array& a, bool b) {
   return logical_and(a, array(b));
 }
 
 /** Logical or of two arrays */
 array logical_or(const array& a, const array& b, StreamOrDevice s = {});
-array operator||(const array& a, const array& b);
-template <typename T>
-array operator||(T a, const array& b) {
+
+// Overload for array-array logical OR
+array operator||(const array& a, const array& b) {
+  return logical_or(a, b);
+}
+
+// Overload for scalar-array and array-scalar logical OR
+array operator||(bool a, const array& b) {
   return logical_or(array(a), b);
 }
-template <typename T>
-array operator||(const array& a, T b) {
+array operator||(const array& a, bool b) {
   return logical_or(a, array(b));
 }
 
