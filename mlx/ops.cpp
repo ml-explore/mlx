@@ -3523,20 +3523,26 @@ array einsum(
     }
     if (std::get<4>(step)) {
       auto extract = einsum_parse(std::get<2>(step));
-      auto left_ord = str_idx_map(extract.first.at(0));
-      auto right_ord = str_idx_map(extract.first.at(1));
 
       std::vector<int> left_axes;
       std::vector<int> right_axes;
-      for (auto c : std::get<1>(step)) {
-        left_axes.push_back(left_ord.at(c));
-        right_axes.push_back(right_ord.at(c));
+
+      for (int i = 0; i < extract.first.at(0).size(); i++) {
+        auto c = extract.first.at(0).at(i);
+        if (std::get<1>(step).find(c) != std::get<1>(step).end()) {
+          left_axes.push_back(i);
+        }
       }
-      auto res = tensordot(args.at(0), args.at(1), {left_axes, right_axes}, s);
-      inputs.emplace_back(res);
+      for (int i = 0; i < extract.first.at(1).size(); i++) {
+        auto c = extract.first.at(1).at(i);
+        if (std::get<1>(step).find(c) != std::get<1>(step).end()) {
+          right_axes.push_back(i);
+        }
+      }
+      inputs.emplace_back(
+          tensordot(args.at(0), args.at(1), {left_axes, right_axes}, s));
     } else {
-      array res = einsum_naive(std::get<2>(step), args, s);
-      inputs.emplace_back(res);
+      inputs.emplace_back(einsum_naive(std::get<2>(step), args, s));
     }
   }
   return inputs.front();
