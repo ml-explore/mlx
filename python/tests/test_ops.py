@@ -1547,6 +1547,34 @@ class TestOps(mlx_tests.MLXTestCase):
                     dims=([2, 1, 3], [1, 2, 0]),
                 )
 
+    def test_inner(self):
+        self.assertCmpNumpy([(3,), (3,)], mx.inner, np.inner)
+        self.assertCmpNumpy([(1, 1, 2), (3, 2)], mx.inner, np.inner)
+        self.assertCmpNumpy([(2, 3, 4), (4,)], mx.inner, np.inner)
+
+    def test_outer(self):
+        self.assertCmpNumpy([(3,), (3,)], mx.outer, np.outer)
+        self.assertCmpNumpy(
+            [
+                mx.ones(
+                    5,
+                ),
+                mx.linspace(-2, 2, 5),
+            ],
+            mx.outer,
+            np.outer,
+        )
+        self.assertCmpNumpy(
+            [
+                1j * mx.linspace(2, -2, 5),
+                mx.ones(
+                    5,
+                ),
+            ],
+            mx.outer,
+            np.outer,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

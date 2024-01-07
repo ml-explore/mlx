@@ -2848,10 +2848,6 @@ array tensordot(
     throw std::invalid_argument(
         "[tensordot] dims[0] and dims[1] must have the same number of dimensions.");
   }
-  if (a.dtype() != b.dtype()) {
-    throw std::invalid_argument(
-        "[tensordot] a and b must have the same dtype.");
-  }
   int csize = 1;
   auto x = a;
   auto y = b;
@@ -2903,6 +2899,23 @@ array tensordot(
   x = reshape(transpose(x, t1, s), {size1, csize}, s);
   y = reshape(transpose(y, t2, s), {csize, size2}, s);
   return reshape(matmul(x, y, s), rshape, s);
+}
+
+array outer(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  return multiply(
+      reshape(a, {static_cast<int>(a.size()), 1}, s), flatten(b, s), s);
+}
+
+array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    return multiply(a, b, s);
+  }
+  if (a.shape(-1) != b.shape(-1)) {
+    throw std::invalid_argument(
+        "[inner] a and b must have the same last dimension.");
+  }
+
+  return tensordot(a, b, {{-1}, {-1}}, s);
 }
 
 } // namespace mlx::core
