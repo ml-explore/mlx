@@ -3531,7 +3531,6 @@ array einsum(
       std::vector<int> left_axes;
       std::vector<int> right_axes;
       for (auto c : std::get<1>(step)) {
-        printf("%c %d %d\n", c, left_ord.at(c), right_ord.at(c));
         left_axes.push_back(left_ord.at(c));
         right_axes.push_back(right_ord.at(c));
       }
