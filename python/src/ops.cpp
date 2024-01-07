@@ -1321,49 +1321,121 @@ void init_ops(py::module_& m) {
             array: The output array with the specified shape and values.
       )pbdoc");
   m.def(
-      "scatter",
+      "scatter_add",
       [](const array& a,
-         const array& indices,
+         const std::vector<array>& indices,
          const array& updates,
-         const std::variant<int, std::vector<int>>& axis,
-         const std::optional<std::string> mode,
+         const std::vector<int>& axes,
          StreamOrDevice stream) {
-        std::vector<int> axes =
-            (std::holds_alternative<int>(axis)
-                 ? std::vector<int>({std::get<int>(axis)})
-                 : std::get<std::vector<int>>(axis));
-        if (!mode.has_value())
-          return scatter(a, {indices}, updates, axes, stream);
-        if (mode.value() == "sum")
-          return scatter_add(a, {indices}, updates, axes, stream);
-        if (mode.value() == "prod")
-          return scatter_prod(a, {indices}, updates, axes, stream);
-        if (mode.value() == "min")
-          return scatter_min(a, {indices}, updates, axes, stream);
-        if (mode.value() == "max")
-          return scatter_max(a, {indices}, updates, axes, stream);
-        throw std::invalid_argument(
-            "[scatter] The mode argument must be sum, prod, min or max.");
+        return scatter_add(a, indices, updates, axes, stream);
       },
       "a"_a,
       py::pos_only(),
       "indices"_a,
       "updates"_a,
-      "axis"_a,
-      "mode"_a = std::nullopt,
+      "axes"_a,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        scatter(a: array, /, indices: array, updates: array, axis: int | List[int], mode: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        scatter_add(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
 
-        Scatter updates to given indices.
+        Scatter adds.
 
         Args:
             a (array): Input array.
-            indices (array): Indices array.
+            indices (list[array]): A list of indices array.
             updates (array): Updates array.
-            axis (int | list[int]): The axis or a list of axes along which to perform the scatter operation.
-            mode (str, optional): Reduce type. One of 'sum', 'prod', 'min', 'max'. Default: None.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
+      "scatter_prod",
+      [](const array& a,
+         const std::vector<array>& indices,
+         const array& updates,
+         const std::vector<int>& axes,
+         StreamOrDevice stream) {
+        return scatter_prod(a, indices, updates, axes, stream);
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_prod(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter prods.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): A list of indices array.
+            updates (array): Updates array.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
+      "scatter_max",
+      [](const array& a,
+         const std::vector<array>& indices,
+         const array& updates,
+         const std::vector<int>& axes,
+         StreamOrDevice stream) {
+        return scatter_max(a, indices, updates, axes, stream);
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_max(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter maxes.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): A list of indices array.
+            updates (array): Updates array.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
+      "scatter_min",
+      [](const array& a,
+         const std::vector<array>& indices,
+         const array& updates,
+         const std::vector<int>& axes,
+         StreamOrDevice stream) {
+        return scatter_min(a, indices, updates, axes, stream);
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_min(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter mins.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): A list of indices array.
+            updates (array): Updates array.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
 
         Returns:
             array: The result of the scatter operation.
