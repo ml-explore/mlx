@@ -1641,7 +1641,7 @@ array operator||(const array& a, const array& b) {
   // check if a and b are bool arrays
   if (a.dtype() != bool_ || b.dtype() != bool_) {
     throw std::invalid_argument(
-        "[operator||] operator|| is only supported for bool arrays.");
+        "[operator||] is only supported for bool arrays.");
   }
   return logical_or(a, b);
 }
