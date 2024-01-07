@@ -270,7 +270,7 @@ class TestNN(mlx_tests.MLXTestCase):
         targets = mx.array([[0.6, 0.4, 0.3, 0.8], [0.2, 0.5, 0.6, 0.4]])
 
         # Test with reduction 'none'
-        losses_none = losses.cosine_similarity_loss(logits, targets, reduction="none")
+        losses_none = nn.losses.cosine_similarity_loss(logits, targets, reduction="none")
         expected_none = mx.array([-0.985344, -0.961074])
         print(losses_none)
         self.assertTrue(mx.allclose(losses_none, expected_none))
