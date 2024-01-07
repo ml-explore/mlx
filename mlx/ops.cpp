@@ -3511,18 +3511,13 @@ array einsum(
     StreamOrDevice s /* = {} */) {
   std::vector<array> inputs = operands;
   auto path = einsum_path(equation, inputs);
-  printf("path size %d\n", path.size());
   for (auto step : path) {
-    auto pos1 = std::get<0>(step).at(0);
-    auto pos2 = std::get<0>(step).at(1);
-
-    array arg1 = inputs.at(pos1);
-    array arg2 = inputs.at(pos2);
-    inputs.erase(inputs.begin() + pos1);
-    inputs.erase(inputs.begin() + pos2);
+    std::vector<array> args;
+    for (auto pos : std::get<0>(step)) {
+      args.push_back(inputs.at(pos));
+      inputs.erase(inputs.begin() + pos);
+    }
     if (std::get<4>(step)) {
-      // dot
-
       auto extract = einsum_parse(std::get<2>(step));
       auto left_ord = str_idx_map(extract.first.at(0));
       auto right_ord = str_idx_map(extract.first.at(1));
@@ -3534,11 +3529,10 @@ array einsum(
         left_axes.push_back(left_ord.at(c));
         right_axes.push_back(right_ord.at(c));
       }
-      auto res = tensordot(arg1, arg2, {left_axes, right_axes}, s);
+      auto res = tensordot(args.at(0), args.at(1), {left_axes, right_axes}, s);
       inputs.emplace_back(res);
     } else {
-      // naive
-      array res = einsum_naive(std::get<2>(step), inputs, s);
+      array res = einsum_naive(std::get<2>(step), args, s);
       inputs.emplace_back(res);
     }
   }
