@@ -3510,6 +3510,10 @@ array einsum(
     const std::vector<array>& operands,
     StreamOrDevice s /* = {} */) {
   std::vector<array> inputs = operands;
+  if (operands.size() == 0) {
+    throw std::invalid_argument("[einsum] At least one operand is required.");
+  }
+
   auto path = einsum_path(equation, inputs);
   for (auto step : path) {
     std::vector<array> args;
