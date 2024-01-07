@@ -2359,6 +2359,7 @@ TEST_CASE("inner") {
   expected = array({7., 0., 0., 7.}, {2, 2});
   CHECK(array_equal(z, expected).item<bool>());
 }
+
 TEST_CASE("test einsum") {
   CHECK_THROWS(einsum("ijk", {full({2, 2}, 2.0f)}));
   CHECK_THROWS(einsum("", {}));
