@@ -6,17 +6,6 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-def _reduce(loss: mx.array, reduction: str = "none"):
-    if reduction == "mean":
-        return mx.mean(loss)
-    elif reduction == "sum":
-        return mx.sum(loss)
-    elif reduction == "none":
-        return loss
-    else:
-        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
-
-
 def cross_entropy(
     logits: mx.array,
     targets: mx.array,
@@ -393,6 +382,10 @@ def cosine_similarity_loss(
 ) -> mx.array:
     """
     Computes the Cosine Similarity loss between inputs and targets.
+<<<<<<< HEAD
+=======
+
+>>>>>>> acf37ac (change afte rewivew)
     Note that inputs must be between -1 and 1. When it is a negative number
     between -1 and 0, 0 indicates orthogonality and values closer to -1 indicate
     greater similarity. The values closer to 1 indicate greater dissimilarity.
@@ -400,8 +393,16 @@ def cosine_similarity_loss(
     maximize the proximity between predictions and targets. If either
     `inputs` or `targets` is a zero vector, cosine similarity will be 0
     regardless of the proximity between predictions and targets.
+<<<<<<< HEAD
     .. math::
         \text{cosine_similiarity_loss} = \frac{\sum_{i} e_{1,i} \cdot e_{2,i}}{\max(\|e_1\|, \varepsilon) \cdot \max(\|e_2\|, \varepsilon)}
+=======
+
+    .. math::
+
+        \text{cosine_similiarity_loss} = \frac{\sum_{i} e_{1,i} \cdot e_{2,i}}{\max(\|e_1\|, \varepsilon) \cdot \max(\|e_2\|, \varepsilon)}
+
+>>>>>>> acf37ac (change afte rewivew)
     Args:
         embeddings1 (mx.array): Embeddings for the first set of samples.
         embeddings2 (mx.array): Embeddings for the second set of samples.
@@ -418,4 +419,8 @@ def cosine_similarity_loss(
     dot_product = mx.sum(inputs * targets, axis=1)
 
     loss = dot_product / (inputs_norm * targets_norm)
+<<<<<<< HEAD
     return _reduce(loss, reduction)
+=======
+    return _reduce(loss, reduction)
+>>>>>>> acf37ac (change afte rewivew)
