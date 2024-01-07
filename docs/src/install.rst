@@ -48,6 +48,12 @@ Build Requirements
 - `cmake <https://cmake.org/>`_ -- version 3.24 or later, and ``make``
 - Xcode >= 14.3 (Xcode >= 15.0 for macOS 14 and above)
 
+.. note::
+    Ensure your shell environment and tools are running native ``arm64``,
+    not ``x86_64`` via Rosetta. Verify the shell by confirming ``uname -m``
+    outputs ``arm64``. If installed via homebrew, verify ``which cmake``
+    begins with ``/opt/homebrew/``.
+
 
 Python API
 ^^^^^^^^^^
