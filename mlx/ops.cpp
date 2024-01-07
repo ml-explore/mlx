@@ -2902,11 +2902,8 @@ array tensordot(
 }
 
 array outer(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  auto t_a = a;
-  if (a.ndim() > 0) {
-    t_a = flatten(a, s);
-  }
-  return multiply(reshape(t_a, {t_a.shape(0), 1}, s), flatten(b, s), s);
+  return multiply(
+      reshape(a, {static_cast<int>(a.size()), 1}, s), flatten(b, s), s);
 }
 
 array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
