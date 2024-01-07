@@ -1344,13 +1344,7 @@ std::vector<array> LogicalAnd::vjp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
 
-  if (argnums.size() == 1) {
-    // If derivative is with respect to only one argument
-    return {argnums[0] == 0 ? cotan : zeros_like(cotan, stream())};
-  } else {
-    // If derivative is with respect to both arguments
-    return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
-  }
+  return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
 }
 
 array LogicalAnd::jvp(
@@ -1360,14 +1354,9 @@ array LogicalAnd::jvp(
   assert(primals.size() == 2);
   assert(argnums.size() <= 2);
 
-  if (argnums.size() == 1) {
-    // If derivative is with respect to only one argument
-    return argnums[0] == 0 ? tangents[0] : zeros_like(tangents[0], stream());
-  } else {
-    // If derivative is with respect to both arguments
-    return zeros_like(tangents[0], stream());
-  }
+  return zeros_like(primals[0], stream());
 }
+
 
 std::pair<array, int> LogicalAnd::vmap(
     const std::vector<array>& inputs,
@@ -1385,13 +1374,7 @@ std::vector<array> LogicalOr::vjp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
 
-  if (argnums.size() == 1) {
-    // If derivative is with respect to only one argument
-    return {argnums[0] == 0 ? cotan : zeros_like(cotan, stream())};
-  } else {
-    // If derivative is with respect to both arguments
-    return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
-  }
+  return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
 }
 
 array LogicalOr::jvp(
@@ -1401,13 +1384,7 @@ array LogicalOr::jvp(
   assert(primals.size() == 2);
   assert(argnums.size() <= 2);
 
-  if (argnums.size() == 1) {
-    // If derivative is with respect to only one argument
-    return argnums[0] == 0 ? tangents[0] : zeros_like(tangents[0], stream());
-  } else {
-    // If derivative is with respect to both arguments
-    return zeros_like(tangents[0], stream());
-  }
+  return zeros_like(primals[0], stream());
 }
 
 std::pair<array, int> LogicalOr::vmap(
