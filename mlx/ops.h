@@ -1021,13 +1021,10 @@ array conv2d(
 /** Serialization operations */
 
 /** Save array to out stream in .npy format */
-void save(
-    std::shared_ptr<io::Writer> out_stream,
-    array a,
-    bool retain_graph = true);
+void save(std::shared_ptr<io::Writer> out_stream, array a);
 
 /** Save array to file in .npy format */
-void save(const std::string& file, array a, bool retain_graph = true);
+void save(const std::string& file, array a);
 
 /** Load array from reader in .npy format */
 array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
@@ -1091,10 +1088,8 @@ std::unordered_map<std::string, array> load_safetensors(
 
 void save_safetensors(
     std::shared_ptr<io::Writer> in_stream,
-    std::unordered_map<std::string, array>,
-    std::optional<bool> retain_graph = std::nullopt);
+    std::unordered_map<std::string, array>);
 void save_safetensors(
     const std::string& file,
-    std::unordered_map<std::string, array>,
-    std::optional<bool> retain_graph = std::nullopt);
+    std::unordered_map<std::string, array>);
 } // namespace mlx::core

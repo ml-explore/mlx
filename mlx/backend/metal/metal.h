@@ -25,7 +25,6 @@ std::shared_ptr<void> new_scoped_memory_pool();
 std::function<void()> make_task(
     array& arr,
     std::vector<std::shared_future<void>> deps,
-    std::shared_ptr<std::promise<void>> p,
-    bool retain_graph);
+    std::shared_ptr<std::promise<void>> p);
 
 } // namespace mlx::core::metal

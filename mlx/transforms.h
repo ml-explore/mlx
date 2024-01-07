@@ -14,11 +14,11 @@ void simplify(Arrays... outputs) {
   simplify(std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 
-void eval(const std::vector<array>& outputs, bool retain_graph = false);
+void eval(const std::vector<array>& outputs);
 
 template <typename... Arrays>
 void eval(Arrays... outputs) {
-  eval(std::vector<array>{std::forward<Arrays>(outputs)...}, false);
+  eval(std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 
 /**
