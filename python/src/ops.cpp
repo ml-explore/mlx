@@ -1,14 +1,18 @@
 // Copyright © 2023 Apple Inc.
 
 #include <numeric>
+#include <optional>
 #include <ostream>
+#include <string>
 #include <variant>
+#include <vector>
 
 #include <pybind11/iostream.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 #include "mlx/ops.h"
+#include "mlx/primitives.h"
 #include "mlx/utils.h"
 #include "python/src/load.h"
 #include "python/src/utils.h"
@@ -1318,26 +1322,48 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "scatter",
-      &scatter,
+      [](const array& a,
+         const array& indices,
+         const array& updates,
+         const std::variant<int, std::vector<int>>& axis,
+         const std::optional<std::string> mode,
+         StreamOrDevice stream) {
+        std::vector<int> axes =
+            (std::holds_alternative<int>(axis)
+                 ? std::vector<int>({std::get<int>(axis)})
+                 : std::get<std::vector<int>>(axis));
+        if (!mode.has_value())
+          return scatter(a, {indices}, updates, axes, stream);
+        if (mode.value() == "sum")
+          return scatter_add(a, {indices}, updates, axes, stream);
+        if (mode.value() == "prod")
+          return scatter_prod(a, {indices}, updates, axes, stream);
+        if (mode.value() == "min")
+          return scatter_min(a, {indices}, updates, axes, stream);
+        if (mode.value() == "max")
+          return scatter_max(a, {indices}, updates, axes, stream);
+        throw std::invalid_argument(
+            "[scatter] The mode argument must be sum, prod, min or max.");
+      },
       "a"_a,
       py::pos_only(),
       "indices"_a,
       "updates"_a,
-      "axes"_a,
+      "axis"_a,
+      "mode"_a = std::nullopt,
       py::kw_only(),
-      "mode"_a = Scatter::ReduceType::None,
       "stream"_a = none,
       R"pbdoc(
-        scatter(a: array, /, indices: List[array], updates: array, axes: List[int],
-                    mode: int = Scatter::None, *, stream: Union[None, Stream, Device] = None) -> array
+        scatter(a: array, /, indices: array, updates: array, axis: int | List[int], mode: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> array
+
         Scatter updates to given indices.
 
         Args:
             a (array): Input array.
-            indices (list[array]): List of index arrays.
+            indices (array): Indices array.
             updates (array): Updates array.
-            axes (list[int]): List of axes along which to perform the scatter operation.
-            mode (str, optional): Reduce type. Defaults to None.
+            axis (int | list[int]): The axis or a list of axes along which to perform the scatter operation.
+            mode (str, optional): Reduce type. One of 'sum', 'prod', 'min', 'max'. Default: None.
 
         Returns:
             array: The result of the scatter operation.
