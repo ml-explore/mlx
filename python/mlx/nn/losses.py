@@ -6,17 +6,6 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-def _reduce(loss: mx.array, reduction: str = "none"):
-    if reduction == "mean":
-        return mx.mean(loss)
-    elif reduction == "sum":
-        return mx.sum(loss)
-    elif reduction == "none":
-        return loss
-    else:
-        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
-
-
 def cross_entropy(
     logits: mx.array,
     targets: mx.array,
@@ -281,8 +270,19 @@ def triplet_loss(
         0,
     )
     return _reduce(loss, reduction)
-  
-  
+
+
+def _reduce(loss: mx.array, reduction: str = "none"):
+    if reduction == "mean":
+        return mx.mean(loss)
+    elif reduction == "sum":
+        return mx.sum(loss)
+    elif reduction == "none":
+        return loss
+    else:
+        raise ValueError("Invalid reduction. Must be 'none', 'mean', or 'sum'.")
+
+
 def hinge_loss(
     inputs: mx.array, targets: mx.array, reduction: str = "none"
 ) -> mx.array:
@@ -375,27 +375,25 @@ def log_cosh_loss(
 
 
 def cosine_similarity_loss(
-    embeddings1: mx.array,
-    embeddings2: mx.array,
+    inputs: mx.array,
     targets: mx.array,
     eps: float = 1e-8,
-    margin: float = 0.0,
     reduction: str = "none",
 ) -> mx.array:
     """
-    Computes the Cosine Similarity loss.
+    Computes the Cosine Similarity loss between inputs and targets.
 
-    This loss function calculates the cosine of the angle between two vectors and is often used in 
-    tasks involving embeddings, such as natural language processing or image recognition.
+    Note that inputs must be between -1 and 1. When it is a negative number
+    between -1 and 0, 0 indicates orthogonality and values closer to -1 indicate
+    greater similarity. The values closer to 1 indicate greater dissimilarity.
+    This makes it usable as a loss function in a setting where you try to
+    maximize the proximity between predictions and targets. If either
+    `inputs` or `targets` is a zero vector, cosine similarity will be 0
+    regardless of the proximity between predictions and targets.
 
     .. math::
 
-        \text{Cosine Similarity Loss}(e_1, e_2, y) = 
-        \begin{cases} 
-        1 - \frac{e_1 \cdot e_2}{\|e_1\| \|e_2\|} & \text{if } y = 1 \\
-        \max(0, \frac{e_1 \cdot e_2}{\|e_1\| \|e_2\|} - \text{margin}) & \text{if } y = -1 
-        \end{cases}
-
+        \text{cosine_similiarity_loss} = \frac{\sum_{i} e_{1,i} \cdot e_{2,i}}{\max(\|e_1\|, \varepsilon) \cdot \max(\|e_2\|, \varepsilon)}
 
     Args:
         embeddings1 (mx.array): Embeddings for the first set of samples.
@@ -408,13 +406,10 @@ def cosine_similarity_loss(
     Returns:
         mx.array: The computed Cosine Similarity loss.
     """
-    embeddings1_norm = mx.sqrt(mx.sum(mx.square(embeddings1), axis=1) + eps)
-    embeddings2_norm = mx.sqrt(mx.sum(mx.square(embeddings2), axis=1) + eps)
+    inputs_norm = mx.maximum(mx.sqrt(mx.sum(mx.square(inputs), axis=1)), eps)
+    targets_norm = mx.maximum(mx.sqrt(mx.sum(mx.square(targets), axis=1)), eps)
 
-    cos_similarity = mx.sum(embeddings1 * embeddings2, axis=1) / (
-        embeddings1_norm * embeddings2_norm
-    )
-    loss = mx.where(
-        targets == 1, 1 - cos_similarity, mx.maximum(0, cos_similarity - margin)
-    )
+    dot_product = mx.sum(inputs * targets, axis=1)
+
+    loss = dot_product / (inputs_norm * targets_norm)
     return _reduce(loss, reduction)
