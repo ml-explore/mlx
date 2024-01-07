@@ -17,6 +17,7 @@ std::pair<std::vector<std::string>, std::string> einsum_parse(
     auto pos = equation.find("->");
     lhs = equation.substr(0, pos);
     rhs = equation.substr(pos + 2);
+    rhs.erase(std::remove(rhs.begin(), rhs.end(), ' '), rhs.end());
   } else {
     lhs = equation;
     std::map<char, int> temp;
@@ -31,7 +32,7 @@ std::pair<std::vector<std::string>, std::string> einsum_parse(
       }
     }
     for (auto k : temp) {
-      if (k.second == 1) {
+      if (k.first != ' ' && k.second == 1) {
         rhs += k.first;
       }
     }
@@ -40,6 +41,7 @@ std::pair<std::vector<std::string>, std::string> einsum_parse(
   std::stringstream ss(lhs);
   std::string token;
   while (getline(ss, token, ',')) {
+    token.erase(std::remove(token.begin(), token.end(), ' '), token.end());
     input_list.push_back(token);
   }
   return {input_list, rhs};
@@ -200,7 +202,8 @@ std::vector<std::vector<int>> optimal_path(
       positions.emplace_back(rangeHelper(in_sets.size() - i));
       return positions;
     }
-  }
+  } // in_sets loop
+
   if (results.size() == 0) {
     return {rangeHelper(in_sets.size())};
   }
@@ -388,7 +391,12 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
         std::max(max_size, term_size(input.begin(), input.end(), dim_map));
   }
   // calculate the optimal path
-  auto path = optimal_path(in_sets, out_set, dim_map, max_size);
+  std::vector<std::vector<int>> path;
+  if (in_sets.size() == 1 || in_sets.size() == 2) {
+    path.emplace_back(rangeHelper(in_sets.size()));
+  } else {
+    path = optimal_path(in_sets, out_set, dim_map, max_size);
+  }
   std::vector<std::tuple<
       std::vector<int>,
       std::set<char>,
@@ -396,15 +404,17 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
       std::vector<std::string>,
       bool>>
       result;
-
+  // Go through the generated path and construct einsum path
   for (int i = 0; i < path.size(); i++) {
     auto curr = path[i];
     std::sort(curr.begin(), curr.end(), std::greater<int>());
     auto cont = find_contraction(curr, in_sets, out_set);
     in_sets = std::get<1>(cont);
+
     bool do_blas = false;
     std::set<char> bcast;
     std::vector<std::string> tmp_inputs;
+
     for (auto j : curr) {
       tmp_inputs.push_back(extract.first.at(j));
       extract.first.erase(extract.first.begin() + j);
@@ -412,6 +422,7 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
           broadcast_indicies.at(j).begin(), broadcast_indicies.at(j).end());
       broadcast_indicies.erase(broadcast_indicies.begin() + j);
     }
+    // check if tensordot can be used
     if (!has_intersection(std::get<2>(cont), bcast)) {
       do_blas = can_dot(tmp_inputs, std::get<0>(cont), std::get<2>(cont));
     }
