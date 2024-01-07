@@ -563,14 +563,6 @@ void init_array(py::module_& m) {
             list(int): A list containing the sizes of each dimension.
         )pbdoc")
       .def_property_readonly(
-          "strides",
-          [](const array& a) { return a.strides(); },
-          R"pbdoc(
-          The strides of the array as a Python list.
-          Returns:
-            list(int): A list containing the strides.
-        )pbdoc")
-      .def_property_readonly(
           "dtype",
           &array::dtype,
           R"pbdoc(
