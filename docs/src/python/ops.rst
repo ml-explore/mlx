@@ -49,6 +49,7 @@ Operations
    greater
    greater_equal
    identity
+   inner
    less
    less_equal
    linspace
@@ -71,6 +72,7 @@ Operations
    negative
    ones
    ones_like
+   outer
    partition
    pad
    prod

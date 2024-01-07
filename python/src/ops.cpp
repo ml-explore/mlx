@@ -3250,4 +3250,46 @@ void init_ops(py::module_& m) {
         Returns:
           result (array): The tensor dot product.
       )pbdoc");
+
+  m.def(
+      "inner",
+      &inner,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      inner(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Ordinary inner product of vectors for 1-D arrays, in higher dimensions a sum product over the last axes.
+
+      Args:
+        a (array): Input array
+        b (array): Input array
+
+      Returns:
+        result (array): The inner product.
+    )pbdoc");
+
+  m.def(
+      "outer",
+      &outer,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      outer(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Compute the outer product of two 1-D arrays, if the array's passed are not 1-D a flatten op will be run beforehand.
+
+      Args:
+        a (array): Input array
+        b (array): Input array
+
+      Returns:
+        result (array): The outer product.
+    )pbdoc");
 }
