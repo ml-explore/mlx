@@ -399,8 +399,8 @@ def cosine_similarity_loss(
     Returns:
         mx.array: The computed Cosine Similarity loss.
     """
-    embeddings1_norm = mx.sqrt(mx.sum(mx.square(embeddings1), axis=axis))
-    embeddings2_norm = mx.sqrt(mx.sum(mx.square(embeddings2), axis=axis))
+    embeddings1_norm = mx.linalg.norm(embeddings1, axis=axis)
+    embeddings2_norm = mx.linalg.norm(embeddings2, axis=axis)
 
     dot_product = mx.sum(embeddings1 * embeddings2, axis=axis)
 
