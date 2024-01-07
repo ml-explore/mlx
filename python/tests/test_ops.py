@@ -1586,6 +1586,34 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.scatter_min(a, [indices], updates, [0])
         self.assertTrue(np.array_equal(out, [-6, 1, 1, 1]))
 
+    def test_inner(self):
+        self.assertCmpNumpy([(3,), (3,)], mx.inner, np.inner)
+        self.assertCmpNumpy([(1, 1, 2), (3, 2)], mx.inner, np.inner)
+        self.assertCmpNumpy([(2, 3, 4), (4,)], mx.inner, np.inner)
+
+    def test_outer(self):
+        self.assertCmpNumpy([(3,), (3,)], mx.outer, np.outer)
+        self.assertCmpNumpy(
+            [
+                mx.ones(
+                    5,
+                ),
+                mx.linspace(-2, 2, 5),
+            ],
+            mx.outer,
+            np.outer,
+        )
+        self.assertCmpNumpy(
+            [
+                1j * mx.linspace(2, -2, 5),
+                mx.ones(
+                    5,
+                ),
+            ],
+            mx.outer,
+            np.outer,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -125,8 +125,7 @@ std::unordered_map<std::string, array> load_safetensors(
 /** Save array to out stream in .npy format */
 void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
-    std::unordered_map<std::string, array> a,
-    std::optional<bool> retain_graph_) {
+    std::unordered_map<std::string, array> a) {
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
@@ -142,8 +141,7 @@ void save_safetensors(
   });
   size_t offset = 0;
   for (auto& [key, arr] : a) {
-    auto retain = retain_graph_.value_or(arr.is_tracer());
-    arr.eval(retain);
+    arr.eval();
     if (arr.nbytes() == 0) {
       throw std::invalid_argument(
           "[save_safetensors] cannot serialize an empty array key: " + key);
@@ -152,7 +150,7 @@ void save_safetensors(
     // Try to make it row contiguous
     if (!arr.flags().row_contiguous) {
       arr = reshape(flatten(arr), arr.shape());
-      arr.eval(retain);
+      arr.eval();
     }
 
     // Has to be row-major now but, check one more time in case
@@ -181,8 +179,7 @@ void save_safetensors(
 
 void save_safetensors(
     const std::string& file_,
-    std::unordered_map<std::string, array> a,
-    std::optional<bool> retain_graph) {
+    std::unordered_map<std::string, array> a) {
   // Open and check file
   std::string file = file_;
 
@@ -192,7 +189,7 @@ void save_safetensors(
     file += ".safetensors";
 
   // Serialize array
-  save_safetensors(std::make_shared<io::FileWriter>(file), a, retain_graph);
+  save_safetensors(std::make_shared<io::FileWriter>(file), a);
 }
 
 } // namespace mlx::core

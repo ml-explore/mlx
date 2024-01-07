@@ -183,7 +183,7 @@ TEST_CASE("test vmap with eval") {
   auto fun2 = [](std::vector<array> inputs) {
     auto x = inputs[0] + 1;
     auto y = inputs[1] + 2;
-    eval({x}, true);
+    eval(x);
     auto out = add(x, y);
     return std::vector<array>{out};
   };

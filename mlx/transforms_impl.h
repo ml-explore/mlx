@@ -14,4 +14,23 @@ std::vector<array> vmap_replace(
     const std::vector<int>& in_axes,
     const std::vector<int>& out_axes);
 
+// Create an InTracing object during tracing operations to signify to the rest
+// of the codebase that we are during tracing so evals should not throw away
+// the graph.
+struct InTracing {
+  InTracing() {
+    tracing_counter++;
+  }
+  ~InTracing() {
+    tracing_counter--;
+  }
+
+  static bool in_tracing() {
+    return tracing_counter > 0;
+  }
+
+ private:
+  static int tracing_counter;
+};
+
 } // namespace mlx::core::detail

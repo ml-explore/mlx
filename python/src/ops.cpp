@@ -3022,20 +3022,14 @@ void init_ops(py::module_& m) {
       &mlx_save_helper,
       "file"_a,
       "arr"_a,
-      py::pos_only(),
-      "retain_graph"_a = std::nullopt,
-      py::kw_only(),
       R"pbdoc(
-        save(file: str, arr: array, / , retain_graph: Optional[bool] = None)
+        save(file: str, arr: array)
 
         Save the array to a binary file in ``.npy`` format.
 
         Args:
             file (str): File to which the array is saved
             arr (array): Array to be saved.
-            retain_graph (bool, optional): Whether or not to retain the graph
-              during array evaluation. If left unspecified the graph is retained
-              only if saving is done in a function transformation. Default: ``None``
       )pbdoc");
   m.def(
       "savez",
@@ -3119,11 +3113,8 @@ void init_ops(py::module_& m) {
       &mlx_save_safetensor_helper,
       "file"_a,
       "arrays"_a,
-      py::pos_only(),
-      "retain_graph"_a = std::nullopt,
-      py::kw_only(),
       R"pbdoc(
-        save_safetensors(file: str, arrays: Dict[str, array], /, retain_graph: Optional[bool] = None)
+        save_safetensors(file: str, arrays: Dict[str, array])
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
@@ -3132,9 +3123,6 @@ void init_ops(py::module_& m) {
         Args:
             file (file, str): File in which the array is saved>
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
-            retain_graph (bool, optional): Whether or not to retain the graph
-              during array evaluation. If left unspecified the graph is retained
-              only if saving is done in a function transformation. Default: ``None``.
       )pbdoc");
   m.def(
       "where",
@@ -3370,4 +3358,46 @@ void init_ops(py::module_& m) {
         Returns:
           result (array): The tensor dot product.
       )pbdoc");
+
+  m.def(
+      "inner",
+      &inner,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      inner(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Ordinary inner product of vectors for 1-D arrays, in higher dimensions a sum product over the last axes.
+
+      Args:
+        a (array): Input array
+        b (array): Input array
+
+      Returns:
+        result (array): The inner product.
+    )pbdoc");
+
+  m.def(
+      "outer",
+      &outer,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      outer(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Compute the outer product of two 1-D arrays, if the array's passed are not 1-D a flatten op will be run beforehand.
+
+      Args:
+        a (array): Input array
+        b (array): Input array
+
+      Returns:
+        result (array): The outer product.
+    )pbdoc");
 }
