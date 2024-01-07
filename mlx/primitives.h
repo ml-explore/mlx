@@ -49,7 +49,7 @@ class Primitive {
    * A primitive must know how to evaluate itself on
    * the CPU/GPU for the given inputs and populate the output array.
    *
-   * To avoid unecessary allocations, the evaluation function
+   * To avoid unnecessary allocations, the evaluation function
    * is responsible for allocating space for the array.
    */
   virtual void eval_cpu(const std::vector<array>& inputs, array& out) = 0;
@@ -84,7 +84,7 @@ class Primitive {
   /** Print the primitive. */
   virtual void print(std::ostream& os) = 0;
 
-  /** Equivalence check defaults to false unless overriden by the primitive */
+  /** Equivalence check defaults to false unless overridden by the primitive */
   virtual bool is_equivalent(const Primitive& other) const {
     return false;
   }
@@ -1112,8 +1112,15 @@ class Power : public Primitive {
 
 class QuantizedMatmul : public Primitive {
  public:
-  explicit QuantizedMatmul(Stream stream, int group_size, int bits)
-      : Primitive(stream), group_size_(group_size), bits_(bits){};
+  explicit QuantizedMatmul(
+      Stream stream,
+      int group_size,
+      int bits,
+      bool transpose)
+      : Primitive(stream),
+        group_size_(group_size),
+        bits_(bits),
+        transpose_(transpose){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1129,6 +1136,7 @@ class QuantizedMatmul : public Primitive {
  private:
   int group_size_;
   int bits_;
+  bool transpose_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };

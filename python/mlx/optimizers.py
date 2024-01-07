@@ -253,7 +253,7 @@ class AdaDelta(Optimizer):
         rho (float, optional): The coefficient :math:`\rho` used for computing a
             running average of squared gradients. Default: ``0.9``
         eps (float, optional): The term :math:`\epsilon` added to the denominator to improve
-          numerical stability. Ddefault: `1e-8`
+          numerical stability. Default: `1e-8`
     """
 
     def __init__(self, learning_rate: float, rho: float = 0.9, eps: float = 1e-6):

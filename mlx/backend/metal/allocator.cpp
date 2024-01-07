@@ -26,13 +26,10 @@ namespace metal {
 namespace {
 
 BufferCache::BufferCache(MTL::Device* device)
-    : device_(device),
-      head_(nullptr),
-      tail_(nullptr),
-      pool_size_(0),
-      gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()) {}
+    : device_(device), head_(nullptr), tail_(nullptr), pool_size_(0) {}
 
 BufferCache::~BufferCache() {
+  auto thread_pool = metal::new_scoped_memory_pool();
   clear();
 }
 
@@ -54,12 +51,16 @@ MTL::Buffer* BufferCache::reuse_from_cache(size_t size) {
 
   // Find the closest buffer in pool
   MTL::Buffer* pbuf = nullptr;
+
+  // Make sure we use most of the available memory
   auto it = buffer_pool_.lower_bound(size);
 
-  // Make sure we use > 50% of the available memory
-  while (!pbuf && it != buffer_pool_.end() && it->first < 2 * size) {
+  // Make sure we use most of the available memory
+  while (!pbuf && it != buffer_pool_.end() &&
+         it->first < std::min(2 * size, size + 2 * vm_page_size)) {
     // Collect from the cache
     pbuf = it->second->buf;
+
     // Remove from cache
     remove_from_list(it->second);
     delete it->second;
@@ -85,13 +86,9 @@ void BufferCache::recycle_to_cache(MTL::Buffer* buf) {
   }
 }
 
-size_t BufferCache::release_cached_buffers(size_t min_bytes_to_free) {
-  min_bytes_to_free += device_->currentAllocatedSize() - gc_limit_;
-
+void BufferCache::release_cached_buffers(size_t min_bytes_to_free) {
   if (min_bytes_to_free >= 0.9 * pool_size_) {
-    size_t old_pool_size = pool_size_;
     clear();
-    return old_pool_size;
   } else {
     std::lock_guard<std::mutex> lk(cache_mutex_);
     size_t total_bytes_freed = 0;
@@ -104,9 +101,7 @@ size_t BufferCache::release_cached_buffers(size_t min_bytes_to_free) {
       }
       remove_from_list(tail_);
     }
-
     pool_size_ -= total_bytes_freed;
-    return total_bytes_freed;
   }
 }
 
@@ -125,8 +120,9 @@ void BufferCache::add_at_head(BufferCache::BufferHolder* to_add) {
 }
 
 void BufferCache::remove_from_list(BufferCache::BufferHolder* to_remove) {
-  if (!to_remove)
+  if (!to_remove) {
     return;
+  }
 
   // If in the middle
   if (to_remove->prev && to_remove->next) {
@@ -153,26 +149,32 @@ MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
       buffer_cache_(device_),
       peak_allocated_size_(0),
-      block_limit_(1.5 * device_->recommendedMaxWorkingSetSize()) {}
+      block_limit_(1.5 * device_->recommendedMaxWorkingSetSize()),
+      gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()) {}
 
-Buffer MetalAllocator::malloc(size_t size) {
+Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   // Align up memory
   if (size > vm_page_size) {
     size = vm_page_size * ((size + vm_page_size - 1) / vm_page_size);
   }
 
+  // Try the cache
   MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
 
-  // Prepare to allocate new memory as needed
   if (!buf) {
-    // If we are under very high memoory pressure, we don't allocate further
-    if (device_->currentAllocatedSize() >= block_limit_) {
+    // If there is too much memory pressure, fail (likely causes a wait).
+    if (!allow_swap && device_->currentAllocatedSize() + size >= block_limit_) {
       return Buffer{nullptr};
     }
 
-    // If we are still under memory pressure, try cleaning cache
-    if (buffer_cache_.can_garbage_collect()) {
-      buffer_cache_.release_cached_buffers(size);
+    auto thread_pool = metal::new_scoped_memory_pool();
+
+    // If we have a lot of memory pressure, check if we can reclaim some memory
+    // from the cache
+    if (device_->currentAllocatedSize() + size >= gc_limit_) {
+      size_t min_bytes_to_free =
+          size + device_->currentAllocatedSize() - gc_limit_;
+      buffer_cache_.release_cached_buffers(min_bytes_to_free);
     }
 
     // Allocate new buffer if needed

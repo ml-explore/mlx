@@ -61,15 +61,21 @@ void init_random(py::module_& parent_module) {
       [](const ScalarOrArray& low,
          const ScalarOrArray& high,
          const std::vector<int>& shape,
-         Dtype type,
+         std::optional<Dtype> type,
          const std::optional<array>& key,
          StreamOrDevice s) {
-        return uniform(to_array(low), to_array(high), shape, type, key, s);
+        return uniform(
+            to_array(low),
+            to_array(high),
+            shape,
+            type.value_or(float32),
+            key,
+            s);
       },
       "low"_a = 0,
       "high"_a = 1,
       "shape"_a = std::vector<int>{},
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       "key"_a = none,
       "stream"_a = none,
       R"pbdoc(
@@ -92,12 +98,14 @@ void init_random(py::module_& parent_module) {
   m.def(
       "normal",
       [](const std::vector<int>& shape,
-         Dtype type,
+         std::optional<Dtype> type,
          const std::optional<array>& key,
-         StreamOrDevice s) { return normal(shape, type, key, s); },
+         StreamOrDevice s) {
+        return normal(shape, type.value_or(float32), key, s);
+      },
 
       "shape"_a = std::vector<int>{},
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       "key"_a = none,
       "stream"_a = none,
       R"pbdoc(
@@ -116,10 +124,11 @@ void init_random(py::module_& parent_module) {
       [](const ScalarOrArray& low,
          const ScalarOrArray& high,
          const std::vector<int>& shape,
-         Dtype type,
+         std::optional<Dtype> type,
          const std::optional<array>& key,
          StreamOrDevice s) {
-        return randint(to_array(low), to_array(high), shape, type, key, s);
+        return randint(
+            to_array(low), to_array(high), shape, type.value_or(int32), key, s);
       },
       "low"_a,
       "high"_a,
@@ -183,21 +192,22 @@ void init_random(py::module_& parent_module) {
       [](const ScalarOrArray& lower_,
          const ScalarOrArray& upper_,
          const std::optional<std::vector<int>> shape_,
-         Dtype dtype,
+         std::optional<Dtype> type,
          const std::optional<array>& key,
          StreamOrDevice s) {
         auto lower = to_array(lower_);
         auto upper = to_array(upper_);
+        auto t = type.value_or(float32);
         if (shape_.has_value()) {
-          return truncated_normal(lower, upper, shape_.value(), dtype, key, s);
+          return truncated_normal(lower, upper, shape_.value(), t, key, s);
         } else {
-          return truncated_normal(lower, upper, dtype, key, s);
+          return truncated_normal(lower, upper, t, key, s);
         }
       },
       "lower"_a,
       "upper"_a,
       "shape"_a = none,
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       "key"_a = none,
       "stream"_a = none,
       R"pbdoc(
@@ -212,7 +222,7 @@ void init_random(py::module_& parent_module) {
             upper (scalar or array): Upper bound of the domain.
             shape (list(int), optional): The shape of the output.
               Default is ``()``.
-            dtype (Dtype, optinoal): The data type of the output.
+            dtype (Dtype, optional): The data type of the output.
               Default is ``float32``.
             key (array, optional): A PRNG key. Default: None.
 
@@ -221,9 +231,14 @@ void init_random(py::module_& parent_module) {
       )pbdoc");
   m.def(
       "gumbel",
-      &gumbel,
+      [](const std::vector<int>& shape,
+         std::optional<Dtype> type,
+         const std::optional<array>& key,
+         StreamOrDevice s) {
+        return gumbel(shape, type.value_or(float32), key, s);
+      },
       "shape"_a = std::vector<int>{},
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       "stream"_a = none,
       "key"_a = none,
       R"pbdoc(

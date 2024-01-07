@@ -6,6 +6,66 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
+class InstanceNorm(Module):
+    r"""Applies instance normalization [1] on the inputs.
+
+    Computes
+
+    .. math::
+
+        y = \frac{x - \mathrm{E}[x]}{ \sqrt{\mathrm{Var}[x] + \epsilon}} * \gamma + \beta,
+
+    where :math:`\gamma` and :math:`\beta` are learned per feature dimension
+    parameters initialized at 1 and 0 respectively. Both are of size :attr:`dims`,
+    if :attr:`affine` is ``True``.
+
+    Args:
+        dims (int): The number of features of the input.
+        eps (float): A value added to the denominator for numerical stability. Default: ``1e-5``.
+        affine (bool): Default: ``False``.
+
+    Shape:
+      - Input: :math:`(..., C)` where :math:`C` is equal to :attr:`dims`.
+      - Output: Same shape as the input.
+
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> x = mx.random.normal((8, 4, 4, 16))
+        >>> inorm = nn.InstanceNorm(dims=16)
+        >>> output = inorm(x)
+
+    References:
+        [1]: https://arxiv.org/abs/1607.08022
+    """
+
+    def __init__(
+        self,
+        dims: int,
+        eps: float = 1e-5,
+        affine: bool = False,
+    ):
+        super().__init__()
+        if affine:
+            self.weight = mx.ones((dims,))
+            self.bias = mx.zeros((dims,))
+        self.dims = dims
+        self.eps = eps
+
+    def _extra_repr(self):
+        return f"{self.dims}, eps={self.eps}, affine={'weight' in self}"
+
+    def __call__(self, x: mx.array) -> mx.array:
+        reduction_axes = tuple(range(1, x.ndim - 1))
+        # Compute stats
+        mean = mx.mean(x, axis=reduction_axes, keepdims=True)
+        var = mx.var(x, axis=reduction_axes, keepdims=True)
+        # Normalize
+        x = (x - mean) * mx.rsqrt(var + self.eps)
+        # Scale and shift if necessary
+        return (self.weight * x + self.bias) if "weight" in self else x
+
+
 class LayerNorm(Module):
     r"""Applies layer normalization [1] on the inputs.
 
@@ -198,7 +258,7 @@ class BatchNorm(Module):
     batch, ``C`` is the number of features or channels, and ``L`` is the
     sequence length. The output has the same shape as the input. For
     four-dimensional arrays, the shape is ``NHWC``, where ``H`` and ``W`` are
-    the height and width respecitvely.
+    the height and width respectively.
 
     For more information on Batch Normalization, see the original paper `Batch
     Normalization: Accelerating Deep Network Training by Reducing Internal

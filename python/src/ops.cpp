@@ -1212,14 +1212,22 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "linspace",
-      [](Scalar start, Scalar stop, int num, Dtype dtype, StreamOrDevice s) {
+      [](Scalar start,
+         Scalar stop,
+         int num,
+         std::optional<Dtype> dtype,
+         StreamOrDevice s) {
         return linspace(
-            scalar_to_double(start), scalar_to_double(stop), num, dtype, s);
+            scalar_to_double(start),
+            scalar_to_double(stop),
+            num,
+            dtype.value_or(float32),
+            s);
       },
       "start"_a,
       "stop"_a,
       "num"_a = 50,
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       "stream"_a = none,
       R"pbdoc(
       linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
@@ -1263,7 +1271,7 @@ void init_ops(py::module_& m) {
         If the axis is not specified the array is treated as a flattened
         1-D array prior to performing the take.
 
-        As an example, if the ``axis=1`` this is equialent to ``a[:, indices, ...]``.
+        As an example, if the ``axis=1`` this is equivalent to ``a[:, indices, ...]``.
 
         Args:
             a (array): Input array.
@@ -1356,11 +1364,11 @@ void init_ops(py::module_& m) {
         }
       },
       "shape"_a,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        zeros(shape: Union[int, List[int]], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        zeros(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
         Construct an array of zeros.
 
@@ -1403,11 +1411,11 @@ void init_ops(py::module_& m) {
         }
       },
       "shape"_a,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        ones(shape: Union[int, List[int]], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        ones(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
         Construct an array of ones.
 
@@ -1449,11 +1457,11 @@ void init_ops(py::module_& m) {
       "n"_a,
       "m"_a = py::none(),
       "k"_a = 0,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-      eye(n: int, m: Optional[int] = None, k: int = 0, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+      eye(n: int, m: Optional[int] = None, k: int = 0, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
       Create an identity matrix or a general diagonal matrix.
 
@@ -1473,11 +1481,11 @@ void init_ops(py::module_& m) {
         return identity(n, dtype.value_or(float32), s);
       },
       "n"_a,
-      "dtype"_a = std::nullopt,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-      identity(n: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
+      identity(n: int, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
 
       Create a square identity matrix.
 
@@ -1491,13 +1499,17 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "tri",
-      [](int n, std::optional<int> m, int k, Dtype dtype, StreamOrDevice s) {
-        return tri(n, m.value_or(n), k, float32, s);
+      [](int n,
+         std::optional<int> m,
+         int k,
+         std::optional<Dtype> type,
+         StreamOrDevice s) {
+        return tri(n, m.value_or(n), k, type.value_or(float32), s);
       },
       "n"_a,
       "m"_a = none,
       "k"_a = 0,
-      "dtype"_a = float32,
+      "dtype"_a = std::optional{float32},
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -1742,7 +1754,7 @@ void init_ops(py::module_& m) {
       "a"_a,
       py::pos_only(),
       "source"_a,
-      "destiantion"_a,
+      "destination"_a,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -2253,7 +2265,7 @@ void init_ops(py::module_& m) {
               will be of elements less or equal to the element at the ``kth``
               index and all indices after will be of elements greater or equal
               to the element at the ``kth`` index.
-            axis (int or None, optional): Optional axis to partiton over.
+            axis (int or None, optional): Optional axis to partition over.
               If ``None``, this partitions over the flattened array.
               If unspecified, it defaults to ``-1``.
 
@@ -2426,13 +2438,13 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       repeat(array: array, repeats: int, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Repeate an array along a specified axis.
+      Repeat an array along a specified axis.
 
       Args:
           array (array): Input array.
           repeats (int): The number of repetitions for each element.
           axis (int, optional): The axis in which to repeat the array along. If
-            unspecified it uses the flattened array of the input and repeates 
+            unspecified it uses the flattened array of the input and repeats
             along axis 0.
           stream (Stream, optional): Stream or device. Defaults to ``None``.
 
@@ -3050,7 +3062,7 @@ void init_ops(py::module_& m) {
 
         Round to the given number of decimals.
 
-        Bascially performs:
+        Basically performs:
 
         .. code-block:: python
 
@@ -3072,12 +3084,13 @@ void init_ops(py::module_& m) {
       py::pos_only(),
       "scales"_a,
       "biases"_a,
+      "transpose"_a = true,
       "group_size"_a = 64,
       "bits"_a = 4,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        quantized_matmul(x: array, w: array, scales: array, biases: array, /, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
+        quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
 
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
@@ -3089,10 +3102,13 @@ void init_ops(py::module_& m) {
           w (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w``
           biases (array): The biases to use per ``group_size`` elements of ``w``
+          transpose (bool, optional): Defines whether to multiply with the
+            transposed ``w`` or not, namely whether we are performing
+            ``x @ w.T`` or ``x @ w``. (default: ``True``)
           group_size (int, optional): The size of the group in ``w`` that
-            shares a scale and bias. (default: 64)
+            shares a scale and bias. (default: ``64``)
           bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: 4)
+            ``w``. (default: ``4``)
 
         Returns:
           result (array): The result of the multiplication of ``x`` with ``w``.
@@ -3146,9 +3162,9 @@ void init_ops(py::module_& m) {
         Args:
           w (array): Matrix to be quantized
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: 64)
+            scale and bias. (default: ``64``)
           bits (int, optional): The number of bits occupied by each element of
-            ``w`` in the returned quantized matrix. (default: 4)
+            ``w`` in the returned quantized matrix. (default: ``4``)
 
         Returns:
           (tuple): A tuple containing
@@ -3187,11 +3203,51 @@ void init_ops(py::module_& m) {
           scales (array): The scales to use per ``group_size`` elements of ``w``
           biases (array): The biases to use per ``group_size`` elements of ``w``
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: 64)
+            scale and bias. (default: ``64``)
           bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: 4)
+            ``w``. (default: ``4``)
 
         Returns:
           result (array): The dequantized version of ``w``
+      )pbdoc");
+  m.def(
+      "tensordot",
+      [](const array& a,
+         const array& b,
+         const std::variant<int, std::vector<std::vector<int>>>& dims,
+         StreamOrDevice s) {
+        if (auto pv = std::get_if<int>(&dims); pv) {
+          return tensordot(a, b, *pv, s);
+        } else {
+          auto x = std::get<std::vector<std::vector<int>>>(dims);
+          if (x.size() != 2) {
+            throw std::invalid_argument(
+                "[tensordot] dims must be a list of two lists.");
+          }
+          return tensordot(a, b, {x[0], x[1]}, s);
+        }
+      },
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      "dims"_a = 2,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        tensordot(a: array, b: array, /, dims: Union[int, List[List[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Compute the tensor dot product along the specified axes.
+
+        Args:
+          a (array): Input array
+          b (array): Input array
+          dims (int or list(list(int)), optional): The number of dimensions to
+            sum over. If an integer is provided, then sum over the last
+            ``dims`` dimensions of ``a`` and the first ``dims`` dimensions of
+            ``b``. If a list of lists is provided, then sum over the
+            corresponding dimensions of ``a`` and ``b``. (default: 2)
+        
+        Returns:
+          result (array): The tensor dot product.
       )pbdoc");
 }

@@ -50,9 +50,14 @@ void save(std::shared_ptr<io::Writer> out_stream, array a, bool retain_graph) {
     throw std::invalid_argument("[save] cannot serialize an empty array");
   }
 
-  if (!a.flags().contiguous) {
+  if (!(a.flags().row_contiguous || a.flags().col_contiguous)) {
+    a = reshape(flatten(a), a.shape());
+    a.eval(retain_graph);
+  }
+  // Check once more in-case the above ops change
+  if (!(a.flags().row_contiguous || a.flags().col_contiguous)) {
     throw std::invalid_argument(
-        "[save] cannot serialize a non-contiguous array");
+        "[save] can only serialize row or col contiguous arrays");
   }
 
   ////////////////////////////////////////////////////////
@@ -155,7 +160,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   // Read and check version
   if (read_magic_and_ver[6] != 1 && read_magic_and_ver[6] != 2) {
     throw std::runtime_error(
-        "[load] Unsupport npy format version in " + in_stream->label());
+        "[load] Unsupported npy format version in " + in_stream->label());
   }
 
   // Read header len and header

@@ -11,278 +11,130 @@ import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
 
 
-class TestNN(mlx_tests.MLXTestCase):
+class TestBase(mlx_tests.MLXTestCase):
+    def test_module_utilities(self):
+        m = nn.Sequential(
+            nn.Sequential(nn.Linear(2, 10), nn.relu),
+            nn.Sequential(nn.Linear(10, 10), nn.ReLU()),
+            nn.Linear(10, 1),
+            mx.sigmoid,
+        )
+
+        children = m.children()
+        self.assertTrue(isinstance(children, dict))
+        self.assertEqual(len(children), 1)
+        self.assertTrue(isinstance(children["layers"], list))
+        self.assertEqual(len(children["layers"]), 4)
+        self.assertEqual(children["layers"][3], {})
+        flat_children = tree_flatten(children, is_leaf=nn.Module.is_module)
+        self.assertEqual(len(flat_children), 3)
+
+        leaves = tree_flatten(m.leaf_modules(), is_leaf=nn.Module.is_module)
+        self.assertEqual(len(leaves), 4)
+        self.assertEqual(leaves[0][0], "layers.0.layers.0")
+        self.assertEqual(leaves[1][0], "layers.1.layers.0")
+        self.assertEqual(leaves[2][0], "layers.1.layers.1")
+        self.assertEqual(leaves[3][0], "layers.2")
+        self.assertTrue(leaves[0][1] is m.layers[0].layers[0])
+        self.assertTrue(leaves[1][1] is m.layers[1].layers[0])
+        self.assertTrue(leaves[2][1] is m.layers[1].layers[1])
+        self.assertTrue(leaves[3][1] is m.layers[2])
+
+        m.eval()
+
+        def assert_not_training(k, m):
+            self.assertFalse(m.training)
+
+        m.apply_to_modules(assert_not_training)
+
+        m.train()
+
+        def assert_training(k, m):
+            self.assertTrue(m.training)
+
+        m.apply_to_modules(assert_training)
+
+    def test_io(self):
+        def make_model():
+            return nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
+
+        m = make_model()
+        tdir = tempfile.TemporaryDirectory()
+        file = os.path.join(tdir.name, "model.npz")
+        m.save_weights(file)
+        m_load = make_model()
+        m_load.load_weights(file)
+        tdir.cleanup()
+
+        eq_tree = tree_map(mx.array_equal, m.parameters(), m_load.parameters())
+        self.assertTrue(all(tree_flatten(eq_tree)))
+
+    def test_load_from_weights(self):
+        m = nn.Linear(2, 2)
+
+        # Too few weights
+        weights = [("weight", mx.ones((2, 2)))]
+        with self.assertRaises(ValueError):
+            m.load_weights(weights)
+
+        m.load_weights(weights, strict=False)
+        self.assertTrue(mx.array_equal(m.weight, weights[0][1]))
+
+        # Wrong name
+        with self.assertRaises(ValueError):
+            m.load_weights([("weihgt", mx.ones((2, 2)))])
+
+        # Ok
+        m.load_weights([("weihgt", mx.ones((2, 2)))], strict=False)
+
+        # Too many weights
+        with self.assertRaises(ValueError):
+            m.load_weights(
+                [
+                    ("weight", mx.ones((2, 2))),
+                    ("bias", mx.ones((2,))),
+                    ("bias2", mx.ones((2,))),
+                ]
+            )
+
+        # Wrong shape
+        with self.assertRaises(ValueError):
+            m.load_weights(
+                [
+                    ("weight", mx.ones((2, 2))),
+                    ("bias", mx.ones((2, 1))),
+                ]
+            )
+
+        # Wrong type
+        with self.assertRaises(ValueError):
+            m.load_weights(
+                [
+                    ("weight", mx.ones((2, 2))),
+                    ("bias", 3),
+                ]
+            )
+
+
+class TestLayers(mlx_tests.MLXTestCase):
+    def test_identity(self):
+        inputs = mx.zeros((10, 4))
+        layer = nn.Identity()
+        outputs = layer(inputs)
+        self.assertEqual(tuple(inputs.shape), tuple(outputs.shape))
+
     def test_linear(self):
         inputs = mx.zeros((10, 4))
         layer = nn.Linear(input_dims=4, output_dims=8)
         outputs = layer(inputs)
         self.assertEqual(tuple(outputs.shape), (10, 8))
 
-    def test_cross_entropy(self):
-        logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
-        targets = mx.array([0, 1])
-
-        # Test with reduction 'none'
-        losses_none = nn.losses.cross_entropy(logits, targets, reduction="none")
-        expected_none = mx.array([0.0, 0.0])
-        self.assertTrue(mx.array_equal(losses_none, expected_none))
-
-        # Test with reduction 'mean'
-        losses_mean = nn.losses.cross_entropy(logits, targets, reduction="mean")
-        expected_mean = mx.mean(expected_none)
-        self.assertEqual(losses_mean, expected_mean)
-
-        # Test with reduction 'sum'
-        losses_sum = nn.losses.cross_entropy(logits, targets, reduction="sum")
-        expected_sum = mx.sum(expected_none)
-        self.assertEqual(losses_sum, expected_sum)
-
-        # Test cases with weights and no label smoothing
-        logits = mx.array([[2.0, -1.0], [-1.0, 2.0]])
-        targets = mx.array([0, 1])
-        weights = mx.array([1.0, 2.0])
-
-        # Reduction 'none'
-        losses_none = nn.losses.cross_entropy(
-            logits,
-            targets,
-            weights=weights,
-            reduction="none",
-        )
-        expected_none = mx.array([0.04858735, 0.0971747])  # Calculated losses
-        self.assertTrue(
-            np.allclose(losses_none, expected_none, atol=1e-5),
-            "Test case failed for cross_entropy loss --reduction='none' --weights=[1.0, 2.0]",
-        )
-
-        # Reduction 'mean'
-        losses_mean = nn.losses.cross_entropy(
-            logits,
-            targets,
-            weights=weights,
-            reduction="mean",
-        )
-        expected_mean = mx.mean(expected_none)
-        self.assertTrue(
-            np.allclose(losses_mean, expected_mean, atol=1e-5),
-            "Test case failed for cross_entropy loss --reduction='mean' --weights=[1.0, 2.0]",
-        )
-
-        # Reduction 'sum'
-        losses_sum = nn.losses.cross_entropy(
-            logits,
-            targets,
-            weights=weights,
-            reduction="sum",
-        )
-        expected_sum = mx.sum(expected_none)
-        self.assertTrue(
-            np.allclose(losses_sum, expected_sum, atol=1e-5),
-            "Test case failed for cross_entropy loss --reduction='sum' --weights=[1.0, 2.0]",
-        )
-
-        # Test case with equal weights and label smoothing > 0
-        logits = mx.array(
-            [[0, 0.2, 0.7, 0.1, 0], [0, 0.9, 0.2, 0.2, 1], [1, 0.2, 0.7, 0.9, 1]]
-        )
-        target = mx.array([2, 1, 0])
-
-        losses_none = nn.losses.cross_entropy(
-            logits, target, label_smoothing=0.3, reduction="none"
-        )
-        expected_none = mx.array([1.29693, 1.38617, 1.48176])
-        self.assertTrue(
-            mx.allclose(expected_none, losses_none),
-            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='none'",
-        )
-
-        expected_mean = mx.mean(expected_none)
-        losses_mean = nn.losses.cross_entropy(
-            logits, target, label_smoothing=0.3, reduction="mean"
-        )
-        self.assertTrue(
-            mx.allclose(losses_mean, expected_mean),
-            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='mean'",
-        )
-
-        expected_sum = mx.sum(expected_none)
-        losses_sum = nn.losses.cross_entropy(
-            logits, target, label_smoothing=0.3, reduction="sum"
-        )
-        self.assertTrue(
-            mx.allclose(losses_sum, expected_sum),
-            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='sum'",
-        )
-
-    def test_l1_loss(self):
-        predictions = mx.array([0.5, 0.2, 0.9, 0.0])
-        targets = mx.array([0.5, 0.2, 0.9, 0.0])
-
-        # Expected result
-        expected_none = mx.array([0, 0, 0, 0]).astype(mx.float32)
-        expected_sum = mx.sum(expected_none)
-        expected_mean = mx.mean(expected_none)
-
-        losses = nn.losses.l1_loss(predictions, targets, reduction="none")
-        self.assertTrue(
-            mx.array_equal(losses, expected_none),
-            "Test failed for l1_loss --reduction='none'",
-        )
-
-        losses = nn.losses.l1_loss(predictions, targets, reduction="sum")
-        self.assertTrue(mx.array_equal(losses, expected_sum))
-
-        losses = nn.losses.l1_loss(predictions, targets, reduction="mean")
-        self.assertTrue(mx.array_equal(losses, expected_mean))
-
-    def test_mse_loss(self):
-        predictions = mx.array([0.5, 0.2, 0.9, 0.0])
-        targets = mx.array([0.7, 0.1, 0.8, 0.2])
-
-        expected_none = mx.array([0.04, 0.01, 0.01, 0.04])
-        expected_mean = mx.mean(expected_none)
-        expected_sum = mx.sum(expected_none)
-
-        # Test with reduction 'none'
-        losses_none = nn.losses.mse_loss(predictions, targets, reduction="none")
-        self.assertTrue(
-            np.allclose(losses_none, expected_none, 1e-5),
-            "Test case failed for mse_loss --reduction='none'",
-        )
-
-        # Test with reduction 'mean'
-        losses_mean = nn.losses.mse_loss(predictions, targets, reduction="mean")
-        self.assertEqual(
-            losses_mean,
-            expected_mean,
-            "Test case failed for mse_loss --reduction='mean'",
-        )
-
-        # Test with reduction 'sum'
-        losses_sum = nn.losses.mse_loss(predictions, targets, reduction="sum")
-        self.assertEqual(
-            losses_sum, expected_sum, "Test case failed for mse_loss --reduction='sum'"
-        )
-
-    def test_smooth_l1_loss(self):
-        predictions = mx.array([1.5, 2.5, 0.5, 3.5])
-        targets = mx.array([1.0, 2.0, 0.5, 2.5])
-        beta = 1.0
-
-        # Expected results
-        expected_none = mx.array([0.125, 0.125, 0.0, 0.5])
-        expected_sum = mx.sum(expected_none)
-        expected_mean = mx.mean(expected_none)
-
-        # Test with reduction 'none'
-        loss_none = nn.losses.smooth_l1_loss(
-            predictions, targets, beta, reduction="none"
-        )
-        self.assertTrue(
-            mx.array_equal(loss_none, expected_none),
-            "Test case failed for smooth_l1_loss --reduction='none'",
-        )
-
-        # Test with reduction 'sum'
-        loss_sum = nn.losses.smooth_l1_loss(predictions, targets, beta, reduction="sum")
-        self.assertEqual(
-            loss_sum,
-            expected_sum,
-            "Test case failed for smooth_l1_loss --reduction='sum'",
-        )
-
-        # Test with reduction 'mean'
-        loss_mean = nn.losses.smooth_l1_loss(
-            predictions, targets, beta, reduction="mean"
-        )
-        self.assertEqual(
-            loss_mean,
-            expected_mean,
-            "Test case failed for smooth_l1_loss --reduction='mean'",
-        )
-
-    def test_nll_loss(self):
-        logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
-        targets = mx.array([0, 1])
-
-        # Test with reduction 'none'
-        losses_none = nn.losses.nll_loss(logits, targets, reduction="none")
-        expected_none = mx.array([0.0, 0.0])
-        self.assertTrue(mx.array_equal(losses_none, expected_none))
-
-        # Test with reduction 'mean'
-        losses_mean = nn.losses.nll_loss(logits, targets, reduction="mean")
-        expected_mean = mx.mean(expected_none)
-        self.assertEqual(losses_mean, expected_mean)
-
-        # Test with reduction 'sum'
-        losses_sum = nn.losses.nll_loss(logits, targets, reduction="sum")
-        expected_sum = mx.sum(expected_none)
-        self.assertEqual(losses_sum, expected_sum)
-
-    def test_kl_div_loss(self):
-        p_logits = mx.log(mx.array([[0.5, 0.5], [0.8, 0.2]]))
-        q_logits = mx.log(mx.array([[0.5, 0.5], [0.2, 0.8]]))
-
-        # Test with reduction 'none'
-        losses_none = nn.losses.kl_div_loss(p_logits, q_logits, reduction="none")
-        expected_none = mx.array([0.0, 0.831777])
-        self.assertTrue(mx.allclose(losses_none, expected_none))
-
-        # Test with reduction 'mean'
-        losses_mean = nn.losses.kl_div_loss(p_logits, q_logits, reduction="mean")
-        expected_mean = mx.mean(expected_none)
-        self.assertTrue(mx.allclose(losses_mean, expected_mean))
-
-        # Test with reduction 'sum'
-        losses_sum = nn.losses.kl_div_loss(p_logits, q_logits, reduction="sum")
-        expected_sum = mx.sum(expected_none)
-        self.assertTrue(mx.allclose(losses_sum, expected_sum))
-
-    def test_triplet_loss(self):
-        anchors = mx.array([[1, 2, 3], [1, 2, 3]])
-        positives = mx.array([[4, 5, 6], [0, -1, 2]])
-        negatives = mx.array([[7, 8, 9], [3, 2, 3]])
-
-        # Test with reduction 'none'
-        losses_none = nn.losses.triplet_loss(
-            anchors, positives, negatives, reduction="none"
-        )
-        expected_none = mx.array([0, 2.31662])
-        self.assertTrue(mx.allclose(losses_none, expected_none))
-
-        # Test with reduction 'mean'
-        losses_mean = nn.losses.triplet_loss(
-            anchors, positives, negatives, reduction="mean"
-        )
-        expected_mean = mx.mean(expected_none)
-        self.assertTrue(mx.allclose(losses_mean, expected_mean))
-
-        # Test with reduction 'sum'
-        losses_sum = nn.losses.triplet_loss(
-            anchors, positives, negatives, reduction="sum"
-        )
-        expected_sum = mx.sum(expected_none)
-        self.assertTrue(mx.allclose(losses_sum, expected_sum))
-
-    def test_gelu(self):
-        inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
-
-        # From: jax.nn.gelu(np.array(inputs), approximate=False)
-        expected = np.array(
-            [1.0093501, -0.16925684, 0.22918941, 0.60498625, 0.49459383]
-        )
-
-        out = nn.GELU()(mx.array(inputs))
-        self.assertTrue(np.allclose(out, expected))
-
-        # Crudely check the approximations
-        x = mx.arange(-6.0, 6.0, 12 / 100)
-        y = nn.gelu(x)
-        y_hat1 = nn.gelu_approx(x)
-        y_hat2 = nn.gelu_fast_approx(x)
-        self.assertLess(mx.abs(y - y_hat1).max(), 0.0003)
-        self.assertLess(mx.abs(y - y_hat2).max(), 0.02)
+    def test_bilinear(self):
+        inputs1 = mx.zeros((10, 2))
+        inputs2 = mx.zeros((10, 4))
+        layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
+        outputs = layer(inputs1, inputs2)
+        self.assertEqual(tuple(outputs.shape), (10, 6))
 
     def test_group_norm(self):
         x = mx.arange(100, dtype=mx.float32)
@@ -319,6 +171,224 @@ class TestNN(mlx_tests.MLXTestCase):
         var = y.reshape(2, -1, 2, 4).var(axis=(1, -1))
         self.assertTrue(np.allclose(means, 3 * np.ones_like(means), atol=1e-6))
         self.assertTrue(np.allclose(var, 4 * np.ones_like(var), atol=1e-6))
+
+    def test_instance_norm(self):
+        # Test InstanceNorm1d
+        x = mx.array(
+            [
+                [
+                    [-0.0119524, 1.1263, 2.02223],
+                    [-0.500331, 0.517899, -1.21143],
+                    [1.12958, -0.21413, -2.48738],
+                    [1.39955, 0.891329, 1.63289],
+                ],
+                [
+                    [0.241417, -0.619157, -0.77484],
+                    [-1.42512, 0.970817, -1.31352],
+                    [2.739, -1.2506, 1.56844],
+                    [-1.23175, 0.32756, 1.13969],
+                ],
+            ]
+        )
+        inorm = nn.InstanceNorm(dims=3)
+        y = inorm(x)
+        expected_y = [
+            [
+                [-0.657082, 1.07593, 1.0712],
+                [-1.27879, -0.123074, -0.632505],
+                [0.796101, -1.56572, -1.30476],
+                [1.13978, 0.612862, 0.866067],
+            ],
+            [
+                [0.0964426, -0.557906, -0.759885],
+                [-0.904772, 1.30444, -1.20013],
+                [1.59693, -1.29752, 1.15521],
+                [-0.7886, 0.550987, 0.804807],
+            ],
+        ]
+        self.assertTrue(x.shape == y.shape)
+        self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        # Test InstanceNorm2d
+        x = mx.array(
+            [
+                [
+                    [
+                        [-0.458824, 0.483254, -0.58611],
+                        [-0.447996, -0.176577, -0.622545],
+                        [0.0486988, -0.0611224, 1.8845],
+                    ],
+                    [
+                        [1.13049, 0.345315, -0.926389],
+                        [0.301795, 0.99207, -0.184927],
+                        [-2.23876, -0.758631, -1.12639],
+                    ],
+                    [
+                        [0.0986325, -1.82973, -0.241765],
+                        [-1.25257, 0.154442, -0.556204],
+                        [-0.329399, -0.319107, 0.830584],
+                    ],
+                ],
+                [
+                    [
+                        [1.04407, 0.073752, 0.407081],
+                        [0.0800776, 1.2513, 1.20627],
+                        [0.782321, -0.444367, 0.563132],
+                    ],
+                    [
+                        [0.671423, -1.21689, -1.88979],
+                        [-0.110299, -1.42248, 1.17838],
+                        [0.159905, 0.516452, -0.539121],
+                    ],
+                    [
+                        [0.810252, 1.50456, 1.08659],
+                        [0.182597, 0.0576239, 0.973883],
+                        [-0.0621687, 0.184253, 0.784216],
+                    ],
+                ],
+            ]
+        )
+        inorm = nn.InstanceNorm(dims=3)
+        y = inorm(x)
+        expected_y = [
+            [
+                [
+                    [-0.120422, 0.801503, -0.463983],
+                    [-0.108465, -0.0608611, -0.504602],
+                    [0.440008, 0.090032, 2.29032],
+                ],
+                [
+                    [1.63457, 0.621224, -0.843335],
+                    [0.719488, 1.4665, -0.0167344],
+                    [-2.08591, -0.821575, -1.0663],
+                ],
+                [
+                    [0.495147, -2.22145, -0.0800989],
+                    [-0.996913, 0.371763, -0.430643],
+                    [0.022495, -0.24714, 1.11538],
+                ],
+            ],
+            [
+                [
+                    [1.5975, 0.0190292, -0.0123306],
+                    [-0.776381, 1.28291, 0.817237],
+                    [0.952927, -0.537076, 0.149652],
+                ],
+                [
+                    [0.679836, -1.36624, -2.39651],
+                    [-1.24519, -1.5869, 0.788287],
+                    [-0.579802, 0.494186, -0.994499],
+                ],
+                [
+                    [1.02171, 1.55474, 0.693008],
+                    [-0.523922, 0.00171862, 0.576016],
+                    [-1.12667, 0.137632, 0.37914],
+                ],
+            ],
+        ]
+        self.assertTrue(x.shape == y.shape)
+        self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        # # Test InstanceNorm3d
+        x = mx.array(
+            [
+                [
+                    [
+                        [[0.777621, 0.528145, -1.56133], [-2.1722, 0.128192, 0.153862]],
+                        [
+                            [-1.41317, 0.476288, -1.20411],
+                            [0.284446, -0.649858, 0.152112],
+                        ],
+                    ],
+                    [
+                        [[0.11, -0.12431, 1.18768], [-0.837743, 1.93502, 0.00236324]],
+                        [
+                            [-2.40205, -1.25873, -2.04243],
+                            [0.336682, -0.261986, 1.54289],
+                        ],
+                    ],
+                    [
+                        [
+                            [0.789185, -1.63747, 0.67917],
+                            [-1.42998, -1.73247, -0.402572],
+                        ],
+                        [
+                            [-0.459489, -2.15559, -0.249959],
+                            [0.0298199, 0.10275, -0.821897],
+                        ],
+                    ],
+                ],
+                [
+                    [
+                        [
+                            [-2.12354, 0.643973, 0.72391],
+                            [0.317797, -0.682916, 0.016364],
+                        ],
+                        [
+                            [-0.146628, -0.987925, 0.573199],
+                            [0.0329215, 1.54086, 0.213092],
+                        ],
+                    ],
+                    [
+                        [
+                            [-1.55784, 0.71179, -0.0678402],
+                            [2.41031, -0.290786, 0.00449439],
+                        ],
+                        [
+                            [0.226341, 0.057712, -1.58342],
+                            [0.265387, -0.742304, 1.28133],
+                        ],
+                    ],
+                    [
+                        [
+                            [0.990317, -0.399875, -0.357647],
+                            [0.475161, -1.10479, -1.07389],
+                        ],
+                        [
+                            [-1.37804, 1.40097, 0.141618],
+                            [-0.501041, 0.0723374, -0.386141],
+                        ],
+                    ],
+                ],
+            ]
+        )
+        inorm = nn.InstanceNorm(dims=3)
+        y = inorm(x)
+        expected_y = [
+            [
+                [
+                    [[1.23593, 0.821849, -1.30944], [-1.54739, 0.462867, 0.357126]],
+                    [[-0.831204, 0.775304, -0.962338], [0.770588, -0.23548, 0.355425]],
+                ],
+                [
+                    [[0.605988, 0.236231, 1.36163], [-0.288258, 2.0846, 0.209922]],
+                    [[-1.76427, -0.78198, -1.77689], [0.819875, 0.112659, 1.70677]],
+                ],
+                [
+                    [[1.24684, -1.12192, 0.867539], [-0.847068, -1.20719, -0.183531]],
+                    [
+                        [0.0686449, -1.58697, -0.0352458],
+                        [0.530334, 0.440032, -0.590967],
+                    ],
+                ],
+            ],
+            [
+                [
+                    [[-1.75315, 0.733967, 1.04349], [0.343736, -0.822472, 0.080661]],
+                    [[-0.0551618, -1.18025, 0.838402], [0.0990544, 1.78602, 0.348368]],
+                ],
+                [
+                    [[-1.26726, 0.813517, -0.033924], [2.14101, -0.362504, 0.0645089]],
+                    [[0.265184, 0.0462839, -2.09632], [0.298721, -0.892134, 1.80203]],
+                ],
+                [
+                    [[0.921369, -0.490465, -0.428293], [0.478897, -1.31732, -1.40296]],
+                    [[-1.11283, 1.62192, 0.251107], [-0.35957, 0.0634394, -0.467067]],
+                ],
+            ],
+        ]
+        self.assertTrue(x.shape == y.shape)
+        self.assertTrue(np.allclose(y, expected_y, atol=1e-5))
+        # Test repr
+        self.assertTrue(str(inorm) == "InstanceNorm(3, eps=1e-05, affine=False)")
 
     def test_batch_norm(self):
         mx.random.seed(42)
@@ -557,47 +627,24 @@ class TestNN(mlx_tests.MLXTestCase):
         y2 = m(x)
         self.assertTrue(mx.array_equal(y, y2))
 
-    def test_module_utilities(self):
-        m = nn.Sequential(
-            nn.Sequential(nn.Linear(2, 10), nn.relu),
-            nn.Sequential(nn.Linear(10, 10), nn.ReLU()),
-            nn.Linear(10, 1),
-            mx.sigmoid,
+    def test_gelu(self):
+        inputs = [1.15286231, -0.81037411, 0.35816911, 0.77484438, 0.66276414]
+
+        # From: jax.nn.gelu(np.array(inputs), approximate=False)
+        expected = np.array(
+            [1.0093501, -0.16925684, 0.22918941, 0.60498625, 0.49459383]
         )
 
-        children = m.children()
-        self.assertTrue(isinstance(children, dict))
-        self.assertEqual(len(children), 1)
-        self.assertTrue(isinstance(children["layers"], list))
-        self.assertEqual(len(children["layers"]), 4)
-        self.assertEqual(children["layers"][3], {})
-        flat_children = tree_flatten(children, is_leaf=nn.Module.is_module)
-        self.assertEqual(len(flat_children), 3)
+        out = nn.GELU()(mx.array(inputs))
+        self.assertTrue(np.allclose(out, expected))
 
-        leaves = tree_flatten(m.leaf_modules(), is_leaf=nn.Module.is_module)
-        self.assertEqual(len(leaves), 4)
-        self.assertEqual(leaves[0][0], "layers.0.layers.0")
-        self.assertEqual(leaves[1][0], "layers.1.layers.0")
-        self.assertEqual(leaves[2][0], "layers.1.layers.1")
-        self.assertEqual(leaves[3][0], "layers.2")
-        self.assertTrue(leaves[0][1] is m.layers[0].layers[0])
-        self.assertTrue(leaves[1][1] is m.layers[1].layers[0])
-        self.assertTrue(leaves[2][1] is m.layers[1].layers[1])
-        self.assertTrue(leaves[3][1] is m.layers[2])
-
-        m.eval()
-
-        def assert_not_training(k, m):
-            self.assertFalse(m.training)
-
-        m.apply_to_modules(assert_not_training)
-
-        m.train()
-
-        def assert_training(k, m):
-            self.assertTrue(m.training)
-
-        m.apply_to_modules(assert_training)
+        # Crudely check the approximations
+        x = mx.arange(-6.0, 6.0, 12 / 100)
+        y = nn.gelu(x)
+        y_hat1 = nn.gelu_approx(x)
+        y_hat2 = nn.gelu_fast_approx(x)
+        self.assertLess(mx.abs(y - y_hat1).max(), 0.0003)
+        self.assertLess(mx.abs(y - y_hat2).max(), 0.02)
 
     def test_sin_pe(self):
         m = nn.SinusoidalPositionalEncoding(16, min_freq=0.01)
@@ -610,20 +657,14 @@ class TestNN(mlx_tests.MLXTestCase):
             mx.abs(similarities[mx.arange(10), mx.arange(10)] - 1).max(), 1e-5
         )
 
-    def test_io(self):
-        def make_model():
-            return nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
+    def test_sigmoid(self):
+        x = mx.array([1.0, 0.0, -1.0])
+        y1 = mx.sigmoid(x)
+        y2 = nn.activations.sigmoid(x)
+        y3 = nn.Sigmoid()(x)
 
-        m = make_model()
-        tdir = tempfile.TemporaryDirectory()
-        file = os.path.join(tdir.name, "model.npz")
-        m.save_weights(file)
-        m_load = make_model()
-        m_load.load_weights(file)
-        tdir.cleanup()
-
-        eq_tree = tree_map(mx.array_equal, m.parameters(), m_load.parameters())
-        self.assertTrue(all(tree_flatten(eq_tree)))
+        self.assertEqualArray(y1, y2, atol=0, rtol=0)
+        self.assertEqualArray(y1, y3, atol=0, rtol=0)
 
     def test_relu(self):
         x = mx.array([1.0, -1.0, 0.0])
@@ -780,23 +821,53 @@ class TestNN(mlx_tests.MLXTestCase):
         y = alibi(x.astype(mx.float16))
         self.assertTrue(y.dtype, mx.float16)
 
-    def test_hinge_loss(self):
-        inputs = mx.ones((2, 4))
-        targets = mx.zeros((2, 4))
-        loss = nn.losses.hinge_loss(inputs, targets, reduction="mean")
-        self.assertEqual(loss, 1.0)
+    def test_dropout(self):
+        x = mx.ones((2, 4))
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
 
-    def test_huber_loss(self):
-        inputs = mx.ones((2, 4))
-        targets = mx.zeros((2, 4))
-        loss = nn.losses.huber_loss(inputs, targets, reduction="mean")
-        self.assertEqual(loss, 0.5)
+        x = mx.ones((2, 4), dtype=mx.bfloat16)
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
 
-    def test_log_cosh_loss(self):
-        inputs = mx.ones((2, 4))
-        targets = mx.zeros((2, 4))
-        loss = nn.losses.log_cosh_loss(inputs, targets, reduction="mean")
-        self.assertAlmostEqual(loss.item(), 0.433781, places=6)
+        x = mx.ones((2, 4), dtype=mx.float16)
+        y = nn.Dropout(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
+
+    def test_dropout2d(self):
+        x = mx.ones((2, 4, 4, 4))
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4, 4, 4), dtype=mx.bfloat16)
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4, 4, 4), dtype=mx.float16)
+        y = nn.Dropout2d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
+
+    def test_dropout3d(self):
+        x = mx.ones((2, 4, 4, 4, 4))
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float32)
+
+        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.bfloat16)
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.bfloat16)
+
+        x = mx.ones((2, 4, 4, 4, 4), dtype=mx.float16)
+        y = nn.Dropout3d(0.5)(x)
+        self.assertTrue(y.shape, x.shape)
+        self.assertTrue(y.dtype, mx.float16)
 
     def test_glu(self):
         x = mx.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=mx.float32)

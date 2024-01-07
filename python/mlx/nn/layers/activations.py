@@ -273,6 +273,15 @@ def hardswish(x):
     return x * mx.minimum(max_x_3, 6) / 6
 
 
+@_make_activation_module(mx.sigmoid)
+class Sigmoid(Module):
+    r"""Applies the sigmoid function, element-wise.
+
+    .. math::
+        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
+    """
+
+
 @_make_activation_module(mish)
 class Mish(Module):
     r"""Applies the Mish function, element-wise.
@@ -283,7 +292,6 @@ class Mish(Module):
         \text{Mish}(x) = x * \text{Tanh}(\text{Softplus}(x))
 
     """
-    pass
 
 
 @_make_activation_module(relu)
@@ -293,7 +301,6 @@ class ReLU(Module):
 
     See :func:`relu`, for the functional equivalent.
     """
-    pass
 
 
 class LeakyReLU(Module):
@@ -337,7 +344,6 @@ class ReLU6(Module):
 
     See :func:`relu6`, for the functional equivalent.
     """
-    pass
 
 
 @_make_activation_module(softmax)
@@ -346,7 +352,6 @@ class Softmax(Module):
 
     See :func:`softmax`, for the functional equivalent.
     """
-    pass
 
 
 @_make_activation_module(softplus)
@@ -355,7 +360,6 @@ class Softplus(Module):
 
     See :func:`softplus`, for the functional equivalent.
     """
-    pass
 
 
 @_make_activation_module(softsign)
@@ -364,7 +368,6 @@ class Softsign(Module):
 
     See :func:`softsign`, for the functional equivalent.
     """
-    pass
 
 
 class CELU(Module):
@@ -392,7 +395,6 @@ class SiLU(Module):
 
     See :func:`silu`, for the functional equivalent.
     """
-    pass
 
 
 @_make_activation_module(log_softmax)
@@ -401,7 +403,6 @@ class LogSoftmax(Module):
 
     See :func:`log_softmax`, for the functional equivalent.
     """
-    pass
 
 
 @_make_activation_module(log_sigmoid)
@@ -410,7 +411,6 @@ class LogSigmoid(Module):
 
     See :func:`log_sigmoid`, for the functional equivalent.
     """
-    pass
 
 
 class PReLU(Module):
@@ -488,7 +488,6 @@ class Tanh(Module):
 
     See :func:`tanh`, for the functional equivalent.
     """
-    pass
 
 
 @_make_activation_module(hardswish)
@@ -497,7 +496,6 @@ class Hardswish(Module):
 
     See :func:`hardswish`, for the functional equivalent.
     """
-    pass
 
 
 class Step(Module):
@@ -530,4 +528,3 @@ class SELU(Module):
 
     See :func:`selu`, for the functional equivalent.
     """
-    pass

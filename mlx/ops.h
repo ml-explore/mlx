@@ -214,7 +214,7 @@ array concatenate(const std::vector<array>& arrays, StreamOrDevice s = {});
 array stack(const std::vector<array>& arrays, int axis, StreamOrDevice s = {});
 array stack(const std::vector<array>& arrays, StreamOrDevice s = {});
 
-/** Repeate an array along an axis. */
+/** Repeat an array along an axis. */
 array repeat(const array& arr, int repeats, int axis, StreamOrDevice s = {});
 array repeat(const array& arr, int repeats, StreamOrDevice s = {});
 
@@ -1041,6 +1041,7 @@ array quantized_matmul(
     const array& w,
     const array& scales,
     const array& biases,
+    bool transpose = true,
     int group_size = 64,
     int bits = 4,
     StreamOrDevice s = {});
@@ -1059,6 +1060,19 @@ array dequantize(
     const array& biases,
     int group_size = 64,
     int bits = 4,
+    StreamOrDevice s = {});
+
+/** TensorDot returns a contraction of a and b over multiple dimensions. */
+array tensordot(
+    const array& a,
+    const array& b,
+    const int dims = 2,
+    StreamOrDevice s = {});
+
+array tensordot(
+    const array& a,
+    const array& b,
+    const std::pair<std::vector<int>, std::vector<int>>& dims,
     StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */
