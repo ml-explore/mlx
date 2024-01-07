@@ -266,28 +266,24 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
     def test_cosine_similarity_loss(self):
-        embeddings1 = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
-        embeddings2 = mx.array([[0.6, 0.4, 0.3, 0.8], [0.2, 0.5, 0.6, 0.4]])
-        targets = mx.array([1, -1])
+        logits = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        targets = mx.array([[0.6, 0.4, 0.3, 0.8], [0.2, 0.5, 0.6, 0.4]])
 
         # Test with reduction 'none'
-        losses_none = nn.losses.cosine_similarity_loss(
-            embeddings1, embeddings2, targets, reduction="none"
-        )
-        expected_none = mx.array([0.0146555, 0.961074])
+        losses_none = losses.cosine_similarity_loss(logits, targets, reduction="none")
+        expected_none = mx.array([-0.985344, -0.961074])
+        print(losses_none)
         self.assertTrue(mx.allclose(losses_none, expected_none))
 
         # Test with reduction 'mean'
         losses_mean = nn.losses.cosine_similarity_loss(
-            embeddings1, embeddings2, targets, reduction="mean"
+            logits, targets, reduction="mean"
         )
         expected_mean = mx.mean(expected_none)
         self.assertTrue(mx.allclose(losses_mean, expected_mean))
 
         # Test with reduction 'sum'
-        losses_sum = nn.losses.cosine_similarity_loss(
-            embeddings1, embeddings2, targets, reduction="sum"
-        )
+        losses_sum = nn.losses.cosine_similarity_loss(logits, targets, reduction="sum")
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
