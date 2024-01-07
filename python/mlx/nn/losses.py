@@ -413,3 +413,39 @@ def cosine_similarity_loss(
 
     loss = dot_product / (inputs_norm * targets_norm)
     return _reduce(loss, reduction)
+
+
+def cosine_similarity_loss(
+    inputs: mx.array,
+    targets: mx.array,
+    eps: float = 1e-8,
+    reduction: str = "none",
+) -> mx.array:
+    """
+    Computes the Cosine Similarity loss between inputs and targets.
+    Note that inputs must be between -1 and 1. When it is a negative number
+    between -1 and 0, 0 indicates orthogonality and values closer to -1 indicate
+    greater similarity. The values closer to 1 indicate greater dissimilarity.
+    This makes it usable as a loss function in a setting where you try to
+    maximize the proximity between predictions and targets. If either
+    `inputs` or `targets` is a zero vector, cosine similarity will be 0
+    regardless of the proximity between predictions and targets.
+    .. math::
+        \text{cosine_similiarity_loss} = \frac{\sum_{i} e_{1,i} \cdot e_{2,i}}{\max(\|e_1\|, \varepsilon) \cdot \max(\|e_2\|, \varepsilon)}
+    Args:
+        embeddings1 (mx.array): Embeddings for the first set of samples.
+        embeddings2 (mx.array): Embeddings for the second set of samples.
+        targets (mx.array): The target values (cosine similarity between embeddings).
+        margin (float, optional): Margin for dissimilar pairs. Default: ``0.0``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+    Returns:
+        mx.array: The computed Cosine Similarity loss.
+    """
+    inputs_norm = mx.maximum(mx.sqrt(mx.sum(mx.square(inputs), axis=1)), eps)
+    targets_norm = mx.maximum(mx.sqrt(mx.sum(mx.square(targets), axis=1)), eps)
+
+    dot_product = mx.sum(inputs * targets, axis=1)
+
+    loss = dot_product / (inputs_norm * targets_norm)
+    return _reduce(loss, reduction)
