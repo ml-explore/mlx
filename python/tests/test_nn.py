@@ -1186,11 +1186,23 @@ class TestLayers(mlx_tests.MLXTestCase):
                 expected_irregular_average_pool_output,
             )
         )
-        # # Test repr
-        # self.assertTrue(
-        #     str(nn.Pooling(kernel_size=3, stride=2, padding=1, mode="max"))
-        #     == "Pooling(3, stride=2, padding=1, mode=max)"
-        # )
+        # Test repr
+        self.assertTrue(
+            str(nn.MaxPooling1d(kernel_size=3, padding=2))
+            == "MaxPooling1d(3, stride=3, padding=2)"
+        )
+        self.assertTrue(
+            str(nn.AvgPooling1d(kernel_size=2, stride=3))
+            == "AvgPooling1d(2, stride=3, padding=0)"
+        )
+        self.assertTrue(
+            str(nn.MaxPooling2d(kernel_size=3, stride=2, padding=1))
+            == "MaxPooling2d(3, stride=2, padding=1)"
+        )
+        self.assertTrue(
+            str(nn.AvgPooling2d(kernel_size=(1, 2), stride=2, padding=(1, 2)))
+            == "AvgPooling2d((1, 2), stride=2, padding=(1, 2))"
+        )
 
 
 if __name__ == "__main__":

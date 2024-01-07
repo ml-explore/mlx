@@ -58,6 +58,11 @@ class Pooling(Module):
     ) -> mx.array:
         return mx.pad(a, self._get_padding(features_sizes), padding_value)
 
+    def _extra_repr(self):
+        return (
+            f"{self.kernel_size}, " f"stride={self.stride}, " f"padding={self.padding}"
+        )
+
 
 class Pooling1d(Pooling):
     def __init__(
