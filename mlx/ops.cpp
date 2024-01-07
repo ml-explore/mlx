@@ -1,10 +1,11 @@
 // Copyright © 2023 Apple Inc.
-
 #include <cmath>
+#include <map>
 #include <numeric>
 #include <set>
 #include <sstream>
 
+#include "mlx/einsum.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -2813,6 +2814,49 @@ array dequantize(
   w_full = reshape(w_full, {w.shape(0), -1}, s);
 
   return w_full;
+}
+
+array einsum(
+    std::string equation,
+    const std::vector<array>& operands,
+    StreamOrDevice s /* = {} */) {
+  std::vector<array> inputs = operands;
+  if (operands.size() == 0) {
+    throw std::invalid_argument("[einsum] At least one operand is required.");
+  }
+
+  auto path = einsum_path(equation, inputs);
+  for (auto step : path) {
+    std::vector<array> args;
+    for (auto pos : std::get<0>(step)) {
+      args.push_back(inputs.at(pos));
+      inputs.erase(inputs.begin() + pos);
+    }
+    if (std::get<4>(step)) {
+      auto extract = einsum_parse(std::get<2>(step));
+
+      std::vector<int> left_axes;
+      std::vector<int> right_axes;
+
+      for (int i = 0; i < extract.first.at(0).size(); i++) {
+        auto c = extract.first.at(0).at(i);
+        if (std::get<1>(step).find(c) != std::get<1>(step).end()) {
+          left_axes.push_back(i);
+        }
+      }
+      for (int i = 0; i < extract.first.at(1).size(); i++) {
+        auto c = extract.first.at(1).at(i);
+        if (std::get<1>(step).find(c) != std::get<1>(step).end()) {
+          right_axes.push_back(i);
+        }
+      }
+      inputs.emplace_back(
+          tensordot(args.at(0), args.at(1), {left_axes, right_axes}, s));
+    } else {
+      inputs.emplace_back(einsum_naive(std::get<2>(step), args, s));
+    }
+  }
+  return inputs.front();
 }
 
 array tensordot(
