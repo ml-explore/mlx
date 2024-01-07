@@ -3250,4 +3250,56 @@ void init_ops(py::module_& m) {
         Returns:
           result (array): The tensor dot product.
       )pbdoc");
+  m.def(
+      "scatter_add",
+      [](const array& a,
+         const std::variant<std::monostate, array, std::vector<array>>& indices,
+         const array& updates,
+         const IntOrVec& axes,
+         StreamOrDevice s) {
+        if (auto index = std::get_if<array>(&indices); index) {
+          if (auto axis = std::get_if<int>(&axes); axis) {
+            return scatter_add(a, *index, updates, *axis, s);
+          } else {
+            throw std::invalid_argument(
+                "[scatter_add] One array provided so one axis expected");
+          }
+        } else {
+          if (auto axis = std::get_if<int>(&axes); axis) {
+            throw std::invalid_argument(
+                "[scatter_add] Many indices provided so many axes expected");
+          } else {
+            return scatter_add(
+                a,
+                std::get<std::vector<array>>(indices),
+                updates,
+                std::get<std::vector<int>>(axes),
+                s);
+          }
+        }
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_add(a: array, /, indices: List[array], updates: array, axes: Union[int, List[int]], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter and add atomically the updates to the input array ``a``.
+
+        Args:
+          a (array): Input array
+          indices (Union[array, List[array]]): The arrays containing the
+            indices to add the updates to
+          updates (array): The array containing the updates to be added
+            to the input
+          axes (Union[int, List[int]]): Defines which axes of the input
+            the indices correspond to
+
+        Returns:
+          result (array): The input with the ``updates`` added to the locations specidied by ``indices``
+      )pbdoc");
 }
