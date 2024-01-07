@@ -190,16 +190,15 @@ std::vector<std::vector<int>> optimal_path(
         temp.emplace_back(total_cost, positions, std::get<1>(cont));
       }
     }
-    if (temp.size() > 0) {
+    if (!temp.empty()) {
       results = temp;
     } else {
-      auto path_parent = results.at(0);
-      for (int i = 1; i < results.size(); i++) {
-        if (std::get<0>(results.at(i)) < std::get<0>(path_parent)) {
-          path_parent = results.at(i);
-        }
-      }
-      auto positions = std::get<1>(path_parent);
+      auto min_ele = std::min_element(
+          results.begin(), results.end(), [](const auto& a, const auto& b) {
+            return std::get<0>(a) < std::get<0>(b);
+          });
+      size_t min_idx = std::distance(results.begin(), min_ele);
+      auto positions = std::get<1>(results.at(min_idx));
       positions.emplace_back(rangeHelper(in_sets.size() - i));
       return positions;
     }
@@ -208,13 +207,12 @@ std::vector<std::vector<int>> optimal_path(
   if (results.size() == 0) {
     return {rangeHelper(in_sets.size())};
   }
-  auto path_parent = results.at(0);
-  for (int i = 1; i < results.size(); i++) {
-    if (std::get<0>(results.at(i)) < std::get<0>(path_parent)) {
-      path_parent = results.at(i);
-    }
-  }
-  return std::get<1>(path_parent);
+  auto min_ele = std::min_element(
+      results.begin(), results.end(), [](const auto& a, const auto& b) {
+        return std::get<0>(a) < std::get<0>(b);
+      });
+  size_t min_idx = std::distance(results.begin(), min_ele);
+  return std::get<1>(results.at(min_idx));
 }
 
 bool has_intersection(std::set<char> a, std::set<char> b) {
@@ -431,24 +429,17 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
     if (!has_intersection(std::get<2>(cont), bcast)) {
       do_blas = can_dot(tmp_inputs, std::get<0>(cont), std::get<2>(cont));
     }
+
+    // Construct the sub-einsum equation
     std::string ein_res = extract.second;
     if ((i - path.size()) != -1) {
       std::string tmp(std::get<0>(cont).begin(), std::get<0>(cont).end());
       std::sort(tmp.begin(), tmp.end(), [dim_map](char a, char b) {
-        auto pa = dim_map.find(a)->second;
-        auto pb = dim_map.find(b)->second;
-        return pa < pb;
+        return dim_map.find(a)->second < dim_map.find(b)->second;
       });
       ein_res = tmp;
     }
     extract.first.emplace_back(ein_res);
-    std::set<char> new_bcast;
-    std::set_difference(
-        bcast.begin(),
-        bcast.end(),
-        std::get<2>(cont).begin(),
-        std::get<2>(cont).end(),
-        std::inserter(new_bcast, new_bcast.begin()));
     std::string new_ein_res;
     for (auto ti : tmp_inputs) {
       new_ein_res += ti;
@@ -457,6 +448,15 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
     new_ein_res.pop_back();
     new_ein_res += "->";
     new_ein_res += ein_res;
+    // finish constructing the sub-einsum equation
+
+    std::set<char> new_bcast;
+    std::set_difference(
+        bcast.begin(),
+        bcast.end(),
+        std::get<2>(cont).begin(),
+        std::get<2>(cont).end(),
+        std::inserter(new_bcast, new_bcast.begin()));
     broadcast_indicies.emplace_back(new_bcast);
     auto in_list_cp = extract.first;
     result.emplace_back(

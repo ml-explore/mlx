@@ -20,5 +20,4 @@ einsum_path(const std::string& equation, const std::vector<array>& operands);
 std::pair<std::vector<std::string>, std::string> einsum_parse(
     const std::string& equation);
 
-std::map<char, int> str_idx_map(const std::string inp);
 } // namespace mlx::core
