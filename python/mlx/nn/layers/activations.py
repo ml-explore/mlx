@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import Any, Callable
+from typing import Any
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
