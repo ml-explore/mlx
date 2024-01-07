@@ -15,7 +15,6 @@ namespace mlx::core {
 // Forward declaration
 class Primitive;
 using deleter_t = std::function<void(allocator::Buffer)>;
-bool currently_tracing();
 
 class array {
   /* An array is really a node in a graph. It contains a shared ArrayDesc
@@ -266,9 +265,7 @@ class array {
     array_desc_->is_tracer = is_tracer;
   }
   // Check if the array is a tracer array
-  bool is_tracer() const {
-    return array_desc_->is_tracer && currently_tracing();
-  }
+  bool is_tracer() const;
 
   void set_data(allocator::Buffer buffer, deleter_t d = allocator::free);
 

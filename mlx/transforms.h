@@ -6,9 +6,6 @@
 
 namespace mlx::core {
 
-/** Return whether we are during tracing for a function transformation. */
-bool currently_tracing();
-
 /** Fuse equivalent arrays to avoid duplicate execution. */
 void simplify(const std::vector<array>& outputs);
 

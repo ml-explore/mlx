@@ -19,37 +19,11 @@
 
 namespace mlx::core {
 
-namespace {
-
-static std::atomic<int> _tracing_counter = 0;
-
-// Create an InTracing object during tracing operations to signify to the rest
-// of the codebase that we are during tracing so evals should not throw away
-// the graph.
-struct InTracing {
- public:
-  InTracing() {
-    tracing_counter++;
-  }
-  ~InTracing() {
-    tracing_counter--;
-  }
-
-  static bool currently_tracing() {
-    return tracing_counter > 0;
-  }
-
- private:
-  static int tracing_counter;
-};
-
-int InTracing::tracing_counter{0};
-
-} // namespace
-
-bool currently_tracing() {
-  return InTracing::currently_tracing();
-}
+// Initialize the static tracing counter from transforms_impl.h .
+//
+// This is used to implement the in_tracing() function the returns true if we
+// are currently under a function transformation.
+int detail::InTracing::tracing_counter{0};
 
 void simplify(const std::vector<array>& outputs) {
   std::function<void(const array&)> recurse;
@@ -290,7 +264,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotans) {
   // Set the global tracing flag.
-  InTracing in_tracing;
+  detail::InTracing in_tracing;
 
   // Make tracers from given primals
   std::vector<array> primals_;
@@ -449,7 +423,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
   }
 
   // Set the global tracing flag.
-  InTracing in_tracing;
+  detail::InTracing in_tracing;
 
   std::vector<array> primals_;
   for (auto& p : primals) {

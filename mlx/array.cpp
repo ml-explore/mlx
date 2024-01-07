@@ -6,6 +6,7 @@
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
+#include "mlx/transforms_impl.h"
 
 namespace mlx::core {
 
@@ -19,6 +20,12 @@ std::pair<size_t, std::vector<size_t>> cum_prod(const std::vector<int>& shape) {
     cum_prod *= shape[i];
   }
   return {cum_prod, strides};
+}
+
+/** Return true if we are currently performing a function transformation in
+ * order to keep the graph when evaluating tracer arrays. */
+bool in_tracing() {
+  return detail::InTracing::in_tracing();
 }
 
 } // namespace
@@ -64,6 +71,10 @@ void array::detach() {
 
 void array::eval() {
   mlx::core::eval({*this});
+}
+
+bool array::is_tracer() const {
+  return array_desc_->is_tracer && in_tracing();
 }
 
 void array::set_data(allocator::Buffer buffer, deleter_t d) {

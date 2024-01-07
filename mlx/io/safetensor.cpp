@@ -150,7 +150,7 @@ void save_safetensors(
     // Try to make it row contiguous
     if (!arr.flags().row_contiguous) {
       arr = reshape(flatten(arr), arr.shape());
-      arr.eval(retain);
+      arr.eval();
     }
 
     // Has to be row-major now but, check one more time in case

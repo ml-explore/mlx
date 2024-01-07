@@ -52,7 +52,7 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
 
   if (!(a.flags().row_contiguous || a.flags().col_contiguous)) {
     a = reshape(flatten(a), a.shape());
-    a.eval(retain_graph);
+    a.eval();
   }
   // Check once more in-case the above ops change
   if (!(a.flags().row_contiguous || a.flags().col_contiguous)) {
