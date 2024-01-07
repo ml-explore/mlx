@@ -1,18 +1,14 @@
 // Copyright © 2023 Apple Inc.
 
 #include <numeric>
-#include <optional>
 #include <ostream>
-#include <string>
 #include <variant>
-#include <vector>
 
 #include <pybind11/iostream.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 #include "mlx/ops.h"
-#include "mlx/primitives.h"
 #include "mlx/utils.h"
 #include "python/src/load.h"
 #include "python/src/utils.h"
