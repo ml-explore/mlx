@@ -62,6 +62,7 @@ jobs:
             pip install --upgrade pybind11[global]
             pip install numpy
             pip install torch
+            pip install tensorflow
             pip install unittest-xml-reporting
       - run:
           name: Build python package

@@ -275,26 +275,26 @@ class TestLosses(mlx_tests.MLXTestCase):
         self.assertAlmostEqual(loss.item(), 0.433781, places=6)
 
     def test_cosine_similarity_loss(self):
-        logits = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
+        inputs = mx.array([[0.5, 0.5, 0.2, 0.9], [0.1, 0.3, 0.5, 0.5]])
         targets = mx.array([[0.6, 0.4, 0.3, 0.8], [0.2, 0.5, 0.6, 0.4]])
 
         # Test with reduction 'none'
         losses_none = nn.losses.triplet_loss(
-            logits, targets, reduction="none"
+            inputs, targets, reduction="none"
         )
         expected_none = mx.array([-0.985344, -0.961074])
         self.assertTrue(mx.allclose(losses_none, expected_none))
 
         # Test with reduction 'mean'
         losses_mean = nn.losses.triplet_loss(
-            anchors, positives, negatives, reduction="mean"
+            inputs, targets, reduction="mean"
         )
         expected_mean = mx.mean(expected_none)
         self.assertTrue(mx.allclose(losses_mean, expected_mean))
 
         # Test with reduction 'sum'
         losses_sum = nn.losses.triplet_loss(
-            anchors, positives, negatives, reduction="sum"
+            inputs, targets, reduction="sum"
         )
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))

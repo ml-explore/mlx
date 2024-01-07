@@ -26,6 +26,7 @@ Layers
    LayerNorm
    RMSNorm
    GroupNorm
+   InstanceNorm
    Dropout
    Dropout2d
    Dropout3d

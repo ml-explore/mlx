@@ -10,7 +10,12 @@ MLX was developed with contributions from the following individuals:
 - Nripesh Niketan: Added `softsign`, `softmax`, `hardswish`, `logsoftmax` activation functions. Added `dropout3d` ops.
 - Juarez Bochi: Fixed bug in cross attention.
 - Justin Deschenaux: Sine, Cosine, arange, randint, truncated normal, bernoulli, lion optimizer, Dropout2d, linear and logistic regression python example.
-- Diogo Da Cruz: Added tri, tril, triu and safetensor support
+- Diogo Da Cruz: Added `tri`, `tril`, `triu`, `tensordot` and safetensor support
+- Gabrijel Boduljak: Added `mlx.core.linalg`, implemented `norm` method and `InstanceNorm` layer.
+
+<a href="https://github.com/ml-explore/mlx/graphs/contributors">
+  <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
+</a>
 
 # Third-Party Software
 

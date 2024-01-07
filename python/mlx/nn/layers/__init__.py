@@ -13,6 +13,7 @@ from mlx.nn.layers.activations import (
     PReLU,
     ReLU,
     ReLU6,
+    Sigmoid,
     SiLU,
     Softmax,
     Softplus,
@@ -45,8 +46,14 @@ from mlx.nn.layers.containers import Sequential
 from mlx.nn.layers.convolution import Conv1d, Conv2d
 from mlx.nn.layers.dropout import Dropout, Dropout2d, Dropout3d
 from mlx.nn.layers.embedding import Embedding
-from mlx.nn.layers.linear import Linear
-from mlx.nn.layers.normalization import BatchNorm, GroupNorm, LayerNorm, RMSNorm
+from mlx.nn.layers.linear import Bilinear, Identity, Linear
+from mlx.nn.layers.normalization import (
+    BatchNorm,
+    GroupNorm,
+    InstanceNorm,
+    LayerNorm,
+    RMSNorm,
+)
 from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalEncoding
 from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.nn.layers.transformer import (

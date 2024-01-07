@@ -714,6 +714,7 @@ array stack(
   }
   return concatenate(new_arrays, axis, s);
 }
+
 array stack(const std::vector<array>& arrays, StreamOrDevice s /* = {} */) {
   return stack(arrays, 0, s);
 }
@@ -1947,6 +1948,13 @@ array matmul(
   }
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
+  if (!is_floating_point(out_type) || is_complex(out_type)) {
+    std::ostringstream msg;
+    msg << "[matmul] Only real floating point types are supported but "
+        << a.dtype() << " and " << b.dtype() << " were provided which results"
+        << " in " << out_type << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
   if (a.dtype() != out_type) {
     a = astype(a, out_type, s);
   }
@@ -2618,10 +2626,11 @@ array quantized_matmul(
     const array& w,
     const array& scales,
     const array& biases,
+    bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
-  auto x = in_x;
+  array x = in_x;
 
   if (w.dtype() != uint32) {
     std::ostringstream msg;
@@ -2646,39 +2655,52 @@ array quantized_matmul(
     x = reshape(x, {-1, x_inner_dims}, s);
   }
 
-  int w_inner_dims = w.shape(0) * (32 / bits);
-  if (w_inner_dims != x_inner_dims) {
+  if (scales.ndim() != 2 || scales.shape() != biases.shape()) {
     std::ostringstream msg;
-    msg << "[quantized_matmul] Last dimension of first input with "
-        << "shape (..., " << x_inner_dims
-        << ") does not match the expanded first "
-        << "dimension of the quantized matrix " << w_inner_dims
-        << ", computed from shape " << w.shape()
+    msg << "[quantized_matmul] Scales and biases should have the same 2D shape. "
+        << "Received scales with shape " << scales.shape()
+        << " and biases with " << biases.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (w.shape(1) * 32 / bits != scales.shape(1) * group_size) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] The shapes of the weight and scales are "
+        << "incompatible based on bits and group_size. w.shape() == "
+        << w.shape() << " and scales.shape() == " << scales.shape()
         << " with group_size=" << group_size << " and bits=" << bits;
     throw std::invalid_argument(msg.str());
   }
 
-  int n_groups = x_inner_dims / group_size;
-  if (scales.shape(-1) != n_groups || biases.shape(-1) != n_groups) {
+  // Calculate the expanded w's dims
+  int w_inner_dims = (transpose) ? w.shape(1) * 32 / bits : w.shape(0);
+  int w_outer_dims = (transpose) ? w.shape(0) : w.shape(1) * 32 / bits;
+
+  if (w_inner_dims != x_inner_dims) {
     std::ostringstream msg;
-    msg << "[quantized_matmul] Scales and biases provided do not match the "
-        << "quantization arguments (group_size=" << group_size
-        << ", bits=" << bits << "). Expected shapes (" << w.shape(1) << ", "
-        << x_inner_dims / group_size
-        << "), but got scales.shape=" << scales.shape()
-        << " and biases.shape=" << biases.shape();
+    msg << "[quantized_matmul] Last dimension of first input with "
+        << "shape (..., " << x_inner_dims << ") does not match "
+        << "the expanded quantized matrix (" << w_inner_dims << ", "
+        << w_outer_dims << ") computed from shape " << w.shape()
+        << " with group_size=" << group_size << ", bits=" << bits
+        << " and transpose=" << std::boolalpha << transpose;
     throw std::invalid_argument(msg.str());
   }
 
+  auto dtype = result_type({x, scales, biases});
   auto out = array(
-      {x.shape(0), w.shape(1)},
-      x.dtype(),
-      std::make_unique<QuantizedMatmul>(to_stream(s), group_size, bits),
-      {x, w, scales, biases});
+      {x.shape(0), w_outer_dims},
+      dtype,
+      std::make_unique<QuantizedMatmul>(
+          to_stream(s), group_size, bits, transpose),
+      {astype(x, dtype, s),
+       w,
+       astype(scales, dtype, s),
+       astype(biases, dtype, s)});
 
   // If needed reshape x to the original batch shape
   if (original_shape.size() != 1) {
-    original_shape.push_back(w.shape(1));
+    original_shape.push_back(w_outer_dims);
     out = reshape(out, original_shape, s);
   }
 
@@ -2791,6 +2813,96 @@ array dequantize(
   w_full = reshape(w_full, {w.shape(0), -1}, s);
 
   return w_full;
+}
+
+array tensordot(
+    const array& a,
+    const array& b,
+    const int dims /* = 2 */,
+    StreamOrDevice s /* = {} */
+) {
+  if (dims < 0) {
+    throw std::invalid_argument(
+        "[tensordot] dims must be greater or equal to 0.");
+  }
+  if (dims > std::min(a.ndim(), b.ndim())) {
+    throw std::invalid_argument(
+        "[tensordot] dims must be less than the number of dimensions of a and b.");
+  }
+  std::vector<int> adims;
+  std::vector<int> bdims;
+  for (int i = 0; i < dims; i++) {
+    bdims.emplace_back(i);
+    adims.emplace_back(-dims + i);
+  }
+  return tensordot(a, b, {adims, bdims}, s);
+}
+
+array tensordot(
+    const array& a,
+    const array& b,
+    const std::pair<std::vector<int>, std::vector<int>>& dims,
+    StreamOrDevice s /* = {} */
+) {
+  if (dims.first.size() != dims.second.size()) {
+    throw std::invalid_argument(
+        "[tensordot] dims[0] and dims[1] must have the same number of dimensions.");
+  }
+  if (a.dtype() != b.dtype()) {
+    throw std::invalid_argument(
+        "[tensordot] a and b must have the same dtype.");
+  }
+  int csize = 1;
+  auto x = a;
+  auto y = b;
+  for (int i = 0; i < dims.first.size(); i++) {
+    if (x.shape(dims.first.at(i)) == y.shape(dims.second.at(i))) {
+      csize *= x.shape(dims.first.at(i));
+    } else {
+      throw std::invalid_argument(
+          "[tensordot] a and b must have the same shape on the contracted axes.");
+    }
+  }
+
+  std::vector<bool> cdims1(x.ndim(), false);
+  std::vector<bool> cdims2(y.ndim(), false);
+  for (const auto n : dims.first) {
+    int n_ = (n < 0) ? n + x.ndim() : n;
+    cdims1[n_] = true;
+  }
+  for (const auto n : dims.second) {
+    int n_ = (n < 0) ? n + y.ndim() : n;
+    cdims2[n_] = true;
+  }
+
+  std::vector<int> t1;
+  std::vector<int> t2;
+  std::vector<int> rshape;
+  int size1 = 1;
+  int size2 = 1;
+  for (int i = 0; i < a.ndim(); i++) {
+    if (!cdims1[i]) {
+      t1.emplace_back(i);
+      size1 *= a.shape(i);
+      rshape.emplace_back(a.shape(i));
+    }
+  }
+  for (const auto x : dims.first) {
+    t1.emplace_back(x);
+  }
+  for (const auto x : dims.second) {
+    t2.emplace_back(x);
+  }
+  for (int i = 0; i < b.ndim(); i++) {
+    if (!cdims2[i]) {
+      t2.emplace_back(i);
+      size2 *= b.shape(i);
+      rshape.emplace_back(b.shape(i));
+    }
+  }
+  x = reshape(transpose(x, t1, s), {size1, csize}, s);
+  y = reshape(transpose(y, t2, s), {csize, size2}, s);
+  return reshape(matmul(x, y, s), rshape, s);
 }
 
 } // namespace mlx::core
