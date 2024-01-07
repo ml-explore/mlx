@@ -194,16 +194,6 @@ class GLU(Module):
         return glu(x=x, axis=self.axis)
 
 
-@_make_activation_module
-class Sigmoid(Module):
-    r"""Applies the sigmoid function, element-wise.
-
-    .. math::
-        \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
-    """
-    pass
-
-
 def step(x: mx.array, threshold: float = 0.0):
     r"""Applies the Step Activation Function.
 
