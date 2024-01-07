@@ -670,35 +670,11 @@ array logical_not(const array& a, StreamOrDevice s = {});
 
 /** Logical and of two arrays */
 array logical_and(const array& a, const array& b, StreamOrDevice s = {});
-
-// Overload for array-array logical AND
-array operator&&(const array& a, const array& b) {
-  return logical_and(a, b);
-}
-
-// Overload for scalar-array and array-scalar logical AND
-array operator&&(bool a, const array& b) {
-  return logical_and(array(a), b);
-}
-array operator&&(const array& a, bool b) {
-  return logical_and(a, array(b));
-}
+array operator&&(const array& a, const array& b);
 
 /** Logical or of two arrays */
 array logical_or(const array& a, const array& b, StreamOrDevice s = {});
-
-// Overload for array-array logical OR
-array operator||(const array& a, const array& b) {
-  return logical_or(a, b);
-}
-
-// Overload for scalar-array and array-scalar logical OR
-array operator||(bool a, const array& b) {
-  return logical_or(array(a), b);
-}
-array operator||(const array& a, bool b) {
-  return logical_or(a, array(b));
-}
+array operator||(const array& a, const array& b);
 
 /** The reciprocal (1/x) of the elements in an array. */
 array reciprocal(const array& a, StreamOrDevice s = {});

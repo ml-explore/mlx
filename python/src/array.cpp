@@ -766,6 +766,18 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
+          "__and__",
+          [](const array& a, const ScalarOrArray v) {
+            return logical_and(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__or__",
+          [](const array& a, const ScalarOrArray v) {
+            return logical_or(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
           "flatten",
           [](const array& a,
              int start_axis,
