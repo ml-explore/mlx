@@ -1037,8 +1037,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     op_ = op
                     atol_ = 1e-5
 
-                    np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
-                    mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+                    def np_vjp(x):
+                        return np_vjp_funcs[op_](primal_np, x)
+
+                    def mx_vjp(x):
+                        return mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+
                     test_ops(np_vjp, mx_vjp, x_, y_, atol_)
 
                 with self.subTest(op="arc" + op):
@@ -1057,8 +1061,12 @@ class TestOps(mlx_tests.MLXTestCase):
                     op_ = "arc" + op
                     atol_ = 1e-5
 
-                    np_vjp = lambda x: np_vjp_funcs[op_](primal_np, x)
-                    mx_vjp = lambda x: mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+                    def np_vjp(x):
+                        return np_vjp_funcs[op_](primal_np, x)
+
+                    def mx_vjp(x):
+                        return mx.vjp(getattr(mx, op_), [primal_mx], [x])[1][0]
+
                     test_ops(np_vjp, mx_vjp, x_, y_, atol_)
 
     def test_binary_ops(self):
@@ -1250,7 +1258,9 @@ class TestOps(mlx_tests.MLXTestCase):
         # Test grads
         a_fwd = mx.array(np.random.rand(16, 16).astype(np.float32))
         a_bwd = mx.ones((22, 22))
-        f = lambda x: mx.pad(x, ((4, 2), (2, 4)))
+
+        def f(x):
+            return mx.pad(x, ((4, 2), (2, 4)))
 
         _, df = mx.vjp(f, [a_fwd], [a_bwd])
         self.assertTrue(mx.allclose(a_bwd[4:-2, 2:-4], df[0]).item())
@@ -1546,6 +1556,35 @@ class TestOps(mlx_tests.MLXTestCase):
                     dtype=dtype,
                     dims=([2, 1, 3], [1, 2, 0]),
                 )
+
+    def test_scatter(self):
+        # Test scatter_add
+        a = mx.ones((4,))
+        indices = mx.array([0, 0, 3])
+        updates = mx.ones((3, 1))
+        out = mx.scatter_add(a, [indices], updates, [0])
+        self.assertTrue(np.array_equal(out, [3, 1, 1, 2]))
+
+        # Test scatter_prod
+        a = mx.ones((4,))
+        indices = mx.array([0, 0, 3])
+        updates = mx.full((3, 1), 2)
+        out = mx.scatter_prod(a, [indices], updates, [0])
+        self.assertTrue(np.array_equal(out, [4, 1, 1, 2]))
+
+        # Test scatter_max
+        a = mx.ones((4,))
+        indices = mx.array([0, 0, 3])
+        updates = mx.array([1, 6, -2]).reshape((3, 1))
+        out = mx.scatter_max(a, [indices], updates, [0])
+        self.assertTrue(np.array_equal(out, [6, 1, 1, 1]))
+
+        # Test scatter_min
+        a = mx.ones((4,))
+        indices = mx.array([0, 0, 3])
+        updates = mx.array([1, -6, 2]).reshape((3, 1))
+        out = mx.scatter_min(a, [indices], updates, [0])
+        self.assertTrue(np.array_equal(out, [-6, 1, 1, 1]))
 
 
 if __name__ == "__main__":

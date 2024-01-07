@@ -1317,6 +1317,126 @@ void init_ops(py::module_& m) {
             array: The output array with the specified shape and values.
       )pbdoc");
   m.def(
+      "scatter_add",
+      [](const array& a,
+         const std::vector<array>& indices,
+         const array& updates,
+         const std::vector<int>& axes,
+         StreamOrDevice stream) {
+        return scatter_add(a, indices, updates, axes, stream);
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_add(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter adds.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): A list of indices array.
+            updates (array): Updates array.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
+      "scatter_prod",
+      [](const array& a,
+         const std::vector<array>& indices,
+         const array& updates,
+         const std::vector<int>& axes,
+         StreamOrDevice stream) {
+        return scatter_prod(a, indices, updates, axes, stream);
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_prod(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter prods.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): A list of indices array.
+            updates (array): Updates array.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
+      "scatter_max",
+      [](const array& a,
+         const std::vector<array>& indices,
+         const array& updates,
+         const std::vector<int>& axes,
+         StreamOrDevice stream) {
+        return scatter_max(a, indices, updates, axes, stream);
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_max(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter maxes.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): A list of indices array.
+            updates (array): Updates array.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
+      "scatter_min",
+      [](const array& a,
+         const std::vector<array>& indices,
+         const array& updates,
+         const std::vector<int>& axes,
+         StreamOrDevice stream) {
+        return scatter_min(a, indices, updates, axes, stream);
+      },
+      "a"_a,
+      py::pos_only(),
+      "indices"_a,
+      "updates"_a,
+      "axes"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        scatter_min(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
+
+        Scatter mins.
+
+        Args:
+            a (array): Input array.
+            indices (list[array]): A list of indices array.
+            updates (array): Updates array.
+            axes (list[int]): A list of axes along which to perform the scatter operation.
+
+        Returns:
+            array: The result of the scatter operation.
+      )pbdoc");
+  m.def(
       "full",
       [](const std::variant<int, std::vector<int>>& shape,
          const ScalarOrArray& vals,

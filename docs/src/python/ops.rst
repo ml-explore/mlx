@@ -113,3 +113,7 @@ Operations
    where
    zeros
    zeros_like
+   scatter_add
+   scatter_prod
+   scatter_max
+   scatter_min
