@@ -155,6 +155,7 @@ std::vector<std::vector<int>> optimal_path(
     std::set<char> out_set,
     std::unordered_map<char, int> dim_dict,
     size_t max_size) {
+  // cost, path, remaining sets
   std::vector<std::tuple<
       int,
       std::vector<std::vector<int>>,
@@ -352,21 +353,22 @@ std::vector<std::tuple<
     bool>>
 einsum_path(const std::string& equation, const std::vector<array>& operands) {
   auto extract = einsum_parse(equation);
+
   if (operands.size() != extract.first.size()) {
     throw std::invalid_argument("[einsum_path] operands size mismatch");
   }
+
+  // create sets for inputs and output, faster lookups later
   std::vector<std::set<char>> in_sets;
   std::set<char> out_set(extract.second.begin(), extract.second.end());
-  for (auto& input : extract.first) {
-    std::set<char> temp(input.begin(), input.end());
-    in_sets.push_back(temp);
-  }
   std::unordered_map<char, int> dim_map;
   std::vector<std::set<char>> broadcast_indicies;
 
   for (int i = 0; i < extract.first.size(); i++) {
     auto input = extract.first[i];
-    broadcast_indicies.push_back(std::set<char>());
+    std::set<char> temp_input_set(input.begin(), input.end());
+    in_sets.push_back(temp_input_set);
+    broadcast_indicies.push_back({});
     for (int j = 0; j < input.size(); j++) {
       auto c = input[j];
       auto dim = operands[i].shape(j);
@@ -377,6 +379,7 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
         if (dim != 1 && dim_map[c] != dim) {
           throw new std::runtime_error("[einsum_path] dimension mismatch");
         }
+        // small hack to ensure that 1 is overriden by actual size
         dim_map[c] = std::max(dim_map[c], dim);
       } else {
         dim_map[c] = dim;
@@ -407,7 +410,9 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
   // Go through the generated path and construct einsum path
   for (int i = 0; i < path.size(); i++) {
     auto curr = path[i];
+    // sort by greater idx so that pop later does not mess up the order
     std::sort(curr.begin(), curr.end(), std::greater<int>());
+
     auto cont = find_contraction(curr, in_sets, out_set);
     in_sets = std::get<1>(cont);
 
