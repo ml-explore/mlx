@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import Callable
+from typing import Any, Callable
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -163,58 +163,35 @@ def gelu_fast_approx(x):
     return x * mx.sigmoid(1.773 * x)
 
 
-def glu(x: mx.array) -> mx.array:
-    """Applies the gated linear unit function.
+def glu(x: mx.array, axis: int = -1) -> mx.array:
+    r"""Applies the gated linear unit function.
 
     This function splits the last dimension of the input into two halves
     (a and b) and applies :math:`a * \sigma(b)`.
 
     .. math::
-        \\textrm{GLU}(x) = a * \sigma(b)
+        textrm{GLU}(x) = a * \sigma(b)
     """
-    a, b = mx.split(x, indices_or_sections=2, axis=-1)
+    a, b = mx.split(x, indices_or_sections=2, axis=axis)
     return a * mx.sigmoid(b)
 
 
-def gated_activation(x: mx.array, activation_function: Callable) -> mx.array:
-    """Applies gated activation function.
-
-    This function splits the last dimension of the input into two halves
-    (a and b) and applies :math:`f(a) * \sigma(b)`
-    where :math:`f` is the `activation_function` parameter.
-    """
-    a, b = mx.split(x, indices_or_sections=2, axis=-1)
-    return activation_function(a) * mx.sigmoid(b)
-
-
-@_make_activation_module(glu)
 class GLU(Module):
-    """Applies the gated linear unit function.
+    r"""Applies the gated linear unit function.
 
     This function splits the last dimension of the input into two halves
     (a and b) and applies :math:`a * \sigma(b)`.
 
     .. math::
-        \\textrm{GLU}(x) = a * \sigma(b)
+        textrm{GLU}(x) = a * \sigma(b)
     """
 
-    pass
-
-
-class GatedActivation(Module):
-    """Applies gated activation function.
-
-    This function splits the last dimension of the input into two halves
-    (a and b) and applies :math:`f(a) * \sigma(b)`
-    where :math:`f` is the `activation_function` parameter.
-    """
-
-    def __init__(self, activation_function: Callable):
+    def __init__(self, axis: int = -1):
         super().__init__()
-        self.activation_function = activation_function
+        self.axis = axis
 
-    def __call__(self, x: mx.array) -> mx.array:
-        return gated_activation(x, self.activation_function)
+    def __call__(self, x) -> Any:
+        return glu(x=x, axis=self.axis)
 
 
 @_make_activation_module

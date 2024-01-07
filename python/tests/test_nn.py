@@ -748,6 +748,12 @@ class TestNN(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, [5])
         self.assertEqual(y.dtype, mx.float32)
 
+    def test_glu(self):
+        x = mx.array([[[1.0, 2.0, 3.0, 4.0]]], dtype=mx.float32)
+        y = mx.array([[[0.952574, 1.96403]]], dtype=mx.float32)
+        out = nn.glu(x)
+        self.assertEqualArray(out, y)
+
     def test_rope(self):
         for kwargs in [{}, {"traditional": False}, {"base": 10000}, {"scale": 0.25}]:
             rope = nn.RoPE(4, **kwargs)
