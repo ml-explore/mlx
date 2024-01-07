@@ -375,9 +375,9 @@ def log_cosh_loss(
 
 
 def cosine_similarity_loss(
-    inputs: mx.array,
-    targets: mx.array,
-    axis: int = -1,
+    embeddings1: mx.array,
+    embeddings2: mx.array,
+    axis: int = 1,
     eps: float = 1e-8,
     reduction: str = "none",
 ) -> mx.array:
@@ -385,25 +385,24 @@ def cosine_similarity_loss(
     Computes the Cosine Similarity loss between inputs and targets.
     The cosine similarity loss is given by
 
-        .. math::
-        \frac{x_1 \cdot x_2}{\max(\|x_1\|  \cdot \|x_2\|, \repsilon)}
+    .. math::
+
+        \frac{e_1 \cdot e_2}{\max(\|e_1\|  \cdot \|e_2\|, \repsilon)}
 
 
     Args:
         embeddings1 (mx.array): Embeddings for the first set of samples.
         embeddings2 (mx.array): Embeddings for the second set of samples.
-        targets (mx.array): The target values (cosine similarity between embeddings).
-        margin (float, optional): Margin for dissimilar pairs. Default: ``0.0``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         mx.array: The computed Cosine Similarity loss.
     """
-    inputs_norm = mx.sqrt(mx.sum(mx.square(inputs), axis=axis))
-    targets_norm = mx.sqrt(mx.sum(mx.square(targets), axis=axis))
+    embeddings1_norm = mx.sqrt(mx.sum(mx.square(embeddings1), axis=axis))
+    embeddings2_norm = mx.sqrt(mx.sum(mx.square(embeddings2), axis=axis))
 
-    dot_product = mx.sum(inputs * targets, axis=1)
+    dot_product = mx.sum(embeddings1 * embeddings2, axis=axis)
 
-    loss = dot_product / mx.maximum(inputs_norm * targets_norm, eps)
+    loss = dot_product / mx.maximum(embeddings1_norm * embeddings2_norm, eps)
     return _reduce(loss, reduction)
