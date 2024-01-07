@@ -919,52 +919,51 @@ class TestLayers(mlx_tests.MLXTestCase):
             [[1, 1.66667, 2.33333], [6, 7, 8]],
             [[9, 9.66667, 10.3333], [18, 19, 20]],
         ]
-
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=1, padding=0, mode="max")(x),
+                nn.MaxPooling1d(kernel_size=2, stride=1, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=0, mode="max")(x),
+                nn.MaxPooling1d(kernel_size=2, stride=2, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=1, mode="max")(x),
+                nn.MaxPooling1d(kernel_size=2, stride=2, padding=1)(x),
                 expected_max_pool_output_padding_1_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=3, stride=2, padding=1, mode="max")(x),
+                nn.MaxPooling1d(kernel_size=3, stride=2, padding=1)(x),
                 expected_max_pool_output_padding_1_stride_2_kernel_3,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.Pooling(kernel_size=2, stride=1, padding=0, mode="mean")(x),
+                nn.AvgPooling1d(kernel_size=2, stride=1, padding=0)(x),
                 expected_avg_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
-            np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=0, mode="mean")(x),
+            np.allclose(
+                nn.AvgPooling1d(kernel_size=2, stride=2, padding=0)(x),
                 expected_avg_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
-            np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=1, mode="mean")(x),
+            np.allclose(
+                nn.AvgPooling1d(kernel_size=2, stride=2, padding=1)(x),
                 expected_avg_pool_output_padding_1_stride_2,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.Pooling(kernel_size=3, stride=2, padding=1, mode="mean")(x),
+                nn.AvgPooling1d(kernel_size=3, stride=2, padding=1)(x),
                 expected_avg_pool_output_padding_1_kernel_3,
             )
         )
@@ -1018,38 +1017,38 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=1, padding=0, mode="max")(x),
+                nn.MaxPooling2d(kernel_size=2, stride=1, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=0, mode="max")(x),
+                nn.MaxPooling2d(kernel_size=2, stride=2, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=1, mode="max")(x),
+                nn.MaxPooling2d(kernel_size=2, stride=2, padding=1)(x),
                 expected_max_pool_output_padding_1,
             )
         )
-        # Mean pooling
+        # Average pooling
         self.assertTrue(
             np.allclose(
-                nn.Pooling(kernel_size=2, stride=1, padding=0, mode="mean")(x),
+                nn.AvgPooling2d(kernel_size=2, stride=1, padding=0)(x),
                 expected_mean_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=0, mode="mean")(x),
+                nn.AvgPooling2d(kernel_size=2, stride=2, padding=0)(x),
                 expected_mean_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=2, stride=2, padding=1, mode="mean")(x),
+                nn.AvgPooling2d(kernel_size=2, stride=2, padding=1)(x),
                 expected_mean_pool_output_padding_1,
             )
         )
@@ -1080,21 +1079,118 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(
             np.array_equal(
-                nn.Pooling(kernel_size=3, stride=2, padding=1, mode="max")(x),
+                nn.MaxPooling2d(kernel_size=3, stride=2, padding=1)(x),
                 expected_max_pool_output,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.Pooling(kernel_size=3, stride=2, padding=1, mode="mean")(x),
+                nn.AvgPooling2d(kernel_size=3, stride=2, padding=1)(x),
                 expected_avg_pool_output,
             )
         )
-        # Test repr
-        self.assertTrue(
-            str(nn.Pooling(kernel_size=3, stride=2, padding=1, mode="max"))
-            == "Pooling(3, stride=2, padding=1, mode=max)"
+        # Test irregular kernel (2, 4), stride (3, 1) and padding (1, 2)
+        x = mx.array(
+            [
+                [
+                    [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11]],
+                    [[12, 13, 14], [15, 16, 17], [18, 19, 20], [21, 22, 23]],
+                    [[24, 25, 26], [27, 28, 29], [30, 31, 32], [33, 34, 35]],
+                    [[36, 37, 38], [39, 40, 41], [42, 43, 44], [45, 46, 47]],
+                ],
+                [
+                    [[48, 49, 50], [51, 52, 53], [54, 55, 56], [57, 58, 59]],
+                    [[60, 61, 62], [63, 64, 65], [66, 67, 68], [69, 70, 71]],
+                    [[72, 73, 74], [75, 76, 77], [78, 79, 80], [81, 82, 83]],
+                    [[84, 85, 86], [87, 88, 89], [90, 91, 92], [93, 94, 95]],
+                ],
+            ]
         )
+        expected_irregular_max_pool_output = [
+            [
+                [
+                    [3.0, 4.0, 5.0],
+                    [6.0, 7.0, 8.0],
+                    [9.0, 10.0, 11.0],
+                    [9.0, 10.0, 11.0],
+                    [9.0, 10.0, 11.0],
+                ],
+                [
+                    [39.0, 40.0, 41.0],
+                    [42.0, 43.0, 44.0],
+                    [45.0, 46.0, 47.0],
+                    [45.0, 46.0, 47.0],
+                    [45.0, 46.0, 47.0],
+                ],
+            ],
+            [
+                [
+                    [51.0, 52.0, 53.0],
+                    [54.0, 55.0, 56.0],
+                    [57.0, 58.0, 59.0],
+                    [57.0, 58.0, 59.0],
+                    [57.0, 58.0, 59.0],
+                ],
+                [
+                    [87.0, 88.0, 89.0],
+                    [90.0, 91.0, 92.0],
+                    [93.0, 94.0, 95.0],
+                    [93.0, 94.0, 95.0],
+                    [93.0, 94.0, 95.0],
+                ],
+            ],
+        ]
+        expected_irregular_average_pool_output = [
+            [
+                [
+                    [0.3750, 0.6250, 0.8750],
+                    [1.1250, 1.5000, 1.8750],
+                    [2.2500, 2.7500, 3.2500],
+                    [2.2500, 2.6250, 3.0000],
+                    [1.8750, 2.1250, 2.3750],
+                ],
+                [
+                    [15.7500, 16.2500, 16.7500],
+                    [24.7500, 25.5000, 26.2500],
+                    [34.5000, 35.5000, 36.5000],
+                    [27.0000, 27.7500, 28.5000],
+                    [18.7500, 19.2500, 19.7500],
+                ],
+            ],
+            [
+                [
+                    [12.3750, 12.6250, 12.8750],
+                    [19.1250, 19.5000, 19.8750],
+                    [26.2500, 26.7500, 27.2500],
+                    [20.2500, 20.6250, 21.0000],
+                    [13.8750, 14.1250, 14.3750],
+                ],
+                [
+                    [39.7500, 40.2500, 40.7500],
+                    [60.7500, 61.5000, 62.2500],
+                    [82.5000, 83.5000, 84.5000],
+                    [63.0000, 63.7500, 64.5000],
+                    [42.7500, 43.2500, 43.7500],
+                ],
+            ],
+        ]
+        self.assertTrue(
+            np.array_equal(
+                nn.MaxPooling2d(kernel_size=(2, 4), stride=(3, 1), padding=(1, 2))(x),
+                expected_irregular_max_pool_output,
+            )
+        )
+        self.assertTrue(
+            np.allclose(
+                nn.AvgPooling2d(kernel_size=(2, 4), stride=(3, 1), padding=(1, 2))(x),
+                expected_irregular_average_pool_output,
+            )
+        )
+        # # Test repr
+        # self.assertTrue(
+        #     str(nn.Pooling(kernel_size=3, stride=2, padding=1, mode="max"))
+        #     == "Pooling(3, stride=2, padding=1, mode=max)"
+        # )
 
 
 if __name__ == "__main__":

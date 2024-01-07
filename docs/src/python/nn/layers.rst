@@ -22,6 +22,10 @@ Layers
    QuantizedLinear
    Conv1d
    Conv2d
+   MaxPooling1d
+   MaxPooling2d
+   AvgPooling1d
+   AvgPooling2d
    BatchNorm
    LayerNorm
    RMSNorm
@@ -35,4 +39,3 @@ Layers
    ALiBi
    RoPE
    SinusoidalPositionalEncoding
-   Pooling
