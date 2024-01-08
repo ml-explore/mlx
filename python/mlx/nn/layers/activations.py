@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
+from typing import Any
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -160,6 +161,43 @@ def gelu_fast_approx(x):
     where :math:`\sigma(\cdot)` is the logistic sigmoid.
     """
     return x * mx.sigmoid(1.773 * x)
+
+
+def glu(x: mx.array, axis: int = -1) -> mx.array:
+    r"""Applies the gated linear unit function.
+
+    This function splits the ``axis`` dimension of the input into two halves
+    (:math:`a` and :math:`b`) and applies :math:`a * \sigma(b)`.
+
+    .. math::
+        textrm{GLU}(x) = a * \sigma(b)
+
+    Args:
+        axis (int): The dimension to split along. Default: ``-1``.
+    """
+    a, b = mx.split(x, indices_or_sections=2, axis=axis)
+    return a * mx.sigmoid(b)
+
+
+class GLU(Module):
+    r"""Applies the gated linear unit function.
+
+    This function splits the ``axis`` dimension of the input into two halves
+    (:math:`a` and :math:`b`) and applies :math:`a * \sigma(b)`.
+
+    .. math::
+        textrm{GLU}(x) = a * \sigma(b)
+
+    Args:
+        axis (int): The dimension to split along. Default: ``-1``.
+    """
+
+    def __init__(self, axis: int = -1):
+        super().__init__()
+        self.axis = axis
+
+    def __call__(self, x) -> Any:
+        return glu(x=x, axis=self.axis)
 
 
 def step(x: mx.array, threshold: float = 0.0):
