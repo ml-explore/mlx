@@ -462,6 +462,27 @@ array create_array(array_init_type v, std::optional<Dtype> t) {
   }
 }
 
+class ArrayAt {
+ public:
+  ArrayAt(array x) : x_(std::move(x)) {}
+  ArrayAt& set_indices(py::object indices) {
+    indices_ = indices;
+    return *this;
+  }
+  array add(const ScalarOrArray& v) {
+    x_ = mlx_add_item(x_, indices_, v);
+    return x_;
+  }
+  array subtract(const ScalarOrArray& v) {
+    x_ = mlx_subtract_item(x_, indices_, v);
+    return x_;
+  }
+
+ private:
+  array x_;
+  py::object indices_;
+};
+
 void init_array(py::module_& m) {
   // Types
   py::class_<Dtype>(
@@ -500,6 +521,21 @@ void init_array(py::module_& m) {
   m.attr("float32") = py::cast(float32);
   m.attr("bfloat16") = py::cast(bfloat16);
   m.attr("complex64") = py::cast(complex64);
+
+  py::class_<ArrayAt>(
+      m,
+      "_ArrayAt",
+      R"pbdoc(
+      A helper object to implement x.at[index].add(...) functionality.
+      )pbdoc")
+      .def(
+          py::init([](const array& x) { return ArrayAt(x); }),
+          "x"_a,
+          R"pbdoc(
+          __init__(self, x: array)
+        )pbdoc")
+      .def("__getitem__", &ArrayAt::set_indices, "indices"_a)
+      .def("add", &ArrayAt::add, "value"_a);
 
   auto array_class = py::class_<array>(
       m,
@@ -610,6 +646,7 @@ void init_array(py::module_& m) {
           )pbdoc")
       .def("__getitem__", mlx_get_item)
       .def("__setitem__", mlx_set_item)
+      .def_property_readonly("at", [](const array& a) { return ArrayAt(a); })
       .def(
           "__len__",
           [](const array& a) {

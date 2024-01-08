@@ -12,3 +12,11 @@ using namespace mlx::core;
 
 array mlx_get_item(const array& src, const py::object& obj);
 void mlx_set_item(array& src, const py::object& obj, const ScalarOrArray& v);
+array mlx_add_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v);
+array mlx_subtract_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v);
