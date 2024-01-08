@@ -7,7 +7,7 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-class Pooling(Module):
+class PoolBase(Module):
     def __init__(
         self,
         kernel_size: Union[int, Tuple[int, int]],
@@ -64,7 +64,7 @@ class Pooling(Module):
         )
 
 
-class Pooling1d(Pooling):
+class Pool1d(PoolBase):
     def __init__(
         self, kernel_size: int, stride: Optional[int] = None, padding: Optional[int] = 0
     ):
@@ -111,7 +111,7 @@ class Pooling1d(Pooling):
         return pooling_operator(windows, 2)
 
 
-class Pooling2d(Pooling):
+class Pool2d(PoolBase):
     def __init__(
         self,
         kernel_size: Union[int, Tuple[int, int]],
@@ -166,7 +166,7 @@ class Pooling2d(Pooling):
         return pooling_operator(windows, (3, 4))
 
 
-class MaxPooling1d(Pooling1d):
+class MaxPool1d(Pool1d):
     r"""Applies a 1-dimensional max pooling.
 
     The channels are expected to be last i.e. the input shape should be :math:`(N, L, C)` where:
@@ -202,7 +202,7 @@ class MaxPooling1d(Pooling1d):
                            [15, 16, 17],
                            [18, 19, 20],
                            [21, 22, 23]]])
-        >>> pool = nn.MaxPooling1d(kernel_size=2, stride=2)
+        >>> pool = nn.MaxPool1d(kernel_size=2, stride=2)
         >>> pool(x)
     """
 
@@ -215,7 +215,7 @@ class MaxPooling1d(Pooling1d):
         return super().__call__(a, mx.max, float("-inf"))
 
 
-class AvgPooling1d(Pooling1d):
+class AvgPool1d(Pool1d):
     r"""Applies a 1-dimensional average pooling.
 
     The channels are expected to be last i.e. the input shape should be :math:`(N, L, C)` where:
@@ -252,7 +252,7 @@ class AvgPooling1d(Pooling1d):
                            [15, 16, 17],
                            [18, 19, 20],
                            [21, 22, 23]]])
-        >>> pool = nn.AvgPooling1d(kernel_size=2, stride=2)
+        >>> pool = nn.AvgPool1d(kernel_size=2, stride=2)
         >>> pool(x)
     """
 
@@ -265,7 +265,7 @@ class AvgPooling1d(Pooling1d):
         return super().__call__(a, mx.mean, 0)
 
 
-class MaxPooling2d(Pooling2d):
+class MaxPool2d(Pool2d):
     r"""Applies a 2-dimensional max pooling.
 
     The channels are expected to be last i.e. the input shape should be :math:`(N, H, W, C)` where:
@@ -317,7 +317,7 @@ class MaxPooling2d(Pooling2d):
                             [26, 27],
                             [28, 29],
                             [30, 31]]]])
-        >>> pool = nn.MaxPooling2d(kernel_size=2, stride=2)
+        >>> pool = nn.MaxPool2d(kernel_size=2, stride=2)
         >>> pool(x)
     """
 
@@ -333,7 +333,7 @@ class MaxPooling2d(Pooling2d):
         return super().__call__(a, mx.max, float("-inf"))
 
 
-class AvgPooling2d(Pooling2d):
+class AvgPool2d(Pool2d):
     r"""Applies a 2-dimensional average pooling.
 
     The channels are expected to be last i.e. the input shape should be :math:`(N, H, W, C)` where:
@@ -384,7 +384,7 @@ class AvgPooling2d(Pooling2d):
                             [26, 27],
                             [28, 29],
                             [30, 31]]]])
-        >>> pool = nn.AvgPooling2d(kernel_size=2, stride=2)
+        >>> pool = nn.AvgPool2d(kernel_size=2, stride=2)
         >>> pool(x)    
     """
 

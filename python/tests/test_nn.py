@@ -921,49 +921,49 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling1d(kernel_size=2, stride=1, padding=0)(x),
+                nn.MaxPool1d(kernel_size=2, stride=1, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling1d(kernel_size=2, stride=2, padding=0)(x),
+                nn.MaxPool1d(kernel_size=2, stride=2, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling1d(kernel_size=2, stride=2, padding=1)(x),
+                nn.MaxPool1d(kernel_size=2, stride=2, padding=1)(x),
                 expected_max_pool_output_padding_1_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling1d(kernel_size=3, stride=2, padding=1)(x),
+                nn.MaxPool1d(kernel_size=3, stride=2, padding=1)(x),
                 expected_max_pool_output_padding_1_stride_2_kernel_3,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.AvgPooling1d(kernel_size=2, stride=1, padding=0)(x),
+                nn.AvgPool1d(kernel_size=2, stride=1, padding=0)(x),
                 expected_avg_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.AvgPooling1d(kernel_size=2, stride=2, padding=0)(x),
+                nn.AvgPool1d(kernel_size=2, stride=2, padding=0)(x),
                 expected_avg_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.AvgPooling1d(kernel_size=2, stride=2, padding=1)(x),
+                nn.AvgPool1d(kernel_size=2, stride=2, padding=1)(x),
                 expected_avg_pool_output_padding_1_stride_2,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.AvgPooling1d(kernel_size=3, stride=2, padding=1)(x),
+                nn.AvgPool1d(kernel_size=3, stride=2, padding=1)(x),
                 expected_avg_pool_output_padding_1_kernel_3,
             )
         )
@@ -1017,38 +1017,38 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling2d(kernel_size=2, stride=1, padding=0)(x),
+                nn.MaxPool2d(kernel_size=2, stride=1, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling2d(kernel_size=2, stride=2, padding=0)(x),
+                nn.MaxPool2d(kernel_size=2, stride=2, padding=0)(x),
                 expected_max_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling2d(kernel_size=2, stride=2, padding=1)(x),
+                nn.MaxPool2d(kernel_size=2, stride=2, padding=1)(x),
                 expected_max_pool_output_padding_1,
             )
         )
         # Average pooling
         self.assertTrue(
             np.allclose(
-                nn.AvgPooling2d(kernel_size=2, stride=1, padding=0)(x),
+                nn.AvgPool2d(kernel_size=2, stride=1, padding=0)(x),
                 expected_mean_pool_output_no_padding_stride_1,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.AvgPooling2d(kernel_size=2, stride=2, padding=0)(x),
+                nn.AvgPool2d(kernel_size=2, stride=2, padding=0)(x),
                 expected_mean_pool_output_no_padding_stride_2,
             )
         )
         self.assertTrue(
             np.array_equal(
-                nn.AvgPooling2d(kernel_size=2, stride=2, padding=1)(x),
+                nn.AvgPool2d(kernel_size=2, stride=2, padding=1)(x),
                 expected_mean_pool_output_padding_1,
             )
         )
@@ -1079,13 +1079,13 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling2d(kernel_size=3, stride=2, padding=1)(x),
+                nn.MaxPool2d(kernel_size=3, stride=2, padding=1)(x),
                 expected_max_pool_output,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.AvgPooling2d(kernel_size=3, stride=2, padding=1)(x),
+                nn.AvgPool2d(kernel_size=3, stride=2, padding=1)(x),
                 expected_avg_pool_output,
             )
         )
@@ -1176,32 +1176,32 @@ class TestLayers(mlx_tests.MLXTestCase):
         ]
         self.assertTrue(
             np.array_equal(
-                nn.MaxPooling2d(kernel_size=(2, 4), stride=(3, 1), padding=(1, 2))(x),
+                nn.MaxPool2d(kernel_size=(2, 4), stride=(3, 1), padding=(1, 2))(x),
                 expected_irregular_max_pool_output,
             )
         )
         self.assertTrue(
             np.allclose(
-                nn.AvgPooling2d(kernel_size=(2, 4), stride=(3, 1), padding=(1, 2))(x),
+                nn.AvgPool2d(kernel_size=(2, 4), stride=(3, 1), padding=(1, 2))(x),
                 expected_irregular_average_pool_output,
             )
         )
         # Test repr
         self.assertTrue(
-            str(nn.MaxPooling1d(kernel_size=3, padding=2))
-            == "MaxPooling1d(3, stride=3, padding=2)"
+            str(nn.MaxPool1d(kernel_size=3, padding=2))
+            == "MaxPool1d(3, stride=3, padding=2)"
         )
         self.assertTrue(
-            str(nn.AvgPooling1d(kernel_size=2, stride=3))
-            == "AvgPooling1d(2, stride=3, padding=0)"
+            str(nn.AvgPool1d(kernel_size=2, stride=3))
+            == "AvgPool1d(2, stride=3, padding=0)"
         )
         self.assertTrue(
-            str(nn.MaxPooling2d(kernel_size=3, stride=2, padding=1))
-            == "MaxPooling2d(3, stride=2, padding=1)"
+            str(nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
+            == "MaxPool2d(3, stride=2, padding=1)"
         )
         self.assertTrue(
-            str(nn.AvgPooling2d(kernel_size=(1, 2), stride=2, padding=(1, 2)))
-            == "AvgPooling2d((1, 2), stride=2, padding=(1, 2))"
+            str(nn.AvgPool2d(kernel_size=(1, 2), stride=2, padding=(1, 2)))
+            == "AvgPool2d((1, 2), stride=2, padding=(1, 2))"
         )
 
 
