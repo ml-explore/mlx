@@ -563,10 +563,6 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
   }
 
   for (auto& a : tape) {
-    // TODO this it seems cleanr to chang jvp such that we always pass in all
-    // the tangents and the argnums indicates the outputs which we want a
-    // gradient for. This is inline with how vjp works
-
     // Get the arguments used in the jvp
     std::vector<int> argnums;
     std::vector<array> tangents;
@@ -578,7 +574,6 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     }
 
     auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
-    // TODO fix this after making the above change
     auto outputs = a.outputs();
     for (int i = 0; i < jvps.size(); ++i) {
       tan_map.insert({outputs[i].id(), jvps[i]});
@@ -691,7 +686,6 @@ std::pair<std::vector<array>, std::vector<array>> vmap_trace(
 
       std::vector<int> shape = inputs[i].shape();
       shape.erase(shape.begin() + in_axes[i]);
-      // TODO, awni, check this works with graph node
       array in(shape, inputs[i].dtype(), nullptr, {});
       s_inputs.push_back(in);
       s_inputs.back().set_tracer(true);
