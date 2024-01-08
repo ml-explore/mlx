@@ -87,6 +87,7 @@ DEFAULT(Subtract)
 DEFAULT(Tan)
 DEFAULT(Tanh)
 DEFAULT(Transpose)
+DEFAULT(QRF)
 
 void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (out.dtype() != float32) {

@@ -60,4 +60,9 @@ norm(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {}) {
   return norm(a, std::vector<int>{axis}, keepdims, s);
 }
 
+array qrf(const array& a, StreamOrDevice s = {});
+inline array qrf(const array& a, int axis, StreamOrDevice s = {}) {
+  return qrf(a, s);
+}
+
 } // namespace mlx::core::linalg

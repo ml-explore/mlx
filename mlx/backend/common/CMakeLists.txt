@@ -16,4 +16,5 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/threefry.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/qrf.cpp
 )

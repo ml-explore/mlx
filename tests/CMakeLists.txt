@@ -14,7 +14,7 @@ if (MLX_BUILD_METAL)
   )
 endif()
 
-target_sources(tests PRIVATE 
+target_sources(tests PRIVATE
   allocator_tests.cpp
   array_tests.cpp
   arg_reduce_tests.cpp
@@ -32,6 +32,7 @@ target_sources(tests PRIVATE
   utils_tests.cpp
   vmap_tests.cpp
   linalg_tests.cpp
+  linalg_qr_tests.cpp
   ${METAL_TEST_SOURCES}
 )
 

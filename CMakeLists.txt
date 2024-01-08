@@ -30,8 +30,8 @@ set(MLX_BUILD_ARM OFF)
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
   if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64")
-    message(WARNING 
-      "Building for x86_64 on macOS is not supported." 
+    message(WARNING
+      "Building for x86_64 on macOS is not supported."
       " If you are on an Apple silicon system, "
       " make sure you are building for arm64.")
   elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm64")
@@ -69,7 +69,7 @@ elseif (MLX_BUILD_METAL)
                   COMMAND_ERROR_IS_FATAL ANY)
 
   message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
-  
+
   if (${MACOS_VERSION} GREATER_EQUAL 14.2)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
   elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
@@ -135,7 +135,7 @@ endif()
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
 
 target_include_directories(
-  mlx 
+  mlx
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
   $<INSTALL_INTERFACE:include>

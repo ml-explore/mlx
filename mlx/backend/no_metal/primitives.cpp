@@ -79,5 +79,5 @@ NO_GPU(Subtract)
 NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
-
+NO_GPU(QRF)
 } // namespace mlx::core
