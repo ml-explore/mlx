@@ -49,10 +49,8 @@ Build Requirements
 - Xcode >= 14.3 (Xcode >= 15.0 for macOS 14 and above)
 
 .. note::
-    Ensure your shell environment and tools are running as native ``arm64``,
-    not ``x86_64`` via Rosetta. If the first line of ``cmake`` output begins
-    with ``-- Building MLX for x86_64 processor``, see the Troubleshooting
-    section below.
+   Ensure your shell environment is native ``arm``, not ``x86`` via Rosetta. If
+   the output of ``uname -p`` is ``x86``, see the :ref:`troubleshooting section <build shell>` below.
 
 Python API
 ^^^^^^^^^^
@@ -174,6 +172,7 @@ should point to the path to the built metal library.
 Troubleshooting
 ^^^^^^^^^^^^^^^
 
+
 Metal not found
 ~~~~~~~~~~~~~~~
 
@@ -195,36 +194,22 @@ Then set the active developer directory:
 
   sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
 
-x86_64 Build Target
-~~~~~~~~~~~~~~~~~~~~~~
-If the first line of ``cmake`` output begins with
-``-- Building MLX for x86_64 processor`` either your shell or tools are
-running as x86 via Rosetta instead of native.
+x86 Shell 
+~~~~~~~~~
 
-Shell
-######################
-Verify the shell by confirming ``uname -m`` outputs ``arm64``. 
+.. _build shell:
 
-If ``uname -m`` returns ``x86_64`` your terminal environment is running
-via Rosetta. To fix this, find the application in Finder (``/Applications`` 
-for iTerm, ``/Applications/Utilities`` for Terminal), right-click, and
-click “Get Info”. Uncheck “Open using Rosetta”, close the “Get Info”
-window, and restart your terminal.
+If the ouptut of ``uname -p``  is ``x86`` then your shell is running as x86 via
+Rosetta instead of natively.
 
-Verify the terminal is now running natively with the following commands:
+To fix this, find the application in Finder (``/Applications`` for iTerm,
+``/Applications/Utilities`` for Terminal), right-click, and click “Get Info”.
+Uncheck “Open using Rosetta”, close the “Get Info” window, and restart your
+terminal.
+
+Verify the terminal is now running natively the following command:
+
 .. code-block:: shell
 
-  $ arch
-  i386
-  $ uname -m
-  x86_64
-
-Cmake
-#####
-If ``which cmake`` returns ``/usr/local/bin/cmake`` you are using the
-x86 version of cmake/Homebrew. In the native shell (setup described above)
-install `Homebrew:<https://brew.sh/>`_, which will create a parallel
-installation in ``/opt/homebrew/``. 
-
-Verify ``which brew`` returns ``/opt/homebrew/bin/brew`` and install
-the mlx build dependencies (cmake, etc).
+  $ uname -p
+  arm
