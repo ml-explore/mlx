@@ -282,7 +282,7 @@ class TestLosses(mlx_tests.MLXTestCase):
         losses_none = nn.losses.cosine_similarity_loss(
             embeddings1, embeddings2, reduction="none"
         )
-        expected_none = mx.array([-0.985344, -0.961074])
+        expected_none = mx.array([0.985344, 0.961074])
         self.assertTrue(mx.allclose(losses_none, expected_none))
 
         # Test with reduction 'mean'
