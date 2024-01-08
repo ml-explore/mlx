@@ -141,14 +141,9 @@ void simplify(const std::vector<array>& outputs) {
   };
 
   // Walk the graph
-  cache.clear();
-
   while (!tape.empty()) {
     auto arr = std::move(tape.front());
     tape.pop();
-    if (cache.find(arr.id()) != cache.end()) {
-      continue;
-    }
 
     // Check if we can fuse scalars
     if (is_scalar(arr)) {
@@ -177,7 +172,6 @@ void simplify(const std::vector<array>& outputs) {
             auto& src = parents->second[j].first;
             auto& dst = parents->second[i].first;
             if (src.id() != dst.id() && array_equivalent(src, dst)) {
-              cache.insert(src.id());
               fuse(dst, src);
               mask[j] = true;
             }
