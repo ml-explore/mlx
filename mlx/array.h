@@ -243,10 +243,6 @@ class array {
     array_desc_->position = position;
   }
 
-  uint32_t position() const {
-    return array_desc_->position;
-  }
-
   /** The outputs of the array's primitive (i.e. this array and
    * its siblings) in the order the primitive expects. */
   std::vector<array> outputs() const {
