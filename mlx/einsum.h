@@ -1,4 +1,5 @@
 // Copyright © 2023 Apple Inc.
+#pragma once
 
 #include <map>
 #include <set>
@@ -9,13 +10,18 @@
 #include "mlx/array.h"
 
 namespace mlx::core {
-std::vector<std::tuple<
-    std::vector<int>,
-    std::set<char>,
-    std::string,
-    std::vector<std::string>,
-    bool>>
-einsum_path(const std::string& equation, const std::vector<array>& operands);
+
+struct EinsumPath {
+  std::vector<int> args;
+  std::set<char> removing;
+  std::string einsum_str;
+  std::vector<std::string> remaining;
+  bool can_dot;
+};
+
+std::vector<EinsumPath> einsum_path(
+    const std::string& equation,
+    const std::vector<array>& operands);
 
 std::pair<std::vector<std::string>, std::string> einsum_parse(
     const std::string& equation);
