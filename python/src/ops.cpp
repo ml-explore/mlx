@@ -1335,12 +1335,12 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         scatter_add(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
 
-        Scatter adds.
-
+        Adds values from the `updates` array into `a` at specified `indices` along the specified `axes`.
+        
         Args:
-            a (array): Input array.
-            indices (list[array]): A list of indices array.
-            updates (array): Updates array.
+            a (array): Array to be updated.
+            indices (list[array]): A list of arrays containing the locations where the updates should be applied for each axis in `axes`.
+            updates (array): Array containing values to be added at specified indices.
             axes (list[int]): A list of axes along which to perform the scatter operation.
 
         Returns:
@@ -1365,12 +1365,12 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         scatter_prod(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
 
-        Scatter prods.
-
+        Multiplies values from the `updates` array into `a` at specified `indices` along the specified `axes`.
+        
         Args:
-            a (array): Input array.
-            indices (list[array]): A list of indices array.
-            updates (array): Updates array.
+            a (array): Array to be updated.
+            indices (list[array]): A list of arrays containing the locations where the updates should be applied for each axis in `axes`.
+            updates (array): Array containing values to be multiplied at specified indices.
             axes (list[int]): A list of axes along which to perform the scatter operation.
 
         Returns:
@@ -1395,12 +1395,12 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         scatter_max(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
 
-        Scatter maxes.
+        Uses the values from the `updates` array to update `a` at specified `indices` along the specified `axes` by using the maximum value.
 
         Args:
-            a (array): Input array.
-            indices (list[array]): A list of indices array.
-            updates (array): Updates array.
+            a (array): Array to be updated.
+            indices (list[array]): A list of arrays containing the locations where the updates should be applied for each axis in `axes`.
+            updates (array): Array containing values to be maximized at specified indices.
             axes (list[int]): A list of axes along which to perform the scatter operation.
 
         Returns:
@@ -1425,12 +1425,12 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         scatter_min(a: array, /, indices: List[array], updates: array, axes: List[int], *, stream: Union[None, Stream, Device] = None) -> array
 
-        Scatter mins.
+        Uses the values from the `updates` array to update `a` at specified `indices` along the specified `axes` by using the minimum value.
 
         Args:
-            a (array): Input array.
-            indices (list[array]): A list of indices array.
-            updates (array): Updates array.
+            a (array): Array to be updated.
+            indices (list[array]): A list of arrays containing the locations where the updates should be applied for each axis in `axes`.
+            updates (array): Array containing values to be minimized at specified indices.
             axes (list[int]): A list of axes along which to perform the scatter operation.
 
         Returns:
