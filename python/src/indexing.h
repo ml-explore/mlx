@@ -20,3 +20,19 @@ array mlx_subtract_item(
     const array& src,
     const py::object& obj,
     const ScalarOrArray& v);
+array mlx_multiply_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v);
+array mlx_divide_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v);
+array mlx_maximum_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v);
+array mlx_minimum_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v);
