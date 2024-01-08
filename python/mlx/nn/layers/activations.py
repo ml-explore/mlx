@@ -166,11 +166,14 @@ def gelu_fast_approx(x):
 def glu(x: mx.array, axis: int = -1) -> mx.array:
     r"""Applies the gated linear unit function.
 
-    This function splits the last dimension of the input into two halves
-    (a and b) and applies :math:`a * \sigma(b)`.
+    This function splits the ``axis`` dimension of the input into two halves
+    (:math:`a` and :math:`b`) and applies :math:`a * \sigma(b)`.
 
     .. math::
         textrm{GLU}(x) = a * \sigma(b)
+
+    Args:
+        axis (int): The dimension to split along. Default: ``-1``.
     """
     a, b = mx.split(x, indices_or_sections=2, axis=axis)
     return a * mx.sigmoid(b)
@@ -179,11 +182,14 @@ def glu(x: mx.array, axis: int = -1) -> mx.array:
 class GLU(Module):
     r"""Applies the gated linear unit function.
 
-    This function splits the last dimension of the input into two halves
-    (a and b) and applies :math:`a * \sigma(b)`.
+    This function splits the ``axis`` dimension of the input into two halves
+    (:math:`a` and :math:`b`) and applies :math:`a * \sigma(b)`.
 
     .. math::
         textrm{GLU}(x) = a * \sigma(b)
+
+    Args:
+        axis (int): The dimension to split along. Default: ``-1``.
     """
 
     def __init__(self, axis: int = -1):
