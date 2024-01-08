@@ -375,34 +375,36 @@ def log_cosh_loss(
 
 
 def cosine_similarity_loss(
-    embeddings1: mx.array,
-    embeddings2: mx.array,
+    x1: mx.array,
+    x2: mx.array,
     axis: int = 1,
     eps: float = 1e-8,
     reduction: str = "none",
 ) -> mx.array:
     r"""
-    Computes the Cosine Similarity loss between inputs and targets.
+    Computes the cosine similarity between the two inputs.
+
     The cosine similarity loss is given by
 
     .. math::
 
-        \frac{e_1 \cdot e_2}{\max(\|e_1\|  \cdot \|e_2\|, \repsilon)}
-
+        \frac{x_1 \cdot x_2}{\max(\|x_1\|  \cdot \|x_2\|, \epsilon)}
 
     Args:
-        embeddings1 (mx.array): Embeddings for the first set of samples.
-        embeddings2 (mx.array): Embeddings for the second set of samples.
+        x1 (mx.array): The first set of inputs.
+        x2 (mx.array): The second set of inputs.
+        axis (int, optional): The embedding axis. Default: ``1``.
+        eps (float, optional): The minimum value of the denominator used for
+          numerical stability. Default: ``1e-8``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        mx.array: The computed Cosine Similarity loss.
+        mx.array: The computed cosine similarity loss.
     """
-    embeddings1_norm = mx.linalg.norm(embeddings1, axis=axis)
-    embeddings2_norm = mx.linalg.norm(embeddings2, axis=axis)
+    x1_norm = mx.linalg.norm(x1, axis=axis)
+    x2_norm = mx.linalg.norm(x2, axis=axis)
 
-    dot_product = mx.sum(embeddings1 * embeddings2, axis=axis)
+    loss = mx.sum(x1 * x2, axis=axis) / mx.maximum(x1_norm * x2_norm, eps)
 
-    loss = dot_product / mx.maximum(embeddings1_norm * embeddings2_norm, eps)
     return _reduce(loss, reduction)
