@@ -60,6 +60,8 @@ Operations
    log1p
    logaddexp
    logical_not
+   logical_and
+   logical_or
    logsumexp
    matmul
    max

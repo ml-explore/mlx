@@ -80,6 +80,8 @@ class TestVmap(mlx_tests.MLXTestCase):
             "multiply",
             "power",
             "subtract",
+            "logical_or",
+            "logical_and",
         ]
         for opname in ops:
             with self.subTest(op=opname):

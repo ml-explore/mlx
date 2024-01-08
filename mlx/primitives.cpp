@@ -1338,6 +1338,64 @@ std::pair<array, int> LogicalNot::vmap(
   return {logical_not(inputs[0], stream()), axes[0]};
 }
 
+std::vector<array> LogicalAnd::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+
+  return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
+}
+
+array LogicalAnd::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  assert(argnums.size() <= 2);
+
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> LogicalAnd::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {logical_and(a, b, stream()), to_ax};
+}
+
+std::vector<array> LogicalOr::vjp(
+    const std::vector<array>& primals,
+    const array& cotan,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+
+  return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
+}
+
+array LogicalOr::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  assert(argnums.size() <= 2);
+
+  return zeros_like(primals[0], stream());
+}
+
+std::pair<array, int> LogicalOr::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {logical_or(a, b, stream()), to_ax};
+}
+
 std::vector<array> LogAddExp::vjp(
     const std::vector<array>& primals,
     const array& cotan,

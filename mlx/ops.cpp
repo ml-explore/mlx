@@ -1608,6 +1608,43 @@ array logical_not(const array& a, StreamOrDevice s /* = {} */) {
       {astype(a, bool_, s)});
 }
 
+array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  // Broadcast arrays to a common shape
+  auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
+
+  return array(
+      inputs[0].shape(),
+      bool_,
+      std::make_unique<LogicalAnd>(to_stream(s)),
+      inputs);
+}
+array operator&&(const array& a, const array& b) {
+  // check if a and b are bool arrays
+  if (a.dtype() != bool_ || b.dtype() != bool_) {
+    throw std::invalid_argument("[operator&&] only supported for bool arrays.");
+  }
+  return logical_and(a, b);
+}
+
+array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  // Broadcast arrays to a common shape
+  auto inputs = broadcast_arrays({astype(a, bool_, s), astype(b, bool_, s)}, s);
+
+  return array(
+      inputs[0].shape(),
+      bool_,
+      std::make_unique<LogicalOr>(to_stream(s)),
+      inputs);
+}
+array operator||(const array& a, const array& b) {
+  // check if a and b are bool arrays
+  if (a.dtype() != bool_ || b.dtype() != bool_) {
+    throw std::invalid_argument(
+        "[operator||] is only supported for bool arrays.");
+  }
+  return logical_or(a, b);
+}
+
 array reciprocal(const array& a, StreamOrDevice s /* = {} */) {
   auto dtype = at_least_float(a.dtype());
   return divide(array(1.0f, dtype), a, to_stream(s));

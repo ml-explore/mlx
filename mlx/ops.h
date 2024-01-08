@@ -668,6 +668,14 @@ array sign(const array& a, StreamOrDevice s = {});
 /** Logical not of an array */
 array logical_not(const array& a, StreamOrDevice s = {});
 
+/** Logical and of two arrays */
+array logical_and(const array& a, const array& b, StreamOrDevice s = {});
+array operator&&(const array& a, const array& b);
+
+/** Logical or of two arrays */
+array logical_or(const array& a, const array& b, StreamOrDevice s = {});
+array operator||(const array& a, const array& b);
+
 /** The reciprocal (1/x) of the elements in an array. */
 array reciprocal(const array& a, StreamOrDevice s = {});
 

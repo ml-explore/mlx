@@ -131,6 +131,16 @@ struct Subtract {
   template <typename T> T operator()(T x, T y) { return x - y; }
 };
 
+struct LogicalAnd {
+    template <typename T>
+    T operator()(T x, T y) { return x && y; };
+};
+
+struct LogicalOr {
+    template <typename T>
+    T operator()(T x, T y) { return x || y; };
+};
+
 template <typename T, typename U, typename Op>
 [[kernel]] void binary_op_s2s(
     device const T* a,
@@ -377,3 +387,6 @@ instantiate_binary_all(naneq, float16, half, bool, NaNEqual)
 instantiate_binary_all(naneq, float32, float, bool, NaNEqual)
 instantiate_binary_all(naneq, bfloat16, bfloat16_t, bool, NaNEqual)
 instantiate_binary_all(naneq, complex64, complex64_t, bool, NaNEqual)
+
+instantiate_binary_all(lor, bool_, bool, bool, LogicalOr)
+instantiate_binary_all(land, bool_, bool, bool, LogicalAnd)
