@@ -679,3 +679,51 @@ array mlx_subtract_item(
     return src - updates;
   }
 }
+
+array mlx_multiply_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v) {
+  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  if (indices.size() > 0) {
+    return scatter_prod(src, indices, updates, axes);
+  } else {
+    return src * updates;
+  }
+}
+
+array mlx_divide_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v) {
+  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  if (indices.size() > 0) {
+    return scatter_prod(src, indices, reciprocal(updates), axes);
+  } else {
+    return src / updates;
+  }
+}
+
+array mlx_maximum_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v) {
+  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  if (indices.size() > 0) {
+    return scatter_max(src, indices, updates, axes);
+  } else {
+    return maximum(src, updates);
+  }
+}
+
+array mlx_minimum_item(
+    const array& src,
+    const py::object& obj,
+    const ScalarOrArray& v) {
+  auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
+  if (indices.size() > 0) {
+    return scatter_min(src, indices, updates, axes);
+  } else {
+    return minimum(src, updates);
+  }
+}

@@ -470,12 +470,22 @@ class ArrayAt {
     return *this;
   }
   array add(const ScalarOrArray& v) {
-    x_ = mlx_add_item(x_, indices_, v);
-    return x_;
+    return mlx_add_item(x_, indices_, v);
   }
   array subtract(const ScalarOrArray& v) {
-    x_ = mlx_subtract_item(x_, indices_, v);
-    return x_;
+    return mlx_subtract_item(x_, indices_, v);
+  }
+  array multiply(const ScalarOrArray& v) {
+    return mlx_multiply_item(x_, indices_, v);
+  }
+  array divide(const ScalarOrArray& v) {
+    return mlx_divide_item(x_, indices_, v);
+  }
+  array maximum(const ScalarOrArray& v) {
+    return mlx_maximum_item(x_, indices_, v);
+  }
+  array minimum(const ScalarOrArray& v) {
+    return mlx_minimum_item(x_, indices_, v);
   }
 
  private:
