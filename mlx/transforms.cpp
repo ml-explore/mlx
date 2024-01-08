@@ -193,7 +193,7 @@ void simplify(const std::vector<array>& outputs) {
   }
 }
 
-void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
+void eval(const std::vector<array>& outputs) {
   std::function<void(const array&)> recurse;
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;
@@ -277,7 +277,6 @@ void eval(const std::vector<array>& outputs, bool retain_graph /* = false */) {
     } else {
       auto task = [arr,
                    stream,
-                   arr,
                    deps = std::move(arr_deps),
                    p = std::move(p)]() mutable {
         for (auto& d : deps) {
