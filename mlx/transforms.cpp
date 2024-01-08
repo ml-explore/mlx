@@ -309,6 +309,9 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& primals,
     const std::vector<array>& cotans) {
+  // Set the global tracing flag.
+  detail::InTracing in_tracing;
+
   // Make tracers from given primals
   std::vector<array> primals_;
   for (auto& p : primals) {
@@ -479,6 +482,9 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& primals,
     const std::vector<array>& tangents) {
+  // Set the global tracing flag.
+  detail::InTracing in_tracing;
+
   if (primals.size() != tangents.size()) {
     throw std::invalid_argument(
         "[jvp] Number of inputs does not match number of tangents.");
@@ -659,6 +665,9 @@ std::pair<std::vector<array>, std::vector<array>> vmap_trace(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& inputs,
     const std::vector<int>& in_axes) {
+  // Set the global tracing flag.
+  detail::InTracing in_tracing;
+
   if (in_axes.size() != inputs.size()) {
     throw std::invalid_argument(
         "[vmap] The number of in axes must match the number of inputs.");
