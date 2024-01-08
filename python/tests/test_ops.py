@@ -616,7 +616,7 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.logical_and(a, b)
         expected = np.logical_and(a, b)
         self.assertTrue(np.array_equal(result, expected))
-        
+
         # test overloaded operator
         result = a & b
         self.assertTrue(np.array_equal(result, expected))
@@ -627,7 +627,7 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.logical_or(a, b)
         expected = np.logical_or(a, b)
         self.assertTrue(np.array_equal(result, expected))
-        
+
         # test overloaded operator
         result = a | b
         self.assertTrue(np.array_equal(result, expected))

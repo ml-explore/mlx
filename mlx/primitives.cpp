@@ -1357,7 +1357,6 @@ array LogicalAnd::jvp(
   return zeros_like(primals[0], stream());
 }
 
-
 std::pair<array, int> LogicalAnd::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
