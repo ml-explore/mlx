@@ -10,15 +10,15 @@ def time_add():
     time_fn(np.add, a, b)
 
 
+def time_exp():
+    a = np.random.randn(1000, 100).astype(np.float32)
+    time_fn(np.exp, a)
+
+
 def time_matmul():
     a = np.random.rand(1000, 500).astype(np.float32)
     b = np.random.rand(500, 1000).astype(np.float32)
     time_fn(np.matmul, a, b)
-
-
-def time_exp():
-    a = np.random.randn(1000, 100).astype(np.float32)
-    time_fn(np.exp, a)
 
 
 def time_take():

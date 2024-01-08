@@ -8,11 +8,6 @@ import torch.mps
 import torch.nn as nn
 
 
-def sync_if_needed(x):
-    if x.device != torch.device("cpu"):
-        torch.mps.synchronize()
-
-
 class RoPE(nn.Module):
     def __init__(self, dims: int, traditional: bool = False):
         super().__init__()
@@ -176,6 +171,11 @@ def measure(model, x, cache):
     sync_if_needed(x)
     end = time.time()
     return (end - start) * 1000 / 5
+
+
+def sync_if_needed(x):
+    if x.device != torch.device("cpu"):
+        torch.mps.synchronize()
 
 
 if __name__ == "__main__":

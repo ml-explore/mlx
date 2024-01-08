@@ -10,28 +10,11 @@ import mlx.core as mx
 import mlx.nn as nn
 
 
-def int_or_list(x):
-    try:
-        return int(x)
-    except ValueError:
-        return [int(xi) for xi in x.split(",")]
-
-
-def none_or_list(x):
-    if x == "":
-        return None
-    else:
-        return [int(xi) for xi in x.split(",")]
-
-
-def dtype_from_str(x):
-    if x == "":
-        return mx.float32
-    else:
-        dt = getattr(mx, x)
-        if not isinstance(dt, mx.Dtype):
-            raise ValueError(f"{x} is not an mlx dtype")
-        return dt
+def _quant_matmul(x, w, s, b, group_size, bits):
+    ys = []
+    for i in range(10):
+        ys.append(mx.quantized_matmul(x, w, s, b, group_size=group_size, bits=bits))
+    mx.eval(ys)
 
 
 def bench(f, *args):
@@ -45,36 +28,24 @@ def bench(f, *args):
     return e - s
 
 
-def matmul_square(x):
-    y = x
-    for i in range(10):
-        y = y @ x
+def binary(op, x, y):
+    for i in range(100):
+        y = getattr(mx, op)(x, y)
     mx.eval(y)
-    return y
 
 
-def matmul(x, y):
+def celu(x):
+    y = x
+    for i in range(100):
+        y = nn.celu(y)
+    mx.eval(y)
+
+
+def concatenate(axis, x, y):
     ys = []
     for i in range(10):
-        ys.append(x @ y)
+        ys.append(mx.concatenate([x, y], axis=axis))
     mx.eval(ys)
-
-
-def _quant_matmul(x, w, s, b, group_size, bits):
-    ys = []
-    for i in range(10):
-        ys.append(mx.quantized_matmul(x, w, s, b, group_size=group_size, bits=bits))
-    mx.eval(ys)
-
-
-quant_matmul = {
-    "quant_matmul_64_2": partial(_quant_matmul, group_size=64, bits=2),
-    "quant_matmul_64_4": partial(_quant_matmul, group_size=64, bits=4),
-    "quant_matmul_64_8": partial(_quant_matmul, group_size=64, bits=8),
-    "quant_matmul_128_2": partial(_quant_matmul, group_size=128, bits=2),
-    "quant_matmul_128_4": partial(_quant_matmul, group_size=128, bits=4),
-    "quant_matmul_128_8": partial(_quant_matmul, group_size=128, bits=8),
-}
 
 
 def conv1d(x, y):
@@ -91,120 +62,6 @@ def conv2d(x, y):
     mx.eval(ys)
 
 
-def binary(op, x, y):
-    for i in range(100):
-        y = getattr(mx, op)(x, y)
-    mx.eval(y)
-
-
-def reduction(op, axis, x):
-    ys = []
-    for i in range(100):
-        ys.append(getattr(mx, op)(x, axis=axis))
-    mx.eval(ys)
-
-
-def softmax(axis, x):
-    ys = []
-    for i in range(100):
-        ex = mx.exp(x - mx.max(x, axis=axis, keepdims=True))
-        y = ex / mx.sum(ex, axis=axis, keepdims=True)
-        ys.append(y)
-    mx.eval(ys)
-
-
-def softmax_fused(axis, x):
-    ys = []
-    for i in range(100):
-        y = mx.softmax(x, axis=axis)
-        ys.append(y)
-    mx.eval(ys)
-
-
-def relu(x):
-    y = x
-    for i in range(100):
-        y = nn.relu(y)
-    mx.eval(y)
-
-
-def leaky_relu(x: mx.array):
-    y = x
-    for i in range(100):
-        y = nn.leaky_relu(y)
-    mx.eval(y)
-
-
-def prelu(x: mx.array):
-    y = x
-    for i in range(100):
-        y = nn.prelu(y, mx.ones(1))
-    mx.eval(y)
-
-
-def softplus(x: mx.array):
-    y = x
-    for i in range(100):
-        y = nn.softplus(y)
-    mx.eval(y)
-
-
-def mish(x: mx.array):
-    y = x
-    for i in range(100):
-        y = nn.mish(y)
-    mx.eval(y)
-
-
-def leaky_relu(x):
-    y = x
-    for i in range(100):
-        y = nn.leaky_relu(y)
-    mx.eval(y)
-
-
-def elu(x):
-    y = x
-    for i in range(100):
-        y = nn.elu(y)
-    mx.eval(y)
-
-
-def relu6(x):
-    y = x
-    for i in range(100):
-        y = nn.relu6(y)
-    mx.eval(y)
-
-
-def softplus(x):
-    y = x
-    for i in range(100):
-        y = nn.softplus(y)
-    mx.eval(y)
-
-
-def celu(x):
-    y = x
-    for i in range(100):
-        y = nn.celu(y)
-    mx.eval(y)
-
-
-def log_sigmoid(x):
-    y = x
-    for i in range(100):
-        y = nn.log_sigmoid(y)
-    mx.eval(y)
-
-
-def scalar_mult(x):
-    y = x
-    for i in range(100):
-        y = y * (1.0 / (1 + i))
-    mx.eval(y)
-
-
 def cross_entropy(targets, x):
     ys = []
     for i in range(100):
@@ -215,11 +72,49 @@ def cross_entropy(targets, x):
     mx.eval(ys)
 
 
-def logsumexp(axis, x):
+def cumsum(axis, x):
     ys = []
-    for i in range(100):
-        ys.append(mx.logsumexp(x, axis=axis))
+    for i in range(10):
+        ys.append(mx.cumsum(x, axis))
     mx.eval(ys)
+
+
+def dtype_from_str(x):
+    if x == "":
+        return mx.float32
+    else:
+        dt = getattr(mx, x)
+        if not isinstance(dt, mx.Dtype):
+            raise ValueError(f"{x} is not an mlx dtype")
+        return dt
+
+
+def elu(x):
+    y = x
+    for i in range(100):
+        y = nn.elu(y)
+    mx.eval(y)
+
+
+def int_or_list(x):
+    try:
+        return int(x)
+    except ValueError:
+        return [int(xi) for xi in x.split(",")]
+
+
+def leaky_relu(x: mx.array):
+    y = x
+    for i in range(100):
+        y = nn.leaky_relu(y)
+    mx.eval(y)
+
+
+def leaky_relu(x):
+    y = x
+    for i in range(100):
+        y = nn.leaky_relu(y)
+    mx.eval(y)
 
 
 def linear(w, b, x):
@@ -227,6 +122,77 @@ def linear(w, b, x):
     for i in range(10):
         ys.append(x @ mx.transpose(w, (1, 0)) + b)
     mx.eval(ys)
+
+
+def log_sigmoid(x):
+    y = x
+    for i in range(100):
+        y = nn.log_sigmoid(y)
+    mx.eval(y)
+
+
+def logsumexp(axis, x):
+    ys = []
+    for i in range(100):
+        ys.append(mx.logsumexp(x, axis=axis))
+    mx.eval(ys)
+
+
+def matmul(x, y):
+    ys = []
+    for i in range(10):
+        ys.append(x @ y)
+    mx.eval(ys)
+
+
+def matmul_square(x):
+    y = x
+    for i in range(10):
+        y = y @ x
+    mx.eval(y)
+    return y
+
+
+def mish(x: mx.array):
+    y = x
+    for i in range(100):
+        y = nn.mish(y)
+    mx.eval(y)
+
+
+def none_or_list(x):
+    if x == "":
+        return None
+    else:
+        return [int(xi) for xi in x.split(",")]
+
+
+def prelu(x: mx.array):
+    y = x
+    for i in range(100):
+        y = nn.prelu(y, mx.ones(1))
+    mx.eval(y)
+
+
+def reduction(op, axis, x):
+    ys = []
+    for i in range(100):
+        ys.append(getattr(mx, op)(x, axis=axis))
+    mx.eval(ys)
+
+
+def relu(x):
+    y = x
+    for i in range(100):
+        y = nn.relu(y)
+    mx.eval(y)
+
+
+def relu6(x):
+    y = x
+    for i in range(100):
+        y = nn.relu6(y)
+    mx.eval(y)
 
 
 def rope(x):
@@ -250,32 +216,55 @@ def rope(x):
     mx.eval(ys)
 
 
-def concatenate(axis, x, y):
+def scalar_mult(x):
+    y = x
+    for i in range(100):
+        y = y * (1.0 / (1 + i))
+    mx.eval(y)
+
+
+def selu(x):
+    y = x
+    for i in range(100):
+        y = nn.selu(x)
+    mx.eval(y)
+
+
+def softmax(axis, x):
     ys = []
-    for i in range(10):
-        ys.append(mx.concatenate([x, y], axis=axis))
+    for i in range(100):
+        ex = mx.exp(x - mx.max(x, axis=axis, keepdims=True))
+        y = ex / mx.sum(ex, axis=axis, keepdims=True)
+        ys.append(y)
     mx.eval(ys)
 
 
-def cumsum(axis, x):
+def softmax_fused(axis, x):
     ys = []
-    for i in range(10):
-        ys.append(mx.cumsum(x, axis))
+    for i in range(100):
+        y = mx.softmax(x, axis=axis)
+        ys.append(y)
     mx.eval(ys)
+
+
+def softplus(x: mx.array):
+    y = x
+    for i in range(100):
+        y = nn.softplus(y)
+    mx.eval(y)
+
+
+def softplus(x):
+    y = x
+    for i in range(100):
+        y = nn.softplus(y)
+    mx.eval(y)
 
 
 def sort(axis, x):
     ys = []
     for i in range(10):
         ys.append(mx.sort(x, axis))
-    mx.eval(ys)
-
-
-def topk(axis, x):
-    k = x.shape[axis] // 3
-    ys = []
-    for i in range(10):
-        ys.append(mx.topk(x, k, axis))
     mx.eval(ys)
 
 
@@ -286,11 +275,22 @@ def step_function(x):
     mx.eval(y)
 
 
-def selu(x):
-    y = x
-    for i in range(100):
-        y = nn.selu(x)
-    mx.eval(y)
+def topk(axis, x):
+    k = x.shape[axis] // 3
+    ys = []
+    for i in range(10):
+        ys.append(mx.topk(x, k, axis))
+    mx.eval(ys)
+
+
+quant_matmul = {
+    "quant_matmul_64_2": partial(_quant_matmul, group_size=64, bits=2),
+    "quant_matmul_64_4": partial(_quant_matmul, group_size=64, bits=4),
+    "quant_matmul_64_8": partial(_quant_matmul, group_size=64, bits=8),
+    "quant_matmul_128_2": partial(_quant_matmul, group_size=128, bits=2),
+    "quant_matmul_128_4": partial(_quant_matmul, group_size=128, bits=4),
+    "quant_matmul_128_8": partial(_quant_matmul, group_size=128, bits=8),
+}
 
 
 if __name__ == "__main__":

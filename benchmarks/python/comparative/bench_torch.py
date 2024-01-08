@@ -8,30 +8,6 @@ import torch
 import torch.mps
 
 
-def int_or_list(x):
-    try:
-        return int(x)
-    except ValueError:
-        return [int(xi) for xi in x.split(",")]
-
-
-def none_or_list(x):
-    if x == "":
-        return None
-    else:
-        return [int(xi) for xi in x.split(",")]
-
-
-def dtype_from_str(x):
-    if x == "":
-        return torch.float32
-    else:
-        dt = getattr(torch, x)
-        if not isinstance(dt, torch.dtype):
-            raise ValueError(f"{x} is not a torch dtype")
-        return dt
-
-
 def bench(f, *args):
     for i in range(10):
         f(*args)
@@ -43,24 +19,26 @@ def bench(f, *args):
     return e - s
 
 
-def sync_if_needed(x):
-    if x.device != torch.device("cpu"):
-        torch.mps.synchronize()
-
-
 @torch.no_grad()
-def matmul_square(x):
-    y = x
-    for i in range(10):
-        y = y @ x
+def binary(op, x, y):
+    for i in range(100):
+        y = getattr(torch, op)(x, y)
     sync_if_needed(x)
 
 
 @torch.no_grad()
-def matmul(x, y):
+def celu(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.celu(y)
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def concatenate(axis, x, y):
     ys = []
     for i in range(10):
-        ys.append(x @ y)
+        ys.append(torch.cat([x, y], dim=axis))
     sync_if_needed(x)
 
 
@@ -85,44 +63,44 @@ def conv2d(x, y):
 
 
 @torch.no_grad()
-def binary(op, x, y):
-    for i in range(100):
-        y = getattr(torch, op)(x, y)
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def reduction(op, axis, x):
+def cross_entropy(targets, x):
     ys = []
     for i in range(100):
-        ys.append(getattr(x, op)(axis))
+        ys.append(torch.nn.functional.cross_entropy(x, targets))
     sync_if_needed(x)
 
 
 @torch.no_grad()
-def softmax(axis, x):
+def cumsum(axis, x):
     ys = []
-    for i in range(100):
-        ex = torch.exp(x - torch.max(x, dim=axis, keepdims=True).values)
-        y = ex / torch.sum(ex, dim=axis, keepdims=True)
-        ys.append(y)
+    for i in range(10):
+        ys.append(x.cumsum(axis))
     sync_if_needed(x)
 
 
-@torch.no_grad()
-def softmax_fused(axis, x):
-    ys = []
-    for i in range(100):
-        ys.append(torch.nn.functional.softmax(x, dim=axis))
-    sync_if_needed(x)
+def dtype_from_str(x):
+    if x == "":
+        return torch.float32
+    else:
+        dt = getattr(torch, x)
+        if not isinstance(dt, torch.dtype):
+            raise ValueError(f"{x} is not a torch dtype")
+        return dt
 
 
 @torch.no_grad()
-def relu(x):
+def elu(x):
     y = x
     for i in range(100):
-        y = torch.nn.functional.relu(y)
+        y = torch.nn.functional.elu(y)
     sync_if_needed(x)
+
+
+def int_or_list(x):
+    try:
+        return int(x)
+    except ValueError:
+        return [int(xi) for xi in x.split(",")]
 
 
 @torch.no_grad()
@@ -134,82 +112,10 @@ def leaky_relu(x):
 
 
 @torch.no_grad()
-def elu(x):
-    y = x
-    for i in range(100):
-        y = torch.nn.functional.elu(y)
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def celu(x):
-    y = x
-    for i in range(100):
-        y = torch.nn.functional.celu(y)
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def relu6(x):
-    y = x
-    for i in range(100):
-        y = torch.nn.functional.relu6(y)
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def softplus(x):
-    y = x
-    for i in range(100):
-        y = torch.nn.functional.softplus(y)
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def log_sigmoid(x):
-    y = x
-    for i in range(100):
-        y = torch.nn.functional.logsigmoid(y)
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def prelu(x: torch.Tensor) -> torch.Tensor:
-    y = x
-    for _ in range(100):
-        y = torch.nn.functional.prelu(y, torch.ones(1).to(y.device))
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def mish(x: torch.Tensor) -> torch.Tensor:
-    y = x
-    for _ in range(100):
-        return torch.nn.functional.mish(y)
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def scalar_mult(x):
-    y = x
-    for i in range(100):
-        y = y * (1.0 / (1 + i))
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def cross_entropy(targets, x):
+def linear(w, b, x):
     ys = []
-    for i in range(100):
-        ys.append(torch.nn.functional.cross_entropy(x, targets))
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def logsumexp(axis, x):
-    ys = []
-    for i in range(100):
-        ys.append(torch.logsumexp(x, dim=axis))
+    for i in range(10):
+        ys.append((x @ torch.transpose(w, -2, -1)) + b)
     sync_if_needed(x)
 
 
@@ -222,10 +128,81 @@ def linear_fused(w, b, x):
 
 
 @torch.no_grad()
-def linear(w, b, x):
+def log_sigmoid(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.logsigmoid(y)
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def logsumexp(axis, x):
+    ys = []
+    for i in range(100):
+        ys.append(torch.logsumexp(x, dim=axis))
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def matmul(x, y):
     ys = []
     for i in range(10):
-        ys.append((x @ torch.transpose(w, -2, -1)) + b)
+        ys.append(x @ y)
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def matmul_square(x):
+    y = x
+    for i in range(10):
+        y = y @ x
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def mish(x: torch.Tensor) -> torch.Tensor:
+    y = x
+    for _ in range(100):
+        return torch.nn.functional.mish(y)
+    sync_if_needed(x)
+
+
+def none_or_list(x):
+    if x == "":
+        return None
+    else:
+        return [int(xi) for xi in x.split(",")]
+
+
+@torch.no_grad()
+def prelu(x: torch.Tensor) -> torch.Tensor:
+    y = x
+    for _ in range(100):
+        y = torch.nn.functional.prelu(y, torch.ones(1).to(y.device))
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def reduction(op, axis, x):
+    ys = []
+    for i in range(100):
+        ys.append(getattr(x, op)(axis))
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def relu(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.relu(y)
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def relu6(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.relu6(y)
     sync_if_needed(x)
 
 
@@ -251,18 +228,44 @@ def rope(x):
 
 
 @torch.no_grad()
-def concatenate(axis, x, y):
-    ys = []
-    for i in range(10):
-        ys.append(torch.cat([x, y], dim=axis))
+def scalar_mult(x):
+    y = x
+    for i in range(100):
+        y = y * (1.0 / (1 + i))
     sync_if_needed(x)
 
 
 @torch.no_grad()
-def cumsum(axis, x):
+def selu(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.selu(y)
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def softmax(axis, x):
     ys = []
-    for i in range(10):
-        ys.append(x.cumsum(axis))
+    for i in range(100):
+        ex = torch.exp(x - torch.max(x, dim=axis, keepdims=True).values)
+        y = ex / torch.sum(ex, dim=axis, keepdims=True)
+        ys.append(y)
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def softmax_fused(axis, x):
+    ys = []
+    for i in range(100):
+        ys.append(torch.nn.functional.softmax(x, dim=axis))
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def softplus(x):
+    y = x
+    for i in range(100):
+        y = torch.nn.functional.softplus(y)
     sync_if_needed(x)
 
 
@@ -274,20 +277,17 @@ def sort(axis, x):
     sync_if_needed(x)
 
 
+def sync_if_needed(x):
+    if x.device != torch.device("cpu"):
+        torch.mps.synchronize()
+
+
 @torch.no_grad()
 def topk(axis, x):
     k = x.shape[axis] // 3
     ys = []
     for i in range(10):
         ys.append(torch.topk(x, k, dim=axis)[0])
-    sync_if_needed(x)
-
-
-@torch.no_grad()
-def selu(x):
-    y = x
-    for i in range(100):
-        y = torch.nn.functional.selu(y)
     sync_if_needed(x)
 
 

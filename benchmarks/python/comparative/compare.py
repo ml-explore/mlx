@@ -11,14 +11,6 @@ BENCH_MLX = Path(__file__).parent / "bench_mlx.py"
 BENCH_TORCH = Path(__file__).parent / "bench_torch.py"
 
 
-def run_or_raise(*args, **kwargs):
-    try:
-        result = run(*args, capture_output=True, **kwargs)
-        return float(result.stdout)
-    except ValueError:
-        raise ValueError(f"stdout: {result.stdout}\nstderr: {result.stderr}")
-
-
 def compare(args):
     t_mlx = run_or_raise(["python", BENCH_MLX] + args)
     t_torch = run_or_raise(["python", BENCH_TORCH] + args)
@@ -31,15 +23,6 @@ def compare_mlx_dtypes(args, dt1, dt2):
     t_mlx_dt2 = run_or_raise(["python", BENCH_MLX] + args + ["--dtype", dt2])
 
     print((t_mlx_dt2 - t_mlx_dt1) / t_mlx_dt2, " ".join(args), sep="\t")
-
-
-def make_regex_search(regexes):
-    compiled_regexes = list(map(re.compile, regexes))
-
-    def search(x):
-        return (c.search(x) is not None for c in compiled_regexes)
-
-    return search
 
 
 def make_predicate(positive_filter, negative_filter):
@@ -59,6 +42,23 @@ def make_predicate(positive_filter, negative_filter):
         return positive_filter(x) and negative_filter(x)
 
     return predicate
+
+
+def make_regex_search(regexes):
+    compiled_regexes = list(map(re.compile, regexes))
+
+    def search(x):
+        return (c.search(x) is not None for c in compiled_regexes)
+
+    return search
+
+
+def run_or_raise(*args, **kwargs):
+    try:
+        result = run(*args, capture_output=True, **kwargs)
+        return float(result.stdout)
+    except ValueError:
+        raise ValueError(f"stdout: {result.stdout}\nstderr: {result.stderr}")
 
 
 if __name__ == "__main__":

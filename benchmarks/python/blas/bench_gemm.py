@@ -10,12 +10,10 @@ import mlx.core as mx
 import numpy as np
 import torch
 
-device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
-device_name = device_name.decode("utf-8").strip("\n")
-
-N_warmup = 8
 N_iter_bench = 80
 N_iter_func = 5
+N_warmup = 8
+device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
 
 
 def bench(f, a, b):
@@ -28,82 +26,6 @@ def bench(f, a, b):
         f(a, b)
     e = time.perf_counter_ns()
     return (e - s) * 1e-9
-
-
-def gemm_nn_mlx(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a @ b
-        ys.append(y)
-    mx.eval(ys)
-    return ys
-
-
-def gemm_nt_mlx(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a @ b.transpose((0, 2, 1))
-        ys.append(y)
-    mx.eval(ys)
-    return ys
-
-
-def gemm_tn_mlx(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a.transpose((0, 2, 1)) @ b
-        ys.append(y)
-    mx.eval(ys)
-    return ys
-
-
-def gemm_tt_mlx(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a.transpose((0, 2, 1)) @ b.transpose((0, 2, 1))
-        ys.append(y)
-    mx.eval(ys)
-    return ys
-
-
-@torch.no_grad()
-def gemm_nn_torch(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a @ b
-        ys.append(y)
-    torch.mps.synchronize()
-    return ys
-
-
-@torch.no_grad()
-def gemm_nt_torch(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a @ b.transpose(-1, -2)
-        ys.append(y)
-    torch.mps.synchronize()
-    return ys
-
-
-@torch.no_grad()
-def gemm_tn_torch(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a.transpose(-1, -2) @ b
-        ys.append(y)
-    torch.mps.synchronize()
-    return ys
-
-
-@torch.no_grad()
-def gemm_tt_torch(a, b):
-    ys = []
-    for i in range(N_iter_func):
-        y = a.transpose(-1, -2) @ b.transpose(-1, -2)
-        ys.append(y)
-    torch.mps.synchronize()
-    return ys
 
 
 def bench_shape(B, M, N, K, np_dtype, transpose="nn"):
@@ -156,8 +78,87 @@ def bench_shape(B, M, N, K, np_dtype, transpose="nn"):
     return time_mlx, time_torch
 
 
+def gemm_nn_mlx(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a @ b
+        ys.append(y)
+    mx.eval(ys)
+    return ys
+
+
+@torch.no_grad()
+def gemm_nn_torch(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a @ b
+        ys.append(y)
+    torch.mps.synchronize()
+    return ys
+
+
+def gemm_nt_mlx(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a @ b.transpose((0, 2, 1))
+        ys.append(y)
+    mx.eval(ys)
+    return ys
+
+
+@torch.no_grad()
+def gemm_nt_torch(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a @ b.transpose(-1, -2)
+        ys.append(y)
+    torch.mps.synchronize()
+    return ys
+
+
+def gemm_tn_mlx(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a.transpose((0, 2, 1)) @ b
+        ys.append(y)
+    mx.eval(ys)
+    return ys
+
+
+@torch.no_grad()
+def gemm_tn_torch(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a.transpose(-1, -2) @ b
+        ys.append(y)
+    torch.mps.synchronize()
+    return ys
+
+
+def gemm_tt_mlx(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a.transpose((0, 2, 1)) @ b.transpose((0, 2, 1))
+        ys.append(y)
+    mx.eval(ys)
+    return ys
+
+
+@torch.no_grad()
+def gemm_tt_torch(a, b):
+    ys = []
+    for i in range(N_iter_func):
+        y = a.transpose(-1, -2) @ b.transpose(-1, -2)
+        ys.append(y)
+    torch.mps.synchronize()
+    return ys
+
+
 def get_gflop_count(B, M, N, K):
     return float(2.0 * N_iter_bench * N_iter_func * B * M * N * K) / float(1024.0**3)
+
+
+device_name = device_name.decode("utf-8").strip("\n")
 
 
 if __name__ == "__main__":

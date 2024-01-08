@@ -9,18 +9,6 @@ import mlx.utils
 import mlx_tests
 
 
-def get_all_optimizers():
-    classes = dict()
-    for name, obj in inspect.getmembers(opt):
-        if inspect.isclass(obj):
-            if obj.__name__ not in ["OptimizerState", "Optimizer"]:
-                classes[name] = obj
-    return classes
-
-
-optimizers_dict = get_all_optimizers()
-
-
 class TestOptimizers(mlx_tests.MLXTestCase):
     def test_optimizers(self):
         params = {
@@ -38,6 +26,18 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             )
             all_equal = all(v for _, v in mlx.utils.tree_flatten(equal_shape))
             self.assertTrue(all_equal)
+
+
+def get_all_optimizers():
+    classes = dict()
+    for name, obj in inspect.getmembers(opt):
+        if inspect.isclass(obj):
+            if obj.__name__ not in ["OptimizerState", "Optimizer"]:
+                classes[name] = obj
+    return classes
+
+
+optimizers_dict = get_all_optimizers()
 
 
 if __name__ == "__main__":
