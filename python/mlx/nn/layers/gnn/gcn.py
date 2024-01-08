@@ -26,6 +26,9 @@ class GCNLayer(MessagePassing):
     def __call__(
         self, x: mx.array, edge_index: mx.array, normalize: bool = True, **kwargs: Any
     ) -> mx.array:
+        assert edge_index.shape[0] == 2, "edge_index must have shape (2, num_edges)"
+        assert edge_index[1].size > 0, "'col' component of edge_index should not be empty"
+
         x = self.linear(x)
 
         row, col = edge_index
@@ -35,6 +38,7 @@ class GCNLayer(MessagePassing):
         if normalize:
             deg = self._degree(col, x.shape[0])
             deg_inv_sqrt = deg ** (-0.5)
+            # NOTE : need boolean indexing in order to zero out inf values 
             norm = deg_inv_sqrt[row] * deg_inv_sqrt[col]
 
         else:
@@ -53,6 +57,7 @@ class GCNLayer(MessagePassing):
     def _degree(self, index: mx.array, num_edges: int) -> mx.array:
         out = mx.zeros((num_edges,))
         one = mx.ones((index.shape[0],), dtype=out.dtype)
+
         return mx.scatter_add(out, index, one.reshape(-1, 1), 0)
 
 
