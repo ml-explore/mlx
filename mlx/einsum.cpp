@@ -136,18 +136,6 @@ std::vector<std::pair<int, int>> combinations(std::vector<int> r) {
   return result;
 }
 
-std::map<char, int> str_idx_map(const std::string inp) {
-  std::map<char, int> counts;
-  int i = 0;
-  for (auto c : inp) {
-    if (c != ' ' && counts.find(c) == counts.end()) {
-      counts[c] = i;
-      i += 1;
-    }
-  }
-  return counts;
-}
-
 std::vector<std::vector<int>> optimal_path(
     std::vector<std::set<char>> in_sets,
     std::set<char> out_set,
@@ -454,73 +442,4 @@ std::vector<EinsumPath> einsum_path(
   return result;
 }
 
-array einsum_naive(
-    std::string equation,
-    const std::vector<array>& operands,
-    StreamOrDevice s /* = {} */) {
-  if (operands.empty()) {
-    throw std::runtime_error("[einsum] Must provide at least one operand");
-  }
-  auto extract = einsum_parse(equation);
-
-  if (operands.size() != extract.first.size()) {
-    throw std::runtime_error(
-        "[einsum] Number of operands (" + std::to_string(operands.size()) +
-        ") must match the number of input characters(" +
-        std::to_string(extract.first.size()) + ")");
-  }
-
-  std::map<char, int> input_map;
-  for (int i = 0; i < extract.first.size(); i++) {
-    auto arr = operands[i];
-    auto inp = extract.first[i];
-    for (int j = 0; j < std::min(arr.shape().size(), inp.size()); j++) {
-      input_map[inp[j]] = arr.shape(j);
-    }
-  }
-  std::vector<int> broad;
-  for (auto key : input_map) {
-    broad.push_back(key.second);
-  }
-  std::vector<array> inputs_arr;
-  for (int i = 0; i < operands.size(); i++) {
-    auto arr = operands[i];
-    auto ord_map = str_idx_map(extract.first[i]);
-    std::vector<int> new_shape;
-    for (auto key : input_map) {
-      if (ord_map.find(key.first) != ord_map.end()) {
-        new_shape.push_back(key.second);
-      } else {
-        new_shape.push_back(1);
-      }
-    }
-    std::vector<int> axis;
-    for (auto key : ord_map) {
-      axis.push_back(key.second);
-    }
-    inputs_arr.push_back(
-        broadcast_to(reshape(transpose(arr, axis, s), new_shape, s), broad, s));
-  }
-
-  auto ord_output = str_idx_map(extract.second);
-  std::vector<int> rhs_order;
-  for (auto key : ord_output) {
-    rhs_order.push_back(key.second);
-  }
-
-  std::vector<int> sum_axis;
-  int i = 0;
-  for (auto key : input_map) {
-    if (ord_output.find(key.first) == ord_output.end()) {
-      sum_axis.push_back(i);
-    }
-    i += 1;
-  }
-  // TODO: this should just start with the first and then accumulate
-  auto acc = ones_like(inputs_arr.at(0), s);
-  for (int i = 0; i < inputs_arr.size(); i++) {
-    acc = multiply(acc, inputs_arr[i], s);
-  }
-  return transpose(sum(acc, sum_axis, false, s), rhs_order, s);
-}
 } // namespace mlx::core
