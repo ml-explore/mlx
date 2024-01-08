@@ -248,6 +248,7 @@ class array {
   std::vector<array> outputs() const {
     auto idx = array_desc_->position;
     std::vector<array> outputs;
+    outputs.reserve(siblings().size() + 1);
     outputs.insert(outputs.end(), siblings().begin(), siblings().begin() + idx);
     outputs.push_back(*this);
     outputs.insert(outputs.end(), siblings().begin() + idx, siblings().end());

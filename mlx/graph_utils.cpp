@@ -12,15 +12,10 @@
 
 namespace mlx::core {
 
-using OptionalArrayRef = std::optional<std::reference_wrapper<const array>>;
-
 struct NodeNamer {
   std::unordered_map<std::uintptr_t, std::string> names;
 
   std::string get_name(uintptr_t id) {
-    std::ostringstream msg;
-    msg << id;
-    return msg.str();
     auto it = names.find(id);
     if (it == names.end()) {
       // Get the next name in the sequence
@@ -77,7 +72,7 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
         if (x.has_primitive()) {
           tape.push_back(x);
         } else {
-          inputs.insert(inputs.end(), x.inputs().begin(), x.inputs().end());
+          inputs.push_back(x);
         }
       },
       outputs);

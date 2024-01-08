@@ -32,7 +32,7 @@ void simplify(const std::vector<array>& outputs) {
   //      - Build a map of inputs to their parents.
   //      - Record scalar inputs in a map in order to fuse them.
   // Step 2: Process the tape. A node in the tape has inputs and outputs.
-  //      - Scalar inputs are replaced with their canoncial scalar
+  //      - Scalar inputs are replaced with their canonical scalar
   //      - We check each inputs output nodes. Every output node that matches
   //        the current node gets fused into the current node.
   std::function<void(const array&)> recurse;
@@ -113,9 +113,6 @@ void simplify(const std::vector<array>& outputs) {
     }
   };
 
-  // Walk the graph
-  cache.clear();
-
   // Depth-1 array equivalence check.
   auto array_equivalent = [](const array& a, const array& b) {
     if (!a.has_primitive() || !b.has_primitive()) {
@@ -142,6 +139,9 @@ void simplify(const std::vector<array>& outputs) {
 
     return pa.is_equivalent(pb);
   };
+
+  // Walk the graph
+  cache.clear();
 
   while (!tape.empty()) {
     auto arr = std::move(tape.front());
@@ -228,7 +228,7 @@ void eval(const std::vector<array>& outputs) {
   };
 
   // We have to store the output primitive ids because the arrays are
-  // detached during eval and we need to use the for synchronization
+  // detached during eval and we need to use them for synchronization
   // at the end of this function
   std::vector<std::uintptr_t> output_primitive_ids;
   for (auto& arr : outputs) {
@@ -370,7 +370,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       cache.insert(s.id());
     }
 
-    for (auto input : a.inputs()) {
+    for (auto& input : a.inputs()) {
       recurse(input);
     }
 
@@ -417,22 +417,18 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
 
     // Check if any of the array or its siblings have cotangents,
     // if not, we can skip this primitive
-    auto cotan_it = cotan_map.find(a.id());
-    bool has_cotans = cotan_it != cotan_map.end();
-    has_cotans =
-        has_cotans ||
-        std::any_of(
-            a.siblings().cbegin(), a.siblings().cend(), [&cotan_map](auto& s) {
-              return cotan_map.find(s.id()) != cotan_map.end();
-            });
+    auto outputs = a.outputs();
+    bool has_cotans =
+        std::any_of(outputs.cbegin(), outputs.cend(), [&cotan_map](auto& s) {
+          return cotan_map.find(s.id()) != cotan_map.end();
+        });
     if (!has_cotans) {
       continue;
     }
 
     auto s = a.primitive().stream();
-    std::vector<array> cotangents{cotan_map.extract(cotan_it).mapped()};
-
-    for (auto& o : a.siblings()) {
+    std::vector<array> cotangents{};
+    for (auto& o : outputs) {
       if (auto cotan_it = cotan_map.find(o.id()); cotan_it != cotan_map.end()) {
         cotangents.push_back(cotan_map.extract(cotan_it).mapped());
       } else {
