@@ -1,11 +1,9 @@
 // Copyright © 2023 Apple Inc.
 
-#include <map>
-#include <numeric>
-#include <set>
 #include <sstream>
-#include <tuple>
 
+#include <numeric>
+#include "einsum.h"
 #include "ops.h"
 
 namespace mlx::core {
@@ -343,13 +341,9 @@ bool can_dot(
 }
 
 /** Computes the optimal einsum_path */
-std::vector<std::tuple<
-    std::vector<int>,
-    std::set<char>,
-    std::string,
-    std::vector<std::string>,
-    bool>>
-einsum_path(const std::string& equation, const std::vector<array>& operands) {
+std::vector<EinsumPath> einsum_path(
+    const std::string& equation,
+    const std::vector<array>& operands) {
   auto extract = einsum_parse(equation);
 
   if (operands.size() != extract.first.size()) {
@@ -398,13 +392,7 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
   } else {
     path = optimal_path(in_sets, out_set, dim_map, max_size);
   }
-  std::vector<std::tuple<
-      std::vector<int>,
-      std::set<char>,
-      std::string,
-      std::vector<std::string>,
-      bool>>
-      result;
+  std::vector<EinsumPath> result;
   // Go through the generated path and construct einsum path
   for (int i = 0; i < path.size(); i++) {
     auto curr = path[i];
@@ -459,8 +447,8 @@ einsum_path(const std::string& equation, const std::vector<array>& operands) {
         std::inserter(new_bcast, new_bcast.begin()));
     broadcast_indicies.emplace_back(new_bcast);
     auto in_list_cp = extract.first;
-    result.emplace_back(
-        curr, std::get<2>(cont), new_ein_res, in_list_cp, do_blas);
+    result.push_back(
+        {curr, std::get<2>(cont), new_ein_res, in_list_cp, do_blas});
   }
 
   return result;
