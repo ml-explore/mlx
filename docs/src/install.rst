@@ -48,6 +48,9 @@ Build Requirements
 - `cmake <https://cmake.org/>`_ -- version 3.24 or later, and ``make``
 - Xcode >= 14.3 (Xcode >= 15.0 for macOS 14 and above)
 
+.. note::
+   Ensure your shell environment is native ``arm``, not ``x86`` via Rosetta. If
+   the output of ``uname -p`` is ``x86``, see the :ref:`troubleshooting section <build shell>` below.
 
 Python API
 ^^^^^^^^^^
@@ -169,6 +172,7 @@ should point to the path to the built metal library.
 Troubleshooting
 ^^^^^^^^^^^^^^^
 
+
 Metal not found
 ~~~~~~~~~~~~~~~
 
@@ -189,3 +193,23 @@ Then set the active developer directory:
 .. code-block:: shell
 
   sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
+
+x86 Shell 
+~~~~~~~~~
+
+.. _build shell:
+
+If the ouptut of ``uname -p``  is ``x86`` then your shell is running as x86 via
+Rosetta instead of natively.
+
+To fix this, find the application in Finder (``/Applications`` for iTerm,
+``/Applications/Utilities`` for Terminal), right-click, and click “Get Info”.
+Uncheck “Open using Rosetta”, close the “Get Info” window, and restart your
+terminal.
+
+Verify the terminal is now running natively the following command:
+
+.. code-block:: shell
+
+  $ uname -p
+  arm
