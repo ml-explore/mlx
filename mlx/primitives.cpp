@@ -1374,60 +1374,65 @@ std::pair<std::vector<array>, std::vector<int>> LogicalNot::vmap(
 
 std::vector<array> LogicalAnd::vjp(
     const std::vector<array>& primals,
-    const array& cotan,
+    const std::vector<array>& cotangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-
-  return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
+  std::vector<array> vjps = {zeros_like(cotangents[0], stream())};
+  if (argnums.size() > 1) {
+    vjps.push_back(vjps.back());
+  }
+  return vjps;
 }
 
-array LogicalAnd::jvp(
+std::vector<array> LogicalAnd::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
   assert(argnums.size() <= 2);
-
-  return zeros_like(primals[0], stream());
+  return {zeros_like(primals[0], stream())};
 }
 
-std::pair<array, int> LogicalAnd::vmap(
+std::pair<std::vector<array>, std::vector<int>> LogicalAnd::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   assert(inputs.size() == 2);
   assert(axes.size() == 2);
 
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {logical_and(a, b, stream()), to_ax};
+  return {{logical_and(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> LogicalOr::vjp(
     const std::vector<array>& primals,
-    const array& cotan,
+    const std::vector<array>& cotangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
-
-  return {zeros_like(cotan, stream()), zeros_like(cotan, stream())};
+  std::vector<array> vjps = {zeros_like(cotangents[0], stream())};
+  if (argnums.size() > 1) {
+    vjps.push_back(vjps.back());
+  }
+  return vjps;
 }
 
-array LogicalOr::jvp(
+std::vector<array> LogicalOr::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
   assert(argnums.size() <= 2);
 
-  return zeros_like(primals[0], stream());
+  return {zeros_like(primals[0], stream())};
 }
 
-std::pair<array, int> LogicalOr::vmap(
+std::pair<std::vector<array>, std::vector<int>> LogicalOr::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   assert(inputs.size() == 2);
   assert(axes.size() == 2);
 
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {logical_or(a, b, stream()), to_ax};
+  return {{logical_or(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> LogAddExp::vjp(
