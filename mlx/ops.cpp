@@ -3517,32 +3517,32 @@ array einsum(
   auto path = einsum_path(equation, inputs);
   for (auto step : path) {
     std::vector<array> args;
-    for (auto pos : std::get<0>(step)) {
+    for (auto pos : step.args) {
       args.push_back(inputs.at(pos));
       inputs.erase(inputs.begin() + pos);
     }
-    if (std::get<4>(step)) {
-      auto extract = einsum_parse(std::get<2>(step));
+    if (step.can_dot) {
+      auto extract = einsum_parse(step.einsum_str);
 
       std::vector<int> left_axes;
       std::vector<int> right_axes;
 
       for (int i = 0; i < extract.first.at(0).size(); i++) {
         auto c = extract.first.at(0).at(i);
-        if (std::get<1>(step).find(c) != std::get<1>(step).end()) {
+        if (step.removing.find(c) != step.removing.end()) {
           left_axes.push_back(i);
         }
       }
       for (int i = 0; i < extract.first.at(1).size(); i++) {
         auto c = extract.first.at(1).at(i);
-        if (std::get<1>(step).find(c) != std::get<1>(step).end()) {
+        if (step.removing.find(c) != step.removing.end()) {
           right_axes.push_back(i);
         }
       }
       inputs.emplace_back(
           tensordot(args.at(0), args.at(1), {left_axes, right_axes}, s));
     } else {
-      inputs.emplace_back(einsum_naive(std::get<2>(step), args, s));
+      inputs.emplace_back(einsum_naive(step.einsum_str, args, s));
     }
   }
   return inputs.front();
