@@ -768,10 +768,7 @@ std::vector<array> DivMod::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  // TODO
-  // Promote types
-  // Broadcast
-  return {zeros_like(primals[0])};
+  return {zeros_like(primals[0], stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> DivMod::vmap(
