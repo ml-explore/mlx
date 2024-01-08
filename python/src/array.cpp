@@ -656,7 +656,38 @@ void init_array(py::module_& m) {
           )pbdoc")
       .def("__getitem__", mlx_get_item)
       .def("__setitem__", mlx_set_item)
-      .def_property_readonly("at", [](const array& a) { return ArrayAt(a); })
+      .def_property_readonly(
+          "at",
+          [](const array& a) { return ArrayAt(a); },
+          R"pbdoc(
+            Returns a helper object that allows to apply updates at specific indices.
+
+            .. note::
+
+               Python in place updates for all array frameworks map to
+               assignment. For instance ``x[idx] += y`` maps to ``x[idx] =
+               x[idx] + y``. As a result, assigning to the same index ignores
+               all but one updates. Using ``x.at[idx].add(y)`` will correctly
+               apply all the updates to all indices.
+
+            .. list-table::
+               :header-rows: 1
+
+               * - array.at syntax
+                 - In-place syntax
+               * - ``x = x.at[idx].add(y)`` 
+                 - ``x[idx] += y``
+               * - ``x = x.at[idx].subtract(y)`` 
+                 - ``x[idx] -= y``
+               * - ``x = x.at[idx].multiply(y)`` 
+                 - ``x[idx] *= y``
+               * - ``x = x.at[idx].divide(y)`` 
+                 - ``x[idx] /= y``
+               * - ``x = x.at[idx].maximum(y)`` 
+                 - ``x[idx] = mx.maximum(x[idx], y)``
+               * - ``x = x.at[idx].minimum(y)`` 
+                - ``x[idx] = mx.minimum(x[idx], y)``
+          )pbdoc")
       .def(
           "__len__",
           [](const array& a) {
