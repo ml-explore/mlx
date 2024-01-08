@@ -2132,7 +2132,7 @@ std::vector<array> Scatter::vjp(
       break;
     default:
       throw std::runtime_error(
-          "[scatter] VJP implemented only for scatter assignment");
+          "[scatter] VJP implemented only for scatter and scatter_add");
   }
 
   const array& values = primals[0];
