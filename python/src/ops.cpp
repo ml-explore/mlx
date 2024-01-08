@@ -3389,7 +3389,7 @@ void init_ops(py::module_& m) {
         scatter_add(a: array, /, indices: List[array], updates: array, axes: Union[int, List[int]], *, stream: Union[None, Stream, Device] = None) -> array
 
         Scatter and add the updates to the input array ``a`` at the locations
-        specified by ``indices``.
+        specified by ``indices`` and the corresponding ``axes``.
 
         Args:
           a (array): Input array
