@@ -1008,6 +1008,29 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertEqual(a.sum().item(), u.sum().item())
         self.assertEqual(a[index_x, index_y].tolist(), u.tolist())
 
+        # Test all array.at ops
+        a = mx.random.uniform(shape=(10, 5, 2))
+        idx_x = mx.array([0, 4])
+        update = mx.ones((2, 5))
+        a[idx_x, :, 0] = 0
+        a = a.at[idx_x, :, 0].add(update)
+        self.assertEqualArray(a[idx_x, :, 0], update)
+        a = a.at[idx_x, :, 0].subtract(update)
+        self.assertEqualArray(a[idx_x, :, 0], mx.zeros_like(update))
+        a = a.at[idx_x, :, 0].add(2 * update)
+        self.assertEqualArray(a[idx_x, :, 0], 2 * update)
+        a = a.at[idx_x, :, 0].multiply(2 * update)
+        self.assertEqualArray(a[idx_x, :, 0], 4 * update)
+        a = a.at[idx_x, :, 0].divide(3 * update)
+        self.assertEqualArray(a[idx_x, :, 0], (4 / 3) * update)
+        a[idx_x, :, 0] = 5
+        update = mx.arange(10).reshape(2, 5)
+        a = a.at[idx_x, :, 0].maximum(update)
+        self.assertEqualArray(a[idx_x, :, 0], mx.maximum(a[idx_x, :, 0], update))
+        a[idx_x, :, 0] = 5
+        a = a.at[idx_x, :, 0].minimum(update)
+        self.assertEqualArray(a[idx_x, :, 0], mx.minimum(a[idx_x, :, 0], update))
+
     def test_slice_negative_step(self):
         a_np = np.arange(20)
         a_mx = mx.array(a_np)
