@@ -19,6 +19,9 @@ constexpr bool is_available() {
 #endif
 }
 
+bool cache_enabled(void);
+void set_cache_enabled(bool enabled);
+
 void new_stream(Stream stream);
 std::shared_ptr<void> new_scoped_memory_pool();
 
