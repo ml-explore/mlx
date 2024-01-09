@@ -371,7 +371,7 @@ Scripts
 
    The full example code is available in `mlx-examples`_.
 
-.. _mlx-examples: https://github.com/ml-explore/mlx-examples/tree/main/llama
+.. _mlx-examples: https://github.com/ml-explore/mlx-examples/tree/main/llms/llama
 
 .. [1] Su, J., Lu, Y., Pan, S., Murtadha, A., Wen, B. and Liu, Y., 2021.
    Roformer: Enhanced transformer with rotary position embedding. arXiv
