@@ -86,8 +86,7 @@ std::unordered_map<std::string, array> load_gguf(
 
 void save_gguf(
     const std::string& file_,
-    std::unordered_map<std::string, array> a,
-    std::optional<bool> retain_graph) {
+    std::unordered_map<std::string, array> a) {
   std::string file = file_;
 
   // Add .gguf to file name if it is not there
@@ -104,8 +103,9 @@ void save_gguf(
 
   // First, append the tensor info
   for (auto& [key, arr] : a) {
-    arr.eval(retain_graph.value_or(arr.is_tracer()));
+    arr.eval();
 
+    // TODO make sure array is the right kind of contiguous
     tensor_offset += gguf_get_alignment_padding(ctx->alignment, tensor_offset);
     const std::optional<uint32_t> gguf_type =
         dtype_to_gguf_tensor_type(arr.dtype());
