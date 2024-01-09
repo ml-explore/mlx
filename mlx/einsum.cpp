@@ -434,9 +434,7 @@ std::vector<EinsumPath> einsum_path(
         std::get<2>(cont).end(),
         std::inserter(new_bcast, new_bcast.begin()));
     broadcast_indicies.emplace_back(new_bcast);
-    auto in_list_cp = extract.first;
-    result.push_back(
-        {curr, std::get<2>(cont), new_ein_res, in_list_cp, do_blas});
+    result.push_back({curr, std::get<2>(cont), new_ein_res, do_blas});
   }
 
   return result;
