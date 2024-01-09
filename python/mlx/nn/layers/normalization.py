@@ -333,8 +333,8 @@ class BatchNorm(Module):
         """
         reduction_axes = tuple(range(0, x.ndim - 1))
 
-        mean = mx.mean(x, axis=reduction_axes, keepdims=True)
-        var = mx.var(x, axis=reduction_axes, keepdims=True)
+        mean = mx.mean(x, axis=reduction_axes)
+        var = mx.var(x, axis=reduction_axes)
 
         return mean, var
 
