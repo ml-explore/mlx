@@ -984,6 +984,30 @@ class TestArray(mlx_tests.MLXTestCase):
         a[2:-2, 2:-2] = 4
         self.assertEqual(a[2, 2].item(), 4)
 
+    def test_array_at(self):
+        a = mx.array(1)
+        a = a.at[None].add(1)
+        self.assertEqual(a.item(), 2)
+
+        a = mx.array([0, 1, 2])
+        a = a.at[1].add(2)
+        self.assertEqual(a.tolist(), [0, 3, 2])
+
+        a = a.at[mx.array([0, 0, 0, 0])].add(1)
+        self.assertEqual(a.tolist(), [4, 3, 2])
+
+        a = mx.zeros((10, 10))
+        a = a.at[0].add(mx.arange(10))
+        self.assertEqual(a[0].tolist(), list(range(10)))
+
+        a = mx.zeros((10, 10))
+        index_x = mx.array([0, 2, 3, 7])
+        index_y = mx.array([3, 3, 1, 2])
+        u = mx.random.uniform(shape=(4,))
+        a = a.at[index_x, index_y].add(u)
+        self.assertEqual(a.sum().item(), u.sum().item())
+        self.assertEqual(a[index_x, index_y].tolist(), u.tolist())
+
     def test_slice_negative_step(self):
         a_np = np.arange(20)
         a_mx = mx.array(a_np)

@@ -3310,7 +3310,6 @@ void init_ops(py::module_& m) {
         Returns:
           result (array): The tensor dot product.
       )pbdoc");
-
   m.def(
       "inner",
       &inner,
@@ -3331,7 +3330,6 @@ void init_ops(py::module_& m) {
       Returns:
         result (array): The inner product.
     )pbdoc");
-
   m.def(
       "outer",
       &outer,
