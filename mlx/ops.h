@@ -1110,8 +1110,6 @@ std::unordered_map<std::string, array> load_gguf(
     const std::string& file,
     StreamOrDevice s = {});
 
-void save_gguf(
-    const std::string& file_,
-    std::unordered_map<std::string, array> a);
+void save_gguf(std::string file, std::unordered_map<std::string, array> a);
 
 } // namespace mlx::core

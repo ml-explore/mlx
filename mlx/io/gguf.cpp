@@ -1,4 +1,5 @@
 #include "mlx/io/gguf.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
@@ -84,14 +85,11 @@ std::unordered_map<std::string, array> load_gguf(
   return result;
 }
 
-void save_gguf(
-    const std::string& file_,
-    std::unordered_map<std::string, array> a) {
-  std::string file = file_;
-
+void save_gguf(std::string file, std::unordered_map<std::string, array> a) {
   // Add .gguf to file name if it is not there
-  if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf")
+  if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
     file += ".gguf";
+  }
 
   gguf_ctx* ctx = gguf_create(file.c_str());
   if (!ctx) {
@@ -105,19 +103,33 @@ void save_gguf(
   for (auto& [key, arr] : a) {
     arr.eval();
 
-    // TODO make sure array is the right kind of contiguous
+    // Try to make it row contiguous
+    if (!arr.flags().row_contiguous) {
+      arr = reshape(flatten(arr), arr.shape());
+      arr.eval();
+    }
+
+    // Has to be row-major now but, check one more time in case
+    // any of the above change in the future
+    if (!arr.flags().row_contiguous) {
+      throw std::invalid_argument(
+          "[save_gguf] can only serialize row-major arrays");
+    }
+
     tensor_offset += gguf_get_alignment_padding(ctx->alignment, tensor_offset);
     const std::optional<uint32_t> gguf_type =
         dtype_to_gguf_tensor_type(arr.dtype());
     if (!gguf_type.has_value()) {
-      throw std::runtime_error("[save_gguf] dtype is not supported");
+      std::ostringstream msg;
+      msg << "[save_gguf] dtype " << arr.dtype() << " is not supported";
+      throw std::runtime_error(msg.str());
     }
     const char* tensorname = key.c_str();
     const uint64_t namelen = key.length();
-    const uint32_t num_dim = arr.shape().size();
+    const uint32_t num_dim = arr.ndim();
     uint64_t dim[num_dim];
     for (int i = 0; i < num_dim; i++) {
-      dim[i] = arr.shape()[num_dim - i - 1];
+      dim[i] = arr.shape()[num_dim - 1 - i];
     }
     if (!gguf_append_tensor_info(
             ctx,
