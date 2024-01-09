@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(mlx LANGUAGES CXX)
+project(mlx LANGUAGES C CXX)
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -106,6 +106,23 @@ target_include_directories(
     $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>
     $<INSTALL_INTERFACE:include/json>
 )
+
+MESSAGE(STATUS "Downloading gguflib")
+FetchContent_Declare(gguflib
+    GIT_REPOSITORY     https://github.com/antirez/gguf-tools/
+    GIT_TAG            e48ca317eadc1c1af3cf3bcbb2f9ea04e060dac1
+)
+FetchContent_MakeAvailable(gguflib)
+target_include_directories(
+    mlx PUBLIC
+    $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/gguflib>
+)
+add_library(
+  gguflib SHARED
+  ${gguflib_SOURCE_DIR}/fp16.c
+  ${gguflib_SOURCE_DIR}/gguflib.c)
+target_link_libraries(mlx $<BUILD_INTERFACE:gguflib>)
 
 find_library(ACCELERATE_LIBRARY Accelerate)
 if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
