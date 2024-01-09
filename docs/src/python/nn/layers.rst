@@ -22,6 +22,10 @@ Layers
    QuantizedLinear
    Conv1d
    Conv2d
+   MaxPool1d
+   MaxPool2d
+   AvgPool1d
+   AvgPool2d
    BatchNorm
    LayerNorm
    RMSNorm
