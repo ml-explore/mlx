@@ -92,12 +92,7 @@ void save_gguf(std::string file, std::unordered_map<std::string, array> a) {
   if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
     file += ".gguf";
   }
-
-<<<<<<< HEAD
-  gguf_ctx* ctx = gguf_create(file.c_str());
-=======
   gguf_ctx* ctx = gguf_create(file.c_str(), GGUF_OVERWRITE);
->>>>>>> d97fdc7 (Update api)
   if (!ctx) {
     throw std::runtime_error("[save_gguf] gguf_create failed");
   }
