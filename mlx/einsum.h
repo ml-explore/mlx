@@ -15,7 +15,6 @@ struct EinsumPath {
   std::vector<int> args;
   std::set<char> removing;
   std::string einsum_str;
-  std::vector<std::string> remaining;
   bool can_dot;
 };
 
