@@ -66,7 +66,7 @@ std::unordered_map<std::string, array> load_gguf(
     const std::string& file,
     StreamOrDevice s) {
   std::unordered_map<std::string, array> result;
-  gguf_ctx* ctx = gguf_init(file.c_str());
+  gguf_ctx* ctx = gguf_open(file.c_str());
   if (!ctx) {
     throw std::runtime_error("[load_gguf] gguf_init failed");
   }
@@ -83,7 +83,7 @@ std::unordered_map<std::string, array> load_gguf(
     std::string name = std::string(tensor.name, tensor.namelen);
     result.insert({name, loaded_array});
   }
-  gguf_end(ctx);
+  gguf_close(ctx);
   return result;
 }
 
@@ -93,7 +93,11 @@ void save_gguf(std::string file, std::unordered_map<std::string, array> a) {
     file += ".gguf";
   }
 
+<<<<<<< HEAD
   gguf_ctx* ctx = gguf_create(file.c_str());
+=======
+  gguf_ctx* ctx = gguf_create(file.c_str(), GGUF_OVERWRITE);
+>>>>>>> d97fdc7 (Update api)
   if (!ctx) {
     throw std::runtime_error("[save_gguf] gguf_create failed");
   }
@@ -152,7 +156,7 @@ void save_gguf(std::string file, std::unordered_map<std::string, array> a) {
       throw std::runtime_error("[save_gguf] gguf_append_tensor_data failed");
     }
   }
-  gguf_end(ctx);
+  gguf_close(ctx);
 }
 
 } // namespace mlx::core
