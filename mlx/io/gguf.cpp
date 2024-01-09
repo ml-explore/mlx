@@ -1,3 +1,5 @@
+// Copyright © 2023 Apple Inc.
+
 #include "mlx/io/gguf.h"
 #include "mlx/utils.h"
 
