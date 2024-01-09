@@ -202,14 +202,12 @@ std::vector<std::vector<int>> optimal_path(
 }
 
 bool has_intersection(std::set<char> a, std::set<char> b) {
-  std::set<char> intersection;
-  std::set_intersection(
-      a.begin(),
-      a.end(),
-      b.begin(),
-      b.end(),
-      std::inserter(intersection, intersection.begin()));
-  return intersection.size() > 0;
+  for (auto c : a) {
+    if (b.find(c) != b.end()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 template <typename Map>
