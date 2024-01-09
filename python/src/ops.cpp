@@ -3070,29 +3070,25 @@ void init_ops(py::module_& m) {
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
-        For more information on the format see https://huggingface.co/docs/safetensors/index.
+        See the `safetensors documentation <https://huggingface.co/docs/safetensors/index>`_
+        for more information on the format.
 
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
-            retain_graph (bool, optional): Whether or not to retain the graph
-              during array evaluation. If left unspecified the graph is retained
-              only if saving is done in a function transformation. Default: ``None``.
       )pbdoc");
   m.def(
       "save_gguf",
       &mlx_save_gguf_helper,
       "file"_a,
       "arrays"_a,
-      py::pos_only(),
-      "retain_graph"_a = std::nullopt,
-      py::kw_only(),
       R"pbdoc(
-        save_gguf(file: str, arrays: Dict[str, array], /, retain_graph: Optional[bool] = None)
+        save_gguf(file: str, arrays: Dict[str, array])
 
         Save array(s) to a binary file in ``.gguf`` format.
 
-        For more information on the format see https://github.com/ggerganov/ggml/blob/master/docs/gguf.md.
+        See the `gguf documentation <https://github.com/ggerganov/ggml/blob/master/docs/gguf.md>`_ for
+        more information on the format.
 
         Args:
             file (file, str): File in which the array is saved.
@@ -3328,7 +3324,7 @@ void init_ops(py::module_& m) {
             ``dims`` dimensions of ``a`` and the first ``dims`` dimensions of
             ``b``. If a list of lists is provided, then sum over the
             corresponding dimensions of ``a`` and ``b``. (default: 2)
-        
+
         Returns:
           result (array): The tensor dot product.
       )pbdoc");
