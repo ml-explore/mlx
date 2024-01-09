@@ -54,6 +54,8 @@ class Module(dict):
         mx.eval(model.parameters())
     """
 
+    __call__: Callable
+
     def __init__(self):
         """Should be called by the subclasses of ``Module``."""
         self._no_grad = set()
