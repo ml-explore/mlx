@@ -536,7 +536,7 @@ void init_array(py::module_& m) {
       m,
       "_ArrayAt",
       R"pbdoc(
-      A helper object to implement x.at[index].add(...) functionality.
+      A helper object to apply updates at specific indices.
       )pbdoc")
       .def(
           py::init([](const array& x) { return ArrayAt(x); }),
@@ -545,7 +545,12 @@ void init_array(py::module_& m) {
           __init__(self, x: array)
         )pbdoc")
       .def("__getitem__", &ArrayAt::set_indices, "indices"_a)
-      .def("add", &ArrayAt::add, "value"_a);
+      .def("add", &ArrayAt::add, "value"_a)
+      .def("subtract", &ArrayAt::subtract, "value"_a)
+      .def("multiply", &ArrayAt::multiply, "value"_a)
+      .def("divide", &ArrayAt::divide, "value"_a)
+      .def("maximum", &ArrayAt::maximum, "value"_a)
+      .def("minimum", &ArrayAt::minimum, "value"_a);
 
   auto array_class = py::class_<array>(
       m,
@@ -660,7 +665,7 @@ void init_array(py::module_& m) {
           "at",
           [](const array& a) { return ArrayAt(a); },
           R"pbdoc(
-            Returns a helper object that allows to apply updates at specific indices.
+            Used to apply updates at the given indices.
 
             .. note::
 

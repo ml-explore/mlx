@@ -2124,7 +2124,7 @@ bool Scatter::is_equivalent(const Primitive& other) const {
 
 std::vector<array> Scatter::vjp(
     const std::vector<array>& primals,
-    const array& cotan,
+    const std::vector<array>& cotangents,
     const std::vector<int>& argnums) {
   switch (reduce_type_) {
     case Scatter::None:
@@ -2147,11 +2147,15 @@ std::vector<array> Scatter::vjp(
         case Scatter::None:
           // Scatter 0s to the locations that were updated with the updates
           vjps.push_back(scatter(
-              cotan, indices, zeros_like(updates, stream()), axes_, stream()));
+              cotangents[0],
+              indices,
+              zeros_like(updates, stream()),
+              axes_,
+              stream()));
           break;
         case Scatter::Sum:
           // The input array values are kept so they all get gradients
-          vjps.push_back(cotan);
+          vjps.push_back(cotangents[0]);
           break;
         default:
           // Should never reach here
@@ -2162,11 +2166,12 @@ std::vector<array> Scatter::vjp(
         case Scatter::None:
         case Scatter::Sum: {
           // Gather the values from the cotangent
-          auto slice_sizes = cotan.shape();
+          auto slice_sizes = cotangents[0].shape();
           for (auto ax : axes_) {
             slice_sizes[ax] = 1;
           }
-          vjps.push_back(gather(cotan, indices, axes_, slice_sizes, stream()));
+          vjps.push_back(
+              gather(cotangents[0], indices, axes_, slice_sizes, stream()));
           break;
         }
         default: {
@@ -2182,7 +2187,7 @@ std::vector<array> Scatter::vjp(
   return vjps;
 }
 
-array Scatter::jvp(
+std::vector<array> Scatter::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
