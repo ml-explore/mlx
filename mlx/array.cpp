@@ -39,13 +39,30 @@ array::array(const std::complex<float>& val, Dtype dtype /* = complex64 */)
 array::array(
     const std::vector<int>& shape,
     Dtype dtype,
-    std::unique_ptr<Primitive> primitive,
+    std::shared_ptr<Primitive> primitive,
     const std::vector<array>& inputs)
     : array_desc_(std::make_shared<ArrayDesc>(
           shape,
           dtype,
           std::move(primitive),
           inputs)) {}
+
+std::vector<array> array::make_arrays(
+    const std::vector<std::vector<int>>& shapes,
+    const std::vector<Dtype>& dtypes,
+    std::shared_ptr<Primitive> primitive,
+    const std::vector<array>& inputs) {
+  std::vector<array> outputs;
+  for (int i = 0; i < shapes.size(); ++i) {
+    outputs.push_back(array(shapes[i], dtypes[i], primitive, inputs));
+  }
+  for (int i = 0; i < outputs.size(); ++i) {
+    auto siblings = outputs;
+    siblings.erase(siblings.begin() + i);
+    outputs[i].set_siblings(std::move(siblings), i);
+  }
+  return outputs;
+}
 
 array::array(std::initializer_list<float> data)
     : array_desc_(std::make_shared<ArrayDesc>(
@@ -66,6 +83,8 @@ array::array(
 
 void array::detach() {
   array_desc_->inputs.clear();
+  array_desc_->siblings.clear();
+  array_desc_->position = 0;
   array_desc_->primitive = nullptr;
 }
 
@@ -127,7 +146,7 @@ array::ArrayDesc::ArrayDesc(const std::vector<int>& shape, Dtype dtype)
 array::ArrayDesc::ArrayDesc(
     const std::vector<int>& shape,
     Dtype dtype,
-    std::unique_ptr<Primitive> primitive,
+    std::shared_ptr<Primitive> primitive,
     const std::vector<array>& inputs)
     : shape(shape),
       dtype(dtype),
@@ -138,10 +157,6 @@ array::ArrayDesc::ArrayDesc(
     is_tracer |= in.is_tracer();
   }
 }
-
-// Needed because the Primitive type used in array.h is incomplete and the
-// compiler needs to see the call to the destructor after the type is complete.
-array::ArrayDesc::~ArrayDesc() = default;
 
 array::ArrayIterator::reference array::ArrayIterator::operator*() const {
   auto start = std::vector<int>(arr.ndim(), 0);

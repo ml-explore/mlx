@@ -16,6 +16,12 @@
     primitive::eval(inputs, out);                                          \
   }
 
+#define DEFAULT_MULTI(primitive)                                       \
+  void primitive::eval_cpu(                                            \
+      const std::vector<array>& inputs, std::vector<array>& outputs) { \
+    primitive::eval(inputs, outputs);                                  \
+  }
+
 namespace mlx::core {
 
 DEFAULT(Abs)
@@ -89,6 +95,7 @@ DEFAULT(Subtract)
 DEFAULT(Tan)
 DEFAULT(Tanh)
 DEFAULT(Transpose)
+DEFAULT_MULTI(DivMod)
 
 void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (out.dtype() != float32) {

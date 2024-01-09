@@ -2,6 +2,12 @@
 
 #include "mlx/primitives.h"
 
+#define NO_GPU_MULTI(func)                                             \
+  void func::eval_gpu(                                                 \
+      const std::vector<array>& inputs, std::vector<array>& outputs) { \
+    throw std::runtime_error(#func " has no GPU implementation.");     \
+  }
+
 #define NO_GPU(func)                                                  \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
     throw std::runtime_error(#func " has no GPU implementation.");    \
@@ -81,5 +87,6 @@ NO_GPU(Subtract)
 NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
+NO_GPU_MULTI(DivMod)
 
 } // namespace mlx::core

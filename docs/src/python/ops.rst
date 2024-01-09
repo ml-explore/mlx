@@ -36,6 +36,7 @@ Operations
    cosh
    dequantize
    divide
+   divmod
    equal
    erf
    erfinv

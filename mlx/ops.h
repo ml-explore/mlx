@@ -721,6 +721,10 @@ array operator/(const array& a, const array& b);
 array operator/(double a, const array& b);
 array operator/(const array& a, double b);
 
+/** Compute the element-wise quotient and remainder. */
+std::vector<array>
+divmod(const array& a, const array& b, StreamOrDevice s = {});
+
 /** Compute integer division. Equivalent to doing floor(a / x). */
 array floor_divide(const array& a, const array& b, StreamOrDevice s = {});
 

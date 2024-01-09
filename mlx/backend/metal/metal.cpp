@@ -4,7 +4,6 @@
 #include <future>
 #include <memory>
 
-#include "mlx/array.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
@@ -54,7 +53,8 @@ std::function<void()> make_task(
     }
     auto s = arr.primitive().stream();
     auto command_buffer = increment_command_buffer(s);
-    arr.primitive().eval_gpu(arr.inputs(), arr);
+    auto outputs = arr.outputs();
+    arr.primitive().eval_gpu(arr.inputs(), outputs);
     if (p) {
       metal::device(s.device).end_encoding(s.index);
       scheduler::notify_new_task(s);
@@ -62,6 +62,9 @@ std::function<void()> make_task(
           [s, arr, p = std::move(p)](MTL::CommandBuffer*) mutable {
             if (!arr.is_tracer()) {
               arr.detach();
+              for (auto s : arr.siblings()) {
+                s.detach();
+              }
             }
             p->set_value();
             scheduler::notify_task_completion(s);

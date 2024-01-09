@@ -30,7 +30,7 @@ TEST_CASE("[mlx.core.linalg.norm] no ord") {
   CHECK_EQ(norm(x).item<float>(), doctest::Approx(expected));
   CHECK_EQ(
       norm(x, std::vector<int>{0, 1}).item<float>(), doctest::Approx(expected));
-  CHECK(array_equal(
+  CHECK(allclose(
             norm(x, 0, false),
             array(
                 {std::sqrt(0 + 3 * 3 + 6 * 6),

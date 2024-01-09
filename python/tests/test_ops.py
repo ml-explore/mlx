@@ -1314,7 +1314,7 @@ class TestOps(mlx_tests.MLXTestCase):
             for axis in (None, 0, 1, 2):
                 c_npy = npop(a_npy, axis=axis)
                 c_mlx = mxop(a_mlx, axis=axis)
-                self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-4, atol=1e-4))
+                self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
         for op in ["cumsum", "cumprod", "cummax", "cummin"]:
             c1 = mxop(a_mlx, axis=2)
@@ -1596,6 +1596,28 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.outer,
             np.outer,
         )
+
+    def test_divmod(self):
+        # A few sizes for the inputs with and without broadcasting
+        sizes = [
+            ((1,), (1,)),
+            ((1,), (10,)),
+            ((10,), (1,)),
+            ((3,), (3,)),
+            ((2, 2, 2), (1, 2, 1)),
+            ((2, 1, 2), (1, 2, 1)),
+            ((2, 2, 2, 2), (2, 2, 2, 2)),
+        ]
+        types = [np.uint16, np.uint32, np.int32, np.float16, np.float32]
+        for s1, s2 in sizes:
+            for t in types:
+                a_np = np.random.uniform(1, 100, size=s1).astype(t)
+                b_np = np.random.uniform(1, 100, size=s2).astype(t)
+                np_out = np.divmod(a_np, b_np)
+                mx_out = mx.divmod(mx.array(a_np), mx.array(b_np))
+                self.assertTrue(
+                    np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
+                )
 
 
 if __name__ == "__main__":

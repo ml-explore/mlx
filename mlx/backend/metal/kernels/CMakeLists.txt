@@ -14,6 +14,7 @@ set(
   "arange"
   "arg_reduce"
   "binary"
+  "binary_two"
   "conv"
   "copy"
   "gemm"

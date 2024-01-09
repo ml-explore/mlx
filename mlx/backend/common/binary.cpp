@@ -6,6 +6,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/binary.h"
+#include "mlx/backend/common/binary_two.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -73,6 +74,61 @@ void Add::eval(const std::vector<array>& inputs, array& out) {
   auto& a = inputs[0];
   auto& b = inputs[1];
   binary(a, b, out, [](auto x, auto y) { return x + y; });
+}
+
+void DivMod::eval(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto integral_op = [](auto x, auto y) {
+    return std::make_pair(x / y, x % y);
+  };
+  auto float_op = [](auto x, auto y) {
+    return std::make_pair(std::trunc(x / y), std::fmod(x, y));
+  };
+  switch (outputs[0].dtype()) {
+    case bool_:
+      binary_op<bool>(a, b, outputs, integral_op);
+    case uint8:
+      binary_op<uint8_t>(a, b, outputs, integral_op);
+      break;
+    case uint16:
+      binary_op<uint16_t>(a, b, outputs, integral_op);
+      break;
+    case uint32:
+      binary_op<uint32_t>(a, b, outputs, integral_op);
+      break;
+    case uint64:
+      binary_op<uint64_t>(a, b, outputs, integral_op);
+      break;
+    case int8:
+      binary_op<int8_t>(a, b, outputs, integral_op);
+      break;
+    case int16:
+      binary_op<int16_t>(a, b, outputs, integral_op);
+      break;
+    case int32:
+      binary_op<int32_t>(a, b, outputs, integral_op);
+      break;
+    case int64:
+      binary_op<int64_t>(a, b, outputs, integral_op);
+      break;
+    case float16:
+      binary_op<float16_t>(a, b, outputs, float_op);
+      break;
+    case float32:
+      binary_op<float>(a, b, outputs, float_op);
+      break;
+    case bfloat16:
+      binary_op<bfloat16_t>(a, b, outputs, float_op);
+      break;
+    case complex64:
+      // Should never get here
+      throw std::runtime_error("[DivMod] Complex type not supported");
+      break;
+  }
 }
 
 void Divide::eval(const std::vector<array>& inputs, array& out) {
