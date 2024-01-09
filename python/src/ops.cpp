@@ -3048,7 +3048,9 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         load(file: str, /, format: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
 
-        Load array(s) from a binary file in ``.npy``, ``.npz``, ``.safetensors``, or ``.gguf`` format.
+        Load array(s) from a binary file.
+
+        The supported formats are ``.npy``, ``.npz``, ``.safetensors``, or ``.gguf``.
 
         Args:
             file (file, str): File in which the array is saved.

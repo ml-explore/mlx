@@ -221,10 +221,21 @@ class TestLoad(mlx_tests.MLXTestCase):
         aload = mx.load(save_file)["a"]
         self.assertTrue(mx.array_equal(a, aload))
 
-        # safetensors only works with row contiguous
+        save_file = os.path.join(self.test_dir, "a.gguf")
+        mx.save_gguf(save_file, {"a": a})
+        aload = mx.load(save_file)["a"]
+        self.assertTrue(mx.array_equal(a, aload))
+
+        # safetensors and gguf only work with row contiguous
         # make sure col contiguous is handled properly
+        save_file = os.path.join(self.test_dir, "a.safetensors")
         a = mx.arange(4).reshape(2, 2).T
         mx.save_safetensors(save_file, {"a": a})
+        aload = mx.load(save_file)["a"]
+        self.assertTrue(mx.array_equal(a, aload))
+
+        save_file = os.path.join(self.test_dir, "a2.gguf")
+        mx.save_gguf(save_file, {"a": a})
         aload = mx.load(save_file)["a"]
         self.assertTrue(mx.array_equal(a, aload))
 
