@@ -3050,7 +3050,7 @@ void init_ops(py::module_& m) {
 
         Load array(s) from a binary file.
 
-        The supported formats are ``.npy``, ``.npz``, ``.safetensors``, or ``.gguf``.
+        The supported formats are ``.npy``, ``.npz``, ``.safetensors``, and ``.gguf``.
 
         Args:
             file (file, str): File in which the array is saved.
@@ -3072,7 +3072,7 @@ void init_ops(py::module_& m) {
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
-        See the `safetensors documentation <https://huggingface.co/docs/safetensors/index>`_
+        See the `Safetensors documentation <https://huggingface.co/docs/safetensors/index>`_
         for more information on the format.
 
         Args:
@@ -3089,7 +3089,7 @@ void init_ops(py::module_& m) {
 
         Save array(s) to a binary file in ``.gguf`` format.
 
-        See the `gguf documentation <https://github.com/ggerganov/ggml/blob/master/docs/gguf.md>`_ for
+        See the `GGUF documentation <https://github.com/ggerganov/ggml/blob/master/docs/gguf.md>`_ for
         more information on the format.
 
         Args:
