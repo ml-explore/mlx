@@ -446,11 +446,10 @@ class TestBlas(mlx_tests.MLXTestCase):
                                     )
                                     self.assertTrue(np.array_equal(c_mlx, c_npy))
 
-
     def test_addmm(self):
         np.random.seed(0)
         # Batched matmul
-        alpha = 0.5 
+        alpha = 0.5
         beta = 2.0
 
         # Regular batched case
@@ -510,7 +509,10 @@ class TestBlas(mlx_tests.MLXTestCase):
         a_mlx = mx.array(a_npy)
         b_mlx = mx.array(b_npy)
 
-        for c_shape in ((1,), (32, 128),):
+        for c_shape in (
+            (1,),
+            (32, 128),
+        ):
             c_npy = np.ones(c_shape).astype(np.float32)
             c_mlx = mx.array(c_npy)
 
@@ -540,16 +542,12 @@ class TestBlas(mlx_tests.MLXTestCase):
     def test_addmm_grad(self):
         def make_ref_addmm(alpha, beta):
             return lambda c, a, b: alpha * (a @ b) + beta * c
-        
+
         def make_addmm(alpha, beta):
             return lambda c, a, b: mx.addmm(c, a, b, alpha, beta)
-        
+
         # B, M, N, K
-        shapes = (
-            (1, 64, 32, 128),
-            (4, 28, 24, 47),
-            (1, 1, 24, 47)
-        )
+        shapes = ((1, 64, 32, 128), (4, 28, 24, 47), (1, 1, 24, 47))
 
         alpha = 2.0
         beta = 0.5
@@ -563,13 +561,23 @@ class TestBlas(mlx_tests.MLXTestCase):
             a = mx.random.normal((B, M, K))
             b = mx.random.normal((B, K, N))
 
-            out_ref, dout_ref = mx.vjp(f_ref, [c, a, b], [cotan,])
-            out_test, dout_test = mx.vjp(f_test, [c, a, b], [cotan,])
+            out_ref, dout_ref = mx.vjp(
+                f_ref,
+                [c, a, b],
+                [
+                    cotan,
+                ],
+            )
+            out_test, dout_test = mx.vjp(
+                f_test,
+                [c, a, b],
+                [
+                    cotan,
+                ],
+            )
 
             self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-5).item())
 
             for r, t in zip(dout_ref, dout_test):
                 self.assertListEqual(r.shape, t.shape)
                 self.assertTrue(mx.allclose(r, t, atol=1e-5).item())
-
-            

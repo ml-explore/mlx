@@ -1,9 +1,11 @@
+// Copyright © 2024 Apple Inc.
+
 #pragma once
 
-#include "mlx/backend/metal/kernels/steel/utils.h"
-#include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/gemm/loader.h"
 #include "mlx/backend/metal/kernels/steel/gemm/mma.h"
+#include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
+#include "mlx/backend/metal/kernels/steel/utils.h"
 
 using namespace metal;
 
@@ -11,7 +13,8 @@ using namespace metal;
 // GEMM kernel class
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace mlx { namespace steel {
+namespace mlx {
+namespace steel {
 
 template <bool M_aligned, bool N_aligned, bool K_aligned>
 struct LoopAlignment {};
@@ -83,8 +86,7 @@ struct GEMMKernel {
       thread const short& tgp_bn,
       thread const short& lbk,
       LoopAlignment<M_aligned, N_aligned, K_aligned_> l = {}) {
-
-    // Appease the compiler 
+    // Appease the compiler
     (void)l;
 
     thread bool mask_A[loader_a_t::n_rows][loader_a_t::vec_size];
@@ -306,4 +308,5 @@ struct GEMMKernel {
   }
 };
 
-} } // namespace mlx::steel
+} // namespace steel
+} // namespace mlx

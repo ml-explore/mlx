@@ -30,8 +30,8 @@ std::tuple<bool, size_t, array> check_transpose(const array& arr) {
 }
 
 inline void matmul_cblas_general(
-    const array& a_pre, 
-    const array& b_pre, 
+    const array& a_pre,
+    const array& b_pre,
     array& out,
     float alpha = 1.0f,
     float beta = 0.0f) {
@@ -76,10 +76,10 @@ inline void matmul_cblas(const array& a_pre, const array& b_pre, array& out) {
 }
 
 inline void matmul_bnns_general(
-    const array& a_pre, 
-    const array& b_pre, 
+    const array& a_pre,
+    const array& b_pre,
     array& out,
-    float alpha = 1.0f, 
+    float alpha = 1.0f,
     float beta = 0.0f) {
   // TODO: Update to utilize BNNS broadcasting
 

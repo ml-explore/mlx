@@ -1,3 +1,5 @@
+// Copyright © 2024 Apple Inc.
+
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
 

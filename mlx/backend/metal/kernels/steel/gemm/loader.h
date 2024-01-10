@@ -1,3 +1,5 @@
+// Copyright © 2024 Apple Inc.
+
 #pragma once
 
 #include "mlx/backend/metal/kernels/steel/utils.h"
@@ -6,7 +8,8 @@
 // Loading helper
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace mlx { namespace steel {
+namespace mlx {
+namespace steel {
 
 template <
     typename T,
@@ -16,7 +19,7 @@ template <
     short reduction_dim,
     short tgp_size,
     short alignment = 1,
-    short n_reads = (BCOLS * BROWS)/ (tgp_size),
+    short n_reads = (BCOLS * BROWS) / (tgp_size),
     short TCOLS = BCOLS / n_reads,
     short TROWS = tgp_size / TCOLS>
 struct BlockLoader {
@@ -57,29 +60,24 @@ struct BlockLoader {
 
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void load_unsafe() const {
-
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < BROWS; i += TROWS) {
       *((threadgroup ReadVector*)(&dst[i * dst_ld])) =
           *((const device ReadVector*)(&src[i * src_ld]));
     }
-
   }
 
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void set_mask(
       thread const short2& src_tile_dims,
       thread bool mask[n_rows][vec_size]) {
-
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < n_rows; i++) {
-
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
         mask[i][j] =
             ((bi + i) < src_tile_dims.y) && ((bj + j) < src_tile_dims.x);
       }
-
     }
   }
 
@@ -121,7 +119,7 @@ struct BlockLoader {
 
   /* Load from device memory into threadgroup memory - with bound checking */
   METAL_FUNC void load_safe(const thread bool mask[n_rows][vec_size]) const {
-    T tmp_val[vec_size]; 
+    T tmp_val[vec_size];
 
     STEEL_PRAGMA_UNROLL
     for (short i = 0, ii = 0; i < BROWS; i += TROWS, ii++) {
@@ -158,4 +156,5 @@ struct BlockLoader {
   }
 };
 
-} } // namespace mlx::steel
+} // namespace steel
+} // namespace mlx

@@ -137,24 +137,24 @@ std::vector<array> AddMM::vjp(
     if (arg == 0) {
       // M X N * (K X N).T -> M X K
       auto cotan_scaled = cotan;
-      if(alpha_ != 1.) {
+      if (alpha_ != 1.) {
         auto alpha_arr = array(alpha_, cotan.dtype());
         cotan_scaled = (multiply(alpha_arr, cotan_scaled, stream()));
       }
-      vjps.push_back(
-          matmul(cotan_scaled, transpose(primals[1], reorder, stream()), stream()));
+      vjps.push_back(matmul(
+          cotan_scaled, transpose(primals[1], reorder, stream()), stream()));
     } else if (arg == 1) {
       // (M X K).T * M X N -> K X N
       auto cotan_scaled = cotan;
-      if(alpha_ != 1.) {
+      if (alpha_ != 1.) {
         auto alpha_arr = array(alpha_, cotan.dtype());
         cotan_scaled = (multiply(alpha_arr, cotan_scaled, stream()));
       }
-      vjps.push_back(
-          matmul(transpose(primals[0], reorder, stream()), cotan_scaled, stream()));
+      vjps.push_back(matmul(
+          transpose(primals[0], reorder, stream()), cotan_scaled, stream()));
     } else {
       auto cotan_scaled = cotan;
-      if(beta_ != 1.) {
+      if (beta_ != 1.) {
         auto beta_arr = array(beta_, cotan.dtype());
         cotan_scaled = (multiply(beta_arr, cotan_scaled, stream()));
       }

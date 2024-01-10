@@ -1,10 +1,13 @@
+// Copyright © 2024 Apple Inc.
+
 #pragma once
 
 ///////////////////////////////////////////////////////////////////////////////
 // GEMM param classes
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace mlx { namespace steel {
+namespace mlx {
+namespace steel {
 
 struct GEMMParams {
   const int M;
@@ -72,7 +75,5 @@ struct GEMMAddMMParams {
   const int fdc;
 };
 
-
-} } // namespace mlx::steel
-
-
+} // namespace steel
+} // namespace mlx

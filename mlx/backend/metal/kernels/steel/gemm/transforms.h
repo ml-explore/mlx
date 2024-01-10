@@ -1,3 +1,5 @@
+// Copyright © 2024 Apple Inc.
+
 #pragma once
 
 #include "mlx/backend/metal/kernels/steel/utils.h"
@@ -6,7 +8,8 @@
 // Transforms and Epilogues
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace mlx { namespace steel {
+namespace mlx {
+namespace steel {
 
 template <typename OutT, typename InT>
 struct TransformNone {
@@ -33,9 +36,9 @@ struct TransformAxpby {
   const float alpha;
   const float beta;
 
-  TransformAxpby(const float alpha_, const float beta_) 
+  TransformAxpby(const float alpha_, const float beta_)
       : alpha(alpha_), beta(beta_) {}
-  
+
   METAL_FUNC OutT apply(InT x, OutT c) const {
     return static_cast<OutT>(x * alpha + (beta * c));
   }
@@ -47,15 +50,14 @@ struct AccumHelper {
 };
 
 struct BlockSwizzle {
-  static METAL_FUNC int2 swizzle(
-      uint3 tid [[threadgroup_position_in_grid]],
-      const int swizzle_log) {
-
+  static METAL_FUNC int2
+  swizzle(uint3 tid [[threadgroup_position_in_grid]], const int swizzle_log) {
     const int tid_x = (tid.x) >> swizzle_log;
-    const int tid_y = ((tid.y) << swizzle_log) +
-        ((tid.x) & ((1 << swizzle_log) - 1));
+    const int tid_y =
+        ((tid.y) << swizzle_log) + ((tid.x) & ((1 << swizzle_log) - 1));
     return int2(tid_x, tid_y);
   }
 };
 
-} } // namespace mlx::steel
+} // namespace steel
+} // namespace mlx

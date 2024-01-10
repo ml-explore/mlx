@@ -1,3 +1,5 @@
+// Copyright © 2024 Apple Inc.
+
 #pragma once
 
 #include "mlx/backend/metal/kernels/steel/utils.h"
@@ -6,7 +8,8 @@
 // MMA helper
 ///////////////////////////////////////////////////////////////////////////////
 
-namespace mlx { namespace steel {
+namespace mlx {
+namespace steel {
 
 template <
     typename T,
@@ -67,7 +70,6 @@ struct BlockMMA {
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
       ushort simd_lane_id [[thread_index_in_simdgroup]])
       : tm(8 * (simd_group_id / WN)), tn(8 * (simd_group_id % WN)) {
-
     // Determine thread position in simdgroup matrix
     short qid = simd_lane_id / 4;
     sm = (qid & 4) + (simd_lane_id / 2) % 4;
@@ -89,9 +91,8 @@ struct BlockMMA {
     // Iterate over BK in blocks of 8
     STEEL_PRAGMA_UNROLL
     for (short kk = 0; kk < BK; kk += 8) {
-
       simdgroup_barrier(mem_flags::mem_none);
-      
+
       // Load elements from threadgroup A as simdgroup matrices
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < TM; i++) {
@@ -102,7 +103,7 @@ struct BlockMMA {
       }
 
       simdgroup_barrier(mem_flags::mem_none);
-      
+
       // Load elements from threadgroup B as simdgroup matrices
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < TN; j++) {
@@ -117,7 +118,6 @@ struct BlockMMA {
       // Multiply and accumulate into result simdgroup matrices
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < TM; i++) {
-        
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < TN; j++) {
           short j_serp = (i % 2) ? (TN - 1 - j) : j;
@@ -144,10 +144,8 @@ struct BlockMMA {
     // Loop over all simdgroup tiles
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < TM; i++) {
-      
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < TN; j++) {
-
         // Get accumulated result and associated offset in C
         thread const auto& accum = results[i * TN + j].thread_elements();
         int offset = (i * TM_stride) * ldc + (j * TN_stride);
@@ -173,7 +171,6 @@ struct BlockMMA {
       if (i * TM_stride < dst_tile_dims.y) {
         STEEL_PRAGMA_UNROLL
         for (int j = 0; j < TN; j++) {
-
           // Get accumulated result and associated offset in C
           thread const auto& accum = results[i * TN + j].thread_elements();
           int offset = (i * TM_stride) * ldc + (j * TN_stride);
@@ -191,12 +188,11 @@ struct BlockMMA {
     }
   }
 
-
   /* Store results from simdgroup_matrix results into device memory */
   METAL_FUNC void store_result(
-      device U* D, 
-      const int ldd, 
-      const device U* C, 
+      device U* D,
+      const int ldd,
+      const device U* C,
       const int ldc,
       const int fdc,
       thread const Epilogue& epilogue_op) const {
@@ -207,10 +203,8 @@ struct BlockMMA {
     // Loop over all simdgroup tiles
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < TM; i++) {
-      
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < TN; j++) {
-
         // Get accumulated result and associated offset in C
         thread const auto& accum = results[i * TN + j].thread_elements();
         int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
@@ -218,9 +212,8 @@ struct BlockMMA {
 
         // Apply epilogue
         U outs[2] = {
-          epilogue_op.apply(accum[0], C[offset_c]), 
-          epilogue_op.apply(accum[1], C[offset_c + fdc])
-        };
+            epilogue_op.apply(accum[0], C[offset_c]),
+            epilogue_op.apply(accum[1], C[offset_c + fdc])};
 
         // Write out D
         D[offset_d] = outs[0];
@@ -230,10 +223,10 @@ struct BlockMMA {
   }
 
   METAL_FUNC void store_result_safe(
-      device U* D, 
-      const int ldd, 
-      const device U* C, 
-      const int ldc, 
+      device U* D,
+      const int ldd,
+      const device U* C,
+      const int ldc,
       const int fdc,
       short2 dst_tile_dims,
       thread const Epilogue& epilogue_op) const {
@@ -247,7 +240,6 @@ struct BlockMMA {
       if (i * TM_stride < dst_tile_dims.y) {
         STEEL_PRAGMA_UNROLL
         for (int j = 0; j < TN; j++) {
-
           // Get accumulated result and associated offset in C
           thread const auto& accum = results[i * TN + j].thread_elements();
           int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
@@ -267,4 +259,5 @@ struct BlockMMA {
   }
 };
 
-} } // namespace mlx::steel
+} // namespace steel
+} // namespace mlx

@@ -173,8 +173,8 @@ class Add : public UnaryPrimitive {
 
 class AddMM : public UnaryPrimitive {
  public:
-  explicit AddMM(Stream stream, float alpha, float beta) 
-      : UnaryPrimitive(stream), alpha_(alpha), beta_(beta) {};
+  explicit AddMM(Stream stream, float alpha, float beta)
+      : UnaryPrimitive(stream), alpha_(alpha), beta_(beta){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
