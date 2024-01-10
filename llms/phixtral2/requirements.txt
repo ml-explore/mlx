@@ -1,0 +1,5 @@
+einops
+mlx
+numpy
+transformers>=4.35
+torch
