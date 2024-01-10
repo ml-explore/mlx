@@ -47,7 +47,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="mlx.core.sigmoid" href="mlx.core.sigmoid.html" />
-    <link rel="prev" title="mlx.core.savez_compressed" href="mlx.core.savez_compressed.html" />
+    <link rel="prev" title="mlx.core.save_gguf" href="mlx.core.save_gguf.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -148,9 +148,12 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Usage</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../usage/quick_start.html">Quick Start Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/lazy_evaluation.html">Lazy Evaluation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/unified_memory.html">Unified Memory</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../../usage/using_streams.html">Using Streams</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/indexing.html">Indexing Arrays</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/saving_and_loading.html">Saving and Loading Arrays</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/numpy.html">Conversion to NumPy and Other Frameworks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
 <ul class="nav bd-sidenav">
@@ -238,6 +241,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.cosh.html">mlx.core.cosh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.dequantize.html">mlx.core.dequantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.divide.html">mlx.core.divide</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.divmod.html">mlx.core.divmod</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.equal.html">mlx.core.equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.erf.html">mlx.core.erf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.erfinv.html">mlx.core.erfinv</a></li>
@@ -251,6 +255,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.identity.html">mlx.core.identity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.inner.html">mlx.core.inner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linspace.html">mlx.core.linspace</a></li>
@@ -261,6 +266,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.log1p.html">mlx.core.log1p</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.logaddexp.html">mlx.core.logaddexp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.logical_not.html">mlx.core.logical_not</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.logical_and.html">mlx.core.logical_and</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.logical_or.html">mlx.core.logical_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.logsumexp.html">mlx.core.logsumexp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.matmul.html">mlx.core.matmul</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.max.html">mlx.core.max</a></li>
@@ -273,6 +280,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.negative.html">mlx.core.negative</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.ones.html">mlx.core.ones</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.ones_like.html">mlx.core.ones_like</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.outer.html">mlx.core.outer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.partition.html">mlx.core.partition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.pad.html">mlx.core.pad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.prod.html">mlx.core.prod</a></li>
@@ -286,6 +294,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.save.html">mlx.core.save</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.savez.html">mlx.core.savez</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.savez_compressed.html">mlx.core.savez_compressed</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.save_gguf.html">mlx.core.save_gguf</a></li>
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">mlx.core.save_safetensors</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.sigmoid.html">mlx.core.sigmoid</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.sign.html">mlx.core.sign</a></li>
@@ -435,6 +444,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.hinge_loss.html">mlx.nn.losses.hinge_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.huber_loss.html">mlx.nn.losses.huber_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.log_cosh_loss.html">mlx.nn.losses.log_cosh_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.cosine_similarity_loss.html">mlx.nn.losses.cosine_similarity_loss</a></li>
 </ul>
 </li>
 </ul>
@@ -635,17 +645,15 @@ document.write(`
 <h1>mlx.core.save_safetensors<a class="headerlink" href="#mlx-core-save-safetensors" title="Permalink to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.core.save_safetensors">
-<span class="sig-prename descclassname"><span class="pre">mlx.core.</span></span><span class="sig-name descname"><span class="pre">save_safetensors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">arrays</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="o"><span class="pre">/</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">retain_graph</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Optional</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.save_safetensors" title="Permalink to this definition">#</a></dt>
+<span class="sig-prename descclassname"><span class="pre">mlx.core.</span></span><span class="sig-name descname"><span class="pre">save_safetensors</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">arrays</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.save_safetensors" title="Permalink to this definition">#</a></dt>
 <dd><p>Save array(s) to a binary file in <code class="docutils literal notranslate"><span class="pre">.safetensors</span></code> format.</p>
-<p>For more information on the format see <a class="reference external" href="https://huggingface.co/docs/safetensors/index">https://huggingface.co/docs/safetensors/index</a>.</p>
+<p>See the <a class="reference external" href="https://huggingface.co/docs/safetensors/index">Safetensors documentation</a>
+for more information on the format.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>file</strong> (<em>file</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – File in which the array is saved&gt;</p></li>
+<li><p><strong>file</strong> (<em>file</em><em>, </em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a>) – File in which the array is saved.</p></li>
 <li><p><strong>arrays</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.12)"><em>dict</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a><em>)</em>) – The dictionary of names to arrays to be saved.</p></li>
-<li><p><strong>retain_graph</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>optional</em>) – Whether or not to retain the graph
-during array evaluation. If left unspecified the graph is retained
-only if saving is done in a function transformation. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
 </ul>
 </dd>
 </dl>
@@ -665,12 +673,12 @@ only if saving is done in a function transformation. Default: <code class="docut
                   
 <div class="prev-next-area">
     <a class="left-prev"
-       href="mlx.core.savez_compressed.html"
+       href="mlx.core.save_gguf.html"
        title="previous page">
       <i class="fa-solid fa-angle-left"></i>
       <div class="prev-next-info">
         <p class="prev-next-subtitle">previous</p>
-        <p class="prev-next-title">mlx.core.savez_compressed</p>
+        <p class="prev-next-title">mlx.core.save_gguf</p>
       </div>
     </a>
     <a class="right-next"

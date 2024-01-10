@@ -62,6 +62,7 @@
    .. autosummary::
    
       ~array.T
+      ~array.at
       ~array.dtype
       ~array.itemsize
       ~array.nbytes

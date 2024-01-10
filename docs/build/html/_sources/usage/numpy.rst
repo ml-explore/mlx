@@ -62,6 +62,11 @@ even though no in-place operations on MLX memory are executed.
 PyTorch
 -------
 
+.. warning:: 
+
+   PyTorch Support for :obj:`memoryview` is experimental and can break for
+   multi-dimensional arrays. Casting to NumPy first is advised for now.
+
 PyTorch supports the buffer protocol, but it requires an explicit :obj:`memoryview`.
 
 .. code-block:: python
