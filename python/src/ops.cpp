@@ -3048,7 +3048,9 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         load(file: str, /, format: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
 
-        Load array(s) from a binary file in ``.npy``, ``.npz``, or ``.safetensors`` format.
+        Load array(s) from a binary file.
+
+        The supported formats are ``.npy``, ``.npz``, ``.safetensors``, and ``.gguf``.
 
         Args:
             file (file, str): File in which the array is saved.
@@ -3059,6 +3061,12 @@ void init_ops(py::module_& m) {
             result (array, dict):
                 A single array if loading from a ``.npy`` file or a dict mapping
                 names to arrays if loading from a ``.npz`` or ``.safetensors`` file.
+
+        Warning:
+
+          When loading unsupported quantization formats from GGUF, tensors will
+          automatically cast to ``mx.float16``
+
       )pbdoc");
   m.def(
       "save_safetensors",
@@ -3070,10 +3078,28 @@ void init_ops(py::module_& m) {
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
-        For more information on the format see https://huggingface.co/docs/safetensors/index.
+        See the `Safetensors documentation <https://huggingface.co/docs/safetensors/index>`_
+        for more information on the format.
 
         Args:
-            file (file, str): File in which the array is saved>
+            file (file, str): File in which the array is saved.
+            arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+      )pbdoc");
+  m.def(
+      "save_gguf",
+      &mlx_save_gguf_helper,
+      "file"_a,
+      "arrays"_a,
+      R"pbdoc(
+        save_gguf(file: str, arrays: Dict[str, array])
+
+        Save array(s) to a binary file in ``.gguf`` format.
+
+        See the `GGUF documentation <https://github.com/ggerganov/ggml/blob/master/docs/gguf.md>`_ for
+        more information on the format.
+
+        Args:
+            file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
       )pbdoc");
   m.def(
@@ -3306,7 +3332,7 @@ void init_ops(py::module_& m) {
             ``dims`` dimensions of ``a`` and the first ``dims`` dimensions of
             ``b``. If a list of lists is provided, then sum over the
             corresponding dimensions of ``a`` and ``b``. (default: 2)
-        
+
         Returns:
           result (array): The tensor dot product.
       )pbdoc");
