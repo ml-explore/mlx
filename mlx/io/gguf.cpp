@@ -1,5 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
+#include <cstring>
+
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
