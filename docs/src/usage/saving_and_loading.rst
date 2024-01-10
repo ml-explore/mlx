@@ -5,7 +5,7 @@ Saving and Loading Arrays
 
 .. currentmodule:: mlx.core
 
-MLX supports multiple array serialization formats:
+MLX supports multiple array serialization formats.
 
 .. list-table:: Serialization Formats
    :widths: 20 8 25 25 
@@ -44,8 +44,8 @@ Here's an example of saving a single array to a file:
    >>> mx.save("array", a)
 
 The array ``a`` will be saved in the file ``array.npy`` (notice the extension
-is automatically added). The extension to the save functions is optional. If
-it is missing it will be added. You can load the array with:
+is automatically added). Including the extension is optional; if it is missing
+it will be added. You can load the array with:
 
 .. code-block:: shell
 
@@ -69,10 +69,10 @@ provided. This can be loaded with:
    >>> mx.load("arrays.npz")
    {'b': array([2], dtype=float32), 'arr_0': array([1], dtype=float32)}
 
-In this case, :func:`load` returns a dictionary of names to arrays.
+In this case :func:`load` returns a dictionary of names to arrays.
 
-Saving ``safetensors`` and ``gguf`` is similar to ``savez`` but they 
-take as input a :obj:`dict` of string names to arrays:
+The functions :func:`save_safetensors` and :func:`save_gguf` are similar to
+:func:`savez`, but they take as input a :obj:`dict` of string names to arrays:
 
 .. code-block:: shell
 

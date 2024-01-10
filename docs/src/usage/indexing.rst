@@ -31,18 +31,18 @@ For multi-dimensional arrays, the ``...`` or :obj:`Ellipsis` syntax works as in 
   array(3, dtype=int32)
   array([[0, 2],
          [4, 6]], dtype=int32
-  >>> arr[.., 0]
+  >>> arr[..., 0]
   array([[0, 2],
          [4, 6]], dtype=int32
 
-You can inex with ``None`` to create a new axis:
+You can index with ``None`` to create a new axis:
 
 .. code-block:: shell
 
   >>> arr = mx.arange(8)
   >>> arr.shape
   [8]
-  >>> arr[None].sape
+  >>> arr[None].shape
   [1, 8]
 
 
@@ -56,7 +56,7 @@ You can also use an :obj:`array` to index another :obj:`array`:
   array([5, 7], dtype=int32)
 
 Mixing and matching integers, :obj:`slice`, ``...``, and :obj:`array` indices
-works just as in NumPy
+works just as in NumPy.
 
 Other functions which may be useful for indexing arrays are :func:`take` and
 :func:`take_along_axis`.
@@ -79,7 +79,7 @@ kernel would be extremely inefficient.
 Indexing with boolean masks is something that MLX may support in the future. In
 general, MLX has limited support for operations for which outputs
 *shapes* are dependent on input *data*. Other examples of these types of
-operation which MLX does not yet support include :func:`numpy.nonzero` and the
+operations which MLX does not yet support include :func:`numpy.nonzero` and the
 single input version of :func:`numpy.where`.
 
 In Place Updates 
