@@ -20,3 +20,4 @@ Loss Functions
    hinge_loss
    huber_loss
    log_cosh_loss
+   cosine_similarity_loss
