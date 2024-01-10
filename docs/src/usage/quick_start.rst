@@ -40,6 +40,9 @@ automatically evaluate the array.
   >> np.array(c)   # Also evaluates c
   array([2., 4., 6., 8.], dtype=float32)
 
+
+See the page on :ref:`Lazy Evaluation <lazy eval>` for more details.
+
 Function and Graph Transformations
 ----------------------------------
 
