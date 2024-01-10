@@ -18,7 +18,7 @@ target_include_directories(
 MESSAGE(STATUS "Downloading gguflib")
 FetchContent_Declare(gguflib
     GIT_REPOSITORY     https://github.com/antirez/gguf-tools/
-    GIT_TAG            eec3dc9f544e818c39ba3f3500c7a7e8eb6e29c9
+    GIT_TAG            af7d88d808a7608a33723fba067036202910acb3 
 )
 FetchContent_MakeAvailable(gguflib)
 target_include_directories(
