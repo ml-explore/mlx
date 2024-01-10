@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils.h"
 
 ///////////////////////////////////////////////////////////////////////////////
