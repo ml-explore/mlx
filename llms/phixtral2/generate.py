@@ -15,7 +15,7 @@ def generate(
     max_tokens: int,
     temp: float = 0.0,
 ):
-    print("[INFO] Generating with Phi-2...", flush=True)
+    print("[INFO] Generating with Phixtral-2...", flush=True)
     print(prompt, end="", flush=True)
     prompt = tokenizer(
         prompt,
