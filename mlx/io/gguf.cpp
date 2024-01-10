@@ -1,7 +1,12 @@
 // Copyright © 2023 Apple Inc.
 
-#include "mlx/io/gguf.h"
+#include "mlx/ops.h"
+#include "mlx/primitives.h"
 #include "mlx/utils.h"
+
+extern "C" {
+#include <gguflib.h>
+}
 
 namespace mlx::core {
 
