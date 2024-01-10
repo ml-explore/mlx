@@ -94,7 +94,7 @@ ValueAndGradFn inline value_and_grad(
  **/
 std::function<std::pair<array, array>(const array&)> inline value_and_grad(
     const std::function<array(const array&)>& fun) {
-  return [fun](auto inputs) { return vjp(fun, inputs, array(1.0f)); };
+  return [fun](auto inputs) { return vjp(fun, inputs, array(1)); };
 }
 
 SimpleValueAndGradFn inline value_and_grad(

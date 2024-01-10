@@ -396,7 +396,10 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   // products for each primitive
   std::unordered_map<std::uintptr_t, array> cotan_map;
   for (auto [out_idx, cotan_idx] : output_cotan_pairs) {
-    cotan_map.insert({outputs[out_idx].id(), cotans[cotan_idx]});
+    auto& o = outputs[out_idx];
+    auto s = o.has_primitive() ? o.primitive().stream()
+                               : default_stream(default_device());
+    cotan_map.insert({o.id(), astype(cotans[cotan_idx], o.dtype(), s)});
   }
   for (auto it = tape.rbegin(); it != tape.rend(); ++it) {
     auto& a = *it;
@@ -636,8 +639,7 @@ ValueAndGradFn value_and_grad(
     for (auto arg : args) {
       ginputs.push_back(inputs[arg]);
     }
-    // Set the incoming gradient as int32 so that it will be promoted to the
-    // appropriate floating point type op(int, floatXX) -> floatXX for most ops
+    // Set the incoming gradient to int32, vjp will cast it to the output type
     auto [outputs, grads] = vjp(gfun, ginputs, {array(1)});
     return std::make_pair(outputs, grads);
   };
