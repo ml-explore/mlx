@@ -68,6 +68,8 @@ struct GEMMAddMMParams {
 
   const float alpha;
   const float beta;
+
+  const int fdc;
 };
 
 

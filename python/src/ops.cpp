@@ -3476,4 +3476,34 @@ void init_ops(py::module_& m) {
       Returns:
         result (array): The tiled array.
     )pbdoc");
+  m.def(
+      "addmm",
+      &addmm,
+      "c"_a,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      "alpha"_a = 1.0f,
+      "beta"_a = 1.0f,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        addmm(c: array, a: array, b: array, /, alpha: float = 1.0, beta: float = 1.0,  *, stream: Union[None, Stream, Device] = None) -> array
+
+        Matrix multiplication and linear combination.
+
+        Perform the (possibly batched) matrix multiplication of two arrays and add to the result
+        with optional scaling factors.
+
+        Args:
+            c (array): Input array or scalar.
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+            alpha (float, optional): Scaling factor for the 
+                matrix product of ``a`` and ``b`` (default: 1)
+            beta (float, optional): Scaling factor for ``c`` (default: 1)
+
+        Returns:
+            array: ``alpha`` * (``a`` @ ``b``)  + ``beta`` * ``c``
+      )pbdoc");
 }

@@ -148,4 +148,58 @@ void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  if (out.dtype() != float32) {
+    throw std::runtime_error(
+        "[AddMM::eval_cpu] Currently only supports float32.");
+  }
+
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  auto& c = inputs[2];
+
+  // Fill output with C
+  CopyType ctype = c.data_size() == 1 ? CopyType::Scalar : CopyType::General;
+  copy(c, out, ctype);
+
+  auto check_transpose = [](const array& arr) {
+    auto stx = arr.strides()[arr.ndim() - 2];
+    auto sty = arr.strides()[arr.ndim() - 1];
+    if (stx == arr.shape(-1) && sty == 1) {
+      return std::make_tuple(false, stx, arr);
+    } else if (stx == 1 && sty == arr.shape(-2)) {
+      return std::make_tuple(true, sty, arr);
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy(arr, arr_copy, CopyType::General);
+      size_t stx = arr.shape(-1);
+      return std::make_tuple(false, stx, arr_copy);
+    }
+  };
+
+  auto [a_transposed, lda, a] = check_transpose(a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(b_pre);
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+  for (int i = 0; i < (a.size() / (M * K)); ++i) {
+    cblas_sgemm(
+        CblasRowMajor,
+        a_transposed ? CblasTrans : CblasNoTrans, // transA
+        b_transposed ? CblasTrans : CblasNoTrans, // transB
+        M,
+        N,
+        K,
+        alpha_, // alpha
+        a.data<float>() + elem_to_loc(M * K * i, a.shape(), a.strides()),
+        lda,
+        b.data<float>() + elem_to_loc(K * N * i, b.shape(), b.strides()),
+        ldb,
+        beta_, // beta
+        out.data<float>() + M * N * i,
+        out.shape(-1) // ldc
+    );
+  }
+}
+
 } // namespace mlx::core

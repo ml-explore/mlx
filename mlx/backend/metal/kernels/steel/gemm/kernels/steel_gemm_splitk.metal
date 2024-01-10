@@ -226,12 +226,13 @@ template <typename AccT,
     const constant int& ldd [[buffer(4)]],
     const device OutT *C [[buffer(5)]],
     const constant int& ldc [[buffer(6)]],
-    const constant float& alpha [[buffer(7)]],
-    const constant float& beta [[buffer(8)]],
+    const constant int& fdc [[buffer(7)]],
+    const constant float& alpha [[buffer(8)]],
+    const constant float& beta [[buffer(9)]],
     uint2 gid [[thread_position_in_grid]]) {
 
   // Ajust D and C
-  C += gid.x + gid.y * ldc;
+  C += gid.x * fdc + gid.y * ldc;
   D += gid.x + gid.y * ldd;
   C_split += gid.x + gid.y * ldd;
 
@@ -267,8 +268,9 @@ template <typename AccT,
       const constant int& ldd [[buffer(4)]], \
       const device otype *C [[buffer(5)]],  \
       const constant int& ldc [[buffer(6)]], \
-      const constant float& alpha [[buffer(7)]], \
-      const constant float& beta [[buffer(8)]], \
+      const constant int& fdc [[buffer(7)]], \
+      const constant float& alpha [[buffer(8)]], \
+      const constant float& beta [[buffer(9)]], \
       uint2 gid [[thread_position_in_grid]]);
 
 instantiate_accum(bfloat16, bfloat16_t, float32, float);

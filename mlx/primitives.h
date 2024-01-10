@@ -171,6 +171,28 @@ class Add : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class AddMM : public UnaryPrimitive {
+ public:
+  explicit AddMM(Stream stream, float alpha, float beta) 
+      : UnaryPrimitive(stream), alpha_(alpha), beta_(beta) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums) override;
+
+  DEFINE_PRINT(AddMM)
+
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  const float alpha_;
+  const float beta_;
+};
+
 class Arange : public UnaryPrimitive {
  public:
   explicit Arange(Stream stream, double start, double stop, double step)

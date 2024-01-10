@@ -198,9 +198,10 @@ struct BlockMMA {
       const int ldd, 
       const device U* C, 
       const int ldc,
+      const int fdc,
       thread const Epilogue& epilogue_op) const {
     // Adjust for simdgroup and thread location
-    C += (sm + tm) * ldc + tn + sn;
+    C += (sm + tm) * ldc + (tn + sn) * fdc;
     D += (sm + tm) * ldd + tn + sn;
 
     // Loop over all simdgroup tiles
@@ -212,13 +213,13 @@ struct BlockMMA {
 
         // Get accumulated result and associated offset in C
         thread const auto& accum = results[i * TN + j].thread_elements();
-        int offset_c = (i * TM_stride) * ldc + (j * TN_stride);
+        int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
         int offset_d = (i * TM_stride) * ldd + (j * TN_stride);
 
         // Apply epilogue
         U outs[2] = {
           epilogue_op.apply(accum[0], C[offset_c]), 
-          epilogue_op.apply(accum[1], C[offset_c + 1])
+          epilogue_op.apply(accum[1], C[offset_c + fdc])
         };
 
         // Write out D
@@ -233,10 +234,11 @@ struct BlockMMA {
       const int ldd, 
       const device U* C, 
       const int ldc, 
+      const int fdc,
       short2 dst_tile_dims,
       thread const Epilogue& epilogue_op) const {
     // Adjust for simdgroup and thread location
-    C += (sm + tm) * ldc + (tn + sn);
+    C += (sm + tm) * ldc + (tn + sn) * fdc;
     D += (sm + tm) * ldd + tn + sn;
     dst_tile_dims -= short2(tn + sn, sm + tm);
 
@@ -248,7 +250,7 @@ struct BlockMMA {
 
           // Get accumulated result and associated offset in C
           thread const auto& accum = results[i * TN + j].thread_elements();
-          int offset_c = (i * TM_stride) * ldc + (j * TN_stride);
+          int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
           int offset_d = (i * TM_stride) * ldd + (j * TN_stride);
 
           // Apply epilogue and output C
@@ -257,7 +259,7 @@ struct BlockMMA {
           }
 
           if (j * TN_stride + 1 < dst_tile_dims.x) {
-            D[offset_d + 1] = epilogue_op.apply(accum[1], C[offset_c + 1]);
+            D[offset_d + 1] = epilogue_op.apply(accum[1], C[offset_c + fdc]);
           }
         }
       }

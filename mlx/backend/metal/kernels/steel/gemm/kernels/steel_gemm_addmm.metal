@@ -69,7 +69,7 @@ template <typename T,
 
     A += transpose_a ? c_row : c_row * params->lda;
     B += transpose_b ? c_col * params->ldb : c_col;
-    C += c_row * params->ldc + c_col;
+    C += c_row * params->ldc + c_col * params->fdc;
     D += c_row * params->ldd + c_col;
 
     // Prepare threadgroup loading operations
@@ -125,7 +125,7 @@ template <typename T,
       }
 
       // Store results to device memory
-      mma_op.store_result(D, params->ldd, C, params->ldc, epilogue_op);
+      mma_op.store_result(D, params->ldd, C, params->ldc, params->fdc, epilogue_op);
       return;
 
     }
@@ -149,7 +149,7 @@ template <typename T,
             leftover_bk,
             LoopAlignment<true, true, K_aligned>{});
 
-        mma_op.store_result(D, params->ldd, C, params->ldc, epilogue_op);
+        mma_op.store_result(D, params->ldd, C, params->ldc, params->fdc, epilogue_op);
         return;
 
       } else if (tgp_bn == BN) {
@@ -167,7 +167,7 @@ template <typename T,
 
         return mma_op.store_result_safe(
             D, params->ldd, 
-            C, params->ldc, 
+            C, params->ldc, params->fdc,
             short2(tgp_bn, tgp_bm), 
             epilogue_op);
 
@@ -186,7 +186,7 @@ template <typename T,
 
         return mma_op.store_result_safe(
             D, params->ldd, 
-            C, params->ldc, 
+            C, params->ldc, params->fdc,
             short2(tgp_bn, tgp_bm), 
             epilogue_op);
 
@@ -205,7 +205,7 @@ template <typename T,
 
         return mma_op.store_result_safe(
             D, params->ldd, 
-            C, params->ldc, 
+            C, params->ldc, params->fdc,
             short2(tgp_bn, tgp_bm), 
             epilogue_op);
       }
