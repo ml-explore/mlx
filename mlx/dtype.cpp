@@ -141,6 +141,37 @@ TypeToDtype<complex64_t>::operator Dtype() {
   return complex64;
 }
 
+bool issubdtype(const Dtype& a, const Dtype& b) {
+  return a == b;
+}
+
+bool issubdtype(const Dtype::Category& cat, const Dtype& type) {
+  return false;
+}
+
+bool issubdtype(const Dtype& type, const Dtype::Category& cat) {
+  if (std::find(cat.kinds.begin(), cat.kinds.end(), kindof(type)) !=
+      cat.kinds.end()) {
+    return true;
+  }
+  return std::any_of(
+      cat.subcategories.begin(),
+      cat.subcategories.end(),
+      [&type](const auto& subcategory) {
+        return issubdtype(type, subcategory);
+      });
+}
+
+bool issubdtype(const Dtype::Category& a, const Dtype::Category& b) {
+  if (a == b) {
+    return true;
+  }
+  return std::any_of(
+      b.subcategories.begin(),
+      b.subcategories.end(),
+      [&a](const auto& subcategory) { return issubdtype(a, subcategory); });
+}
+
 // Array protocol typestring for Dtype
 std::string dtype_to_array_protocol(const Dtype& t) {
   std::ostringstream r;

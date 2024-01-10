@@ -62,10 +62,11 @@ Operations
    identity
    inner
    isclose
-   isnan
-   isposinf
-   isneginf
    isinf
+   isnan
+   issubdtype
+   isneginf
+   isposinf
    less
    less_equal
    linspace

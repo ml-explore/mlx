@@ -439,6 +439,54 @@ void init_array(nb::module_& m) {
   m.attr("float32") = nb::cast(float32);
   m.attr("bfloat16") = nb::cast(bfloat16);
   m.attr("complex64") = nb::cast(complex64);
+  nb::class_<Dtype::Category>(
+      m,
+      "DtypeCategory",
+      R"pbdoc(
+      Type to hold categories of :class:`dtypes <Dtype>`.
+
+      * :attr:`~mlx.core.generic`
+
+        * :ref:`bool_ <data_types>`
+        * :attr:`~mlx.core.number`
+
+          * :attr:`~mlx.core.integer`
+
+            * :attr:`~mlx.core.unsignedinteger`
+
+              * :ref:`uint8 <data_types>`
+              * :ref:`uint16 <data_types>`
+              * :ref:`uint32 <data_types>`
+              * :ref:`uint64 <data_types>`
+
+            * :attr:`~mlx.core.signedinteger`
+
+              * :ref:`int8 <data_types>`
+              * :ref:`int32 <data_types>`
+              * :ref:`int64 <data_types>`
+
+          * :attr:`~mlx.core.inexact`
+
+            * :attr:`~mlx.core.floating`
+
+              * :ref:`float16 <data_types>`
+              * :ref:`bfloat16 <data_types>`
+              * :ref:`float32 <data_types>`
+
+            * :attr:`~mlx.core.complexfloating`
+
+              * :ref:`complex128 <data_types>`
+
+      See also :func:`~mlx.core.issubdtype`.
+      )pbdoc");
+  m.attr("complexfloating") = nb::cast(complexfloating);
+  m.attr("floating") = nb::cast(floating);
+  m.attr("inexact") = nb::cast(inexact);
+  m.attr("signedinteger") = nb::cast(signedinteger);
+  m.attr("unsignedinteger") = nb::cast(unsignedinteger);
+  m.attr("integer") = nb::cast(integer);
+  m.attr("number") = nb::cast(number);
+  m.attr("generic") = nb::cast(generic);
 
   nb::class_<ArrayAt>(
       m,

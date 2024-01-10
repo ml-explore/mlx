@@ -578,3 +578,24 @@ class Module(dict):
         See :func:`train`.
         """
         self.train(False)
+
+    def set_dtype(
+        self,
+        dtype: mx.Dtype,
+        predicate: Optional[Callable[[mx.Dtype], bool]] = lambda x: mx.issubdtype(
+            x, mx.floating
+        ),
+    ):
+        """Set the dtype of the models parameters.
+
+        Args:
+            dtype (Dtype): The new dtype.
+            predicate (~typing.Callable): A predicate to select parameters to cast. By default, only parameters of type
+                :attr:`~mlx.core.floating` will be updated to avoid updating integer parameters to the new dtype.
+        """
+        if predicate is None:
+
+            def predicate(_):
+                return True
+
+        self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)

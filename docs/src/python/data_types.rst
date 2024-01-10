@@ -1,7 +1,5 @@
 .. _data_types:
 
-:orphan:
-
 Data Types
 ==========
 
@@ -56,3 +54,10 @@ The default floating point type is ``float32`` and the default integer type is
    * - ``complex64``
      - 8 
      - 64-bit complex float
+
+Categories
+----------
+
+The hierarchy below shows supported values for :obj:`DtypeCategory`.
+
+.. autoclass:: DtypeCategory

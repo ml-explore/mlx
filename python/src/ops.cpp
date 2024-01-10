@@ -3684,4 +3684,63 @@ void init_ops(nb::module_& m) {
         Returns:
             array or list(array): An array or list of arrays with at least three dimensions.
         )pbdoc");
+  m.def(
+      "issubdtype",
+      nb::overload_cast<const Dtype&, const Dtype&>(&issubdtype),
+      ""_a,
+      ""_a,
+      R"pbdoc(
+        issubdtype(arg1: Union[Dtype, DtypeCategory], arg2: Union[Dtype, DtypeCategory], /) -> bool
+
+        `issubdtype` can be used to check the type of arrays:
+
+        >>> ints = mx.array([1, 2, 3], dtype=mx.int32)
+        >>> mx.issubdtype(ints.dtype, mx.integer)
+        True
+        >>> mx.issubdtype(ints.dtype, mx.floating)
+        False
+
+        >>> floats = mx.array([1, 2, 3], dtype=mx.float32)
+        >>> mx.issubdtype(floats.dtype, mx.integer)
+        False
+        >>> mx.issubdtype(floats.dtype, mx.floating)
+        True
+
+        Similar types of different sizes are not subdtypes of each other:
+
+        >>> mx.issubdtype(mx.float64, mx.float32)
+        False
+        >>> mx.issubdtype(mx.float32, mx.float64)
+        False
+
+        but both are subtypes of `floating`:
+
+        >>> mx.issubdtype(mx.float64, mx.floating)
+        True
+        >>> mx.issubdtype(mx.float32, mx.floating)
+        True
+
+        For convenience, dtype-like objects are allowed too:
+
+        >>> mx.issubdtype(mx.float32, mx.inexact)
+        True
+        >>> mx.issubdtype(mx.signedinteger, mx.floating)
+        False
+      )pbdoc");
+  m.def(
+      "issubdtype",
+      nb::overload_cast<const Dtype&, const Dtype::Category&>(&issubdtype),
+      ""_a,
+      ""_a);
+  m.def(
+      "issubdtype",
+      nb::overload_cast<const Dtype::Category&, const Dtype&>(&issubdtype),
+      ""_a,
+      ""_a);
+  m.def(
+      "issubdtype",
+      nb::overload_cast<const Dtype::Category&, const Dtype::Category&>(
+          &issubdtype),
+      ""_a,
+      ""_a);
 }
