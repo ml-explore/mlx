@@ -1122,7 +1122,6 @@ std::unordered_map<std::string, array> load_gguf(
 
 void save_gguf(std::string file, std::unordered_map<std::string, array> a);
 
-
 /** Compute the matrix product of A and B and add C to the result */
 array addmm(
     const array& c,
