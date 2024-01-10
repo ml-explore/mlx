@@ -640,7 +640,7 @@ ValueAndGradFn value_and_grad(
       ginputs.push_back(inputs[arg]);
     }
     // Set the incoming gradient to int32, vjp will cast it to the output type
-    auto [outputs, grads] = vjp(gfun, ginputs, {array(1)});
+    auto [outputs, grads] = vjp(gfun, ginputs, {array(1.0f)});
     return std::make_pair(outputs, grads);
   };
 }
