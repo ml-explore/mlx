@@ -14,6 +14,11 @@ target_include_directories(
     $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>
     $<INSTALL_INTERFACE:include/json>
 )
+install(
+    DIRECTORY ${json_SOURCE_DIR}/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/json
+    COMPONENT json_source
+)
 
 MESSAGE(STATUS "Downloading gguflib")
 FetchContent_Declare(gguflib

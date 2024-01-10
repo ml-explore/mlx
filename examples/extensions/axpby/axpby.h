@@ -42,11 +42,13 @@ class Axpby : public Primitive {
    * To avoid unnecessary allocations, the evaluation function
    * is responsible for allocating space for the array.
    */
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& out)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& out)
+      override;
 
   /** The Jacobian-vector product. */
-  array jvp(
+  std::vector<array> jvp(
       const std::vector<array>& primals,
       const std::vector<array>& tangents,
       const std::vector<int>& argnums) override;
@@ -54,7 +56,7 @@ class Axpby : public Primitive {
   /** The vector-Jacobian product. */
   std::vector<array> vjp(
       const std::vector<array>& primals,
-      const array& cotan,
+      const std::vector<array>& cotangents,
       const std::vector<int>& argnums) override;
 
   /**
@@ -63,7 +65,7 @@ class Axpby : public Primitive {
    * representing the vectorized computation and the axis which
    * corresponds to the output vectorized dimension.
    */
-  std::pair<array, int> vmap(
+  std::pair<std::vector<array>, std::vector<int>> vmap(
       const std::vector<array>& inputs,
       const std::vector<int>& axes) override;
 
@@ -80,7 +82,7 @@ class Axpby : public Primitive {
   float beta_;
 
   /** Fall back implementation for evaluation on CPU */
-  void eval(const std::vector<array>& inputs, array& out);
+  void eval(const std::vector<array>& inputs, std::vector<array>& out);
 };
 
 } // namespace mlx::core
