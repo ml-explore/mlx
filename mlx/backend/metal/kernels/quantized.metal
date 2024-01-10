@@ -5,7 +5,6 @@
 
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/defines.h"
-#include "mlx/backend/metal/kernels/gemm/gemm.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 #include "mlx/backend/metal/kernels/steel/gemm/gemm.h"

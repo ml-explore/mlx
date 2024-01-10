@@ -18,7 +18,6 @@ set(
   "binary_two"
   "conv"
   "copy"
-  "gemm"
   "gemv"
   "quantized"
   "random"
@@ -47,11 +46,8 @@ endfunction(build_kernel_base)
 function(build_kernel KERNEL)
   set(SRCFILE ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL}.metal)
   set(HEADERS_PADDED ${HEADERS})
-  if(${KERNEL} STREQUAL "gemm")
-    set(HEADERS_PADDED ${HEADERS_PADDED} ${CMAKE_CURRENT_SOURCE_DIR}/gemm/gemm.h)
-  endif()
   if(${KERNEL} STREQUAL "conv")
-    set(HEADERS_PADDED ${HEADERS_PADDED} ${CMAKE_CURRENT_SOURCE_DIR}/gemm/conv.h)
+    set(HEADERS_PADDED ${HEADERS_PADDED} ${CMAKE_CURRENT_SOURCE_DIR}/conv.h)
   endif()
   build_kernel_base(${KERNEL} ${SRCFILE} "${HEADERS_PADDED}")
 endfunction(build_kernel)

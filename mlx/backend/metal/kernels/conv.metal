@@ -5,7 +5,7 @@
 #include "mlx/backend/metal/kernels/conv_params.h"
 #include "mlx/backend/metal/kernels/bf16.h"
 
-#include "mlx/backend/metal/kernels/gemm/conv.h"
+#include "mlx/backend/metal/kernels/conv.h"
 
 using namespace metal;
 
