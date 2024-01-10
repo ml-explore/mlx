@@ -1,10 +1,9 @@
 # Copyright © 2023 Apple Inc.
 
-from typing import List
+from typing import List, Optional, Tuple
 
 import mlx.core as mx
 from mlx.utils import tree_map
-from typing import Optional, Tuple
 
 
 class OptimizerState(dict):
