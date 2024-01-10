@@ -3061,6 +3061,11 @@ void init_ops(py::module_& m) {
             result (array, dict):
                 A single array if loading from a ``.npy`` file or a dict mapping
                 names to arrays if loading from a ``.npz`` or ``.safetensors`` file.
+
+        .. warning:
+
+          When loading unsupported quantization formats from GGUF, MLX will
+          auto case to ``mx.float16``
       )pbdoc");
   m.def(
       "save_safetensors",

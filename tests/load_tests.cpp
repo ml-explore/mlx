@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-#include <cstdio>
 #include <filesystem>
 #include <stdexcept>
 #include <vector>
@@ -37,7 +36,6 @@ TEST_CASE("test save_safetensors") {
 
 TEST_CASE("test gguf") {
   std::string file_path = get_temp_file("test_arr.gguf");
-  remove(file_path.c_str());
   using dict = std::unordered_map<std::string, array>;
   dict map = {
       {"test", array({1.0f, 2.0f, 3.0f, 4.0f})},
@@ -56,7 +54,6 @@ TEST_CASE("test gguf") {
       bool_, uint8, uint32, uint64, int64, bfloat16, complex64};
   for (auto t : unsupported_types) {
     dict to_save = {{"test", astype(arange(5), t)}};
-    remove(file_path.c_str());
     CHECK_THROWS(save_gguf(file_path, to_save));
   }
 
@@ -64,7 +61,6 @@ TEST_CASE("test gguf") {
   for (auto t : supported_types) {
     auto arr = astype(arange(5), t);
     dict to_save = {{"test", arr}};
-    remove(file_path.c_str());
     save_gguf(file_path, to_save);
     auto loaded = load_gguf(file_path);
     CHECK(array_equal(loaded.at("test"), arr).item<bool>());

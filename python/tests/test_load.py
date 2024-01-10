@@ -234,7 +234,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         aload = mx.load(save_file)["a"]
         self.assertTrue(mx.array_equal(a, aload))
 
-        save_file = os.path.join(self.test_dir, "a2.gguf")
+        save_file = os.path.join(self.test_dir, "a.gguf")
         mx.save_gguf(save_file, {"a": a})
         aload = mx.load(save_file)["a"]
         self.assertTrue(mx.array_equal(a, aload))

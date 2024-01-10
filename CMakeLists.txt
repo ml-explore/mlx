@@ -98,32 +98,6 @@ elseif (MLX_BUILD_METAL)
     ${QUARTZ_LIB})
 endif()
 
-MESSAGE(STATUS "Downloading json")
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
-FetchContent_MakeAvailable(json)
-target_include_directories(
-    mlx PUBLIC
-    $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>
-    $<INSTALL_INTERFACE:include/json>
-)
-
-MESSAGE(STATUS "Downloading gguflib")
-FetchContent_Declare(gguflib
-    GIT_REPOSITORY     https://github.com/antirez/gguf-tools/
-    GIT_TAG            26e3a59233569a7b754b7f404b473111923215aa
-)
-FetchContent_MakeAvailable(gguflib)
-target_include_directories(
-    mlx PUBLIC
-    $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/gguflib>
-)
-add_library(
-  gguflib SHARED
-  ${gguflib_SOURCE_DIR}/fp16.c
-  ${gguflib_SOURCE_DIR}/gguflib.c)
-target_link_libraries(mlx $<BUILD_INTERFACE:gguflib>)
-
 find_library(ACCELERATE_LIBRARY Accelerate)
 if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
   message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")

@@ -50,16 +50,17 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
         tensor->num_weights * equivalent_dtype.value().size);
     return {buffer, equivalent_dtype.value()};
   }
-  // Otherwise, we convert to float32.
+  // Otherwise, we convert to float16.
   // TODO: Add other dequantization options.
-  const float* data = gguf_tensor_to_float(tensor);
+  int16_t* data = gguf_tensor_to_f16(tensor);
   if (data == NULL) {
-    throw std::runtime_error("[load_gguf] gguf_tensor_to_float failed");
+    throw std::runtime_error("[load_gguf] gguf_tensor_to_f16 failed");
   }
-  const size_t new_size = tensor->num_weights * sizeof(float);
+  const size_t new_size = tensor->num_weights * sizeof(int16_t);
   allocator::Buffer buffer = allocator::malloc(new_size);
   memcpy(buffer.raw_ptr(), data, new_size);
-  return {buffer, float32};
+  free(data);
+  return {buffer, float16};
 }
 
 std::unordered_map<std::string, array> load_gguf(

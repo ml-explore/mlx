@@ -5,3 +5,29 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/safetensor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/gguf.cpp
 )
+
+MESSAGE(STATUS "Downloading json")
+FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
+FetchContent_MakeAvailable(json)
+target_include_directories(
+    mlx PUBLIC
+    $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>
+    $<INSTALL_INTERFACE:include/json>
+)
+
+MESSAGE(STATUS "Downloading gguflib")
+FetchContent_Declare(gguflib
+    GIT_REPOSITORY     https://github.com/antirez/gguf-tools/
+    GIT_TAG            eec3dc9f544e818c39ba3f3500c7a7e8eb6e29c9
+)
+FetchContent_MakeAvailable(gguflib)
+target_include_directories(
+    mlx PUBLIC
+    $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include/gguflib>
+)
+add_library(
+  gguflib SHARED
+  ${gguflib_SOURCE_DIR}/fp16.c
+  ${gguflib_SOURCE_DIR}/gguflib.c)
+target_link_libraries(mlx $<BUILD_INTERFACE:gguflib>)
