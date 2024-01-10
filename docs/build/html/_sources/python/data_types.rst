@@ -29,9 +29,9 @@ The default floating point type is ``float32`` and the default integer type is
    * - ``uint32``
      - 4 
      - 32-bit unsigned integer 
-   * - ``uint32``
+   * - ``uint64``
      - 8 
-     - 32-bit unsigned integer 
+     - 64-bit unsigned integer 
    * - ``int8``
      - 1 
      - 8-bit signed integer 
