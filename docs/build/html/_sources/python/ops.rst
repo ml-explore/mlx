@@ -36,6 +36,7 @@ Operations
    cosh
    dequantize
    divide
+   divmod
    equal
    erf
    erfinv
@@ -49,6 +50,7 @@ Operations
    greater
    greater_equal
    identity
+   inner
    less
    less_equal
    linspace
@@ -59,6 +61,8 @@ Operations
    log1p
    logaddexp
    logical_not
+   logical_and
+   logical_or
    logsumexp
    matmul
    max
@@ -71,6 +75,7 @@ Operations
    negative
    ones
    ones_like
+   outer
    partition
    pad
    prod
@@ -84,6 +89,7 @@ Operations
    save
    savez
    savez_compressed
+   save_gguf
    save_safetensors
    sigmoid
    sign
