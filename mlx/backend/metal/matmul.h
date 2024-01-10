@@ -28,4 +28,20 @@ void mlx_matmul(
     bool transpose_b,
     std::vector<array>& copies);
 
+void steel_matmul(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    array& out,
+    int M,
+    int N,
+    int K,
+    int batch_size_out,
+    int lda,
+    int ldb,
+    bool transpose_a,
+    bool transpose_b,
+    std::vector<array>& copies);
+
 } // namespace mlx::core

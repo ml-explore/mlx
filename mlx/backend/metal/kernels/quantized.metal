@@ -8,6 +8,8 @@
 #include "mlx/backend/metal/kernels/gemm/gemm.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
+#include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
+
 using namespace metal;
 
 #define MLX_MTL_CONST static constant constexpr const
@@ -239,8 +241,9 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   constexpr int w_els_per_thread = (BN * BK / el_per_int) / (SIMD_SIZE * WM * WN);
 
   // Instantiate the appropriate BlockMMA and Loader
-  using mma_t = BlockMMA<T, BM, BN, BK, WM, WN, false, true>;
-  using loader_x_t = BlockLoader<T, BM, BK, BK, 4, WM * WN * SIMD_SIZE, false, true, 0>;
+  using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK, BK>;
+  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE, 1, 4>;
+
 
   threadgroup T scales_block[BN * groups_per_block];
   threadgroup T biases_block[BN * groups_per_block];
@@ -392,8 +395,8 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   constexpr int w_els_per_thread = (BK * BN / el_per_int) / (SIMD_SIZE * WM * WN);
 
   // Instantiate the appropriate BlockMMA and Loader
-  using mma_t = BlockMMA<T, BM, BN, BK, WM, WN, false, false>;
-  using loader_x_t = BlockLoader<T, BM, BK, BK, 4, WM * WN * SIMD_SIZE, false, true, 0>;
+  using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, false, BK, BN>;
+  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE, 1, 4>;
 
   threadgroup T scales_block[BK * groups_per_block];
   threadgroup T biases_block[BK * groups_per_block];

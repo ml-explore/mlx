@@ -30,6 +30,20 @@ set(
   "indexing"
 )
 
+function(build_kernel_base TARGET SRCFILE DEPS)
+  add_custom_command(
+    COMMAND xcrun -sdk macosx metal -Wall -Wextra
+                  -fno-fast-math
+                  -c ${SRCFILE} 
+                  -I${PROJECT_SOURCE_DIR} 
+                  -o ${TARGET}.air
+    DEPENDS ${SRCFILE} ${DEPS}
+    OUTPUT ${TARGET}.air
+    COMMENT "Building ${TARGET}.air"
+    VERBATIM
+  )
+endfunction(build_kernel_base)
+
 function(build_kernel KERNEL)
   set(SRCFILE ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL}.metal)
   set(HEADERS_PADDED ${HEADERS})
@@ -39,22 +53,21 @@ function(build_kernel KERNEL)
   if(${KERNEL} STREQUAL "conv")
     set(HEADERS_PADDED ${HEADERS_PADDED} ${CMAKE_CURRENT_SOURCE_DIR}/gemm/conv.h)
   endif()
-  add_custom_command(
-    COMMAND xcrun -sdk macosx metal -Wall -Wextra
-                  -fno-fast-math
-                  -c ${SRCFILE} 
-                  -I${PROJECT_SOURCE_DIR} 
-                  -o ${KERNEL}.air
-    DEPENDS ${SRCFILE} ${HEADERS_PADDED}
-    OUTPUT ${KERNEL}.air
-    COMMENT "Building ${KERNEL}.air"
-    VERBATIM
-  )
+  build_kernel_base(${KERNEL} ${SRCFILE} "${HEADERS_PADDED}")
 endfunction(build_kernel)
 
 foreach(KERNEL ${KERNELS})
   build_kernel(${KERNEL})
   set(KERNEL_AIR ${KERNEL}.air ${KERNEL_AIR})
+endforeach()
+
+file(GLOB_RECURSE STEEL_KERNELS ${CMAKE_CURRENT_SOURCE_DIR}/steel/*.metal)
+file(GLOB_RECURSE STEEL_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/steel/*.h)
+
+foreach(KERNEL ${STEEL_KERNELS})
+  cmake_path(GET KERNEL STEM TARGET)
+  build_kernel_base(${TARGET} ${KERNEL} "${STEEL_HEADERS}")
+  set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
 endforeach()
 
 add_custom_command(

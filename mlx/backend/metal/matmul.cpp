@@ -3,11 +3,13 @@
 #include <algorithm>
 #include <cassert>
 #include <numeric>
+#include <iostream>
 #include <sstream>
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/kernels/steel/host.h"
 #include "mlx/backend/metal/matmul.h"
 #include "mlx/backend/metal/mps/gemm.h"
 #include "mlx/backend/metal/utils.h"
@@ -186,7 +188,7 @@ inline void mps_matmul(
 
 } // namespace
 
-void mlx_matmul(
+void steel_matmul(
     const Stream& s,
     metal::Device& d,
     const array& a,
@@ -201,6 +203,17 @@ void mlx_matmul(
     bool transpose_a,
     bool transpose_b,
     std::vector<array>& copies) {
+
+  using namespace mlx::steel;
+
+  // Coalesce (B, M, K) X (K, N) to (B*M, K) X (K, N)
+  if(batch_size_out > 1 && !transpose_a && 
+     a.data_size() == batch_size_out * M * K &&
+     b.size() == K * N) {
+    M = M * batch_size_out;
+    batch_size_out = 1;
+  }
+
   // Account for batch sizes and basic broadcasting
   int batch_size_a = a.data_size() / (M * K);
   int batch_size_b = b.data_size() / (K * N);
@@ -209,11 +222,105 @@ void mlx_matmul(
   int matrix_stride_b = (batch_size_b == 1) ? 0 : K * N;
   int matrix_stride_out = M * N;
 
+  int _tm = M / 16;
+  int _tn = N / 16;
+  int _tk = K / 16;
+
+  if(batch_size_out == 1 && (_tm * _tn) <= 32 && _tk >= 8) {
+
+    int bm = M < 40 ? 16 : 32;
+    int bn = N < 40 ? 16 : 32;
+    int bk = 16;
+    int wm = 2, wn = 2;  
+
+    int split_k_partitions = _tk < 16 ? 2 : (_tk < 32 ? 4 : (_tk < 64 ? 8 : 16));
+    int split_k_partition_stride = M * N;
+    int gemm_k_iterations = (K / bk) / split_k_partitions;
+    int split_k_partition_size = gemm_k_iterations * bk;
+
+    array C_split({split_k_partitions, M, N}, float32, nullptr, {});
+    C_split.set_data(allocator::malloc_or_wait(C_split.nbytes()));
+    copies.push_back(C_split);
+
+    std::ostringstream kname;
+    kname << "steel_gemm_splitk_" << (transpose_a ? 't' : 'n') << (transpose_b ? 't' : 'n')
+          << "_" << type_to_name(a) << "_" << type_to_name(C_split) << "_bm" << bm
+          << "_bn" << bn << "_bk" << bk << "_wm" << wm << "_wn" << wn << "_MN_"
+          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
+          << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+
+    // Encode and dispatch gemm kernel
+    auto compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = d.get_kernel(kname.str());
+    compute_encoder->setComputePipelineState(kernel);
+
+    int tn = (N + bn - 1) / bn;
+    int tm = (M + bm - 1) / bm;
+
+    GEMMSpiltKParams params{
+        M,
+        N,
+        K,
+        lda,
+        ldb,
+        N,
+        tn,
+        tm,
+        split_k_partitions,
+        split_k_partition_stride,
+        split_k_partition_size,
+        gemm_k_iterations};
+
+    MTL::Size group_dims = MTL::Size(32, wn, wm);
+    MTL::Size grid_dims = MTL::Size(tn, tm, split_k_partitions);
+
+    
+    set_array_buffer(compute_encoder, a, 0);
+    set_array_buffer(compute_encoder, b, 1);
+    set_array_buffer(compute_encoder, C_split, 2);
+
+    compute_encoder->setBytes(&params, sizeof(GEMMSpiltKParams), 3);
+    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+
+    // Do accum kernel 
+    {
+      auto c_split_buf = static_cast<const MTL::Resource*>(C_split.buffer().ptr());
+      const class MTL::Resource* const resources[1] = {c_split_buf};
+      compute_encoder->memoryBarrier(resources, 1);
+
+      auto kernel = d.get_kernel(
+        "steel_gemm_splitk_accum_" + type_to_name(out) + "_" + type_to_name(C_split));
+      compute_encoder->setComputePipelineState(kernel);
+
+      // Set the arguments for the kernel
+      set_array_buffer(compute_encoder, C_split, 0);
+      set_array_buffer(compute_encoder, out, 1);
+      compute_encoder->setBytes(&split_k_partitions, sizeof(int), 2);
+      compute_encoder->setBytes(&split_k_partition_stride, sizeof(int), 3);
+      compute_encoder->setBytes(&N, sizeof(int), 4);
+
+      // Launch enough thread groups for each output
+      MTL::Size grid_dims = MTL::Size(N, M, 1);
+      MTL::Size group_dims = MTL::Size(std::min(1024, N * M), 1, 1);
+
+      compute_encoder->dispatchThreads(grid_dims, group_dims);
+    }
+
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+    return;
+
+  }
+
   // Determine dispatch kernel
   int bm = 32, bn = 32, bk = 16;
   int wm = 2, wn = 2;
 
-  if ((size_t)batch_size_out * M * N >= 2ul << 20) {
+  // bm = 32;
+  // bn = 64;
+  // bk = (out.dtype() == float32) ? 16 : 32;
+
+  if ((size_t)batch_size_out * M * N >= 1ul << 20) {
     if (!transpose_a && transpose_b) {
       bm = 64;
       bn = (out.dtype() == float32) ? 64 : 32;
@@ -225,7 +332,7 @@ void mlx_matmul(
   }
 
   std::ostringstream kname;
-  kname << "gemm_" << (transpose_a ? 't' : 'n') << (transpose_b ? 't' : 'n')
+  kname << "steel_gemm_" << (transpose_a ? 't' : 'n') << (transpose_b ? 't' : 'n')
         << "_" << type_to_name(a) << "_" << type_to_name(out) << "_bm" << bm
         << "_bn" << bn << "_bk" << bk << "_wm" << wm << "_wn" << wn << "_MN_"
         << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
@@ -236,33 +343,50 @@ void mlx_matmul(
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
+  int tn = (N + bn - 1) / bn;
+  int tm = (M + bm - 1) / bm;
+  int swizzle_log = tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+
+  GEMMParams params{
+      M,
+      N,
+      K,
+      lda,
+      ldb,
+      N,
+      tn,
+      tm,
+      matrix_stride_a,
+      matrix_stride_b,
+      matrix_stride_out,
+      swizzle_log,
+      (K / bk)};
+
+  int tile = 1 << swizzle_log;
+  tm = (tm + tile - 1) / tile;
+  tn = tn * tile;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
+
   // Launch only 1 kernel in the case of simple batching / broadcasting
   if (batch_size_out == std::max(batch_size_a, batch_size_b) &&
       (batch_size_a == batch_size_b ||
        std::min(batch_size_a, batch_size_b) == 1)) {
-    MTL::Size group_dims = MTL::Size(32, wn, wm);
-    MTL::Size grid_dims =
-        MTL::Size((N + bn - 1) / bn, (M + bm - 1) / bm, batch_size_out);
 
     set_array_buffer(compute_encoder, a, 0);
     set_array_buffer(compute_encoder, b, 1);
     set_array_buffer(compute_encoder, out, 2);
 
-    compute_encoder->setBytes(&M, sizeof(int), 3);
-    compute_encoder->setBytes(&N, sizeof(int), 4);
-    compute_encoder->setBytes(&K, sizeof(int), 5);
-    compute_encoder->setBytes(&matrix_stride_a, sizeof(int), 6);
-    compute_encoder->setBytes(&matrix_stride_b, sizeof(int), 7);
-    compute_encoder->setBytes(&matrix_stride_out, sizeof(int), 8);
+    compute_encoder->setBytes(&params, sizeof(GEMMParams), 3);
     compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
   } else { // Other launch kernels with set offsets
+
+    MTL::Size grid_dims_single = MTL::Size(tn, tm, 1);
 
     for (int i = 0; i < batch_size_out; ++i) {
       auto a_off = elem_to_loc(M * K * i, a.shape(), a.strides());
       auto b_off = elem_to_loc(K * N * i, b.shape(), b.strides());
-
-      MTL::Size group_dims = MTL::Size(32, wn, wm);
-      MTL::Size grid_dims = MTL::Size((N + bn - 1) / bn, (M + bm - 1) / bm, 1);
 
       auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
       auto b_buf = static_cast<const MTL::Buffer*>(b.buffer().ptr());
@@ -272,13 +396,8 @@ void mlx_matmul(
       compute_encoder->setBuffer(b_buf, b_off * b.itemsize(), 1);
       compute_encoder->setBuffer(out_buf, i * M * N * out.itemsize(), 2);
 
-      compute_encoder->setBytes(&M, sizeof(int), 3);
-      compute_encoder->setBytes(&N, sizeof(int), 4);
-      compute_encoder->setBytes(&K, sizeof(int), 5);
-      compute_encoder->setBytes(&matrix_stride_a, sizeof(int), 6);
-      compute_encoder->setBytes(&matrix_stride_b, sizeof(int), 7);
-      compute_encoder->setBytes(&matrix_stride_out, sizeof(int), 8);
-      compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+      compute_encoder->setBytes(&params, sizeof(GEMMParams), 3);
+      compute_encoder->dispatchThreadgroups(grid_dims_single, group_dims);
     }
   }
 
@@ -433,10 +552,10 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  d.end_encoding(s.index);
-
   if (use_mps()) {
-    mps_matmul(
+    d.end_encoding(s.index);
+
+    return mps_matmul(
         s,
         d,
         a,
@@ -451,10 +570,10 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
         a_transposed,
         b_transposed,
         copies);
-    return;
+    
   }
 
-  mlx_matmul(
+  return steel_matmul(
       s,
       d,
       a,

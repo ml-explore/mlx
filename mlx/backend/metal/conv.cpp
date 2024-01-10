@@ -70,7 +70,7 @@ void explicit_gemm_conv_1D_gpu(
 
   // Perform gemm
   std::vector<array> copies = {in_padded, in_strided};
-  mlx_matmul(
+  return steel_matmul(
       s,
       d,
       /*a = */ in_strided,
@@ -262,7 +262,7 @@ void explicit_gemm_conv_2D_gpu(
 
   // Perform gemm
   std::vector<array> copies = {in_padded, in_strided};
-  mlx_matmul(
+  return steel_matmul(
       s,
       d,
       /*a = */ in_strided,
@@ -411,7 +411,7 @@ void winograd_conv_2D_gpu(
   copies_w.push_back(out_wg);
   {
     std::vector<array> empty_copies;
-    mlx_matmul(
+    steel_matmul(
         s,
         d,
         /*a = */ inp_wg,
