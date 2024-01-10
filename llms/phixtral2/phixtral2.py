@@ -234,7 +234,6 @@ def load(path_or_hf_repo: str):
                 allow_patterns=["*.json", "*.safetensors", "tokenizer.model"],
             )
         )
-    print(f"{model_path=}")
 
     with open(model_path / "config.json", "r") as f:
         config = json.loads(f.read())
