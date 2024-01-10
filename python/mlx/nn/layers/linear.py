@@ -63,9 +63,10 @@ class Linear(Module):
         return f"input_dims={self.weight.shape[1]}, output_dims={self.weight.shape[0]}, bias={'bias' in self}"
 
     def __call__(self, x: mx.array) -> mx.array:
-        x = x @ self.weight.T
         if "bias" in self:
-            x = x + self.bias
+            x = mx.addmm(self.bias, x, self.weight.T)
+        else:
+            x = x @ self.weight.T
         return x
 
 
