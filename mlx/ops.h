@@ -374,6 +374,8 @@ array_equal(const array& a, const array& b, StreamOrDevice s = {}) {
   return array_equal(a, b, false, s);
 }
 
+array isnan(const array& a, StreamOrDevice s = {});
+
 /** Select from x or y depending on condition. */
 array where(
     const array& condition,

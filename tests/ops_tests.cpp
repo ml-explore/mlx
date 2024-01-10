@@ -479,6 +479,20 @@ TEST_CASE("test comparison ops") {
   }
 }
 
+TEST_CASE("test is nan") {
+  array x(1.0f);
+  CHECK(!isnan(x).item<bool>());
+
+  array y(NAN);
+  CHECK(isnan(y).item<bool>());
+
+  array z = identity(7);
+  CHECK(!all(isnan(z)).item<bool>());
+
+  array w = array({1.0f, NAN, 2.0f});
+  CHECK(all(isnan(w)).item<bool>());
+}
+
 TEST_CASE("test all close") {
   array x(1.0f);
   array y(1.0f);

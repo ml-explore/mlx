@@ -321,6 +321,19 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertFalse(mx.array_equal(x, y))
                 self.assertTrue(mx.array_equal(x, y, equal_nan=True))
 
+    def test_isnan(self):
+        x = mx.array([0.0, float("nan")])
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.float16)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.complex64)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
             for diag in [-1, 0, 1, -2]:

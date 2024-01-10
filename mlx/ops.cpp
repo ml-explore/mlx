@@ -1051,6 +1051,17 @@ array array_equal(
   }
 }
 
+array isnan(const array& a, StreamOrDevice s /* = {} */) {
+  array b = full(a.shape(), std::numeric_limits<double>::quiet_NaN());
+  return array(
+      a.shape(),
+      bool_,
+      std::make_unique<Equal>(to_stream(s), true),
+      {astype(a, a.dtype(), s), astype(b, a.dtype(), s)});
+  // return equal(
+  //     a, full(a.shape(), std::numeric_limits<double>::quiet_NaN()));
+}
+
 array where(
     const array& condition,
     const array& x,
