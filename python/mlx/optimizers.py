@@ -1,10 +1,10 @@
 # Copyright © 2023 Apple Inc.
 
-import math
 from typing import List
 
 import mlx.core as mx
 from mlx.utils import tree_map
+from typing import Optional, Tuple
 
 
 class OptimizerState(dict):
@@ -502,3 +502,106 @@ class Lion(Optimizer):
         if weight_decay > 0:
             parameter = (1 - lr * weight_decay) * parameter
         return parameter - lr * mx.sign(c)
+
+
+class Adafactor(Optimizer):
+    def __init__(
+        self,
+        learning_rate: Optional[float] = None,
+        eps: Tuple[float, float] = (1e-30, 1e-3),
+        clip_threshold: float = 1.0,
+        decay_rate: float = -0.8,
+        beta_1: Optional[float] = None,
+        weight_decay: float = 0.0,
+        scale_parameter: bool = True,
+        relative_step: bool = True,
+        warmup_init: bool = False,
+    ):
+        super().__init__()
+        self.learning_rate = learning_rate
+        self.eps = eps
+        self.clip_threshold = clip_threshold
+        self.decay_rate = decay_rate
+        self.beta_1 = beta_1
+        self.weight_decay = weight_decay
+        self.scale_parameter = scale_parameter
+        self.relative_step = relative_step
+        self.warmup_init = warmup_init
+
+    def compute_rms(self, inputs):
+        return mx.sqrt(mx.square(mx.mean(inputs)))
+
+    def compute_learning_rate(self, step, rms):
+        relative_step_size = self.learning_rate
+        if self.relative_step:
+            min_step = 1e-6 * step if self.warmup_init else 1e-2
+            relative_step_size = mx.minimum(min_step, 1 / mx.sqrt(mx.array(step)))
+
+        parameter_scale = 1.0
+        if self.scale_parameter:
+            parameter_scale = mx.maximum(mx.array(self.eps[-1]), rms)
+        return parameter_scale * relative_step_size
+
+    def approximate_exp_moving_avg(self, exp_avg_sq_row, exp_avg_sq_col):
+        r_factor = mx.rsqrt(
+            exp_avg_sq_row / mx.mean(exp_avg_sq_row, axis=-1, keepdims=True)
+        )
+        c_factor = mx.rsqrt(exp_avg_sq_col)
+        return mx.matmul(
+            mx.expand_dims(r_factor, axis=-1), mx.expand_dims(c_factor, axis=0)
+        )
+
+    def apply_single(
+        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
+    ):
+        gradient_shape = gradient.shape
+        factored = len(gradient_shape) >= 2
+        step = state.get("step", 0) + 1
+        state["step"] = step
+        use_first_moment = self.beta_1 is not None
+
+        rms = state.get("rms", self.compute_rms(parameter))
+        learning_rate = self.compute_learning_rate(step, rms)
+        beta_2 = 1.0 - mx.power(step, self.decay_rate)
+        update = gradient**2 + self.eps[0]
+
+        if factored:
+            exp_avg_sq_row = state.get(
+                "exp_avg_sq_row", mx.zeros(gradient_shape[:-1], dtype=gradient.dtype)
+            )
+            exp_avg_sq_col = state.get(
+                "exp_avg_sq_col",
+                mx.zeros(
+                    gradient_shape[:-2] + gradient_shape[-1:], dtype=gradient.dtype
+                ),
+            )
+            exp_avg_sq_row = (beta_2 * exp_avg_sq_row) + (
+                (1 - beta_2) * mx.mean(update, axis=-1)
+            )
+            exp_avg_sq_col = (beta_2 * exp_avg_sq_col) + (
+                (1 - beta_2) * mx.mean(update, axis=-2)
+            )
+            state["exp_avg_sq_row"] = exp_avg_sq_row
+            state["exp_avg_sq_col"] = exp_avg_sq_col
+            update = self.approximate_exp_moving_avg(exp_avg_sq_row, exp_avg_sq_col)
+            update = update * gradient
+        else:
+            exp_avg_sq = state.get("exp_avg_sq", mx.zeros_like(gradient))
+            exp_avg_sq = (beta_2 * exp_avg_sq) + ((1 - beta_2) * update)
+            state["exp_avg_sq"] = exp_avg_sq
+            update = mx.rsqrt(exp_avg_sq) * gradient
+
+        update = update / mx.maximum(
+            mx.array(1.0), self.compute_rms(update) / self.clip_threshold
+        )
+        update = learning_rate * update
+
+        if use_first_moment:
+            exp_avg = state.get("exp_avg", mx.zeros_like(gradient))
+            exp_avg = (self.beta_1 * exp_avg) + ((1 - self.beta_1) * update)
+            state["exp_avg"] = exp_avg
+            update = exp_avg
+
+        if self.weight_decay != 0:
+            parameter += parameter * (-self.weight_decay * learning_rate)
+        return parameter + (-update)
