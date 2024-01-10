@@ -1,4 +1,4 @@
-.. _lazy_eval:
+.. _lazy eval:
 
 Lazy Evaluation
 ===============
@@ -120,7 +120,7 @@ a partial evaluation computing only the forward pass.
 
 .. warning::
 
-  Using arrays for control-flow will cause an evaluation.
+  Using scalar arrays for control-flow will cause an evaluation.
 
 Here is an example:
 

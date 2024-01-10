@@ -41,7 +41,7 @@ automatically evaluate the array.
   array([2., 4., 6., 8.], dtype=float32)
 
 
-See the page on `Lazy Evaluation <lazy_eval>`_ for more details.
+See the page on :ref:`Lazy Evaluation <lazy eval>` for more details.
 
 Function and Graph Transformations
 ----------------------------------
