@@ -52,7 +52,16 @@ std::optional<Dtype> gguf_type_to_dtype(const uint32_t& gguf_type) {
   }
 }
 
-std::pair<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
+std::vector<int> get_shape(const gguf_tensor& tensor) {
+  std::vector<int> shape;
+  // The dimension order in GGML is the reverse of the order used in MLX.
+  for (int i = tensor.ndim - 1; i >= 0; i--) {
+    shape.push_back(tensor.dim[i]);
+  }
+  return shape;
+}
+
+std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   std::optional<Dtype> equivalent_dtype = gguf_type_to_dtype(tensor->type);
   // If there's an equivalent type, we can simply copy.
   if (equivalent_dtype.has_value()) {
@@ -200,19 +209,89 @@ std::unordered_map<std::string, MetaData> load_metadata(gguf_ctx* ctx) {
   return metadata;
 }
 
+void extract_q4_1_data(
+    std::unordered_map<std::string, array>* a,
+    const gguf_tensor& tensor) {
+  std::string name = std::string(tensor.name, tensor.namelen);
+  const std::vector<int> shape = get_shape(tensor);
+  const uint64_t weights_per_byte = 2;
+  const uint64_t weights_per_block = 32;
+  if (shape[shape.size() - 1] % weights_per_block != 0) {
+    std::ostringstream msg;
+    msg << "[save_gguf] tensor " << name
+        << "has incompatible last dim shape: " << shape[shape.size() - 1];
+    throw std::runtime_error(msg.str());
+  }
+  const uint64_t bytes_per_block =
+      20; // 2 bytes scale, 2 bytes bias, 32x0.5 byte weights
+  const uint64_t num_blocks = tensor.num_weights / weights_per_block;
+  allocator::Buffer weights_buffer =
+      allocator::malloc(tensor.num_weights / weights_per_byte);
+  allocator::Buffer scales_buffer = allocator::malloc(num_blocks * 2);
+  allocator::Buffer biases_buffer = allocator::malloc(num_blocks * 2);
+  auto data = (uint8_t*)tensor.weights_data;
+  auto weigths = (uint8_t*)weights_buffer.raw_ptr();
+  auto scales = (uint16_t*)scales_buffer.raw_ptr();
+  auto biases = (uint16_t*)biases_buffer.raw_ptr();
+  for (int64_t i = 0; i < num_blocks; i++) {
+    uint8_t* block_data = data + i * bytes_per_block;
+    scales[i] = *((uint16_t*)block_data);
+    biases[i] = *((uint16_t*)block_data + 1);
+    // 16 weights in lower bits
+    for (int64_t j = 0; j < 16; ++j) {
+      uint8_t x = (block_data[j + 4] & 0x0F);
+      if (j % 2 == 0) {
+        x <<= 4;
+      }
+      weigths[i * 16 + j / 2] += x;
+    }
+    // 16 weights in higher bits
+    for (int64_t j = 0; j < 16; ++j) {
+      uint8_t x = (block_data[j + 4] >> 4);
+      if (j % 2 == 0) {
+        x <<= 4;
+      }
+      weigths[i * 16 + 8 + j / 2] += x;
+    }
+  }
+  std::vector<int> weights_shape = shape;
+  weights_shape[shape.size() - 1] =
+      weights_shape[shape.size() - 1] / weights_per_byte / 4;
+  a->insert({name, array(weights_buffer, weights_shape, uint32)});
+
+  const std::string weight_suffix = ".weight";
+  const std::string name_prefix =
+      name.substr(0, name.length() - weight_suffix.length());
+  std::vector<int> scale_bias_shape = shape;
+  scale_bias_shape[shape.size() - 1] =
+      scale_bias_shape[shape.size() - 1] / weights_per_block;
+
+  const std::string scales_name =
+      (std::ostringstream() << name_prefix << ".scales").str();
+  a->insert({scales_name, array(scales_buffer, scale_bias_shape, float16)});
+
+  const std::string biases_name =
+      (std::ostringstream() << name_prefix << ".biases").str();
+  a->insert({biases_name, array(biases_buffer, scale_bias_shape, float16)});
+}
+
 std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
   while (gguf_get_tensor(ctx, &tensor)) {
-    std::vector<int> shape;
-    // The dimension order in GGML is the reverse of the order used in MLX.
-    for (int i = tensor.ndim - 1; i >= 0; i--) {
-      shape.push_back(tensor.dim[i]);
-    }
-    const auto& [data, dtype] = extract_tensor_data(&tensor);
-    array loaded_array = array(data, shape, dtype);
     std::string name = std::string(tensor.name, tensor.namelen);
-    array_map.insert({name, loaded_array});
+    const std::string weight_suffix = ".weight";
+    const size_t weight_len = weight_suffix.length();
+    const bool ends_with_weight = (name.length() > weight_len) &&
+        (name.compare(name.length() - weight_len, weight_len, weight_suffix) ==
+         0);
+    if (ends_with_weight && tensor.type == GGUF_TYPE_Q4_1) {
+      extract_q4_1_data(&result, tensor);
+    } else {
+      const auto& [data, dtype] = extract_tensor_data(&tensor);
+      array loaded_array = array(data, get_shape(tensor), dtype);
+      result.insert({name, loaded_array});
+    }
   }
   return array_map;
 }
