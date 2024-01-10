@@ -562,7 +562,7 @@ class Adafactor(Optimizer):
         rms = state.get("rms", self.compute_rms(parameter))
         learning_rate = self.compute_learning_rate(step, rms)
         beta_2 = 1.0 - mx.power(step, self.decay_rate)
-        update = gradient**2 + self.eps[0]
+        update = mx.square(gradient) + self.eps[0]
 
         if factored:
             exp_avg_sq_row = state.get(
