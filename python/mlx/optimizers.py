@@ -577,7 +577,7 @@ class Adafactor(Optimizer):
         self.warmup_init = warmup_init
 
     def compute_rms(self, inputs):
-        return mx.sqrt(mx.square(mx.mean(inputs)))
+        return mx.sqrt(mx.mean(mx.square(inputs)))
 
     def compute_learning_rate(self, step, rms):
         relative_step_size = self.learning_rate
