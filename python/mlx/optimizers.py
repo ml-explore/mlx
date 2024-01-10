@@ -504,6 +504,55 @@ class Lion(Optimizer):
 
 
 class Adafactor(Optimizer):
+    r"""Implementation of the Adafactor optimizer [1].
+
+    Our Adafactor implementation follows the original paper. In detail,
+
+    [1]: Shazeer, Noam et al., 2018.. Adafactor: Adaptive Learning Rates with Sublinear Memory Cost. ICLR 2015.
+
+    .. math::
+        \alpha_{t+1} &= max(\epsilon_2, RMS(X_{t-1})) \rho_{t}
+        G_t &= \delta f_{t}(X_{t-1})
+        R_t &= \beta_2t * R_{t-1} + (1 - \beta_2t)(G_t^2 + \epsilon_1 1_n 1_m^T)1_m
+        C_t &= \beta_2t * C_{t-1} + (1 - \beta_2t)(G_t^2 + \epsilon_1 1_n 1_m^T)
+        V_t &= R_t C_t / 1_m^T R_t
+        U_t &= G_t / \sqrt{V_t}
+        U_t &= U_t / max(1, RMS(U_t) / d)
+        X_t &= X_{t-1} - \alpha * U_t
+    Args:
+        learning_rate (float): The learning rate :math:`\alpha`.
+        eps (Tuple[float, float], optional): The coefficients
+          :math:`(\beta_1, \beta_2)` used for computing running averages of the
+          gradient and its square. Default: ``(0.9, 0.999)``
+        eps (float, optional): The term :math:`\epsilon` added to the
+          denominator to improve numerical stability. Default: ``1e-8``
+
+    Args:
+        learning_rate (Optional[float], optional): The learning rate
+            :math:`\alpha`. Defaults to None.
+        eps (Tuple[float, float], optional): The first term :math:`\epsilon`
+            added to the square of the gradients to improve numerical
+            stability and the second term :math:`\epsilon` is used for
+            parameter scaling if `parameter_scale` is set to `True`.
+            Defaults to (1e-30, 1e-3).
+        clip_threshold (float, optional): Clips the unscaled update at
+            `clip_threshold`. Defaults to 1.0.
+        decay_rate (float, optional): Controls the rate of increasing
+            :math:`\beta_2`. Defaults to -0.8.
+        beta_1 (Optional[float], optional): If set to a value bigger than zero
+            then first moment will be used. Defaults to None.
+        weight_decay (float, optional): The weight decay :math:`\lambda`.
+            Defaults to 0.0.
+        scale_parameter (bool, optional): If set to `True` the learning rate
+            will be scaled by :math:`max(\epsilon_1, RMS(X_{t-1}))`.
+            Defaults to True.
+        relative_step (bool, optional): If set to `True` the `learning_rate`
+            will be ignored and relative step size will be computed.
+            Defaults to True.
+        warmup_init (bool, optional): If set to True then relative step size
+            will be calculated by the current step. Defaults to False.
+    """
+
     def __init__(
         self,
         learning_rate: Optional[float] = None,
@@ -538,7 +587,7 @@ class Adafactor(Optimizer):
 
         parameter_scale = 1.0
         if self.scale_parameter:
-            parameter_scale = mx.maximum(mx.array(self.eps[-1]), rms)
+            parameter_scale = mx.maximum(mx.array(self.eps[1]), rms)
         return parameter_scale * relative_step_size
 
     def approximate_exp_moving_avg(self, exp_avg_sq_row, exp_avg_sq_col):
