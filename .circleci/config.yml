@@ -80,6 +80,13 @@ jobs:
             DEVICE=gpu python -m xmlrunner discover -v python/tests -o test-results/gpu
       - store_test_results:
           path: test-results
+      - run:
+          name: Build CPP only
+          command: |
+            mkdir -p build && cd build && cmake .. && make -j
+      - run:
+          name: Run CPP tests
+          command: METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
 
   build_release:
     machine: true

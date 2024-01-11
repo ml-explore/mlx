@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include <cmath>
 #include <numeric>
 #include <set>
