@@ -20,6 +20,9 @@ void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
+  if (out.size() == 0) {
+    return;
+  }
   if (ctype == CopyType::GeneralGeneral) {
     ctype = CopyType::General;
   }
