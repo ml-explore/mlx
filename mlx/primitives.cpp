@@ -2129,6 +2129,7 @@ std::vector<array> Scatter::vjp(
   switch (reduce_type_) {
     case Scatter::None:
     case Scatter::Sum:
+    case Scatter::Max:
       break;
     default:
       throw std::runtime_error(
@@ -2157,6 +2158,12 @@ std::vector<array> Scatter::vjp(
           // The input array values are kept so they all get gradients
           vjps.push_back(cotangents[0]);
           break;
+        case Scatter::Max: {
+          auto result = scatter_max(values, indices, updates, axes_, stream());
+          auto mask = where(result == values, array({1}), array({0}));
+          vjps.push_back(multiply(cotangents[0], mask));
+          break;
+        }
         default:
           // Should never reach here
           throw std::invalid_argument("");
@@ -2172,6 +2179,21 @@ std::vector<array> Scatter::vjp(
           }
           vjps.push_back(
               gather(cotangents[0], indices, axes_, slice_sizes, stream()));
+          break;
+        }
+        case Scatter::Max: {
+          auto slice_sizes = cotangents[0].shape();
+          for (auto ax : axes_) {
+            slice_sizes[ax] = 1;
+          }
+          auto result = scatter_max(values, indices, updates, axes_, stream());
+          auto gathered_cotan =
+              gather(cotangents[0], indices, axes_, slice_sizes, stream());
+          auto gathered_result =
+              gather(result, indices, axes_, slice_sizes, stream());
+          vjps.push_back(multiply(
+              gathered_cotan,
+              where(gathered_result == updates, array({1}), array({0}))));
           break;
         }
         default: {
