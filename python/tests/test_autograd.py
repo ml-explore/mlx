@@ -306,7 +306,9 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(vjps[1], mx.array([5.0])))
 
         cotan = mx.array([[4.0], [5.0], [6.0]])
-        _, vjps = mx.vjp(fun, [mx.array([[1.0], [2.0], [3.0]]), mx.array([[[3.0]]])], [cotan])
+        _, vjps = mx.vjp(
+            fun, [mx.array([[1.0], [2.0], [3.0]]), mx.array([[[3.0]]])], [cotan]
+        )
         mx.eval(vjps)
 
         self.assertTrue(mx.allclose(vjps[0], mx.array([[4.0], [5.0], [6.0]])))
