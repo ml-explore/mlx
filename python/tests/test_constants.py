@@ -48,6 +48,13 @@ class TestConstants(mlx_tests.MLXTestCase):
         self.assertTrue(hasattr(mx, "newaxis"))
         self.assertTrue(hasattr(mx, "pi"))
 
+    def test_newaxis_for_reshaping_arrays(self):
+        arr_1d = mx.array([1, 2, 3, 4, 5])
+        arr_2d_column = arr_1d[:, mx.newaxis]
+        expected_result = mx.array([[1], [2], [3], [4], [5]])
+
+        self.assertTrue(mx.array_equal(arr_2d_column, expected_result))
+
 
 if __name__ == "__main__":
     unittest.main()
