@@ -240,7 +240,7 @@ void extract_q4_1_data(
     // 16 weights in lower bits
     for (int64_t j = 0; j < 16; ++j) {
       uint8_t x = (block_data[j + 4] & 0x0F);
-      if (j % 2 == 0) {
+      if (j % 2 != 0) {
         x <<= 4;
       }
       weigths[i * 16 + j / 2] += x;
@@ -248,7 +248,7 @@ void extract_q4_1_data(
     // 16 weights in higher bits
     for (int64_t j = 0; j < 16; ++j) {
       uint8_t x = (block_data[j + 4] >> 4);
-      if (j % 2 == 0) {
+      if (j % 2 != 0) {
         x <<= 4;
       }
       weigths[i * 16 + 8 + j / 2] += x;
