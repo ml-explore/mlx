@@ -91,7 +91,6 @@ Operations
    savez_compressed
    save_gguf
    save_safetensors
-   scatter_max
    sigmoid
    sign
    sin
