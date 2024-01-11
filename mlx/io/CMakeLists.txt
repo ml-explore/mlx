@@ -27,7 +27,7 @@ target_include_directories(
     $<INSTALL_INTERFACE:include/gguflib>
 )
 add_library(
-  gguflib SHARED
+  gguflib STATIC
   ${gguflib_SOURCE_DIR}/fp16.c
   ${gguflib_SOURCE_DIR}/gguflib.c)
 target_link_libraries(mlx $<BUILD_INTERFACE:gguflib>)
