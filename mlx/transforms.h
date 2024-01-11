@@ -2,9 +2,13 @@
 
 #pragma once
 
-#include "array.h"
+#include "mlx/array.h"
 
 namespace mlx::core {
+
+// Compile takes a function and returns a new function
+std::function<std::vector<array>(const std::vector<array>&)> compile(
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun);
 
 /** Fuse equivalent arrays to avoid duplicate execution. */
 void simplify(const std::vector<array>& outputs);

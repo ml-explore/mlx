@@ -20,6 +20,7 @@ target_sources(tests PRIVATE
   arg_reduce_tests.cpp
   autograd_tests.cpp
   blas_tests.cpp
+  compile_tests.cpp
   creations_tests.cpp
   device_tests.cpp
   eval_tests.cpp
