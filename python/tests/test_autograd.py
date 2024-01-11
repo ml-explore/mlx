@@ -295,7 +295,7 @@ class TestAutograd(mlx_tests.MLXTestCase):
 
     def test_scatter_max_vjp(self):
         def fun(src, updates):
-            x = mx.scatter_max(src, mx.array([1]), updates, 0)
+            x = src.at[1].maximum(updates)
             return x
 
         cotan = mx.array([4.0, 5.0, 6.0])
