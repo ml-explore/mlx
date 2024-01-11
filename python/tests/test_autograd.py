@@ -293,6 +293,25 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(dfdx, mx.array([1.0])))
         self.assertEqual(dfdx.dtype, mx.float32)
 
+    def test_scatter_add_vjp(self):
+        def fun(src, updates):
+            x = mx.scatter_add(src, mx.array([1]), updates, 0)
+            return x
+
+        cotan = mx.array([4.0, 5.0, 6.0])
+        _, vjps = mx.vjp(fun, [mx.array([1.0, 2.0, 3.0]), mx.array([[3.0]])], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([4.0, 5.0, 6.0])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([5.0])))
+
+        cotan = mx.array([[4.0], [5.0], [6.0]])
+        _, vjps = mx.vjp(fun, [mx.array([[1.0], [2.0], [3.0]]), mx.array([[[3.0]]])], [cotan])
+        mx.eval(vjps)
+
+        self.assertTrue(mx.allclose(vjps[0], mx.array([[4.0], [5.0], [6.0]])))
+        self.assertTrue(mx.allclose(vjps[1], mx.array([[[5.0]]])))
+
     def test_vjp_types(self):
         def fun(x):
             return x
