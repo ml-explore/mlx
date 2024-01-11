@@ -91,6 +91,7 @@ Operations
    savez_compressed
    save_gguf
    save_safetensors
+   scatter_add
    sigmoid
    sign
    sin
