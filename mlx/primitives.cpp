@@ -2191,9 +2191,8 @@ std::vector<array> Scatter::vjp(
               gather(cotangents[0], indices, axes_, slice_sizes, stream());
           auto gathered_result =
               gather(result, indices, axes_, slice_sizes, stream());
-          vjps.push_back(multiply(
-              gathered_cotan,
-              where(gathered_result == updates, array({1}), array({0}))));
+          vjps.push_back(
+              multiply(gathered_cotan, gathered_result == updates, stream()));
           break;
         }
         default: {
