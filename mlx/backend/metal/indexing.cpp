@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 #include <algorithm>
 #include <cassert>
-#include <iostream> // TODO
 #include <numeric>
 #include <sstream>
 
