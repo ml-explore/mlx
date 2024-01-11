@@ -209,6 +209,8 @@ std::unordered_map<std::string, MetaData> load_metadata(gguf_ctx* ctx) {
   return metadata;
 }
 
+// Extracts (weight, scales, biases) from Q4_1 tensors.
+// Data layout is: |16 bit scale|32 x 4bit weights|.
 void extract_q4_1_data(
     std::unordered_map<std::string, array>* a,
     const gguf_tensor& tensor) {
@@ -218,7 +220,7 @@ void extract_q4_1_data(
   const uint64_t weights_per_block = 32;
   if (shape[shape.size() - 1] % weights_per_block != 0) {
     std::ostringstream msg;
-    msg << "[save_gguf] tensor " << name
+    msg << "[load_gguf] tensor " << name
         << "has incompatible last dim shape: " << shape[shape.size() - 1];
     throw std::runtime_error(msg.str());
   }
@@ -231,21 +233,21 @@ void extract_q4_1_data(
   allocator::Buffer biases_buffer = allocator::malloc(num_blocks * 2);
   auto data = (uint8_t*)tensor.weights_data;
   auto weigths = (uint8_t*)weights_buffer.raw_ptr();
-  auto scales = (uint16_t*)scales_buffer.raw_ptr();
-  auto biases = (uint16_t*)biases_buffer.raw_ptr();
+  auto scales = (float16_t*)scales_buffer.raw_ptr();
+  auto biases = (float16_t*)biases_buffer.raw_ptr();
   for (int64_t i = 0; i < num_blocks; i++) {
     uint8_t* block_data = data + i * bytes_per_block;
-    scales[i] = *((uint16_t*)block_data);
-    biases[i] = *((uint16_t*)block_data + 1);
-    // 16 weights in lower bits
+    scales[i] = *((float16_t*)block_data);
+    biases[i] = *((float16_t*)block_data + 1);
+    // First 16 weights are in the lower bits
     for (int64_t j = 0; j < 16; ++j) {
-      uint8_t x = (block_data[j + 4] & 0x0F);
+      uint8_t x = (block_data[j + 4] & 0x0F);  // j+4 to skip scale and biases bytes.
       if (j % 2 != 0) {
         x <<= 4;
       }
       weigths[i * 16 + j / 2] += x;
     }
-    // 16 weights in higher bits
+    // Last 16 weights are in the higher bits
     for (int64_t j = 0; j < 16; ++j) {
       uint8_t x = (block_data[j + 4] >> 4);
       if (j % 2 != 0) {
@@ -285,7 +287,9 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
     const bool ends_with_weight = (name.length() > weight_len) &&
         (name.compare(name.length() - weight_len, weight_len, weight_suffix) ==
          0);
-    if (ends_with_weight && tensor.type == GGUF_TYPE_Q4_1) {
+    if (ends_with_weight && tensor.type == GGUF_TYPE_Q4_0) {
+      extract_q4_0_data(&result, tensor);
+    } else if (ends_with_weight && tensor.type == GGUF_TYPE_Q4_1) {
       extract_q4_1_data(&result, tensor);
     } else {
       const auto& [data, dtype] = extract_tensor_data(&tensor);
