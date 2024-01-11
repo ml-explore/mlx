@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(mlx LANGUAGES CXX)
+project(mlx LANGUAGES C CXX)
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -97,15 +97,6 @@ elseif (MLX_BUILD_METAL)
     ${FOUNDATION_LIB}
     ${QUARTZ_LIB})
 endif()
-
-MESSAGE(STATUS "Downloading json")
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
-FetchContent_MakeAvailable(json)
-target_include_directories(
-    mlx PUBLIC
-    $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>
-    $<INSTALL_INTERFACE:include/json>
-)
 
 find_library(ACCELERATE_LIBRARY Accelerate)
 if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
