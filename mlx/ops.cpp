@@ -1058,8 +1058,6 @@ array isnan(const array& a, StreamOrDevice s /* = {} */) {
       bool_,
       std::make_unique<Equal>(to_stream(s), true),
       {astype(a, a.dtype(), s), astype(b, a.dtype(), s)});
-  // return equal(
-  //     a, full(a.shape(), std::numeric_limits<double>::quiet_NaN()));
 }
 
 array where(

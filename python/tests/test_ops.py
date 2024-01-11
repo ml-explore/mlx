@@ -334,6 +334,8 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([0.0, float("nan")]).astype(mx.complex64)
         self.assertEqual(mx.isnan(x).tolist(), [False, True])
 
+        self.assertEqual(mx.isnan(0 * mx.array(float("inf"))).tolist(), True)
+
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
             for diag in [-1, 0, 1, -2]:
