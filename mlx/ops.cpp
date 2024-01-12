@@ -1054,6 +1054,12 @@ array isnan(const array& a, StreamOrDevice s /* = {} */) {
   return not_equal(a, a, s);
 }
 
+array isinf(const array& a, StreamOrDevice s /* = {} */) {
+  const array& infArray =
+      full(a.shape(), std::numeric_limits<double>::infinity());
+  return infArray == a;
+}
+
 array where(
     const array& condition,
     const array& x,

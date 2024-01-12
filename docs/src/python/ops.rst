@@ -52,6 +52,7 @@ Operations
    identity
    inner
    isnan
+   isinf
    less
    less_equal
    linspace

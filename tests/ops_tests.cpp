@@ -505,6 +505,32 @@ TEST_CASE("test is nan") {
   CHECK(isnan(d).item<bool>());
 }
 
+TEST_CASE("test is inf") {
+  array x(1.0f);
+  CHECK_FALSE(isinf(x).item<bool>());
+
+  array y(std::numeric_limits<double>::infinity());
+  CHECK(isinf(y).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(all(isinf(z)).item<bool>());
+
+  array w = array({1.0f, std::numeric_limits<double>::infinity(), 2.0f});
+  CHECK_FALSE(all(isinf(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isinf(a).item<bool>());
+
+  array b(1.0f, float16);
+  CHECK_FALSE(isinf(b).item<bool>());
+
+  array c(std::numeric_limits<double>::infinity(), bfloat16);
+  CHECK(isinf(c).item<bool>());
+
+  array d(std::numeric_limits<double>::infinity(), float16);
+  CHECK(isinf(d).item<bool>());
+}
+
 TEST_CASE("test all close") {
   array x(1.0f);
   array y(1.0f);

@@ -1839,6 +1839,24 @@ void init_ops(py::module_& m) {
             array: The array with boolean values indicating which elements are NaN.
       )pbdoc");
   m.def(
+      "isinf",
+      &mlx::core::isinf,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isinf(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Return a boolean array indicating which elements are +/- inf.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The array with boolean values indicating which elements are +/- inf.
+      )pbdoc");
+  m.def(
       "moveaxis",
       &moveaxis,
       "a"_a,

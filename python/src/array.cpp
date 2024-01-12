@@ -1139,6 +1139,12 @@ void init_array(py::module_& m) {
           "stream"_a = none,
           "See :func:`isnan`.")
       .def(
+          "isinf",
+          &mlx::core::isinf,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`isinf`.")
+      .def(
           "moveaxis",
           &moveaxis,
           "source"_a,
