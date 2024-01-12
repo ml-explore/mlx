@@ -761,26 +761,24 @@ array tile(
     reps.insert(reps.begin(), arr.ndim() - reps.size(), 1);
   }
 
-  std::vector<int> expand_shape = arr.shape();
-  int offset = 0;
+  std::vector<int> expand_shape;
+  std::vector<int> broad_shape;
+  std::vector<int> final_shape;
+  int odims = reps.size() - arr.ndim();
   for (int i = 0; i < arr.ndim(); i++) {
     if (reps[i] != 1) {
-      expand_shape.insert(expand_shape.begin() + offset + i, 1);
-      offset += 1;
+      expand_shape.push_back(1);
+      broad_shape.push_back(reps[i]);
     }
-  }
-  offset = 0;
-  std::vector<int> broad_shape = expand_shape;
-  for (int i = 0; i < arr.ndim(); i++) {
-    if (reps[i] != 1) {
-      broad_shape[i + offset] *= reps[i];
-      offset += 1;
+    expand_shape.push_back(arr.shape(i));
+    broad_shape.push_back(arr.shape(i));
+
+    final_shape.push_back(reps[i]);
+    if (odims > 0) {
+      odims -= 1;
+    } else {
+      final_shape.back() *= arr.shape(i);
     }
-  }
-  std::vector<int> final_shape = arr.shape();
-  final_shape.insert(final_shape.begin(), (reps.size() - arr.ndim()), 1);
-  for (int i = 0; i < final_shape.size(); i++) {
-    final_shape[i] *= reps[i];
   }
 
   auto x = reshape(arr, expand_shape, s);
