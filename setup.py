@@ -170,6 +170,7 @@ if __name__ == "__main__":
         description="A framework for machine learning on Apple silicon.",
         long_description=long_description,
         long_description_content_type="text/markdown",
+        url="https://github.com/ml-explore/mlx",
         packages=packages,
         package_dir=package_dir,
         package_data=package_data,
