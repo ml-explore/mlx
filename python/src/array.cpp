@@ -1147,7 +1147,7 @@ void init_array(py::module_& m) {
           "axis2"_a,
           py::kw_only(),
           "stream"_a = none,
-          "See :func:`moveaxis`.")
+          "See :func:`swapaxes`.")
       .def(
           "transpose",
           [](const array& a, py::args axes, StreamOrDevice s) {
