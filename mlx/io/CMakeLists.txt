@@ -31,6 +31,12 @@ target_include_directories(
     $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include/gguflib>
 )
+install(
+  DIRECTORY ${gguflib_SOURCE_DIR}/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gguflib
+  COMPONENT gguflib_source
+)
+
 add_library(
   gguflib STATIC
   ${gguflib_SOURCE_DIR}/fp16.c
