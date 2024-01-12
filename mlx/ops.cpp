@@ -757,27 +757,31 @@ array tile(
     const array& arr,
     std::vector<int> reps,
     StreamOrDevice s /* = {} */) {
-  if (reps.size() < arr.ndim()) {
-    reps.insert(reps.begin(), arr.ndim() - reps.size(), 1);
+  auto shape = arr.shape();
+  if (reps.size() < shape.size()) {
+    reps.insert(reps.begin(), shape.size() - reps.size(), 1);
+  }
+  if (reps.size() > shape.size()) {
+    shape.insert(shape.begin(), reps.size() - shape.size(), 1);
   }
 
   std::vector<int> expand_shape;
   std::vector<int> broad_shape;
   std::vector<int> final_shape;
-  int odims = reps.size() - arr.ndim();
-  for (int i = 0; i < arr.ndim(); i++) {
+  int odims = reps.size() - shape.size();
+  for (int i = 0; i < shape.size(); i++) {
     if (reps[i] != 1) {
       expand_shape.push_back(1);
       broad_shape.push_back(reps[i]);
     }
-    expand_shape.push_back(arr.shape(i));
-    broad_shape.push_back(arr.shape(i));
+    expand_shape.push_back(shape[i]);
+    broad_shape.push_back(shape[i]);
 
     final_shape.push_back(reps[i]);
     if (odims > 0) {
       odims -= 1;
     } else {
-      final_shape.back() *= arr.shape(i);
+      final_shape.back() *= shape[i];
     }
   }
 

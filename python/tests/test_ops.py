@@ -1634,6 +1634,7 @@ class TestOps(mlx_tests.MLXTestCase):
             mx.tile,
             np.tile,
         )
+        self.assertCmpNumpy([(3,), [2, 2, 2]], mx.tile, np.tile)
 
 
 if __name__ == "__main__":

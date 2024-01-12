@@ -2334,8 +2334,12 @@ TEST_CASE("tile") {
   x = array({1, 2, 3, 4}, {2, 2});
   y = tile(x, {2, 2});
   expected = array({1, 2, 1, 2, 3, 4, 3, 4, 1, 2, 1, 2, 3, 4, 3, 4}, {4, 4});
-  MESSAGE("y" << y);
-  MESSAGE("expected" << expected);
+  CHECK(array_equal(y, expected).item<bool>());
+  x = array({1, 2, 3}, {3});
+  y = tile(x, {2, 2, 2});
+  expected = array(
+      {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3},
+      {2, 2, 6});
   CHECK(array_equal(y, expected).item<bool>());
 }
 
