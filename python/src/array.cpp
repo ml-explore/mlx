@@ -1133,6 +1133,12 @@ void init_array(py::module_& m) {
           "stream"_a = none,
           "See :func:`any`.")
       .def(
+          "isneginf",
+          &mlx::core::isneginf,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`isneginf`.")
+      .def(
           "moveaxis",
           &moveaxis,
           "source"_a,

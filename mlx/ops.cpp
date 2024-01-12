@@ -172,6 +172,15 @@ array as_strided(
       {x});
 }
 
+array isneginf(const array& a, StreamOrDevice s) {
+  array neg_inf_array =
+      full(a.shape(), -std::numeric_limits<double>::infinity());
+
+  array result = a == neg_inf_array;
+
+  return result;
+}
+
 array copy(const array& a, StreamOrDevice s /* = {} */) {
   return array(a.shape(), a.dtype(), std::make_unique<Copy>(to_stream(s)), {a});
 }

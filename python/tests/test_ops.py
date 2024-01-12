@@ -50,6 +50,13 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(y.dtype, t)
             self.assertTrue(mx.array_equal(y, x))
 
+    def test_isneginf(self):
+        x = mx.array([float("-inf"), 0.0, float("inf")])
+        self.assertEqual(mx.isneginf(x).tolist(), [True, False, False])
+
+        x = mx.array([float("-inf"), 0.0, float("inf")]).astype(mx.float16)
+        self.assertEqual(mx.isneginf(x).tolist(), [True, False, False])
+
     def test_scalar_inputs(self):
         # Check combinations of python types
         a = mx.add(False, True)

@@ -2613,6 +2613,22 @@ void init_ops(py::module_& m) {
             array: The padded array.
       )pbdoc");
   m.def(
+      "isneginf",
+      &mlx::core::isneginf,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isneginf(a: array, stream: Union[None, Stream, Device] = None) -> array
+        Return a boolean array indicating which elements are negative infinity.
+        Args:
+            a (array): Input array.
+            stream (Union[None, Stream, Device]): Optional stream or device.
+        Returns:
+            array: The array with boolean values indicating which elements are negative infinity.
+      )pbdoc");
+  m.def(
       "as_strided",
       [](const array& a,
          std::optional<std::vector<int>> shape,

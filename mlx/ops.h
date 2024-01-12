@@ -56,6 +56,9 @@ array as_strided(
     size_t offset,
     StreamOrDevice s = {});
 
+/** Test element-wise for negative infinity, return result as bool array. */
+array isneginf(const array& a, StreamOrDevice s = {});
+
 /** Copy another array. */
 array copy(const array& a, StreamOrDevice s = {});
 
