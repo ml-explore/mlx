@@ -753,6 +753,41 @@ array repeat(const array& arr, int repeats, StreamOrDevice s) {
   return repeat(flatten(arr, s), repeats, 0, s);
 }
 
+array tile(
+    const array& arr,
+    std::vector<int> reps,
+    StreamOrDevice s /* = {} */) {
+  if (reps.size() < arr.ndim()) {
+    reps.insert(reps.begin(), arr.ndim() - reps.size(), 1);
+  }
+
+  std::vector<int> expand_shape = arr.shape();
+  int offset = 0;
+  for (int i = 0; i < arr.ndim(); i++) {
+    if (reps[i] != 1) {
+      expand_shape.insert(expand_shape.begin() + offset + i, 1);
+      offset += 1;
+    }
+  }
+  offset = 0;
+  std::vector<int> broad_shape = expand_shape;
+  for (int i = 0; i < arr.ndim(); i++) {
+    if (reps[i] != 1) {
+      broad_shape[i + offset] *= reps[i];
+      offset += 1;
+    }
+  }
+  std::vector<int> final_shape = arr.shape();
+  final_shape.insert(final_shape.begin(), (reps.size() - arr.ndim()), 1);
+  for (int i = 0; i < final_shape.size(); i++) {
+    final_shape[i] *= reps[i];
+  }
+
+  auto x = reshape(arr, expand_shape, s);
+  x = broadcast_to(x, broad_shape, s);
+  return reshape(x, final_shape, s);
+}
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,
