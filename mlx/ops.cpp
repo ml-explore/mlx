@@ -1050,6 +1050,10 @@ array array_equal(
   }
 }
 
+array isnan(const array& a, StreamOrDevice s /* = {} */) {
+  return not_equal(a, a, s);
+}
+
 array where(
     const array& condition,
     const array& x,

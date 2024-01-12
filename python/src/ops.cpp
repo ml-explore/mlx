@@ -1821,6 +1821,24 @@ void init_ops(py::module_& m) {
             array: The ceil of ``a``.
       )pbdoc");
   m.def(
+      "isnan",
+      &mlx::core::isnan,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isnan(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Return a boolean array indicating which elements are NaN.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The array with boolean values indicating which elements are NaN.
+      )pbdoc");
+  m.def(
       "moveaxis",
       &moveaxis,
       "a"_a,
