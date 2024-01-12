@@ -37,33 +37,39 @@ TEST_CASE("test save_safetensors") {
 TEST_CASE("test gguf") {
   std::string file_path = get_temp_file("test_arr.gguf");
   using dict = std::unordered_map<std::string, array>;
-  dict map = {
+  dict original_weights = {
       {"test", array({1.0f, 2.0f, 3.0f, 4.0f})},
       {"test2", reshape(arange(6), {3, 2})}};
+  std::unordered_map<std::string, metadata> original_metadata;
+  original_metadata.insert({"test_str", {std::nullopt, "my string", std::nullopt}});
 
-  save_gguf(file_path, map);
-  auto loaded = load_gguf(file_path);
-  CHECK_EQ(loaded.size(), 2);
-  CHECK_EQ(loaded.count("test"), 1);
-  CHECK_EQ(loaded.count("test2"), 1);
-  for (auto [k, v] : loaded) {
-    CHECK(array_equal(v, map.at(k)).item<bool>());
+  save_gguf(file_path, original_weights, original_metadata);
+  const auto& [loaded_weights, loaded_metadata] = load_gguf(file_path);
+  CHECK_EQ(loaded_metadata.size(), 1);
+  CHECK_EQ(loaded_metadata.count("test_str"), 1);
+  CHECK_EQ(loaded_metadata.at("test_str").string, "my string");
+
+  CHECK_EQ(loaded_weights.size(), 2);
+  CHECK_EQ(loaded_weights.count("test"), 1);
+  CHECK_EQ(loaded_weights.count("test2"), 1);
+  for (auto [k, v] : loaded_weights) {
+    CHECK(array_equal(v, original_weights.at(k)).item<bool>());
   }
 
   std::vector<Dtype> unsupported_types = {
       bool_, uint8, uint32, uint64, int64, bfloat16, complex64};
   for (auto t : unsupported_types) {
     dict to_save = {{"test", astype(arange(5), t)}};
-    CHECK_THROWS(save_gguf(file_path, to_save));
+    CHECK_THROWS(save_gguf(file_path, to_save, original_metadata));
   }
 
-  std::vector<Dtype> supported_types = {int8, int32, float16};
+  std::vector<Dtype> supported_types = {int8, int32, float16, float32};
   for (auto t : supported_types) {
     auto arr = astype(arange(5), t);
     dict to_save = {{"test", arr}};
-    save_gguf(file_path, to_save);
-    auto loaded = load_gguf(file_path);
-    CHECK(array_equal(loaded.at("test"), arr).item<bool>());
+    save_gguf(file_path, to_save, original_metadata);
+    const auto& [loaded_weights, loaded_metadata] = load_gguf(file_path);
+    CHECK(array_equal(loaded_weights.at("test"), arr).item<bool>());
   }
 }
 

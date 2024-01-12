@@ -3164,8 +3164,9 @@ void init_ops(py::module_& m) {
       &mlx_save_gguf_helper,
       "file"_a,
       "arrays"_a,
+      "metadata"_a,
       R"pbdoc(
-        save_gguf(file: str, arrays: Dict[str, array])
+        save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str, Union[array, string, list]])
 
         Save array(s) to a binary file in ``.gguf`` format.
 
@@ -3175,6 +3176,7 @@ void init_ops(py::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+            metadata (dict(str, Union[array,string,list])): The dictionary of metadata to be saved.
       )pbdoc");
   m.def(
       "where",

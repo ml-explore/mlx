@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include <cstdint>
 #include <cstring>
 
 #include "mlx/ops.h"
@@ -46,7 +47,7 @@ std::optional<Dtype> gguf_type_to_dtype(const uint32_t& gguf_type) {
   }
 }
 
-std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
+std::pair<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   std::optional<Dtype> equivalent_dtype = gguf_type_to_dtype(tensor->type);
   // If there's an equivalent type, we can simply copy.
   if (equivalent_dtype.has_value()) {
@@ -70,15 +71,59 @@ std::tuple<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   return {buffer, float16};
 }
 
-std::unordered_map<std::string, array> load_gguf(
-    const std::string& file,
-    StreamOrDevice s) {
-  std::unordered_map<std::string, array> result;
-  gguf_ctx* ctx = gguf_open(file.c_str());
-  if (!ctx) {
-    throw std::runtime_error("[load_gguf] gguf_init failed");
+void metadata_value_callback(void *privdata, uint32_t type, union gguf_value *val, uint64_t in_array, uint64_t array_len) {
+  auto *value = (struct metadata*) privdata;
+  // TODO: Support all other types.
+  switch (type) {
+        case GGUF_VALUE_TYPE_ARRAY_START:
+          break;
+        case GGUF_VALUE_TYPE_ARRAY_END:
+          break;
+        case GGUF_VALUE_TYPE_UINT8:
+          break;
+        case GGUF_VALUE_TYPE_INT8:
+          break;
+        case GGUF_VALUE_TYPE_UINT16:
+          break;
+        case GGUF_VALUE_TYPE_INT16:
+          break;
+        case GGUF_VALUE_TYPE_UINT32:
+          break;
+        case GGUF_VALUE_TYPE_INT32:
+          break;
+        case GGUF_VALUE_TYPE_FLOAT32:
+          break;
+        case GGUF_VALUE_TYPE_BOOL:
+          break;
+        case GGUF_VALUE_TYPE_STRING:
+          value->string = std::string(val->string.string, (int)val->string.len);
+          break;
+        case GGUF_VALUE_TYPE_UINT64:
+          break;
+        case GGUF_VALUE_TYPE_INT64:
+          break;
+        case GGUF_VALUE_TYPE_FLOAT64:
+          break;
+        default:
+          throw std::runtime_error("[load_gguf] unknown value type");
+          break;
+    }
+}
+
+std::unordered_map<std::string, metadata> load_metadata(gguf_ctx* ctx) {
+  std::unordered_map<std::string, metadata> metadata_map;
+  gguf_key key;
+  while (gguf_get_key(ctx,&key)) {
+    std::string key_name = std::string(key.name, key.namelen);
+    metadata value;
+    gguf_do_with_value(ctx,key.type,key.val,&value,0,0,metadata_value_callback);
+    metadata_map.insert({key_name, value});
   }
-  gguf_skip_key_values_section(ctx);
+  return metadata_map;
+}
+
+std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
+  std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
   while (gguf_get_tensor(ctx, &tensor)) {
     std::vector<int> shape;
@@ -89,13 +134,30 @@ std::unordered_map<std::string, array> load_gguf(
     const auto& [data, dtype] = extract_tensor_data(&tensor);
     array loaded_array = array(data, shape, dtype);
     std::string name = std::string(tensor.name, tensor.namelen);
-    result.insert({name, loaded_array});
+    array_map.insert({name, loaded_array});
   }
-  gguf_close(ctx);
-  return result;
+  return array_map;
 }
 
-void save_gguf(std::string file, std::unordered_map<std::string, array> a) {
+std::pair<
+std::unordered_map<std::string, array>,
+std::unordered_map<std::string, metadata>> load_gguf(
+    const std::string& file,
+    StreamOrDevice s) {
+  gguf_ctx* ctx = gguf_open(file.c_str());
+  if (!ctx) {
+    throw std::runtime_error("[load_gguf] gguf_init failed");
+  }
+  const auto& metadata_map = load_metadata(ctx);
+  const auto& array_map = load_arrays(ctx);
+  gguf_close(ctx);
+  return {array_map, metadata_map};
+}
+
+void save_gguf(
+    std::string file,
+    std::unordered_map<std::string, array> array_map,
+    std::unordered_map<std::string, metadata> metadata_map) {
   // Add .gguf to file name if it is not there
   if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
     file += ".gguf";
@@ -105,11 +167,25 @@ void save_gguf(std::string file, std::unordered_map<std::string, array> a) {
     throw std::runtime_error("[save_gguf] gguf_create failed");
   }
 
+  for (const auto& [key, value] : metadata_map) {
+    if (value.string.has_value()) {
+      const std::string& str = value.string.value();
+      const size_t size = sizeof(gguf_string) + str.length();
+      gguf_string* val = reinterpret_cast<gguf_string*>(new char[size + 1]);
+      val->len = str.length();
+      memcpy(val->string, str.c_str(), str.length());
+      val->string[str.length()] = '\0';
+      gguf_append_kv(ctx, key.c_str(), key.length(), GGUF_VALUE_TYPE_STRING, (void *) val, size);
+      delete[] reinterpret_cast<char*>(val);
+    }
+    // TODO: serialize other types
+  }
+
   // Tensor offsets are relative to data section, so we start at offset 0.
   uint64_t tensor_offset = 0;
 
   // First, append the tensor info
-  for (auto& [key, arr] : a) {
+  for (auto& [key, arr] : array_map) {
     arr.eval();
 
     // Try to make it row contiguous
@@ -154,7 +230,7 @@ void save_gguf(std::string file, std::unordered_map<std::string, array> a) {
   }
 
   // Then, append the tensor weights
-  for (const auto& [key, arr] : a) {
+  for (const auto& [key, arr] : array_map) {
     if (!gguf_append_tensor_data(ctx, (void*)arr.data<void>(), arr.nbytes())) {
       throw std::runtime_error("[save_gguf] gguf_append_tensor_data failed");
     }

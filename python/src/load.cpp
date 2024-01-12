@@ -181,10 +181,12 @@ std::unordered_map<std::string, array> mlx_load_safetensor_helper(
       "[load_safetensors] Input must be a file-like object, or string");
 }
 
-std::unordered_map<std::string, array> mlx_load_gguf_helper(
-    py::object file,
-    StreamOrDevice s) {
+std::pair<
+    std::unordered_map<std::string, array>,
+    std::unordered_map<std::string, metadata>>
+mlx_load_gguf_helper(py::object file, StreamOrDevice s) {
   if (py::isinstance<py::str>(file)) { // Assume .gguf file path string
+    // TODO: also return metadata.
     return load_gguf(py::cast<std::string>(file), s);
   }
 
@@ -275,7 +277,9 @@ DictOrArray mlx_load_helper(
   } else if (format.value() == "npy") {
     return mlx_load_npy_helper(file, s);
   } else if (format.value() == "gguf") {
-    return mlx_load_gguf_helper(file, s);
+    const auto& [weights, metadata] = mlx_load_gguf_helper(file, s);
+    // TODO: also return metadata
+    return weights;
   } else {
     throw std::invalid_argument("[load] Unknown file format " + format.value());
   }
@@ -448,10 +452,11 @@ void mlx_save_safetensor_helper(py::object file, py::dict d) {
       "[save_safetensors] Input must be a file-like object, or string");
 }
 
-void mlx_save_gguf_helper(py::object file, py::dict d) {
-  auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
+void mlx_save_gguf_helper(py::object file, py::dict a, py::dict m) {
+  auto arrays_map = a.cast<std::unordered_map<std::string, array>>();
+  auto metadata_map = m.cast<std::unordered_map<std::string, metadata>>();
   if (py::isinstance<py::str>(file)) {
-    save_gguf(py::cast<std::string>(file), arrays_map);
+    save_gguf(py::cast<std::string>(file), arrays_map, metadata_map);
     return;
   }
 

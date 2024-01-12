@@ -1115,12 +1115,23 @@ void save_safetensors(
     const std::string& file,
     std::unordered_map<std::string, array>);
 
-/** Load array map from .gguf file format */
-std::unordered_map<std::string, array> load_gguf(
-    const std::string& file,
-    StreamOrDevice s = {});
+/** Load metadata and array map from .gguf file format */
 
-void save_gguf(std::string file, std::unordered_map<std::string, array> a);
+struct metadata {
+  std::optional<array> array;
+  std::optional<std::string> string;
+  std::optional<std::vector<metadata>> list;
+};
+
+std::pair<
+    std::unordered_map<std::string, array>,
+    std::unordered_map<std::string, metadata>>
+load_gguf(const std::string& file, StreamOrDevice s = {});
+
+void save_gguf(
+    std::string file,
+    std::unordered_map<std::string, array> array_map,
+    std::unordered_map<std::string, metadata> metadata_map);
 
 /** Compute D = beta * C + alpha * (A @ B) */
 array addmm(
