@@ -35,3 +35,4 @@ Layers
    ALiBi
    RoPE
    SinusoidalPositionalEncoding
+   Upsample2d
