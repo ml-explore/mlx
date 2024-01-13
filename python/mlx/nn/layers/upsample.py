@@ -86,6 +86,8 @@ class Upsample2d(Module):
         mode: Literal["nearest", "bilinear"] = "nearest",
     ) -> None:
         super().__init__()
+        if mode not in ["nearest", "bilinear"]:
+            raise ValueError("[upsample2d] unsupported upsampling algorithm")
         self.scale = scale
         self.mode = mode
 
@@ -158,3 +160,6 @@ class Upsample2d(Module):
         return list(
             reversed(mx.cumprod(mx.array([1] + list(reversed(a.shape))))[:-1].tolist())
         )
+
+    def _extra_repr(self) -> str:
+        return f"scale={self.scale}, mode={self.mode}"
