@@ -1634,6 +1634,23 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
 
+    def test_tile(self):
+        self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)
+        self.assertCmpNumpy([(2, 3, 4), [2]], mx.tile, np.tile)
+        self.assertCmpNumpy([(2, 3, 4), [2, 1]], mx.tile, np.tile)
+        self.assertCmpNumpy(
+            [
+                (2, 3, 4),
+                [
+                    2,
+                    2,
+                ],
+            ],
+            mx.tile,
+            np.tile,
+        )
+        self.assertCmpNumpy([(3,), [2, 2, 2]], mx.tile, np.tile)
+
 
 if __name__ == "__main__":
     unittest.main()
