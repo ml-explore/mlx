@@ -1715,7 +1715,28 @@ TEST_CASE("test take along axis") {
   CHECK(array_equal(out, array({0, 1, 2, 2, 5, 4, 6, 7}, {2, 2, 2}))
             .item<bool>());
 }
+TEST_CASE("test is negative infinity") {
+  array x(1.0f);
+  CHECK_FALSE(isneginf(x).item<bool>());
 
+  array y(-std::numeric_limits<float>::infinity());
+  CHECK(isneginf(y).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(all(isneginf(z)).item<bool>());
+
+  array w = array({1.0f, -std::numeric_limits<float>::infinity(), 2.0f});
+  CHECK_FALSE(all(isneginf(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isneginf(a).item<bool>());
+
+  array b(-std::numeric_limits<float>::infinity(), float16);
+  CHECK(isneginf(b).item<bool>());
+
+  array c(-std::numeric_limits<float>::infinity(), bfloat16);
+  CHECK(isneginf(c).item<bool>());
+}
 TEST_CASE("test scatter") {
   // More indices than dimensions
   CHECK_THROWS(scatter(array(0), array({1}), array(1), 0));

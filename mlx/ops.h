@@ -56,6 +56,8 @@ array as_strided(
     size_t offset,
     StreamOrDevice s = {});
 
+array isneginf(const array& a, StreamOrDevice s = {});
+
 /** Copy another array. */
 array copy(const array& a, StreamOrDevice s = {});
 
