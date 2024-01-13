@@ -1,14 +1,89 @@
 # Copyright © 2023 Apple Inc.
 
-from typing import List, Literal
+from typing import List, Literal, Tuple, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
 class Upsample2d(Module):
+    r"""Upsamples the given spatial data.
+
+    The input  is assumed to be a 4D tensor where the channels are expected to be last.
+    Thus, the input shape should be :math:`(N, H, W, C)` where:
+        - ``N`` is the batch dimension
+        - ``H`` is the input image height
+        - ``W`` is the input image width
+        - ``C`` is the number of input channels
+
+    Parameters:
+        scale (int or Tuple[int, int]):
+            The multiplier for spatial size. If the single integer is provided, the provided value 
+            is the multiplier for both height and width axis. Otherwise, the first element of the
+            tuple is the height multipler, while the second is the width multipler.
+        mode (str, optional): The upsampling algorithm: one of ``'nearest'`` and ``'bilinear'``.
+            Default: ``'nearest'``.
+
+    Shape:
+        - Input:  :math:`(N, C, H, W)` 
+        - Output: :math:`(N, C, H_{out}, W_{out})`, where
+
+    .. math::
+        \begin{aligned}
+            H_{out} &=  H_{in} \times \text{scale} \\
+            W_{out} &=  W_{in} \times \text{scale}
+        \end{aligned}
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+        >>> x = mx.arange(1, 5).reshape((1, 2, 2, 1))
+        >>> x
+        array([[[[1],
+                 [2]],
+                [[3],
+                 [4]]]], dtype=int32)
+        >>> n = nn.Upsample2d(scale=2, mode='nearest')
+        >>> n(x)
+        array([[[[1],
+                 [1],
+                 [2],
+                 [2]],
+                [[1],
+                 [1],
+                 [2],
+                 [2]],
+                [[3],
+                 [3],
+                 [4],
+                 [4]],
+                [[3],
+                 [3],
+                 [4],
+                 [4]]]], dtype=int32)
+        >>> b = nn.Upsample2d(scale=2, mode='bilinear')
+        >>> b(x)
+        array([[[[1],
+                 [1.33333],
+                 [1.66667],
+                 [2]],
+                [[1.66667],
+                 [2],
+                 [2.33333],
+                 [2.66667]],
+                [[2.33333],
+                 [2.66667],
+                 [3],
+                 [3.33333]],
+                [[3],
+                 [3.33333],
+                 [3.66667],
+                 [4]]]], dtype=float32)        
+    """
+
     def __init__(
-        self, scale: int, mode: Literal["nearest", "bilinear"] = "bilinear"
+        self,
+        scale: Union[int, Tuple[int, int]],
+        mode: Literal["nearest", "bilinear"] = "nearest",
     ) -> None:
         super().__init__()
         self.scale = scale
@@ -28,16 +103,17 @@ class Upsample2d(Module):
             width_stride,
             channels_stride,
         ) = self._get_row_contiguous_strides(x)
-        scale = self.scale
+        (height_scale, width_scale) = self._get_scale()
         return mx.as_strided(
             x,
-            shape=(batch_size, height, scale, width, scale, channels),
+            shape=(batch_size, height, height_scale, width, width_scale, channels),
             strides=(batch_stride, height_stride, 0, width_stride, 0, channels_stride),
-        ).reshape((batch_size, height * scale, width * scale, channels))
+        ).reshape((batch_size, height * height_scale, width * width_scale, channels))
 
     def _upsample_bilinear(self, x: mx.array) -> mx.array:
         (batch_size, height, width, channels) = x.shape
-        desired_height, desired_width = height * self.scale, width * self.scale
+        (height_scale, width_scale) = self._get_scale()
+        desired_height, desired_width = height * height_scale, width * width_scale
         img_ch_first = x.transpose((0, 3, 1, 2))
         # Compute sampling indices
         height_indices = mx.repeat(mx.arange(desired_height), desired_width)
@@ -72,6 +148,11 @@ class Upsample2d(Module):
         # Go back to (B, H, W, C)
         out = out.transpose((0, 2, 3, 1))
         return out
+
+    def _get_scale(self) -> Tuple[int, int]:
+        if isinstance(self.scale, int):
+            return (self.scale, self.scale)
+        return self.scale
 
     def _get_row_contiguous_strides(self, a: mx.array) -> List[int]:
         return list(
