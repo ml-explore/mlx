@@ -505,6 +505,30 @@ TEST_CASE("test is nan") {
   CHECK(isnan(d).item<bool>());
 }
 
+TEST_CASE("test is positive infinity") {
+  array x(1.0f);
+  CHECK_FALSE(isposinf(x).item<bool>());
+
+  array y(std::numeric_limits<float>::infinity());
+  CHECK(isposinf(y).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(all(isposinf(z)).item<bool>());
+
+  array w = array({1.0f, std::numeric_limits<float>::infinity(), 2.0f});
+  CHECK_FALSE(all(isposinf(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isposinf(a).item<bool>());
+
+  array b(std::numeric_limits<float>::infinity(), float16);
+  CHECK(isposinf(b).item<bool>());
+
+  array c(std::numeric_limits<float>::infinity(), bfloat16);
+  CHECK(isposinf(c).item<bool>());
+}
+
+
 TEST_CASE("test all close") {
   array x(1.0f);
   array y(1.0f);

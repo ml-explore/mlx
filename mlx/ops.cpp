@@ -1053,6 +1053,13 @@ array array_equal(
 array isnan(const array& a, StreamOrDevice s /* = {} */) {
   return not_equal(a, a, s);
 }
+array isposinf(const array& a, StreamOrDevice s) {
+  array pos_inf_array =
+      full(a.shape(), std::numeric_limits<double>::infinity());
+
+  array result = a == pos_inf_array;
+  return result;
+}
 
 array where(
     const array& condition,

@@ -1133,6 +1133,12 @@ void init_array(py::module_& m) {
           "stream"_a = none,
           "See :func:`any`.")
       .def(
+          "isposinf",
+          &mlx::core::isposinf,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`isposinf`.")
+      .def(
           "isnan",
           &mlx::core::isnan,
           py::kw_only(),
