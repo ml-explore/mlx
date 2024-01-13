@@ -204,11 +204,17 @@ void eval(const std::vector<array>& outputs) {
   std::unordered_set<std::uintptr_t> cache;
   std::unordered_map<std::uintptr_t, std::shared_future<void>> deps;
 
-  auto synchronizer = array(
-      {},
-      bool_,
-      std::make_unique<Synchronizer>(default_stream(default_device())),
-      outputs);
+  // Make an effort to choose a good output stream
+  Stream stream = default_stream(default_device());
+  for (auto& o : outputs) {
+    if (!o.is_evaled() && o.has_primitive()) {
+      stream = o.primitive().stream();
+      break;
+    }
+  }
+
+  auto synchronizer =
+      array({}, bool_, std::make_unique<Synchronizer>(stream), outputs);
 
   recurse = [&](const array& a) {
     auto id = a.id();
