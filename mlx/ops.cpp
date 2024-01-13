@@ -768,7 +768,6 @@ array tile(
   std::vector<int> expand_shape;
   std::vector<int> broad_shape;
   std::vector<int> final_shape;
-  int odims = reps.size() - shape.size();
   for (int i = 0; i < shape.size(); i++) {
     if (reps[i] != 1) {
       expand_shape.push_back(1);
@@ -776,13 +775,7 @@ array tile(
     }
     expand_shape.push_back(shape[i]);
     broad_shape.push_back(shape[i]);
-
-    final_shape.push_back(reps[i]);
-    if (odims > 0) {
-      odims -= 1;
-    } else {
-      final_shape.back() *= shape[i];
-    }
+    final_shape.push_back(reps[i] * shape[i]);
   }
 
   auto x = reshape(arr, expand_shape, s);
