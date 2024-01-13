@@ -227,13 +227,18 @@ void eval(const std::vector<array>& outputs) {
   std::vector<std::uintptr_t> output_primitive_ids;
   for (auto& arr : outputs) {
     if (!arr.is_evaled() || (!arr.is_tracer() && arr.has_primitive())) {
-      recurse(arr);
+      // Ignore outputs we've already seen (children of other outputs)
+      if (cache.find(arr.id()) != cache.end()) {
+        continue;
+      }
+
       // Insert a dependency for every output to synchronize
       // with at the end.
       if (!arr.is_evaled() && deps.find(arr.primitive_id()) == deps.end()) {
         deps.insert({arr.primitive_id(), std::shared_future<void>{}});
         output_primitive_ids.push_back(arr.primitive_id());
       }
+      recurse(arr);
     }
   }
 
