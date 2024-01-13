@@ -985,6 +985,51 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(upsample_nearest(x), expected_nearest))
         self.assertTrue(np.allclose(upsample_bilinear(x), expected_bilinear))
 
+        # Test different height and width scale
+        b, h, w, c = 1, 2, 2, 2
+        x = mx.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
+        upsample_nearest = nn.Upsample2d(scale=(2, 3), mode="nearest")
+        upsample_bilinear = nn.Upsample2d(scale=(2, 3), mode="bilinear")
+
+        expected_nearest = mx.array(
+            [
+                [
+                    [
+                        [0, 0, 0, 1, 1, 1],
+                        [0, 0, 0, 1, 1, 1],
+                        [2, 2, 2, 3, 3, 3],
+                        [2, 2, 2, 3, 3, 3],
+                    ],
+                    [
+                        [4, 4, 4, 5, 5, 5],
+                        [4, 4, 4, 5, 5, 5],
+                        [6, 6, 6, 7, 7, 7],
+                        [6, 6, 6, 7, 7, 7],
+                    ],
+                ]
+            ]
+        ).transpose((0, 2, 3, 1))
+        expected_bilinear = mx.array(
+            [
+                [
+                    [
+                        [0, 0.2, 0.4, 0.6, 0.8, 1],
+                        [0.666667, 0.866667, 1.06667, 1.26667, 1.46667, 1.66667],
+                        [1.33333, 1.53333, 1.73333, 1.93333, 2.13333, 2.33333],
+                        [2, 2.2, 2.4, 2.6, 2.8, 3],
+                    ],
+                    [
+                        [4, 4.2, 4.4, 4.6, 4.8, 5],
+                        [4.66667, 4.86667, 5.06667, 5.26667, 5.46667, 5.66667],
+                        [5.33333, 5.53333, 5.73333, 5.93333, 6.13333, 6.33333],
+                        [6, 6.2, 6.4, 6.6, 6.8, 7],
+                    ],
+                ]
+            ]
+        ).transpose((0, 2, 3, 1))
+        self.assertTrue(np.allclose(upsample_nearest(x), expected_nearest))
+        self.assertTrue(np.allclose(upsample_bilinear(x), expected_bilinear))
+
 
 if __name__ == "__main__":
     unittest.main()
