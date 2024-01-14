@@ -1847,10 +1847,13 @@ void init_ops(py::module_& m) {
       "stream"_a = none,
       R"pbdoc(
         isposinf(a: array, stream: Union[None, Stream, Device] = None) -> array
+
         Return a boolean array indicating which elements are positive infinity.
+
         Args:
             a (array): Input array.
             stream (Union[None, Stream, Device]): Optional stream or device.
+        
         Returns:
             array: The array with boolean values indicating which elements are positive infinity.
       )pbdoc");
