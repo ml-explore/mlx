@@ -1838,7 +1838,7 @@ void init_ops(py::module_& m) {
         Returns:
             array: The array with boolean values indicating which elements are NaN.
       )pbdoc");
-   m.def(
+  m.def(
       "isposinf",
       &isposinf,
       "a"_a,
@@ -1855,7 +1855,7 @@ void init_ops(py::module_& m) {
             stream (Union[None, Stream, Device]): Optional stream or device.
         
         Returns:
-            array: The array with boolean values indicating which elements are positive infinity.
+            array: The boolean array indicating which elements are positive infinity.
       )pbdoc");
   m.def(
       "moveaxis",

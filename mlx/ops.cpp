@@ -1053,9 +1053,10 @@ array array_equal(
 array isnan(const array& a, StreamOrDevice s /* = {} */) {
   return not_equal(a, a, s);
 }
-array isposinf(const array& a, StreamOrDevice s) {
-  return equal(a, array(std::numeric_limits<float>::infinity(), a.dtype()), s)
-}
+array isposinf(const array& a, StreamOrDevice s){return equal(
+    a,
+    array(std::numeric_limits<float>::infinity(), a.dtype()),
+    s)}
 
 array where(
     const array& condition,

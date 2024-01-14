@@ -338,7 +338,7 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_isposinf(self):
         x = mx.array([0.0, float("-inf")])
-        self.assertEqual(mx.isposinf(x).tolist(), [False, False ])
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
 
         x = mx.array([0.0, float("-inf")]).astype(mx.float16)
         self.assertEqual(mx.isposinf(x).tolist(), [False, False])
@@ -349,8 +349,9 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([0.0, float("-inf")]).astype(mx.complex64)
         self.assertEqual(mx.isposinf(x).tolist(), [False, False])
 
-        self.assertEqual(mx.isposinf(0 * mx.array(float("inf"))).tolist(), [False,False])
-
+        self.assertEqual(
+            mx.isposinf(0 * mx.array(float("inf"))).tolist(), [False, False]
+        )
 
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:

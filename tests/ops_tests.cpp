@@ -528,7 +528,6 @@ TEST_CASE("test is positive infinity") {
   CHECK(isposinf(c).item<bool>());
 }
 
-
 TEST_CASE("test all close") {
   array x(1.0f);
   array y(1.0f);
