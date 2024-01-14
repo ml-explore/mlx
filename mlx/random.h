@@ -18,12 +18,16 @@ class KeySequence {
 
   // static default
   static KeySequence& default_() {
-    static KeySequence ks(0);
+    static KeySequence ks(getCurrentTimeSeed());
     return ks;
   }
 
  private:
   array key_;
+  static uint64_t getCurrentTimeSeed() {
+        auto now = std::chrono::system_clock::now();
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    }
 };
 
 /** Get a PRNG key from a seed. */
