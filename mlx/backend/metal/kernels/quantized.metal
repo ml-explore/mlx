@@ -154,10 +154,13 @@ template <typename T, const int BM, const int BN, const int group_size, const in
 
   // Loop over in_vec in blocks of colgroup
   for (int i=0; i<in_vec_size; i+=BM) {
+    int offset = simd_lid + i;
+    bool thread_in_bounds = offset < in_vec_size;
+
     // Load the vec to shared memory
     threadgroup_barrier(mem_flags::mem_threadgroup);
     if (simd_gid == 0) {
-      x_block[simd_lid] = x[simd_lid + i];
+      x_block[simd_lid] = (thread_in_bounds) ? x[offset] : 0;
     }
 
     // Load the scales and biases to shared memory
@@ -180,7 +183,7 @@ template <typename T, const int BM, const int BN, const int group_size, const in
     bias = biases_block[simd_lid * groups_per_block + (simd_gid * el_per_int) / group_size];
 
     // Load the matrix elements
-    w_local = w[(i + simd_lid) * out_vec_size_w];
+    w_local = (thread_in_bounds) ? w[offset * out_vec_size_w] : 0;
 
     // Do all the work.
     #pragma clang loop unroll(full)
@@ -445,21 +448,48 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
     // Load the w tile
     {
-      for (int wo=0; wo<w_els_per_thread; wo++) {
-        int offset = lid * w_els_per_thread + wo;
-        int offset_row = offset / (BN / el_per_int);
-        int offset_col = offset % (BN / el_per_int);
-        const device uint32_t * w_local = w + offset_row * N_w + offset_col;
-        threadgroup T * Ws_local = Ws + offset_row * BN + offset_col * el_per_int;
+      if (k + BK >= K) {
+        for (int wo=0; wo<w_els_per_thread; wo++) {
+          int offset = lid * w_els_per_thread + wo;
+          int offset_row = offset / (BN / el_per_int);
+          int offset_col = offset % (BN / el_per_int);
+          const device uint32_t * w_local = w + offset_row * N_w + offset_col;
+          threadgroup T * Ws_local = Ws + offset_row * BN + offset_col * el_per_int;
 
-        uint32_t wi = *w_local;
-        T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-        T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+          if (y_row + offset_row < K) {
+            uint32_t wi = *w_local;
+            T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+            T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
 
-        #pragma clang loop unroll(full)
-        for (int t=0; t<el_per_int; t++) {
-          Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
-          wi >>= bits;
+            #pragma clang loop unroll(full)
+            for (int t=0; t<el_per_int; t++) {
+              Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
+              wi >>= bits;
+            }
+          } else {
+            #pragma clang loop unroll(full)
+            for (int t=0; t<el_per_int; t++) {
+              Ws_local[t] = 0;
+            }
+          }
+        }
+      } else {
+        for (int wo=0; wo<w_els_per_thread; wo++) {
+          int offset = lid * w_els_per_thread + wo;
+          int offset_row = offset / (BN / el_per_int);
+          int offset_col = offset % (BN / el_per_int);
+          const device uint32_t * w_local = w + offset_row * N_w + offset_col;
+          threadgroup T * Ws_local = Ws + offset_row * BN + offset_col * el_per_int;
+
+          uint32_t wi = *w_local;
+          T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+          T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+
+          #pragma clang loop unroll(full)
+          for (int t=0; t<el_per_int; t++) {
+            Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
+            wi >>= bits;
+          }
         }
       }
     }

@@ -110,10 +110,10 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
-      int bo = 32;
+      int bo = std::min(32, O);
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, bo, 1);
-      MTL::Size grid_dims = MTL::Size(1, (w.shape(1) + bo - 1) / bo, B);
+      MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
 
       set_array_buffer(compute_encoder, x, 0);
       set_array_buffer(compute_encoder, w, 1);

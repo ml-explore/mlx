@@ -150,6 +150,20 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+        # Test qmv
+        x = mx.random.normal(shape=(1, 8))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=False)
+        y_hat = x @ w_hat
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test qmm
+        x = mx.random.normal(shape=(10, 8))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=False)
+        y_hat = x @ w_hat
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
 
 if __name__ == "__main__":
     unittest.main()
