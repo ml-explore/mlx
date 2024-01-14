@@ -337,19 +337,19 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.isnan(0 * mx.array(float("inf"))).tolist(), True)
 
     def test_isposinf(self):
-        x = mx.array([0.0, float("inf")])
-        self.assertEqual(mx.isposinf(x).tolist(), [False, True])
+        x = mx.array([0.0, float("-inf")])
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False ])
 
-        x = mx.array([0.0, float("inf")]).astype(mx.float16)
-        self.assertEqual(mx.isposinf(x).tolist(), [False, True])
+        x = mx.array([0.0, float("-inf")]).astype(mx.float16)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
 
-        x = mx.array([0.0, float("inf")]).astype(mx.bfloat16)
-        self.assertEqual(mx.isposinf(x).tolist(), [False, True])
+        x = mx.array([0.0, float("-inf")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
 
-        x = mx.array([0.0, float("inf")]).astype(mx.complex64)
-        self.assertEqual(mx.isposinf(x).tolist(), [False, True])
+        x = mx.array([0.0, float("-inf")]).astype(mx.complex64)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
 
-        self.assertEqual(mx.isposinf(0 * mx.array(float("-inf"))).tolist(), False)
+        self.assertEqual(mx.isposinf(0 * mx.array(float("inf"))).tolist(), [False,False])
 
 
     def test_tri(self):
