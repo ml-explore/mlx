@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-#include <iostream> // TODO
 
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
