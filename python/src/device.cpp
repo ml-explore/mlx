@@ -12,6 +12,7 @@ using namespace py::literals;
 using namespace mlx::core;
 
 void init_device(py::module_& m) {
+  auto device_class = py::class_<Device>(m, "Device");
   py::enum_<Device::DeviceType>(m, "DeviceType")
       .value("cpu", Device::DeviceType::cpu)
       .value("gpu", Device::DeviceType::gpu)
@@ -23,8 +24,7 @@ void init_device(py::module_& m) {
           },
           py::prepend());
 
-  py::class_<Device>(m, "Device")
-      .def(py::init<Device::DeviceType, int>(), "type"_a, "index"_a = 0)
+  device_class.def(py::init<Device::DeviceType, int>(), "type"_a, "index"_a = 0)
       .def_readonly("type", &Device::type)
       .def(
           "__repr__",

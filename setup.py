@@ -135,18 +135,6 @@ class GenerateStubs(Command):
 
     def run(self) -> None:
         subprocess.run(["pybind11-stubgen", "mlx.core", "-o", "python"])
-        # Note, sed inplace on macos requires a backup prefix, delete the file after its generated
-        # this sed is needed to replace references from py::cpp_function to a generic Callable
-        subprocess.run(
-            [
-                "sed",
-                "-i",
-                "''",
-                "s/cpp_function/typing.Callable/g",
-                "python/mlx/core/__init__.pyi",
-            ]
-        )
-        subprocess.run(["rm", "python/mlx/core/__init__.pyi''"])
 
 
 # Read the content of README.md
