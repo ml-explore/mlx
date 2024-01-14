@@ -2145,6 +2145,8 @@ std::vector<array> Scatter::vjp(
     switch (reduce_type_) {
       case Scatter::Max:
         return scatter_max(values, indices, updates, axes_, stream());
+      default:
+        return array({});
     }
   };
   array result = get_result();
