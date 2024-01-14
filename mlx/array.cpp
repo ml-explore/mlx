@@ -47,6 +47,17 @@ array::array(
           std::move(primitive),
           inputs)) {}
 
+array::array(
+    std::vector<int> shape,
+    Dtype dtype,
+    std::shared_ptr<Primitive> primitive,
+    std::vector<array>&& inputs)
+    : array_desc_(std::make_shared<ArrayDesc>(
+          std::move(shape),
+          dtype,
+          std::move(primitive),
+          std::move(inputs))) {}
+
 std::vector<array> array::make_arrays(
     const std::vector<std::vector<int>>& shapes,
     const std::vector<Dtype>& dtypes,
@@ -158,6 +169,21 @@ array::ArrayDesc::ArrayDesc(
       dtype(dtype),
       primitive(std::move(primitive)),
       inputs(inputs) {
+  std::tie(size, strides) = cum_prod(shape);
+  for (auto& in : inputs) {
+    is_tracer |= in.is_tracer();
+  }
+}
+
+array::ArrayDesc::ArrayDesc(
+    std::vector<int>&& shape,
+    Dtype dtype,
+    std::shared_ptr<Primitive> primitive,
+    std::vector<array>&& inputs)
+    : shape(std::move(shape)),
+      dtype(dtype),
+      primitive(std::move(primitive)),
+      inputs(std::move(inputs)) {
   std::tie(size, strides) = cum_prod(shape);
   for (auto& in : inputs) {
     is_tracer |= in.is_tracer();
