@@ -3,6 +3,7 @@
 #pragma once
 
 #include <optional>
+#include <chrono>
 
 #include "mlx/array.h"
 #include "mlx/stream.h"
