@@ -9,7 +9,7 @@ import mlx_tests
 
 class TestQuantized(mlx_tests.MLXTestCase):
     def test_quantize_dequantize(self):
-        w = mx.random.normal(shape=(128, 128))
+        w = mx.random.normal(shape=(128, 512))
         for b in [2, 4, 8]:
             w_q, scales, biases = mx.quantize(w, 64, b)
             w_hat = mx.dequantize(w_q, scales, biases, 64, b)

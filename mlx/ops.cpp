@@ -2801,7 +2801,7 @@ std::tuple<array, array, array> quantize(
     throw std::invalid_argument("[quantize] Only matrices supported for now");
   }
 
-  if ((w.shape(-1) % group_size) != 0) {
+  if ((w.shape(1) % group_size) != 0) {
     std::ostringstream msg;
     msg << "[quantize] The last dimension of the matrix needs to be divisible by "
         << "the quantization group size " << group_size
@@ -2815,6 +2815,20 @@ std::tuple<array, array, array> quantize(
   int el_per_int = 32 / bits;
   array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
   shifts = reshape(shifts, {1, 1, -1}, s);
+
+  // Check that the w matrix will fill up a whole SIMD.
+  // This is an implementation detail which should be removed in the future but
+  // at least we bail out early which will result in a nice readable error.
+  //
+  // Hopefully nobody is quantizing matrices that small anyway.
+  if (w.shape(1) < 32 * el_per_int) {
+    std::ostringstream msg;
+    msg << "[quantize] The feature dimension (2nd dimension of the matrix) is "
+        << "too small for quantization. We support >=512 for 2 bits, "
+        << ">= 256 for 4 bits and >= 128 for 8 bits. The provided matrix has "
+        << "shape " << w.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
 
   // Compute scales and biases
   array packed_w =
