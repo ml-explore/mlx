@@ -479,6 +479,32 @@ TEST_CASE("test comparison ops") {
   }
 }
 
+TEST_CASE("test is nan") {
+  array x(1.0f);
+  CHECK_FALSE(isnan(x).item<bool>());
+
+  array y(NAN);
+  CHECK(isnan(y).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(all(isnan(z)).item<bool>());
+
+  array w = array({1.0f, NAN, 2.0f});
+  CHECK_FALSE(all(isnan(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isnan(a).item<bool>());
+
+  array b(1.0f, float16);
+  CHECK_FALSE(isnan(b).item<bool>());
+
+  array c(NAN, bfloat16);
+  CHECK(isnan(c).item<bool>());
+
+  array d(NAN, float16);
+  CHECK(isnan(d).item<bool>());
+}
+
 TEST_CASE("test all close") {
   array x(1.0f);
   array y(1.0f);
@@ -2315,6 +2341,32 @@ TEST_CASE("test repeat") {
 
   // negative repeats
   CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
+}
+
+TEST_CASE("tile") {
+  auto x = array({1, 2, 3}, {3});
+  auto y = tile(x, {2});
+  auto expected = array({1, 2, 3, 1, 2, 3}, {6});
+  CHECK(array_equal(y, expected).item<bool>());
+  x = array({1, 2, 3, 4}, {2, 2});
+  y = tile(x, {2});
+  expected = array({1, 2, 1, 2, 3, 4, 3, 4}, {2, 4});
+  CHECK(array_equal(y, expected).item<bool>());
+  x = array({1, 2, 3, 4}, {2, 2});
+  y = tile(x, {4, 1});
+  expected = array({1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4}, {8, 2});
+  CHECK(array_equal(y, expected).item<bool>());
+
+  x = array({1, 2, 3, 4}, {2, 2});
+  y = tile(x, {2, 2});
+  expected = array({1, 2, 1, 2, 3, 4, 3, 4, 1, 2, 1, 2, 3, 4, 3, 4}, {4, 4});
+  CHECK(array_equal(y, expected).item<bool>());
+  x = array({1, 2, 3}, {3});
+  y = tile(x, {2, 2, 2});
+  expected = array(
+      {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3},
+      {2, 2, 6});
+  CHECK(array_equal(y, expected).item<bool>());
 }
 
 TEST_CASE("tensordot") {

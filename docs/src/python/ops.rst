@@ -51,6 +51,7 @@ Operations
    greater_equal
    identity
    inner
+   isnan
    less
    less_equal
    linspace

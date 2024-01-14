@@ -1821,6 +1821,24 @@ void init_ops(py::module_& m) {
             array: The ceil of ``a``.
       )pbdoc");
   m.def(
+      "isnan",
+      &mlx::core::isnan,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isnan(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Return a boolean array indicating which elements are NaN.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The array with boolean values indicating which elements are NaN.
+      )pbdoc");
+  m.def(
       "moveaxis",
       &moveaxis,
       "a"_a,
@@ -3375,5 +3393,31 @@ void init_ops(py::module_& m) {
 
       Returns:
         result (array): The outer product.
+    )pbdoc");
+  m.def(
+      "tile",
+      [](const array& a, const IntOrVec& reps, StreamOrDevice s) {
+        if (auto pv = std::get_if<int>(&reps); pv) {
+          return tile(a, {*pv}, s);
+        } else {
+          return tile(a, std::get<std::vector<int>>(reps), s);
+        }
+      },
+      "a"_a,
+      "reps"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      tile(a: array, reps: Union[int, List[int]], /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Construct an array by repeating ``a`` the number of times given by ``reps``.
+
+      Args:
+        a (array): Input array
+        reps (int or list(int)): The number of times to repeat ``a`` along each axis.
+
+      Returns:
+        result (array): The tiled array.
     )pbdoc");
 }

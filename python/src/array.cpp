@@ -1133,6 +1133,12 @@ void init_array(py::module_& m) {
           "stream"_a = none,
           "See :func:`any`.")
       .def(
+          "isnan",
+          &mlx::core::isnan,
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`isnan`.")
+      .def(
           "moveaxis",
           &moveaxis,
           "source"_a,
@@ -1147,7 +1153,7 @@ void init_array(py::module_& m) {
           "axis2"_a,
           py::kw_only(),
           "stream"_a = none,
-          "See :func:`moveaxis`.")
+          "See :func:`swapaxes`.")
       .def(
           "transpose",
           [](const array& a, py::args axes, StreamOrDevice s) {

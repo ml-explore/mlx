@@ -321,6 +321,21 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertFalse(mx.array_equal(x, y))
                 self.assertTrue(mx.array_equal(x, y, equal_nan=True))
 
+    def test_isnan(self):
+        x = mx.array([0.0, float("nan")])
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.float16)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.complex64)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        self.assertEqual(mx.isnan(0 * mx.array(float("inf"))).tolist(), True)
+
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
             for diag in [-1, 0, 1, -2]:
@@ -1618,6 +1633,23 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
+
+    def test_tile(self):
+        self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)
+        self.assertCmpNumpy([(2, 3, 4), [2]], mx.tile, np.tile)
+        self.assertCmpNumpy([(2, 3, 4), [2, 1]], mx.tile, np.tile)
+        self.assertCmpNumpy(
+            [
+                (2, 3, 4),
+                [
+                    2,
+                    2,
+                ],
+            ],
+            mx.tile,
+            np.tile,
+        )
+        self.assertCmpNumpy([(3,), [2, 2, 2]], mx.tile, np.tile)
 
 
 if __name__ == "__main__":

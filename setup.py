@@ -164,12 +164,13 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.0.8"),
+        version=get_version("0.0.9"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
         long_description=long_description,
         long_description_content_type="text/markdown",
+        url="https://github.com/ml-explore/mlx",
         packages=packages,
         package_dir=package_dir,
         package_data=package_data,
