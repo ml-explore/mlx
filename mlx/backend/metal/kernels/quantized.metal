@@ -257,6 +257,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
   // Make the x loader and mma operation
   const short num_els = min(BM, M - y_row);
+  const short num_outs = min(BN, N - y_col);
   loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
@@ -292,21 +293,48 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
     // Load the w tile
     {
-      for (int wo=0; wo<w_els_per_thread; wo++) {
-        int offset = lid * w_els_per_thread + wo;
-        int offset_row = offset / (BK / el_per_int);
-        int offset_col = offset % (BK / el_per_int);
-        const device uint32_t * w_local = w + offset_row * K_w + offset_col;
-        threadgroup T * Ws_local = Ws + offset_row * BK + offset_col * el_per_int;
+      if (num_outs < BN) {
+        for (int wo=0; wo<w_els_per_thread; wo++) {
+          int offset = lid * w_els_per_thread + wo;
+          int offset_row = offset / (BK / el_per_int);
+          int offset_col = offset % (BK / el_per_int);
+          const device uint32_t * w_local = w + offset_row * K_w + offset_col;
+          threadgroup T * Ws_local = Ws + offset_row * BK + offset_col * el_per_int;
 
-        uint32_t wi = *w_local;
-        T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-        T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+          if (y_col + offset_col < N) {
+            uint32_t wi = *w_local;
+            T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+            T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
 
-        #pragma clang loop unroll(full)
-        for (int t=0; t<el_per_int; t++) {
-          Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
-          wi >>= bits;
+            #pragma clang loop unroll(full)
+            for (int t=0; t<el_per_int; t++) {
+              Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
+              wi >>= bits;
+            }
+          } else {
+            #pragma clang loop unroll(full)
+            for (int t=0; t<el_per_int; t++) {
+              Ws_local[t] = 0;
+            }
+          }
+        }
+      } else {
+        for (int wo=0; wo<w_els_per_thread; wo++) {
+          int offset = lid * w_els_per_thread + wo;
+          int offset_row = offset / (BK / el_per_int);
+          int offset_col = offset % (BK / el_per_int);
+          const device uint32_t * w_local = w + offset_row * K_w + offset_col;
+          threadgroup T * Ws_local = Ws + offset_row * BK + offset_col * el_per_int;
+
+          uint32_t wi = *w_local;
+          T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+          T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
+
+          #pragma clang loop unroll(full)
+          for (int t=0; t<el_per_int; t++) {
+            Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
+            wi >>= bits;
+          }
         }
       }
     }
@@ -324,8 +352,8 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
   // Store results to device memory
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (num_els < BM) {
-    mma_op.store_result_safe(y, N, short2(BN, num_els));
+  if (num_els < BM || num_outs < BN) {
+    mma_op.store_result_safe(y, N, short2(num_outs, num_els));
   } else {
     mma_op.store_result(y, N);
   }

@@ -2801,11 +2801,6 @@ std::tuple<array, array, array> quantize(
     throw std::invalid_argument("[quantize] Only matrices supported for now");
   }
 
-  if ((w.shape(0) % 32) != 0) {
-    throw std::invalid_argument(
-        "[quantize] All dimensions should be divisible by 32 for now");
-  }
-
   if ((w.shape(-1) % group_size) != 0) {
     std::ostringstream msg;
     msg << "[quantize] The last dimension of the matrix needs to be divisible by "
@@ -2849,11 +2844,6 @@ array dequantize(
     StreamOrDevice s /* = {} */) {
   if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {
     throw std::invalid_argument("[dequantize] Only matrices supported for now");
-  }
-
-  if ((w.shape(0) % 32) != 0) {
-    throw std::invalid_argument(
-        "[dequantize] All dimensions should be divisible by 32 for now");
   }
 
   if (w.shape(0) != scales.shape(0) || w.shape(0) != biases.shape(0)) {
