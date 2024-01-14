@@ -169,7 +169,7 @@ array::ArrayDesc::ArrayDesc(
       dtype(dtype),
       primitive(std::move(primitive)),
       inputs(inputs) {
-  std::tie(size, strides) = cum_prod(shape);
+  std::tie(size, strides) = cum_prod(this->shape);
   for (auto& in : inputs) {
     is_tracer |= in.is_tracer();
   }
@@ -184,7 +184,7 @@ array::ArrayDesc::ArrayDesc(
       dtype(dtype),
       primitive(std::move(primitive)),
       inputs(std::move(inputs)) {
-  std::tie(size, strides) = cum_prod(shape);
+  std::tie(size, strides) = cum_prod(this->shape);
   for (auto& in : inputs) {
     is_tracer |= in.is_tracer();
   }
