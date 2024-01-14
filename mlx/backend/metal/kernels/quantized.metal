@@ -209,7 +209,7 @@ template <typename T, const int BM, const int BN, const int group_size, const in
 }
 
 
-template <typename T, const int BM, const int BK, const int BN, const int group_size, const int bits>
+template <typename T, const int BM, const int BK, const int BN, const int group_size, const int bits, const bool aligned_N>
 [[kernel]] void qmm_t(
     const device T* x [[buffer(0)]],
     const device uint32_t* w [[buffer(1)]],
@@ -296,7 +296,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
     // Load the w tile
     {
-      if (num_outs < BN) {
+      if (!aligned_N && num_outs < BN) {
         for (int wo=0; wo<w_els_per_thread; wo++) {
           int offset = lid * w_els_per_thread + wo;
           int offset_row = offset / (BK / el_per_int);
@@ -569,9 +569,9 @@ instantiate_qvm_types( 64, 2)
 instantiate_qvm_types( 64, 4)
 instantiate_qvm_types( 64, 8)
 
-#define instantiate_qmm_t(name, itype, group_size, bits) \
-  template [[host_name("qmm_t_" #name "_gs_" #group_size "_b_" #bits)]] \
-  [[kernel]] void qmm_t<itype, 32, 64, 32, group_size, bits>( \
+#define instantiate_qmm_t(name, itype, group_size, bits, aligned_N) \
+  template [[host_name("qmm_t_" #name "_gs_" #group_size "_b_" #bits "_alN_" #aligned_N)]] \
+  [[kernel]] void qmm_t<itype, 32, 64, 32, group_size, bits, aligned_N>( \
       const device itype* x [[buffer(0)]], \
       const device uint32_t* w [[buffer(1)]], \
       const device itype* scales [[buffer(2)]], \
@@ -586,9 +586,12 @@ instantiate_qvm_types( 64, 8)
       uint simd_lid [[thread_index_in_simdgroup]]);
 
 #define instantiate_qmm_t_types(group_size, bits) \
-  instantiate_qmm_t(float32, float, group_size, bits) \
-  instantiate_qmm_t(float16, half, group_size, bits) \
-  instantiate_qmm_t(bfloat16, bfloat16_t, group_size, bits)
+  instantiate_qmm_t(float32, float, group_size, bits, false) \
+  instantiate_qmm_t(float16, half, group_size, bits, false) \
+  instantiate_qmm_t(bfloat16, bfloat16_t, group_size, bits, false) \
+  instantiate_qmm_t(float32, float, group_size, bits, true) \
+  instantiate_qmm_t(float16, half, group_size, bits, true) \
+  instantiate_qmm_t(bfloat16, bfloat16_t, group_size, bits, true)
 
 instantiate_qmm_t_types(128, 2)
 instantiate_qmm_t_types(128, 4)
