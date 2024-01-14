@@ -334,7 +334,7 @@ std::vector<array> compile_replace(
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     size_t fun_id) {
-  return [&fun, fun_id](const std::vector<array>& inputs) {
+  return [fun, fun_id](const std::vector<array>& inputs) {
     // Find a cache entry with the correct inputs
     auto& entry = compiler_cache().find(fun_id, inputs);
 
