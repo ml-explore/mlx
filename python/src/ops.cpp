@@ -1840,7 +1840,7 @@ void init_ops(py::module_& m) {
       )pbdoc");
    m.def(
       "isposinf",
-      &mlx::core::isposinf,
+      &isposinf,
       "a"_a,
       py::pos_only(),
       py::kw_only(),
