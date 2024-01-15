@@ -477,22 +477,26 @@ auto py_compile(const py::function& fun) {
     auto inputs = tree_flatten(args, true);
 
     // Get globally enclosed arrays so we don't compile through them
-    auto global_inputs = tree_flatten(py::getattr(fun, "__globals__"), false);
-    std::move(
-        std::begin(global_inputs),
-        std::end(global_inputs),
-        std::back_inserter(inputs));
+    if (py::hasattr(fun, "__globals__")) {
+      auto global_inputs = tree_flatten(py::getattr(fun, "__globals__"), false);
+      std::move(
+          std::begin(global_inputs),
+          std::end(global_inputs),
+          std::back_inserter(inputs));
+    }
 
     // Get locally enclosed arrays so we don't compile through them
-    auto closures = py::getattr(fun, "__closure__");
-    if (py::isinstance<py::tuple>(closures)) {
-      for (auto& closure : closures) {
-        auto enclosed_inputs =
-            tree_flatten(py::getattr(closure, "cell_contents"), false);
-        std::move(
-            std::begin(enclosed_inputs),
-            std::end(enclosed_inputs),
-            std::back_inserter(inputs));
+    if (py::hasattr(fun, "__closure__")) {
+      auto closures = py::getattr(fun, "__closure__");
+      if (py::isinstance<py::tuple>(closures)) {
+        for (auto& closure : closures) {
+          auto enclosed_inputs =
+              tree_flatten(py::getattr(closure, "cell_contents"), false);
+          std::move(
+              std::begin(enclosed_inputs),
+              std::end(enclosed_inputs),
+              std::back_inserter(inputs));
+        }
       }
     }
 
