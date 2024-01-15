@@ -11,7 +11,7 @@ MLX was developed with contributions from the following individuals:
 - Juarez Bochi: Fixed bug in cross attention.
 - Justin Deschenaux: Sine, Cosine, arange, randint, truncated normal, bernoulli, lion optimizer, Dropout2d, linear and logistic regression python example.
 - Diogo Da Cruz: Added `tri`, `tril`, `triu`, `tensordot`, `inner`, `outer` and safetensor support
-- Gabrijel Boduljak: Added `mlx.core.linalg`, implemented `norm` method and `InstanceNorm` layer.
+- Gabrijel Boduljak: Added `mlx.core.linalg`, implemented `norm` method, `InstanceNorm`, and `Upsample2d` layers.
 
 <a href="https://github.com/ml-explore/mlx/graphs/contributors">
   <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
