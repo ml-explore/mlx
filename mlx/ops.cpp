@@ -573,16 +573,32 @@ std::vector<array> split(
         << " for array with shape " << a.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
-  std::vector<array> res;
-  auto out_shape = a.shape();
-  auto start_indices = std::vector<int>(a.ndim(), 0);
-  auto stop_indices = a.shape();
-  for (int i = 0; i < indices.size() + 1; ++i) {
-    stop_indices[ax] = i < indices.size() ? indices[i] : a.shape(ax);
-    res.push_back(slice(a, start_indices, stop_indices, to_stream(s)));
-    start_indices[ax] = stop_indices[ax];
+  if (!indices.empty() && indices.size() < 10) {
+    std::vector<Dtype> dtypes(indices.size() + 1, a.dtype());
+    std::vector<std::vector<int>> shapes(indices.size() + 1, a.shape());
+    shapes[0][ax] = indices[0];
+    for (int i = 1; i < indices.size(); i++) {
+      shapes[i][ax] = indices[i] - indices[i - 1];
+    }
+    shapes.back()[ax] = a.shape(ax) - indices.back();
+
+    return array::make_arrays(
+        shapes,
+        dtypes,
+        std::make_shared<Split>(to_stream(s), indices, ax),
+        {a});
+  } else {
+    std::vector<array> res;
+    auto out_shape = a.shape();
+    auto start_indices = std::vector<int>(a.ndim(), 0);
+    auto stop_indices = a.shape();
+    for (int i = 0; i < indices.size() + 1; ++i) {
+      stop_indices[ax] = i < indices.size() ? indices[i] : a.shape(ax);
+      res.push_back(slice(a, start_indices, stop_indices, to_stream(s)));
+      start_indices[ax] = stop_indices[ax];
+    }
+    return res;
   }
-  return res;
 }
 
 std::vector<array> split(

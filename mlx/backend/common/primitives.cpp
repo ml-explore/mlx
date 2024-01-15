@@ -588,6 +588,59 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
   out.copy_shared_buffer(in, strides, flags, data_size, data_offset);
 }
 
+void Split::eval(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 1);
+
+  auto& in = inputs[0];
+  auto strides = in.strides();
+  auto flags = in.flags();
+  auto new_flags = flags;
+
+  // Extract the first dim that isn't 1 starting at left and right of the shape
+  int first_non_singleton = 0;
+  for (; first_non_singleton < in.ndim(); first_non_singleton++) {
+    if (in.shape(first_non_singleton) != 1) {
+      break;
+    }
+  }
+  int reverse_non_singleton = in.ndim() - 1;
+  for (; reverse_non_singleton >= 0; reverse_non_singleton--) {
+    if (in.shape(reverse_non_singleton) != 1) {
+      break;
+    }
+  }
+
+  std::vector<int> indices(1, 0);
+  indices.insert(indices.end(), indices_.begin(), indices_.end());
+  for (int i = 0; i < indices.size(); i++) {
+    size_t offset = indices[i] * strides[axis_];
+    new_flags.row_contiguous =
+        flags.row_contiguous && axis_ <= first_non_singleton;
+    new_flags.col_contiguous =
+        flags.col_contiguous && axis_ >= reverse_non_singleton;
+    size_t data_size = 1;
+    if (strides[axis_] == 0) {
+      // Slicing over a broadcasted dim
+      data_size = in.data_size();
+      new_flags.contiguous = flags.contiguous;
+    } else if (strides[axis_] == 1 && in.data_size() != in.size()) {
+      // Slicing the only non-broadcasted dim
+      data_size = outputs[i].size();
+      new_flags.contiguous = true;
+    } else {
+      // We sliced something. So either we are row or col contiguous or we
+      // punched a hole
+      data_size = outputs[i].size();
+      new_flags.contiguous =
+          (new_flags.row_contiguous || new_flags.col_contiguous);
+    }
+
+    outputs[i].copy_shared_buffer(in, strides, new_flags, data_size, offset);
+  }
+}
+
 void Square::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
