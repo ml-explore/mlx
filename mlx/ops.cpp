@@ -218,20 +218,20 @@ array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (n <= 0 || m <= 0) {
     throw std::invalid_argument("N and M must be positive integers.");
   }
-  array result = zeros({n * m}, dtype, s);
+  array result = zeros({n, m}, dtype, s);
   if (k >= m || -k >= n) {
-    return reshape(result, {n, m}, s);
+    return result;
   }
 
   int diagonal_length = k >= 0 ? std::min(n, m - k) : std::min(n + k, m);
-  int start_index = (k >= 0) ? k : -k * m;
 
-  array diag_indices_array = arange(
-      start_index, start_index + diagonal_length * (m + 1), m + 1, int32, s);
-  array ones_array = ones({diagonal_length, 1}, dtype, s);
-  result = scatter(result, diag_indices_array, ones_array, 0, s);
-
-  return reshape(result, {n, m}, s);
+  std::vector<array> indices;
+  auto s1 = std::max(0, -k);
+  auto s2 = std::max(0, k);
+  indices.push_back(arange(s1, diagonal_length + s1, int32, s));
+  indices.push_back(arange(s2, diagonal_length + s2, int32, s));
+  array ones_array = ones({diagonal_length, 1, 1}, dtype, s);
+  return scatter(result, indices, ones_array, {0, 1}, s);
 }
 
 array identity(int n, Dtype dtype, StreamOrDevice s /* = {} */) {
