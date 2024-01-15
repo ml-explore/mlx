@@ -15,7 +15,12 @@ class TestCompile(mlx_tests.MLXTestCase):
         compiled_fn = mx.compile(fun)
         x = mx.array(1.0)
         y = mx.array(1.0)
-        # out = compiled_fn(x, y)
+        out = compiled_fn(x, y)
+        self.assertEqual(out.item(), 2.0)
+
+        # Try again
+        out = compiled_fn(x, y)
+        self.assertEqual(out.item(), 2.0)
 
 
 if __name__ == "__main__":
