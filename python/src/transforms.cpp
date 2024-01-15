@@ -449,10 +449,13 @@ auto py_vmap(
   };
 }
 
-auto py_compile(const py::function& fun) {
+std::unordered_map<size_t, py::object>& tree_cache() {
   // This map is used to Cache the tree structure of the outputs
-  static std::unordered_map<size_t, py::object> tree_cache;
+  static std::unordered_map<size_t, py::object> tree_cache_;
+  return tree_cache_;
+}
 
+auto py_compile(const py::function& fun) {
   return [fun](const py::args& args) {
     // Inputs must be array or tree of arrays
     auto inputs = tree_flatten(args, true);
@@ -470,7 +473,7 @@ auto py_compile(const py::function& fun) {
 
       py_outputs =
           tree_map(py_outputs, [](const py::handle& x) { return py::none(); });
-      tree_cache.insert({fun_id, py_outputs});
+      tree_cache().insert({fun_id, py_outputs});
       return outputs;
     };
 
@@ -478,7 +481,7 @@ auto py_compile(const py::function& fun) {
     auto outputs = detail::compile(compile_fun, fun_id)(inputs);
 
     // Put the outputs back in the container
-    py::object py_outputs = tree_cache.at(fun_id);
+    py::object py_outputs = tree_cache().at(fun_id);
     return tree_unflatten_none(py_outputs, outputs);
   };
 }
@@ -800,4 +803,8 @@ void init_transforms(py::module_& m) {
             function: A compiled function which has the same input arguments
             as ``fun`` and returns the the same output(s).
       )pbdoc");
+
+  // Register static Python object cleanup before the interpreter exits
+  auto atexit = py::module_::import("atexit");
+  atexit.attr("register")(py::cpp_function([]() { tree_cache().clear(); }));
 }
