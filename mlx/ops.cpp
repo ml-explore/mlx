@@ -1,4 +1,5 @@
 // Copyright © 2023 Apple Inc.
+#include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <set>
@@ -573,7 +574,14 @@ std::vector<array> split(
         << " for array with shape " << a.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
-  if (!indices.empty() && indices.size() < 10) {
+
+  if (indices.empty()) {
+    return {a};
+  }
+
+  if (indices.size() < 10 &&
+      std::is_sorted(indices.begin(), indices.end(), std::greater<>{}) &&
+      indices[0] > 0 && indices.back() < a.shape(ax)) {
     std::vector<Dtype> dtypes(indices.size() + 1, a.dtype());
     std::vector<std::vector<int>> shapes(indices.size() + 1, a.shape());
     shapes[0][ax] = indices[0];
@@ -587,18 +595,18 @@ std::vector<array> split(
         dtypes,
         std::make_shared<Split>(to_stream(s), indices, ax),
         {a});
-  } else {
-    std::vector<array> res;
-    auto out_shape = a.shape();
-    auto start_indices = std::vector<int>(a.ndim(), 0);
-    auto stop_indices = a.shape();
-    for (int i = 0; i < indices.size() + 1; ++i) {
-      stop_indices[ax] = i < indices.size() ? indices[i] : a.shape(ax);
-      res.push_back(slice(a, start_indices, stop_indices, to_stream(s)));
-      start_indices[ax] = stop_indices[ax];
-    }
-    return res;
   }
+
+  std::vector<array> res;
+  auto out_shape = a.shape();
+  auto start_indices = std::vector<int>(a.ndim(), 0);
+  auto stop_indices = a.shape();
+  for (int i = 0; i < indices.size() + 1; ++i) {
+    stop_indices[ax] = i < indices.size() ? indices[i] : a.shape(ax);
+    res.push_back(slice(a, start_indices, stop_indices, to_stream(s)));
+    start_indices[ax] = stop_indices[ax];
+  }
+  return res;
 }
 
 std::vector<array> split(
