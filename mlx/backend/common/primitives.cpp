@@ -594,50 +594,49 @@ void Split::eval(
   assert(inputs.size() == 1);
 
   auto& in = inputs[0];
-  auto strides = in.strides();
-  auto flags = in.flags();
-  auto new_flags = flags;
 
-  // Extract the first dim that isn't 1 starting at left and right of the shape
-  int first_non_singleton = 0;
-  for (; first_non_singleton < in.ndim(); first_non_singleton++) {
-    if (in.shape(first_non_singleton) != 1) {
-      break;
+  auto compute_new_flags = [](const auto& shape,
+                              const auto& strides,
+                              size_t in_data_size,
+                              auto flags) {
+    size_t data_size = 1;
+    size_t f_stride = 1;
+    size_t b_stride = 1;
+    flags.row_contiguous = true;
+    flags.col_contiguous = true;
+    for (int i = 0, ri = shape.size() - 1; ri >= 0; i++, ri--) {
+      flags.col_contiguous &= strides[i] == f_stride || shape[i] == 1;
+      flags.row_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
+      f_stride *= shape[i];
+      b_stride *= shape[ri];
+      if (strides[i] > 0) {
+        data_size *= shape[i];
+      }
     }
-  }
-  int reverse_non_singleton = in.ndim() - 1;
-  for (; reverse_non_singleton >= 0; reverse_non_singleton--) {
-    if (in.shape(reverse_non_singleton) != 1) {
-      break;
+
+    if (data_size == 1) {
+      // Broadcasted scalar array is contiguous.
+      flags.contiguous = true;
+    } else if (data_size == in_data_size) {
+      // Means we sliced a broadcasted dimension so leave the "no holes" flag
+      // alone.
+    } else {
+      // We sliced something. So either we are row or col contiguous or we
+      // punched a hole.
+      flags.contiguous &= flags.row_contiguous || flags.col_contiguous;
     }
-  }
+
+    return std::pair<decltype(flags), size_t>{flags, data_size};
+  };
 
   std::vector<int> indices(1, 0);
   indices.insert(indices.end(), indices_.begin(), indices_.end());
   for (int i = 0; i < indices.size(); i++) {
-    size_t offset = indices[i] * strides[axis_];
-    new_flags.row_contiguous =
-        flags.row_contiguous && axis_ <= first_non_singleton;
-    new_flags.col_contiguous =
-        flags.col_contiguous && axis_ >= reverse_non_singleton;
-    size_t data_size = 1;
-    if (strides[axis_] == 0) {
-      // Slicing over a broadcasted dim
-      data_size = in.data_size();
-      new_flags.contiguous = flags.contiguous;
-    } else if (strides[axis_] == 1 && in.data_size() != in.size()) {
-      // Slicing the only non-broadcasted dim
-      data_size = outputs[i].size();
-      new_flags.contiguous = true;
-    } else {
-      // We sliced something. So either we are row or col contiguous or we
-      // punched a hole
-      data_size = outputs[i].size();
-      new_flags.contiguous =
-          (new_flags.row_contiguous || new_flags.col_contiguous);
-    }
-
-    outputs[i].copy_shared_buffer(in, strides, new_flags, data_size, offset);
+    size_t offset = indices[i] * in.strides()[axis_];
+    auto [new_flags, data_size] = compute_new_flags(
+        outputs[i].shape(), in.strides(), in.data_size(), in.flags());
+    outputs[i].copy_shared_buffer(
+        in, in.strides(), new_flags, data_size, offset);
   }
 }
 

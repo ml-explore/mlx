@@ -580,7 +580,7 @@ std::vector<array> split(
   }
 
   if (indices.size() < 10 &&
-      std::is_sorted(indices.begin(), indices.end(), std::greater<>{}) &&
+      std::is_sorted(indices.begin(), indices.end(), std::less<>{}) &&
       indices[0] > 0 && indices.back() < a.shape(ax)) {
     std::vector<Dtype> dtypes(indices.size() + 1, a.dtype());
     std::vector<std::vector<int>> shapes(indices.size() + 1, a.shape());
