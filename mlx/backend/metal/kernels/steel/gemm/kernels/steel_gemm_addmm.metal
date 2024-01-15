@@ -192,7 +192,7 @@ template <typename T,
             short2(tgp_bn, tgp_bm), 
             epilogue_op);
 
-      } else [[unlikely]] {
+      } else {
         gemm_kernel::gemm_loop(
             As,
             Bs,
