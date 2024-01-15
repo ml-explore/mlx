@@ -70,6 +70,10 @@ struct CompilerCache {
     return entries.back();
   };
 
+  void erase(size_t fun_id) {
+    cache_.erase(fun_id);
+  }
+
  private:
   CompilerCache() {}
   friend CompilerCache& compiler_cache();
@@ -357,6 +361,11 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     return compile_replace(entry.tape, entry.inputs, entry.outputs, inputs);
   };
 }
+
+void compile_erase(size_t fun_id) {
+  detail::compiler_cache().erase(fun_id);
+}
+
 } // namespace detail
 
 std::function<std::vector<array>(const std::vector<array>&)> compile(
