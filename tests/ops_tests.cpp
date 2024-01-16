@@ -510,7 +510,7 @@ TEST_CASE("test is inf") {
   array x(1.0f);
   CHECK_FALSE(isinf(x).item<bool>());
 
-  auto inf = std::numeric_limits<double>::infinity();
+  auto inf = std::numeric_limits<float>::infinity();
   array y(inf);
   CHECK(isinf(y).item<bool>());
 
