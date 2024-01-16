@@ -1,4 +1,5 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
+
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -71,6 +72,10 @@ struct CompilerCache {
 
   void erase(size_t fun_id) {
     cache_.erase(fun_id);
+  }
+
+  void clear() {
+    cache_.clear();
   }
 
  private:
@@ -361,6 +366,10 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 
 void compile_erase(size_t fun_id) {
   detail::compiler_cache().erase(fun_id);
+}
+
+void compile_clear() {
+  detail::compiler_cache().clear();
 }
 
 } // namespace detail

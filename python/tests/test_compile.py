@@ -134,6 +134,18 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = compiled(mx.array(1))
         self.assertTrue(mx.array_equal(out, mx.array([-1, -2])))
 
+    def test_function_creates_array(self):
+        def fun(x):
+            return x + mx.array(1)
+
+        cfun = mx.compile(fun)
+        out = cfun(mx.array(3))
+        self.assertEqual(out.item(), 4)
+
+        # And again
+        out = cfun(mx.array(3))
+        self.assertEqual(out.item(), 4)
+
 
 if __name__ == "__main__":
     unittest.main()
