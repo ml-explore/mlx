@@ -52,7 +52,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
-      int bo = 32;
+      int bo = std::min(32, O);
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, bo, 1);
       MTL::Size grid_dims = MTL::Size(1, O / bo, B);
@@ -72,7 +72,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     else {
       std::ostringstream kname;
       kname << "qmm_t_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
-            << bits_;
+            << bits_ << "_alN_" << std::boolalpha << ((O % 32) == 0);
 
       // Encode and dispatch kernel
       auto compute_encoder = d.get_command_encoder(s.index);
@@ -85,7 +85,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       int bn = 32;
       int bk = 64;
       MTL::Size group_dims = MTL::Size(32, wn, wm);
-      MTL::Size grid_dims = MTL::Size(O / bn, (B + bm - 1) / bm, 1);
+      MTL::Size grid_dims = MTL::Size((O + bn - 1) / bn, (B + bm - 1) / bm, 1);
 
       set_array_buffer(compute_encoder, x, 0);
       set_array_buffer(compute_encoder, w, 1);
@@ -110,10 +110,10 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
-      int bo = 32;
+      int bo = std::min(32, O);
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, bo, 1);
-      MTL::Size grid_dims = MTL::Size(1, (w.shape(1) + bo - 1) / bo, B);
+      MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
 
       set_array_buffer(compute_encoder, x, 0);
       set_array_buffer(compute_encoder, w, 1);
