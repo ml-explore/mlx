@@ -173,10 +173,10 @@ array norm(
   return matrix_norm(a, ord, ax, keepdims, s);
 }
 
-array qrf(const array& a, StreamOrDevice s /* = {} */) {
-  return array(
-      a.shape(),
-      a.dtype(),
+std::vector<array> qrf(const array& a, StreamOrDevice s /* = {} */) {
+  return array::make_arrays(
+      {a.shape(), a.shape()},
+      {a.dtype(), a.dtype()},
       std::make_unique<QRF>(to_stream(s)),
       {astype(a, a.dtype(), s)});
 }

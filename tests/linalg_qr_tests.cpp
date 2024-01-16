@@ -4,15 +4,18 @@
 
 #include <iostream>
 #include "mlx/mlx.h"
+#include "mlx/linalg.h"
 
 using namespace mlx::core;
 
 TEST_CASE("test QR factorization") {
   array A = array({{2., 1., 1., 2.}, {2, 2}});
-  array out = linalg::qrf(A, default_stream(Device::cpu));
-  out.eval();
+  std::vector<array> out = linalg::qrf(A, default_stream(Device::cpu));
+  eval(out);
 
-  // std::cout << out << "\n";
+  std::cout << out[0] << "\n";
+  std::cout << out[1] << "\n";
+
   CHECK_EQ(true, true);
 }
 

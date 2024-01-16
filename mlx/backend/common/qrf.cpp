@@ -120,10 +120,9 @@ void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
         "QR factorization is only supported for floating point 32bit type.");
   }
 
-  // array Q = out;
-  // array R = zeros(out.shape());
-  // R.eval();
-  // qrf_impl<float>(A, Q, R);
+  array Q = outputs[0];
+  array R = outputs[1];
+  qrf_impl<float>(A, Q, R);
 
   // std::cout << "Q: " <<  Q << "\n";
   // std::cout << "R: " <<  R << "\n";
