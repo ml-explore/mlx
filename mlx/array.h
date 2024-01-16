@@ -127,11 +127,7 @@ class array {
     using value_type = const array;
     using reference = value_type;
 
-    explicit ArrayIterator(const array& arr, int idx = 0) : arr(arr), idx(idx) {
-      if (arr.ndim() == 0) {
-        throw std::invalid_argument("Cannot iterate over 0-d array.");
-      }
-    }
+    explicit ArrayIterator(const array& arr, int idx = 0);
 
     reference operator*() const;
 
@@ -155,6 +151,7 @@ class array {
    private:
     const array& arr;
     int idx;
+    std::vector<array> splits;
   };
 
   ArrayIterator begin() const {
