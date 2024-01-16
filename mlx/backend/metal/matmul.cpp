@@ -358,7 +358,9 @@ void steel_matmul(
   // Use problem size to determine threadblock swizzle
   int tn = (N + bn - 1) / bn;
   int tm = (M + bm - 1) / bm;
-  int swizzle_log = tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+
+  // TODO: Explore device-based tuning for swizzle
+  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
 
   // Prepare steel matmul params
   GEMMParams params{
@@ -808,7 +810,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int tn = (N + bn - 1) / bn;
   int tm = (M + bm - 1) / bm;
-  int swizzle_log = tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+
+  // TODO: Explore device-based tuning for swizzle
+  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
 
   GEMMAddMMParams params{
       M,
