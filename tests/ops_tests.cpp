@@ -510,13 +510,14 @@ TEST_CASE("test is inf") {
   array x(1.0f);
   CHECK_FALSE(isinf(x).item<bool>());
 
-  array y(std::numeric_limits<double>::infinity());
+  auto inf = std::numeric_limits<double>::infinity();
+  array y(inf);
   CHECK(isinf(y).item<bool>());
 
   array z = identity(7);
   CHECK_FALSE(any(isinf(z)).item<bool>());
 
-  array w = array({1.0f, std::numeric_limits<double>::infinity(), 2.0f});
+  array w = array({1.0f, inf, 2.0f});
   CHECK(array_equal({false, true, false}, isinf(w)).item<bool>());
 
   array a(1.0f, bfloat16);
@@ -525,10 +526,10 @@ TEST_CASE("test is inf") {
   array b(1.0f, float16);
   CHECK_FALSE(isinf(b).item<bool>());
 
-  array c(std::numeric_limits<double>::infinity(), bfloat16);
+  array c(inf, bfloat16);
   CHECK(isinf(c).item<bool>());
 
-  array d(std::numeric_limits<double>::infinity(), float16);
+  array d(inf, float16);
   CHECK(isinf(d).item<bool>());
 }
 
