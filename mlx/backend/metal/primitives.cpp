@@ -727,6 +727,12 @@ void Sinh::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "sinh");
 }
 
+void Split::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+
 void Square::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "square");
 }

@@ -1,4 +1,5 @@
 // Copyright © 2023 Apple Inc.
+#include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <set>
@@ -573,6 +574,29 @@ std::vector<array> split(
         << " for array with shape " << a.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
+
+  if (indices.empty()) {
+    return {a};
+  }
+
+  if (indices.size() < 10 &&
+      std::is_sorted(indices.begin(), indices.end(), std::less<>{}) &&
+      indices[0] > 0 && indices.back() < a.shape(ax)) {
+    std::vector<Dtype> dtypes(indices.size() + 1, a.dtype());
+    std::vector<std::vector<int>> shapes(indices.size() + 1, a.shape());
+    shapes[0][ax] = indices[0];
+    for (int i = 1; i < indices.size(); i++) {
+      shapes[i][ax] = indices[i] - indices[i - 1];
+    }
+    shapes.back()[ax] = a.shape(ax) - indices.back();
+
+    return array::make_arrays(
+        shapes,
+        dtypes,
+        std::make_shared<Split>(to_stream(s), indices, ax),
+        {a});
+  }
+
   std::vector<array> res;
   auto out_shape = a.shape();
   auto start_indices = std::vector<int>(a.ndim(), 0);

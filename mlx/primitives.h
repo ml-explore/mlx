@@ -1421,6 +1421,28 @@ class Sort : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Split : public Primitive {
+ public:
+  explicit Split(Stream stream, const std::vector<int>& indices, int axis)
+      : Primitive(stream), indices_(indices), axis_(axis){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Split)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+
+  std::vector<int> indices_;
+  int axis_;
+};
+
 class Square : public UnaryPrimitive {
  public:
   explicit Square(Stream stream) : UnaryPrimitive(stream){};

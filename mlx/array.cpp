@@ -158,7 +158,26 @@ array::ArrayDesc::ArrayDesc(
   }
 }
 
+array::ArrayIterator::ArrayIterator(const array& arr, int idx)
+    : arr(arr), idx(idx) {
+  if (arr.ndim() == 0) {
+    throw std::invalid_argument("Cannot iterate over 0-d array.");
+  }
+
+  // Iterate using split
+  if (arr.shape(0) > 0 && arr.shape(0) <= 10) {
+    splits = split(arr, arr.shape(0));
+    for (auto& arr_i : splits) {
+      arr_i = squeeze(arr_i, 0);
+    }
+  }
+}
+
 array::ArrayIterator::reference array::ArrayIterator::operator*() const {
+  if (idx >= 0 && idx < splits.size()) {
+    return splits[idx];
+  }
+
   auto start = std::vector<int>(arr.ndim(), 0);
   auto end = arr.shape();
   auto shape = arr.shape();

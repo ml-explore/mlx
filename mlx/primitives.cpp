@@ -2493,6 +2493,32 @@ bool Sort::is_equivalent(const Primitive& other) const {
   return axis_ == r_other.axis_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> Split::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  return {
+      {split(inputs[0], indices_, axis_ + (axes[0] <= axis_), stream())}, axes};
+}
+
+std::vector<array> Split::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums) {
+  return {concatenate(cotangents, axis_, stream())};
+}
+
+std::vector<array> Split::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  return split(tangents[0], indices_, axis_, stream());
+}
+
+bool Split::is_equivalent(const Primitive& other) const {
+  const Split& s_other = static_cast<const Split&>(other);
+  return axis_ == s_other.axis_ && indices_ == s_other.indices_;
+}
+
 std::vector<array> Square::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
