@@ -2797,6 +2797,20 @@ std::tuple<array, array, array> quantize(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
+  if (group_size != 64 && group_size != 128) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested group size " << group_size
+        << " is not supported. The supported group sizes are 64 and 128.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (bits != 2 && bits != 4 && bits != 8) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested number of bits " << bits
+        << " is not supported. The supported bits are 2, 4 and 8.";
+    throw std::invalid_argument(msg.str());
+  }
+
   if (w.ndim() != 2) {
     throw std::invalid_argument("[quantize] Only matrices supported for now");
   }
