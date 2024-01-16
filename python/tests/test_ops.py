@@ -401,6 +401,36 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.ceil(mx.array([22 + 3j, 19 + 98j]))
 
+    def test_isposinf(self):
+        x = mx.array([0.0, float("-inf")])
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.float16)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.complex64)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        self.assertEqual(mx.isposinf(0 * mx.array(float("inf"))).tolist(), False)
+
+    def test_isneginf(self):
+        x = mx.array([0.0, float("-inf")])
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.float16)
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.complex64)
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        self.assertEqual(mx.isneginf(0 * mx.array(float("inf"))).tolist(), False)
+
     def test_round(self):
         # float
         x = mx.array(
