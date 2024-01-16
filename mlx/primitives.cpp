@@ -2134,7 +2134,7 @@ std::vector<array> Scatter::vjp(
       break;
     default:
       throw std::runtime_error(
-          "[scatter] VJP not implemented for this scattering reduction type");
+          "[scatter] VJP not implemented for scatter_prod");
   }
 
   const array& values = primals[0];
