@@ -17,6 +17,7 @@
 #endif
 
 namespace mlx::core {
+using allocator::Buffer;
 
 template <typename T>
 struct lpack;
@@ -53,16 +54,19 @@ void qrf_impl(array& A, array& Q, array& R) {
   const int M = A.shape(0);
   const int N = A.shape(1);
   const int lda = std::max(M, N);
+
+  // No. of elementary reflectors
+  const int tau_size = std::min(M, N);
   // Holds scalar factors of the elementary reflectors
-  array tau = zeros({std::min(M, N)}, default_device());
-  tau.eval();
+  Buffer tau = allocator::malloc_or_wait(sizeof(T) *  tau_size);
+
   array work = array(1, A.dtype());
   int lwork = -1;
   int info;
 
   // Compute workspace size
   lpack<T>::xgeqrf(
-      &M, &N, A.data<T>(), &lda, tau.data<T>(), work.data<T>(), &lwork, &info);
+      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), work.data<T>(), &lwork, &info);
 
   // Update workspace size
   lwork = work.item<T>();
@@ -70,7 +74,7 @@ void qrf_impl(array& A, array& Q, array& R) {
 
   // Solve
   lpack<T>::xgeqrf(
-      &M, &N, A.data<T>(), &lda, tau.data<T>(), work.data<T>(), &lwork, &info);
+      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), work.data<T>(), &lwork, &info);
 
   // For m ≥ n, R is an upper triangular matrix.
   // For m < n, R is an upper trapezoidal matrix.
@@ -85,18 +89,17 @@ void qrf_impl(array& A, array& Q, array& R) {
 
   copy_inplace(R_, R, CopyType::Vector);
 
-  // No. of elementary reflectors
-  const int K = tau.size();
+  // const int K = tau.size();
 
   // retrieve Q from the elementary reflectors
   // uses the same worksize as before
   lpack<T>::xorgqr(
       &M,
       &N,
-      &K,
+      &tau_size,
       A.data<T>(),
       &lda,
-      tau.data<T>(),
+      static_cast<T*>(tau.ptr()),
       work.data<T>(),
       &lwork,
       &info);
