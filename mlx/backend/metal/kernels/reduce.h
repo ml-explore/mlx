@@ -16,7 +16,7 @@ union bool4_or_uint {
 
 struct None {
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, int offset = 0) {
+  void atomic_update(device mlx_atomic<T>* out, T val, uint offset = 0) {
     mlx_atomic_store_explicit(out, val, offset);
   }
 };
@@ -41,7 +41,7 @@ struct And {
     }
   }
 
-  void atomic_update(device mlx_atomic<bool>* out, bool val, int offset = 0) {
+  void atomic_update(device mlx_atomic<bool>* out, bool val, uint offset = 0) {
     if (!val) {
       mlx_atomic_store_explicit(out, val, offset);
     }
@@ -68,8 +68,8 @@ struct Or {
   void atomic_update(
       device mlx_atomic<unsigned int>* out,
       bool val,
-      int elem_idx,
-      int offset = 0) {
+      uint elem_idx,
+      uint offset = 0) {
     if (val) {
       bool4_or_uint update;
       update.b = {false, false, false, false};
@@ -78,7 +78,7 @@ struct Or {
     }
   }
 
-  void atomic_update(device mlx_atomic<bool>* out, bool val, int offset = 0) {
+  void atomic_update(device mlx_atomic<bool>* out, bool val, uint offset = 0) {
     if (val) {
       mlx_atomic_store_explicit(out, val, offset);
     }
@@ -105,7 +105,7 @@ struct Sum {
   static constexpr constant U init = U(0);
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, int offset = 0) {
+  void atomic_update(device mlx_atomic<T>* out, T val, uint offset = 0) {
     mlx_atomic_fetch_add_explicit(out, val, offset);
   }
 
@@ -125,7 +125,7 @@ struct Prod {
   static constexpr constant U init = U(1);
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, int offset = 0) {
+  void atomic_update(device mlx_atomic<T>* out, T val, uint offset = 0) {
     mlx_atomic_fetch_mul_explicit(out, val, offset);
   }
 
@@ -145,7 +145,7 @@ struct Min {
   static constexpr constant U init = Limits<U>::max;
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, int offset = 0) {
+  void atomic_update(device mlx_atomic<T>* out, T val, uint offset = 0) {
     mlx_atomic_fetch_min_explicit(out, val, offset);
   }
 
@@ -165,7 +165,7 @@ struct Max {
   static constexpr constant U init = Limits<U>::min;
 
   template <typename T>
-  void atomic_update(device mlx_atomic<T>* out, T val, int offset = 0) {
+  void atomic_update(device mlx_atomic<T>* out, T val, uint offset = 0) {
     mlx_atomic_fetch_max_explicit(out, val, offset);
   }
 
