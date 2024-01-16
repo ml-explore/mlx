@@ -513,10 +513,10 @@ TEST_CASE("test is inf") {
   CHECK(isinf(y).item<bool>());
 
   array z = identity(7);
-  CHECK_FALSE(all(isinf(z)).item<bool>());
+  CHECK_FALSE(any(isinf(z)).item<bool>());
 
   array w = array({1.0f, std::numeric_limits<double>::infinity(), 2.0f});
-  CHECK_FALSE(all(isinf(w)).item<bool>());
+  CHECK(array_equal({false, true, false}, isinf(w)).item<bool>());
 
   array a(1.0f, bfloat16);
   CHECK_FALSE(isinf(a).item<bool>());

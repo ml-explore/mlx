@@ -1836,7 +1836,7 @@ void init_ops(py::module_& m) {
             a (array): Input array.
 
         Returns:
-            array: The array with boolean values indicating which elements are NaN.
+            array: The boolean array indicating which elements are NaN.
       )pbdoc");
   m.def(
       "isinf",
@@ -1848,13 +1848,13 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         isinf(a: array, stream: Union[None, Stream, Device] = None) -> array
 
-        Return a boolean array indicating which elements are +/- inf.
+        Return a boolean array indicating which elements are +/- infnity.
 
         Args:
             a (array): Input array.
 
         Returns:
-            array: The array with boolean values indicating which elements are +/- inf.
+            array: The boolean array indicating which elements are +/- infinity.
       )pbdoc");
   m.def(
       "moveaxis",

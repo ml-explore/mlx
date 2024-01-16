@@ -680,17 +680,17 @@ void init_array(py::module_& m) {
 
                * - array.at syntax
                  - In-place syntax
-               * - ``x = x.at[idx].add(y)`` 
+               * - ``x = x.at[idx].add(y)``
                  - ``x[idx] += y``
-               * - ``x = x.at[idx].subtract(y)`` 
+               * - ``x = x.at[idx].subtract(y)``
                  - ``x[idx] -= y``
-               * - ``x = x.at[idx].multiply(y)`` 
+               * - ``x = x.at[idx].multiply(y)``
                  - ``x[idx] *= y``
-               * - ``x = x.at[idx].divide(y)`` 
+               * - ``x = x.at[idx].divide(y)``
                  - ``x[idx] /= y``
-               * - ``x = x.at[idx].maximum(y)`` 
+               * - ``x = x.at[idx].maximum(y)``
                  - ``x[idx] = mx.maximum(x[idx], y)``
-               * - ``x = x.at[idx].minimum(y)`` 
+               * - ``x = x.at[idx].minimum(y)``
                 - ``x[idx] = mx.minimum(x[idx], y)``
           )pbdoc")
       .def(
@@ -1132,18 +1132,6 @@ void init_array(py::module_& m) {
           py::kw_only(),
           "stream"_a = none,
           "See :func:`any`.")
-      .def(
-          "isnan",
-          &mlx::core::isnan,
-          py::kw_only(),
-          "stream"_a = none,
-          "See :func:`isnan`.")
-      .def(
-          "isinf",
-          &mlx::core::isinf,
-          py::kw_only(),
-          "stream"_a = none,
-          "See :func:`isinf`.")
       .def(
           "moveaxis",
           &moveaxis,
