@@ -1088,6 +1088,14 @@ array isinf(const array& a, StreamOrDevice s /* = {} */) {
   return equal(a, array(std::numeric_limits<float>::infinity(), a.dtype()), s);
 }
 
+array isposinf(const array& a, StreamOrDevice s) {
+  return equal(a, array(std::numeric_limits<float>::infinity(), a.dtype()), s);
+}
+
+array isneginf(const array& a, StreamOrDevice s) {
+  return equal(a, array(-std::numeric_limits<float>::infinity(), a.dtype()), s);
+}
+
 array where(
     const array& condition,
     const array& x,

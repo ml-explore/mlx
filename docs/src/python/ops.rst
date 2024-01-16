@@ -52,6 +52,8 @@ Operations
    identity
    inner
    isnan
+   isposinf
+   isneginf
    isinf
    less
    less_equal
