@@ -1848,7 +1848,7 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         isinf(a: array, stream: Union[None, Stream, Device] = None) -> array
 
-        Return a boolean array indicating which elements are +/- infnity.
+        Return a boolean array indicating which elements are +/- inifnity.
 
         Args:
             a (array): Input array.
