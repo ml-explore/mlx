@@ -60,21 +60,21 @@ void qrf_impl(array& A, array& Q, array& R) {
   // Holds scalar factors of the elementary reflectors
   Buffer tau = allocator::malloc_or_wait(sizeof(T) *  tau_size);
 
-  array work = array(1, A.dtype());
+  T optimal_work;
   int lwork = -1;
   int info;
 
   // Compute workspace size
   lpack<T>::xgeqrf(
-      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), work.data<T>(), &lwork, &info);
+      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), &optimal_work, &lwork, &info);
 
   // Update workspace size
-  lwork = work.item<T>();
-  work = array(std::max(1, lwork), A.dtype());
+  lwork = optimal_work;
+  Buffer work = allocator::malloc_or_wait(sizeof(T) * lwork);
 
   // Solve
   lpack<T>::xgeqrf(
-      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), work.data<T>(), &lwork, &info);
+      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), static_cast<T*>(work.ptr()), &lwork, &info);
 
   // For m ≥ n, R is an upper triangular matrix.
   // For m < n, R is an upper trapezoidal matrix.
@@ -89,8 +89,6 @@ void qrf_impl(array& A, array& Q, array& R) {
 
   copy_inplace(R_, R, CopyType::Vector);
 
-  // const int K = tau.size();
-
   // retrieve Q from the elementary reflectors
   // uses the same worksize as before
   lpack<T>::xorgqr(
@@ -100,7 +98,7 @@ void qrf_impl(array& A, array& Q, array& R) {
       A.data<T>(),
       &lda,
       static_cast<T*>(tau.ptr()),
-      work.data<T>(),
+      static_cast<T*>(work.ptr()),
       &lwork,
       &info);
 
