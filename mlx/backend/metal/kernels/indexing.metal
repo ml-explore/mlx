@@ -173,8 +173,7 @@ template <typename T, typename IdxT, typename Op, int NIDX>
   auto out_offset = elem_to_loc(
       ind_offset, upd_shape + indices.ndim, out_strides, out_ndim);
   auto upd_idx = elem_to_loc(gid, upd_shape, upd_strides, upd_ndim);
-
-  op.atomic_update(out + out_idx + out_offset, updates[upd_idx]);
+  op.atomic_update(out, updates[upd_idx], out_idx + out_offset);
 }
 
 #define instantiate_scatter4(name, type, ind_type, op_type, nindex) \

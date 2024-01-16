@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 #include <cmath>
+#include <iostream> // TODO
 #include <numeric>
 
 #include "doctest/doctest.h"
@@ -1876,6 +1877,28 @@ TEST_CASE("test scatter") {
   inds = array({0, 1});
   out = scatter_add(in, inds, updates, 0);
   CHECK(array_equal(out, array({1, 0, 1, 0}, {2, 2})).item<bool>());
+}
+
+TEST_CASE("test scatter types") {
+  for (auto t : {bool_, uint8, uint16, int8, int16}) {
+    auto in = zeros({4, 4}, t);
+    auto inds = {arange(4), arange(4)};
+    auto updates = ones({4, 1, 1}, t);
+    auto out = scatter(in, inds, updates, {0, 1});
+    auto expected =
+        array({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}, {4, 4}, t);
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+
+  for (auto t : {float16, bfloat16}) {
+    auto in = zeros({4, 4}, t);
+    auto inds = {arange(4), arange(4)};
+    auto updates = ones({4, 1, 1}, t);
+    auto out = scatter(in, inds, updates, {0, 1});
+    auto expected =
+        array({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}, {4, 4}, t);
+    CHECK(allclose(out, expected).item<bool>());
+  }
 }
 
 TEST_CASE("test complex ops") {
