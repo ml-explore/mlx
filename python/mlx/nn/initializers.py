@@ -131,8 +131,8 @@ def glorot_normal(
 
     def initializer(a: mx.array, gain: mx.float32 = 1.0) -> mx.array:
         fan_in, fan_out = _calculate_fan_in_fan_out(a)
-        std = gain * mx.sqrt(2.0 / (fan_in + fan_out))
-        return mx.random.normal(0.0, std, a.shape, dtype=dtype)
+        std = gain * mx.sqrt(mx.array(2.0 / (fan_in + fan_out)))
+        return mx.random.normal(shape=a.shape, dtype=dtype) * std
 
     return initializer
 
@@ -158,7 +158,7 @@ def glorot_uniform(
 
     def initializer(a: mx.array, gain: mx.float32 = 1.0) -> mx.array:
         fan_in, fan_out = _calculate_fan_in_fan_out(a)
-        limit = gain * mx.sqrt(6.0 / (fan_in + fan_out))
+        limit = gain * mx.sqrt(mx.array(6.0 / (fan_in + fan_out)))
         return mx.random.uniform(-limit, limit, a.shape, dtype=dtype)
 
     return initializer
@@ -195,8 +195,8 @@ def he_normal(
         else:
             raise ValueError(f"Invalid mode: {mode}. Valid modes are: fan_in, fan_out")
 
-        std = gain / mx.sqrt(fan)
-        return mx.random.normal(0, std, a.shape, dtype=dtype)
+        std = gain / mx.sqrt(mx.array(fan))
+        return mx.random.normal(shape=a.shape, dtype=dtype) * std
 
     return initializer
 
@@ -231,7 +231,7 @@ def he_uniform(
         else:
             raise ValueError(f"Invalid mode: {mode}. Valid modes are: fan_in, fan_out")
 
-        limit = gain * mx.sqrt(3.0 / fan)
+        limit = gain * mx.sqrt(mx.array(3.0 / fan))
         return mx.random.uniform(-limit, limit, a.shape, dtype=dtype)
 
     return initializer
