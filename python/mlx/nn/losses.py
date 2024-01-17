@@ -169,6 +169,54 @@ def nll_loss(
     return _reduce(loss, reduction)
 
 
+def gaussian_nll_loss(
+    inputs: mx.array,
+    targets: mx.array,
+    vars: mx.array,
+    full: bool = False,
+    eps: float = 1e-6,
+    reduction: str = "none",
+) -> mx.array:
+    r"""
+    Computes the negative log likelihood loss for a Gaussian distribution.
+
+    .. math::
+        \text{loss} = \frac{1}{2}\left(\log\left(\text{max}\left(\text{var},
+        \ \text{eps}\right)\right) + \frac{\left(\text{input} - \text{target}\right)^2}
+        {\text{max}\left(\text{var}, \ \text{eps}\right)}\right) + \text{const.}
+
+    Args:
+        inputs (array): The predicted expectation of the Gaussian distribution.
+        targets (array): The target values (samples from the Gaussian distribution).
+        vars (array): The predicted variance of the Gaussian distribution.
+        full (bool, optional): Whether to include the constant term in the loss calculation.
+            Default: ``False``.
+        eps (float, optional): Small positive constant to prevent numerical instability.
+            Defaults to ``1e-6``.
+
+    Returns:
+        array: The computed NLL loss.
+    """
+    if inputs.shape != targets.shape:
+        raise ValueError(
+            f"Inputs shape {inputs.shape} does not match targets shape {targets.shape}."
+        )
+
+    if inputs.shape != vars.shape:
+        raise ValueError(
+            f"Inputs shape {inputs.shape} does not match vars shape {vars.shape}."
+        )
+
+    loss = 0.5 * mx.log(mx.maximum(vars, eps)) + 0.5 * mx.square(
+        (targets - inputs)
+    ) / mx.maximum(vars, eps)
+
+    if full:
+        loss += 0.5 * math.log(2 * math.pi)
+
+    return _reduce(loss, reduction)
+
+
 def kl_div_loss(
     inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
 ) -> mx.array:

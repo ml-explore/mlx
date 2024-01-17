@@ -12,6 +12,7 @@ Loss Functions
    binary_cross_entropy
    cosine_similarity_loss
    cross_entropy
+   gaussian_nll_loss
    hinge_loss
    huber_loss
    kl_div_loss
