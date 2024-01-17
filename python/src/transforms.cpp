@@ -778,45 +778,6 @@ void init_transforms(py::module_& m) {
             function: The vectorized function.
       )pbdoc");
   m.def(
-      "simplify",
-      [](const py::args& args) {
-        std::vector<array> arrays = tree_flatten(args);
-        simplify(arrays);
-      },
-      R"pbdoc(
-        simplify(*args) -> None
-
-        Simplify the graph that computes the arrays.
-
-        Run a few fast graph simplification operations to reuse computation and
-        reduce memory consumption. This function is meant to be run every time
-        so its overhead should be small, approximately 1ms for a graph with a
-        few thousand nodes.
-
-        .. code-block:: python
-
-          import mlx.core as mx
-
-          def foo(x):
-            y = x @ x
-            z = x @ x
-            return y + z
-
-          x = mx.ones((10, 10))
-          y = foo(x)
-          z = foo(x)
-
-          # Computes the matmul twice
-          mx.eval(y)
-
-          # Computes the matmul once
-          mx.simplify(z)
-          mx.eval(z)
-
-        Args:
-          args: Any number of arrays and/or trees of arrays to be simplified.
-      )pbdoc");
-  m.def(
       "export_to_dot",
       [](py::object file, const py::args& args) {
         std::vector<array> arrays = tree_flatten(args);

@@ -21,14 +21,6 @@ void disable_compiler();
  */
 void enable_compiler();
 
-/** Fuse equivalent arrays to avoid duplicate execution. */
-void simplify(const std::vector<array>& outputs);
-
-template <typename... Arrays>
-void simplify(Arrays... outputs) {
-  simplify(std::vector<array>{std::forward<Arrays>(outputs)...});
-}
-
 void eval(const std::vector<array>& outputs);
 
 template <typename... Arrays>
