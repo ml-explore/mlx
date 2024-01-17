@@ -2603,7 +2603,7 @@ std::vector<array> Sqrt::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
   assert(primals.size() == 1);
-  assert(tangents.size() == 1);
+  assert(cotangents.size() == 1);
   auto dtype = primals[0].dtype();
   if (recip_) {
     auto one_over_x_root_x = divide(outputs[0], primals[0], stream());
