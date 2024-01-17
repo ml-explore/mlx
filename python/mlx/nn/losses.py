@@ -1,11 +1,11 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import Literal
+from typing import Literal, TypeAlias
 
 import mlx.core as mx
 
-Reduction = Literal["none", "mean", "sum"]
+Reduction: TypeAlias = Literal["none", "mean", "sum"]
 
 
 def _reduce(loss: mx.array, reduction: Reduction = "none"):
