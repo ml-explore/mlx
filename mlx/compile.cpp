@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "mlx/allocator.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
@@ -92,12 +93,12 @@ struct CompilerCache {
     cache_.erase(fun_id);
   }
 
-  void clear() {
-    cache_.clear();
-  }
-
  private:
-  CompilerCache() {}
+  CompilerCache() {
+    // Make sure the allocator is fully
+    // initialized before the compiler cache
+    allocator::allocator();
+  }
   friend CompilerCache& compiler_cache();
   std::unordered_map<size_t, std::vector<CacheEntry>> cache_;
 };
@@ -398,10 +399,6 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 
 void compile_erase(size_t fun_id) {
   detail::compiler_cache().erase(fun_id);
-}
-
-void compile_clear() {
-  detail::compiler_cache().clear();
 }
 
 } // namespace detail

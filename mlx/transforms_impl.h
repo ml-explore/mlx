@@ -23,9 +23,6 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 // Erase cached compile functions
 void compile_erase(size_t fun_id);
 
-// Clear the compiler cache
-void compile_clear();
-
 // Create an InTracing object during tracing operations to signify to the rest
 // of the codebase that we are during tracing so evals should not throw away
 // the graph.

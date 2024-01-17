@@ -836,8 +836,5 @@ void init_transforms(py::module_& m) {
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = py::module_::import("atexit");
-  atexit.attr("register")(py::cpp_function([]() {
-    detail::compile_clear();
-    tree_cache().clear();
-  }));
+  atexit.attr("register")(py::cpp_function([]() { tree_cache().clear(); }));
 }
