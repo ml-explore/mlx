@@ -211,9 +211,9 @@ def gaussian_nll_loss(
             f"Inputs shape {inputs.shape} does not match vars shape {vars.shape}."
         )
 
-    loss = 0.5 * mx.log(mx.maximum(vars, eps)) + 0.5 * mx.square(
-        (targets - inputs)
-    ) / mx.maximum(vars, eps)
+    # For stability
+    vars = mx.maximum(vars, eps)
+    loss = 0.5 * (mx.log(vars) + mx.square(targets - inputs) / vars)
 
     if full:
         loss += 0.5 * math.log(2 * math.pi)
