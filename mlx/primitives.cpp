@@ -1801,22 +1801,14 @@ std::vector<array> Power::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
+    const std::vector<array>& outputs) {
   std::vector<array> vjps;
   for (auto arg : argnums) {
     if (arg == 0) {
       vjps.push_back(multiply(
-          power(
-              primals[0],
-              subtract(primals[1], array(1, primals[0].dtype()), stream()),
-              stream()),
-          primals[1],
-          stream()));
+          outputs[0], divide(primals[1], primals[0], stream()), stream()));
     } else {
-      vjps.push_back(multiply(
-          log(primals[0], stream()),
-          power(primals[0], primals[1], stream()),
-          stream()));
+      vjps.push_back(multiply(log(primals[0], stream()), outputs[0], stream()));
     }
     vjps.back() = multiply(cotangents[0], vjps.back(), stream());
   }
@@ -2128,7 +2120,7 @@ std::vector<array> Scan::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
+    const std::vector<array>& outputs) {
   assert(primals.size() == 1);
   assert(argnums[0] == 0);
 
@@ -2136,7 +2128,7 @@ std::vector<array> Scan::vjp(
     return {cumsum(cotangents[0], axis_, !reverse_, inclusive_, stream())};
   } else if (reduce_type_ == Scan::Prod) {
     // TODO: Make it numerically stable when we introduce where()
-    auto prod = cumprod(primals[0], axis_, reverse_, inclusive_, stream());
+    auto prod = outputs[0];
     auto partial_grads = multiply(prod, cotangents[0], stream());
     auto accum_grads =
         cumsum(partial_grads, axis_, !reverse_, inclusive_, stream());
@@ -2178,7 +2170,7 @@ std::vector<array> Scatter::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
+    const std::vector<array>& outputs) {
   switch (reduce_type_) {
     case Scatter::None:
     case Scatter::Sum:
@@ -2190,22 +2182,10 @@ std::vector<array> Scatter::vjp(
           "[scatter] VJP not implemented for scatter_prod");
   }
 
+  const array& result = outputs[0];
   const array& values = primals[0];
   const array& updates = primals.back();
   const std::vector<array> indices(primals.begin() + 1, primals.end() - 1);
-
-  // Store result of scatter if needed for reuse in vjp
-  auto get_result = [&]() {
-    switch (reduce_type_) {
-      case Scatter::Max:
-        return scatter_max(values, indices, updates, axes_, stream());
-      case Scatter::Min:
-        return scatter_min(values, indices, updates, axes_, stream());
-      default:
-        return array({});
-    }
-  };
-  array result = get_result();
 
   std::vector<array> vjps;
   for (auto num : argnums) {
@@ -2621,29 +2601,33 @@ std::vector<array> Sqrt::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
-    const std::vector<array>&) {
-  return jvp(primals, cotangents, argnums);
+    const std::vector<array>& outputs) {
+  assert(primals.size() == 1);
+  assert(tangents.size() == 1);
+  auto dtype = primals[0].dtype();
+  if (recip_) {
+    auto one_over_x_root_x = divide(outputs[0], primals[0], stream());
+    return {multiply(
+        multiply(array(-0.5, dtype), tangents[0], stream()),
+        one_over_x_root_x,
+        stream())};
+  } else {
+    return {divide(
+        multiply(array(0.5, dtype), cotangents[0], stream()),
+        outputs[0],
+        stream())};
+  }
 }
 
 std::vector<array> Sqrt::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  assert(primals.size() == 1);
-  assert(tangents.size() == 1);
-  auto dtype = primals[0].dtype();
   if (recip_) {
-    auto one_over_x_root_x =
-        divide(rsqrt(primals[0], stream()), primals[0], stream());
-    return {multiply(
-        multiply(array(-0.5, dtype), tangents[0], stream()),
-        one_over_x_root_x,
-        stream())};
+    return vjp(primals, tangents, argnums, {rsqrt(primals[0], stream())});
+  } else {
+    return vjp(primals, tangents, argnums, {sqrt(primals[0], stream())});
   }
-  return {divide(
-      multiply(array(0.5, dtype), tangents[0], stream()),
-      sqrt(primals[0], stream()),
-      stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> Sqrt::vmap(
