@@ -1819,12 +1819,13 @@ std::vector<array> Power::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  auto jvp = vjp(primals, {tangents[0]}, {argnums[0]}, {});
+  auto output = power(primals[0], primals[1], stream());
+  auto grads = vjp(primals, tangents, argnums, {output});
   if (argnums.size() > 1) {
-    jvp[0] =
-        add(jvp[0], vjp(primals, {tangents[1]}, {argnums[1]}, {})[0], stream());
+    return {add(grads[0], grads[1], stream())};
+  } else {
+    return grads;
   }
-  return jvp;
 }
 
 std::pair<std::vector<array>, std::vector<int>> Power::vmap(
