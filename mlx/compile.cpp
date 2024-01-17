@@ -1,4 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
+#include <cstdlib>
 #include <map>
 #include <unordered_map>
 #include <unordered_set>
@@ -11,6 +12,20 @@ namespace mlx::core {
 
 namespace detail {
 
+bool& compiler_disabled() {
+  auto get_val = []() {
+    if (const char* buff_str = std::getenv("MLX_DISABLE_COMPILER")) {
+      return true;
+    } else {
+      return false;
+    }
+  };
+  static bool compiler_disabled_ = get_val();
+  return compiler_disabled_;
+}
+
+#define MAX_OPS_PER_BUFFER max_ops_per_buffer()
+
 using CompileFn = std::function<std::vector<array>(const std::vector<array>&)>;
 using ParentsMap =
     std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>;
@@ -19,6 +34,10 @@ template <typename T, typename... U>
 size_t getAddress(std::function<T(U...)> f) {
   typedef T(fnType)(U...);
   fnType** fnPointer = f.template target<fnType*>();
+  if (fnPointer == nullptr) {
+    throw std::invalid_argument(
+        "[compile] Cannot compile a non-addressable function.");
+  }
   return (size_t)*fnPointer;
 }
 
@@ -343,6 +362,9 @@ std::vector<array> compile_replace(
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     size_t fun_id) {
+  if (compiler_disabled()) {
+    return fun;
+  }
   return [fun, fun_id](const std::vector<array>& inputs) {
     // Find a cache entry with the correct inputs
     auto& entry = compiler_cache().find(fun_id, inputs);
@@ -386,12 +408,19 @@ void compile_clear() {
 
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun) {
-  auto fun_id = detail::getAddress(fun);
-  if (fun_id == 0) {
-    throw std::invalid_argument(
-        "[compile] Cannot compile a non-addressable function.");
+  if (detail::compiler_disabled()) {
+    return fun;
   }
+  auto fun_id = detail::getAddress(fun);
   return detail::compile(fun, fun_id);
+}
+
+void disable_compiler() {
+  detail::compiler_disabled() = true;
+}
+
+void enable_compiler() {
+  detail::compiler_disabled() = false;
 }
 
 } // namespace mlx::core

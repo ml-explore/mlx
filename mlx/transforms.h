@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -9,6 +9,17 @@ namespace mlx::core {
 // Compile takes a function and returns a new function
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun);
+
+/** Globally disable compilation.
+ * Setting the environment variable ``MLX_DISABLE_COMPILER`` can also
+ * be used to disable compilation.
+ */
+void disable_compiler();
+
+/** Globally enable compilation.
+ * This will override the environment variable ``MLX_DISABLE_COMPILER``.
+ */
+void enable_compiler();
 
 /** Fuse equivalent arrays to avoid duplicate execution. */
 void simplify(const std::vector<array>& outputs);

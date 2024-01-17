@@ -96,3 +96,11 @@ TEST_CASE("test nested compile") {
   out = cfun({array(1), array(2)})[0];
   CHECK_EQ(out.item<int>(), 9);
 }
+
+TEST_CASE("test enable and disable compile") {
+  CHECK_THROWS(compile(nullptr));
+  disable_compiler();
+  compile(nullptr);
+  enable_compiler();
+  CHECK_THROWS(compile(nullptr));
+}

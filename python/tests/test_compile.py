@@ -1,5 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
+import io
 import unittest
 
 import mlx.core as mx
@@ -145,6 +146,32 @@ class TestCompile(mlx_tests.MLXTestCase):
         # And again
         out = cfun(mx.array(3))
         self.assertEqual(out.item(), 4)
+
+    def test_enable_disable(self):
+        def fun(x):
+            y = x + 1
+            z = x + 1
+            return y + z
+
+        def count_prims(outputs):
+            buf = io.StringIO()
+            mx.export_to_dot(buf, outputs)
+            buf.seek(0)
+            return len([l for l in buf.read().split() if "label" in l])
+
+        x = mx.array(1.0)
+        cfun = mx.compile(fun)
+        n_compiled = count_prims(cfun(x))
+
+        # Check disabled
+        mx.disable_compiler()
+        n_uncompiled = count_prims(cfun(x))
+        self.assertTrue(n_compiled < n_uncompiled)
+
+        # Check renabled
+        mx.enable_compiler()
+        n_enable_compiled = count_prims(cfun(x))
+        self.assertEqual(n_compiled, n_enable_compiled)
 
 
 if __name__ == "__main__":

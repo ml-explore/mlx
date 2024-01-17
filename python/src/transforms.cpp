@@ -854,6 +854,24 @@ void init_transforms(py::module_& m) {
             function: A compiled function which has the same input arguments
             as ``fun`` and returns the the same output(s).
       )pbdoc");
+  m.def(
+      "disable_compiler",
+      &disable_compiler,
+      R"pbdoc(
+        disable_compiler() -> None
+
+        Globally disable compilation. Setting the environment variable
+        ``MLX_DISABLE_COMPILER`` can also be used to disable compilation.
+      )pbdoc");
+  m.def(
+      "enable_compiler",
+      &enable_compiler,
+      R"pbdoc(
+        enable_compiler() -> None
+
+        Globally enable compilation. This will override the environment
+        variable ``MLX_DISABLE_COMPILER`` if set.
+      )pbdoc");
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = py::module_::import("atexit");
