@@ -2608,7 +2608,7 @@ std::vector<array> Sqrt::vjp(
   if (recip_) {
     auto one_over_x_root_x = divide(outputs[0], primals[0], stream());
     return {multiply(
-        multiply(array(-0.5, dtype), tangents[0], stream()),
+        multiply(array(-0.5, dtype), cotangents[0], stream()),
         one_over_x_root_x,
         stream())};
   } else {
