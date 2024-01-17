@@ -44,11 +44,9 @@ MTL::CommandBuffer* increment_command_buffer(Stream s) {
 
 inline void check_error(MTL::CommandBuffer* cbuf) {
   if (cbuf->status() == MTL::CommandBufferStatusError) {
-    auto error = cbuf->error();
     std::ostringstream msg;
     msg << "[METAL] Command buffer execution failed: "
-        << error->localizedDescription()->utf8String();
-
+        << cbuf->error()->localizedDescription()->utf8String();
     throw std::runtime_error(msg.str());
   }
 }
