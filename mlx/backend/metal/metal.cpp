@@ -9,6 +9,7 @@
 #include "mlx/scheduler.h"
 
 namespace mlx::core::metal {
+// inline check_command_buffer_status(
 
 int max_ops_per_buffer() {
   auto get_val = []() {
@@ -42,6 +43,17 @@ MTL::CommandBuffer* increment_command_buffer(Stream s) {
   return command_buffer;
 }
 
+inline void check_error(MTL::CommandBuffer* cbuf) {
+  if (cbuf->status() == MTL::CommandBufferStatusError) {
+    auto error = cbuf->error();
+    std::ostringstream msg;
+    msg << "[METAL] Command buffer execution failed: "
+        << error->localizedDescription()->utf8String();
+
+    throw std::runtime_error(msg.str());
+  }
+}
+
 std::function<void()> make_task(
     array& arr,
     std::vector<std::shared_future<void>> deps,
@@ -59,7 +71,7 @@ std::function<void()> make_task(
       metal::device(s.device).end_encoding(s.index);
       scheduler::notify_new_task(s);
       command_buffer->addCompletedHandler(
-          [s, arr, p = std::move(p)](MTL::CommandBuffer*) mutable {
+          [s, arr, p = std::move(p)](MTL::CommandBuffer* cbuf) mutable {
             if (!arr.is_tracer()) {
               arr.detach();
               for (auto s : arr.siblings()) {
@@ -68,14 +80,16 @@ std::function<void()> make_task(
             }
             p->set_value();
             scheduler::notify_task_completion(s);
+            check_error(cbuf);
           });
       metal::device(s.device).commit_command_buffer(s.index);
     } else {
       command_buffer->addCompletedHandler(
-          [s, arr](MTL::CommandBuffer*) mutable {
+          [s, arr](MTL::CommandBuffer* cbuf) mutable {
             if (!arr.is_tracer()) {
               arr.detach();
             }
+            check_error(cbuf);
           });
     }
   };
