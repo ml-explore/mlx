@@ -11,15 +11,15 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun);
 
 /** Globally disable compilation.
- * Setting the environment variable ``MLX_DISABLE_COMPILER`` can also
+ * Setting the environment variable ``MLX_DISABLE_COMPILE`` can also
  * be used to disable compilation.
  */
-void disable_compiler();
+void disable_compile();
 
 /** Globally enable compilation.
- * This will override the environment variable ``MLX_DISABLE_COMPILER``.
+ * This will override the environment variable ``MLX_DISABLE_COMPILE``.
  */
-void enable_compiler();
+void enable_compile();
 
 void eval(const std::vector<array>& outputs);
 

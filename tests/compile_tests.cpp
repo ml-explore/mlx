@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
+#include <iostream>
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
@@ -99,9 +100,9 @@ TEST_CASE("test nested compile") {
 
 TEST_CASE("test enable and disable compile") {
   CHECK_THROWS(compile(nullptr));
-  disable_compiler();
+  disable_compile();
   compile(nullptr);
-  enable_compiler();
+  enable_compile();
   CHECK_THROWS(compile(nullptr));
 }
 

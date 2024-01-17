@@ -164,12 +164,12 @@ class TestCompile(mlx_tests.MLXTestCase):
         n_compiled = count_prims(cfun(x))
 
         # Check disabled
-        mx.disable_compiler()
+        mx.disable_compile()
         n_uncompiled = count_prims(cfun(x))
         self.assertTrue(n_compiled < n_uncompiled)
 
         # Check renabled
-        mx.enable_compiler()
+        mx.enable_compile()
         n_enable_compiled = count_prims(cfun(x))
         self.assertEqual(n_compiled, n_enable_compiled)
 

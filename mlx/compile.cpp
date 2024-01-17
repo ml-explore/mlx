@@ -15,7 +15,7 @@ namespace detail {
 
 bool& compiler_disabled() {
   auto get_val = []() {
-    if (const char* buff_str = std::getenv("MLX_DISABLE_COMPILER")) {
+    if (const char* buff_str = std::getenv("MLX_DISABLE_COMPILE")) {
       return true;
     } else {
       return false;
@@ -343,13 +343,30 @@ std::vector<array> compile_replace(
     if (!a.has_primitive()) {
       trace_to_real.insert({a.id(), a});
     } else {
+      // Find real inputs
       std::vector<array> real_inputs;
       for (auto& in : a.inputs()) {
         real_inputs.push_back(trace_to_real.at(in.id()));
       }
-      auto real_a = array(
-          a.shape(), a.dtype(), a.primitive_ptr(), std::move(real_inputs));
-      trace_to_real.insert({a.id(), std::move(real_a)});
+      if (a.siblings().empty()) {
+        auto real_a = array(
+            a.shape(), a.dtype(), a.primitive_ptr(), std::move(real_inputs));
+        trace_to_real.insert({a.id(), std::move(real_a)});
+      } else {
+        // Ensure the order is correct for multi-output primitives
+        std::vector<std::vector<int>> shapes;
+        std::vector<Dtype> types;
+        auto trace_out = a.outputs();
+        for (auto& o : trace_out) {
+          shapes.push_back(o.shape());
+          types.push_back(o.dtype());
+        }
+        auto real_out =
+            array::make_arrays(shapes, types, a.primitive_ptr(), real_inputs);
+        for (int i = 0; i < trace_out.size(); ++i) {
+          trace_to_real.insert({trace_out[i].id(), std::move(real_out[i])});
+        }
+      }
     }
   }
 
@@ -412,11 +429,11 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
   return detail::compile(fun, fun_id);
 }
 
-void disable_compiler() {
+void disable_compile() {
   detail::compiler_disabled() = true;
 }
 
-void enable_compiler() {
+void enable_compile() {
   detail::compiler_disabled() = false;
 }
 

@@ -816,22 +816,22 @@ void init_transforms(py::module_& m) {
             as ``fun`` and returns the the same output(s).
       )pbdoc");
   m.def(
-      "disable_compiler",
-      &disable_compiler,
+      "disable_compile",
+      &disable_compile,
       R"pbdoc(
-        disable_compiler() -> None
+        disable_compile() -> None
 
         Globally disable compilation. Setting the environment variable
-        ``MLX_DISABLE_COMPILER`` can also be used to disable compilation.
+        ``MLX_DISABLE_COMPILE`` can also be used to disable compilation.
       )pbdoc");
   m.def(
-      "enable_compiler",
-      &enable_compiler,
+      "enable_compile",
+      &enable_compile,
       R"pbdoc(
         enable_compiler() -> None
 
         Globally enable compilation. This will override the environment
-        variable ``MLX_DISABLE_COMPILER`` if set.
+        variable ``MLX_DISABLE_COMPILE`` if set.
       )pbdoc");
 
   // Register static Python object cleanup before the interpreter exits
