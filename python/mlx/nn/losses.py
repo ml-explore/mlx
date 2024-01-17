@@ -1,12 +1,14 @@
 # Copyright © 2023 Apple Inc.
 
 import math
+from typing import Literal
 
 import mlx.core as mx
-from mlx.nn.layers.base import Module
+
+Reduction = Literal["none", "mean", "sum"]
 
 
-def _reduce(loss: mx.array, reduction: str = "none"):
+def _reduce(loss: mx.array, reduction: Reduction = "none"):
     if reduction == "mean":
         return mx.mean(loss)
     elif reduction == "sum":
@@ -23,7 +25,7 @@ def cross_entropy(
     weights: mx.array = None,
     axis: int = -1,
     label_smoothing: float = 0.0,
-    reduction: str = "none",
+    reduction: Reduction = "none",
 ) -> mx.array:
     """
     Computes the cross entropy loss.
@@ -72,7 +74,7 @@ def cross_entropy(
 
 
 def binary_cross_entropy(
-    logits: mx.array, targets: mx.array, reduction: str = "none"
+    logits: mx.array, targets: mx.array, reduction: Reduction = "none"
 ) -> mx.array:
     """
     Computes the binary cross entropy loss.
@@ -99,7 +101,7 @@ def binary_cross_entropy(
 
 
 def l1_loss(
-    predictions: mx.array, targets: mx.array, reduction: str = "mean"
+    predictions: mx.array, targets: mx.array, reduction: Reduction = "mean"
 ) -> mx.array:
     """
     Computes the L1 loss.
@@ -124,7 +126,7 @@ def l1_loss(
 
 
 def mse_loss(
-    predictions: mx.array, targets: mx.array, reduction: str = "mean"
+    predictions: mx.array, targets: mx.array, reduction: Reduction = "mean"
 ) -> mx.array:
     """
     Computes the mean squared error loss.
@@ -149,7 +151,7 @@ def mse_loss(
 
 
 def nll_loss(
-    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: Reduction = "none"
 ) -> mx.array:
     """
     Computes the negative log likelihood loss.
@@ -175,7 +177,7 @@ def gaussian_nll_loss(
     vars: mx.array,
     full: bool = False,
     eps: float = 1e-6,
-    reduction: str = "none",
+    reduction: Reduction = "mean",
 ) -> mx.array:
     r"""
     Computes the negative log likelihood loss for a Gaussian distribution.
@@ -193,6 +195,8 @@ def gaussian_nll_loss(
             Default: ``False``.
         eps (float, optional): Small positive constant to prevent numerical instability.
             Defaults to ``1e-6``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         array: The computed NLL loss.
@@ -218,7 +222,7 @@ def gaussian_nll_loss(
 
 
 def kl_div_loss(
-    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: str = "none"
+    inputs: mx.array, targets: mx.array, axis: int = -1, reduction: Reduction = "none"
 ) -> mx.array:
     """
     Computes the Kullback-Leibler divergence loss.
@@ -245,7 +249,10 @@ def kl_div_loss(
 
 
 def smooth_l1_loss(
-    predictions: mx.array, targets: mx.array, beta: float = 1.0, reduction: str = "mean"
+    predictions: mx.array,
+    targets: mx.array,
+    beta: float = 1.0,
+    reduction: Reduction = "mean",
 ) -> mx.array:
     r"""
     Computes the smooth L1 loss.
@@ -297,7 +304,7 @@ def triplet_loss(
     p: int = 2,
     margin: float = 1.0,
     eps: float = 1e-6,
-    reduction: str = "none",
+    reduction: Reduction = "none",
 ) -> mx.array:
     r"""
     Computes the triplet loss for a set of anchor, positive, and negative samples.
@@ -332,7 +339,7 @@ def triplet_loss(
 
 
 def hinge_loss(
-    inputs: mx.array, targets: mx.array, reduction: str = "none"
+    inputs: mx.array, targets: mx.array, reduction: Reduction = "none"
 ) -> mx.array:
     r"""
     Computes the hinge loss between inputs and targets.
@@ -357,7 +364,10 @@ def hinge_loss(
 
 
 def huber_loss(
-    inputs: mx.array, targets: mx.array, delta: float = 1.0, reduction: str = "none"
+    inputs: mx.array,
+    targets: mx.array,
+    delta: float = 1.0,
+    reduction: Reduction = "none",
 ) -> mx.array:
     r"""
     Computes the Huber loss between inputs and targets.
@@ -391,7 +401,7 @@ def huber_loss(
 
 
 def log_cosh_loss(
-    inputs: mx.array, targets: mx.array, reduction: str = "none"
+    inputs: mx.array, targets: mx.array, reduction: Reduction = "none"
 ) -> mx.array:
     r"""
     Computes the log cosh loss between inputs and targets.
@@ -427,7 +437,7 @@ def cosine_similarity_loss(
     x2: mx.array,
     axis: int = 1,
     eps: float = 1e-8,
-    reduction: str = "none",
+    reduction: Reduction = "none",
 ) -> mx.array:
     r"""
     Computes the cosine similarity between the two inputs.
