@@ -127,7 +127,8 @@ std::pair<std::vector<array>, std::vector<int>> Add::vmap(
 std::vector<array> AddMM::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
   std::vector<int> reorder(cotan.ndim());

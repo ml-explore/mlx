@@ -1122,11 +1122,11 @@ std::unordered_map<std::string, array> load_gguf(
 
 void save_gguf(std::string file, std::unordered_map<std::string, array> a);
 
-/** Compute the matrix product of A and B and add C to the result */
+/** Compute D = beta * C + alpha * (A @ B) */
 array addmm(
-    const array& c,
-    const array& a,
-    const array& b,
+    array c,
+    array a,
+    array b,
     const float& alpha = 1.f,
     const float& beta = 1.f,
     StreamOrDevice s = {});

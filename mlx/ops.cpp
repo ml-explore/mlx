@@ -3057,29 +3057,25 @@ array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   return tensordot(a, b, {{-1}, {-1}}, s);
 }
 
-/** Compute the matrix product of A and B and add C to the result */
+/** Compute D = beta * C + alpha * (A @ B) */
 array addmm(
-    const array& in_c,
-    const array& in_a,
-    const array& in_b,
+    array c,
+    array a,
+    array b,
     const float& alpha /* = 1.f */,
     const float& beta /* = 1.f */,
     StreamOrDevice s /* = {} */) {
   // Divert in the case of vector-matrix multiplication
   // TODO: Add the needed specializtion
-  if (in_a.ndim() == 1 || in_b.ndim() == 1) {
-    array X = matmul(in_a, in_b, s);
+  if (a.ndim() == 1 || b.ndim() == 1) {
+    array X = matmul(a, b, s);
     array alpha_arr = array(alpha, X.dtype());
     array aX = multiply(alpha_arr, X, s);
 
-    array beta_arr = array(beta, in_c.dtype());
-    array bY = multiply(beta_arr, in_c, s);
+    array beta_arr = array(beta, c.dtype());
+    array bY = multiply(beta_arr, c, s);
     return add(aX, bY, s);
   }
-
-  auto a = in_a;
-  auto b = in_b;
-  auto c = in_c;
 
   if (a.ndim() == 0 || b.ndim() == 0) {
     throw std::invalid_argument(
@@ -3096,33 +3092,25 @@ array addmm(
   }
 
   // Type promotion
-  auto out_type = promote_types(a.dtype(), b.dtype());
+  auto out_type = result_type({a, b, c});
   if (!is_floating_point(out_type) || is_complex(out_type)) {
     std::ostringstream msg;
     msg << "[addmm] Only real floating point types are supported but "
-        << a.dtype() << " and " << b.dtype() << " were provided which results"
-        << " in " << out_type << ", which is not a real floating point type.";
+        << c.dtype() << ", " << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
     throw std::invalid_argument(msg.str());
   }
 
-  if (a.dtype() != out_type) {
-    a = astype(a, out_type, s);
-  }
-  if (b.dtype() != out_type) {
-    b = astype(b, out_type, s);
-  }
-  if (c.dtype() != out_type) {
-    c = astype(c, out_type, s);
-  }
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+  c = astype(c, out_type, s);
 
   // We can batch the multiplication by reshaping a
   if (a.ndim() > 2 && b.ndim() == 2 && c.ndim() <= 1) {
     std::vector<int> out_shape = a.shape();
     a = reshape(a, {-1, out_shape.back()}, s);
     out_shape.back() = b.shape(-1);
-    if (in_b.ndim() == 1) {
-      out_shape.pop_back();
-    }
     c = broadcast_to(c, {a.shape(0), b.shape(1)}, s);
     auto out = array(
         {a.shape(0), b.shape(1)},

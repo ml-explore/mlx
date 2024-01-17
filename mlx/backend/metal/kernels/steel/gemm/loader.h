@@ -89,28 +89,28 @@ struct BlockLoader {
     bool tmp_idx[vec_size];
     T tmp_val[vec_size];
 
-#pragma clang loop unroll(full)
+    STEEL_PRAGMA_UNROLL
     for (short i = 0; i < BROWS; i += TROWS) {
       // Make sure tmp_idx only contains valid indices
-#pragma clang loop unroll(full)
+      STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
         tmp_idx[j] = (i < src_tile_dim.y) && (j < src_tile_dim.x);
       }
 
-      // Read valid indcies into tmp_val
-#pragma clang loop unroll(full)
+      // Read valid indices into tmp_val
+      STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
         tmp_val[j] = src[(tmp_idx[j] ? i * src_ld + j : 0)];
       }
 
       // Zero out uneeded values
-#pragma clang loop unroll(full)
+      STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
         tmp_val[j] = tmp_idx[j] ? tmp_val[j] : T(0);
       }
 
       // Copy values to threadgroup memory
-#pragma clang loop unroll(full)
+      STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
         dst[i * dst_ld + j] = tmp_val[j];
       }
@@ -126,7 +126,7 @@ struct BlockLoader {
       simdgroup_barrier(mem_flags::mem_none);
       // Use fast thread memory for bound checks
 
-      // Read valid indcies into tmp_val
+      // Read valid indices into tmp_val
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
         tmp_val[j] = src[(mask[ii][j] ? i * src_ld + j : 0)];

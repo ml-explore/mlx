@@ -182,7 +182,8 @@ class AddMM : public UnaryPrimitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(AddMM)
 

@@ -742,11 +742,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Do accum kernel
     {
-      auto c_split_buf =
-          static_cast<const MTL::Resource*>(C_split.buffer().ptr());
-      const class MTL::Resource* const resources[1] = {c_split_buf};
-      compute_encoder->memoryBarrier(resources, 1);
-
       auto kernel = d.get_kernel(
           "steel_gemm_splitk_accum_" + type_to_name(out) + "_" +
           type_to_name(C_split) + "_axpby");
