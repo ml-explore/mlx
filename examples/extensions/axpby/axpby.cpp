@@ -204,7 +204,7 @@ void Axpby::eval_cpu(
 void Axpby::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& out) {
-  eval(inputs, out[0]);
+  eval(inputs, out);
 }
 
 #endif
