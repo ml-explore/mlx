@@ -56,11 +56,11 @@ struct SignOp {
 struct RoundOp {
   template <typename T>
   T operator()(T x) {
-    return std::round(x);
+    return std::rint(x);
   }
 
   complex64_t operator()(complex64_t x) {
-    return {std::round(x.real()), std::round(x.imag())};
+    return {std::rint(x.real()), std::rint(x.imag())};
   }
 };
 

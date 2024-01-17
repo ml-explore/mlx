@@ -134,8 +134,8 @@ struct Negative {
 };
 
 struct Round {
-  template <typename T> T operator()(T x) { return metal::round(x); };
-  template <> complex64_t operator()(complex64_t x) { return {metal::round(x.real), metal::round(x.imag)}; };
+  template <typename T> T operator()(T x) { return metal::rint(x); };
+  template <> complex64_t operator()(complex64_t x) { return {metal::rint(x.real), metal::rint(x.imag)}; };
 };
 
 struct Sigmoid {
