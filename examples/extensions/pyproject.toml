@@ -1,0 +1,3 @@
+[build-system]
+requires = ["setuptools>=42", "pybind11>=2.10", "cmake>=3.24", "mlx @ git+https://github.com/mlx-explore/mlx@main"]
+build-backend = "setuptools.build_meta"
