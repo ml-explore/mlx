@@ -957,7 +957,7 @@ TEST_CASE("test arithmetic unary ops") {
   // Test round
   {
     array x({0.5, -0.5, 1.5, -1.5, 2.3, 2.6});
-    CHECK(array_equal(round(x), array({1, -1, 2, -2, 2, 3})).item<bool>());
+    CHECK(array_equal(round(x), array({0, -0, 2, -2, 2, 3})).item<bool>());
 
     x = array({11, 222, 32});
     CHECK(array_equal(round(x, -1), array({10, 220, 30})).item<bool>());
