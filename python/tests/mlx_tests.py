@@ -71,3 +71,5 @@ class MLXTestCase(unittest.TestCase):
         elif not isinstance(expected, mx.array):
             expected = mx.array(expected)
             self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))
+        else:
+            self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))

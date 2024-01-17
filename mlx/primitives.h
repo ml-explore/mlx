@@ -21,7 +21,8 @@
   std::vector<array> vjp(                        \
       const std::vector<array>& primals,         \
       const std::vector<array>& cotangents,      \
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,           \
+      const std::vector<array>& outputs) override;
 
 #define DEFINE_PRINT(PRIMITIVE)           \
   void print(std::ostream& os) override { \
@@ -78,7 +79,8 @@ class Primitive {
   virtual std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums);
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs);
 
   /**
    * The primitive must know how to vectorize itself across
@@ -464,7 +466,8 @@ class Convolution : public UnaryPrimitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(Convolution)
   bool is_equivalent(const Primitive& other) const override;
@@ -919,7 +922,8 @@ class Matmul : public UnaryPrimitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(Matmul)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1153,7 +1157,8 @@ class Reduce : public UnaryPrimitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   void print(std::ostream& os) override {
     switch (reduce_type_) {
