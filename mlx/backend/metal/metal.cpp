@@ -62,9 +62,6 @@ std::function<void()> make_task(
           [s, arr, p = std::move(p)](MTL::CommandBuffer*) mutable {
             if (!arr.is_tracer()) {
               arr.detach();
-              for (auto s : arr.siblings()) {
-                s.detach();
-              }
             }
             p->set_value();
             scheduler::notify_task_completion(s);
