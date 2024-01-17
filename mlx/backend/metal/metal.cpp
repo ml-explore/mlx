@@ -9,7 +9,6 @@
 #include "mlx/scheduler.h"
 
 namespace mlx::core::metal {
-// inline check_command_buffer_status(
 
 int max_ops_per_buffer() {
   auto get_val = []() {
