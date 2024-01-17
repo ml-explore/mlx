@@ -40,6 +40,7 @@ are the CPU and GPU.
    usage/unified_memory
    usage/indexing
    usage/saving_and_loading
+   usage/function_transforms
    usage/numpy
    usage/using_streams
 
