@@ -443,7 +443,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       }
     }
 
-    auto vjps = a.primitive().vjp(a.inputs(), cotangents, argnums);
+    auto vjps = a.primitive().vjp(a.inputs(), cotangents, argnums, outputs);
     // Accumulate the vector-jacobian products for each input
     for (int i = 0; i < argnums.size(); ++i) {
       auto in_id = a.inputs()[argnums[i]].id();

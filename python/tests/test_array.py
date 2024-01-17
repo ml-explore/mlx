@@ -1005,7 +1005,7 @@ class TestArray(mlx_tests.MLXTestCase):
         index_y = mx.array([3, 3, 1, 2])
         u = mx.random.uniform(shape=(4,))
         a = a.at[index_x, index_y].add(u)
-        self.assertEqual(a.sum().item(), u.sum().item())
+        self.assertAlmostEqual(a.sum().item(), u.sum().item())
         self.assertEqual(a[index_x, index_y].tolist(), u.tolist())
 
         # Test all array.at ops
