@@ -1,9 +1,10 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2024 Apple Inc.
 
 #include "mlx/backend/metal/kernels/bf16.h"
-#include "mlx/backend/metal/kernels/gemm/gemm.h"
+#include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
 
 using namespace metal;
+using namespace mlx::steel;
 
 ///////////////////////////////////////////////////////////////////////////////
 // GEMM kernels
@@ -23,26 +24,26 @@ template <typename T,
     const device T *A [[buffer(0)]],
     const device T *B [[buffer(1)]],
     device T *C [[buffer(2)]],
-    const constant int &M [[buffer(3)]],
-    const constant int &N [[buffer(4)]],
-    const constant int &K [[buffer(5)]],
-    const constant int &batch_stride_a [[buffer(6)]],
-    const constant int &batch_stride_b [[buffer(7)]],
-    const constant int &batch_stride_c [[buffer(8)]],
+    const constant GEMMParams* params [[buffer(3)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]]) {
+    uint3 lid [[thread_position_in_threadgroup]]) { 
     
-    using gemm_kernel = GEMMKernel<T, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned>;
+    using gemm_kernel = GEMMKernel<T, T, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned>;
     
-    threadgroup T tgp_memory[gemm_kernel::tgp_mem_size];
+    threadgroup T As[gemm_kernel::tgp_mem_size_a];
+    threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
+
+    // Adjust for batch
+    A += params->batch_stride_a * tid.z;
+    B += params->batch_stride_b * tid.z;
+    C += params->batch_stride_c * tid.z;
 
     gemm_kernel::run( 
       A, B, C, 
-      M, N, K, 
-      batch_stride_a, batch_stride_b, batch_stride_c,
-      tgp_memory,
+      params,
+      As, Bs,
       simd_lane_id, simd_group_id, tid, lid
     );
 }
@@ -52,17 +53,12 @@ template <typename T,
 ///////////////////////////////////////////////////////////////////////////////
 
 #define instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned) \
-  template [[host_name("gemm_" #tname "_"  #iname "_" #oname "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_MN_" #aname "_K_" #kname)]] \
+  template [[host_name("steel_gemm_" #tname "_"  #iname "_" #oname "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_MN_" #aname "_K_" #kname)]] \
   [[kernel]] void gemm<itype, bm, bn, bk, wm, wn, trans_a, trans_b, mn_aligned, k_aligned>( \
       const device itype *A [[buffer(0)]], \
       const device itype *B [[buffer(1)]], \
       device itype *C [[buffer(2)]], \
-      const constant int &M [[buffer(3)]], \
-      const constant int &N [[buffer(4)]], \
-      const constant int &K [[buffer(5)]], \
-      const constant int &batch_stride_a [[buffer(6)]], \
-      const constant int &batch_stride_b [[buffer(7)]], \
-      const constant int &batch_stride_c [[buffer(8)]], \
+      const constant GEMMParams* params [[buffer(3)]], \
       uint simd_lane_id [[thread_index_in_simdgroup]], \
       uint simd_group_id [[simdgroup_index_in_threadgroup]], \
       uint3 tid [[threadgroup_position_in_grid]], \
@@ -84,10 +80,10 @@ template <typename T,
     instantiate_gemm_transpose_helper(iname, itype, oname, otype, 32, 32, 16, 2, 2) \
     instantiate_gemm_transpose_helper(iname, itype, oname, otype, 64, 64, 16, 2, 2) \
     instantiate_gemm_transpose_helper(iname, itype, oname, otype, 64, 32, 32, 2, 2) \
-    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 64, 32, 16, 2, 2)
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 64, 32, 16, 2, 2) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 32, 64, 16, 2, 2)
 
 instantiate_gemm_shapes_helper(float16, half, float16, half);
-instantiate_gemm_shapes_helper(float32, float, float32, float);
 instantiate_gemm_shapes_helper(bfloat16, bfloat16_t, bfloat16, bfloat16_t);
 
-// TODO: Accumulation in different type
+instantiate_gemm_shapes_helper(float32, float, float32, float);

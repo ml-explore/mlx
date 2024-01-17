@@ -29,12 +29,16 @@ std::tuple<bool, size_t, array> check_transpose(const array& arr) {
   }
 }
 
-inline void matmul_cblas(const array& a_pre, const array& b_pre, array& out) {
+inline void matmul_cblas_general(
+    const array& a_pre,
+    const array& b_pre,
+    array& out,
+    float alpha = 1.0f,
+    float beta = 0.0f) {
   if (out.dtype() != float32) {
     throw std::runtime_error(
         "[matmul_cblas] on CPU currently only supports float32");
   }
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
   auto [a_transposed, lda, a] = check_transpose(a_pre);
   auto [b_transposed, ldb, b] = check_transpose(b_pre);
@@ -50,21 +54,34 @@ inline void matmul_cblas(const array& a_pre, const array& b_pre, array& out) {
         M,
         N,
         K,
-        1.0f, // alpha
+        alpha, // alpha
         a.data<float>() + elem_to_loc(M * K * i, a.shape(), a.strides()),
         lda,
         b.data<float>() + elem_to_loc(K * N * i, b.shape(), b.strides()),
         ldb,
-        0.0f, // beta
+        beta, // beta
         out.data<float>() + M * N * i,
         out.shape(-1) // ldc
     );
   }
 }
 
-inline void matmul_bnns(const array& a_pre, const array& b_pre, array& out) {
-  // TODO: Update to utilize BNNS broadcasting
+inline void matmul_cblas(const array& a_pre, const array& b_pre, array& out) {
+  if (out.dtype() != float32) {
+    throw std::runtime_error(
+        "[matmul_cblas] on CPU currently only supports float32");
+  }
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  return matmul_cblas_general(a_pre, b_pre, out);
+}
+
+inline void matmul_bnns_general(
+    const array& a_pre,
+    const array& b_pre,
+    array& out,
+    float alpha = 1.0f,
+    float beta = 0.0f) {
+  // TODO: Update to utilize BNNS broadcasting
 
   auto [a_transposed, lda, a] = check_transpose(a_pre);
   auto [b_transposed, ldb, b] = check_transpose(b_pre);
@@ -75,8 +92,8 @@ inline void matmul_bnns(const array& a_pre, const array& b_pre, array& out) {
   BNNSDataType bnns_dtype = to_bnns_dtype(out.dtype());
 
   const BNNSLayerParametersBroadcastMatMul gemm_params{
-      /* float alpha = */ 1.0,
-      /* float beta = */ 0.0,
+      /* float alpha = */ alpha,
+      /* float beta = */ beta,
       /* bool transA = */ a_transposed,
       /* bool transB = */ b_transposed,
       /* bool quadratic = */ false,
@@ -157,6 +174,12 @@ inline void matmul_bnns(const array& a_pre, const array& b_pre, array& out) {
   BNNSFilterDestroy(bnns_filter);
 }
 
+inline void matmul_bnns(const array& a_pre, const array& b_pre, array& out) {
+  // TODO: Update to utilize BNNS broadcasting
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  return matmul_bnns_general(a_pre, b_pre, out);
+}
+
 } // namespace
 
 void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
@@ -164,6 +187,18 @@ void Matmul::eval_cpu(const std::vector<array>& inputs, array& out) {
     return matmul_cblas(inputs[0], inputs[1], out);
   }
   return matmul_bnns(inputs[0], inputs[1], out);
+}
+
+void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  // Fill output with C
+  auto& c = inputs[2];
+  CopyType ctype = c.data_size() == 1 ? CopyType::Scalar : CopyType::General;
+  copy(c, out, ctype);
+
+  if (out.dtype() == float32) {
+    return matmul_cblas_general(inputs[0], inputs[1], out, alpha_, beta_);
+  }
+  return matmul_bnns_general(inputs[0], inputs[1], out, alpha_, beta_);
 }
 
 } // namespace mlx::core

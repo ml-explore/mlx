@@ -257,6 +257,13 @@ def linear(w, b, x):
     mx.eval(ys)
 
 
+def linear_fused(w, b, x):
+    ys = []
+    for i in range(10):
+        ys.append(mx.addmm(b, x, mx.transpose(w, (1, 0))))
+    mx.eval(ys)
+
+
 def rope(x):
     *_, N, D = x.shape
     ys = []
@@ -397,7 +404,10 @@ if __name__ == "__main__":
         print(bench(quant_matmul[args.benchmark], *xs))
 
     elif args.benchmark == "linear":
-        print(bench(linear, *xs))
+        if args.fused:
+            print(bench(linear_fused, *xs))
+        else:
+            print(bench(linear, *xs))
 
     elif args.benchmark == "sum_axis":
         print(bench(reduction, "sum", axis, x))

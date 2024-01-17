@@ -1122,4 +1122,12 @@ std::unordered_map<std::string, array> load_gguf(
 
 void save_gguf(std::string file, std::unordered_map<std::string, array> a);
 
+/** Compute D = beta * C + alpha * (A @ B) */
+array addmm(
+    array c,
+    array a,
+    array b,
+    const float& alpha = 1.f,
+    const float& beta = 1.f,
+    StreamOrDevice s = {});
 } // namespace mlx::core

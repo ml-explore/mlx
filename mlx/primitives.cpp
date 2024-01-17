@@ -124,6 +124,52 @@ std::pair<std::vector<array>, std::vector<int>> Add::vmap(
   return {{add(a, b, stream())}, {to_ax}};
 }
 
+std::vector<array> AddMM::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  std::vector<int> reorder(cotan.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      // M X N * (K X N).T -> M X K
+      auto cotan_scaled = cotan;
+      if (alpha_ != 1.) {
+        auto alpha_arr = array(alpha_, cotan.dtype());
+        cotan_scaled = (multiply(alpha_arr, cotan_scaled, stream()));
+      }
+      vjps.push_back(matmul(
+          cotan_scaled, transpose(primals[1], reorder, stream()), stream()));
+    } else if (arg == 1) {
+      // (M X K).T * M X N -> K X N
+      auto cotan_scaled = cotan;
+      if (alpha_ != 1.) {
+        auto alpha_arr = array(alpha_, cotan.dtype());
+        cotan_scaled = (multiply(alpha_arr, cotan_scaled, stream()));
+      }
+      vjps.push_back(matmul(
+          transpose(primals[0], reorder, stream()), cotan_scaled, stream()));
+    } else {
+      auto cotan_scaled = cotan;
+      if (beta_ != 1.) {
+        auto beta_arr = array(beta_, cotan.dtype());
+        cotan_scaled = (multiply(beta_arr, cotan_scaled, stream()));
+      }
+      vjps.push_back(cotan_scaled);
+    }
+  }
+  return vjps;
+}
+
+bool AddMM::is_equivalent(const Primitive& other) const {
+  const AddMM& a_other = static_cast<const AddMM&>(other);
+  return (alpha_ == a_other.alpha_ && beta_ == a_other.beta_);
+}
+
 bool Arange::is_equivalent(const Primitive& other) const {
   const Arange& a_other = static_cast<const Arange&>(other);
   return (

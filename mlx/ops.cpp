@@ -3057,4 +3057,98 @@ array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   return tensordot(a, b, {{-1}, {-1}}, s);
 }
 
+/** Compute D = beta * C + alpha * (A @ B) */
+array addmm(
+    array c,
+    array a,
+    array b,
+    const float& alpha /* = 1.f */,
+    const float& beta /* = 1.f */,
+    StreamOrDevice s /* = {} */) {
+  // Divert in the case of vector-matrix multiplication
+  // TODO: Add the needed specializtion
+  if (a.ndim() == 1 || b.ndim() == 1) {
+    array X = matmul(a, b, s);
+    array alpha_arr = array(alpha, X.dtype());
+    array aX = multiply(alpha_arr, X, s);
+
+    array beta_arr = array(beta, c.dtype());
+    array bY = multiply(beta_arr, c, s);
+    return add(aX, bY, s);
+  }
+
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    throw std::invalid_argument(
+        "[addmm] Got 0 dimension input. Inputs must "
+        "have at least one dimension.");
+  }
+
+  if (a.shape(-1) != b.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[addmm] Last dimension of first input with shape " << a.shape()
+        << " must match second to last dimension of"
+        << " second input with shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Type promotion
+  auto out_type = result_type({a, b, c});
+  if (!is_floating_point(out_type) || is_complex(out_type)) {
+    std::ostringstream msg;
+    msg << "[addmm] Only real floating point types are supported but "
+        << c.dtype() << ", " << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+  c = astype(c, out_type, s);
+
+  // We can batch the multiplication by reshaping a
+  if (a.ndim() > 2 && b.ndim() == 2 && c.ndim() <= 1) {
+    std::vector<int> out_shape = a.shape();
+    a = reshape(a, {-1, out_shape.back()}, s);
+    out_shape.back() = b.shape(-1);
+    c = broadcast_to(c, {a.shape(0), b.shape(1)}, s);
+    auto out = array(
+        {a.shape(0), b.shape(1)},
+        out_type,
+        std::make_unique<AddMM>(to_stream(s), alpha, beta),
+        {a, b, c});
+    return reshape(out, out_shape, s);
+  }
+
+  if (a.ndim() > 2 || b.ndim() > 2) {
+    std::vector<int> bsx_a(a.shape().begin(), a.shape().end() - 2);
+    std::vector<int> bsx_b(b.shape().begin(), b.shape().end() - 2);
+    auto inner_shape = broadcast_shapes(bsx_a, bsx_b);
+
+    // Broadcast a
+    inner_shape.push_back(a.shape(-2));
+    inner_shape.push_back(a.shape(-1));
+    a = broadcast_to(a, inner_shape, s);
+
+    // Broadcast b
+    *(inner_shape.end() - 2) = b.shape(-2);
+    *(inner_shape.end() - 1) = b.shape(-1);
+    b = broadcast_to(b, inner_shape, s);
+  }
+
+  auto out_shape = a.shape();
+  out_shape.back() = b.shape(-1);
+
+  auto c_broadcast_shape = broadcast_shapes(c.shape(), out_shape);
+  c = broadcast_to(c, c_broadcast_shape, s);
+
+  auto out = array(
+      out_shape,
+      out_type,
+      std::make_unique<AddMM>(to_stream(s), alpha, beta),
+      {a, b, c});
+
+  return out;
+}
+
 } // namespace mlx::core

@@ -17,6 +17,7 @@ namespace mlx::core {
 
 NO_GPU(Abs)
 NO_GPU(Add)
+NO_GPU(AddMM)
 NO_GPU(Arange)
 NO_GPU(ArcCos)
 NO_GPU(ArcCosh)
