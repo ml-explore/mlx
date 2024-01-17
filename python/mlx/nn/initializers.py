@@ -1,6 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
-from typing import Callable
+from typing import Callable, Literal
 
 import mlx.core as mx
 
@@ -185,7 +185,9 @@ def he_normal(
     """
 
     def initializer(
-        a: mx.array, mode: str = "fan_in", gain: mx.float32 = 1.0
+        a: mx.array,
+        mode: Literal["fan_in", "fan_out"] = "fan_in",
+        gain: mx.float32 = 1.0,
     ) -> mx.array:
         fan_in, fan_out = _calculate_fan_in_fan_out(a)
         if mode == "fan_in":
@@ -221,7 +223,9 @@ def he_uniform(
     """
 
     def initializer(
-        a: mx.array, mode: str = "fan_in", gain: mx.float32 = 1.0
+        a: mx.array,
+        mode: Literal["fan_in", "fan_out"] = "fan_in",
+        gain: mx.float32 = 1.0,
     ) -> mx.array:
         fan_in, fan_out = _calculate_fan_in_fan_out(a)
         if mode == "fan_in":
