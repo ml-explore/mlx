@@ -82,6 +82,12 @@ array::array(
 }
 
 void array::detach() {
+  for (auto& s : array_desc_->siblings) {
+    s.array_desc_->inputs.clear();
+    s.array_desc_->siblings.clear();
+    s.array_desc_->position = 0;
+    s.array_desc_->primitive = nullptr;
+  }
   array_desc_->inputs.clear();
   array_desc_->siblings.clear();
   array_desc_->position = 0;

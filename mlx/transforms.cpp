@@ -292,9 +292,6 @@ void eval(const std::vector<array>& outputs) {
         arr.primitive().eval_cpu(arr.inputs(), outputs);
         if (!arr.is_tracer()) {
           arr.detach();
-          for (auto s : arr.siblings()) {
-            s.detach();
-          }
         }
         if (p) {
           p->set_value();
