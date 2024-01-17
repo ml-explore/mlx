@@ -1122,4 +1122,15 @@ std::unordered_map<std::string, array> load_gguf(
 
 void save_gguf(std::string file, std::unordered_map<std::string, array> a);
 
+/** computes einsum */
+array einsum_naive(
+    std::string equation,
+    const std::vector<array>& operands,
+    StreamOrDevice s = {});
+
+array einsum(
+    std::string equation,
+    const std::vector<array>& operands,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core
