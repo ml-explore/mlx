@@ -57,7 +57,8 @@ class Axpby : public Primitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   /**
    * The primitive must know how to vectorize itself across

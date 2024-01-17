@@ -347,7 +347,8 @@ std::vector<array> Axpby::jvp(
 std::vector<array> Axpby::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
   // Reverse mode diff
   std::vector<array> vjps;
   for (auto arg : argnums) {
