@@ -1,13 +1,18 @@
 # Copyright © 2023 Apple Inc.
 
 import mlx.core as mx
-from typing import Union, List, Callable
+from typing import Callable
 
 def constant(value: float, dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
-    r"""Build an initializer that takes an array and returns a new array of the same shape filled with 'value'.
+    r"""Build an initializer that returns a array filled with 'value'.
 
     Args:
         value (float): The value to fill the array with.
+        dtype (mx.Dtype, optional): The data type of the array. Defaults to mx.float32.
+
+    Returns:
+        Callable[[mx.array], mx.array]: An initializer that returns an array, of the same
+                                        shape as the input array, filled with 'value'.
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -17,12 +22,17 @@ def constant(value: float, dtype: mx.Dtype = mx.float32) -> Callable[[mx.array],
 
 
 def normal(mean: float = 0.0, std: float = 1.0, dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
-    r"""Build an initializer that takes an array and returns a new array with random values from a normal distribution.
+    r"""Build an initializer that returns random values from a normal distribution.
 
     Args:
         mean (float): Mean of the normal distribution.
         std (float): Standard deviation of the normal distribution.
         dtype (Dtype): The data type of the array.
+
+    Returns:
+        Callable[[mx.array], mx.array]: An initializer that returns an array, of the same
+                                        shape as the input array, filled with values drawn
+                                        from the normal distribution.
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -33,12 +43,17 @@ def normal(mean: float = 0.0, std: float = 1.0, dtype: mx.Dtype = mx.float32) ->
 
 
 def uniform(low: float = 0.0, high: float = 1.0, dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
-    r"""Build an initializer that takes an array and returns a new array with random values from a uniform distribution.
+    r"""Build an initializer that returns random values from a uniform distribution.
 
     Args:
         low (float): The lower bound of the uniform distribution.
         high (float): The upper bound of the uniform distribution.
         dtype (Dtype): The data type of the array.
+
+    Returns:
+        Callable[[mx.array], mx.array]: An initializer that returns an array, of the same
+                                        shape as the input array, filled with values drawn
+                                        from the uniform distribution
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -52,6 +67,10 @@ def identity(dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
 
     Args:
         dtype (Dtype, optional): The data type of the array. Defaults to mx.float32.
+
+    Returns:
+        Callable[[mx.array], mx.array]: An initializer that returns an identity array, of 
+                                    the same shape as the input array.
     """
 
     def initializer(arr: mx.array) -> mx.array:
