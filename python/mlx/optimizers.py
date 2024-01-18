@@ -587,7 +587,7 @@ class Adafactor(Optimizer):
 
         parameter_scale = 1.0
         if self.scale_parameter:
-            parameter_scale = mx.maximum(mx.array(self.eps[1]), parameter_rms)
+            parameter_scale = mx.maximum(self.eps[1], parameter_rms)
         return parameter_scale * relative_step_size
 
     def _approximate_exp_moving_avg(self, exp_avg_sq_row, exp_avg_sq_col):
@@ -640,7 +640,7 @@ class Adafactor(Optimizer):
             update = mx.rsqrt(exp_avg_sq) * gradient
 
         update = update / mx.maximum(
-            mx.array(1.0), self._compute_rms(update) / self.clip_threshold
+            1.0, self._compute_rms(update) / self.clip_threshold
         )
         update = learning_rate * update
 
