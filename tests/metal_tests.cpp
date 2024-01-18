@@ -5,6 +5,7 @@
 
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
+#include "mlx/backend/metal/allocator.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -470,4 +471,44 @@ TEST_CASE("test metal validation") {
   eval(argmax(x));
 
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
+}
+
+TEST_CASE("test metal enable/disable cache") {
+  // Test enable metal cache
+  {
+    metal::set_cache_enabled(true);
+    CHECK(metal::cache_enabled());
+
+    auto &a = metal::allocator();
+    auto size = 100;
+    auto buf = a.malloc(size, false);
+    
+    // Release a
+    a.free(buf);
+    
+    // Check size should equals to size
+    CHECK_EQ(static_cast<MTL::Buffer*>(buf.ptr())->length(), size);
+  }
+    
+  // Test disable metal cache
+  {
+    metal::set_cache_enabled(false);
+    CHECK(!metal::cache_enabled());
+
+    auto &a = metal::allocator();
+    auto size = 100;
+    auto buf = a.malloc(size, false);
+    auto buf_ptr = static_cast<MTL::Buffer*>(buf.ptr());
+    unsigned char first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
+    printf("first byte: %d\n", first_byte);
+    
+    // Release a
+    a.free(buf);
+    
+    // If release successfully, the first byte should be different from the first byte before release
+    unsigned char new_first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
+    printf("new first byte: %d\n", new_first_byte);
+    
+    CHECK_NE(new_first_byte, first_byte);
+  }
 }
