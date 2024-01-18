@@ -182,10 +182,15 @@ def gaussian_nll_loss(
     r"""
     Computes the negative log likelihood loss for a Gaussian distribution.
 
+    The loss is given by:
+
     .. math::
-        \text{loss} = \frac{1}{2}\left(\log\left(\text{max}\left(\text{var},
-        \ \text{eps}\right)\right) + \frac{\left(\text{input} - \text{target}\right)^2}
-        {\text{max}\left(\text{var}, \ \text{eps}\right)}\right) + \text{const.}
+        \frac{1}{2}\left(\log\left(\max\left(\text{vars},
+        \ \epsilon\right)\right) + \frac{\left(\text{inputs} - \text{targets} \right)^2}
+        {\max\left(\text{vars}, \ \epsilon \right)}\right) + \text{const.}
+
+    where ``inputs`` are the predicted means and ``vars`` are the the
+    predicted variances.
 
     Args:
         inputs (array): The predicted expectation of the Gaussian distribution.
@@ -193,13 +198,13 @@ def gaussian_nll_loss(
         vars (array): The predicted variance of the Gaussian distribution.
         full (bool, optional): Whether to include the constant term in the loss calculation.
             Default: ``False``.
-        eps (float, optional): Small positive constant to prevent numerical instability.
-            Defaults to ``1e-6``.
+        eps (float, optional): Small positive constant for numerical stability.
+            Default: ``1e-6``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
-        array: The computed NLL loss.
+        array: The Gaussian NLL loss.
     """
     if inputs.shape != targets.shape:
         raise ValueError(
@@ -265,7 +270,7 @@ def smooth_l1_loss(
 
     .. math::
 
-       l =
+      l =
           \begin{cases}
             0.5 (x - y)^2, & \text{ if } & (x - y) < \beta \\
             |x - y| - 0.5 \beta, &  & \text{otherwise}
@@ -312,7 +317,7 @@ def triplet_loss(
 
     .. math::
 
-       L_{\text{triplet}} = \max\left(\|A - P\|_p - \|A - N\|_p + \alpha, 0\right)
+       \max\left(\|A - P\|_p - \|A - N\|_p + \alpha, 0\right)
 
     Args:
         anchors (array): The anchor samples.
@@ -374,7 +379,7 @@ def huber_loss(
 
     .. math::
 
-        L_{\delta}(a) =
+        l_{\delta}(a) =
         \left\{ \begin{array}{ll}
             \frac{1}{2} a^2 & \text{for } |a| \leq \delta, \\
             \delta \left( |a| - \frac{1}{2} \delta \right) & \text{otherwise.}
