@@ -33,13 +33,13 @@ we use a splittable version of Threefry, which is a counter-based PRNG.
 .. autosummary:: 
   :toctree: _autosummary
 
-   seed
-   key
-   split
    bernoulli
    categorical
    gumbel
+   key
    normal
    randint
-   uniform
+   seed
+   split
    truncated_normal
+   uniform

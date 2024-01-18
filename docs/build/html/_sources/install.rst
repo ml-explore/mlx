@@ -1,8 +1,8 @@
 Build and Install
 =================
 
-Install from PyPI
------------------
+Python Installation
+-------------------
 
 MLX is available on PyPI. All you have to do to use MLX with your own Apple
 silicon computer is
@@ -20,6 +20,14 @@ To install from PyPI you must meet the following requirements:
 .. note::
     MLX is only available on devices running macOS >= 13.3 
     It is highly recommended to use macOS 14 (Sonoma)
+
+
+MLX is also available on conda-forge. To install MLX with conda do:
+
+.. code-block:: shell
+
+   conda install conda-forge::mlx
+
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
@@ -213,3 +221,14 @@ Verify the terminal is now running natively the following command:
 
   $ uname -p
   arm
+
+Also check that cmake is using the correct architecture:
+
+.. code-block:: shell
+
+  $ cmake --system-information | grep CMAKE_HOST_SYSTEM_PROCESSOR
+  CMAKE_HOST_SYSTEM_PROCESSOR "arm64"
+
+If you see ``"x86_64"``, try re-installing ``cmake``. If you see ``"arm64"``
+but the build errors out with "Building for x86_64 on macOS is not supported."
+wipe your build cahce with ``rm -rf build/`` and try again.
