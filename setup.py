@@ -15,7 +15,7 @@ from setuptools.command.build_ext import build_ext
 def get_version(version):
     if "PYPI_RELEASE" not in os.environ:
         today = datetime.date.today()
-        version = f"{version}.dev{today.year}{today.month}{today.day}"
+        version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
 
         if "DEV_RELEASE" not in os.environ:
             git_hash = (
