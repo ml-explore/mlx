@@ -171,6 +171,49 @@ def mse_loss(
     return _reduce(loss, reduction)
 
 
+def msle_loss(
+    inputs: mx.array, targets: mx.array, reduction: Reduction = "mean"
+) -> float:
+    r"""
+    Calculate the mean squared logarithmic error (MSLE) between predictions and
+    targets.
+
+    The loss is given by:
+
+    .. math::
+        \text{MSLE} = \frac{1}{N}\sum_i^N (\log(1 + y_i) - \log(1 + \hat{y_i}))^2
+
+    Where is :math:`y` is the targets, and :math:`\hat{y}` is the predictions.
+
+    Args:
+        inputs (array): The predicted values.
+        targets (array): The target values.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
+
+    Returns:
+        array: The computed mean squared logarithmic error.
+
+    Examples:
+        >>> import mlx.core as mx
+        >>> import mlx.nn as nn
+
+        >>> targets = mx.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        >>> predictions = mx.array([0.8, 2.1, 2.9, 4.2, 5.2])
+        >>> loss = nn.losses.msle_loss(predictions, targets, "mean")
+        >>> loss
+        array(0.00308609, dtype=float32)
+    """
+    if inputs.shape != targets.shape:
+        raise ValueError(
+            f"Predictions shape {inputs.shape} does not match targets shape {targets.shape}."
+        )
+
+    loss = (mx.log1p(targets) - mx.log1p(inputs)) ** 2
+
+    return _reduce(loss, reduction)
+
+
 def nll_loss(
     inputs: mx.array, targets: mx.array, axis: int = -1, reduction: Reduction = "none"
 ) -> mx.array:

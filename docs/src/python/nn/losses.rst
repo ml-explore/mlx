@@ -19,6 +19,7 @@ Loss Functions
    l1_loss
    log_cosh_loss
    mse_loss
+   msle_loss
    nll_loss
    smooth_l1_loss
    triplet_loss

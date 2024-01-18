@@ -209,6 +209,28 @@ class TestLosses(mlx_tests.MLXTestCase):
             losses_sum, expected_sum, "Test case failed for mse_loss --reduction='sum'"
         )
 
+    def test_msle_loss(self):
+        predictions = mx.array([0.8, 2.1, 2.9, 4.2, 5.2])
+        targets = mx.array([1.0, 2.0, 3.0, 4.0, 5.0])
+
+        expected_none = mx.array(
+            [0.01110085, 0.00107517, 0.00064099, 0.00153826, 0.00107517]
+        )
+        expected_mean = mx.mean(expected_none)
+        expected_sum = mx.sum(expected_none)
+
+        # Test with reduction 'none'
+        losses_none = nn.losses.msle_loss(predictions, targets, reduction="none")
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+
+        # Test with reduction 'mean'
+        losses_mean = nn.losses.msle_loss(predictions, targets, reduction="mean")
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+
+        # Test with reduction 'sum'
+        losses_sum = nn.losses.msle_loss(predictions, targets, reduction="sum")
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
     def test_smooth_l1_loss(self):
         predictions = mx.array([1.5, 2.5, 0.5, 3.5])
         targets = mx.array([1.0, 2.0, 0.5, 2.5])
