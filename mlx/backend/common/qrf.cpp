@@ -36,15 +36,15 @@ struct lpack<float> {
     sgeqrf_(m, n, a, lda, tau, work, lwork, info);
   }
   static void xorgqr(
-      const __LAPACK_int * _Nonnull m,
-  const __LAPACK_int * _Nonnull n,
-  const __LAPACK_int * _Nonnull k,
-  float * _Nullable a,
-  const __LAPACK_int * _Nonnull lda,
-  const float * _Nullable tau,
-  float * _Nonnull work,
-  const __LAPACK_int * _Nonnull lwork,
-  __LAPACK_int * _Nonnull info) {
+      const __LAPACK_int* _Nonnull m,
+      const __LAPACK_int* _Nonnull n,
+      const __LAPACK_int* _Nonnull k,
+      float* _Nullable a,
+      const __LAPACK_int* _Nonnull lda,
+      const float* _Nullable tau,
+      float* _Nonnull work,
+      const __LAPACK_int* _Nonnull lwork,
+      __LAPACK_int* _Nonnull info) {
     sorgqr_(m, n, k, a, lda, tau, work, lwork, info);
   }
 };
@@ -58,7 +58,7 @@ void qrf_impl(array& A, array& Q, array& R) {
   // No. of elementary reflectors
   const int tau_size = std::min(M, N);
   // Holds scalar factors of the elementary reflectors
-  Buffer tau = allocator::malloc_or_wait(sizeof(T) *  tau_size);
+  Buffer tau = allocator::malloc_or_wait(sizeof(T) * tau_size);
 
   T optimal_work;
   int lwork = -1;
@@ -66,7 +66,14 @@ void qrf_impl(array& A, array& Q, array& R) {
 
   // Compute workspace size
   lpack<T>::xgeqrf(
-      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), &optimal_work, &lwork, &info);
+      &M,
+      &N,
+      A.data<T>(),
+      &lda,
+      static_cast<T*>(tau.ptr()),
+      &optimal_work,
+      &lwork,
+      &info);
 
   // Update workspace size
   lwork = optimal_work;
@@ -74,7 +81,14 @@ void qrf_impl(array& A, array& Q, array& R) {
 
   // Solve
   lpack<T>::xgeqrf(
-      &M, &N, A.data<T>(), &lda, static_cast<T*>(tau.ptr()), static_cast<T*>(work.ptr()), &lwork, &info);
+      &M,
+      &N,
+      A.data<T>(),
+      &lda,
+      static_cast<T*>(tau.ptr()),
+      static_cast<T*>(work.ptr()),
+      &lwork,
+      &info);
 
   // For m ≥ n, R is an upper triangular matrix.
   // For m < n, R is an upper trapezoidal matrix.
@@ -82,10 +96,10 @@ void qrf_impl(array& A, array& Q, array& R) {
   R_.eval();
 
   R.set_data(
-    allocator::malloc_or_wait(R_.nbytes()),
-    R_.data_size(),
-    R_.strides(),
-    R_.flags());
+      allocator::malloc_or_wait(R_.nbytes()),
+      R_.data_size(),
+      R_.strides(),
+      R_.flags());
 
   copy_inplace(R_, R, CopyType::Vector);
 

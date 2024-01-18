@@ -3,8 +3,8 @@
 #include "doctest/doctest.h"
 
 #include <iostream>
-#include "mlx/mlx.h"
 #include "mlx/linalg.h"
+#include "mlx/mlx.h"
 #include "mlx/ops.h"
 
 using namespace mlx::core;
