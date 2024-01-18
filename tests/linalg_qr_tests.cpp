@@ -5,6 +5,7 @@
 #include <iostream>
 #include "mlx/mlx.h"
 #include "mlx/linalg.h"
+#include "mlx/ops.h"
 
 using namespace mlx::core;
 
@@ -13,10 +14,10 @@ TEST_CASE("test QR factorization") {
   std::vector<array> out = linalg::qrf(A, default_stream(Device::cpu));
   eval(out);
 
-  std::cout << out[0] << "\n";
-  std::cout << out[1] << "\n";
-
-  CHECK_EQ(true, true);
+  array Q = out[0];
+  array R = out[1];
+  CHECK_EQ(Q.dtype(), float32);
+  CHECK_EQ(R.dtype(), float32);
 }
 
 // torch

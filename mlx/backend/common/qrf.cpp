@@ -124,9 +124,6 @@ void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
   array Q = outputs[0];
   array R = outputs[1];
   qrf_impl<float>(A, Q, R);
-
-  // std::cout << "Q: " <<  Q << "\n";
-  // std::cout << "R: " <<  R << "\n";
 }
 
 } // namespace mlx::core
