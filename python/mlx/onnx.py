@@ -66,10 +66,12 @@ class MlxBackend:
                 res[x.name] = str(x.s)
             elif x.type == onnx.AttributeProto.TENSOR:
                 res[x.name] = self.parse_array(x.t)
+            # Sometimes this gets passed as args to functions that expect mx.array, so just converting
+            # them here to simplify the op code
             elif x.type == onnx.AttributeProto.FLOATS:
-                res[x.name] = tuple(float(f) for f in x.floats)
+                res[x.name] = mx.array([float(f) for f in x.floats], dtype=mx.float32)
             elif x.type == onnx.AttributeProto.INTS:
-                res[x.name] = tuple(int(i) for i in x.ints)
+                res[x.name] = mx.array([int(i) for i in x.ints], dtype=mx.int64)
             elif x.type == onnx.AttributeProto.STRINGS:
                 res[x.name] = tuple(str(s) for s in x.strings)
             elif x.type == onnx.AttributeProto.GRAPH:

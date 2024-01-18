@@ -244,7 +244,7 @@ def Trilu(x: mx.array, k=0, upper=1):
 
 
 def Transpose(x: mx.array, perm: mx.array = None):
-    return x.transpose() if perm is None else x.transpose(perm)
+    return x.transpose() if perm is None else x.transpose(perm.tolist())
 
 
 def Identity(x: mx.array):
@@ -477,3 +477,20 @@ def GatherElements(x: mx.array, indices: mx.array, axis=0):
 
 def Not(x: mx.array):
     return ~x
+
+
+def Slice(
+    x: mx.array,
+    starts: mx.array,
+    ends: mx.array,
+    axes: mx.array = None,
+    steps: mx.array = None,
+):
+    if axes is None:
+        axes = mx.arange(x.ndim)
+    if steps is None:
+        steps = mx.ones(starts.shape, dtype=mx.int64)
+    slices = [slice(0, d) for d in x.shape]
+    for start, end, axe, step in zip(starts, ends, axes, steps):
+        slices[axe.item()] = slice(start.item(), end.item(), step.item())
+    return x[tuple(slices)]
