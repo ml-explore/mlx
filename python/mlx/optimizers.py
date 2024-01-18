@@ -579,7 +579,7 @@ class Adafactor(Optimizer):
     def _compute_rms(self, inputs):
         return mx.sqrt(mx.mean(mx.square(inputs)))
 
-    def _compute_learning_rate(self, step, rms):
+    def _compute_learning_rate(self, step, parameter_rms):
         relative_step_size = self.learning_rate
         if self.relative_step:
             min_step = 1e-6 * step if self.warmup_init else 1e-2
@@ -587,7 +587,7 @@ class Adafactor(Optimizer):
 
         parameter_scale = 1.0
         if self.scale_parameter:
-            parameter_scale = mx.maximum(mx.array(self.eps[1]), rms)
+            parameter_scale = mx.maximum(mx.array(self.eps[1]), parameter_rms)
         return parameter_scale * relative_step_size
 
     def _approximate_exp_moving_avg(self, exp_avg_sq_row, exp_avg_sq_col):
@@ -608,8 +608,8 @@ class Adafactor(Optimizer):
         state["step"] = step
         use_first_moment = self.beta_1 is not None
 
-        rms = state.get("rms", self._compute_rms(parameter))
-        learning_rate = self._compute_learning_rate(step, rms)
+        parameter_rms = self._compute_rms(parameter)
+        learning_rate = self._compute_learning_rate(step, parameter_rms)
         beta_2 = 1.0 - mx.power(step, self.decay_rate)
         update = mx.square(gradient) + self.eps[0]
 
