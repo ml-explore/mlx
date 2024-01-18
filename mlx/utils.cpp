@@ -7,14 +7,16 @@
 
 namespace mlx::core {
 
-struct Formatter {
-  std::function<std::string(bool)> bool_formatter;
+Formatter::Formatter() : bool_capitalise(false) {}
 
-  Formatter()
-      : bool_formatter([](bool value) -> std::string {
-          return value ? "True" : "False";
-        }) {}
-};
+std::string Formatter::bool_formatter(bool value) {
+  if (bool_capitalise) {
+    return value ? "True" : "False";
+  }
+  return value ? "true" : "false";
+}
+
+Formatter global_formatter;
 
 Dtype result_type(const std::vector<array>& arrays) {
   std::vector<Dtype> dtypes(1, bool_);
@@ -135,7 +137,7 @@ void print_subarray(
     const array& a,
     size_t index,
     int dim,
-    const Formatter& formatter) {
+    Formatter global_formatter) {
   int num_print = 3;
   int n = a.shape(dim);
   size_t s = a.strides()[dim];
@@ -151,12 +153,12 @@ void print_subarray(
       index += s * (n - 2 * num_print - 1);
     } else if (is_last) {
       if constexpr (std::is_same_v<T, bool>) {
-        os << formatter.bool_formatter(a.data<T>()[index]);
+        os << global_formatter.bool_formatter(a.data<T>()[index]);
       } else {
         os << a.data<T>()[index];
       }
     } else {
-      print_subarray<T>(os, a, index, dim + 1, formatter);
+      print_subarray<T>(os, a, index, dim + 1, global_formatter);
     }
     os << (i == n - 1 ? "" : postfix);
     index += s;
@@ -165,10 +167,7 @@ void print_subarray(
 }
 
 template <typename T>
-void print_array(
-    std::ostream& os,
-    const array& a,
-    const Formatter& formatter = Formatter()) {
+void print_array(std::ostream& os, const array& a) {
   std::vector<int> indices(a.ndim(), 0);
   os << std::boolalpha;
   os << "array(";
@@ -176,7 +175,7 @@ void print_array(
     auto data = a.data<T>();
     os << data[0];
   } else {
-    print_subarray<T>(os, a, 0, 0, formatter);
+    print_subarray<T>(os, a, 0, 0, global_formatter);
   }
   os << ", dtype=" << a.dtype() << ")";
   os << std::noboolalpha;

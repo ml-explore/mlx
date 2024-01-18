@@ -723,7 +723,9 @@ void init_array(py::module_& m) {
               a.eval(a.is_tracer());
             }
             std::ostringstream os;
+            mlx::core::global_formatter.bool_capitalise = true;
             os << a;
+            mlx::core::global_formatter.bool_capitalise = false;
             return os.str();
           })
       .def(

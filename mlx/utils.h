@@ -9,6 +9,14 @@
 
 namespace mlx::core {
 
+struct Formatter {
+  Formatter();
+  bool bool_capitalise;
+  std::string bool_formatter(bool value);
+};
+
+extern Formatter global_formatter;
+
 /** The type from promoting the arrays' types with one another. */
 Dtype result_type(const std::vector<array>& arrays);
 
