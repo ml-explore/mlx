@@ -15,7 +15,7 @@ from setuptools.command.build_ext import build_ext
 def get_version(version):
     if "PYPI_RELEASE" not in os.environ:
         today = datetime.date.today()
-        version = f"{version}.dev{today.year}{today.month}{today.day}"
+        version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
 
         if "DEV_RELEASE" not in os.environ:
             git_hash = (
@@ -152,7 +152,7 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.0.9"),
+        version=get_version("0.0.10"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
