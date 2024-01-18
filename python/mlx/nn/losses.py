@@ -121,6 +121,94 @@ def binary_cross_entropy(
     return _reduce(loss, reduction)
 
 
+def binary_focal_cross_entropy(
+    inputs: mx.array,
+    targets: mx.array,
+    with_logits: bool = True,
+    class_balancing: bool = False,
+    alpha: float = 0.25,
+    gamma: float = 2.0,
+    reduction: Reduction = "mean",
+) -> float:
+    r"""
+    Calculate the binary focal cross entropy loss between true labels and predicted probabilities.
+
+    According to `Lin et al., 2018`_, it helps to apply a "focal factor" to down-weight easy
+    examples and focus more on hard examples.
+    
+    The loss is given by:
+
+    .. math::
+        \text{FL}(p,y)=
+        \begin{cases}
+            -\alpha(1-p)^\gamma\log(p), & \text{ if } y=1 \\
+            -(1-\alpha)p^\gamma\log(1-p), & \text{otherwise.}
+        \end{cases}
+
+    where :math:`p` is the predicted probability, :math:`y` is the target value, :math:`\alpha` is
+    the weight balancing factor for class 1, and :math:`\gamma` is the focusing parameter.
+
+    When ``class_balancing`` is ``False`` and ``gamma`` is ``0``, this function is equivalent to the
+    binary cross-entropy loss.
+
+    Args:
+        inputs (array): The predicted values. If ``with_logits`` is ``True``, then
+            ``inputs`` are unnormalized logits. Otherwise, ``inputs`` are probabilities.
+        targets (array): Binary target values in {0, 1}.
+        with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
+        class_balancing (bool, optional): Whether to apply class balancing. Default: ``False``.
+        alpha (float, optional): A weight balancing factor for class 1.
+            Default: ``0.25`` (`Lin et al., 2018`_). The weight for class 0 is ``1.0 - alpha``.
+        gamma (float, optional): A focusing parameter used to compute the focal factor.
+            Default: ``2.0`` (`Lin et al., 2018`_).
+        reduction (str, optional): Specifies the reduction to apply to the output:
+            ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
+    
+    .. _Lin et al., 2018: https://arxiv.org/pdf/1708.02002.pdf
+
+    Returns:
+        array: The computed binary focal cross entropy loss.
+
+    Examples:
+        >>> import mlx.core as mx
+        >>> from mlx.nn.losses import binary_focal_cross_entropy
+
+        >>> # inputs are logits, without class balancing
+        >>> logits = mx.array([[0.105361, 0.223144], [1.20397, 0.916291]])
+        >>> targets = mx.array([[0, 1], [1, 0]])
+        >>> binary_focal_cross_entropy(logits, targets, gamma=2.0)
+        array(0.244057, dtype=float32)
+
+        >>> # inputs are probabilities, with class balancing
+        >>> probs = mx.array([[0.1, 0.1], [0.4, 0.4]])
+        >>> targets = mx.array([[0, 1], [1, 0]])
+        >>> binary_focal_cross_entropy(probs, targets, class_balancing=True, alpha=0.25, gamma=2.0)
+        array(0.114078, dtype=float32)
+    """
+    if inputs.shape != targets.shape:
+        raise ValueError(
+            f"Inputs shape {inputs.shape} does not match targets shape {targets.shape}."
+        )
+
+    if with_logits:
+        inputs = mx.sigmoid(inputs)
+
+    focusing_pos = (1 - inputs) ** gamma
+    focusing_neg = inputs**gamma
+
+    loss_pos = -(focusing_pos * mx.log(inputs) * targets)
+    if class_balancing:
+        loss_pos *= alpha
+
+    loss_neg = -(focusing_neg * mx.log(1 - inputs) * (1 - targets))
+    if class_balancing:
+        loss_neg *= 1 - alpha
+
+    loss = loss_pos + loss_neg
+
+    return _reduce(loss, reduction)
+
+
 def l1_loss(
     predictions: mx.array, targets: mx.array, reduction: Reduction = "mean"
 ) -> mx.array:

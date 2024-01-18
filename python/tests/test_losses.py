@@ -160,6 +160,66 @@ class TestLosses(mlx_tests.MLXTestCase):
         _test_logits_as_inputs()
         _test_probs_as_inputs()
 
+    def test_binary_focal_cross_entropy(self):
+        # Test ground truth values are calculated by tf.keras.losses.BinaryFocalCrossentropy
+
+        alpha = 0.25  # class balancing factor
+        gamma = 2.0  # focal factor
+
+        def _test_logits_as_inputs():
+            logits = mx.array([-1.6, 0.5, 2.9, -1.8])
+            targets = mx.array([0, 1, 0, 1])
+
+            # Test with reduction 'none', without class balancing
+            losses = nn.losses.binary_focal_cross_entropy(
+                logits, targets, gamma=gamma, reduction="none"
+            )
+            expected = mx.array([0.00518928, 0.06757348, 2.653519, 1.438211])
+            self.assertTrue(mx.allclose(losses, expected))
+
+            # Test with reduction 'none', with class balancing
+            losses_balanced = nn.losses.binary_focal_cross_entropy(
+                logits,
+                targets,
+                class_balancing=True,
+                alpha=alpha,
+                gamma=gamma,
+                reduction="none",
+            )
+            expected_balanced = mx.array(
+                [0.00389196, 0.01689337, 1.9901392, 0.35955274]
+            )
+            self.assertTrue(mx.allclose(losses_balanced, expected_balanced))
+
+        def _test_probs_as_inputs():
+            probs = mx.array([0.5, 0.6, 0.7, 0.8])
+            targets = mx.array([0, 1, 0, 1])
+
+            # Test with reduction 'none', without class balancing
+            losses = nn.losses.binary_focal_cross_entropy(
+                probs, targets, with_logits=False, gamma=gamma, reduction="none"
+            )
+            expected = mx.array([0.17328674, 0.08173206, 0.5899465, 0.00892573])
+            self.assertTrue(mx.allclose(losses, expected))
+
+            # Test with reduction 'none', with class balancing
+            losses_balanced = nn.losses.binary_focal_cross_entropy(
+                probs,
+                targets,
+                with_logits=False,
+                class_balancing=True,
+                alpha=alpha,
+                gamma=gamma,
+                reduction="none",
+            )
+            expected_balanced = mx.array(
+                [0.12996505, 0.02043301, 0.44245988, 0.00223143]
+            )
+            self.assertTrue(mx.allclose(losses_balanced, expected_balanced))
+
+        _test_logits_as_inputs()
+        _test_probs_as_inputs()
+
     def test_l1_loss(self):
         predictions = mx.array([0.5, 0.2, 0.9, 0.0])
         targets = mx.array([0.5, 0.2, 0.9, 0.0])
