@@ -151,7 +151,6 @@ class array {
    private:
     const array& arr;
     int idx;
-    std::vector<array> splits;
   };
 
   ArrayIterator begin() const {

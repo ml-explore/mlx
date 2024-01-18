@@ -493,6 +493,32 @@ class ArrayAt {
   py::object indices_;
 };
 
+class ArrayPythonIterator {
+ public:
+  ArrayPythonIterator(array x) : idx_(0), x_(std::move(x)) {
+    if (x_.shape(0) > 0 && x_.shape(0) < 10) {
+      splits_ = split(x_, x_.shape(0));
+    }
+  }
+
+  array next() {
+    if (idx_ >= x_.shape(0)) {
+      throw py::stop_iteration();
+    }
+
+    if (idx_ >= 0 && idx_ < splits_.size()) {
+      return squeeze(splits_[idx_++], 0);
+    }
+
+    return *(x_.begin() + idx_++);
+  }
+
+ private:
+  int idx_;
+  array x_;
+  std::vector<array> splits_;
+};
+
 void init_array(py::module_& m) {
   // Types
   py::class_<Dtype>(
@@ -539,6 +565,13 @@ void init_array(py::module_& m) {
       A helper object to apply updates at specific indices.
       )pbdoc");
 
+  auto array_iterator_class = py::class_<ArrayPythonIterator>(
+      m,
+      "_ArrayIterator",
+      R"pbdoc(
+      A helper object to iterate over the 1st dimension of an array.
+      )pbdoc");
+
   auto array_class = py::class_<array>(
       m,
       "array",
@@ -574,6 +607,16 @@ void init_array(py::module_& m) {
       .def("divide", &ArrayAt::divide, "value"_a)
       .def("maximum", &ArrayAt::maximum, "value"_a)
       .def("minimum", &ArrayAt::minimum, "value"_a);
+
+  array_iterator_class
+      .def(
+          py::init([](const array& x) { return ArrayPythonIterator(x); }),
+          "x"_a,
+          R"pbdoc(
+          __init__(self, x: array)
+        )pbdoc")
+      .def("__next__", &ArrayPythonIterator::next)
+      .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
 
   array_class
       .def_buffer([](array& a) {
@@ -703,10 +746,7 @@ void init_array(py::module_& m) {
             }
             return a.shape(0);
           })
-      .def(
-          "__iter__",
-          [](const array& a) { return py::make_iterator(a); },
-          py::keep_alive<0, 1>())
+      .def("__iter__", [](const array& a) { return ArrayPythonIterator(a); })
       .def(
           "__add__",
           [](const array& a, const ScalarOrArray v) {
