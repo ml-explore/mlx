@@ -173,7 +173,11 @@ void print_array(std::ostream& os, const array& a) {
   os << "array(";
   if (a.ndim() == 0) {
     auto data = a.data<T>();
-    os << data[0];
+    if constexpr (std::is_same_v<T, bool>) {
+      os << global_formatter.bool_formatter(data[0]);
+    } else {
+      os << data[0];
+    }
   } else {
     print_subarray<T>(os, a, 0, 0, global_formatter);
   }
