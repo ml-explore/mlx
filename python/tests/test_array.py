@@ -304,7 +304,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     def test_array_repr(self):
         x = mx.array(True)
-        self.assertEqual(str(x), "array(true, dtype=bool)")
+        self.assertEqual(str(x), "array(True, dtype=bool)")
         x = mx.array(1)
         self.assertEqual(str(x), "array(1, dtype=int32)")
         x = mx.array(1.0)

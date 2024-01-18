@@ -520,6 +520,9 @@ class ArrayPythonIterator {
 };
 
 void init_array(py::module_& m) {
+  // Set Python print formatting options
+  mlx::core::global_formatter.capitalize_bool = true;
+
   // Types
   py::class_<Dtype>(
       m,
