@@ -93,7 +93,9 @@ def identity(dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
 
 def _calculate_fan_in_fan_out(x):
     if x.ndim < 2:
-        raise ValueError("Glorot initialization requires at least 2 dimensional input")
+        raise ValueError(
+            "Glorot / He initialization requires at least 2 dimensional input"
+        )
 
     fan_in = x.shape[0]
     fan_out = x.shape[1]
