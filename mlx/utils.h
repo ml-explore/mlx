@@ -9,13 +9,23 @@
 
 namespace mlx::core {
 
-struct Formatter {
-  Formatter();
-  bool bool_capitalise;
-  std::string bool_formatter(bool value);
+struct PrintFormatter {
+  inline void print(std::ostream& os, bool val);
+  inline void print(std::ostream& os, int16_t val);
+  inline void print(std::ostream& os, uint16_t val);
+  inline void print(std::ostream& os, int32_t val);
+  inline void print(std::ostream& os, uint32_t val);
+  inline void print(std::ostream& os, int64_t val);
+  inline void print(std::ostream& os, uint64_t val);
+  inline void print(std::ostream& os, float16_t val);
+  inline void print(std::ostream& os, bfloat16_t val);
+  inline void print(std::ostream& os, float val);
+  inline void print(std::ostream& os, complex64_t val);
+
+  bool capitalize_bool{false};
 };
 
-extern Formatter global_formatter;
+extern PrintFormatter global_formatter;
 
 /** The type from promoting the arrays' types with one another. */
 Dtype result_type(const std::vector<array>& arrays);

@@ -7,16 +7,45 @@
 
 namespace mlx::core {
 
-Formatter::Formatter() : bool_capitalise(false) {}
-
-std::string Formatter::bool_formatter(bool value) {
-  if (bool_capitalise) {
-    return value ? "True" : "False";
+void PrintFormatter::print(std::ostream& os, bool val) {
+  if (capitalize_bool) {
+    os << (val ? "True" : "False");
+  } else {
+    os << val;
   }
-  return value ? "true" : "false";
+}
+inline void PrintFormatter::print(std::ostream& os, int16_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, uint16_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, int32_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, uint32_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, int64_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, uint64_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, float16_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, bfloat16_t val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, float val) {
+  os << val;
+}
+inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
+  os << val;
 }
 
-Formatter global_formatter;
+PrintFormatter global_formatter;
 
 Dtype result_type(const std::vector<array>& arrays) {
   std::vector<Dtype> dtypes(1, bool_);
@@ -132,12 +161,7 @@ inline size_t elem_to_loc(
 }
 
 template <typename T>
-void print_subarray(
-    std::ostream& os,
-    const array& a,
-    size_t index,
-    int dim,
-    Formatter global_formatter) {
+void print_subarray(std::ostream& os, const array& a, size_t index, int dim) {
   int num_print = 3;
   int n = a.shape(dim);
   size_t s = a.strides()[dim];
@@ -152,13 +176,9 @@ void print_subarray(
       i = n - num_print - 1;
       index += s * (n - 2 * num_print - 1);
     } else if (is_last) {
-      if constexpr (std::is_same_v<T, bool>) {
-        os << global_formatter.bool_formatter(a.data<T>()[index]);
-      } else {
-        os << a.data<T>()[index];
-      }
+      global_formatter.print(os, a.data<T>()[index]);
     } else {
-      print_subarray<T>(os, a, index, dim + 1, global_formatter);
+      print_subarray<T>(os, a, index, dim + 1);
     }
     os << (i == n - 1 ? "" : postfix);
     index += s;
@@ -173,13 +193,9 @@ void print_array(std::ostream& os, const array& a) {
   os << "array(";
   if (a.ndim() == 0) {
     auto data = a.data<T>();
-    if constexpr (std::is_same_v<T, bool>) {
-      os << global_formatter.bool_formatter(data[0]);
-    } else {
-      os << data[0];
-    }
+    global_formatter.print(os, data[0]);
   } else {
-    print_subarray<T>(os, a, 0, 0, global_formatter);
+    print_subarray<T>(os, a, 0, 0);
   }
   os << ", dtype=" << a.dtype() << ")";
   os << std::noboolalpha;

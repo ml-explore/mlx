@@ -420,6 +420,9 @@ array np_array_to_mlx(py::array np_array, std::optional<Dtype> dtype) {
 ///////////////////////////////////////////////////////////////////////////////
 
 void init_array(py::module_& m) {
+  // Set Python print formatting options
+  mlx::core::global_formatter.capitalize_bool = true;
+
   // Types
   py::class_<Dtype>(
       m,
@@ -723,9 +726,7 @@ void init_array(py::module_& m) {
               a.eval(a.is_tracer());
             }
             std::ostringstream os;
-            mlx::core::global_formatter.bool_capitalise = true;
             os << a;
-            mlx::core::global_formatter.bool_capitalise = false;
             return os.str();
           })
       .def(
