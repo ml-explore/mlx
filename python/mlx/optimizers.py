@@ -576,10 +576,10 @@ class Adafactor(Optimizer):
         self.relative_step = relative_step
         self.warmup_init = warmup_init
 
-    def compute_rms(self, inputs):
+    def _compute_rms(self, inputs):
         return mx.sqrt(mx.mean(mx.square(inputs)))
 
-    def compute_learning_rate(self, step, rms):
+    def _compute_learning_rate(self, step, rms):
         relative_step_size = self.learning_rate
         if self.relative_step:
             min_step = 1e-6 * step if self.warmup_init else 1e-2
@@ -590,7 +590,7 @@ class Adafactor(Optimizer):
             parameter_scale = mx.maximum(mx.array(self.eps[1]), rms)
         return parameter_scale * relative_step_size
 
-    def approximate_exp_moving_avg(self, exp_avg_sq_row, exp_avg_sq_col):
+    def _approximate_exp_moving_avg(self, exp_avg_sq_row, exp_avg_sq_col):
         r_factor = mx.rsqrt(
             exp_avg_sq_row / mx.mean(exp_avg_sq_row, axis=-1, keepdims=True)
         )
@@ -608,8 +608,8 @@ class Adafactor(Optimizer):
         state["step"] = step
         use_first_moment = self.beta_1 is not None
 
-        rms = state.get("rms", self.compute_rms(parameter))
-        learning_rate = self.compute_learning_rate(step, rms)
+        rms = state.get("rms", self._compute_rms(parameter))
+        learning_rate = self._compute_learning_rate(step, rms)
         beta_2 = 1.0 - mx.power(step, self.decay_rate)
         update = mx.square(gradient) + self.eps[0]
 
@@ -631,7 +631,7 @@ class Adafactor(Optimizer):
             )
             state["exp_avg_sq_row"] = exp_avg_sq_row
             state["exp_avg_sq_col"] = exp_avg_sq_col
-            update = self.approximate_exp_moving_avg(exp_avg_sq_row, exp_avg_sq_col)
+            update = self._approximate_exp_moving_avg(exp_avg_sq_row, exp_avg_sq_col)
             update = update * gradient
         else:
             exp_avg_sq = state.get("exp_avg_sq", mx.zeros_like(gradient))
@@ -640,7 +640,7 @@ class Adafactor(Optimizer):
             update = mx.rsqrt(exp_avg_sq) * gradient
 
         update = update / mx.maximum(
-            mx.array(1.0), self.compute_rms(update) / self.clip_threshold
+            mx.array(1.0), self._compute_rms(update) / self.clip_threshold
         )
         update = learning_rate * update
 
@@ -652,4 +652,4 @@ class Adafactor(Optimizer):
 
         if self.weight_decay != 0:
             parameter += parameter * (-self.weight_decay * learning_rate)
-        return parameter + (-update)
+        return parameter - update
