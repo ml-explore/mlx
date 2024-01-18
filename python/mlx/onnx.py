@@ -1,5 +1,5 @@
 import importlib
-from typing import Any
+from typing import Any, Tuple
 
 import mlx.core as mx
 import numpy as np
@@ -44,7 +44,9 @@ class MlxBackend:
                 ).reshape(inp.dims)
             )
         else:
-            print(f"Not implemented for {inp.data_type} {inp.name} {inp.dims}")
+            raise NotImplementedError(
+                f"Not implemented for {inp.data_type} {inp.name} {inp.dims}"
+            )
         return mx.ones(inp.dims, dtype=mx.float32)
 
     def get_input_dict(self, inputs):
@@ -76,7 +78,7 @@ class MlxBackend:
                 raise NotImplementedError(f"Attribute type {x.type} not implemented")
         return res
 
-    def run(self, inputs, **kwargs: Any) -> Any:
+    def run(self, inputs, **kwargs: Any) -> Tuple[mx.array, ...]:
         self.initializer_arrays()
         inputs = self.get_input_dict(inputs)
         for i in self._model.graph.input:
@@ -107,5 +109,4 @@ class MlxBackend:
 
             for i in range(len(node.output)):
                 self._cache[node.output[i]] = res[i]
-        out_names = [x.name for x in self._model.graph.output]
-        return tuple(self._cache[on] for on in out_names)
+        return tuple(self._cache[out.name] for out in self._model.graph.output)
