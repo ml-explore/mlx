@@ -166,9 +166,20 @@ class Module(dict):
 
     def save_weights(self, file: str):
         """
-        Save the model's weights to a ``.npz`` file.
+        Save the model's weights to a file. The saving method is determined by the file extension:
+        - `.npz` extension will use mx.savez
+        - `.safetensors` extension will use mx.save_safetensors
         """
-        mx.savez(file, **dict(tree_flatten(self.parameters())))
+        params_dict = dict(tree_flatten(self.parameters()))
+
+        if file.endswith(".npz"):
+            mx.savez(file, **params_dict)
+        elif file.endswith(".safetensors"):
+            mx.save_safetensors(file, params_dict)
+        else:
+            raise ValueError(
+                "Unsupported file extension. Use '.npz' or '.safetensors'."
+            )
 
     @staticmethod
     def is_module(value):
