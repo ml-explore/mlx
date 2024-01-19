@@ -41,6 +41,6 @@ error_norm = mx.sum(mx.square(w - w_star)).item() ** 0.5
 throughput = num_iters / (toc - tic)
 
 print(
-    f"Loss {loss.item():.5f}, |w-w*| = {error_norm:.5f}, "
+    f"Loss {loss.item():.5f}, L2 distance: |w-w*| = {error_norm:.5f}, "
     f"Throughput {throughput:.5f} (it/s)"
 )
