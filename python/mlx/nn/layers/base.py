@@ -167,8 +167,8 @@ class Module(dict):
     def save_weights(self, file: str):
         """
         Save the model's weights to a file. The saving method is determined by the file extension:
-        - `.npz` extension will use mx.savez
-        - `.safetensors` extension will use mx.save_safetensors
+        - ``.npz`` will use :func:`mx.savez`
+        - ``.safetensors`` will use :func:`mx.save_safetensors`
         """
         params_dict = dict(tree_flatten(self.parameters()))
 
