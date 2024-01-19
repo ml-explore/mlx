@@ -148,7 +148,45 @@ class TestLoad(mlx_tests.MLXTestCase):
         self.assertTrue("meta" in meta_load_dict)
         self.assertEqual(meta_load_dict["meta"], "data")
 
-        # TODO add tests for more meta data types
+        for t in [
+            mx.uint8,
+            mx.int8,
+            mx.uint16,
+            mx.int16,
+            mx.uint32,
+            mx.int32,
+            mx.uint64,
+            mx.int64,
+            mx.float32,
+        ]:
+            arr = mx.array(1, t)
+            metadata = {"meta": arr}
+            mx.save_gguf(save_file_mlx, save_dict, metadata)
+            _, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+            self.assertEqual(len(meta_load_dict), 1)
+            self.assertTrue("meta" in meta_load_dict)
+            self.assertTrue(mx.array_equal(meta_load_dict["meta"], arr))
+            self.assertEqual(meta_load_dict["meta"].dtype, arr.dtype)
+
+        for t in [mx.float16, mx.bfloat16, mx.complex64]:
+            with self.assertRaises(ValueError):
+                arr = mx.array(1, t)
+                metadata = {"meta": arr}
+                mx.save_gguf(save_file_mlx, save_dict, metadata)
+
+        arr = mx.array(1.5)
+        metadata = {"meta1": arr, "meta2": "data"}
+        mx.save_gguf(save_file_mlx, save_dict, metadata)
+        _, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        self.assertEqual(len(meta_load_dict), 2)
+        self.assertTrue("meta1" in meta_load_dict)
+        self.assertTrue(mx.array_equal(meta_load_dict["meta1"], arr))
+        self.assertEqual(meta_load_dict["meta1"].dtype, arr.dtype)
+        self.assertTrue("meta2" in meta_load_dict)
+        self.assertEqual(meta_load_dict["meta2"], "data")
+
+        # TODO test non-scalar arrays
+        # TODO test list of strings
 
     def test_save_and_load_fs(self):
         if not os.path.isdir(self.test_dir):

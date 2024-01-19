@@ -38,18 +38,8 @@ void save_safetensors(
     const std::string& file,
     std::unordered_map<std::string, array>);
 
-using MetaData = std::variant<std::monostate, array, std::string>;
-// TODO pybind had issues casting to this, we might be able
-// to find a workaround but for now no support for nested containers
-/*struct MetaData;
-struct MetaData
-    : public std::
-          variant<std::monostate, array, std::string, std::vector<MetaData>> {
- public:
-  using base =
-      std::variant<std::monostate, array, std::string, std::vector<MetaData>>;
-  using base::base;
-};*/
+using MetaData =
+    std::variant<std::monostate, array, std::string, std::vector<std::string>>;
 
 /** Load metadata and array map from .gguf file format */
 std::pair<

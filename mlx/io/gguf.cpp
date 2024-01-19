@@ -5,6 +5,7 @@
 
 #include "mlx/io.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms.h"
 #include "mlx/utils.h"
 
 extern "C" {
@@ -78,37 +79,48 @@ void metadata_value_callback(
     uint64_t in_array,
     uint64_t array_len) {
   auto value = static_cast<MetaData*>(privdata);
-  // TODO: Support all other types.
+  // TODO: Support arrays.
   switch (type) {
     case GGUF_VALUE_TYPE_ARRAY_START:
       break;
     case GGUF_VALUE_TYPE_ARRAY_END:
       break;
     case GGUF_VALUE_TYPE_UINT8:
+      *value = array(val->uint8, uint8);
       break;
     case GGUF_VALUE_TYPE_INT8:
+      *value = array(val->int8, int8);
       break;
     case GGUF_VALUE_TYPE_UINT16:
+      *value = array(val->uint16, uint16);
       break;
     case GGUF_VALUE_TYPE_INT16:
+      *value = array(val->int16, int16);
       break;
     case GGUF_VALUE_TYPE_UINT32:
+      *value = array(val->uint32, uint32);
       break;
     case GGUF_VALUE_TYPE_INT32:
+      *value = array(val->int32, int32);
+      break;
+    case GGUF_VALUE_TYPE_UINT64:
+      *value = array(val->uint64, uint64);
+      break;
+    case GGUF_VALUE_TYPE_INT64:
+      *value = array(val->int64, int64);
       break;
     case GGUF_VALUE_TYPE_FLOAT32:
+      *value = array(val->float32, float32);
       break;
     case GGUF_VALUE_TYPE_BOOL:
+      *value = array(val->boolval, bool_);
       break;
     case GGUF_VALUE_TYPE_STRING:
       *value =
           std::string(val->string.string, static_cast<int>(val->string.len));
       break;
-    case GGUF_VALUE_TYPE_UINT64:
-      break;
-    case GGUF_VALUE_TYPE_INT64:
-      break;
     case GGUF_VALUE_TYPE_FLOAT64:
+      *value = array(val->float64, float32);
       break;
     default:
       throw std::runtime_error("[load_gguf] unknown value type");
@@ -160,6 +172,20 @@ load_gguf(const std::string& file, StreamOrDevice s) {
   return {arrays, metadata};
 }
 
+void append_kv_array(
+    gguf_ctx* ctx,
+    const std::string& key,
+    array& val,
+    uint32_t gguf_type) {
+  gguf_append_kv(
+      ctx,
+      key.c_str(),
+      key.length(),
+      gguf_type,
+      static_cast<void*>(val.data<char>()),
+      val.nbytes());
+}
+
 void save_gguf(
     std::string file,
     std::unordered_map<std::string, array> array_map,
@@ -175,7 +201,7 @@ void save_gguf(
   }
 
   // Save any meta data
-  for (const auto& [key, value] : metadata) {
+  for (auto& [key, value] : metadata) {
     if (auto pv = std::get_if<std::string>(&value); pv) {
       const std::string& str = *pv;
       size_t size = sizeof(gguf_string) + str.length();
@@ -191,7 +217,51 @@ void save_gguf(
           GGUF_VALUE_TYPE_STRING,
           static_cast<void*>(val),
           size);
+    } else if (auto pv = std::get_if<array>(&value); pv) {
+      array& v = *pv;
+      if (v.ndim() != 0) {
+        throw std::runtime_error("[save_gguf] non-scalar arrays NYI");
+      }
+      eval(v);
+      switch (v.dtype()) {
+        case float32:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_FLOAT32);
+          break;
+        case int64:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_INT64);
+          break;
+        case int32:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_INT32);
+          break;
+        case int16:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_INT16);
+          break;
+        case int8:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_INT8);
+          break;
+        case uint64:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_UINT64);
+          break;
+        case uint32:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_UINT32);
+          break;
+        case uint16:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_UINT16);
+          break;
+        case uint8:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_UINT8);
+          break;
+        case bool_:
+          append_kv_array(ctx, key, v, GGUF_VALUE_TYPE_BOOL);
+          break;
+        default:
+          std::ostringstream msg;
+          msg << "[save_gguf] array type " << v.dtype()
+              << " not support for metadata.";
+          throw std::invalid_argument(msg.str());
+      }
     }
+
     // TODO: serialize other types
   }
 
