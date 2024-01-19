@@ -226,6 +226,14 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array([1 + 0j, 2j, True, 0], mx.complex64)
         self.assertEqual(x.tolist(), [1 + 0j, 2j, 1 + 0j, 0j])
 
+        xnp = np.array([0, 4294967295], dtype=np.uint32)
+        x = mx.array([0, 4294967295], dtype=mx.uint32)
+        self.assertTrue(np.array_equal(x, xnp))
+
+        xnp = np.array([0, 4294967295], dtype=np.float32)
+        x = mx.array([0, 4294967295], dtype=mx.float32)
+        self.assertTrue(np.array_equal(x, xnp))
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,
