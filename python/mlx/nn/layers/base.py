@@ -96,11 +96,11 @@ class Module(dict):
         strict: bool = True,
     ):
         """
-        Update the model's weights from a ``.npz`` or a list.
+        Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
 
         Args:
             file_or_weights (str or list(tuple(str, mx.array))): The path to
-                the weights ``.npz`` file or a list of pairs of parameter names
+                the weights ``.npz`` file (``.npz`` or ``.safetensors``) or a list of pairs of parameter names
                 and arrays.
             strict (bool, optional): If ``True`` then checks that the provided
               weights exactly match the parameters of the model. Otherwise,
@@ -117,6 +117,9 @@ class Module(dict):
 
                 # Load from file
                 model.load_weights("weights.npz")
+
+                # Load from .safetensors file
+                model.load_weights("weights.safetensors")
 
                 # Load from list
                 weights = [
