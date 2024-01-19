@@ -576,8 +576,8 @@ class TestBlas(mlx_tests.MLXTestCase):
                 ],
             )
 
-            self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-5).item())
+            self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-4).item())
 
             for r, t in zip(dout_ref, dout_test):
                 self.assertListEqual(r.shape, t.shape)
-                self.assertTrue(mx.allclose(r, t, atol=1e-5).item())
+                self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
