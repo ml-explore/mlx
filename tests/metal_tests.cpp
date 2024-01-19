@@ -500,7 +500,6 @@ TEST_CASE("test metal enable/disable cache") {
     auto buf = a.malloc(size, false);
     auto buf_ptr = static_cast<MTL::Buffer*>(buf.ptr());
     unsigned char first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
-    printf("first byte: %d\n", first_byte);
 
     // Release a
     a.free(buf);
@@ -508,7 +507,6 @@ TEST_CASE("test metal enable/disable cache") {
     // If release successfully, the first byte should be different from the
     // first byte before release
     unsigned char new_first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
-    printf("new first byte: %d\n", new_first_byte);
 
     CHECK_NE(new_first_byte, first_byte);
   }
