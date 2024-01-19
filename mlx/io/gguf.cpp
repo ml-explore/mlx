@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <cstring>
 
-#include "mlx/ops.h"
+#include "mlx/io.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -71,55 +71,62 @@ std::pair<allocator::Buffer, Dtype> extract_tensor_data(gguf_tensor* tensor) {
   return {buffer, float16};
 }
 
-void metadata_value_callback(void *privdata, uint32_t type, union gguf_value *val, uint64_t in_array, uint64_t array_len) {
-  auto *value = (struct metadata*) privdata;
+void metadata_value_callback(
+    void* privdata,
+    uint32_t type,
+    union gguf_value* val,
+    uint64_t in_array,
+    uint64_t array_len) {
+  auto value = static_cast<MetaData*>(privdata);
   // TODO: Support all other types.
   switch (type) {
-        case GGUF_VALUE_TYPE_ARRAY_START:
-          break;
-        case GGUF_VALUE_TYPE_ARRAY_END:
-          break;
-        case GGUF_VALUE_TYPE_UINT8:
-          break;
-        case GGUF_VALUE_TYPE_INT8:
-          break;
-        case GGUF_VALUE_TYPE_UINT16:
-          break;
-        case GGUF_VALUE_TYPE_INT16:
-          break;
-        case GGUF_VALUE_TYPE_UINT32:
-          break;
-        case GGUF_VALUE_TYPE_INT32:
-          break;
-        case GGUF_VALUE_TYPE_FLOAT32:
-          break;
-        case GGUF_VALUE_TYPE_BOOL:
-          break;
-        case GGUF_VALUE_TYPE_STRING:
-          value->string = std::string(val->string.string, (int)val->string.len);
-          break;
-        case GGUF_VALUE_TYPE_UINT64:
-          break;
-        case GGUF_VALUE_TYPE_INT64:
-          break;
-        case GGUF_VALUE_TYPE_FLOAT64:
-          break;
-        default:
-          throw std::runtime_error("[load_gguf] unknown value type");
-          break;
-    }
+    case GGUF_VALUE_TYPE_ARRAY_START:
+      break;
+    case GGUF_VALUE_TYPE_ARRAY_END:
+      break;
+    case GGUF_VALUE_TYPE_UINT8:
+      break;
+    case GGUF_VALUE_TYPE_INT8:
+      break;
+    case GGUF_VALUE_TYPE_UINT16:
+      break;
+    case GGUF_VALUE_TYPE_INT16:
+      break;
+    case GGUF_VALUE_TYPE_UINT32:
+      break;
+    case GGUF_VALUE_TYPE_INT32:
+      break;
+    case GGUF_VALUE_TYPE_FLOAT32:
+      break;
+    case GGUF_VALUE_TYPE_BOOL:
+      break;
+    case GGUF_VALUE_TYPE_STRING:
+      *value =
+          std::string(val->string.string, static_cast<int>(val->string.len));
+      break;
+    case GGUF_VALUE_TYPE_UINT64:
+      break;
+    case GGUF_VALUE_TYPE_INT64:
+      break;
+    case GGUF_VALUE_TYPE_FLOAT64:
+      break;
+    default:
+      throw std::runtime_error("[load_gguf] unknown value type");
+      break;
+  }
 }
 
-std::unordered_map<std::string, metadata> load_metadata(gguf_ctx* ctx) {
-  std::unordered_map<std::string, metadata> metadata_map;
+std::unordered_map<std::string, MetaData> load_meta_data(gguf_ctx* ctx) {
+  std::unordered_map<std::string, MetaData> meta_data;
   gguf_key key;
-  while (gguf_get_key(ctx,&key)) {
+  while (gguf_get_key(ctx, &key)) {
     std::string key_name = std::string(key.name, key.namelen);
-    metadata value;
-    gguf_do_with_value(ctx,key.type,key.val,&value,0,0,metadata_value_callback);
-    metadata_map.insert({key_name, value});
+    MetaData value;
+    gguf_do_with_value(
+        ctx, key.type, key.val, &value, 0, 0, metadata_value_callback);
+    meta_data.insert({key_name, value});
   }
-  return metadata_map;
+  return meta_data;
 }
 
 std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
@@ -140,43 +147,50 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
 }
 
 std::pair<
-std::unordered_map<std::string, array>,
-std::unordered_map<std::string, metadata>> load_gguf(
-    const std::string& file,
-    StreamOrDevice s) {
+    std::unordered_map<std::string, array>,
+    std::unordered_map<std::string, MetaData>>
+load_gguf(const std::string& file, StreamOrDevice s) {
   gguf_ctx* ctx = gguf_open(file.c_str());
   if (!ctx) {
     throw std::runtime_error("[load_gguf] gguf_init failed");
   }
-  const auto& metadata_map = load_metadata(ctx);
-  const auto& array_map = load_arrays(ctx);
+  auto meta_data = load_meta_data(ctx);
+  auto arrays = load_arrays(ctx);
   gguf_close(ctx);
-  return {array_map, metadata_map};
+  return {arrays, meta_data};
 }
 
 void save_gguf(
     std::string file,
     std::unordered_map<std::string, array> array_map,
-    std::unordered_map<std::string, metadata> metadata_map) {
+    std::unordered_map<std::string, MetaData> meta_data /* = {} */) {
   // Add .gguf to file name if it is not there
   if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
     file += ".gguf";
   }
+
   gguf_ctx* ctx = gguf_create(file.c_str(), GGUF_OVERWRITE);
   if (!ctx) {
     throw std::runtime_error("[save_gguf] gguf_create failed");
   }
 
-  for (const auto& [key, value] : metadata_map) {
-    if (value.string.has_value()) {
-      const std::string& str = value.string.value();
-      const size_t size = sizeof(gguf_string) + str.length();
-      gguf_string* val = reinterpret_cast<gguf_string*>(new char[size + 1]);
+  // Save any meta data
+  for (const auto& [key, value] : meta_data) {
+    if (auto pv = std::get_if<std::string>(&value); pv) {
+      const std::string& str = *pv;
+      size_t size = sizeof(gguf_string) + str.length();
+      std::vector<char> val_vec(size + 1);
+      gguf_string* val = reinterpret_cast<gguf_string*>(val_vec.data());
       val->len = str.length();
       memcpy(val->string, str.c_str(), str.length());
       val->string[str.length()] = '\0';
-      gguf_append_kv(ctx, key.c_str(), key.length(), GGUF_VALUE_TYPE_STRING, (void *) val, size);
-      delete[] reinterpret_cast<char*>(val);
+      gguf_append_kv(
+          ctx,
+          key.c_str(),
+          key.length(),
+          GGUF_VALUE_TYPE_STRING,
+          static_cast<void*>(val),
+          size);
     }
     // TODO: serialize other types
   }

@@ -40,14 +40,28 @@ TEST_CASE("test gguf") {
   dict original_weights = {
       {"test", array({1.0f, 2.0f, 3.0f, 4.0f})},
       {"test2", reshape(arange(6), {3, 2})}};
-  std::unordered_map<std::string, metadata> original_metadata;
-  original_metadata.insert({"test_str", {std::nullopt, "my string", std::nullopt}});
+
+  {
+    // Check saving loading just arrays, no metadata
+    save_gguf(file_path, original_weights);
+    auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
+    CHECK_EQ(loaded_metadata.size(), 0);
+    CHECK_EQ(loaded_weights.size(), 2);
+    CHECK_EQ(loaded_weights.count("test"), 1);
+    CHECK_EQ(loaded_weights.count("test2"), 1);
+    for (auto [k, v] : loaded_weights) {
+      CHECK(array_equal(v, original_weights.at(k)).item<bool>());
+    }
+  }
+
+  std::unordered_map<std::string, MetaData> original_metadata;
+  original_metadata.insert({"test_str", "my string"});
 
   save_gguf(file_path, original_weights, original_metadata);
-  const auto& [loaded_weights, loaded_metadata] = load_gguf(file_path);
+  auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
   CHECK_EQ(loaded_metadata.size(), 1);
   CHECK_EQ(loaded_metadata.count("test_str"), 1);
-  CHECK_EQ(loaded_metadata.at("test_str").string, "my string");
+  CHECK_EQ(std::get<std::string>(loaded_metadata.at("test_str")), "my string");
 
   CHECK_EQ(loaded_weights.size(), 2);
   CHECK_EQ(loaded_weights.count("test"), 1);

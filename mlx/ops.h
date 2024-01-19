@@ -1,14 +1,13 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
 #include <optional>
 #include <variant>
 
-#include "array.h"
-#include "device.h"
-#include "io/load.h"
-#include "stream.h"
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/stream.h"
 
 namespace mlx::core {
 
@@ -1040,20 +1039,6 @@ array conv2d(
     int groups = 1,
     StreamOrDevice s = {});
 
-/** Serialization operations */
-
-/** Save array to out stream in .npy format */
-void save(std::shared_ptr<io::Writer> out_stream, array a);
-
-/** Save array to file in .npy format */
-void save(const std::string& file, array a);
-
-/** Load array from reader in .npy format */
-array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
-
-/** Load array from file in .npy format */
-array load(const std::string& file, StreamOrDevice s = {});
-
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
     const array& x,
@@ -1100,39 +1085,6 @@ array outer(const array& a, const array& b, StreamOrDevice s = {});
 /** Compute the inner product of two vectors. */
 array inner(const array& a, const array& b, StreamOrDevice s = {});
 
-/** Load array map from .safetensors file format */
-std::unordered_map<std::string, array> load_safetensors(
-    std::shared_ptr<io::Reader> in_stream,
-    StreamOrDevice s = {});
-std::unordered_map<std::string, array> load_safetensors(
-    const std::string& file,
-    StreamOrDevice s = {});
-
-void save_safetensors(
-    std::shared_ptr<io::Writer> in_stream,
-    std::unordered_map<std::string, array>);
-void save_safetensors(
-    const std::string& file,
-    std::unordered_map<std::string, array>);
-
-/** Load metadata and array map from .gguf file format */
-
-struct metadata {
-  std::optional<array> array;
-  std::optional<std::string> string;
-  std::optional<std::vector<metadata>> list;
-};
-
-std::pair<
-    std::unordered_map<std::string, array>,
-    std::unordered_map<std::string, metadata>>
-load_gguf(const std::string& file, StreamOrDevice s = {});
-
-void save_gguf(
-    std::string file,
-    std::unordered_map<std::string, array> array_map,
-    std::unordered_map<std::string, metadata> metadata_map);
-
 /** Compute D = beta * C + alpha * (A @ B) */
 array addmm(
     array c,
@@ -1141,4 +1093,5 @@ array addmm(
     const float& alpha = 1.f,
     const float& beta = 1.f,
     StreamOrDevice s = {});
+
 } // namespace mlx::core
