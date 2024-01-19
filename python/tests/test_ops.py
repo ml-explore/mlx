@@ -351,6 +351,14 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.isinf(0 * mx.array(float("inf"))).tolist(), False)
 
+        x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
+        result = mx.isinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
+        x = mx.array([-32768, 0, 32767], dtype=mx.int16)
+        result = mx.isinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
             for diag in [-1, 0, 1, -2]:
@@ -416,6 +424,14 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.isposinf(0 * mx.array(float("inf"))).tolist(), False)
 
+        x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
+        result = mx.isposinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
+        x = mx.array([-32768, 0, 32767], dtype=mx.int16)
+        result = mx.isposinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
     def test_isneginf(self):
         x = mx.array([0.0, float("-inf")])
         self.assertEqual(mx.isneginf(x).tolist(), [False, True])
@@ -430,6 +446,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(mx.isneginf(x).tolist(), [False, True])
 
         self.assertEqual(mx.isneginf(0 * mx.array(float("inf"))).tolist(), False)
+
+        x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
+        result = mx.isneginf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
+        x = mx.array([-32768, 0, 32767], dtype=mx.int16)
+        result = mx.isneginf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
 
     def test_round(self):
         # float

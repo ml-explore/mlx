@@ -1105,18 +1105,30 @@ array array_equal(
 }
 
 array isnan(const array& a, StreamOrDevice s /* = {} */) {
+  if (is_integral(a.dtype())) {
+    return full(a.shape(), false, bool_, s);
+  }
   return not_equal(a, a, s);
 }
 
 array isinf(const array& a, StreamOrDevice s /* = {} */) {
+  if (is_integral(a.dtype())) {
+    return full(a.shape(), false, bool_, s);
+  }
   return equal(a, array(std::numeric_limits<float>::infinity(), a.dtype()), s);
 }
 
 array isposinf(const array& a, StreamOrDevice s) {
+  if (is_integral(a.dtype())) {
+    return full(a.shape(), false, bool_, s);
+  }
   return equal(a, array(std::numeric_limits<float>::infinity(), a.dtype()), s);
 }
 
 array isneginf(const array& a, StreamOrDevice s) {
+  if (is_integral(a.dtype())) {
+    return full(a.shape(), false, bool_, s);
+  }
   return equal(a, array(-std::numeric_limits<float>::infinity(), a.dtype()), s);
 }
 
