@@ -3,8 +3,8 @@
 #include <json.hpp>
 #include <stack>
 
+#include "mlx/io.h"
 #include "mlx/io/load.h"
-#include "mlx/ops.h"
 #include "mlx/primitives.h"
 
 using json = nlohmann::json;
