@@ -116,17 +116,17 @@ void metadata_value_callback(
   }
 }
 
-std::unordered_map<std::string, MetaData> load_meta_data(gguf_ctx* ctx) {
-  std::unordered_map<std::string, MetaData> meta_data;
+std::unordered_map<std::string, MetaData> load_metadata(gguf_ctx* ctx) {
+  std::unordered_map<std::string, MetaData> metadata;
   gguf_key key;
   while (gguf_get_key(ctx, &key)) {
     std::string key_name = std::string(key.name, key.namelen);
     MetaData value;
     gguf_do_with_value(
         ctx, key.type, key.val, &value, 0, 0, metadata_value_callback);
-    meta_data.insert({key_name, value});
+    metadata.insert({key_name, value});
   }
-  return meta_data;
+  return metadata;
 }
 
 std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
@@ -154,16 +154,16 @@ load_gguf(const std::string& file, StreamOrDevice s) {
   if (!ctx) {
     throw std::runtime_error("[load_gguf] gguf_init failed");
   }
-  auto meta_data = load_meta_data(ctx);
+  auto metadata = load_metadata(ctx);
   auto arrays = load_arrays(ctx);
   gguf_close(ctx);
-  return {arrays, meta_data};
+  return {arrays, metadata};
 }
 
 void save_gguf(
     std::string file,
     std::unordered_map<std::string, array> array_map,
-    std::unordered_map<std::string, MetaData> meta_data /* = {} */) {
+    std::unordered_map<std::string, MetaData> metadata /* = {} */) {
   // Add .gguf to file name if it is not there
   if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
     file += ".gguf";
@@ -175,7 +175,7 @@ void save_gguf(
   }
 
   // Save any meta data
-  for (const auto& [key, value] : meta_data) {
+  for (const auto& [key, value] : metadata) {
     if (auto pv = std::get_if<std::string>(&value); pv) {
       const std::string& str = *pv;
       size_t size = sizeof(gguf_string) + str.length();

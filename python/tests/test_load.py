@@ -117,6 +117,39 @@ class TestLoad(mlx_tests.MLXTestCase):
                             mx.array_equal(load_dict["test"], save_dict["test"])
                         )
 
+    def test_save_and_load_gguf_with_metadata(self):
+        if not os.path.isdir(self.test_dir):
+            os.mkdir(self.test_dir)
+
+        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
+        metadata = {}
+
+        # Empty works
+        mx.save_gguf(save_file_mlx, save_dict, metadata)
+
+        # Loads without the metadata
+        load_dict = mx.load(save_file_mlx)
+        self.assertTrue("test" in load_dict)
+        self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+
+        # Loads empty metadata
+        load_dict, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        self.assertTrue("test" in load_dict)
+        self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+        self.assertEqual(len(meta_load_dict), 0)
+
+        metadata = {"meta": "data"}
+        mx.save_gguf(save_file_mlx, save_dict, metadata)
+        load_dict, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
+        self.assertTrue("test" in load_dict)
+        self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
+        self.assertEqual(len(meta_load_dict), 1)
+        self.assertTrue("meta" in meta_load_dict)
+        self.assertEqual(meta_load_dict["meta"], "data")
+
+        # TODO add tests for more meta data types
+
     def test_save_and_load_fs(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)

@@ -1867,11 +1867,11 @@ void init_ops(py::module_& m) {
         isposinf(a: array, stream: Union[None, Stream, Device] = None) -> array
 
         Return a boolean array indicating which elements are positive infinity.
-        
+
         Args:
             a (array): Input array.
             stream (Union[None, Stream, Device]): Optional stream or device.
-        
+
         Returns:
             array: The boolean array indicating which elements are positive infinity.
       )pbdoc");
@@ -1886,11 +1886,11 @@ void init_ops(py::module_& m) {
         isneginf(a: array, stream: Union[None, Stream, Device] = None) -> array
 
         Return a boolean array indicating which elements are negative infinity.
-        
+
         Args:
             a (array): Input array.
             stream (Union[None, Stream, Device]): Optional stream or device.
-        
+
         Returns:
             array: The boolean array indicating which elements are negative infinity.
       )pbdoc");
@@ -3117,10 +3117,11 @@ void init_ops(py::module_& m) {
       "file"_a,
       py::pos_only(),
       "format"_a = none,
+      "return_metadata"_a = false,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        load(file: str, /, format: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
+        load(file: str, /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
 
         Load array(s) from a binary file.
 
@@ -3131,10 +3132,15 @@ void init_ops(py::module_& m) {
             format (str, optional): Format of the file. If ``None``, the format
               is inferred from the file extension. Supported formats: ``npy``,
               ``npz``, and ``safetensors``. Default: ``None``.
+            return_metadata (bool, optional): Load the metadata for formats which
+              support matadata. The metadata will be returned as an additional
+              dictionary.
         Returns:
             result (array, dict):
                 A single array if loading from a ``.npy`` file or a dict mapping
                 names to arrays if loading from a ``.npz`` or ``.safetensors`` file.
+                If ``return_metadata` is ``True`` an additional dictionary of metadata
+                will be returned.
 
         Warning:
 
@@ -3164,7 +3170,7 @@ void init_ops(py::module_& m) {
       &mlx_save_gguf_helper,
       "file"_a,
       "arrays"_a,
-      "metadata"_a,
+      "metadata"_a = none,
       R"pbdoc(
         save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str, Union[array, string, list]])
 
@@ -3176,7 +3182,9 @@ void init_ops(py::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
-            metadata (dict(str, Union[array,string,list])): The dictionary of metadata to be saved.
+            metadata (dict(str, Union[array, string, list])): The dictionary of
+               metadata to be saved. The values can be an arbitrarily nested list of
+               :obj:`array` or :obj:`string`.
       )pbdoc");
   m.def(
       "where",
@@ -3501,7 +3509,7 @@ void init_ops(py::module_& m) {
             c (array): Input array or scalar.
             a (array): Input array or scalar.
             b (array): Input array or scalar.
-            alpha (float, optional): Scaling factor for the 
+            alpha (float, optional): Scaling factor for the
                 matrix product of ``a`` and ``b`` (default: ``1``)
             beta (float, optional): Scaling factor for ``c`` (default: ``1``)
 
