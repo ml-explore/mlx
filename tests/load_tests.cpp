@@ -87,6 +87,113 @@ TEST_CASE("test gguf") {
   }
 }
 
+TEST_CASE("test gguf metadata") {
+  std::string file_path = get_temp_file("test_arr.gguf");
+  using dict = std::unordered_map<std::string, array>;
+  dict original_weights = {
+      {"test", array({1.0f, 2.0f, 3.0f, 4.0f})},
+      {"test2", reshape(arange(6), {3, 2})}};
+
+  // Scalar array
+  {
+    std::unordered_map<std::string, MetaData> original_metadata;
+    original_metadata.insert({"test_arr", array(1.0)});
+    save_gguf(file_path, original_weights, original_metadata);
+
+    auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
+    CHECK_EQ(loaded_metadata.size(), 1);
+    CHECK_EQ(loaded_metadata.count("test_arr"), 1);
+
+    auto arr = std::get<array>(loaded_metadata.at("test_arr"));
+    CHECK_EQ(arr.item<float>(), 1.0f);
+  }
+
+  // 1D Array
+  {
+    std::unordered_map<std::string, MetaData> original_metadata;
+    auto arr = array({1.0, 2.0});
+    original_metadata.insert({"test_arr", arr});
+    save_gguf(file_path, original_weights, original_metadata);
+
+    auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
+    CHECK_EQ(loaded_metadata.size(), 1);
+    CHECK_EQ(loaded_metadata.count("test_arr"), 1);
+
+    auto loaded_arr = std::get<array>(loaded_metadata.at("test_arr"));
+    CHECK(array_equal(arr, loaded_arr).item<bool>());
+
+    // Preserves dims
+    arr = array({1.0});
+    original_metadata["test_arr"] = arr;
+    save_gguf(file_path, original_weights, original_metadata);
+
+    std::tie(loaded_weights, loaded_metadata) = load_gguf(file_path);
+    CHECK_EQ(loaded_metadata.size(), 1);
+    CHECK_EQ(loaded_metadata.count("test_arr"), 1);
+
+    loaded_arr = std::get<array>(loaded_metadata.at("test_arr"));
+    CHECK(array_equal(arr, loaded_arr).item<bool>());
+  }
+
+  // > 1D array throws
+  {
+    std::unordered_map<std::string, MetaData> original_metadata;
+    original_metadata.insert({"test_arr", array({1.0}, {1, 1})});
+    CHECK_THROWS(save_gguf(file_path, original_weights, original_metadata));
+  }
+
+  // empty array throws
+  {
+    std::unordered_map<std::string, MetaData> original_metadata;
+    original_metadata.insert({"test_arr", array({})});
+    CHECK_THROWS(save_gguf(file_path, original_weights, original_metadata));
+  }
+
+  // vector of string
+  {
+    std::unordered_map<std::string, MetaData> original_metadata;
+    std::vector<std::string> data = {"data1", "data2", "data1234"};
+    original_metadata.insert({"meta", data});
+    save_gguf(file_path, original_weights, original_metadata);
+
+    auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
+    CHECK_EQ(loaded_metadata.size(), 1);
+    CHECK_EQ(loaded_metadata.count("meta"), 1);
+    auto& strs = std::get<std::vector<std::string>>(loaded_metadata["meta"]);
+    CHECK_EQ(strs.size(), 3);
+    for (int i = 0; i < strs.size(); ++i) {
+      CHECK_EQ(strs[i], data[i]);
+    }
+  }
+
+  // vector of string, string, scalar, and array
+  {
+    std::unordered_map<std::string, MetaData> original_metadata;
+    std::vector<std::string> data = {"data1", "data2", "data1234"};
+    original_metadata.insert({"meta1", data});
+    original_metadata.insert({"meta2", array(2.5)});
+    original_metadata.insert({"meta3", array({1, 2, 3})});
+    original_metadata.insert({"meta4", "last"});
+    save_gguf(file_path, original_weights, original_metadata);
+
+    auto [loaded_weights, loaded_metadata] = load_gguf(file_path);
+    CHECK_EQ(loaded_metadata.size(), 4);
+    auto& strs = std::get<std::vector<std::string>>(loaded_metadata["meta1"]);
+    CHECK_EQ(strs.size(), 3);
+    for (int i = 0; i < strs.size(); ++i) {
+      CHECK_EQ(strs[i], data[i]);
+    }
+    auto& arr = std::get<array>(loaded_metadata["meta2"]);
+    CHECK_EQ(arr.item<float>(), 2.5);
+
+    arr = std::get<array>(loaded_metadata["meta3"]);
+    CHECK(array_equal(arr, array({1, 2, 3})).item<bool>());
+
+    auto& str = std::get<std::string>(loaded_metadata["meta4"]);
+    CHECK_EQ(str, "last");
+  }
+}
+
 TEST_CASE("test single array serialization") {
   // Basic test
   {
