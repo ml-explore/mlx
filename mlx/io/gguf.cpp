@@ -15,8 +15,8 @@ extern "C" {
 
 namespace mlx::core {
 
-// https://github.com/antirez/gguf-tools/blob/main/gguflib.h#L102-L108
-constexpr int gguf_array_header = 12;
+// https://github.com/antirez/gguf-tools/blob/af7d88d808a7608a33723fba067036202910acb3/gguflib.h#L102-L108
+constexpr int gguf_array_header_size = 12;
 
 std::optional<uint32_t> dtype_to_gguf_tensor_type(const Dtype& dtype) {
   switch (dtype) {
@@ -120,8 +120,8 @@ void set_mx_value_from_gguf(
       value = array(val->float64, float32);
       break;
     case GGUF_VALUE_TYPE_ARRAY: {
-      ctx->off += gguf_array_header; // Skip header
-      char* data = reinterpret_cast<char*>(val) + gguf_array_header;
+      ctx->off += gguf_array_header_size; // Skip header
+      char* data = reinterpret_cast<char*>(val) + gguf_array_header_size;
       auto size = static_cast<int>(val->array.len);
       if (val->array.type == GGUF_VALUE_TYPE_ARRAY) {
         throw std::invalid_argument(
@@ -172,6 +172,9 @@ void set_mx_value_from_gguf(
         case GGUF_VALUE_TYPE_FLOAT64:
           value = array(reinterpret_cast<double*>(data), {size}, float32);
           break;
+        default:
+          throw std::runtime_error(
+              "[load_gguf] Multiple levels of nested arrays are not supported.");
       }
       break;
     }
@@ -180,7 +183,7 @@ void set_mx_value_from_gguf(
       break;
   }
   if (type == GGUF_VALUE_TYPE_STRING) {
-    ctx->off += (8 + std::get<std::string>(value).size());
+    ctx->off += (sizeof(gguf_string) + std::get<std::string>(value).size());
   } else if (auto pv = std::get_if<array>(&value); pv) {
     ctx->off += pv->nbytes();
   }
@@ -234,12 +237,15 @@ void append_kv_array(
     array& val,
     uint32_t gguf_type) {
   if (val.ndim() == 1) {
-    size_t gguf_size = val.nbytes() + gguf_array_header;
+    size_t gguf_size = val.nbytes() + gguf_array_header_size;
     std::vector<char> val_vec(gguf_size);
     gguf_value* gguf_val = reinterpret_cast<gguf_value*>(val_vec.data());
     gguf_val->array.type = gguf_type;
     gguf_val->array.len = val.size();
-    memcpy(val_vec.data() + gguf_array_header, val.data<char>(), val.nbytes());
+    memcpy(
+        val_vec.data() + gguf_array_header_size,
+        val.data<char>(),
+        val.nbytes());
     gguf_append_kv(
         ctx,
         key.c_str(),
@@ -298,12 +304,12 @@ void save_gguf(
           str_vec.begin(), str_vec.end(), 0, [](size_t accum, const auto& s) {
             return accum + s.size();
           });
-      mem_size += str_vec.size() * sizeof(gguf_string) + gguf_array_header;
+      mem_size += str_vec.size() * sizeof(gguf_string) + gguf_array_header_size;
       std::vector<char> val_vec(mem_size);
       gguf_value* val = reinterpret_cast<gguf_value*>(val_vec.data());
       val->array.type = GGUF_VALUE_TYPE_STRING;
       val->array.len = str_vec.size();
-      auto str_ptr = val_vec.data() + gguf_array_header;
+      auto str_ptr = val_vec.data() + gguf_array_header_size;
       for (auto& str : str_vec) {
         string_to_gguf(str_ptr, str);
         str_ptr += str.length() + sizeof(gguf_string);

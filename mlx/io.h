@@ -41,7 +41,7 @@ void save_safetensors(
 using MetaData =
     std::variant<std::monostate, array, std::string, std::vector<std::string>>;
 
-/** Load metadata and array map from .gguf file format */
+/** Load array map and metadata from .gguf file format */
 std::pair<
     std::unordered_map<std::string, array>,
     std::unordered_map<std::string, MetaData>>

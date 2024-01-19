@@ -54,6 +54,7 @@ TEST_CASE("test gguf") {
     }
   }
 
+  // Test saving and loading string metadata
   std::unordered_map<std::string, MetaData> original_metadata;
   original_metadata.insert({"test_str", "my string"});
 

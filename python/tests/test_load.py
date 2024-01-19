@@ -117,7 +117,7 @@ class TestLoad(mlx_tests.MLXTestCase):
                             mx.array_equal(load_dict["test"], save_dict["test"])
                         )
 
-    def test_save_and_load_gguf_with_metadata(self):
+    def test_save_and_load_gguf_metadata_basic(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
 
@@ -139,6 +139,7 @@ class TestLoad(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(load_dict["test"], save_dict["test"]))
         self.assertEqual(len(meta_load_dict), 0)
 
+        # Loads string metadata
         metadata = {"meta": "data"}
         mx.save_gguf(save_file_mlx, save_dict, metadata)
         load_dict, meta_load_dict = mx.load(save_file_mlx, return_metadata=True)
@@ -148,6 +149,14 @@ class TestLoad(mlx_tests.MLXTestCase):
         self.assertTrue("meta" in meta_load_dict)
         self.assertEqual(meta_load_dict["meta"], "data")
 
+    def test_save_and_load_gguf_metadata_arrays(self):
+        if not os.path.isdir(self.test_dir):
+            os.mkdir(self.test_dir)
+
+        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
+
+        # Test scalars and one dimensional arrays
         for t in [
             mx.uint8,
             mx.int8,
@@ -174,6 +183,13 @@ class TestLoad(mlx_tests.MLXTestCase):
                 arr = mx.array(1, t)
                 metadata = {"meta": arr}
                 mx.save_gguf(save_file_mlx, save_dict, metadata)
+
+    def test_save_and_load_gguf_metadata_mixed(self):
+        if not os.path.isdir(self.test_dir):
+            os.mkdir(self.test_dir)
+
+        save_file_mlx = os.path.join(self.test_dir, f"mlx_gguf_with_metadata.gguf")
+        save_dict = {"test": mx.ones((4, 4), dtype=mx.int32)}
 
         # Test string and array
         arr = mx.array(1.5)
