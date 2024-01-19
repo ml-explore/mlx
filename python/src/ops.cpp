@@ -3172,7 +3172,7 @@ void init_ops(py::module_& m) {
       "arrays"_a,
       "metadata"_a = none,
       R"pbdoc(
-        save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str, Union[array, string, list]])
+        save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str, Union[array, str, List[str]]])
 
         Save array(s) to a binary file in ``.gguf`` format.
 
@@ -3182,9 +3182,9 @@ void init_ops(py::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
-            metadata (dict(str, Union[array, string, list])): The dictionary of
-               metadata to be saved. The values can be an arbitrarily nested list of
-               :obj:`array` or :obj:`string`.
+            metadata (dict(str, Union[array, str, list(str)])): The dictionary of
+               metadata to be saved. The values can be a scalar or 1D obj:`array`,
+               a :obj:`str`, or a :obj:`list` of :obj:`str`.
       )pbdoc");
   m.def(
       "where",
