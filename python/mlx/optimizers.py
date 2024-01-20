@@ -422,6 +422,10 @@ class Adamax(Adam):
     def __init__(
         self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
     ):
+        if not 0.0 <= learning_rate:
+            raise  ValueError(f"Learning rate should be >=0, {self.learning_rate} was provided instead")
+        if not 0.0 <= eps:
+            raise ValueError(f"Epsilon value should be >=0, {self.eps} was provided instead")
         super().__init__(learning_rate, betas, eps)
 
     def apply_single(
@@ -447,7 +451,7 @@ class Adamax(Adam):
 class Lion(Optimizer):
     r"""Implementation of the Lion optimizer [1].
 
-    Since updates are computed through the sign operation, they tend to
+    Since updates are computed through the sign operation, they ten to
     have larger norm than for other optimizers such as SGD and Adam.
     We recommend a learning rate that is 3-10x smaller than AdamW and a
     weight decay 3-10x larger than AdamW to maintain the strength
@@ -498,3 +502,5 @@ class Lion(Optimizer):
         if weight_decay > 0:
             parameter = (1 - lr * weight_decay) * parameter
         return parameter - lr * mx.sign(c)
+
+
