@@ -426,6 +426,10 @@ class Adamax(Adam):
             raise ValueError(f"Learning rate should be >=0, {self.learning_rate} was provided instead")
         if not 0.0 <= eps:
             raise ValueError(f"Epsilon value should be >=0, {self.eps} was provided instead")
+        if not 0.0 <= betas[0] <= 1.0:
+            raise ValueError(f"Beta parameter at index 0 should be between 1 and 0, {self.betas[0]} was provided instead")
+        if not 0.0 <= betas[1] <= 1.0:
+            raise ValueError(f"Beta parameter at index 1 should be between 1 and 0, {self.betas[1]} was provided instead")
         super().__init__(learning_rate, betas, eps)
 
     def apply_single(
