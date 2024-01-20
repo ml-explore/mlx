@@ -385,6 +385,10 @@ class TestAutograd(mlx_tests.MLXTestCase):
         g = mx.grad(lambda x: x**2)(x)
         self.assertEqual(g.item(), 0.0)
 
+        x = mx.array(0.0)
+        g = mx.grad(lambda x: x**1.5)(x)
+        self.assertEqual(g.item(), 0.0)
+
         x = mx.array(2.0)
         g = mx.grad(lambda x: x**2)(x)
         self.assertAlmostEqual(g.item(), 4.0)
