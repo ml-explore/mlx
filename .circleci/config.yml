@@ -26,6 +26,7 @@ jobs:
           command: |
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev
@@ -34,6 +35,10 @@ jobs:
           command: |
             CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py build_ext --inplace
             CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py develop
+      - run:
+          name: Generate stubs
+          command: |
+            python3 setup.py generate_stubs
       - run:
           name: Run the python tests
           command: |
@@ -65,6 +70,7 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install torch
             pip install tensorflow
@@ -76,6 +82,12 @@ jobs:
             conda activate runner-env
             CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py build_ext --inplace
             CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py develop
+      - run:
+          name: Generate stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
       - run:
           name: Run the python tests
           command: |
@@ -121,10 +133,30 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install twine
       - run:
-          name: Build package
+          name: Build python package
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              PYPI_RELEASE=1 \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py build_ext
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              PYPI_RELEASE=1 \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py install
+      - run:
+          name: Generate stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
+      - run:
+          name: Publish python package
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env
@@ -157,10 +189,30 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install twine
       - run:
-          name: Build package
+          name: Build python package
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              DEV_RELEASE=1 \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py build_ext
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              DEV_RELEASE=1 \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py install
+      - run:
+          name: Generate stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
+      - run:
+          name: Publish python package
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env
@@ -193,10 +245,28 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install twine
       - run:
-          name: Build package
+          name: Build python package
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py build_ext
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py install
+      - run:
+          name: Generate stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
+      - run:
+          name: Publish python package
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env

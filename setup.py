@@ -148,7 +148,7 @@ if __name__ == "__main__":
         where="python", exclude=["src", "tests", "tests.*"]
     )
     package_dir = {"": "python"}
-    package_data = {"mlx": ["lib/*", "include/*", "share/*"]}
+    package_data = {"mlx": ["lib/*", "include/*", "share/*"], "mlx.core": ["*.pyi"]}
 
     setup(
         name="mlx",
