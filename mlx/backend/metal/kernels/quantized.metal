@@ -543,6 +543,9 @@ instantiate_qmv_types(128, 8)
 instantiate_qmv_types( 64, 2)
 instantiate_qmv_types( 64, 4)
 instantiate_qmv_types( 64, 8)
+instantiate_qmv_types( 32, 2)
+instantiate_qmv_types( 32, 4)
+instantiate_qmv_types( 32, 8)
 
 #define instantiate_qvm(name, itype, group_size, bits) \
   template [[host_name("qvm_" #name "_gs_" #group_size "_b_" #bits)]] \
@@ -570,6 +573,9 @@ instantiate_qvm_types(128, 8)
 instantiate_qvm_types( 64, 2)
 instantiate_qvm_types( 64, 4)
 instantiate_qvm_types( 64, 8)
+instantiate_qvm_types( 32, 2)
+instantiate_qvm_types( 32, 4)
+instantiate_qvm_types( 32, 8)
 
 #define instantiate_qmm_t(name, itype, group_size, bits, aligned_N) \
   template [[host_name("qmm_t_" #name "_gs_" #group_size "_b_" #bits "_alN_" #aligned_N)]] \
@@ -601,6 +607,9 @@ instantiate_qmm_t_types(128, 8)
 instantiate_qmm_t_types( 64, 2)
 instantiate_qmm_t_types( 64, 4)
 instantiate_qmm_t_types( 64, 8)
+instantiate_qmm_t_types( 32, 2)
+instantiate_qmm_t_types( 32, 4)
+instantiate_qmm_t_types( 32, 8)
 
 #define instantiate_qmm_n(name, itype, group_size, bits) \
   template [[host_name("qmm_n_" #name "_gs_" #group_size "_b_" #bits)]] \
@@ -629,3 +638,6 @@ instantiate_qmm_n_types(128, 8)
 instantiate_qmm_n_types( 64, 2)
 instantiate_qmm_n_types( 64, 4)
 instantiate_qmm_n_types( 64, 8)
+instantiate_qmm_n_types( 32, 2)
+instantiate_qmm_n_types( 32, 4)
+instantiate_qmm_n_types( 32, 8)

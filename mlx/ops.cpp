@@ -2845,7 +2845,7 @@ std::tuple<array, array, array> quantize(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
-  if (group_size != 64 && group_size != 128) {
+  if (group_size != 32 && group_size != 64 && group_size != 128) {
     std::ostringstream msg;
     msg << "[quantize] The requested group size " << group_size
         << " is not supported. The supported group sizes are 64 and 128.";
