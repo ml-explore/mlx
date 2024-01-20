@@ -422,6 +422,10 @@ class Adamax(Adam):
     def __init__(
         self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
     ):
+        if not 0.0 <= learning_rate:
+            raise ValueError(f"Learning rate should be >=0, {self.learning_rate} was provided instead")
+        if not 0.0 <= eps:
+            raise ValueError(f"Epsilon value should be >=0, {self.eps} was provided instead")
         super().__init__(learning_rate, betas, eps)
 
     def apply_single(
