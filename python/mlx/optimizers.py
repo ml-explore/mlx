@@ -422,15 +422,11 @@ class Adamax(Adam):
     def __init__(
         self, learning_rate: float, betas: List[float] = [0.9, 0.999], eps: float = 1e-8
     ):
+        super().__init__(learning_rate, betas, eps)
         if not 0.0 <= learning_rate:
             raise ValueError(f"Learning rate should be >=0, {self.learning_rate} was provided instead")
         if not 0.0 <= eps:
             raise ValueError(f"Epsilon value should be >=0, {self.eps} was provided instead")
-        if not 0.0 <= betas[0] <= 1.0:
-            raise ValueError(f"Beta parameter at index 0 should be between 1 and 0, {self.betas[0]} was provided instead")
-        if not 0.0 <= betas[1] <= 1.0:
-            raise ValueError(f"Beta parameter at index 1 should be between 1 and 0, {self.betas[1]} was provided instead")
-        super().__init__(learning_rate, betas, eps)
 
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
