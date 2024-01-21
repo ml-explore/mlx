@@ -140,7 +140,6 @@ class TestLosses(mlx_tests.MLXTestCase):
                 probs, targets, with_logits=False, reduction="none"
             )
             expected_none = mx.array([0.693147, 0.916291, 0.356675, 0.223144])
-            print(losses_none, expected_none)
             self.assertTrue(mx.allclose(losses_none, expected_none))
 
             # Test with reduction 'mean'
