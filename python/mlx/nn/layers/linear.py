@@ -32,7 +32,7 @@ class Linear(Module):
         y = x W^\top + b
 
     where:
-    where :math:`W` has shape ``[output_dims, input_dims]`` and :math:`b` has shape ``[output_dims]``.
+    :math:`W` has shape ``[output_dims, input_dims]`` and :math:`b` has shape ``[output_dims]``.
 
     The values are initialized from the uniform distribution :math:`\mathcal{U}(-{k}, {k})`,
     where :math:`k = \frac{1}{\sqrt{D_i}}` and :math:`D_i` is equal to ``input_dims``.
