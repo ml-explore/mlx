@@ -1,6 +1,8 @@
 import math
+
 import mlx.core as mx
 from mlx.nn.layers.base import Module
+
 
 class LazyLinear(Module):
     def __init__(self, output_dims: int, bias: bool = True) -> None:
