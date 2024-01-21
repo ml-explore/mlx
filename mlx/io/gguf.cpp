@@ -206,19 +206,12 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
   while (gguf_get_tensor(ctx, &tensor)) {
-    std::string name = std::string(tensor.name, tensor.namelen);
-    const std::string weight_suffix = ".weight";
-    const size_t weight_len = weight_suffix.length();
-    const bool ends_with_weight = (name.length() > weight_len) &&
-        (name.compare(name.length() - weight_len, weight_len, weight_suffix) ==
-         0);
-    if (ends_with_weight && tensor.type == GGUF_TYPE_Q4_0) {
-      extract_q4_0_data(&array_map, tensor);
-    } else if (ends_with_weight && tensor.type == GGUF_TYPE_Q4_1) {
-      extract_q4_1_data(&array_map, tensor);
-    } else if (ends_with_weight && tensor.type == GGUF_TYPE_Q8_0) {
-      extract_q8_0_data(&array_map, tensor);
+    if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
+        tensor.type == GGUF_TYPE_Q8_0) {
+      gguf_load_quantized(array_map, tensor);
     } else {
+      std::string name = std::string(tensor.name, tensor.namelen);
+
       const auto& [data, dtype] = extract_tensor_data(&tensor);
       array loaded_array = array(data, get_shape(tensor), dtype);
       array_map.insert({name, loaded_array});

@@ -10,7 +10,7 @@ namespace mlx::core {
 // Extracts (weight, scales, biases) from Q4_0 tensors.
 // Data layout is: |16 bit scale|32 x 4bit weights|.
 void extract_q4_0_data(
-    std::unordered_map<std::string, array>* a,
+    std::unordered_map<std::string, array>& a,
     const gguf_tensor& tensor) {
   std::string name = std::string(tensor.name, tensor.namelen);
   const std::vector<int> shape = get_shape(tensor);
@@ -56,7 +56,7 @@ void extract_q4_0_data(
   std::vector<int> weights_shape = shape;
   weights_shape[shape.size() - 1] =
       weights_shape[shape.size() - 1] / weights_per_byte / 4;
-  a->insert({name, array(weights_buffer, weights_shape, uint32)});
+  a.insert({name, array(weights_buffer, weights_shape, uint32)});
 
   const std::string weight_suffix = ".weight";
   const std::string name_prefix =
@@ -67,17 +67,17 @@ void extract_q4_0_data(
 
   const std::string scales_name =
       (std::ostringstream() << name_prefix << ".scales").str();
-  a->insert({scales_name, array(scales_buffer, scale_bias_shape, float16)});
+  a.insert({scales_name, array(scales_buffer, scale_bias_shape, float16)});
 
   const std::string biases_name =
       (std::ostringstream() << name_prefix << ".biases").str();
-  a->insert({biases_name, array(biases_buffer, scale_bias_shape, float16)});
+  a.insert({biases_name, array(biases_buffer, scale_bias_shape, float16)});
 }
 
 // Extracts (weight, scales, biases) from Q4_1 tensors.
 // Data layout is: |16 bit scale|32 x 4bit weights|.
 void extract_q4_1_data(
-    std::unordered_map<std::string, array>* a,
+    std::unordered_map<std::string, array>& a,
     const gguf_tensor& tensor) {
   std::string name = std::string(tensor.name, tensor.namelen);
   const std::vector<int> shape = get_shape(tensor);
@@ -125,7 +125,7 @@ void extract_q4_1_data(
   std::vector<int> weights_shape = shape;
   weights_shape[shape.size() - 1] =
       weights_shape[shape.size() - 1] / weights_per_byte / 4;
-  a->insert({name, array(weights_buffer, weights_shape, uint32)});
+  a.insert({name, array(weights_buffer, weights_shape, uint32)});
 
   const std::string weight_suffix = ".weight";
   const std::string name_prefix =
@@ -136,17 +136,17 @@ void extract_q4_1_data(
 
   const std::string scales_name =
       (std::ostringstream() << name_prefix << ".scales").str();
-  a->insert({scales_name, array(scales_buffer, scale_bias_shape, float16)});
+  a.insert({scales_name, array(scales_buffer, scale_bias_shape, float16)});
 
   const std::string biases_name =
       (std::ostringstream() << name_prefix << ".biases").str();
-  a->insert({biases_name, array(biases_buffer, scale_bias_shape, float16)});
+  a.insert({biases_name, array(biases_buffer, scale_bias_shape, float16)});
 }
 
 // Extracts (weight, scales, biases) from Q8_0 tensors.
 // Data layout is: |16 bit scale|32 x 8bit weights|.
 void extract_q8_0_data(
-    std::unordered_map<std::string, array>* a,
+    std::unordered_map<std::string, array>& a,
     const gguf_tensor& tensor) {
   std::string name = std::string(tensor.name, tensor.namelen);
   const std::vector<int> shape = get_shape(tensor);
@@ -183,7 +183,7 @@ void extract_q8_0_data(
   std::vector<int> weights_shape = shape;
   weights_shape[shape.size() - 1] =
       weights_shape[shape.size() - 1] / weights_per_byte / 4;
-  a->insert({name, array(weights_buffer, weights_shape, uint32)});
+  a.insert({name, array(weights_buffer, weights_shape, uint32)});
 
   const std::string weight_suffix = ".weight";
   const std::string name_prefix =
@@ -194,11 +194,23 @@ void extract_q8_0_data(
 
   const std::string scales_name =
       (std::ostringstream() << name_prefix << ".scales").str();
-  a->insert({scales_name, array(scales_buffer, scale_bias_shape, float16)});
+  a.insert({scales_name, array(scales_buffer, scale_bias_shape, float16)});
 
   const std::string biases_name =
       (std::ostringstream() << name_prefix << ".biases").str();
-  a->insert({biases_name, array(biases_buffer, scale_bias_shape, float16)});
+  a.insert({biases_name, array(biases_buffer, scale_bias_shape, float16)});
+}
+
+void gguf_load_quantized(
+    std::unordered_map<std::string, array>& a,
+    const gguf_tensor& tensor) {
+  if (tensor.type == GGUF_TYPE_Q4_0) {
+    extract_q4_0_data(a, tensor);
+  } else if (tensor.type == GGUF_TYPE_Q4_1) {
+    extract_q4_1_data(a, tensor);
+  } else if (tensor.type == GGUF_TYPE_Q8_0) {
+    extract_q8_0_data(a, tensor);
+  }
 }
 
 } // namespace mlx::core
