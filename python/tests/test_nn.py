@@ -150,6 +150,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
         outputs = layer(inputs1, inputs2)
         self.assertEqual(tuple(outputs.shape), (10, 6))
+        
+    def test_lazy_linear(self):
+        inputs = mx.zeros((10, 4))
+        layer = nn.LazyLinear(output_dims=8)
+        outputs = layer(inputs)
+        self.assertEqual(tuple(outputs.shape), (10, 8))
 
     def test_group_norm(self):
         x = mx.arange(100, dtype=mx.float32)
