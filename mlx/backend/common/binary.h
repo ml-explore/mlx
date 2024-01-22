@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
-
 #include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
@@ -47,22 +46,51 @@ void set_binary_op_output_data(
           allocator::malloc_or_wait(out.itemsize()), 1, a.strides(), a.flags());
       break;
     case ScalarVector:
-      out.set_data(
-          allocator::malloc_or_wait(b.data_size() * out.itemsize()),
-          b.data_size(),
-          b.strides(),
-          b.flags());
+      if (b.is_donatable() && b.itemsize() == out.itemsize()) {
+        out.copy_shared_buffer(b);
+      } else {
+        out.set_data(
+            allocator::malloc_or_wait(b.data_size() * out.itemsize()),
+            b.data_size(),
+            b.strides(),
+            b.flags());
+      }
       break;
     case VectorScalar:
+      if (a.is_donatable() && a.itemsize() == out.itemsize()) {
+        out.copy_shared_buffer(a);
+      } else {
+        out.set_data(
+            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
+            a.data_size(),
+            a.strides(),
+            a.flags());
+      }
+      break;
     case VectorVector:
-      out.set_data(
-          allocator::malloc_or_wait(a.data_size() * out.itemsize()),
-          a.data_size(),
-          a.strides(),
-          a.flags());
+      if (a.is_donatable() && a.itemsize() == out.itemsize()) {
+        out.copy_shared_buffer(a);
+      } else if (b.is_donatable() && b.itemsize() == out.itemsize()) {
+        out.copy_shared_buffer(b);
+      } else {
+        out.set_data(
+            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
+            a.data_size(),
+            a.strides(),
+            a.flags());
+      }
       break;
     case General:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
+      if (a.is_donatable() && a.flags().row_contiguous &&
+          a.itemsize() == out.itemsize() && a.size() == out.size()) {
+        out.copy_shared_buffer(a);
+      } else if (
+          b.is_donatable() && b.flags().row_contiguous &&
+          b.itemsize() == out.itemsize() && b.size() == out.size()) {
+        out.copy_shared_buffer(b);
+      } else {
+        out.set_data(allocator::malloc_or_wait(out.nbytes()));
+      }
       break;
   }
 }

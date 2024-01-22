@@ -240,6 +240,11 @@ class array {
     return array_desc_->inputs;
   }
 
+  /** True indicates the arrays buffer is safe to reuse */
+  bool is_donatable() const {
+    return array_desc_.use_count() == 1 && (array_desc_->data.use_count() == 1);
+  }
+
   /** The array's siblings. */
   const std::vector<array>& siblings() const {
     return array_desc_->siblings;
@@ -282,6 +287,12 @@ class array {
     return array_desc_->data->buffer;
   };
 
+  // Return a copy of the shared pointer
+  // to the array::Data struct
+  std::shared_ptr<Data> data_shared_ptr() const {
+    return array_desc_->data;
+  }
+  // Return a raw pointer to the arrays data
   template <typename T>
   T* data() {
     return static_cast<T*>(array_desc_->data_ptr);

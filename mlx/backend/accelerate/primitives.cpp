@@ -72,11 +72,15 @@ void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
   if (in.dtype() == float32 && in.flags().contiguous) {
     auto size = in.data_size();
-    out.set_data(
-        allocator::malloc_or_wait(size * out.itemsize()),
-        size,
-        in.strides(),
-        in.flags());
+    if (in.is_donatable()) {
+      out.copy_shared_buffer(in);
+    } else {
+      out.set_data(
+          allocator::malloc_or_wait(size * out.itemsize()),
+          size,
+          in.strides(),
+          in.flags());
+    }
     vDSP_vabs(in.data<float>(), 1, out.data<float>(), 1, size);
   } else if (in.dtype() == int32 && in.flags().contiguous) {
     auto size = in.data_size();

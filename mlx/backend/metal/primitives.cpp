@@ -212,11 +212,15 @@ void unary_op(
   auto& in = inputs[0];
   bool contig = in.flags().contiguous;
   if (contig) {
-    out.set_data(
-        allocator::malloc_or_wait(in.data_size() * out.itemsize()),
-        in.data_size(),
-        in.strides(),
-        in.flags());
+    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+      out.copy_shared_buffer(in);
+    } else {
+      out.set_data(
+          allocator::malloc_or_wait(in.data_size() * out.itemsize()),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+    }
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
