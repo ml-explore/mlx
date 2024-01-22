@@ -5,12 +5,14 @@ from time_utils import time_fn
 def time_unary_inplace():
     n = 8192
     x = mx.zeros((n, n, 16))
+
     def abs_inplace(x):
         for _ in range(20):
             x = mx.abs(x)
         return x
 
     time_fn(abs_inplace, x)
+
 
 def time_binary_inplace():
     n = 8192

@@ -244,7 +244,8 @@ void unary_op(
 
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
+  set_array_buffer(
+      compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
   set_array_buffer(compute_encoder, out, 1);
   if (!contig) {
     compute_encoder->setBytes(in.shape().data(), in.ndim() * sizeof(int), 2);
