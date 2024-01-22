@@ -1696,7 +1696,7 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_inner(self):
         self.assertCmpNumpy([(3,), (3,)], mx.inner, np.inner)
-        self.assertCmpNumpy([(1, 1, 2), (4, 2)], mx.inner, np.inner)
+        self.assertCmpNumpy([(1, 1, 2), (3, 2)], mx.inner, np.inner)
         self.assertCmpNumpy([(2, 3, 4), (4,)], mx.inner, np.inner)
 
     def test_outer(self):
