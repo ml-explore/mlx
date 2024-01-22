@@ -2,6 +2,20 @@ import mlx.core as mx
 from time_utils import time_fn
 
 
+def time_copy_inplace():
+    n = 8192
+    x = mx.zeros((n, n, 16))
+
+    types = [mx.int32, mx.float32]
+
+    def astype_inplace(x):
+        for i in range(20):
+            x = x.astype(types[i % 2])
+        return x
+
+    time_fn(astype_inplace, x)
+
+
 def time_unary_inplace():
     n = 8192
     x = mx.zeros((n, n, 16))
@@ -49,5 +63,6 @@ def time_binary_inplace():
 
 
 if __name__ == "__main__":
+    time_copy_inplace()
     time_unary_inplace()
-    # time_binary_inplace()
+    time_binary_inplace()
