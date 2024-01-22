@@ -333,6 +333,8 @@ class array {
 
   void copy_shared_buffer(const array& other);
 
+  void move_shared_buffer(array other);
+
   void overwrite_descriptor(const array& other) {
     array_desc_ = other.array_desc_;
   }

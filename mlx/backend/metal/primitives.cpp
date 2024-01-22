@@ -213,7 +213,7 @@ void unary_op(
   bool contig = in.flags().contiguous;
   if (contig) {
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
-      out.copy_shared_buffer(in);
+      out.move_shared_buffer(in);
     } else {
       out.set_data(
           allocator::malloc_or_wait(in.data_size() * out.itemsize()),
@@ -244,7 +244,7 @@ void unary_op(
 
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in, 0);
+  set_array_buffer(compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
   set_array_buffer(compute_encoder, out, 1);
   if (!contig) {
     compute_encoder->setBytes(in.shape().data(), in.ndim() * sizeof(int), 2);
