@@ -526,7 +526,7 @@ class Adafactor(Optimizer):
         weight_decay (float, optional): The weight decay :math:`\lambda`.
             Default: ``0.0``.
         scale_parameter (bool, optional): If set to ``True`` the learning rate
-            will be scaled by :math:`\max(\epsilon_1, \text{RMS}(X_{t-1}))`.
+            will be scaled by :math:`\max(\epsilon_1, \text{RMS}(w_{t-1}))`.
             Default: ``True``.
         relative_step (bool, optional): If set to ``True`` the ``learning_rate``
             will be ignored and relative step size will be computed.
