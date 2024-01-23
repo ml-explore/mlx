@@ -205,6 +205,16 @@ std::unordered_map<std::string, MetaData> load_metadata(gguf_ctx* ctx) {
 std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
+
+  auto check_insert = [](auto inserted) {
+    if (!inserted.second) {
+      std::ostringstream msg;
+      msg << "[load_gguf] Duplicate parameter name " << inserted.first->second
+          << " this can happend when loading quantized tensors.";
+      throw std::runtime_error(msg.str());
+    }
+  };
+
   while (gguf_get_tensor(ctx, &tensor)) {
     if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
         tensor.type == GGUF_TYPE_Q8_0) {

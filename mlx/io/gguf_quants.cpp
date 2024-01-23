@@ -75,7 +75,6 @@ void extract_q8_0_data(
     array& weights_arr,
     array& scales_arr,
     array& biases_arr) {
-
   const uint64_t weights_per_block = 32;
   const uint64_t bytes_per_block = 34; // 2 bytes scale, 32x1 byte weights
   auto data = static_cast<uint8_t*>(tensor.weights_data);
@@ -99,7 +98,6 @@ void extract_q8_0_data(
 void gguf_load_quantized(
     std::unordered_map<std::string, array>& a,
     const gguf_tensor& tensor) {
-
   uint64_t weights_per_byte;
   if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1) {
     weights_per_byte = 2;
@@ -131,7 +129,6 @@ void gguf_load_quantized(
   scales.set_data(allocator::malloc(scales.nbytes()));
   biases.set_data(allocator::malloc(biases.nbytes()));
 
-
   if (tensor.type == GGUF_TYPE_Q4_0) {
     extract_q4_0_data(tensor, weights, scales, biases);
   } else if (tensor.type == GGUF_TYPE_Q4_1) {
@@ -141,11 +138,21 @@ void gguf_load_quantized(
   }
 
   a.insert({name, weights});
+
+  auto check_insert = [](auto inserted) {
+    if (!inserted.second) {
+      std::ostringstream msg;
+      msg << "[load_gguf] Duplicate parameter name " << inserted.first->second
+          << " this can happend when loading quantized tensors.";
+      throw std::runtime_error(msg.str());
+    }
+  };
+
   const std::string weight_suffix = ".weight";
   const std::string name_prefix =
       name.substr(0, name.length() - weight_suffix.length());
-  a.insert({name_prefix + ".scales", scales});
-  a.insert({name_prefix + ".biases", biases});
+  check_insert(a.insert({name_prefix + ".scales", scales}));
+  check_insert(a.insert({name_prefix + ".biases", biases}));
 }
 
 } // namespace mlx::core
