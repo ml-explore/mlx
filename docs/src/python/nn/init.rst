@@ -1,9 +1,9 @@
-.. _initializers:
+.. _init:
 
-.. currentmodule:: mlx.nn.initializers
+.. currentmodule:: mlx.nn.init
 
 Initializers
---------------
+------------
 
 .. autosummary::
    :toctree: _autosummary_functions

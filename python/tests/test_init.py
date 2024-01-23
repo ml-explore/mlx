@@ -2,7 +2,7 @@
 import unittest
 
 import mlx.core as mx
-import mlx.nn.initializers as init
+import mlx.nn.init as init
 import mlx_tests
 import numpy as np
 
