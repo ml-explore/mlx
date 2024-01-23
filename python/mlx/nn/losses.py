@@ -31,12 +31,13 @@ def cross_entropy(
     Computes the cross entropy loss.
 
     Args:
-        logits (array): The unnormalized predicted logits.
-        targets (array): The ground truth values. These can be class indices or probabilities for
-            each class, depending on its shape. If ``targets`` are class indices, then the shape of
-            ``targets`` should match the shape of ``logits``, excluding the ``axis`` dimension.
-            If ``targets`` are probabilities (or one-hot encoded), then the shape of ``targets``
-            should be identical to the shape of ``logits``.
+        logits (array): The unnormalized logits.
+        targets (array): The ground truth values. These can be class indices or
+            probabilities for each class. If the ``targets`` are class indices,
+            then ``targets`` shape should match the ``logits`` shape with
+            the ``axis`` dimension removed. If the ``targets`` are probabilities
+            (or one-hot encoded), then the ``targets`` shape should be the same as
+            the ``logits`` shape.
         weights (array, optional): Optional weights for each target. Default: ``None``.
         axis (int, optional): The axis over which to compute softmax. Default: ``-1``.
         label_smoothing (float, optional): Label smoothing factor. Default: ``0``.
@@ -48,18 +49,18 @@ def cross_entropy(
 
     Examples:
         >>> import mlx.core as mx
-        >>> from mlx.nn.losses import cross_entropy
-
+        >>> import mlx.nn as nn
+        >>>
         >>> # Class indices as targets
         >>> logits = mx.array([[2.0, -1.0], [-1.0, 2.0]])
         >>> targets = mx.array([0, 1])
-        >>> cross_entropy(logits, targets)
+        >>> nn.losses.cross_entropy(logits, targets)
         array([0.0485873, 0.0485873], dtype=float32)
-
+        >>>
         >>> # Probabilities (or one-hot vectors) as targets
         >>> logits = mx.array([[2.0, -1.0], [-1.0, 2.0]])
         >>> targets = mx.array([[0.9, 0.1], [0.1, 0.9]])
-        >>> cross_entropy(logits, targets)
+        >>> nn.losses.cross_entropy(logits, targets)
         array([0.348587, 0.348587], dtype=float32)
     """
     if label_smoothing < 0 or label_smoothing >= 1:
