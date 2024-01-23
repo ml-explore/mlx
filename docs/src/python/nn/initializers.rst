@@ -1,5 +1,6 @@
 .. _initializers:
 
+.. currentmodule:: mlx.core
 .. currentmodule:: mlx.nn.initializers
 
 Initializers
