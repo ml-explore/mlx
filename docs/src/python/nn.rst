@@ -180,3 +180,4 @@ In detail:
    nn/layers
    nn/functions
    nn/losses
+   nn/init
