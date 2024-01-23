@@ -81,7 +81,7 @@ def cross_entropy(
         )
 
     if targets_as_probs:
-        score = mx.sum(logits * targets, axis=axis)  # mx.inner doesn't support axis
+        score = mx.sum(logits * targets, axis=axis)
     else:
         score = mx.take_along_axis(logits, targets[..., None], axis).squeeze(-1)
 
@@ -101,12 +101,10 @@ def cross_entropy(
 
     # Apply weights if provided
     if weights is not None:
-        if (targets_as_probs and weights.shape != _drop_dim(targets.shape, axis)) or (
-            not targets_as_probs and weights.shape != targets.shape
-        ):
+        if weights.shape != loss.shape:
             raise ValueError(
                 f"Weights with shape {weights.shape} is not the same as "
-                f"targets with shape {targets.shape}."
+                f"output loss with shape {loss.shape}."
             )
         loss *= weights
 
