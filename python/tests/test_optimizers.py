@@ -39,6 +39,24 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             all_equal = all(v for _, v in mlx.utils.tree_flatten(equal_shape))
             self.assertTrue(all_equal)
 
+    def test_adafactor(self):
+        x = mx.zeros((5, 5))
+        grad = mx.ones_like(x)
+        optimizer = opt.Adafactor()
+        for _ in range(2):
+            xp = optimizer.apply_single(grad, x, optimizer.state)
+            self.assertEqual(xp.dtype, x.dtype)
+            self.assertEqual(xp.shape, x.shape)
+
+        x = mx.zeros((5, 5), mx.float16)
+        grad = mx.ones_like(x)
+        optimizer = opt.Adafactor()
+        for _ in range(2):
+            xp = optimizer.apply_single(grad, x, optimizer.state)
+            self.assertEqual(xp.dtype, x.dtype)
+            self.assertEqual(xp.shape, x.shape)
+        self.assertEqual(optimizer.state["step"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
