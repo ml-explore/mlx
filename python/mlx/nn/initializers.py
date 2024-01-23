@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 from typing import Callable, Literal
 
@@ -8,15 +8,15 @@ import mlx.core as mx
 def constant(
     value: float, dtype: mx.Dtype = mx.float32
 ) -> Callable[[mx.array], mx.array]:
-    r"""Build an initializer that returns a array filled with 'value'.
+    r"""An initializer that returns an array filled with ``value``.
 
     Args:
         value (float): The value to fill the array with.
-        dtype (mx.Dtype, optional): The data type of the array. Defaults to mx.float32.
+        dtype (Dtype, optional): The data type of the array. Default: ``float32``.
 
     Returns:
-        Callable[[mx.array], mx.array]: An initializer that returns an array, of the same
-                                        shape as the input array, filled with 'value'.
+        Callable[[array], array]: An initializer that returns an array, of the same
+        shape as the input, filled with ``value``.
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -28,17 +28,16 @@ def constant(
 def normal(
     mean: float = 0.0, std: float = 1.0, dtype: mx.Dtype = mx.float32
 ) -> Callable[[mx.array], mx.array]:
-    r"""Build an initializer that returns random values from a normal distribution.
+    r"""An initializer that returns samples from a normal distribution.
 
     Args:
         mean (float): Mean of the normal distribution.
         std (float): Standard deviation of the normal distribution.
-        dtype (Dtype): The data type of the array.
+        dtype (Dtype): The data type of the array. Default: ``float32``.
 
     Returns:
-        Callable[[mx.array], mx.array]: An initializer that returns an array, of the same
-                                        shape as the input array, filled with values drawn
-                                        from the normal distribution.
+        Callable[[array], array]: An initializer that returns an array, of the
+        same shape as the, filled with samples from a normal distribution.
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -51,17 +50,17 @@ def normal(
 def uniform(
     low: float = 0.0, high: float = 1.0, dtype: mx.Dtype = mx.float32
 ) -> Callable[[mx.array], mx.array]:
-    r"""Build an initializer that returns random values from a uniform distribution.
+    r"""An initializer that returns random values from a uniform distribution.
 
     Args:
-        low (float): The lower bound of the uniform distribution.
-        high (float): The upper bound of the uniform distribution.
-        dtype (Dtype): The data type of the array.
+        low (float): The lower bound of the uniform distribution. Default: `0.0`.
+        high (float): The upper bound of the uniform distribution. Default: `1.0`
+        dtype (Dtype): The data type of the array. Default: ``float32``.
 
     Returns:
-        Callable[[mx.array], mx.array]: An initializer that returns an array, of the same
-                                        shape as the input array, filled with values drawn
-                                        from the uniform distribution
+        Callable[[mx.array], mx.array]: An initializer that returns an array,
+        of the same shape as the input, filled with samples from the uniform
+        distribution
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -71,14 +70,14 @@ def uniform(
 
 
 def identity(dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
-    r"""Build an initializer that returns an identity matrix.
+    r"""An initializer that returns an identity matrix.
 
     Args:
-        dtype (Dtype, optional): The data type of the array. Defaults to mx.float32.
+        dtype (Dtype, optional): The data type of the array. Defaults: ``float32``.
 
     Returns:
-        Callable[[mx.array], mx.array]: An initializer that returns an identity array, of
-                                    the same shape as the input array.
+        Callable[[mx.array], mx.array]: An initializer that returns an identity
+        matrix, with the same shape as the input.
     """
 
     def initializer(arr: mx.array) -> mx.array:
@@ -114,21 +113,22 @@ def _calculate_fan_in_fan_out(x):
 def glorot_normal(
     dtype: mx.Dtype = mx.float32,
 ) -> Callable[[mx.array, mx.float32], mx.array]:
-    r"""Build a Xavier Glorot normal initializer.
+    r"""A Glorot normal initializer.
 
-    This initializer generates values from a normal distribution centered around 0.
-    The standard deviation is calculated based on the number of input (`fan_in`) and
-    output (`fan_out`) units in the weight tensor. The method is described in
+    This initializer samples from a normal distribution with a standard
+    deviation computed from the number of input (``fan_in``) and output
+    (``fan_out``) units. The method is described in detail:
+
     `Understanding the difficulty of training deep feedforward neural networks`
     - Glorot, X. & Bengio, Y. (2010).
 
     Args:
-        dtype (mx.Dtype, optional): The data type of the array. Defaults to mx.float32.
+        dtype (Dtype, optional): The data type of the array. Default: ``float32``.
 
     Returns:
-        Callable[[mx.array, mx.float32], mx.array]: An initializer that returns an array, of the same
-                                    shape as the input array, filled with random values from
-                                    the Glorot normal distribution.
+        Callable[[mx.array, mx.float32], mx.array]: An initializer that returns
+        an array with the same shape as the input, filled with samples from the
+        Glorot normal distribution.
     """
 
     def initializer(a: mx.array, gain: mx.float32 = 1.0) -> mx.array:
@@ -142,20 +142,21 @@ def glorot_normal(
 def glorot_uniform(
     dtype: mx.Dtype = mx.float32,
 ) -> Callable[[mx.array, mx.float32], mx.array]:
-    r"""Build a Xavier Glorot uniform initializer.
+    r"""A Glorot uniform initializer.
 
-    This initializer generates values from a uniform distribution within a range
-    determined by the number of input (`fan_in`) and output (`fan_out`) units in the
-    weight tensor. The method is described in  `Understanding the difficulty of training
-    deep feedforward neural networks` - Glorot, X. & Bengio, Y. (2010).
+    This initializer generates values from a uniform distribution with a range
+    computed from the number of input (``fan_in``) and output (``fan_out``)
+    units. The method is described in  `Understanding the difficulty of
+    training deep feedforward neural networks` - Glorot, X. & Bengio, Y.
+    (2010).
 
     Args:
-        dtype (mx.Dtype, optional): The data type of the array. Defaults to mx.float32.
+        dtype (Dtype, optional): The data type of the array. Default: ``float32``.
 
     Returns:
-        Callable[[mx.array, mx.array], mx.array]: An initializer that returns an array, of the same
-                                    shape as the input array, filled with random values from
-                                    the Glorot uniform distribution.
+        Callable[[array, array], array]: An initializer that returns an array
+        with the same shape as the input, filled with samples from the Glorot
+        uniform distribution.
     """
 
     def initializer(a: mx.array, gain: mx.float32 = 1.0) -> mx.array:
@@ -169,21 +170,22 @@ def glorot_uniform(
 def he_normal(
     dtype: mx.Dtype = mx.float32,
 ) -> Callable[[mx.array, str, mx.float32], mx.array]:
-    r"""Build a Kaming He normal initializer.
+    r"""Build a He normal initializer.
 
-    This initializer generates values from a normal distribution centered around 0,
-    with a standard deviation calculated based on the number of input (`fan_in`) or
-    output (`fan_out`) units in the weight tensor. The method is described in `Delving
-    deep into rectifiers: Surpassing human-level performance on ImageNet classification`
+    This initializer generates values from a normal distribution with a
+    standard deviation computed from the number of input (``fan_in``) or output
+    (``fan_out``) units in the weight tensor. The method is described in
+    `Delving deep into rectifiers: Surpassing human-level performance on
+    ImageNet classification`
     - He, K. et al. (2015).
 
     Args:
-        dtype (mx.Dtype, optional): The data type of the array. Defaults to mx.float32.
+        dtype (Dtype, optional): The data type of the array. Defaults to mx.float32.
 
     Returns:
-        Callable[[mx.array, str, mx.float32], mx.array]: An initializer that returns an array, of the same
-                                        shape as the input array, filled with random values from
-                                        the He normal distribution.
+        Callable[[array, str, float32], array]: An initializer that returns an
+        array with the same shape as the input, filled with samples from the He
+        normal distribution.
     """
 
     def initializer(
@@ -208,20 +210,21 @@ def he_normal(
 def he_uniform(
     dtype: mx.Dtype = mx.float32,
 ) -> Callable[[mx.array, str, mx.float32], mx.array]:
-    r"""Create a He uniform (Kaiming uniform) initializer.
+    r"""A He uniform (Kaiming uniform) initializer.
 
-    This initializer generates values from a uniform distribution within a range
-    determined by the number of input (`fan_in`) or output (`fan_out`) units in the
-    weight tensor. The method is described in `Delving deep into rectifiers: Surpassing
-    human-level performance on ImageNet classification` - He, K. et al. (2015).
+    This initializer generates values from a uniform distribution with a range
+    computed from the number of input (``fan_in``) or output (``fan_out``)
+    units.  The method is described in `Delving deep into rectifiers:
+    Surpassing human-level performance on ImageNet classification` - He, K. et
+    al. (2015).
 
     Args:
-        dtype (mx.Dtype, optional): The data type of the array. Defaults to mx.float32.
+        dtype (Dtype, optional): The data type of the array. Default: ``float32``.
 
     Returns:
-        Callable[[mx.array, str, mx.float32], mx.array]: An initializer that returns an array, of the same
-                                        shape as the input array, filled with random values from
-                                        the He uniform distribution.
+        Callable[[array, str, float32], array]: An initializer that returns an
+        array with the same shape as the input, filled with samples from  the
+        He uniform distribution.
     """
 
     def initializer(
