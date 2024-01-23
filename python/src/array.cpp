@@ -1486,5 +1486,17 @@ void init_array(py::module_& m) {
           "decimals"_a = 0,
           py::kw_only(),
           "stream"_a = none,
-          "See :func:`round`.");
+          "See :func:`round`.")
+      .def(
+          "diagonal",
+          [](const array& a,
+             int offset,
+             int axis1,
+             int axis2,
+             StreamOrDevice s) { return diagonal(a, offset, axis1, axis2, s); },
+          "offset"_a = 0,
+          "axis1"_a = 0,
+          "axis2"_a = 1,
+          "stream"_a = none,
+          "See :func:`diagonal`.");
 }

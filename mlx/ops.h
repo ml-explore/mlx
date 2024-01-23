@@ -1105,4 +1105,12 @@ array addmm(
     const float& beta = 1.f,
     StreamOrDevice s = {});
 
+/** Extract a diagonal or construct a diagonal array */
+array diagonal(
+    const array& a,
+    int offset,
+    int axis1,
+    int axis2,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core

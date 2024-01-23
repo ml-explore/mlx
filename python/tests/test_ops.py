@@ -1785,6 +1785,20 @@ class TestOps(mlx_tests.MLXTestCase):
         out = a @ b
         self.assertTrue(mx.array_equal(out, mx.zeros((10, 10))))
 
+    def test_diagonal(self):
+        x = mx.array(
+            [
+                [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11]],
+                [[12, 13, 14, 15], [16, 17, 18, 19], [20, 21, 22, 23]],
+            ]
+        )
+        expected = [[0, 13], [4, 17], [8, 21]]
+
+        self.assertListEqual(mx.diagonal(x, 0, -1, 0).tolist(), expected)
+
+        expected = [[1, 14], [5, 18], [9, 22]]
+        self.assertListEqual(mx.diagonal(x, -1, 2, 0).tolist(), expected)
+
 
 if __name__ == "__main__":
     unittest.main()

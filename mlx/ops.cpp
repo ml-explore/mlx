@@ -3251,4 +3251,93 @@ array addmm(
   return out;
 }
 
+array diagonal(
+    const array& a,
+    int offset,
+    int axis1,
+    int axis2,
+    StreamOrDevice s /* = {} */
+) {
+  auto ndim = a.ndim();
+
+  if (ndim < 2) {
+    throw std::invalid_argument(
+        "[diagonal] diag requires an array of at least two dimensions");
+  }
+
+  auto ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
+  if (ax1 < 0 || ax1 >= ndim) {
+    std::ostringstream msg;
+    msg << "Invalid axis1 " << axis1 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  auto ax2 = (axis2 < 0) ? axis2 + ndim : axis2;
+  if (ax2 < 0 || ax2 >= ndim) {
+    std::ostringstream msg;
+    msg << "Invalid axis2 " << axis2 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  if (ax1 == ax2) {
+    std::ostringstream msg;
+    msg << "axis1 and axis2 cannot be the same axis";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out = a;
+  auto dim1 = a.shape(ax1);
+  auto dim2 = a.shape(ax2);
+  if (offset >= 0) {
+    dim2 -= offset;
+  } else {
+    dim1 += offset;
+  }
+  auto diag_size = dim2 < dim1 ? dim2 : dim1;
+  if (diag_size < 0) {
+    diag_size = 0;
+  }
+
+  if (ax1 < ax2) {
+    out = moveaxis(out, ax1, -1, s);
+    out = moveaxis(out, ax2 - 1, -1, s);
+  } else {
+    out = moveaxis(out, ax1, -1, s);
+    out = moveaxis(out, ax2, -1, s);
+  }
+
+  auto indices1 = arange(diag_size);
+  auto indices2 = arange(std::abs(offset), std::abs(offset) + diag_size);
+  std::vector<array> indices(ndim - 2, arange(1));
+
+  if (offset >= 0) {
+    indices.emplace_back(indices1);
+    indices.emplace_back(indices2);
+  } else {
+    indices.emplace_back(indices2);
+    indices.emplace_back(indices1);
+  }
+
+  std::vector<int> slice_sizes;
+  slice_sizes.reserve(ndim);
+  for (auto i = 0; i < ndim; i++) {
+    if (i < ndim - 2) {
+      slice_sizes.emplace_back(out.shape(i));
+      continue;
+    }
+    slice_sizes.emplace_back(1);
+  }
+
+  std::vector<int> axes(ndim);
+  std::iota(axes.begin(), axes.end(), 0);
+
+  out = gather(out, indices, axes, slice_sizes, s);
+  out = squeeze(out, {-1, -2}, s);
+  out = moveaxis(out, 0, -1);
+
+  return out;
+}
+
 } // namespace mlx::core
