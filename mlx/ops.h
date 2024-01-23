@@ -229,6 +229,9 @@ inline array transpose(
   return transpose(a, std::vector<int>(axes), s);
 }
 
+/** Extract diagonal from a 2d array or create a diagonal matrix. */
+array diag(const array& a, int k, StreamOrDevice s = {});
+
 /** Swap two axes of an array. */
 array swapaxes(const array& a, int axis1, int axis2, StreamOrDevice s = {});
 
