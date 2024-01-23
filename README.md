@@ -68,8 +68,16 @@ in the documentation.
 
 MLX is available on [PyPI](https://pypi.org/project/mlx/). To install the Python API, run:
 
+**With `pip`**:
+
 ```
 pip install mlx
+```
+
+**With `conda`**:
+
+```
+conda install -c conda-forge mlx
 ```
 
 Checkout the
