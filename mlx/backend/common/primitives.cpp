@@ -721,4 +721,33 @@ void Transpose::eval(const std::vector<array>& inputs, array& out) {
   out.copy_shared_buffer(in, out_strides, flags, in.data_size());
 }
 
+void Diagonal::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+  auto& in = inputs[0];
+  auto& in_strides = in.strides();
+  std::vector<size_t> out_strides;
+  out_strides.reserve(out.ndim());
+  auto flags = in.flags();
+  size_t data_size = 1;
+
+  for (int i = 0; i < in.ndim(); ++i) {
+    if (i != axis1_ && i != axis2_) {
+      out_strides.push_back(in.strides()[i]);
+      data_size *= in.shape()[i];
+    }
+  }
+  out_strides.push_back(in_strides[axis1_] + in_strides[axis2_]);
+  data_size *= diag_size_;
+
+  flags.row_contiguous = false;
+  flags.col_contiguous = false;
+  flags.contiguous = false;
+
+  out.copy_shared_buffer(in, out_strides, flags, data_size, data_offset_);
+}
+
 } // namespace mlx::core

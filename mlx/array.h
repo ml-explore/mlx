@@ -365,7 +365,7 @@ class array {
   // The ArrayDesc contains the details of the materialized array including the
   // shape, strides, the data type. It also includes
   // the primitive which knows how to compute the array's data from its inputs
-  // and a the list of array's inputs for the primitive.
+  // and the list of array's inputs for the primitive.
   std::shared_ptr<ArrayDesc> array_desc_{nullptr};
 };
 

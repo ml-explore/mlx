@@ -666,6 +666,11 @@ TEST_CASE("test op vjps") {
     expected = array({720.0f, 360.0f, 240.0f, 180.0f, 144.0f, 120.0f}, {2, 3});
     CHECK(array_equal(out, expected).item<bool>());
   }
+
+  // Test diagonal
+  {
+    // TODO: test diagonal's vjp and jvp
+  }
 }
 
 TEST_CASE("test gather and take grads") {

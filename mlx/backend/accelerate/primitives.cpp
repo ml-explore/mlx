@@ -64,6 +64,7 @@ DEFAULT_MULTI(Split)
 DEFAULT(Sort)
 DEFAULT(StopGradient)
 DEFAULT(Transpose)
+DEFAULT(Diagonal)
 DEFAULT_MULTI(DivMod)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {

@@ -2837,4 +2837,45 @@ bool Transpose::is_equivalent(const Primitive& other) const {
   return axes_ == t_other.axes_;
 }
 
+std::vector<array> Diagonal::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+
+  auto& primal = primals[0];
+  auto& cotan = cotangents[0];
+
+  if (diag_size_ == 0) {
+    return {zeros_like(primal)};
+  }
+
+  // TODO: implement this
+  throw std::logic_error("Not Implemented");
+}
+
+std::vector<array> Diagonal::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {diagonal(tangents[0], offset_, axis1_, axis2_, stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> Diagonal::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  // TODO: implement this
+  throw std::logic_error("Not Implemented");
+}
+
+bool Diagonal::is_equivalent(const mlx::core::Primitive& other) const {
+  const Diagonal& d_other = static_cast<const Diagonal&>(other);
+  return offset_ == d_other.offset_ && axis1_ == d_other.axis1_ &&
+      axis2_ == d_other.axis2_;
+}
+
 } // namespace mlx::core

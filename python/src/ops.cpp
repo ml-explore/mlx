@@ -3516,4 +3516,40 @@ void init_ops(py::module_& m) {
         Returns:
             array: ``alpha * (a @ b)  + beta * c``
       )pbdoc");
+  m.def(
+      "diagonal",
+      [](const array& a, int offset, int axis1, int axis2, StreamOrDevice s) {
+        return diagonal(a, offset, axis1, axis2, s);
+      },
+      "a"_a,
+      "offset"_a = 0,
+      "axis1"_a = 0,
+      "axis2"_a = 1,
+      "stream"_a = none,
+      R"pbdoc(
+        diagonal(a: array, offset: int = 0, axis1: int = 0, axis2: int = 1, stream: Union[None, Stream, Device] = None) -> array
+
+        Return specified diagonals
+        If `a` is 2-D, then a 1-D array containing the diagonal and of the
+        same type as `a` is returned unless `a` is a `matrix`, in which case
+        a 1-D array rather than a (2-D) `matrix` is returned in order to
+        maintain backward compatibility.
+
+        If ``a.ndim > 2``, then the dimensions specified by `axis1` and `axis2`
+        are removed, and a new axis inserted at the end corresponding to the
+        diagonal.
+
+        Args:
+          a (array): Input array
+          offset (int, optional): Offset of the diagonal from the main diagonal.
+            Can be positive or negative. Default: ``0``.
+          axis1 (int, optional): Axis to be used as the first axis of the 2-D sub-arrays from which
+              the diagonals should be taken. Default: ``0``.
+          axis2 (int, optional): Axis to be used as the second axis of the 2-D sub-arrays from which
+              the diagonals should be taken. Default: ``1``.
+
+        Returns:
+            array: The diagonal array.
+
+      )pbdoc");
 }

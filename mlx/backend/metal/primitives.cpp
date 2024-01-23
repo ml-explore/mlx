@@ -769,4 +769,8 @@ void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void Diagonal::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
 } // namespace mlx::core

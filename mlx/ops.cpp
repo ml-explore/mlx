@@ -3163,4 +3163,79 @@ array addmm(
   return out;
 }
 
+array diagonal(
+    const array& a,
+    int offset,
+    int axis1,
+    int axis2,
+    StreamOrDevice s /* = {} */
+) {
+  auto ndim = a.ndim();
+
+  if (ndim < 2) {
+    throw std::invalid_argument(
+        "[diagonal] diag requires an array of at least two dimensions");
+  }
+
+  auto ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
+  if (ax1 < 0 || ax1 >= ndim) {
+    std::ostringstream msg;
+    msg << "Invalid axis1 " << axis1 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  auto ax2 = (axis2 < 0) ? axis2 + ndim : axis2;
+  if (ax2 < 0 || ax2 >= ndim) {
+    std::ostringstream msg;
+    msg << "Invalid axis2 " << axis2 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  if (ax1 == ax2) {
+    std::ostringstream msg;
+    msg << "axis1 and axis2 cannot be the same axis";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto dim1 = a.shape()[ax1];
+  auto dim2 = a.shape()[ax2];
+  auto stride1 = a.strides()[ax1];
+  auto stride2 = a.strides()[ax2];
+  size_t offset_stride = 0;
+  size_t data_offset = 0;
+
+  if (offset >= 0) {
+    offset_stride = stride2;
+    dim2 -= offset;
+  } else {
+    offset = -offset;
+    offset_stride = stride1;
+    dim1 -= offset;
+  }
+  auto diag_size = dim2 < dim1 ? dim2 : dim1;
+  if (diag_size < 0) {
+    diag_size = 0;
+  } else {
+    data_offset += offset * offset_stride;
+  }
+
+  std::vector<int> shape;
+  shape.reserve(a.shape().size() - 1);
+  for (auto i = 0; i < a.ndim(); ++i) {
+    if (i != ax1 && i != ax2) {
+      shape.push_back(a.shape()[i]);
+    }
+  }
+  shape.push_back(diag_size);
+
+  return array(
+      shape,
+      a.dtype(),
+      std::make_unique<Diagonal>(
+          to_stream(s), offset, ax1, ax2, data_offset, diag_size),
+      {a});
+}
+
 } // namespace mlx::core

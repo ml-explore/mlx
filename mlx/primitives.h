@@ -1602,4 +1602,38 @@ class Transpose : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Diagonal : public UnaryPrimitive {
+ public:
+  explicit Diagonal(
+      Stream stream,
+      int offset,
+      int axis1,
+      int axis2,
+      size_t data_offset,
+      int diag_size)
+      : UnaryPrimitive(stream),
+        offset_(offset),
+        axis1_(axis1),
+        axis2_(axis2),
+        data_offset_(data_offset),
+        diag_size_(diag_size){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Transpose)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int offset_;
+  int axis1_;
+  int axis2_;
+  size_t data_offset_;
+  int diag_size_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 } // namespace mlx::core

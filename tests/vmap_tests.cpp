@@ -138,6 +138,11 @@ TEST_CASE("test simple vmap") {
     CHECK(array_equal(out, x + y).item<bool>());
   }
 
+  // vmap diagonal
+  {
+    // TODO: add more tests
+  }
+
   // vmap with capturing closure
   {
     auto x = add(add(ones({2}), zeros({2})), zeros({2}));
