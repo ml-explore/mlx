@@ -1,6 +1,5 @@
 .. _initializers:
 
-.. currentmodule:: mlx.core
 .. currentmodule:: mlx.nn.initializers
 
 Initializers
@@ -8,7 +7,6 @@ Initializers
 
 .. autosummary::
    :toctree: _autosummary_functions
-   :template: nn-module-template.rst
 
    constant
    normal
