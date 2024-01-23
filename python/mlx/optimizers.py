@@ -1,5 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
+import math
 from typing import List, Optional, Tuple
 
 import mlx.core as mx
@@ -75,7 +76,7 @@ class Optimizer:
 
 
 class SGD(Optimizer):
-    r"""Stochastic gradient descent optimizer.
+    r"""The stochastic gradient descent optimizer.
 
     Updates a parameter :math:`w` with a gradient :math:`g` as follows
 
@@ -140,7 +141,7 @@ class SGD(Optimizer):
 
 
 class RMSprop(Optimizer):
-    r"""Implementation of the RMSprop optimizer [1].
+    r"""The RMSprop optimizer [1].
 
     [1]: Tieleman, T. and Hinton, G. 2012. Lecture 6.5-rmsprop, coursera: Neural networks for machine learning
 
@@ -189,7 +190,7 @@ class RMSprop(Optimizer):
 
 
 class Adagrad(Optimizer):
-    r"""Implementation of the Adagrad optimizer [1].
+    r"""The Adagrad optimizer [1].
 
     Our Adagrad implementation follows the original paper. In detail,
 
@@ -234,7 +235,7 @@ class Adagrad(Optimizer):
 
 
 class AdaDelta(Optimizer):
-    r"""Implementation of the AdaDelta optimizer with learning rate[1].
+    r"""The AdaDelta optimizer with a learning rate [1].
 
     Our AdaDelta implementation follows the original paper. In detail,
 
@@ -293,7 +294,7 @@ class AdaDelta(Optimizer):
 
 
 class Adam(Optimizer):
-    r"""Implementation of the Adam optimizer [1].
+    r"""The Adam optimizer [1].
 
     Our Adam implementation follows the original paper and omits the bias
     correction in the first and second moment estimates. In detail,
@@ -345,7 +346,7 @@ class Adam(Optimizer):
 
 
 class AdamW(Adam):
-    r"""Implementation of the AdamW optimizer [1].
+    r"""The AdamW optimizer [1].
 
     Following the above convention, in contrast with [1], we do not use bias
     correction in the first and second moments for AdamW. We update the weights
@@ -394,8 +395,7 @@ class AdamW(Adam):
 
 
 class Adamax(Adam):
-    r"""Implementation of the Adamax optimizer. It is a variant of Adam based
-    on the infinity norm [1].
+    r"""The Adamax optimizer, a variant of Adam based on the infinity norm [1].
 
     Our Adam implementation follows the original paper and omits the bias
     correction in the first and second moment estimates. In detail,
@@ -448,7 +448,7 @@ class Adamax(Adam):
 
 
 class Lion(Optimizer):
-    r"""Implementation of the Lion optimizer [1].
+    r"""The Lion optimizer [1].
 
     Since updates are computed through the sign operation, they tend to
     have larger norm than for other optimizers such as SGD and Adam.
@@ -504,53 +504,36 @@ class Lion(Optimizer):
 
 
 class Adafactor(Optimizer):
-    r"""Implementation of the Adafactor optimizer [1].
+    r"""The Adafactor optimizer.
 
-    Our Adafactor implementation follows the original paper. In detail,
-
-    [1]: Shazeer, Noam et al., 2018.. Adafactor: Adaptive Learning Rates with Sublinear Memory Cost. ICLR 2015.
-
-    .. math::
-        \alpha_{t+1} &= max(\epsilon_2, RMS(X_{t-1})) \rho_{t}
-        G_t &= \delta f_{t}(X_{t-1})
-        R_t &= \beta_2t * R_{t-1} + (1 - \beta_2t)(G_t^2 + \epsilon_1 1_n 1_m^T)1_m
-        C_t &= \beta_2t * C_{t-1} + (1 - \beta_2t)(G_t^2 + \epsilon_1 1_n 1_m^T)
-        V_t &= R_t C_t / 1_m^T R_t
-        U_t &= G_t / \sqrt{V_t}
-        U_t &= U_t / max(1, RMS(U_t) / d)
-        X_t &= X_{t-1} - \alpha * U_t
-    Args:
-        learning_rate (float): The learning rate :math:`\alpha`.
-        eps (Tuple[float, float], optional): The coefficients
-          :math:`(\beta_1, \beta_2)` used for computing running averages of the
-          gradient and its square. Default: ``(0.9, 0.999)``
-        eps (float, optional): The term :math:`\epsilon` added to the
-          denominator to improve numerical stability. Default: ``1e-8``
+    Our Adafactor implementation follows the original paper: `Adafactor:
+    Adaptive Learning Rates with Sublinear Memory Cost
+    <https://arxiv.org/abs/1804.04235>`_
 
     Args:
-        learning_rate (Optional[float], optional): The learning rate
-            :math:`\alpha`. Defaults to None.
-        eps (Tuple[float, float], optional): The first term :math:`\epsilon`
+        learning_rate (float, optional): The learning rate. Default: ``None``.
+        eps (tuple(float, float), optional): The first term :math:`\epsilon_1`
             added to the square of the gradients to improve numerical
-            stability and the second term :math:`\epsilon` is used for
-            parameter scaling if `parameter_scale` is set to `True`.
-            Defaults to (1e-30, 1e-3).
+            stability and the second term :math:`\epsilon_2` is used for
+            parameter scaling if ``parameter_scale`` is set to ``True``.
+            Default: ``(1e-30, 1e-3)``.
         clip_threshold (float, optional): Clips the unscaled update at
-            `clip_threshold`. Defaults to 1.0.
-        decay_rate (float, optional): Controls the rate of increasing
-            :math:`\beta_2`. Defaults to -0.8.
-        beta_1 (Optional[float], optional): If set to a value bigger than zero
-            then first moment will be used. Defaults to None.
+            ``clip_threshold``. Default: ``1.0``.
+        decay_rate (float, optional): Coefficient for the running average
+            of the squared gradient. Default: ``-0.8``.
+        beta_1 (float, optional): If set to a value bigger than zero
+            then first moment will be used. Default: ``None``.
         weight_decay (float, optional): The weight decay :math:`\lambda`.
-            Defaults to 0.0.
-        scale_parameter (bool, optional): If set to `True` the learning rate
-            will be scaled by :math:`max(\epsilon_1, RMS(X_{t-1}))`.
-            Defaults to True.
-        relative_step (bool, optional): If set to `True` the `learning_rate`
+            Default: ``0.0``.
+        scale_parameter (bool, optional): If set to ``True`` the learning rate
+            will be scaled by :math:`\max(\epsilon_1, \text{RMS}(X_{t-1}))`.
+            Default: ``True``.
+        relative_step (bool, optional): If set to ``True`` the ``learning_rate``
             will be ignored and relative step size will be computed.
-            Defaults to True.
-        warmup_init (bool, optional): If set to True then relative step size
-            will be calculated by the current step. Defaults to False.
+            Default: ``True``.
+        warmup_init (bool, optional): If set to ``True`` then the relative
+            step size will be calculated by the current step. Default:
+            ``False``.
     """
 
     def __init__(
@@ -583,7 +566,7 @@ class Adafactor(Optimizer):
         relative_step_size = self.learning_rate
         if self.relative_step:
             min_step = 1e-6 * step if self.warmup_init else 1e-2
-            relative_step_size = mx.minimum(min_step, 1 / mx.sqrt(mx.array(step)))
+            relative_step_size = min(min_step, 1 / math.sqrt(step))
 
         parameter_scale = 1.0
         if self.scale_parameter:
@@ -602,6 +585,7 @@ class Adafactor(Optimizer):
     def apply_single(
         self, gradient: mx.array, parameter: mx.array, state: OptimizerState
     ):
+        """Performs the Adafactor parameter and state update."""
         gradient_shape = gradient.shape
         factored = len(gradient_shape) >= 2
         step = state.get("step", 0) + 1
@@ -610,7 +594,7 @@ class Adafactor(Optimizer):
 
         parameter_rms = self._compute_rms(parameter)
         learning_rate = self._compute_learning_rate(step, parameter_rms)
-        beta_2 = 1.0 - mx.power(step, self.decay_rate)
+        beta_2 = 1.0 - math.pow(step, self.decay_rate)
         update = mx.square(gradient) + self.eps[0]
 
         if factored:
