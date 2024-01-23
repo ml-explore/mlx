@@ -6,7 +6,7 @@ Initializers
 ------------
 
 .. autosummary::
-   :toctree: _autosummary_functions
+   :toctree: _autosummary
 
    constant
    normal

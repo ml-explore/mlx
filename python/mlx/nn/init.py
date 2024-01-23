@@ -1,5 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
+import math
 from typing import Callable, Literal
 
 import mlx.core as mx
@@ -12,11 +13,19 @@ def constant(
 
     Args:
         value (float): The value to fill the array with.
-        dtype (Dtype, optional): The data type of the array. Default: ``float32``.
+        dtype (Dtype, optional): The data type of the array. Default:
+          ``float32``.
 
     Returns:
         Callable[[array], array]: An initializer that returns an array with the
         same shape as the input, filled with ``value``.
+
+    Example:
+
+        >>> init_fn = nn.init.constant(0.5)
+        >>> init_fn(mx.zeros((2, 2)))
+        array([[0.5, 0.5],
+               [0.5, 0.5]], dtype=float32)
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -41,6 +50,13 @@ def normal(
     Returns:
         Callable[[array], array]: An initializer that returns an array with the
         same shape as the input, filled with samples from a normal distribution.
+
+    Example:
+
+        >>> init_fn = nn.init.normal()
+        >>> init_fn(mx.zeros((2, 2)))
+        array([[-0.982273, -0.534422],
+               [0.380709, 0.0645099]], dtype=float32)
     """
 
     def initializer(a: mx.array) -> mx.array:
@@ -52,7 +68,7 @@ def normal(
 def uniform(
     low: float = 0.0, high: float = 1.0, dtype: mx.Dtype = mx.float32
 ) -> Callable[[mx.array], mx.array]:
-    r"""An initializer that returns random values from a uniform distribution.
+    r"""An initializer that returns samples from a uniform distribution.
 
     Args:
         low (float, optional): The lower bound of the uniform distribution.
@@ -69,8 +85,7 @@ def uniform(
     Example:
 
         >>> init_fn = nn.init.uniform(low=0, high=1)
-        >>> out = init_fn(mx.zeros((2, 2))
-        >>> print(out)
+        >>> init_fn(mx.zeros((2, 2)))
         array([[0.883935, 0.863726],
                [0.617261, 0.417497]], dtype=float32)
     """
@@ -91,6 +106,13 @@ def identity(dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
     Returns:
         Callable[[array], array]: An initializer that returns an identity
         matrix with the same shape as the input.
+
+    Example:
+
+        >>> init_fn = nn.init.identity()
+        >>> init_fn(mx.zeros((2, 2)))
+        array([[1, 0],
+               [0, 1]], dtype=float32)
     """
 
     def initializer(arr: mx.array) -> mx.array:
@@ -98,7 +120,7 @@ def identity(dtype: mx.Dtype = mx.float32) -> Callable[[mx.array], mx.array]:
             raise ValueError(
                 f"The input array must be a square matrix but got shape {arr.shape}."
             )
-        return mx.core.eye(n=arr.shape[0], dtype=dtype)
+        return mx.eye(n=arr.shape[0], dtype=dtype)
 
     return initializer
 
@@ -110,12 +132,12 @@ def _calculate_fan_in_fan_out(x):
             f" but input with {x.ndim} dimensions."
         )
 
-    fan_in = x.shape[0]
-    fan_out = x.shape[1]
-    receptive_field = 1
+    fan_in = x.shape[-1]
+    fan_out = x.shape[0]
 
     if x.ndim > 2:
-        for d in x.shape[2:]:
+        receptive_field = 1
+        for d in x.shape[1:-1]:
             receptive_field *= d
 
         fan_in = fan_in * receptive_field
@@ -136,9 +158,8 @@ def glorot_normal(
     .. math::
         \sigma = \gamma \sqrt{\frac{2.0}{\text{fan_in} + \text{fan_out}}}
 
-    For more details see the original reference:
-
-    `Understanding the difficulty of training deep feedforward neural networks
+    For more details see the original reference: `Understanding the difficulty
+    of training deep feedforward neural networks
     <https://proceedings.mlr.press/v9/glorot10a.html>`_
 
     Args:
@@ -148,11 +169,21 @@ def glorot_normal(
         Callable[[array, float], array]: An initializer that returns an array
         with the same shape as the input, filled with samples from the Glorot
         normal distribution.
+
+    Example:
+
+        >>> init_fn = nn.init.glorot_normal()
+        >>> init_fn(mx.zeros((2, 2)))
+        array([[0.191107, 1.61278],
+               [-0.150594, -0.363207]], dtype=float32)
+        >>> init_fn(mx.zeros((2, 2)), gain=4.0)
+        array([[1.89613, -4.53947],
+               [4.48095, 0.995016]], dtype=float32)
     """
 
     def initializer(a: mx.array, gain: float = 1.0) -> mx.array:
         fan_in, fan_out = _calculate_fan_in_fan_out(a)
-        std = gain * mx.sqrt(mx.array(2.0 / (fan_in + fan_out)))
+        std = gain * math.sqrt(2.0 / (fan_in + fan_out))
         return mx.random.normal(shape=a.shape, dtype=dtype) * std
 
     return initializer
@@ -163,11 +194,16 @@ def glorot_uniform(
 ) -> Callable[[mx.array, float], mx.array]:
     r"""A Glorot uniform initializer.
 
-    This initializer generates values from a uniform distribution with a range
+    This initializer samples from a uniform distribution with a range
     computed from the number of input (``fan_in``) and output (``fan_out``)
-    units. The method is described in  `Understanding the difficulty of
-    training deep feedforward neural networks` - Glorot, X. & Bengio, Y.
-    (2010).
+    units according to:
+
+    .. math::
+        \sigma = \gamma \sqrt{\frac{6.0}{\text{fan_in} + \text{fan_out}}}
+
+    For more details see the original reference: `Understanding the difficulty
+    of training deep feedforward neural networks
+    <https://proceedings.mlr.press/v9/glorot10a.html>`_
 
     Args:
         dtype (Dtype, optional): The data type of the array. Default: ``float32``.
@@ -176,11 +212,21 @@ def glorot_uniform(
         Callable[[array, float], array]: An initializer that returns an array
         with the same shape as the input, filled with samples from the Glorot
         uniform distribution.
+
+    Example:
+
+        >>> init_fn = nn.init.glorot_uniform()
+        >>> init_fn(mx.zeros((2, 2)))
+        array([[0.223404, -0.890597],
+               [-0.379159, -0.776856]], dtype=float32)
+        >>> init_fn(mx.zeros((2, 2)), gain=4.0)
+        array([[-1.90041, 3.02264],
+               [-0.912766, 4.12451]], dtype=float32)
     """
 
     def initializer(a: mx.array, gain: float = 1.0) -> mx.array:
         fan_in, fan_out = _calculate_fan_in_fan_out(a)
-        limit = gain * mx.sqrt(mx.array(6.0 / (fan_in + fan_out)))
+        limit = gain * math.sqrt(6.0 / (fan_in + fan_out))
         return mx.random.uniform(-limit, limit, a.shape, dtype=dtype)
 
     return initializer
@@ -191,12 +237,20 @@ def he_normal(
 ) -> Callable[[mx.array, str, float], mx.array]:
     r"""Build a He normal initializer.
 
-    This initializer generates values from a normal distribution with a
-    standard deviation computed from the number of input (``fan_in``) or output
-    (``fan_out``) units in the weight tensor. The method is described in
-    `Delving deep into rectifiers: Surpassing human-level performance on
-    ImageNet classification`
-    - He, K. et al. (2015).
+    This initializer samples from a normal distribution with a standard
+    deviation computed from the number of input (``fan_in``) or output
+    (``fan_out``) units according to:
+
+    .. math::
+        \sigma = \gamma \frac{1}{\sqrt{\text{fan}}}
+
+    where :math:`\text{fan}` is either the number of input units when the
+    ``mode`` is ``"fan_in"`` or output units when the ``mode`` is
+    ``"fan_out"``.
+
+    For more details see the original reference: `Delving Deep into Rectifiers:
+    Surpassing Human-Level Performance on ImageNet Classification
+    <https://arxiv.org/abs/1502.01852>`_
 
     Args:
         dtype (Dtype, optional): The data type of the array. Defaults to mx.float32.
@@ -205,6 +259,16 @@ def he_normal(
         Callable[[array, str, float], array]: An initializer that returns an
         array with the same shape as the input, filled with samples from the He
         normal distribution.
+
+    Example:
+
+        >>> init_fn = nn.init.he_normal()
+        >>> init_fn(mx.zeros((2, 2)))  # uses fan_in
+        array([[-1.25211, 0.458835],
+               [-0.177208, -0.0137595]], dtype=float32)
+        >>> init_fn(mx.zeros((2, 2)), mode="fan_out", gain=5)
+        array([[5.6967, 4.02765],
+               [-4.15268, -2.75787]], dtype=float32)
     """
 
     def initializer(
@@ -220,7 +284,7 @@ def he_normal(
         else:
             raise ValueError(f"Invalid mode: {mode}. Valid modes are: fan_in, fan_out")
 
-        std = gain / mx.sqrt(mx.array(fan))
+        std = gain / math.sqrt(fan)
         return mx.random.normal(shape=a.shape, dtype=dtype) * std
 
     return initializer
@@ -231,11 +295,22 @@ def he_uniform(
 ) -> Callable[[mx.array, str, float], mx.array]:
     r"""A He uniform (Kaiming uniform) initializer.
 
-    This initializer generates values from a uniform distribution with a range
+    This initializer samples from a uniform distribution with a range
     computed from the number of input (``fan_in``) or output (``fan_out``)
-    units.  The method is described in `Delving deep into rectifiers:
-    Surpassing human-level performance on ImageNet classification` - He, K. et
-    al. (2015).
+    units according to:
+
+    .. math::
+
+        \sigma = \gamma \sqrt{\frac{3.0}{\text{fan}}}
+
+    where :math:`\text{fan}` is either the number of input units when the
+    ``mode`` is ``"fan_in"`` or output units when the ``mode`` is
+    ``"fan_out"``.
+
+    For more details see the original reference: `Delving Deep into Rectifiers:
+    Surpassing Human-Level Performance on ImageNet Classification
+    <https://arxiv.org/abs/1502.01852>`_
+
 
     Args:
         dtype (Dtype, optional): The data type of the array. Default: ``float32``.
@@ -244,6 +319,16 @@ def he_uniform(
         Callable[[array, str, float], array]: An initializer that returns an
         array with the same shape as the input, filled with samples from  the
         He uniform distribution.
+
+    Example:
+
+        >>> init_fn = nn.init.he_uniform()
+        >>> init_fn(mx.zeros((2, 2)))  # uses fan_in
+        array([[0.0300242, -0.0184009],
+               [0.793615, 0.666329]], dtype=float32)
+        >>> init_fn(mx.zeros((2, 2)), mode="fan_out", gain=5)
+        array([[-1.64331, -2.16506],
+               [1.08619, 5.79854]], dtype=float32)
     """
 
     def initializer(
@@ -259,7 +344,7 @@ def he_uniform(
         else:
             raise ValueError(f"Invalid mode: {mode}. Valid modes are: fan_in, fan_out")
 
-        limit = gain * mx.sqrt(mx.array(3.0 / fan))
+        limit = gain * math.sqrt(3.0 / fan)
         return mx.random.uniform(-limit, limit, a.shape, dtype=dtype)
 
     return initializer
