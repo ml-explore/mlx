@@ -404,6 +404,7 @@ array allclose(
     const array& b,
     double rtol = 1e-5,
     double atol = 1e-8,
+    bool equal_nan = false,
     StreamOrDevice s = {});
 
 /** Returns a boolean array where two arrays are element-wise equal within the specified tolerance. */
@@ -412,6 +413,7 @@ array isclose(
     const array& b,
     double rtol = 1e-5,
     double atol = 1e-8,
+    bool equal_nan = false,
     StreamOrDevice s = {});
 
 /**

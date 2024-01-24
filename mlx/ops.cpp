@@ -1154,8 +1154,9 @@ array allclose(
     const array& b,
     double rtol /* = 1e-5 */,
     double atol /* = 1e-8 */,
+    bool equal_nan /* = false */,
     StreamOrDevice s /* = {}*/) {
-    return all(isclose(a, b, rtol, atol, s), s);
+    return all(isclose(a, b, rtol, atol, equal_nan, s), s);
 }
 
 array isclose(
@@ -1163,6 +1164,7 @@ array isclose(
     const array& b,
     double rtol /* = 1e-5 */,
     double atol /* = 1e-8 */,
+    bool equal_nan /* = false */,
     StreamOrDevice s /* = {}*/) {
   // |a - b| <= atol + rtol * |b|
     auto rhs = add(array(atol), multiply(array(rtol), abs(b, s), s), s);
@@ -1182,6 +1184,11 @@ array isclose(
 
     // Convert all the elements where either value is NaN to False.
     out = out && logical_not(any_nan, s);
+
+    if (equal_nan) {
+      auto both_nan = isnan(a, s) && isnan(b, s);
+      out = out || both_nan;
+    }
 
     return out;
 }

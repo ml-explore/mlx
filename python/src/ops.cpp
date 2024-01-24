@@ -1648,9 +1648,10 @@ void init_ops(py::module_& m) {
       "rtol"_a = 1e-5,
       "atol"_a = 1e-8,
       py::kw_only(),
+      "equal_nan"_a = false,
       "stream"_a = none,
       R"pbdoc(
-        allclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, stream: Union[None, Stream, Device] = None) -> array
+        allclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
 
         Approximate comparison of two arrays.
 
@@ -1668,6 +1669,8 @@ void init_ops(py::module_& m) {
             b (array): Input array.
             rtol (float): Relative tolerance.
             atol (float): Absolute tolerance.
+            equal_nan (bool): If ``True``, NaNs are treated as equal.
+              Defaults to ``False``.
 
         Returns:
             array: The boolean output scalar indicating if the arrays are close.
@@ -1681,9 +1684,10 @@ void init_ops(py::module_& m) {
       "rtol"_a = 1e-5,
       "atol"_a = 1e-8,
       py::kw_only(),
+      "equal_nan"_a = false,
       "stream"_a = none,
       R"pbdoc(
-        isclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, stream: Union[None, Stream, Device] = None) -> array
+        isclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
 
         Returns a boolean array where two arrays are element-wise equal within a tolerance.
 
@@ -1703,6 +1707,8 @@ void init_ops(py::module_& m) {
             b (array): Input array.
             rtol (float): Relative tolerance.
             atol (float): Absolute tolerance.
+            equal_nan (bool): If ``True``, NaNs are treated as equal.
+              Defaults to ``False``.
 
         Returns:
             array: The boolean output scalar indicating if the arrays are close.
