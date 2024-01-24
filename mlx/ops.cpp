@@ -3347,7 +3347,7 @@ std::vector<array> depends(
   }
 
   return array::make_arrays(
-      shapes, dtypes, std::make_shared<Depends>(to_stream(s)), inputs);
+      shapes, dtypes, std::make_shared<Depends>(to_stream(s)), all_inputs);
 }
 
 std::vector<array> custom_vjp(
