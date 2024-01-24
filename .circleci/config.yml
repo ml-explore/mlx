@@ -29,7 +29,7 @@ jobs:
             pip install pybind11-stubgen
             pip install numpy
             sudo apt-get update
-            sudo apt-get install libblas-dev
+            sudo apt-get install libblas-dev liblapack-dev
       - run:
           name: Install Python package
           command: |
