@@ -346,7 +346,8 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     if (out.shape() != cotans[cotan_index].shape()) {
       std::ostringstream msg;
       msg << "[vjp] Output shape " << out.shape()
-          << " does not cotangent shape " << cotans[cotan_index].shape() << ".";
+          << " does not match cotangent shape " << cotans[cotan_index].shape()
+          << ".";
       if (outputs.size() == 1 && out.size() == 1) {
         msg << " If you are using grad your function must return a scalar.";
       }
