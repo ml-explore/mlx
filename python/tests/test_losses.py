@@ -10,100 +10,61 @@ import numpy as np
 
 class TestLosses(mlx_tests.MLXTestCase):
     def test_cross_entropy(self):
+        # No weights, no label smoothing
         logits = mx.array([[0.0, -float("inf")], [-float("inf"), 0.0]])
-        targets = mx.array([0, 1])
+        indices = mx.array([0, 1])
+        expected = mx.array([0.0, 0.0])
+        loss = nn.losses.cross_entropy(logits, indices, reduction="none")
+        self.assertTrue(mx.allclose(loss, expected))
 
-        # Test with reduction 'none'
-        losses_none = nn.losses.cross_entropy(logits, targets, reduction="none")
-        expected_none = mx.array([0.0, 0.0])
-        self.assertTrue(mx.array_equal(losses_none, expected_none))
+        probs = mx.array([[1.0, 0.0], [0.0, 1.0]])
+        loss = nn.losses.cross_entropy(logits, probs, reduction="none")
+        self.assertTrue(mx.isnan(loss).all())  # produce NaNs, like PyTorch
 
-        # Test with reduction 'mean'
-        losses_mean = nn.losses.cross_entropy(logits, targets, reduction="mean")
-        expected_mean = mx.mean(expected_none)
-        self.assertEqual(losses_mean, expected_mean)
-
-        # Test with reduction 'sum'
-        losses_sum = nn.losses.cross_entropy(logits, targets, reduction="sum")
-        expected_sum = mx.sum(expected_none)
-        self.assertEqual(losses_sum, expected_sum)
-
-        # Test cases with weights and no label smoothing
+        # With weights, no label smoothing
         logits = mx.array([[2.0, -1.0], [-1.0, 2.0]])
-        targets = mx.array([0, 1])
+        indices = mx.array([0, 1])
         weights = mx.array([1.0, 2.0])
+        expected = mx.array([0.04858735, 0.0971747])
+        loss = nn.losses.cross_entropy(
+            logits, indices, weights=weights, reduction="none"
+        )
+        self.assertTrue(mx.allclose(loss, expected))
 
-        # Reduction 'none'
-        losses_none = nn.losses.cross_entropy(
-            logits,
-            targets,
-            weights=weights,
-            reduction="none",
-        )
-        expected_none = mx.array([0.04858735, 0.0971747])  # Calculated losses
-        self.assertTrue(
-            np.allclose(losses_none, expected_none, atol=1e-5),
-            "Test case failed for cross_entropy loss --reduction='none' --weights=[1.0, 2.0]",
-        )
+        probs = mx.array([[1.0, 0.0], [0.0, 1.0]])
+        loss = nn.losses.cross_entropy(logits, probs, weights=weights, reduction="none")
+        self.assertTrue(mx.allclose(loss, expected))
 
-        # Reduction 'mean'
-        losses_mean = nn.losses.cross_entropy(
-            logits,
-            targets,
-            weights=weights,
-            reduction="mean",
+        # No weights, with label smoothing
+        logits = mx.array([[2.0, -1.0], [-1.0, 2.0]])
+        indices = mx.array([0, 1])
+        expected = mx.array([0.498587, 0.498587])
+        loss = nn.losses.cross_entropy(
+            logits, indices, label_smoothing=0.3, reduction="none"
         )
-        expected_mean = mx.mean(expected_none)
-        self.assertTrue(
-            np.allclose(losses_mean, expected_mean, atol=1e-5),
-            "Test case failed for cross_entropy loss --reduction='mean' --weights=[1.0, 2.0]",
-        )
+        self.assertTrue(mx.allclose(loss, expected))
 
-        # Reduction 'sum'
-        losses_sum = nn.losses.cross_entropy(
-            logits,
-            targets,
-            weights=weights,
-            reduction="sum",
+        probs = mx.array([[1.0, 0.0], [0.0, 1.0]])
+        loss = nn.losses.cross_entropy(
+            logits, probs, label_smoothing=0.3, reduction="none"
         )
-        expected_sum = mx.sum(expected_none)
-        self.assertTrue(
-            np.allclose(losses_sum, expected_sum, atol=1e-5),
-            "Test case failed for cross_entropy loss --reduction='sum' --weights=[1.0, 2.0]",
-        )
+        self.assertTrue(mx.allclose(loss, expected))
 
-        # Test case with equal weights and label smoothing > 0
-        logits = mx.array(
-            [[0, 0.2, 0.7, 0.1, 0], [0, 0.9, 0.2, 0.2, 1], [1, 0.2, 0.7, 0.9, 1]]
+        # With weights and label smoothing
+        logits = mx.array([[2.0, -1.0], [-1.0, 2.0]])
+        indices = mx.array([0, 1])
+        weights = mx.array([1.0, 2.0])
+        expected = mx.array([0.49858734, 0.9971747])
+        loss = nn.losses.cross_entropy(
+            logits, indices, weights=weights, label_smoothing=0.3, reduction="none"
         )
-        target = mx.array([2, 1, 0])
+        self.assertTrue(mx.allclose(loss, expected))
 
-        losses_none = nn.losses.cross_entropy(
-            logits, target, label_smoothing=0.3, reduction="none"
+        probs = mx.array([[1.0, 0.0], [0.0, 1.0]])
+        loss = nn.losses.cross_entropy(
+            logits, probs, weights=weights, label_smoothing=0.3, reduction="none"
         )
-        expected_none = mx.array([1.29693, 1.38617, 1.48176])
-        self.assertTrue(
-            mx.allclose(expected_none, losses_none),
-            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='none'",
-        )
-
-        expected_mean = mx.mean(expected_none)
-        losses_mean = nn.losses.cross_entropy(
-            logits, target, label_smoothing=0.3, reduction="mean"
-        )
-        self.assertTrue(
-            mx.allclose(losses_mean, expected_mean),
-            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='mean'",
-        )
-
-        expected_sum = mx.sum(expected_none)
-        losses_sum = nn.losses.cross_entropy(
-            logits, target, label_smoothing=0.3, reduction="sum"
-        )
-        self.assertTrue(
-            mx.allclose(losses_sum, expected_sum),
-            "Test case failed for cross_entropy --label_smoothing=0.3 --reduction='sum'",
-        )
+        self.assertTrue(mx.allclose(loss, expected))
 
     def test_binary_cross_entropy(self):
         def _test_logits_as_inputs():

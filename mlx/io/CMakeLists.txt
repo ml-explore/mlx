@@ -4,6 +4,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/load.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/safetensor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/gguf.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/gguf_quants.cpp
 )
 
 MESSAGE(STATUS "Downloading json")
