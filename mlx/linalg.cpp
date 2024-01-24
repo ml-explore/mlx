@@ -188,7 +188,6 @@ std::pair<array, array> qrf(const array& a, StreamOrDevice s /* = {} */) {
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-
   auto out = array::make_arrays(
       {a.shape(), a.shape()},
       {a.dtype(), a.dtype()},
