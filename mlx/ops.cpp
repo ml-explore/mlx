@@ -3328,6 +3328,28 @@ array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   }
 }
 
+std::vector<array> depends(
+    const std::vector<array>& inputs,
+    const std::vector<array>& dependencies) {
+  std::vector<array> all_inputs = inputs;
+  all_inputs.insert(all_inputs.end(), dependencies.begin(), dependencies.end());
+
+  // Compute the stream. Maybe do it in a smarter way at some point in the
+  // future.
+  Stream s = (inputs[0].has_primitive()) ? inputs[0].primitive().stream()
+                                         : to_stream({});
+  // Make the output info
+  std::vector<std::vector<int>> shapes;
+  std::vector<Dtype> dtypes;
+  for (const auto& in : inputs) {
+    shapes.emplace_back(in.shape());
+    dtypes.emplace_back(in.dtype());
+  }
+
+  return array::make_arrays(
+      shapes, dtypes, std::make_shared<Depends>(to_stream(s)), inputs);
+}
+
 std::vector<array> custom_vjp(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::function<std::vector<array>(
@@ -3374,7 +3396,7 @@ std::vector<array> checkpoint(
                      const std::vector<array>& primals,
                      const std::vector<array>& cotangents,
                      const std::vector<array>& outputs) -> std::vector<array> {
-    auto [__, vjps] = vjp(fun, primals, cotangents);
+    auto [__, vjps] = vjp(fun, depends(primals, outputs), cotangents);
     return vjps;
   };
 

@@ -492,6 +492,12 @@ void CustomVJP::eval_gpu(
   eval(inputs, outputs);
 }
 
+void Depends::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+
 void Divide::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "div");
 }

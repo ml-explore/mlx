@@ -1116,6 +1116,13 @@ array diagonal(
 /** Extract diagonal from a 2d array or create a diagonal matrix. */
 array diag(const array& a, int k = 0, StreamOrDevice s = {});
 
+/** Implements the identity function but allows injecting dependencies to other
+ * arrays to ensure that they will be computed before anything that depends on
+ * the inputs. */
+std::vector<array> depends(
+    const std::vector<array>& inputs,
+    const std::vector<array>& dependencies);
+
 /** Allows to have call a function and define a custom VJP for it. */
 std::vector<array> custom_vjp(
     std::function<std::vector<array>(const std::vector<array>&)> fun,

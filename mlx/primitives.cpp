@@ -817,6 +817,23 @@ std::vector<array> CustomVJP::vjp(
   return vjps;
 }
 
+std::vector<array> Depends::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  std::vector<array> vjps;
+
+  for (auto arg : argnums) {
+    if (arg < cotangents.size()) {
+      vjps.push_back(cotangents[arg]);
+    } else {
+      vjps.push_back(zeros_like(primals[arg]));
+    }
+  }
+  return vjps;
+}
+
 std::vector<array> Divide::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

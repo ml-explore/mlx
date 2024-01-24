@@ -242,6 +242,15 @@ void CustomVJP::eval(
   }
 }
 
+void Depends::eval(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() > outputs.size());
+  for (int i = 0; i < outputs.size(); i++) {
+    outputs[i].copy_shared_buffer(inputs[i]);
+  }
+}
+
 void Erf::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
