@@ -701,7 +701,7 @@ array concatenate(
     if (a.ndim() != shape.size()) {
       std::ostringstream msg;
       msg << "[concatenate] All the input arrays must have the same number of "
-          << "dimensions. However, got arrays with dimensions" << shape.size()
+          << "dimensions. However, got arrays with dimensions " << shape.size()
           << " and " << a.ndim() << ".";
       throw std::invalid_argument(msg.str());
     }
