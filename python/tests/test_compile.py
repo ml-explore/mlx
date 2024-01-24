@@ -105,16 +105,18 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         compiled = mx.compile(closure)
         out = compiled(mx.array(1))
-        self.assertTrue(out.item(), 2)
+        self.assertEqual(out.item(), 2)
 
         # Try again
         out = compiled(mx.array(1))
-        self.assertTrue(out.item(), 2)
+        self.assertEqual(out.item(), 2)
 
         # Change the shape of the enclosed variable
         x = mx.array([1, 2])
         out = compiled(mx.array(1))
-        self.assertTrue(mx.array_equal(out, mx.array([2, 3])))
+
+        # We still get the original input (closures are not updated)
+        self.assertEqual(out.item(), 2)
 
         # Try with a tree of enclosed variables
         x = {"a": mx.array(1), "b": mx.array(2)}
@@ -129,11 +131,26 @@ class TestCompile(mlx_tests.MLXTestCase):
         # Change the shape of one input
         x["a"] = mx.array([4, 5])
         out = compiled(mx.array(1))
-        self.assertTrue(mx.array_equal(out, mx.array([7, 8])))
+        self.assertEqual(out.item(), 4)
 
         x["b"] = mx.array([-6, -8])
         out = compiled(mx.array(1))
-        self.assertTrue(mx.array_equal(out, mx.array([-1, -2])))
+        self.assertEqual(out.item(), 4)
+
+        # Enclosed variable is not evaluated yet
+        x = mx.array(1)
+        x = x + x
+
+        def closure(y):
+            return x + y
+
+        compiled = mx.compile(closure)
+        out = compiled(mx.array(2))
+        self.assertEqual(out.item(), 4)
+
+        # And again
+        out = compiled(mx.array(2))
+        self.assertEqual(out.item(), 4)
 
     def test_function_creates_array(self):
         def fun(x):
