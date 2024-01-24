@@ -864,6 +864,12 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertListEqual(mx.isclose(a, b).tolist(), [True, False, True])
 
+        a = mx.array([np.nan])
+        self.assertListEqual(mx.isclose(a, a).tolist(), [False])
+
+        a = mx.array([np.nan])
+        self.assertListEqual(mx.isclose(a, a, equal_nan=True).tolist(), [True])
+
     def test_all(self):
         a = mx.array([[True, False], [True, True]])
 
