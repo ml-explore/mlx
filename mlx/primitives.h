@@ -1602,6 +1602,7 @@ class Transpose : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+/* QR Factorization primitive. */
 class QRF : public Primitive {
  public:
   explicit QRF(Stream stream) : Primitive(stream){};

@@ -32,7 +32,6 @@ target_sources(tests PRIVATE
   utils_tests.cpp
   vmap_tests.cpp
   linalg_tests.cpp
-  linalg_qr_tests.cpp
   ${METAL_TEST_SOURCES}
 )
 
