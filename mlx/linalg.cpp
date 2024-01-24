@@ -6,8 +6,6 @@
 
 #include "mlx/dtype.h"
 #include "mlx/linalg.h"
-#include "mlx/primitives.h"
-#include "mlx/utils.h"
 
 namespace mlx::core::linalg {
 
@@ -188,6 +186,15 @@ std::pair<array, array> qrf(const array& a, StreamOrDevice s /* = {} */) {
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
+  if (a.ndim() > 2) {
+    throw std::invalid_argument(
+        "[linalg::qr] Support for more than 2 dimensions NYI.");
+  }
+  if (a.shape(0) != a.shape(1)) {
+    throw std::invalid_argument(
+        "[linalg::qr] Support for non-square matrices NYI.");
+  }
+
   auto out = array::make_arrays(
       {a.shape(), a.shape()},
       {a.dtype(), a.dtype()},
