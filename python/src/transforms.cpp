@@ -487,38 +487,6 @@ struct PyCompiledFun {
     // Inputs must be array or tree of arrays
     auto inputs = tree_flatten(args, true);
 
-    // Get globally enclosed arrays so we don't compile through them
-    // c.f. https://github.com/python/cpython/blob/main/Lib/inspect.py#L1638
-    if (py::hasattr(fun, "__globals__")) {
-      py::dict globals = py::getattr(fun, "__globals__");
-      auto co_names = py::getattr(py::getattr(fun, "__code__"), "co_names");
-      for (auto& n : co_names) {
-        if (py::cast<bool>(globals.attr("__contains__")(n))) {
-          auto global_inputs =
-              tree_flatten(globals.attr("__getitem__")(n), false);
-          std::move(
-              std::begin(global_inputs),
-              std::end(global_inputs),
-              std::back_inserter(inputs));
-        }
-      }
-    }
-
-    // Get locally enclosed arrays so we don't compile through them
-    if (py::hasattr(fun, "__closure__")) {
-      auto closures = py::getattr(fun, "__closure__");
-      if (py::isinstance<py::tuple>(closures)) {
-        for (auto& closure : closures) {
-          auto enclosed_inputs =
-              tree_flatten(py::getattr(closure, "cell_contents"), false);
-          std::move(
-              std::begin(enclosed_inputs),
-              std::end(enclosed_inputs),
-              std::back_inserter(inputs));
-        }
-      }
-    }
-
     // Compile and call
     auto outputs = detail::compile(compile_fun, fun_id)(inputs);
 
