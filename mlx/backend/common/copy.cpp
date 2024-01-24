@@ -289,11 +289,16 @@ void copy(const array& src, array& dst, CopyType ctype) {
   // Allocate the output
   switch (ctype) {
     case CopyType::Vector:
-      dst.set_data(
-          allocator::malloc_or_wait(src.data_size() * dst.itemsize()),
-          src.data_size(),
-          src.strides(),
-          src.flags());
+      if (src.is_donatable() && src.itemsize() == dst.itemsize()) {
+        dst.copy_shared_buffer(src);
+      } else {
+        auto size = src.data_size();
+        dst.set_data(
+            allocator::malloc_or_wait(size * dst.itemsize()),
+            size,
+            src.strides(),
+            src.flags());
+      }
       break;
     case CopyType::Scalar:
     case CopyType::General:
