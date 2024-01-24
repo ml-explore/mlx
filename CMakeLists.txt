@@ -127,6 +127,17 @@ else()
   message(STATUS ${BLAS_INCLUDE_DIRS})
   target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
   target_link_libraries(mlx ${BLAS_LIBRARIES})
+  find_package(LAPACK REQUIRED)
+  if (NOT LAPACK_FOUND)
+      message(FATAL_ERROR "Must have LAPACK installed")
+  endif()
+  find_path(LAPACK_INCLUDE_DIRS lapacke.h
+    /usr/include
+    /usr/local/include)
+  message(STATUS ${LAPACK_LIBRARIES})
+  message(STATUS "INCLUDE " ${LAPACK_INCLUDE_DIRS})
+  target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+  target_link_libraries(mlx ${LAPACK_LIBRARIES})
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)

@@ -13,7 +13,8 @@
 
 #ifdef ACCELERATE_NEW_LAPACK
 #include <vecLib/lapack.h>
-#include <vecLib/lapack_types.h>
+#else
+#include <lapack.h>
 #endif
 
 namespace mlx::core {
@@ -25,34 +26,32 @@ struct lpack;
 template <>
 struct lpack<float> {
   static void xgeqrf(
-      const __LAPACK_int* _Nonnull m,
-      const __LAPACK_int* _Nonnull n,
-      float* _Nullable a,
-      const __LAPACK_int* _Nonnull lda,
-      float* _Nullable tau,
-      float* _Nonnull work,
-      const __LAPACK_int* _Nonnull lwork,
-      __LAPACK_int* _Nonnull info) {
+      const int* m,
+      const int* n,
+      float* a,
+      const int* lda,
+      float* tau,
+      float* work,
+      const int* lwork,
+      int* info) {
     sgeqrf_(m, n, a, lda, tau, work, lwork, info);
   }
   static void xorgqr(
-      const __LAPACK_int* _Nonnull m,
-      const __LAPACK_int* _Nonnull n,
-      const __LAPACK_int* _Nonnull k,
-      float* _Nullable a,
-      const __LAPACK_int* _Nonnull lda,
-      const float* _Nullable tau,
-      float* _Nonnull work,
-      const __LAPACK_int* _Nonnull lwork,
-      __LAPACK_int* _Nonnull info) {
+      const int* m,
+      const int* n,
+      const int* k,
+      float* a,
+      const int* lda,
+      const float* tau,
+      float* work,
+      const int* lwork,
+      int* info) {
     sorgqr_(m, n, k, a, lda, tau, work, lwork, info);
   }
 };
 
 template <typename T>
-void qrf_impl(const array& A, array& Q, array& R) {
-  // TODO copies for contiguity
-
+void qrf_impl(array& A, array& Q, array& R) {
   const int M = A.shape(0);
   const int N = A.shape(1);
   const int lda = std::max(M, N);
@@ -61,9 +60,6 @@ void qrf_impl(const array& A, array& Q, array& R) {
   const int tau_size = std::min(M, N);
   // Holds scalar factors of the elementary reflectors
   Buffer tau = allocator::malloc_or_wait(sizeof(T) * tau_size);
-
-  R.set_data(allocator::malloc_or_wait(R.nbytes()));
-  Q.set_data(allocator::malloc_or_wait(A.nbytes()));
 
   T optimal_work;
   int lwork = -1;
@@ -88,7 +84,7 @@ void qrf_impl(const array& A, array& Q, array& R) {
   lpack<T>::xgeqrf(
       &M,
       &N,
-      R.data<T>(),
+      A.data<T>(),
       &lda,
       static_cast<T*>(tau.ptr()),
       static_cast<T*>(work.ptr()),
@@ -97,11 +93,16 @@ void qrf_impl(const array& A, array& Q, array& R) {
 
   // For m ≥ n, R is an upper triangular matrix.
   // For m < n, R is an upper trapezoidal matrix.
-  // Upper tri part of R
-  // Select upper tri part of R without an eval
+  array R_ = triu(A, 0);
+  R_.eval();
 
-  //  array R_ = triu(A, 0);
-  //  R_.eval();
+  R.set_data(
+      allocator::malloc_or_wait(R_.nbytes()),
+      R_.data_size(),
+      R_.strides(),
+      R_.flags());
+
+  copy_inplace(R_, R, CopyType::Vector);
 
   // retrieve Q from the elementary reflectors
   // uses the same worksize as before
@@ -109,12 +110,20 @@ void qrf_impl(const array& A, array& Q, array& R) {
       &M,
       &N,
       &tau_size,
-      Q.data<T>(),
+      A.data<T>(),
       &lda,
       static_cast<T*>(tau.ptr()),
       static_cast<T*>(work.ptr()),
       &lwork,
       &info);
+
+  Q.set_data(
+      allocator::malloc_or_wait(A.nbytes()),
+      A.data_size(),
+      A.strides(),
+      A.flags());
+
+  copy_inplace(A, Q, CopyType::Vector);
 }
 
 void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
@@ -123,7 +132,8 @@ void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
   array A = inputs[0];
 
   if (!(A.dtype() == Dtype::Val::float32)) {
-    throw std::runtime_error("[QR::eval] Only supported for float32.");
+    throw std::runtime_error(
+        "QR factorization is only supported for floating point 32bit type.");
   }
 
   array Q = outputs[0];
