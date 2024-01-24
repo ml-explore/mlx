@@ -19,66 +19,6 @@ namespace {
 
 static constexpr int METAL_MAX_INDEX_ARRAYS = 10;
 
-void set_binary_op_output_data_(
-    const array& a,
-    const array& b,
-    array& out,
-    BinaryOpType bopt) {
-  switch (bopt) {
-    case ScalarScalar:
-      out.set_data(
-          allocator::malloc_or_wait(out.itemsize()), 1, a.strides(), a.flags());
-      break;
-    case ScalarVector:
-      if (b.is_donatable() && b.itemsize() == out.itemsize()) {
-        out.move_shared_buffer(b);
-      } else {
-        out.set_data(
-            allocator::malloc_or_wait(b.data_size() * out.itemsize()),
-            b.data_size(),
-            b.strides(),
-            b.flags());
-      }
-      break;
-    case VectorScalar:
-      if (a.is_donatable() && a.itemsize() == out.itemsize()) {
-        out.move_shared_buffer(a);
-      } else {
-        out.set_data(
-            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
-            a.data_size(),
-            a.strides(),
-            a.flags());
-      }
-      break;
-    case VectorVector:
-      if (a.is_donatable() && a.itemsize() == out.itemsize()) {
-        out.move_shared_buffer(a);
-      } else if (b.is_donatable() && b.itemsize() == out.itemsize()) {
-        out.move_shared_buffer(b);
-      } else {
-        out.set_data(
-            allocator::malloc_or_wait(a.data_size() * out.itemsize()),
-            a.data_size(),
-            a.strides(),
-            a.flags());
-      }
-      break;
-    case General:
-      if (a.is_donatable() && a.flags().row_contiguous &&
-          a.itemsize() == out.itemsize() && a.size() == out.size()) {
-        out.move_shared_buffer(a);
-      } else if (
-          b.is_donatable() && b.flags().row_contiguous &&
-          b.itemsize() == out.itemsize() && b.size() == out.size()) {
-        out.move_shared_buffer(b);
-      } else {
-        out.set_data(allocator::malloc_or_wait(out.nbytes()));
-      }
-      break;
-  }
-}
-
 void binary_op(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
@@ -87,8 +27,8 @@ void binary_op(
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data_(a, b, outputs[0], bopt);
-  set_binary_op_output_data_(a, b, outputs[1], bopt);
+  set_binary_op_output_data(a, b, outputs[0], bopt, true);
+  set_binary_op_output_data(a, b, outputs[1], bopt, true);
 
   auto& out = outputs[0];
   if (out.size() == 0) {
@@ -188,7 +128,7 @@ void binary_op(
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data_(a, b, out, bopt);
+  set_binary_op_output_data(a, b, out, bopt, true);
   if (out.size() == 0) {
     return;
   }
