@@ -569,7 +569,10 @@ TEST_CASE("test is close") {
   {
     array a({1.0, std::nan("1"), std::nan("1")});
     array b({1.0, std::nan("1"), 2.0});
-    CHECK(array_equal(isclose(a, b, 1e-5, 1e-8, equal_nan = true), array({true, true, false})).item<bool>());
+    CHECK(array_equal(
+              isclose(a, b, 1e-5, 1e-8, equal_nan = true),
+              array({true, true, false}))
+              .item<bool>());
   }
 }
 

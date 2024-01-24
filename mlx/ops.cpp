@@ -1156,7 +1156,7 @@ array allclose(
     double atol /* = 1e-8 */,
     bool equal_nan /* = false */,
     StreamOrDevice s /* = {}*/) {
-    return all(isclose(a, b, rtol, atol, equal_nan, s), s);
+  return all(isclose(a, b, rtol, atol, equal_nan, s), s);
 }
 
 array isclose(
@@ -1167,30 +1167,32 @@ array isclose(
     bool equal_nan /* = false */,
     StreamOrDevice s /* = {}*/) {
   // |a - b| <= atol + rtol * |b|
-    auto rhs = add(array(atol), multiply(array(rtol), abs(b, s), s), s);
-    auto lhs = abs(subtract(a, b, s), s);
-    auto out = less_equal(lhs, rhs, s);
+  auto rhs = add(array(atol), multiply(array(rtol), abs(b, s), s), s);
+  auto lhs = abs(subtract(a, b, s), s);
+  auto out = less_equal(lhs, rhs, s);
 
-    // Correct the result for infinite values.
-    auto any_inf = isinf(a, s) || isinf(b, s) || isneginf(a, s) || isneginf(b, s);
-    auto both_inf = (isinf(a, s) && isinf(b, s)) || (isneginf(a, s) && isneginf(b, s));
-    auto any_nan = isnan(a, s) || isnan(b, s);
+  // Correct the result for infinite values.
+  auto any_inf = isinf(a, s) || isinf(b, s) || isneginf(a, s) || isneginf(b, s);
+  auto both_inf =
+      (isinf(a, s) && isinf(b, s)) || (isneginf(a, s) && isneginf(b, s));
+  auto any_nan = isnan(a, s) || isnan(b, s);
 
-    // Convert all elements where either value is infinite to False.
-    out = out && logical_not(any_inf, s);
+  // Convert all elements where either value is infinite to False.
+  out = out && logical_not(any_inf, s);
 
-    // Convert all the elements where both values are infinite and of the same sign to True.
-    out = out || both_inf;
+  // Convert all the elements where both values are infinite and of the same
+  // sign to True.
+  out = out || both_inf;
 
-    // Convert all the elements where either value is NaN to False.
-    out = out && logical_not(any_nan, s);
+  // Convert all the elements where either value is NaN to False.
+  out = out && logical_not(any_nan, s);
 
-    if (equal_nan) {
-      auto both_nan = isnan(a, s) && isnan(b, s);
-      out = out || both_nan;
-    }
+  if (equal_nan) {
+    auto both_nan = isnan(a, s) && isnan(b, s);
+    out = out || both_nan;
+  }
 
-    return out;
+  return out;
 }
 
 array all(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {

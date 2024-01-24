@@ -407,7 +407,8 @@ array allclose(
     bool equal_nan = false,
     StreamOrDevice s = {});
 
-/** Returns a boolean array where two arrays are element-wise equal within the specified tolerance. */
+/** Returns a boolean array where two arrays are element-wise equal within the
+ * specified tolerance. */
 array isclose(
     const array& a,
     const array& b,
