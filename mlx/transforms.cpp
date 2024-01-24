@@ -337,12 +337,20 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       }
     }
     if (cotan_index >= cotans.size()) {
-      throw std::invalid_argument(
-          "[vjp] Number of outputs with gradient does not match number of cotangents.");
+      std::ostringstream msg;
+      msg << "[vjp] Number of outputs to compute gradients for ("
+          << outputs.size() << ") does not match number of cotangents ("
+          << cotans.size() << ").";
+      throw std::invalid_argument(msg.str());
     }
     if (out.shape() != cotans[cotan_index].shape()) {
-      throw std::invalid_argument(
-          "[vjp] Output shape does not match shape of cotangent.");
+      std::ostringstream msg;
+      msg << "[vjp] Output shape " << out.shape()
+          << " does not cotangent shape " << cotans[cotan_index].shape() << ".";
+      if (outputs.size() == 1 && out.size() == 1) {
+        msg << " If you are using grad your function must return a scalar.";
+      }
+      throw std::invalid_argument(msg.str());
     }
     output_cotan_pairs.emplace_back(i, cotan_index++);
   }
