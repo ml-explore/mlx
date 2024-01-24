@@ -545,6 +545,29 @@ TEST_CASE("test all close") {
   CHECK(allclose(x, y, 0.01, 0.1).item<bool>());
 }
 
+TEST_CASE("test is close") {
+  {
+    array a({1.0, std::numeric_limits<float>::infinity()});
+    array b({1.0, std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
+  }
+  {
+    array a({1.0, -std::numeric_limits<float>::infinity()});
+    array b({1.0, -std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
+  }
+  {
+    array a({1.0, std::numeric_limits<float>::infinity()});
+    array b({1.0, -std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, false})).item<bool>());
+  }
+  {
+    array a({1.0, std::nan("1"), std::nan("1")});
+    array b({1.0, std::nan("1"), 2.0});
+    CHECK(array_equal(isclose(a, b), array({true, false, false})).item<bool>());
+  }
+}
+
 TEST_CASE("test reduction ops") {
   // Check shapes and throws correctly
   {

@@ -406,6 +406,14 @@ array allclose(
     double atol = 1e-8,
     StreamOrDevice s = {});
 
+/** Returns a boolean array where two arrays are element-wise equal within the specified tolerance. */
+array isclose(
+    const array& a,
+    const array& b,
+    double rtol = 1e-5,
+    double atol = 1e-8,
+    StreamOrDevice s = {});
+
 /**
  *  Reduces the input along the given axes. An output value is true
  *  if all the corresponding inputs are true.

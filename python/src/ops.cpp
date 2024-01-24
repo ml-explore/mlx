@@ -1673,6 +1673,41 @@ void init_ops(py::module_& m) {
             array: The boolean output scalar indicating if the arrays are close.
       )pbdoc");
   m.def(
+      "isclose",
+      &isclose,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      "rtol"_a = 1e-5,
+      "atol"_a = 1e-8,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Returns a boolean array where two arrays are element-wise equal within a tolerance.
+
+        Infinite values are treated as equals if they're of the same sign. NaN are never treated as equals.
+
+        Two values are considered equal if:
+
+        .. code-block::
+
+         all(abs(a - b) <= (atol + rtol * abs(b)))
+
+        Note unlike :func:`array_equal`, this function supports numpy-style
+        broadcasting.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+            rtol (float): Relative tolerance.
+            atol (float): Absolute tolerance.
+
+        Returns:
+            array: The boolean output scalar indicating if the arrays are close.
+      )pbdoc");
+  m.def(
       "all",
       [](const array& a,
          const IntOrVec& axis,
