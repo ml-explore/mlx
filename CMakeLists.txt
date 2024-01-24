@@ -123,8 +123,8 @@ else()
     /usr/include
     /usr/local/include
     $ENV{BLAS_HOME}/include)
-  message(STATUS ${BLAS_LIBRARIES})
-  message(STATUS ${BLAS_INCLUDE_DIRS})
+  message(STATUS "Blas lib" ${BLAS_LIBRARIES})
+  message(STATUS "Blas incclude" ${BLAS_INCLUDE_DIRS})
   target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
   target_link_libraries(mlx ${BLAS_LIBRARIES})
   find_package(LAPACK REQUIRED)
@@ -134,8 +134,8 @@ else()
   find_path(LAPACK_INCLUDE_DIRS lapacke.h
     /usr/include
     /usr/local/include)
-  message(STATUS ${LAPACK_LIBRARIES})
-  message(STATUS "INCLUDE " ${LAPACK_INCLUDE_DIRS})
+  message(STATUS "Lapack lib" ${LAPACK_LIBRARIES})
+  message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
   target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
   target_link_libraries(mlx ${LAPACK_LIBRARIES})
 endif()
