@@ -980,6 +980,17 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.tolist(), [5, 6, 7])
 
     def test_arange_overload_dispatch(self):
+        with self.assertRaises(ValueError):
+            a = mx.arange(float("nan"), 1, 5)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, float("nan"), 5)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, 2, float("nan"))
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, float("inf"), float("inf"))
+        with self.assertRaises(ValueError):
+            a = mx.arange(float("inf"), 1, float("inf"))
+
         a = mx.arange(5)
         expected = [0, 1, 2, 3, 4]
         self.assertListEqual(a.tolist(), expected)

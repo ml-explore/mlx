@@ -79,7 +79,14 @@ array arange(
     msg << bool_ << " not supported for arange.";
     throw std::invalid_argument(msg.str());
   }
-  int size = std::max(static_cast<int>(std::ceil((stop - start) / step)), 0);
+  if (std::isnan(start) || std::isnan(step) || std::isnan(stop)) {
+    throw std::invalid_argument("[arange] Cannot compute length.");
+  }
+  double real_size = std::ceil((stop - start) / step);
+  if (std::isnan(real_size)) {
+    throw std::invalid_argument("[arange] Cannot compute length.");
+  }
+  int size = std::max(static_cast<int>(real_size), 0);
   return array(
       {size},
       dtype,
