@@ -556,24 +556,32 @@ class CustomVJP : public Primitive {
  public:
   explicit CustomVJP(
       Stream stream,
-      std::function<std::vector<array>(const std::vector<array>&, const array&)>
-          fun)
+      std::function<std::vector<array>(
+          const std::vector<array>&,
+          const std::vector<array>&,
+          const std::vector<array>&)> fun)
       : Primitive(stream), vjp_fun_(std::move(fun)) {}
 
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
 
   std::vector<array> vjp(
       const std::vector<array>& primals,
-      const array& cotan,
-      const std::vector<int>& argnums) override;
+      const std::vector<array>& cotan,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(CustomVJP);
 
  private:
-  void eval(const std::vector<array>& inputs, array& out);
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 
-  std::function<std::vector<array>(const std::vector<array>&, const array&)>
+  std::function<std::vector<array>(
+      const std::vector<array>&,
+      const std::vector<array>&,
+      const std::vector<array>&)>
       vjp_fun_;
 };
 

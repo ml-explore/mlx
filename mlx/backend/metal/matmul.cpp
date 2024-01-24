@@ -615,7 +615,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
+  assert(inputs.size() == 3);
   if (!is_floating_point(out.dtype())) {
     throw std::runtime_error(
         "[matmul] Does not yet support non-floating point types.");

@@ -1116,10 +1116,19 @@ array diagonal(
 /** Extract diagonal from a 2d array or create a diagonal matrix. */
 array diag(const array& a, int k = 0, StreamOrDevice s = {});
 
+/** Allows to have call a function and define a custom VJP for it. */
+std::vector<array> custom_vjp(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<array>&)> fun_vjp,
+    const std::vector<array>& args);
+
 /** Checkpoint a function such that to compute its gradient we run the function
  * again and we don't have to keep all the intermediate states in memory. */
-array checkpoint(
-    std::function<array(const std::vector<array>&)> fun,
+std::vector<array> checkpoint(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
     const std::vector<array>& args);
 
 } // namespace mlx::core

@@ -232,9 +232,14 @@ void Cosh::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void CustomVJP::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() >= 1);
-  out.copy_shared_buffer(inputs.back());
+void CustomVJP::eval(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() > outputs.size());
+  for (int i = 0, j = inputs.size() - outputs.size(); i < outputs.size();
+       i++, j++) {
+    outputs[i].copy_shared_buffer(inputs[j]);
+  }
 }
 
 void Erf::eval(const std::vector<array>& inputs, array& out) {

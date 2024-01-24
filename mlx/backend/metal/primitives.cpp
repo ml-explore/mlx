@@ -486,8 +486,10 @@ void Cosh::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "cosh");
 }
 
-void CustomVJP::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
+void CustomVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
 }
 
 void Divide::eval_gpu(const std::vector<array>& inputs, array& out) {

@@ -9,6 +9,7 @@
 
 #include "mlx/array.h"
 #include "mlx/graph_utils.h"
+#include "mlx/ops.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 
@@ -147,6 +148,50 @@ std::vector<array> tree_flatten(py::object tree, bool strict = true) {
   });
 
   return flat_tree;
+}
+
+py::object structure_sentinel() {
+  static py::object sentinel;
+
+  if (sentinel.ptr() == nullptr) {
+    sentinel = py::capsule(&sentinel);
+    // probably not needed but this should make certain that we won't ever
+    // delete the sentinel
+    sentinel.inc_ref();
+  }
+
+  return sentinel;
+}
+
+std::pair<std::vector<array>, py::object> tree_flatten_with_structure(
+    py::object tree) {
+  auto sentinel = structure_sentinel();
+  std::vector<array> flat_tree;
+  auto structure = tree_map(
+      tree, [&flat_tree, sentinel = std::move(sentinel)](py::handle obj) {
+        if (py::isinstance<array>(obj)) {
+          flat_tree.push_back(py::cast<array>(obj));
+          return sentinel;
+        } else {
+          return py::cast<py::object>(obj);
+        }
+      });
+
+  return {flat_tree, structure};
+}
+
+py::object tree_unflatten_from_structure(
+    py::object structure,
+    const std::vector<array>& values,
+    int index = 0) {
+  auto sentinel = structure_sentinel();
+  return tree_map(structure, [&](py::handle obj) {
+    if (obj.is(sentinel)) {
+      return py::cast(values[index++]);
+    } else {
+      return py::cast<py::object>(obj);
+    }
+  });
 }
 
 py::object tree_unflatten(
@@ -501,6 +546,41 @@ struct PyCompiledFun {
   }
 };
 
+class CheckpointedFn {
+ public:
+  CheckpointedFn(
+      py::function fun,
+      py::object args_structure,
+      std::weak_ptr<py::object> output_structure)
+      : fun_(std::move(fun)),
+        args_structure_(std::move(args_structure)),
+        output_structure_(output_structure) {}
+  ~CheckpointedFn() {
+    py::gil_scoped_acquire gil;
+
+    fun_.release().dec_ref();
+    args_structure_.release().dec_ref();
+  }
+
+  std::vector<array> operator()(const std::vector<array>& inputs) {
+    py::gil_scoped_acquire gil;
+
+    auto args = py::cast<py::tuple>(
+        tree_unflatten_from_structure(args_structure_, inputs));
+    auto [outputs, output_structure] =
+        tree_flatten_with_structure(fun_(*args[0], **args[1]));
+    if (auto s = output_structure_.lock()) {
+      *s = output_structure;
+    }
+    return outputs;
+  }
+
+ private:
+  py::function fun_;
+  py::object args_structure_;
+  std::weak_ptr<py::object> output_structure_;
+};
+
 void init_transforms(py::module_& m) {
   py::options options;
   options.disable_function_signatures();
@@ -802,6 +882,18 @@ void init_transforms(py::module_& m) {
         Globally enable compilation. This will override the environment
         variable ``MLX_DISABLE_COMPILE`` if set.
       )pbdoc");
+  m.def(
+      "checkpoint",
+      [](py::function fun, const py::args& args, const py::kwargs& kwargs) {
+        auto output_structure = std::make_shared<py::object>();
+        auto full_args = py::make_tuple(args, kwargs);
+        auto [inputs, args_structure] = tree_flatten_with_structure(full_args);
+        auto ckpt_fun = CheckpointedFn(
+            std::move(fun), std::move(args_structure), output_structure);
+        auto outputs = checkpoint(std::move(ckpt_fun), std::move(inputs));
+        return tree_unflatten_from_structure(*output_structure, outputs);
+      },
+      "fun"_a);
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = py::module_::import("atexit");

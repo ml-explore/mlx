@@ -799,11 +799,14 @@ std::pair<std::vector<array>, std::vector<int>> Cosh::vmap(
 
 std::vector<array> CustomVJP::vjp(
     const std::vector<array>& primals,
-    const array& cotan,
-    const std::vector<int>& argnums) {
-  std::vector<array> inputs(primals.begin(), primals.end() - 1);
-  auto all_vjps = vjp_fun_(inputs, cotan);
-  all_vjps.push_back(ones_like(primals.back()));
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  std::vector<array> inputs(primals.begin(), primals.end() - outputs.size());
+  auto all_vjps = vjp_fun_(inputs, cotangents, outputs);
+  for (const auto& cot : cotangents) {
+    all_vjps.emplace_back(cot);
+  }
 
   std::vector<array> vjps;
   vjps.reserve(argnums.size());

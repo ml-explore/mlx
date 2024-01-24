@@ -3328,35 +3328,57 @@ array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   }
 }
 
-array checkpoint(
-    std::function<array(const std::vector<array>&)> fun,
+std::vector<array> custom_vjp(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<array>&)> fun_vjp,
     const std::vector<array>& args) {
-  auto out = stop_gradient(fun(args));
+  // Compute the outputs
+  auto outputs = fun(args);
+  for (auto& out : outputs) {
+    out = stop_gradient(out);
+  }
 
-  // Create the checkpointing gradient where the forward pass is run again
-  auto fun_multi_output =
-      [fun = std::move(fun)](const std::vector<array>& inputs) {
-        return std::vector<array>{fun(inputs)};
-      };
-  auto fun_vjp = [fun_multi_output = std::move(fun_multi_output)](
+  // Prepare the inputs to the primitive
+  // We also add the outputs to the primitive so that it can "run" the forward
+  // pass.
+  std::vector<array> inputs = args;
+  inputs.insert(inputs.end(), outputs.begin(), outputs.end());
+
+  // Compute the stream. Maybe do it in a smarter way at some point in the
+  // future.
+  Stream s = (outputs[0].has_primitive()) ? outputs[0].primitive().stream()
+                                          : to_stream({});
+
+  // Make the output info
+  std::vector<std::vector<int>> shapes;
+  std::vector<Dtype> dtypes;
+  for (const auto& out : outputs) {
+    shapes.emplace_back(out.shape());
+    dtypes.emplace_back(out.dtype());
+  }
+
+  return array::make_arrays(
+      shapes,
+      dtypes,
+      std::make_shared<CustomVJP>(to_stream(s), std::move(fun_vjp)),
+      inputs);
+}
+
+std::vector<array> checkpoint(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    const std::vector<array>& args) {
+  auto vjp_fun = [fun](
                      const std::vector<array>& primals,
-                     const array& cotan) -> std::vector<array> {
-    auto [outputs, vjps] = vjp(fun_multi_output, primals, {cotan});
+                     const std::vector<array>& cotangents,
+                     const std::vector<array>& outputs) -> std::vector<array> {
+    auto [__, vjps] = vjp(fun, primals, cotangents);
     return vjps;
   };
 
-  // Prepare the inputs for the CustomVJP primitive
-  std::vector<array> inputs = args;
-  inputs.push_back(out);
-
-  // Compute the stream
-  Stream s = (out.has_primitive()) ? out.primitive().stream() : to_stream({});
-
-  return array(
-      out.shape(),
-      out.dtype(),
-      std::make_unique<CustomVJP>(s, std::move(fun_vjp)),
-      inputs);
+  return custom_vjp(fun, vjp_fun, args);
 }
 
 } // namespace mlx::core
