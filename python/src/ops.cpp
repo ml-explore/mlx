@@ -2254,7 +2254,7 @@ void init_ops(py::module_& m) {
               singleton dimensions, defaults to `False`.
 
         Returns:
-            array: The output array with the indices of the minimum values.
+            array: The ``uint32`` array with the indices of the minimum values.
       )pbdoc");
   m.def(
       "argmax",
@@ -2287,7 +2287,7 @@ void init_ops(py::module_& m) {
               singleton dimensions, defaults to `False`.
 
         Returns:
-            array: The output array with the indices of the maximum values.
+            array: The ``uint32`` array with the indices of the maximum values.
       )pbdoc");
   m.def(
       "sort",
@@ -2343,7 +2343,7 @@ void init_ops(py::module_& m) {
               If unspecified, it defaults to -1 (sorting over the last axis).
 
         Returns:
-            array: The indices that sort the input array.
+            array: The ``uint32`` array containing indices that sort the input.
       )pbdoc");
   m.def(
       "partition",
@@ -2416,7 +2416,7 @@ void init_ops(py::module_& m) {
               If unspecified, it defaults to ``-1``.
 
         Returns:
-            array: The indices that partition the input array.
+            array: The `uint32`` array containing indices that partition the input.
       )pbdoc");
   m.def(
       "topk",
