@@ -250,12 +250,16 @@ TEST_CASE("[mlx.core.linalg.norm] string ord") {
 }
 
 TEST_CASE("test QR factorization") {
-  array A = array({{2., 1., 1., 2.}, {2, 2}});
-  std::vector<array> out = linalg::qrf(A, default_stream(Device::cpu));
-  eval(out);
+  // 0D and 1D throw
+  CHECK_THROWS(linalg::qrf(array(0.0)));
+  CHECK_THROWS(linalg::qrf(array({0.0, 1.0})));
+  // Unsupported types throw
+  CHECK_THROWS(linalg::qrf(array({0, 1}, {1, 2})));
 
-  array Q = out[0];
-  array R = out[1];
+  array A = array({{2., 1., 1., 2.}, {2, 2}});
+  auto [Q, R] = linalg::qrf(A, Device::cpu);
+  eval(Q, R);
+
   CHECK_EQ(Q.dtype(), float32);
   CHECK_EQ(R.dtype(), float32);
 }
