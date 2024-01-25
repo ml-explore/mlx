@@ -1691,7 +1691,8 @@ void init_ops(py::module_& m) {
 
         Returns a boolean array where two arrays are element-wise equal within a tolerance.
 
-        Infinite values are treated as equals if they're of the same sign. NaN are never treated as equals.
+        Infinite values are considered equal if they have the same sign, NaN values are
+        not equal unless ``equal_nan`` is ``True``.
 
         Two values are considered equal if:
 
