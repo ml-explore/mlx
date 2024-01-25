@@ -980,6 +980,17 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.tolist(), [5, 6, 7])
 
     def test_arange_overload_dispatch(self):
+        with self.assertRaises(ValueError):
+            a = mx.arange(float("nan"), 1, 5)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, float("nan"), 5)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, 2, float("nan"))
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, float("inf"), float("inf"))
+        with self.assertRaises(ValueError):
+            a = mx.arange(float("inf"), 1, float("inf"))
+
         a = mx.arange(5)
         expected = [0, 1, 2, 3, 4]
         self.assertListEqual(a.tolist(), expected)
@@ -1333,6 +1344,11 @@ class TestOps(mlx_tests.MLXTestCase):
                 c_mlx = mx.concatenate([a_mlx, mx.transpose(b_mlx, p)], axis=axis)
                 self.assertEqual(list(c_npy.shape), list(c_mlx.shape))
                 self.assertTrue(np.allclose(c_npy, c_mlx, atol=1e-6))
+
+        with self.assertRaises(ValueError):
+            a = mx.array([[1, 2], [1, 2], [1, 2]])
+            b = mx.array([1, 2])
+            mx.concatenate([a, b], axis=0)
 
     def test_pad(self):
         pad_width_and_values = [

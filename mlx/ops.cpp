@@ -79,7 +79,14 @@ array arange(
     msg << bool_ << " not supported for arange.";
     throw std::invalid_argument(msg.str());
   }
-  int size = std::max(static_cast<int>(std::ceil((stop - start) / step)), 0);
+  if (std::isnan(start) || std::isnan(step) || std::isnan(stop)) {
+    throw std::invalid_argument("[arange] Cannot compute length.");
+  }
+  double real_size = std::ceil((stop - start) / step);
+  if (std::isnan(real_size)) {
+    throw std::invalid_argument("[arange] Cannot compute length.");
+  }
+  int size = std::max(static_cast<int>(real_size), 0);
   return array(
       {size},
       dtype,
@@ -662,26 +669,27 @@ array concatenate(
     int axis,
     StreamOrDevice s /* = {} */) {
   if (arrays.size() == 0) {
-    throw std::invalid_argument("No arrays provided for concatenation");
+    throw std::invalid_argument(
+        "[concatenate] No arrays provided for concatenation");
   }
 
   // Normalize the given axis
   auto ax = axis < 0 ? axis + arrays[0].ndim() : axis;
   if (ax < 0 || ax >= arrays[0].ndim()) {
     std::ostringstream msg;
-    msg << "Invalid axis (" << axis << ") passed to concatenate"
+    msg << "[concatenate] Invalid axis (" << axis << ") passed to concatenate"
         << " for array with shape " << arrays[0].shape() << ".";
     throw std::invalid_argument(msg.str());
   }
 
   auto throw_invalid_shapes = [&]() {
     std::ostringstream msg;
-    msg << "All the input array dimensions must match exactly except"
-        << " for the concatenation axis. However, the provided shapes are ";
+    msg << "[concatenate] All the input array dimensions must match exactly "
+        << "except for the concatenation axis. However, the provided shapes are ";
     for (auto& a : arrays) {
       msg << a.shape() << ", ";
     }
-    msg << "and the concatenation axis is " << axis;
+    msg << "and the concatenation axis is " << axis << ".";
     throw std::invalid_argument(msg.str());
   };
 
@@ -690,6 +698,13 @@ array concatenate(
   // Make the output shape and validate that all arrays have the same shape
   // except for the concatenation axis.
   for (auto& a : arrays) {
+    if (a.ndim() != shape.size()) {
+      std::ostringstream msg;
+      msg << "[concatenate] All the input arrays must have the same number of "
+          << "dimensions. However, got arrays with dimensions " << shape.size()
+          << " and " << a.ndim() << ".";
+      throw std::invalid_argument(msg.str());
+    }
     for (int i = 0; i < a.ndim(); i++) {
       if (i == ax) {
         continue;
