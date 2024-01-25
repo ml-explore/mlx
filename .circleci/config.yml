@@ -136,10 +136,7 @@ jobs:
             pip install pybind11-stubgen
             pip install numpy
             pip install twine
-      # TODO: Implement new build system and/or versioning scheme compatible with
-      # Python packages and Semantic Versioning (https://semver.org).
-      # Following this, modify the Python package installation command to transition
-      # from 'development' to 'production' mode."
+      # TODO: Update build system to switch away from setup.py develop
       - run:
           name: Install Python package
           command: |
