@@ -89,6 +89,19 @@ def softsign(x):
     return mx.divide(x, 1 + mx.abs(x))
 
 
+def softshrink(x, lambd: float = 0.5):
+    r"""Applies the Softshrink activation function.
+
+    .. math::
+        \text{softshrink}(x) = \begin{cases}
+        x - \lambda & \text{if } x > \lambda \\
+        x + \lambda & \text{if } x < -\lambda \\
+        0 & \text{otherwise}
+        \end{cases}
+    """
+    return mx.where(mx.abs(x) > lambd, x - mx.sign(x) * lambd, 0)
+
+
 def celu(x, alpha=1.0):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.
 
@@ -365,6 +378,22 @@ class Softsign(Module):
     See :func:`softsign`, for the functional equivalent.
     """
 
+
+class Softshrink(Module):
+    r"""Applies the Softshrink function.
+    
+    See :func:`softshrink`, for functional equivalent. 
+    
+    Args: 
+        lambd: the :math:`\lambda` value for Softshrink. Default: 0.5
+    """
+
+    def __init__(self, lambd=0.5):
+        super().__init__()
+        self.lambd = lambd
+
+    def __call__(self, x):
+        return softshrink(x, self.lambd)
 
 class CELU(Module):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.

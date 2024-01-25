@@ -19,6 +19,7 @@ from mlx.nn.layers.activations import (
     Softmax,
     Softplus,
     Softsign,
+    Softshrink,
     Step,
     Tanh,
     celu,
@@ -40,6 +41,7 @@ from mlx.nn.layers.activations import (
     softmax,
     softplus,
     softsign,
+    softshrink,
     step,
     tanh,
 )
