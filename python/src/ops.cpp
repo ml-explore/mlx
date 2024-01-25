@@ -566,7 +566,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array or scalar.
             b (array): Input array or scalar.
-            equal_nan (bool): If ``True``, NaNs are treated as equal.
+            equal_nan (bool): If ``True``, NaNs are considered equal.
               Defaults to ``False``.
 
         Returns:
@@ -1655,6 +1655,8 @@ void init_ops(py::module_& m) {
 
         Approximate comparison of two arrays.
 
+        Infinite values are considered equal if they have the same sign, NaN values are not equal unless ``equal_nan`` is ``True``.
+
         The arrays are considered equal if:
 
         .. code-block::
@@ -1669,7 +1671,7 @@ void init_ops(py::module_& m) {
             b (array): Input array.
             rtol (float): Relative tolerance.
             atol (float): Absolute tolerance.
-            equal_nan (bool): If ``True``, NaNs are treated as equal.
+            equal_nan (bool): If ``True``, NaNs are considered equal.
               Defaults to ``False``.
 
         Returns:
