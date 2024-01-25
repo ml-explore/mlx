@@ -381,10 +381,10 @@ class Softsign(Module):
 
 class Softshrink(Module):
     r"""Applies the Softshrink function.
-    
-    See :func:`softshrink`, for functional equivalent. 
-    
-    Args: 
+
+    See :func:`softshrink`, for functional equivalent.
+
+    Args:
         lambd: the :math:`\lambda` value for Softshrink. Default: 0.5
     """
 
@@ -394,6 +394,7 @@ class Softshrink(Module):
 
     def __call__(self, x):
         return softshrink(x, self.lambd)
+
 
 class CELU(Module):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.
