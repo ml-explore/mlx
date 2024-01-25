@@ -229,6 +229,14 @@ inline array transpose(
   return transpose(a, std::vector<int>(axes), s);
 }
 
+/** Extracts the diagonal of the input array. */
+array diagonal(
+    const array& a,
+    int offset,
+    int axis1,
+    int axis2,
+    StreamOrDevice s = {});
+
 /** Extract diagonal from a 2d array or create a diagonal matrix. */
 array diag(const array& a, int k, StreamOrDevice s = {});
 

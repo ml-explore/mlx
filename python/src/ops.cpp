@@ -1968,6 +1968,33 @@ void init_ops(py::module_& m) {
             array: The transposed array.
       )pbdoc");
   m.def(
+      "diagonal",
+      [](const array& a, int offset, int axis1, int axis2, StreamOrDevice s) {
+        return diagonal(a, offset, axis1, axis2, s);
+      },
+      "a"_a,
+      py::pos_only(),
+      "offset"_a = 0,
+      "axis1"_a = 0,
+      "axis2"_a = 1,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        diagonal(a: array, /, offset: int = 0, axis1: int = 0, axis2: int = 1, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Extract a diagonal from the input array.
+
+        Args:
+            a (array): Input array.
+            offset (int, optional): Offset of the diagonal from the main diagonal. Defaults to 0.
+            axis1 (int, optional): First axis to extract the diagonal from. Defaults to 0.
+            axis2 (int, optional): Second axis to extract the diagonal from. Defaults to 1.
+            stream (StreamOrDevice, optional): The stream or device to use for the operation.
+
+        Returns:
+            array: The extracted diagonal.
+        )pbdoc");
+  m.def(
       "diag",
       [](const array& a, int k, StreamOrDevice s) { return diag(a, k, s); },
       "a"_a,
@@ -1976,7 +2003,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        diag(a: array, /, k: int = 0, stream: Union[None, Stream, Device] = None) -> array 
+        diag(a: array, /, k: int = 0, *, stream: Union[None, Stream, Device] = None) -> array 
         
         Extract a diagonal or construct a diagonal array.
 

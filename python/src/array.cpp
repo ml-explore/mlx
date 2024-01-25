@@ -1221,13 +1221,28 @@ void init_array(py::module_& m) {
           [](const array& a) { return transpose(a); },
           "Equivalent to calling ``self.transpose()`` with no arguments.")
       .def(
+          "diagonal",
+          [](const array& a,
+             int offset,
+             int axis1,
+             int axis2,
+             StreamOrDevice s) { return diagonal(a, offset, axis1, axis2); },
+          "offset"_a = 0,
+          "axis1"_a = 0,
+          "axis2"_a = 1,
+          py::kw_only(),
+          "stream"_a = none,
+          R"pbdoc(
+            Extracts the diagonal of the input array.
+        )pbdoc")
+      .def(
           "diag",
           [](const array& a, int k, StreamOrDevice s) { return diag(a, k, s); },
           "k"_a = 0,
           py::kw_only(),
           "stream"_a = none,
           R"pbdoc(
-            Extract a diagonal or construct a diagonal array.
+            Extract a diagonal or construct a diagonal matrix.
         )pbdoc")
       .def(
           "sum",

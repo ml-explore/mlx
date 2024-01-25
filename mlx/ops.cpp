@@ -974,6 +974,66 @@ array transpose(const array& a, StreamOrDevice s /* = {} */) {
   return transpose(a, std::move(axes), to_stream(s));
 }
 
+array diagonal(
+    const array& a,
+    int offset = 0,
+    int axis1 = 0,
+    int axis2 = 1,
+    StreamOrDevice s) {
+  auto ndim = a.ndim();
+  if (a.shape(0) != a.shape(1)) {
+    throw std::invalid_argument("Input must be 2-d and square.");
+  }
+  if (axis1 < 0 || axis2 < 0) {
+    throw std::invalid_argument(
+        "Invalid axis argument provided. Axis value should be non-negative.");
+  }
+  auto ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
+  if (ax1 < 0 || ax1 >= ndim) {
+    std::ostringstream msg;
+    msg << "Invalid axis1 " << axis1 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+  auto ax2 = (axis2 < 0) ? axis2 + ndim : axis2;
+  if (ax2 < 0 || ax2 >= ndim) {
+    std::ostringstream msg;
+    msg << "Invalid axis2 " << axis2 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+  if (ax1 == ax2) {
+    std::ostringstream msg;
+    msg << "axis1 and axis2 cannot be the same axis";
+    throw std::invalid_argument(msg.str());
+  }
+  int dim1 = a.shape(ax1);
+  int dim2 = a.shape(ax1);
+  int a_ndim = a.ndim();
+  int diag_size = std::max(
+      0, std::min(dim1 + std::min(offset, 0), dim2 - std::max(offset, 0)));
+
+  array a_moved = moveaxis(a, ax1, -2, s);
+  a_moved = moveaxis(a_moved, ax2, -1, s);
+
+  array i = arange(0, diag_size, int32, s);
+  array j = arange(std::abs(offset), std::abs(offset) + diag_size, int32, s);
+
+  std::vector<array> indices;
+
+  if (offset >= 0) {
+    indices.push_back(i);
+    indices.push_back(j);
+  } else {
+    indices.push_back(j);
+    indices.push_back(i);
+  }
+
+  // update result
+
+  // return result;
+}
+
 array diag(const array& a, int k, StreamOrDevice s) {
   if (a.ndim() == 1) {
     int n = a.size() + std::abs(k);
@@ -993,11 +1053,7 @@ array diag(const array& a, int k, StreamOrDevice s) {
     if (a.shape(0) != a.shape(1)) {
       throw std::invalid_argument("Input must be 2-d and square.");
     }
-    array res = zeros({a.shape(0) - std::abs(k)}, a.dtype(), s);
-
-    // update res
-
-    return res;
+    return diagonal(a, k, 0, 1, s);
   } else {
     throw std::invalid_argument("Input must be 1- or 2-d.");
   }
