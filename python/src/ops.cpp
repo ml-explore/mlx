@@ -1700,7 +1700,7 @@ void init_ops(py::module_& m) {
 
         .. code-block::
 
-         all(abs(a - b) <= (atol + rtol * abs(b)))
+         abs(a - b) <= (atol + rtol * abs(b))
 
         Note unlike :func:`array_equal`, this function supports numpy-style
         broadcasting.
