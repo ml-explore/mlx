@@ -1707,7 +1707,7 @@ void init_ops(py::module_& m) {
             b (array): Input array.
             rtol (float): Relative tolerance.
             atol (float): Absolute tolerance.
-            equal_nan (bool): If ``True``, NaNs are treated as equal.
+            equal_nan (bool): If ``True``, NaNs are considered equal.
               Defaults to ``False``.
 
         Returns:
