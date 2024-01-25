@@ -981,13 +981,6 @@ array diagonal(
     int axis2 = 1,
     StreamOrDevice s) {
   auto ndim = a.ndim();
-  if (a.shape(0) != a.shape(1)) {
-    throw std::invalid_argument("Input must be 2-d and square.");
-  }
-  if (axis1 < 0 || axis2 < 0) {
-    throw std::invalid_argument(
-        "Invalid axis argument provided. Axis value should be non-negative.");
-  }
   auto ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
   if (ax1 < 0 || ax1 >= ndim) {
     std::ostringstream msg;
@@ -1008,7 +1001,7 @@ array diagonal(
     throw std::invalid_argument(msg.str());
   }
   int dim1 = a.shape(ax1);
-  int dim2 = a.shape(ax1);
+  int dim2 = a.shape(ax2);
   int a_ndim = a.ndim();
   int diag_size = std::max(
       0, std::min(dim1 + std::min(offset, 0), dim2 - std::max(offset, 0)));
@@ -1019,8 +1012,16 @@ array diagonal(
   array i = arange(0, diag_size, int32, s);
   array j = arange(std::abs(offset), std::abs(offset) + diag_size, int32, s);
 
-  std::vector<array> indices;
+  std::vector<int> axes(a.ndim());
+  std::iota(axes.begin(), axes.end(), 0);
 
+  // Considering values at all indices for first n-2 dimensions
+  std::vector<array> indices;
+  for (int i = 0; i < a_ndim - 2; ++i) {
+    indices.push_back(arange(0, a_moved.shape(i), int32, s));
+  }
+
+  // Considering values at indices i and j for last two dimensions
   if (offset >= 0) {
     indices.push_back(i);
     indices.push_back(j);
@@ -1029,9 +1030,14 @@ array diagonal(
     indices.push_back(i);
   }
 
-  // update result
+  std::vector<int> slice_sizes;
+  for (int i = 0; i < a_ndim; ++i) {
+    slice_sizes.push_back(1);
+  }
 
-  // return result;
+  array result = gather(a_moved, indices, axes, slice_sizes, s);
+
+  return squeeze(result, s);
 }
 
 array diag(const array& a, int k, StreamOrDevice s) {
