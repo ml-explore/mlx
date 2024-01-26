@@ -9,6 +9,7 @@ import mlx.nn as nn
 import mlx_tests
 import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
+from copy import deepcopy
 
 
 class TestBase(mlx_tests.MLXTestCase):
@@ -129,6 +130,12 @@ class TestBase(mlx_tests.MLXTestCase):
                     ("bias", 3),
                 ]
             )
+
+    def test_deepcopy(self):
+        linear = nn.Linear(2, 2)
+        linear_2 = deepcopy(linear)
+        self.assertNotEqual(id(linear.weight), id(linear_2.weight))
+        self.assertNotEqual(id(linear.bias), id(linear_2.bias))
 
 
 class TestLayers(mlx_tests.MLXTestCase):
