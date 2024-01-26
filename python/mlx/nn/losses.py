@@ -551,7 +551,7 @@ def contrastive_loss(
         x2 (array): The second set of inputs
         labels (array): Binary labels indicating whether x1 and x2 are from the same distribution.
         axis (int,optional): The distribution axis. Default: ``-1``.
-        eps (float,optional):  Small positive constant to prevent numerical instability. Defaults to ``1e-6``.
+        eps (float,optional):  Small positive constant to prevent numerical instability. Defaults to ``1e-08``.
         margin (float,optional): Margin for the contrastive loss. Defaults to ``1.0``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
@@ -562,8 +562,8 @@ def contrastive_loss(
 
         \\text{distance} = \\|x_1 - x_2\\|_2^{\\text{axis}}\\\\
 
-        L(x_1, x_2, y) = (1-y) \\frac{1}{2}\\|\\text{distance}\\|_2^2 + 
-        y \\frac{1}{2}\\max(\\text{margin} - \\|\\text{distance}\\|_2, \\epsilon)^2
+        L(x_1, x_2, y) = (1-y)\|\\text{distance}\\|_2^2 + 
+        y \\max(\\text{margin} - \\|\\text{distance}\\|_2, \\epsilon)^2
     
     Returns: 
         array: The computed Contrastive Loss. If reduction is "none", returns a tensor of the same shape as input;
