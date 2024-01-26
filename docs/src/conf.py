@@ -12,7 +12,7 @@ import mlx.core as mx
 project = "MLX"
 copyright = "2023, MLX Contributors"
 author = "MLX Contributors"
-version = ".".join(mx.__version__.split()[:-1])
+version = ".".join(mx.__version__.split(".")[:3])
 release = version
 
 # -- General configuration ---------------------------------------------------

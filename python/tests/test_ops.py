@@ -855,6 +855,21 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertFalse(mx.allclose(a, b, 0.01).item())
         self.assertTrue(mx.allclose(a, b, 0.01, 0.1).item())
 
+        c = mx.array(float("inf"))
+        self.assertTrue(mx.allclose(c, c).item())
+
+    def test_isclose(self):
+        a = mx.array([float("inf"), float("inf"), float("-inf")])
+        b = mx.array([float("inf"), float("-inf"), float("-inf")])
+
+        self.assertListEqual(mx.isclose(a, b).tolist(), [True, False, True])
+
+        a = mx.array([np.nan])
+        self.assertListEqual(mx.isclose(a, a).tolist(), [False])
+
+        a = mx.array([np.nan])
+        self.assertListEqual(mx.isclose(a, a, equal_nan=True).tolist(), [True])
+
     def test_all(self):
         a = mx.array([[True, False], [True, True]])
 
