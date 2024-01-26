@@ -451,6 +451,42 @@ class Ceil : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Compiled : public Primitive {
+ public:
+  /*
+   * The inputs, outputs and tape are either tracers or constants. The tape
+   * should not contain the inputs, but it should contain the outputs. The
+   * tape should also have only one array per primitive for multi-output
+   * primitives.
+   */
+  explicit Compiled(
+      Stream stream,
+      const std::vector<array>& inputs,
+      const std::vector<array>& outputs,
+      const std::vector<array>& tape);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+
+  void print(std::ostream& os) override;
+
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  const std::string name_;
+  const std::vector<array> inputs_;
+  const std::vector<array> outputs_;
+  const std::vector<array> tape_;
+
+  void eval(const std::vector<array>& inputs, std::vector<array>& out);
+};
+
 class Concatenate : public UnaryPrimitive {
  public:
   explicit Concatenate(Stream stream, int axis)

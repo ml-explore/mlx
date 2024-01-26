@@ -11,6 +11,154 @@
 
 namespace mlx::core {
 
+bool is_unary_primitive(const Primitive& p) {
+  return (
+      typeid(p) == typeid(Abs) || typeid(p) == typeid(ArcCos) ||
+      typeid(p) == typeid(ArcCosh) || typeid(p) == typeid(ArcSin) ||
+      typeid(p) == typeid(ArcSinh) || typeid(p) == typeid(ArcTan) ||
+      typeid(p) == typeid(ArcTanh) || typeid(p) == typeid(AsType) ||
+      typeid(p) == typeid(Ceil) || typeid(p) == typeid(Copy) ||
+      typeid(p) == typeid(Cos) || typeid(p) == typeid(Cosh) ||
+      typeid(p) == typeid(Remainder) || typeid(p) == typeid(Erf) ||
+      typeid(p) == typeid(ErfInv) || typeid(p) == typeid(Exp) ||
+      typeid(p) == typeid(Floor) || typeid(p) == typeid(Log) ||
+      typeid(p) == typeid(Log1p) || typeid(p) == typeid(LogicalNot) ||
+      typeid(p) == typeid(Negative) || typeid(p) == typeid(Round) ||
+      typeid(p) == typeid(Sigmoid) || typeid(p) == typeid(Square) ||
+      typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh));
+}
+
+bool is_fusable(const Primitive& p) {
+  return is_unary_primitive(p);
+}
+
+std::pair<std::vector<array>, std::vector<array>> convert_trace_to_real(
+    const std::vector<array>& inputs,
+    const std::vector<array>& trace_tape,
+    const std::vector<array>& trace_inputs,
+    const std::vector<array>& trace_outputs) {
+  // TODO refactor this with compile_replace
+  std::unordered_map<uintptr_t, array> trace_to_real;
+  for (int i = 0; i < trace_inputs.size(); ++i) {
+    trace_to_real.insert({trace_inputs[i].id(), inputs[i]});
+  }
+  std::vector<array> tape;
+  for (auto& a : trace_tape) {
+    // Arrays in the tape without primitives are constants
+    // and can be used directly
+    if (!a.has_primitive()) {
+      trace_to_real.insert({a.id(), a});
+      tape.push_back(a);
+    } else {
+      // Find real inputs
+      std::vector<array> real_inputs;
+      for (auto& in : a.inputs()) {
+        real_inputs.push_back(trace_to_real.at(in.id()));
+      }
+      if (a.siblings().empty()) {
+        auto real_a = array(
+            a.shape(), a.dtype(), a.primitive_ptr(), std::move(real_inputs));
+        trace_to_real.insert({a.id(), std::move(real_a)});
+        tape.push_back(real_a);
+      } else {
+        // Ensure the order is correct for multi-output primitives
+        std::vector<std::vector<int>> shapes;
+        std::vector<Dtype> types;
+        auto trace_out = a.outputs();
+        for (auto& o : trace_out) {
+          shapes.push_back(o.shape());
+          types.push_back(o.dtype());
+        }
+        auto real_out =
+            array::make_arrays(shapes, types, a.primitive_ptr(), real_inputs);
+        // TODO choose the array at the sam eposition
+        tape.push_back(real_out[0]);
+        for (int i = 0; i < trace_out.size(); ++i) {
+          trace_to_real.insert({trace_out[i].id(), std::move(real_out[i])});
+        }
+      }
+    }
+  }
+
+  std::vector<array> outputs;
+  for (auto& o : trace_outputs) {
+    outputs.push_back(trace_to_real.at(o.id()));
+  }
+  return {tape, outputs};
+}
+
+std::vector<array> Compiled::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  throw std::invalid_argument("[Compiled::vjp] NYI");
+}
+
+std::vector<array> Compiled::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::invalid_argument("[Compiled::jvp] NYI");
+}
+
+std::pair<std::vector<array>, std::vector<int>> Compiled::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  // Inputs are the real inputs
+  auto [s_outputs, tape] =
+      convert_trace_to_real(inputs, inputs_, tape_, outputs_);
+
+  // The next part is the standard vmap code, should refactor
+  std::unordered_map<std::uintptr_t, std::pair<array, int>> tmap;
+  for (int i = 0; i < inputs.size(); ++i) {
+    auto in = inputs_[i];
+    // TODO this may need to be real inputs to real inputs
+    tmap.insert({in.id(), {inputs[i], axes[i]}});
+  }
+
+  for (auto& a : tape) {
+    std::vector<array> v_inputs;
+    std::vector<int> v_axes;
+    for (auto& in : a.inputs()) {
+      auto it = tmap.find(in.id());
+      auto& [v_in, v_ax] = it->second;
+      v_inputs.push_back(v_in);
+      v_axes.push_back(v_ax);
+    }
+
+    auto [v_outputs, v_out_axes] = a.primitive().vmap(v_inputs, v_axes);
+
+    auto outputs = a.outputs();
+    for (int i = 0; i < v_outputs.size(); ++i) {
+      tmap.insert({outputs[i].id(), {v_outputs[i], v_out_axes[i]}});
+    }
+  }
+
+  // Construct the real outputs from the non-vmapped outputs
+  std::vector<array> outputs;
+  std::vector<int> out_axes;
+  for (auto& o : s_outputs) {
+    auto it = tmap.find(o.id());
+    auto& [out, ax] = it->second;
+    outputs.push_back(out);
+    out_axes.push_back(ax);
+  }
+  return {outputs, out_axes};
+}
+
+bool Compiled::is_equivalent(const Primitive& other) const {
+  // equivalent if the tapes of primitives are equivalent?
+  return false;
+}
+
+void Compiled::print(std::ostream& os) {
+  // TODO maybe print the compiled name here instead.
+  for (auto& a : tape_) {
+    a.primitive().print(os);
+  }
+}
+
 namespace detail {
 
 bool& compiler_disabled() {
@@ -324,6 +472,52 @@ void compile_simplify(
       }
     }
     tape = std::move(new_tape);
+  }
+}
+
+// Extracts sections of the graph that can be compile and replace
+// them with a Compiled Primitive.
+void compile_reduce(
+    std::vector<array>& tape,
+    ParentsMap& parents_map,
+    const std::vector<array>& outputs) {
+  // Start with consecutive unary ops
+  std::unordered_set<uintptr_t> cache;
+  std::vector<array> new_tape;
+  for (auto it = tape.rbegin(); it != tape.rend(); ++it) {
+    auto& a = *it;
+
+    // Already compiled it
+    if (cache.find(a.id()) != cache.end()) {
+      continue;
+    }
+    if (has_primitive(a) && is_fusable_primitive(a.primitive())) {
+      // Check input has one parent
+      auto& parents = parents_map[a.inputs()[0].id()];
+      if (parents.size() == 1) {
+        a =
+      }
+      auto& parents = parents_it->second;
+    }
+  }
+
+  for (auto&
+  for (auto& a : tape) {
+    std::vector<array> fused_inputs;
+    std::vector<array> fused_tape;
+    std::vector<array> fused_outputs;
+    int fusion_depth = 0;
+    while (auto parents_it = parents_map.find(a.id());
+           parents_it != parents_map.end()) {
+      auto& parents = parents_it->second;
+      if (parents.size() == 1 &&
+          is_fusable_primitive(parents[0].first.primitive())) {
+        // fused_inputs.push_back(a);
+        if (tape
+        fused_tape.push_back(a);
+        a = parents[0].first;
+      }
+    }
   }
 }
 
