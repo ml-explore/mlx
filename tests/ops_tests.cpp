@@ -514,6 +514,9 @@ TEST_CASE("test is inf") {
   array y(inf);
   CHECK(isinf(y).item<bool>());
 
+  auto neginf = -std::numeric_limits<float>::infinity();
+  CHECK(isinf(array(neginf)).item<bool>());
+
   array z = identity(7);
   CHECK_FALSE(any(isinf(z)).item<bool>());
 
@@ -543,6 +546,36 @@ TEST_CASE("test all close") {
   CHECK(allclose(x, y, 0.1).item<bool>());
   CHECK_FALSE(allclose(x, y, 0.01).item<bool>());
   CHECK(allclose(x, y, 0.01, 0.1).item<bool>());
+}
+
+TEST_CASE("test is close") {
+  {
+    array a({1.0, std::numeric_limits<float>::infinity()});
+    array b({1.0, std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
+  }
+  {
+    array a({1.0, -std::numeric_limits<float>::infinity()});
+    array b({1.0, -std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
+  }
+  {
+    array a({1.0, std::numeric_limits<float>::infinity()});
+    array b({1.0, -std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, false})).item<bool>());
+  }
+  {
+    array a({1.0, std::nan("1"), std::nan("1")});
+    array b({1.0, std::nan("1"), 2.0});
+    CHECK(array_equal(isclose(a, b), array({true, false, false})).item<bool>());
+  }
+  {
+    array a({1.0, std::nan("1"), std::nan("1")});
+    array b({1.0, std::nan("1"), 2.0});
+    CHECK(
+        array_equal(isclose(a, b, 1e-5, 1e-8, true), array({true, true, false}))
+            .item<bool>());
+  }
 }
 
 TEST_CASE("test reduction ops") {
