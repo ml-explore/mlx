@@ -18,7 +18,7 @@ option(MLX_BUILD_METAL "Build metal backend" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.0.10)
+  set(MLX_VERSION 0.0.11)
 endif()
 
 # --------------------- Processor tests -------------------------
