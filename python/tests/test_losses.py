@@ -368,7 +368,6 @@ class TestLosses(mlx_tests.MLXTestCase):
         losses = nn.losses.margin_ranking_loss(
             inputs1, inputs2, targets, reduction="none"
         )
-        print(losses)
         expected = mx.array([1.329369, 0.990929, 0.0])
         self.assertTrue(mx.allclose(losses, expected))
 

@@ -577,19 +577,9 @@ def margin_ranking_loss(
         >>> loss
         array(0.773433, dtype=float32)
     """
-    if inputs1.shape != inputs2.shape:
+    if not (inputs1.shape == inputs2.shape == targets.shape):
         raise ValueError(
-            f"Inputs1 shape {inputs1.shape} does not match inputs2 shape {inputs2.shape}."
-        )
-
-    if inputs1.shape != targets.shape:
-        raise ValueError(
-            f"Input1 shape {inputs1.shape} does not match target shape {targets.shape}."
-        )
-
-    if inputs2.shape != targets.shape:
-        raise ValueError(
-            f"Input2 shape {inputs2.shape} does not match target shape {targets.shape}."
+            f"The shapes of the arguments do not match. The provided shapes are inputs1.shape={inputs1.shape}, inputs2.shape={inputs2.shape}, and targets.shape={targets.shape}"
         )
 
     differences = inputs1 - inputs2
