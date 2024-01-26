@@ -1,13 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <cassert>
-#include <iostream> // TODO
-
-#include <iostream>
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/primitives.h"
-#include "mlx/utils.h"
 
 #ifdef ACCELERATE_NEW_LAPACK
 #include <vecLib/lapack.h>
@@ -16,7 +11,6 @@
 #endif
 
 namespace mlx::core {
-using allocator::Buffer;
 
 template <typename T>
 struct lpack;
@@ -49,13 +43,13 @@ struct lpack<float> {
 };
 
 template <typename T>
-void qrf_impl(array& a, array& q, array& r) {
+void qrf_impl(const array& a, array& q, array& r) {
   const int M = a.shape(-2);
   const int N = a.shape(-1);
   const int lda = std::max(M, N);
   size_t num_matrices = a.size() / (M * N);
   int num_reflectors = std::min(M, N);
-  Buffer tau =
+  auto tau =
       allocator::malloc_or_wait(sizeof(T) * num_matrices * num_reflectors);
 
   // Copy A to inplace input and make it col-contiguous
@@ -82,7 +76,7 @@ void qrf_impl(array& a, array& q, array& r) {
 
   // Update workspace size
   lwork = optimal_work;
-  Buffer work = allocator::malloc_or_wait(sizeof(T) * lwork);
+  auto work = allocator::malloc_or_wait(sizeof(T) * lwork);
 
   // Loop over matrices
   for (int i = 0; i < num_matrices; ++i) {
@@ -150,17 +144,10 @@ void qrf_impl(array& a, array& q, array& r) {
 }
 
 void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
-  assert(inputs.size() == 1);
-
-  array a = inputs[0];
-
-  if (!(a.dtype() == float32)) {
+  if (!(inputs[0].dtype() == float32)) {
     throw std::runtime_error("[QRF::eval] only supports float32.");
   }
-
-  array q = outputs[0];
-  array r = outputs[1];
-  qrf_impl<float>(a, q, r);
+  qrf_impl<float>(inputs[0], outputs[0], outputs[1]);
 }
 
 } // namespace mlx::core
