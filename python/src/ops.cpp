@@ -2930,6 +2930,10 @@ void init_ops(py::module_& m) {
           throw std::invalid_argument("[convolve] Inputs must be 1D.");
         }
 
+        if (a.size() == 0 || v.size() == 0) {
+          throw std::invalid_argument("[convolve] Inputs cannot be empty.");
+        }
+
         array in = a.size() < v.size() ? v : a;
         array wt = a.size() < v.size() ? a : v;
         wt = slice(wt, {wt.shape(0) - 1}, {-wt.shape(0) - 1}, {-1}, s);
