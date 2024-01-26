@@ -12,6 +12,7 @@
 namespace mlx::core {
 
 bool is_unary_primitive(const Primitive& p) {
+  // TODO fix this mess.
   return (
       typeid(p) == typeid(Abs) || typeid(p) == typeid(ArcCos) ||
       typeid(p) == typeid(ArcCosh) || typeid(p) == typeid(ArcSin) ||
@@ -24,12 +25,33 @@ bool is_unary_primitive(const Primitive& p) {
       typeid(p) == typeid(Floor) || typeid(p) == typeid(Log) ||
       typeid(p) == typeid(Log1p) || typeid(p) == typeid(LogicalNot) ||
       typeid(p) == typeid(Negative) || typeid(p) == typeid(Round) ||
-      typeid(p) == typeid(Sigmoid) || typeid(p) == typeid(Square) ||
+      typeid(p) == typeid(Sigmoid) || typeid(p) == typeid(Sign) ||
+      typeid(p) == typeid(Sin) || typeid(p) == typeid(Sinh) ||
+      typeid(p) == typeid(Square) || typeid(p) == typeid(Sqrt) ||
       typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh));
 }
 
+bool is_binary_primitive(const Primitive& p) {
+  // TODO fix this mess.
+  return (
+      typeid(p) == typeid(Add) || typeid(p) == typeid(Divide) ||
+      typeid(p) == typeid(Equal) || typeid(p) == typeid(Greater) ||
+      typeid(p) == typeid(GreaterEqual) || typeid(p) == typeid(Less) ||
+      typeid(p) == typeid(LessEqual) || typeid(p) == typeid(LogicalNot) ||
+      typeid(p) == typeid(LogicalAnd) || typeid(p) == typeid(LogicalOr) ||
+      typeid(p) == typeid(LogAddExp) || typeid(p) == typeid(Maximum) ||
+      typeid(p) == typeid(Minimum) || typeid(p) == typeid(Multiply) ||
+      typeid(p) == typeid(NotEqual) || typeid(p) == typeid(Power) ||
+      typeid(p) == typeid(Subtract);
+}
+
+bool is_broadcast_primitive(const Primitive& p) {
+  return typeid(p) == typeid(Broadcast);
+}
+
 bool is_fusable(const Primitive& p) {
-  return is_unary_primitive(p);
+  return is_unary_primitive(p) || is_binary_primitive(p) ||
+      is_broadcast_primitive(p);
 }
 
 std::pair<std::vector<array>, std::vector<array>> convert_trace_to_real(
