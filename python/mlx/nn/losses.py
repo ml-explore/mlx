@@ -64,7 +64,7 @@ def cross_entropy(
         array([0.348587, 0.348587], dtype=float32)
     """
     if label_smoothing < 0 or label_smoothing >= 1:
-        raise ValueError(f"Label smoothing must in [0, 1), got {label_smoothing}.")
+        raise ValueError(f"Label smoothing must in [0, 1], got {label_smoothing}.")
 
     # Whether targets are class indices or probabilities
     targets_as_probs = targets.ndim == logits.ndim
