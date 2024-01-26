@@ -358,6 +358,26 @@ class TestLosses(mlx_tests.MLXTestCase):
         )
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
+    
+    def test_contrastive_loss(self):
+        input1= mx.array([[ 0.5000,  0.1000, -0.9000],[-0.1000,  0.2000, -0.5000]])
+        input2= mx.array([[ 0.2000,  0.1500, -0.8000],[-0.5000,  0.3000, -0.0100]])
+        labels= mx.array([0,1])
+
+        losses_none= nn.losses.contrastive_loss(input1,input2,labels,reduction="none")
+        expected_none = mx.array([0.1025, 0.129319])
+
+        self.assertTrue(mx.allclose(losses_none, expected_none))
+        
+        losses_mean= nn.losses.contrastive_loss(input1,input2,labels,reduction="mean")
+        expected_mean = mx.mean(losses_none)
+
+        self.assertTrue(mx.allclose(losses_mean, expected_mean))
+        
+        losses_sum= nn.losses.contrastive_loss(input1,input2,labels,reduction="sum")
+        expected_sum = mx.sum(losses_none)
+
+        self.assertTrue(mx.allclose(losses_sum, expected_sum))
 
 
 if __name__ == "__main__":
