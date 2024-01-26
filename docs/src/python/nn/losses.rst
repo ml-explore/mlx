@@ -10,6 +10,7 @@ Loss Functions
    :template: nn-module-template.rst
 
    binary_cross_entropy
+   contrastive_loss
    cosine_similarity_loss
    cross_entropy
    gaussian_nll_loss
