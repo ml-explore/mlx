@@ -814,7 +814,7 @@ void init_ops(py::module_& m) {
         Element-wise error function.
 
         .. math::
-          \mathrm{erf}(x) = \frac{2}{\sqrt{\pi}} \int_0^t e^{-t^2} \, dx
+          \mathrm{erf}(x) = \frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} \, dt
 
         Args:
             a (array): Input array.
