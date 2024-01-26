@@ -65,6 +65,7 @@ DEFAULT(Sort)
 DEFAULT(StopGradient)
 DEFAULT(Transpose)
 DEFAULT_MULTI(DivMod)
+DEFAULT_MULTI(QRF)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);

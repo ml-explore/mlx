@@ -1602,4 +1602,20 @@ class Transpose : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+/* QR Factorization primitive. */
+class QRF : public Primitive {
+ public:
+  explicit QRF(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(QRF)
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+};
+
 } // namespace mlx::core

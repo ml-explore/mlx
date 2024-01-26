@@ -97,6 +97,7 @@ DEFAULT(Tan)
 DEFAULT(Tanh)
 DEFAULT(Transpose)
 DEFAULT_MULTI(DivMod)
+DEFAULT_MULTI(QRF)
 
 namespace {
 
