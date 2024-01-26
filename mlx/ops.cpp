@@ -320,7 +320,8 @@ array flatten(
   }
   if (end_ax < start_ax) {
     throw std::invalid_argument(
-        "[flatten] start_axis must be less than or equal to end_axis");
+        "[flatten] Invalid combination of start_axis and end_axis. "
+        "start_axis must be less than or equal to end_axis");
   }
   if (start_ax >= ndim) {
     std::ostringstream msg;
