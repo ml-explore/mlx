@@ -533,13 +533,16 @@ def cosine_similarity_loss(
 
     return _reduce(loss, reduction)
 
-def contrastive_loss(x1:mx.array,
-                     x2:mx.array,
-                     labels:mx.array,
-                     axis:int=-1,
-                     eps:float=1e-6,
-                     margin:float=1.0,
-                     reduction:Reduction="none")-> mx.array:
+
+def contrastive_loss(
+    x1: mx.array,
+    x2: mx.array,
+    labels: mx.array,
+    axis: int = -1,
+    eps: float = 1e-6,
+    margin: float = 1.0,
+    reduction: Reduction = "none",
+) -> mx.array:
     """ 
     Computes the contrastive loss.
 
@@ -566,16 +569,18 @@ def contrastive_loss(x1:mx.array,
         array: The computed Contrastive Loss. If reduction is "none", returns a tensor of the same shape as input;
                   if reduction is "mean" or "sum", returns a scalar tensor.
     """
-        
-    if x1.shape[0] != labels.shape[0] or x2.shape[0] != labels.shape[0]:
 
+    if x1.shape[0] != labels.shape[0] or x2.shape[0] != labels.shape[0]:
         raise ValueError(
             "For Contrastive Loss, the number of samples in the label array "
             f"({labels.shape[0]}) must match the number of samples in the input "
-            f"arrays x1 ({x1.shape[0]}) and x2 ({x2.shape[0]}).")
+            f"arrays x1 ({x1.shape[0]}) and x2 ({x2.shape[0]})."
+        )
 
-    distance= mx.linalg.norm(x1-x2,axis=axis)
+    distance = mx.linalg.norm(x1 - x2, axis=axis)
 
-    losses= (1-labels) * mx.square(distance) + (labels) * mx.square(mx.maximum(margin-distance,eps))
+    losses = (1 - labels) * mx.square(distance) + (labels) * mx.square(
+        mx.maximum(margin - distance, eps)
+    )
 
-    return _reduce(losses,reduction)
+    return _reduce(losses, reduction)
