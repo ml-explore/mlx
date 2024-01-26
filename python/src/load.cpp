@@ -223,9 +223,11 @@ std::unordered_map<std::string, array> mlx_load_npz_helper(
   }
 
   // If we don't own the stream and it was passed to us, eval immediately
-  for (auto& [key, arr] : array_dict) {
+  {
     py::gil_scoped_release gil;
-    arr.eval();
+    for (auto& [key, arr] : array_dict) {
+      arr.eval();
+    }
   }
 
   return array_dict;
