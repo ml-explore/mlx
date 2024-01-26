@@ -2993,6 +2993,16 @@ array dequantize(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
+  if (bits <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for bits: " << bits;
+    throw std::invalid_argument(msg.str());
+  }
+  if (group_size <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for group_size: " << group_size;
+    throw std::invalid_argument(msg.str());
+  }
   if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {
     throw std::invalid_argument("[dequantize] Only matrices supported for now");
   }
