@@ -54,8 +54,8 @@ struct CompilerCache {
   // by the caller to avoid copying large tapes / inputs / outputs
   CacheEntry& find(size_t fun_id, const std::vector<array>& inputs) {
     // Try to find the entry
-    auto inserted = cache_.insert({fun_id, {}});
-    auto& entries = inserted.first->second;
+    auto [entry_it, inserted] = cache_.insert({fun_id, {}});
+    auto& entries = entry_it->second;
     auto is_match = [](const std::vector<array>& in1,
                        const std::vector<array>& in2) {
       if (in1.size() != in2.size()) {
