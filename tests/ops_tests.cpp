@@ -2600,3 +2600,38 @@ TEST_CASE("test divmod") {
   eval(out_holder);
   CHECK_EQ(out_holder[0].item<float>(), 1.0);
 }
+
+TEST_CASE("test diagonal") {
+  auto x = array({0, 1, 2, 3, 4, 5, 6, 7}, {4, 2});
+  auto out = diagonal(x, 0, 0, 1);
+  CHECK(array_equal(out, array({0, 3}, {2})).item<bool>());
+
+  CHECK_THROWS_AS(diagonal(x, 1, 6, 0), std::out_of_range);
+  CHECK_THROWS_AS(diagonal(x, 1, 0, -3), std::out_of_range);
+
+  x = array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, {3, 4});
+  out = diagonal(x, 2, 1, 0);
+  CHECK(array_equal(out, array({8}, {1})).item<bool>());
+
+  out = diagonal(x, -1, 0, 1);
+  CHECK(array_equal(out, array({4, 9}, {2})).item<bool>());
+
+  out = diagonal(x, -5, 0, 1);
+  eval(out);
+  CHECK_EQ(out.shape(), std::vector<int>{0});
+
+  x = array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, {3, 2, 2});
+  out = diagonal(x, 1, 0, 1);
+  CHECK(array_equal(out, array({2, 3}, {2, 1})).item<bool>());
+
+  out = diagonal(x, 0, 2, 0);
+  CHECK(array_equal(out, array({0, 5, 2, 7}, {2, 2})).item<bool>());
+
+  out = diagonal(x, 1, -1, 0);
+  CHECK(array_equal(out, array({4, 9, 6, 11}, {2, 2})).item<bool>());
+
+  CHECK_THROWS_AS(diagonal(x, 0, 1, 1), std::invalid_argument);
+
+  x = array({0, 1}, {2});
+  CHECK_THROWS_AS(diagonal(x, 0, 0, 1), std::invalid_argument);
+}

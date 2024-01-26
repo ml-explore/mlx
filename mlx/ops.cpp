@@ -980,15 +980,15 @@ array diagonal(
     int axis1 = 0,
     int axis2 = 1,
     StreamOrDevice s) {
-  auto ndim = a.ndim();
-  auto ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
+  int ndim = a.ndim();
+  int ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
   if (ax1 < 0 || ax1 >= ndim) {
     std::ostringstream msg;
     msg << "Invalid axis1 " << axis1 << " for array with " << ndim
         << " dimensions.";
     throw std::out_of_range(msg.str());
   }
-  auto ax2 = (axis2 < 0) ? axis2 + ndim : axis2;
+  int ax2 = (axis2 < 0) ? axis2 + ndim : axis2;
   if (ax2 < 0 || ax2 >= ndim) {
     std::ostringstream msg;
     msg << "Invalid axis2 " << axis2 << " for array with " << ndim
@@ -1031,11 +1031,18 @@ array diagonal(
   }
 
   std::vector<int> slice_sizes;
-  for (int i = 0; i < a_ndim; ++i) {
-    slice_sizes.push_back(1);
+  for (int i = 0; i < (a_ndim - 2); ++i) {
+    slice_sizes.push_back(a_moved.shape(i));
   }
+  slice_sizes.push_back(1);
+  slice_sizes.push_back(1);
 
   array result = gather(a_moved, indices, axes, slice_sizes, s);
+
+  // To handle the case where diagonal has only one element
+  if (result.shape(0) == 1) {
+    return squeeze(result, -1, s);
+  }
 
   return squeeze(result, s);
 }
