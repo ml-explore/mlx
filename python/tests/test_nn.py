@@ -3,13 +3,13 @@
 import os
 import tempfile
 import unittest
+from copy import deepcopy
 
 import mlx.core as mx
 import mlx.nn as nn
 import mlx_tests
 import numpy as np
 from mlx.utils import tree_flatten, tree_map, tree_unflatten
-from copy import deepcopy
 
 
 class TestBase(mlx_tests.MLXTestCase):

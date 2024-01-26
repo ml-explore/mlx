@@ -1,12 +1,11 @@
 # Copyright © 2023 Apple Inc.
 
 import textwrap
+from copy import deepcopy
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
-from copy import deepcopy
-
 
 
 class Module(dict):
@@ -101,11 +100,20 @@ class Module(dict):
             if isinstance(v, mx.array):
                 obj = mx.array(v)
             elif isinstance(v, list):
-                obj = [mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem) for elem in v]
+                obj = [
+                    mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem)
+                    for elem in v
+                ]
             elif isinstance(v, set):
-                obj = set(mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem) for elem in v)
+                obj = set(
+                    mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem)
+                    for elem in v
+                )
             elif isinstance(v, tuple):
-                obj = tuple(mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem) for elem in v)
+                obj = tuple(
+                    mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem)
+                    for elem in v
+                )
             else:
                 obj = deepcopy(v)
             instance_copy[k] = obj
