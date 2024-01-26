@@ -287,6 +287,72 @@ MTL::ComputePipelineState* Device::get_kernel(
   return kernel;
 }
 
+MTL::ComputePipelineState* Device::get_kernel(
+    const std::string& name,
+    const std::string& specialized_name,
+    const MTL::FunctionConstantValues* func_consts,
+    const std::string& lib_name /* = "mlx" */) {
+  auto pool = new_scoped_memory_pool();
+  // Look for cached kernel
+  if (auto it = kernel_map_.find(specialized_name); it != kernel_map_.end()) {
+    return it->second;
+  }
+
+  // Prepare new kernel
+
+  // Search for cached metal lib
+  MTL::Library* mtl_lib;
+  if (auto it = library_map_.find(lib_name); it != library_map_.end()) {
+    mtl_lib = it->second;
+  } else { // Look for metallib alongside library
+    register_library(lib_name);
+    mtl_lib = library_map_[lib_name];
+  }
+
+  // Pull kernel from library
+  NS::Error* error = nullptr;
+  auto ns_name = NS::String::string(name.c_str(), NS::ASCIIStringEncoding);
+  auto mtl_function = mtl_lib->newFunction(ns_name, func_consts, &error);
+
+  // Compile kernel to compute pipeline
+  MTL::ComputePipelineState* kernel;
+  if (mtl_function) {
+    kernel = device_->newComputePipelineState(mtl_function, &error);
+    mtl_function->release();
+  }
+  if (!mtl_function || !kernel) {
+    std::ostringstream msg;
+    msg << "[metal::Device] Unable to load kernel " << name << "\n";
+    if (error) {
+      msg << error->localizedDescription()->utf8String() << "\n";
+    }
+    throw std::runtime_error(msg.str());
+  }
+
+  // Add kernel to cache
+  kernel_map_.insert({specialized_name, kernel});
+  return kernel;
+}
+
+MTL::FunctionConstantValues* Device::get_function_consts(
+    const std::string& name) {
+  auto pool = new_scoped_memory_pool();
+  // Look for cached kernel
+  if (auto it = fconst_map_.find(name); it != fconst_map_.end()) {
+    return it->second;
+  }
+
+  // Prepare new fdesc
+  auto* fconst = MTL::FunctionConstantValues::alloc()->init();
+  return fconst;
+}
+
+bool Device::has_kernel(
+    const std::string& specialized_name,
+    const std::string& lib_name /* = "mlx" */) {
+  return library_map_.count(lib_name) && kernel_map_.count(specialized_name);
+}
+
 Device& device(mlx::core::Device) {
   static Device metal_device;
   return metal_device;

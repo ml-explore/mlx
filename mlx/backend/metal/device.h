@@ -63,6 +63,18 @@ class Device {
       const std::string& name,
       const std::string& lib_name = "mlx");
 
+  MTL::ComputePipelineState* get_kernel(
+      const std::string& name,
+      const std::string& specialized_name,
+      const MTL::FunctionConstantValues* func_consts,
+      const std::string& lib_name = "mlx");
+
+  MTL::FunctionConstantValues* get_function_consts(const std::string& name);
+
+  bool has_kernel(
+      const std::string& specialized_name,
+      const std::string& lib_name = "mlx");
+
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
@@ -73,6 +85,7 @@ class Device {
   std::unordered_map<int32_t, MTL::ComputeCommandEncoder*> encoder_map_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
+  std::unordered_map<std::string, MTL::FunctionConstantValues*> fconst_map_;
   std::mutex mtx_;
 };
 
