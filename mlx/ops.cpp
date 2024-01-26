@@ -252,7 +252,7 @@ array tri(int n, int m, int k, Dtype type, StreamOrDevice s /* = {} */) {
   return astype(greater_equal(l, r, s), type, s);
 }
 
-array tril(array x, int k, StreamOrDevice s /* = {} */) {
+array tril(array x, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
     throw std::invalid_argument("[tril] array must be at least 2-D");
   }
@@ -260,7 +260,7 @@ array tril(array x, int k, StreamOrDevice s /* = {} */) {
   return where(mask, x, zeros_like(x, s), s);
 }
 
-array triu(array x, int k, StreamOrDevice s /* = {} */) {
+array triu(array x, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
     throw std::invalid_argument("[triu] array must be at least 2-D");
   }
@@ -2656,9 +2656,40 @@ inline std::vector<int> conv_out_shape(
   std::vector<int> out_shape(in_shape.size());
   int i = 0;
   out_shape[i++] = N;
+
   for (; i < in_shape.size() - 1; i++) {
+    if (pads[i - 1] < 0) {
+      std::ostringstream msg;
+      msg << "[conv] Padding sizes must be non-negative."
+          << " Got padding " << pads << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (strides[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Stride sizes must be positive."
+          << " Got strides " << strides << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (dilation[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Dilation sizes must be positive."
+          << " Got dilation " << dilation << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
     out_shape[i] = conv_out_axis_size(
         in_shape[i], wt_shape[i], strides[i - 1], pads[i - 1], dilation[i - 1]);
+
+    if (out_shape[i] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Spatial dimensions of input after padding "
+          << " cannot be smaller than weight spatial dimensions."
+          << " Got input with shape " << in_shape << " and padding " << pads
+          << " for weight of shape " << wt_shape << ".";
+      throw std::invalid_argument(msg.str());
+    }
   }
   out_shape[i] = O;
 
@@ -2962,6 +2993,16 @@ array dequantize(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
+  if (bits <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for bits: " << bits;
+    throw std::invalid_argument(msg.str());
+  }
+  if (group_size <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for group_size: " << group_size;
+    throw std::invalid_argument(msg.str());
+  }
   if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {
     throw std::invalid_argument("[dequantize] Only matrices supported for now");
   }

@@ -14,17 +14,17 @@ if (MLX_BUILD_METAL)
   )
 endif()
 
-target_sources(tests PRIVATE 
+target_sources(tests PRIVATE
   allocator_tests.cpp
   array_tests.cpp
   arg_reduce_tests.cpp
   autograd_tests.cpp
   blas_tests.cpp
+  compile_tests.cpp
   creations_tests.cpp
   device_tests.cpp
   eval_tests.cpp
   fft_tests.cpp
-  graph_optimize_tests.cpp
   load_tests.cpp
   ops_tests.cpp
   random_tests.cpp

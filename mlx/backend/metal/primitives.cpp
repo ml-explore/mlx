@@ -769,4 +769,10 @@ void Transpose::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void QRF::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[QRF::eval_gpu] Metal QR factorization NYI.");
+}
+
 } // namespace mlx::core

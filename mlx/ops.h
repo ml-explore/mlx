@@ -123,8 +123,8 @@ inline array tri(int n, Dtype type, StreamOrDevice s = {}) {
   return tri(n, n, 0, type, s);
 }
 
-array tril(array x, int k, StreamOrDevice s = {});
-array triu(array x, int k, StreamOrDevice s = {});
+array tril(array x, int k = 0, StreamOrDevice s = {});
+array triu(array x, int k = 0, StreamOrDevice s = {});
 
 /** array manipulation */
 

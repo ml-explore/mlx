@@ -55,7 +55,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array.
             shape (tuple(int)): New shape.
-            stream (Stream, optional): Stream or device. Defaults to ```None```
+            stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
         Returns:
@@ -78,6 +78,11 @@ void init_ops(py::module_& m) {
 
       Flatten an array.
 
+      The axes flattened will be between ``start_axis`` and ``end_axis``,
+      inclusive. Negative axes are supported. After converting negative axis to
+      positive, axes outside the valid range will be clamped to a valid value,
+      ``start_axis`` to ``0`` and ``end_axis`` to ``ndim - 1``.
+
       Args:
           a (array): Input array.
           start_axis (int, optional): The first dimension to flatten. Defaults to ``0``.
@@ -87,6 +92,14 @@ void init_ops(py::module_& m) {
 
       Returns:
           array: The flattened array.
+
+      Example:
+          >>> a = mx.array([[1, 2], [3, 4]])
+          >>> mx.flatten(a)
+          array([1, 2, 3, 4], dtype=int32)
+          >>>
+          >>> mx.flatten(a, start_axis=0, end_axis=-1)
+          array([1, 2, 3, 4], dtype=int32)
   )pbdoc");
   m.def(
       "squeeze",
@@ -112,7 +125,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array.
             axis (int or tuple(int), optional): Axes to remove. Defaults
-            to ```None``` in which case all size one axes are removed.
+            to ``None`` in which case all size one axes are removed.
 
         Returns:
             array: The output array with size one axes removed.
@@ -801,7 +814,7 @@ void init_ops(py::module_& m) {
         Element-wise error function.
 
         .. math::
-          \mathrm{erf}(x) = \frac{2}{\sqrt{\pi}} \int_0^t e^{-t^2} \, dx
+          \mathrm{erf}(x) = \frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} \, dt
 
         Args:
             a (array): Input array.
@@ -2928,6 +2941,10 @@ void init_ops(py::module_& m) {
          StreamOrDevice s) {
         if (a.ndim() != 1 || v.ndim() != 1) {
           throw std::invalid_argument("[convolve] Inputs must be 1D.");
+        }
+
+        if (a.size() == 0 || v.size() == 0) {
+          throw std::invalid_argument("[convolve] Inputs cannot be empty.");
         }
 
         array in = a.size() < v.size() ? v : a;

@@ -4,8 +4,9 @@
 #include <ostream>
 #include <vector>
 
-#include "mlx/dtype.h"
 #include "mlx/linalg.h"
+#include "mlx/primitives.h"
+#include "mlx/utils.h"
 
 namespace mlx::core::linalg {
 
@@ -170,6 +171,33 @@ array norm(
     throw std::invalid_argument(msg.str());
   }
   return matrix_norm(a, ord, ax, keepdims, s);
+}
+
+std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::qr] Arrays must type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::qr] Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (a.shape(-1) != a.shape(-2)) {
+    throw std::invalid_argument(
+        "[linalg::qr] Support for non-square matrices NYI.");
+  }
+
+  auto out = array::make_arrays(
+      {a.shape(), a.shape()},
+      {a.dtype(), a.dtype()},
+      std::make_unique<QRF>(to_stream(s)),
+      {astype(a, a.dtype(), s)});
+  return std::make_pair(out[0], out[1]);
 }
 
 } // namespace mlx::core::linalg

@@ -31,13 +31,13 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
   if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64" AND ${CMAKE_HOST_APPLE})
     message(FATAL_ERROR
-      "Building for x86_64 on macOS is not supported." 
+      "Building for x86_64 on macOS is not supported."
       " If you are on an Apple silicon system, check the build"
       " documentation for possible fixes: "
       "https://ml-explore.github.io/mlx/build/html/install.html#build-from-source")
   elseif (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64")
-    message(WARNING 
-      "Building for x86_64 on macOS is not supported." 
+    message(WARNING
+      "Building for x86_64 on macOS is not supported."
       " If you are on an Apple silicon system, "
       " make sure you are building for arm64.")
   elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm64")
@@ -75,7 +75,7 @@ elseif (MLX_BUILD_METAL)
                   COMMAND_ERROR_IS_FATAL ANY)
 
   message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
-  
+
   if (${MACOS_VERSION} GREATER_EQUAL 14.2)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
   elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
@@ -123,16 +123,27 @@ else()
     /usr/include
     /usr/local/include
     $ENV{BLAS_HOME}/include)
-  message(STATUS ${BLAS_LIBRARIES})
-  message(STATUS ${BLAS_INCLUDE_DIRS})
+  message(STATUS "Blas lib" ${BLAS_LIBRARIES})
+  message(STATUS "Blas incclude" ${BLAS_INCLUDE_DIRS})
   target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
   target_link_libraries(mlx ${BLAS_LIBRARIES})
+  find_package(LAPACK REQUIRED)
+  if (NOT LAPACK_FOUND)
+      message(FATAL_ERROR "Must have LAPACK installed")
+  endif()
+  find_path(LAPACK_INCLUDE_DIRS lapacke.h
+    /usr/include
+    /usr/local/include)
+  message(STATUS "Lapack lib" ${LAPACK_LIBRARIES})
+  message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
+  target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+  target_link_libraries(mlx ${LAPACK_LIBRARIES})
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
 
 target_include_directories(
-  mlx 
+  mlx
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
   $<INSTALL_INTERFACE:include>
