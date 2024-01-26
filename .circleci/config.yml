@@ -136,6 +136,7 @@ jobs:
             pip install pybind11-stubgen
             pip install numpy
             pip install twine
+      # TODO: Update build system to switch away from setup.py develop
       - run:
           name: Install Python package
           command: |
@@ -144,7 +145,7 @@ jobs:
             DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
               PYPI_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py install
+              python setup.py develop
       - run:
           name: Generate package stubs
           command: |
@@ -196,7 +197,7 @@ jobs:
             DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
               DEV_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py install
+              python setup.py develop
       - run:
           name: Generate package stubs
           command: |
@@ -247,7 +248,7 @@ jobs:
             conda activate runner-env
             DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py install
+              python setup.py develop
       - run:
           name: Generate package stubs
           command: |

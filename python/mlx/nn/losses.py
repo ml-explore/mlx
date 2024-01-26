@@ -64,7 +64,7 @@ def cross_entropy(
         array([0.348587, 0.348587], dtype=float32)
     """
     if label_smoothing < 0 or label_smoothing >= 1:
-        raise ValueError(f"Label smoothing must in [0, 1), got {label_smoothing}.")
+        raise ValueError(f"Label smoothing must in [0, 1], got {label_smoothing}.")
 
     # Whether targets are class indices or probabilities
     targets_as_probs = targets.ndim == logits.ndim
@@ -532,3 +532,55 @@ def cosine_similarity_loss(
     loss = mx.sum(x1 * x2, axis=axis) / mx.maximum(x1_norm * x2_norm, eps)
 
     return _reduce(loss, reduction)
+
+
+def contrastive_loss(
+    x1: mx.array,
+    x2: mx.array,
+    labels: mx.array,
+    axis: int = -1,
+    eps: float = 1e-6,
+    margin: float = 1.0,
+    reduction: Reduction = "none",
+) -> mx.array:
+    """ 
+    Computes the contrastive loss.
+
+    Args:
+        x1 (array): The first set of inputs
+        x2 (array): The second set of inputs
+        labels (array): Binary labels indicating whether x1 and x2 are from the same distribution.
+        axis (int,optional): The distribution axis. Default: ``-1``.
+        eps (float,optional):  Small positive constant to prevent numerical instability. Defaults to ``1e-6``.
+        margin (float,optional): Margin for the contrastive loss. Defaults to ``1.0``.
+        reduction (str, optional): Specifies the reduction to apply to the output:
+          ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
+
+    Contrastive Loss is given by
+
+    .. math::
+
+        \\text{distance} = \\|x_1 - x_2\\|_2^{\\text{axis}}\\\\
+
+        L(x_1, x_2, y) = (1-y) \\frac{1}{2}\\|\\text{distance}\\|_2^2 + 
+        y \\frac{1}{2}\\max(\\text{margin} - \\|\\text{distance}\\|_2, \\epsilon)^2
+    
+    Returns: 
+        array: The computed Contrastive Loss. If reduction is "none", returns a tensor of the same shape as input;
+                  if reduction is "mean" or "sum", returns a scalar tensor.
+    """
+
+    if x1.shape[0] != labels.shape[0] or x2.shape[0] != labels.shape[0]:
+        raise ValueError(
+            "For Contrastive Loss, the number of samples in the label array "
+            f"({labels.shape[0]}) must match the number of samples in the input "
+            f"arrays x1 ({x1.shape[0]}) and x2 ({x2.shape[0]})."
+        )
+
+    distance = mx.linalg.norm(x1 - x2, axis=axis)
+
+    losses = (1 - labels) * mx.square(distance) + (labels) * mx.square(
+        mx.maximum(margin - distance, eps)
+    )
+
+    return _reduce(losses, reduction)
