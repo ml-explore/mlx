@@ -539,7 +539,7 @@ def contrastive_loss(
     x2: mx.array,
     labels: mx.array,
     axis: int = -1,
-    eps: float = 1e-6,
+    eps: float = 1e-8,
     margin: float = 1.0,
     reduction: Reduction = "none",
 ) -> mx.array:
@@ -560,10 +560,14 @@ def contrastive_loss(
 
     .. math::
 
-        \\text{distance} = \\|x_1 - x_2\\|_2^{\\text{axis}}\\\\
+        L(x_1, x_2, y) = (1-\text{labels}) \cdot \| \text{distance} \|_2^2 + 
+        (\text{labels}) \cdot \max(\text{margin} - \| \text{distance} \|_2, \epsilon)^2
 
-        L(x_1, x_2, y) = (1-y)\|\\text{distance}\\|_2^2 + 
-        y \\max(\\text{margin} - \\|\\text{distance}\\|_2, \\epsilon)^2
+    where the distance is
+        
+    .. math::
+
+        \\text{distance} = \\|x_1 - x_2\\|_2^{\\text{axis}}\\\\
     
     Returns: 
         array: The computed Contrastive Loss. If reduction is "none", returns a tensor of the same shape as input;
