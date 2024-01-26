@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include "doctest/doctest.h"
 
@@ -253,25 +253,29 @@ TEST_CASE("test QR factorization") {
   // 0D and 1D throw
   CHECK_THROWS(linalg::qrf(array(0.0)));
   CHECK_THROWS(linalg::qrf(array({0.0, 1.0})));
+
   // Unsupported types throw
   CHECK_THROWS(linalg::qrf(array({0, 1}, {1, 2})));
 
-  array A = array({{2., 1., 1., 2.}, {2, 2}});
+  array A = array({{2., 3., 1., 2.}, {2, 2}});
   auto [Q, R] = linalg::qrf(A, Device::cpu);
-  eval(Q, R);
+  auto out = matmul(Q, R);
+  CHECK(allclose(out, A).item<bool>());
+  out = matmul(Q, Q);
+  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
+  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
+  CHECK(allclose(tril(R, -1), zeros_like(R)).item<bool>());
+  CHECK_EQ(Q.dtype(), float32);
+  CHECK_EQ(R.dtype(), float32);
 
+  array A = array({{2., 3., 1., 2.}, {2, 2}});
+  auto [Q, R] = linalg::qrf(A, Device::cpu);
+  auto out = matmul(Q, R);
+  CHECK(allclose(out, A).item<bool>());
+  out = matmul(Q, Q);
+  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
+  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
+  CHECK(allclose(tril(R, -1), zeros_like(R)).item<bool>());
   CHECK_EQ(Q.dtype(), float32);
   CHECK_EQ(R.dtype(), float32);
 }
-
-// torch
-// Q=tensor([[-0.8944, -0.4472],
-//         [-0.4472,  0.8944]]),
-// R=tensor([[-2.2361, -1.7889],
-//         [ 0.0000,  1.3416]]))
-
-// mlx
-// 1: Q:array([[-0.894427, -0.447214],
-// 1:        [-0.447214, 0.894427]], dtype=float32)
-// 1: R:array([[-2.23607, 0.236068],
-// 1:        [0, 1.34164]], dtype=float32)

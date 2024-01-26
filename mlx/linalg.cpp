@@ -4,8 +4,9 @@
 #include <ostream>
 #include <vector>
 
-#include "mlx/dtype.h"
 #include "mlx/linalg.h"
+#include "mlx/primitives.h"
+#include "mlx/utils.h"
 
 namespace mlx::core::linalg {
 

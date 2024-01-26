@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 
@@ -61,6 +61,18 @@ void qrf_impl(array& A, array& Q, array& R) {
   // Holds scalar factors of the elementary reflectors
   Buffer tau = allocator::malloc_or_wait(sizeof(T) * tau_size);
 
+  // Copy A to inplace input and make it col-contiguous
+  array in(A.shape(), float32, nullptr, {});
+  auto flags = in.flags();
+  flags.col_contiguous = true;
+  flags.row_contiguous = false;
+  in.set_data(
+      allocator::malloc_or_wait(in.nbytes()),
+      in.nbytes(),
+      {1, static_cast<size_t>(M)}, // col contiguous
+      flags);
+  copy_inplace(A, in, CopyType::GeneralGeneral);
+
   T optimal_work;
   int lwork = -1;
   int info;
@@ -69,7 +81,7 @@ void qrf_impl(array& A, array& Q, array& R) {
   lpack<T>::xgeqrf(
       &M,
       &N,
-      A.data<T>(),
+      in.data<T>(),
       &lda,
       static_cast<T*>(tau.ptr()),
       &optimal_work,
@@ -84,46 +96,55 @@ void qrf_impl(array& A, array& Q, array& R) {
   lpack<T>::xgeqrf(
       &M,
       &N,
-      A.data<T>(),
+      in.data<T>(),
       &lda,
       static_cast<T*>(tau.ptr()),
       static_cast<T*>(work.ptr()),
       &lwork,
       &info);
 
-  // For m ≥ n, R is an upper triangular matrix.
-  // For m < n, R is an upper trapezoidal matrix.
-  array R_ = triu(A, 0);
-  R_.eval();
+  R.set_data(allocator::malloc_or_wait(R.nbytes()));
+  copy_inplace(in, R, CopyType::General);
 
-  R.set_data(
-      allocator::malloc_or_wait(R_.nbytes()),
-      R_.data_size(),
-      R_.strides(),
-      R_.flags());
+  // Zero lower triangle
+  for (int i = 0; i < R.shape(0); ++i) {
+    for (int j = 0; j < i; ++j) {
+      R.data<T>()[i * N + j] = 0;
+    }
+  }
 
-  copy_inplace(R_, R, CopyType::Vector);
-
-  // retrieve Q from the elementary reflectors
-  // uses the same worksize as before
+  // Get work size
+  int lwork2 = -1;
   lpack<T>::xorgqr(
       &M,
       &N,
       &tau_size,
-      A.data<T>(),
+      in.data<T>(),
+      &lda,
+      static_cast<T*>(tau.ptr()),
+      &optimal_work,
+      &lwork2,
+      &info);
+
+  if (optimal_work != lwork) {
+    throw std::runtime_error("[QR::eval] Mismatch work size");
+  }
+  lwork2 = optimal_work;
+
+  // Compute Q
+  lpack<T>::xorgqr(
+      &M,
+      &N,
+      &tau_size,
+      in.data<T>(),
       &lda,
       static_cast<T*>(tau.ptr()),
       static_cast<T*>(work.ptr()),
-      &lwork,
+      &lwork2,
       &info);
 
-  Q.set_data(
-      allocator::malloc_or_wait(A.nbytes()),
-      A.data_size(),
-      A.strides(),
-      A.flags());
-
-  copy_inplace(A, Q, CopyType::Vector);
+  Q.set_data(allocator::malloc_or_wait(Q.nbytes()));
+  copy_inplace(in, Q, CopyType::General);
 }
 
 void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
@@ -131,9 +152,8 @@ void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
 
   array A = inputs[0];
 
-  if (!(A.dtype() == Dtype::Val::float32)) {
-    throw std::runtime_error(
-        "QR factorization is only supported for floating point 32bit type.");
+  if (!(A.dtype() == float32)) {
+    throw std::runtime_error("[QRF::eval] only supports float32.");
   }
 
   array Q = outputs[0];
