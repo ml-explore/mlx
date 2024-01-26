@@ -251,29 +251,17 @@ TEST_CASE("[mlx.core.linalg.norm] string ord") {
 
 TEST_CASE("test QR factorization") {
   // 0D and 1D throw
-  CHECK_THROWS(linalg::qrf(array(0.0)));
-  CHECK_THROWS(linalg::qrf(array({0.0, 1.0})));
+  CHECK_THROWS(linalg::qr(array(0.0)));
+  CHECK_THROWS(linalg::qr(array({0.0, 1.0})));
 
   // Unsupported types throw
-  CHECK_THROWS(linalg::qrf(array({0, 1}, {1, 2})));
+  CHECK_THROWS(linalg::qr(array({0, 1}, {1, 2})));
 
   array A = array({{2., 3., 1., 2.}, {2, 2}});
-  auto [Q, R] = linalg::qrf(A, Device::cpu);
+  auto [Q, R] = linalg::qr(A, Device::cpu);
   auto out = matmul(Q, R);
   CHECK(allclose(out, A).item<bool>());
   out = matmul(Q, Q);
-  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
-  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
-  CHECK(allclose(tril(R, -1), zeros_like(R)).item<bool>());
-  CHECK_EQ(Q.dtype(), float32);
-  CHECK_EQ(R.dtype(), float32);
-
-  array A = array({{2., 3., 1., 2.}, {2, 2}});
-  auto [Q, R] = linalg::qrf(A, Device::cpu);
-  auto out = matmul(Q, R);
-  CHECK(allclose(out, A).item<bool>());
-  out = matmul(Q, Q);
-  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
   CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
   CHECK(allclose(tril(R, -1), zeros_like(R)).item<bool>());
   CHECK_EQ(Q.dtype(), float32);

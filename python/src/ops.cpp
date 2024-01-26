@@ -55,7 +55,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array.
             shape (tuple(int)): New shape.
-            stream (Stream, optional): Stream or device. Defaults to ```None```
+            stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
         Returns:
@@ -112,7 +112,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array.
             axis (int or tuple(int), optional): Axes to remove. Defaults
-            to ```None``` in which case all size one axes are removed.
+            to ``None`` in which case all size one axes are removed.
 
         Returns:
             array: The output array with size one axes removed.

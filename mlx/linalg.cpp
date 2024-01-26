@@ -173,7 +173,7 @@ array norm(
   return matrix_norm(a, ord, ax, keepdims, s);
 }
 
-std::pair<array, array> qrf(const array& a, StreamOrDevice s /* = {} */) {
+std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
   if (a.dtype() != float32) {
     std::ostringstream msg;
     msg << "[linalg::qr] Arrays must type float32. Received array "
