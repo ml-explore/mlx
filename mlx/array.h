@@ -172,6 +172,12 @@ class array {
       std::shared_ptr<Primitive> primitive,
       const std::vector<array>& inputs);
 
+  array(
+      std::vector<int> shape,
+      Dtype dtype,
+      std::shared_ptr<Primitive> primitive,
+      std::vector<array>&& inputs);
+
   static std::vector<array> make_arrays(
       const std::vector<std::vector<int>>& shapes,
       const std::vector<Dtype>& dtypes,
@@ -213,6 +219,11 @@ class array {
   /** The array's primitive. */
   Primitive& primitive() const {
     return *(array_desc_->primitive);
+  };
+
+  /** A shared pointer to the array's primitive. */
+  std::shared_ptr<Primitive>& primitive_ptr() const {
+    return array_desc_->primitive;
   };
 
   /** Check if the array has an attached primitive or is a leaf node. */
@@ -360,6 +371,12 @@ class array {
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
         const std::vector<array>& inputs);
+
+    explicit ArrayDesc(
+        std::vector<int>&& shape,
+        Dtype dtype,
+        std::shared_ptr<Primitive> primitive,
+        std::vector<array>&& inputs);
   };
 
   // The ArrayDesc contains the details of the materialized array including the
