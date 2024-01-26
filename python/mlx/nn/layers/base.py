@@ -5,6 +5,8 @@ from typing import Any, Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
+from copy import deepcopy
+
 
 
 class Module(dict):
@@ -89,6 +91,25 @@ class Module(dict):
 
     def __setattr__(self, key: str, val: Any):
         self[key] = val
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        instance_copy = cls.__new__(cls)
+        memo[id(self)] = instance_copy
+
+        for k, v in self.items():
+            if isinstance(v, mx.array):
+                obj = mx.array(v)
+            elif isinstance(v, list):
+                obj = [mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem) for elem in v]
+            elif isinstance(v, set):
+                obj = set(mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem) for elem in v)
+            elif isinstance(v, tuple):
+                obj = tuple(mx.array(elem) if isinstance(elem, mx.array) else deepcopy(elem) for elem in v)
+            else:
+                obj = deepcopy(v)
+            instance_copy[k] = obj
+        return instance_copy
 
     def load_weights(
         self,
