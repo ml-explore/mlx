@@ -1,13 +1,11 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
+#include <iostream> // TODO
 
 #include <iostream>
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
-#include "mlx/device.h"
-#include "mlx/dtype.h"
-#include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -51,27 +49,28 @@ struct lpack<float> {
 };
 
 template <typename T>
-void qrf_impl(array& A, array& Q, array& R) {
-  const int M = A.shape(0);
-  const int N = A.shape(1);
+void qrf_impl(array& a, array& q, array& r) {
+  const int M = a.shape(-2);
+  const int N = a.shape(-1);
   const int lda = std::max(M, N);
-
-  // No. of elementary reflectors
-  const int tau_size = std::min(M, N);
-  // Holds scalar factors of the elementary reflectors
-  Buffer tau = allocator::malloc_or_wait(sizeof(T) * tau_size);
+  size_t num_matrices = a.size() / (M * N);
+  int num_reflectors = std::min(M, N);
+  Buffer tau =
+      allocator::malloc_or_wait(sizeof(T) * num_matrices * num_reflectors);
 
   // Copy A to inplace input and make it col-contiguous
-  array in(A.shape(), float32, nullptr, {});
+  array in(a.shape(), float32, nullptr, {});
   auto flags = in.flags();
-  flags.col_contiguous = true;
+
+  // Copy the input to be column contiguous
+  flags.col_contiguous = num_matrices == 1;
   flags.row_contiguous = false;
+  std::vector<size_t> strides = in.strides();
+  strides[in.ndim() - 2] = 1;
+  strides[in.ndim() - 1] = M;
   in.set_data(
-      allocator::malloc_or_wait(in.nbytes()),
-      in.nbytes(),
-      {1, static_cast<size_t>(M)}, // col contiguous
-      flags);
-  copy_inplace(A, in, CopyType::GeneralGeneral);
+      allocator::malloc_or_wait(in.nbytes()), in.nbytes(), strides, flags);
+  copy_inplace(a, in, CopyType::GeneralGeneral);
 
   T optimal_work;
   int lwork = -1;
@@ -79,86 +78,89 @@ void qrf_impl(array& A, array& Q, array& R) {
 
   // Compute workspace size
   lpack<T>::xgeqrf(
-      &M,
-      &N,
-      in.data<T>(),
-      &lda,
-      static_cast<T*>(tau.ptr()),
-      &optimal_work,
-      &lwork,
-      &info);
+      &M, &N, nullptr, &lda, nullptr, &optimal_work, &lwork, &info);
 
   // Update workspace size
   lwork = optimal_work;
   Buffer work = allocator::malloc_or_wait(sizeof(T) * lwork);
 
-  // Solve
-  lpack<T>::xgeqrf(
-      &M,
-      &N,
-      in.data<T>(),
-      &lda,
-      static_cast<T*>(tau.ptr()),
-      static_cast<T*>(work.ptr()),
-      &lwork,
-      &info);
+  // Loop over matrices
+  for (int i = 0; i < num_matrices; ++i) {
+    // Solve
+    lpack<T>::xgeqrf(
+        &M,
+        &N,
+        in.data<float>() + M * N * i,
+        &lda,
+        static_cast<T*>(tau.raw_ptr()) + num_reflectors * i,
+        static_cast<T*>(work.raw_ptr()),
+        &lwork,
+        &info);
+  }
+  allocator::free(work);
 
-  R.set_data(allocator::malloc_or_wait(R.nbytes()));
-  copy_inplace(in, R, CopyType::General);
+  r.set_data(allocator::malloc_or_wait(r.nbytes()));
+  copy_inplace(in, r, CopyType::General);
 
-  // Zero lower triangle
-  for (int i = 0; i < R.shape(0); ++i) {
-    for (int j = 0; j < i; ++j) {
-      R.data<T>()[i * N + j] = 0;
+  for (int i = 0; i < num_matrices; ++i) {
+    // Zero lower triangle
+    for (int j = 0; j < r.shape(-2); ++j) {
+      for (int k = 0; k < j; ++k) {
+        r.data<T>()[i * N * M + j * N + k] = 0;
+      }
     }
   }
 
   // Get work size
-  int lwork2 = -1;
+  lwork = -1;
   lpack<T>::xorgqr(
       &M,
       &N,
-      &tau_size,
-      in.data<T>(),
+      &num_reflectors,
+      nullptr,
       &lda,
-      static_cast<T*>(tau.ptr()),
+      nullptr,
       &optimal_work,
-      &lwork2,
+      &lwork,
       &info);
+  lwork = optimal_work;
+  work = allocator::malloc_or_wait(sizeof(T) * lwork);
 
-  if (optimal_work != lwork) {
-    throw std::runtime_error("[QR::eval] Mismatch work size");
+  // Loop over matrices
+  for (int i = 0; i < num_matrices; ++i) {
+    // Compute Q
+    lpack<T>::xorgqr(
+        &M,
+        &N,
+        &num_reflectors,
+        in.data<float>() + M * N * i,
+        &lda,
+        static_cast<T*>(tau.raw_ptr()) + num_reflectors * i,
+        static_cast<T*>(work.raw_ptr()),
+        &lwork,
+        &info);
   }
-  lwork2 = optimal_work;
 
-  // Compute Q
-  lpack<T>::xorgqr(
-      &M,
-      &N,
-      &tau_size,
-      in.data<T>(),
-      &lda,
-      static_cast<T*>(tau.ptr()),
-      static_cast<T*>(work.ptr()),
-      &lwork2,
-      &info);
+  q.set_data(allocator::malloc_or_wait(q.nbytes()));
+  copy_inplace(in, q, CopyType::General);
 
-  Q.set_data(allocator::malloc_or_wait(Q.nbytes()));
-  copy_inplace(in, Q, CopyType::General);
+  // Cleanup
+  allocator::free(work);
+  allocator::free(tau);
 }
 
 void QRF::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
   assert(inputs.size() == 1);
 
-  array A = inputs[0];
+  array a = inputs[0];
 
-  if (!(A.dtype() == float32)) {
+  if (!(a.dtype() == float32)) {
     throw std::runtime_error("[QRF::eval] only supports float32.");
   }
 
-  array Q = outputs[0];
-  array R = outputs[1];
-  qrf_impl<float>(A, Q, R);
+  array q = outputs[0];
+  array r = outputs[1];
+  qrf_impl<float>(a, q, r);
 }
 
 } // namespace mlx::core
