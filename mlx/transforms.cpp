@@ -36,10 +36,8 @@ int detail::InTracing::tracing_counter{0};
 
 void eval(const std::vector<array>& outputs) {
   std::function<void(const array&, bool)> recurse;
-  std::function<int(const array&)> compute_depths;
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;
-  std::unordered_map<std::uintptr_t, int> depth_map;
   std::unordered_map<std::uintptr_t, std::shared_future<void>> deps;
 
   // Make an effort to choose a good output stream
@@ -54,23 +52,6 @@ void eval(const std::vector<array>& outputs) {
   auto synchronizer =
       array({}, bool_, std::make_unique<Synchronizer>(stream), outputs);
 
-  compute_depths = [&](const array& a) {
-    auto id = a.id();
-    if (auto it = depth_map.find(id); it != depth_map.end()) {
-      return it->second;
-    }
-    int depth = 0;
-    for (auto& in : a.inputs()) {
-      depth = std::max(depth, compute_depths(in));
-    }
-    depth++;
-    depth_map[id] = depth;
-    for (auto& s : a.siblings()) {
-      depth_map[s.id()] = depth;
-    }
-    return depth;
-  };
-
   recurse = [&](const array& a, bool largest_branch_first) {
     auto id = a.id();
     if (cache.find(id) != cache.end()) {
@@ -81,11 +62,10 @@ void eval(const std::vector<array>& outputs) {
     std::sort(
         recursion_order.begin(),
         recursion_order.end(),
-        [&a, &depth_map, largest_branch_first](int left, int right) {
-          int depth_left = depth_map[a.inputs()[left].id()];
-          int depth_right = depth_map[a.inputs()[right].id()];
-          bool large_left = depth_left > depth_right;
-          return largest_branch_first == large_left;
+        [&a, largest_branch_first](int i, int j) {
+          auto depth_i = a.inputs()[i].graph_depth();
+          auto depth_j = a.inputs()[j].graph_depth();
+          return largest_branch_first ? depth_i > depth_j : depth_j < depth_i;
         });
 
     for (int idx : recursion_order) {
@@ -112,7 +92,6 @@ void eval(const std::vector<array>& outputs) {
     }
   };
 
-  compute_depths(synchronizer);
   recurse(synchronizer, false);
   uintptr_t synch_id = synchronizer.primitive_id();
   deps.insert({synch_id, std::shared_future<void>{}});
