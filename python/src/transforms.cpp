@@ -143,11 +143,25 @@ std::vector<array> tree_flatten(py::object tree, bool strict = true) {
     if (py::isinstance<array>(obj)) {
       flat_tree.push_back(py::cast<array>(obj));
     } else if (strict) {
-      throw std::invalid_argument("Argument is not an array");
+      throw std::invalid_argument(
+          "[tree_flatten] The argument should contain only arrays");
     }
   });
 
   return flat_tree;
+}
+
+py::object tree_unflatten(
+    py::object tree,
+    const std::vector<array>& values,
+    int index = 0) {
+  return tree_map(tree, [&](py::handle obj) {
+    if (py::isinstance<array>(obj)) {
+      return py::cast(values[index++]);
+    } else {
+      return py::cast<py::object>(obj);
+    }
+  });
 }
 
 py::object structure_sentinel() {
@@ -164,16 +178,21 @@ py::object structure_sentinel() {
 }
 
 std::pair<std::vector<array>, py::object> tree_flatten_with_structure(
-    py::object tree) {
+    py::object tree,
+    bool strict = true) {
   auto sentinel = structure_sentinel();
   std::vector<array> flat_tree;
   auto structure = tree_map(
-      tree, [&flat_tree, sentinel = std::move(sentinel)](py::handle obj) {
+      tree,
+      [&flat_tree, sentinel = std::move(sentinel), strict](py::handle obj) {
         if (py::isinstance<array>(obj)) {
           flat_tree.push_back(py::cast<array>(obj));
           return sentinel;
-        } else {
+        } else if (!strict) {
           return py::cast<py::object>(obj);
+        } else {
+          throw std::invalid_argument(
+              "[tree_flatten] The argument should contain only arrays");
         }
       });
 
@@ -187,32 +206,6 @@ py::object tree_unflatten_from_structure(
   auto sentinel = structure_sentinel();
   return tree_map(structure, [&](py::handle obj) {
     if (obj.is(sentinel)) {
-      return py::cast(values[index++]);
-    } else {
-      return py::cast<py::object>(obj);
-    }
-  });
-}
-
-py::object tree_unflatten(
-    py::object tree,
-    const std::vector<array>& values,
-    int index = 0) {
-  return tree_map(tree, [&](py::handle obj) {
-    if (py::isinstance<array>(obj)) {
-      return py::cast(values[index++]);
-    } else {
-      return py::cast<py::object>(obj);
-    }
-  });
-}
-
-py::object tree_unflatten_none(
-    py::object tree,
-    const std::vector<array>& values,
-    int index = 0) {
-  return tree_map(tree, [&](py::handle obj) {
-    if (py::isinstance<py::none>(obj)) {
       return py::cast(values[index++]);
     } else {
       return py::cast<py::object>(obj);
@@ -517,14 +510,10 @@ struct PyCompiledFun {
 
   py::object operator()(const py::args& args) {
     auto compile_fun = [this, &args](const std::vector<array>& a) {
-      // Call the python function
-      py::object py_outputs = this->fun(*tree_unflatten(args, a));
+      // Call the python function and flatten the outputs
+      auto [outputs, py_outputs] = tree_flatten_with_structure(
+          std::move(this->fun(*tree_unflatten(args, a))), true);
 
-      // Flatten the outputs
-      auto outputs = tree_flatten(py_outputs, true);
-
-      py_outputs =
-          tree_map(py_outputs, [](const py::handle& x) { return py::none(); });
       tree_cache().insert({this->fun_id, py_outputs});
       return outputs;
     };
@@ -537,25 +526,28 @@ struct PyCompiledFun {
 
     // Put the outputs back in the container
     py::object py_outputs = tree_cache().at(fun_id);
-    return tree_unflatten_none(py_outputs, outputs);
+    return tree_unflatten_from_structure(py_outputs, outputs);
   };
 
   ~PyCompiledFun() {
+    py::gil_scoped_acquire gil;
+
     tree_cache().erase(fun_id);
     detail::compile_erase(fun_id);
+    fun.release().dec_ref();
   }
 };
 
-class CheckpointedFn {
+class PyCheckpointedFun {
  public:
-  CheckpointedFn(
+  PyCheckpointedFun(
       py::function fun,
       py::object args_structure,
       std::weak_ptr<py::object> output_structure)
       : fun_(std::move(fun)),
         args_structure_(std::move(args_structure)),
         output_structure_(output_structure) {}
-  ~CheckpointedFn() {
+  ~PyCheckpointedFun() {
     py::gil_scoped_acquire gil;
 
     fun_.release().dec_ref();
@@ -568,7 +560,7 @@ class CheckpointedFn {
     auto args = py::cast<py::tuple>(
         tree_unflatten_from_structure(args_structure_, inputs));
     auto [outputs, output_structure] =
-        tree_flatten_with_structure(fun_(*args[0], **args[1]));
+        tree_flatten_with_structure(fun_(*args[0], **args[1]), false);
     if (auto s = output_structure_.lock()) {
       *s = output_structure;
     }
@@ -887,8 +879,9 @@ void init_transforms(py::module_& m) {
       [](py::function fun, const py::args& args, const py::kwargs& kwargs) {
         auto output_structure = std::make_shared<py::object>();
         auto full_args = py::make_tuple(args, kwargs);
-        auto [inputs, args_structure] = tree_flatten_with_structure(full_args);
-        auto ckpt_fun = CheckpointedFn(
+        auto [inputs, args_structure] =
+            tree_flatten_with_structure(full_args, false);
+        auto ckpt_fun = PyCheckpointedFun(
             std::move(fun), std::move(args_structure), output_structure);
         auto outputs = checkpoint(std::move(ckpt_fun), std::move(inputs));
         return tree_unflatten_from_structure(*output_structure, outputs);

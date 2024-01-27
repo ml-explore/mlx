@@ -749,4 +749,57 @@ std::function<array(const array&)> vmap(
   return [vfun](const array& a) { return vfun({a})[0]; };
 }
 
+std::vector<array> custom_vjp(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<array>&)> fun_vjp,
+    const std::vector<array>& args) {
+  // Compute the outputs
+  auto outputs = fun(args);
+  for (auto& out : outputs) {
+    out = stop_gradient(out);
+  }
+
+  // Prepare the inputs to the primitive
+  // We also add the outputs to the primitive so that it can "run" the forward
+  // pass.
+  std::vector<array> inputs = args;
+  inputs.insert(inputs.end(), outputs.begin(), outputs.end());
+
+  // Compute the stream. Maybe do it in a smarter way at some point in the
+  // future.
+  Stream s = (outputs[0].has_primitive()) ? outputs[0].primitive().stream()
+                                          : default_stream(default_device());
+
+  // Make the output info
+  std::vector<std::vector<int>> shapes;
+  std::vector<Dtype> dtypes;
+  for (const auto& out : outputs) {
+    shapes.emplace_back(out.shape());
+    dtypes.emplace_back(out.dtype());
+  }
+
+  return array::make_arrays(
+      shapes,
+      dtypes,
+      std::make_shared<CustomVJP>(to_stream(s), std::move(fun_vjp)),
+      inputs);
+}
+
+std::vector<array> checkpoint(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    const std::vector<array>& args) {
+  auto vjp_fun = [fun](
+                     const std::vector<array>& primals,
+                     const std::vector<array>& cotangents,
+                     const std::vector<array>& outputs) -> std::vector<array> {
+    auto [__, vjps] = vjp(fun, depends(primals, outputs), cotangents);
+    return vjps;
+  };
+
+  return custom_vjp(fun, vjp_fun, args);
+}
+
 } // namespace mlx::core
