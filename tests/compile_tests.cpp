@@ -1,9 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <iostream>
 #include "doctest/doctest.h"
 
 #include "mlx/mlx.h"
+#include "mlx/primitives.h"
 
 using namespace mlx::core;
 
@@ -121,6 +121,7 @@ auto max_scalars(const std::vector<array>&) {
 };
 
 TEST_CASE("test simplify scalars") {
+  set_compile_mode(CompileMode::no_fuse);
   {
     auto cfun = compile(add_scalars);
     auto out = cfun({});
@@ -137,6 +138,7 @@ TEST_CASE("test simplify scalars") {
     auto d = out[2];
     CHECK(b.inputs()[1].id() == c.inputs()[1].id());
   }
+  set_compile_mode(CompileMode::enabled);
 }
 
 auto exp_two(const std::vector<array>& inputs) {
@@ -145,9 +147,11 @@ auto exp_two(const std::vector<array>& inputs) {
 };
 
 TEST_CASE("test simplify") {
+  set_compile_mode(CompileMode::no_fuse);
   auto a = array({1.0f, 2.0f});
   auto b = compile(exp_two)({a})[0];
   CHECK(b.inputs()[0].id() == b.inputs()[1].id());
+  set_compile_mode(CompileMode::enabled);
 }
 
 auto add_diff(const std::vector<array>& inputs) {
@@ -156,9 +160,11 @@ auto add_diff(const std::vector<array>& inputs) {
 };
 
 TEST_CASE("test no simplify") {
+  set_compile_mode(CompileMode::no_fuse);
   auto a = array({1.0f, 2.0f});
   auto b = compile(add_diff)({a})[0];
   CHECK(b.inputs()[0].id() != b.inputs()[1].id());
+  set_compile_mode(CompileMode::enabled);
 }
 
 auto multi_one(const std::vector<array>&) {
@@ -188,6 +194,7 @@ auto multi_three(const std::vector<array>&) {
 }
 
 TEST_CASE("test simplify multi output") {
+  set_compile_mode(CompileMode::no_fuse);
   {
     auto out = compile(multi_one)({});
     auto e = out[0];
@@ -210,5 +217,65 @@ TEST_CASE("test simplify multi output") {
     CHECK(array_equal(e, array({0.0f, 1.0f, 0.0f, 1.0f})).item<bool>());
     CHECK_EQ(e.inputs()[0].id(), e.inputs()[2].id());
     CHECK_EQ(e.inputs()[1].id(), e.inputs()[3].id());
+  }
+  set_compile_mode(CompileMode::enabled);
+}
+
+// All compilable
+auto unary_fused_1(const std::vector<array>& inputs) {
+  return std::vector<array>{abs(negative(exp(inputs[0])))};
+}
+
+// Output into un-compilable primitive
+auto unary_fused_2(const std::vector<array>& inputs) {
+  return std::vector<array>{sum(abs(negative(exp(inputs[0]))))};
+}
+
+// Input from un-compilable primitive
+auto unary_fused_3(const std::vector<array>& inputs) {
+  return std::vector<array>{exp(abs(negative(sum(inputs[0]))))};
+}
+
+TEST_CASE("test compile unary fused") {
+  // NB: some of these tests are brittle and may need to be
+  // updated if we change compile conditions
+  {
+    auto cfun = compile(unary_fused_1);
+    auto x = array(1.0);
+    auto out = cfun({x});
+
+    auto& p = out[0].primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    CHECK_EQ(out[0].inputs()[0].id(), x.id());
+  }
+
+  {
+    auto cfun = compile(unary_fused_2);
+    auto x = array({1.0, 2.0});
+    auto out = cfun({x});
+    CHECK_EQ(out.size(), 1);
+
+    auto& p = out[0].primitive();
+    // NB: this test is brittle, will need to update
+    // it if we change compile conditions
+    CHECK_EQ(typeid(p), typeid(Reduce));
+    auto cout = out[0].inputs()[0];
+    auto& cp = cout.primitive();
+    CHECK_EQ(typeid(cp), typeid(Compiled));
+    CHECK_EQ(cout.inputs()[0].id(), x.id());
+  }
+
+  {
+    auto cfun = compile(unary_fused_3);
+    auto x = array({1.0, 2.0});
+    auto out = cfun({x});
+
+    auto& p = out[0].primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    auto sout = out[0].inputs()[0];
+    CHECK_EQ(out[0].inputs().size(), 1);
+    auto& sp = sout.primitive();
+    CHECK_EQ(typeid(sp), typeid(Reduce));
+    CHECK_EQ(sout.inputs()[0].id(), x.id());
   }
 }

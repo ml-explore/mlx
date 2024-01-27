@@ -5,8 +5,8 @@
 #include <unordered_set>
 
 #include "mlx/allocator.h"
+#include "mlx/compile.h"
 #include "mlx/primitives.h"
-#include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 
 namespace mlx::core {
@@ -188,28 +188,51 @@ bool Compiled::is_equivalent(const Primitive& other) const {
 
 void Compiled::print(std::ostream& os) {
   // TODO maybe print the compiled name here instead.
-  for (auto& a : tape_) {
-    a.primitive().print(os);
-  }
+  os << "Compiled";
+  //  for (auto& a : tape_) {
+  //    a.primitive().print(os);
+  //  }
 }
 
 namespace detail {
 
-bool& compiler_disabled() {
+CompileMode& compile_mode() {
   auto get_val = []() {
     if (const char* buff_str = std::getenv("MLX_DISABLE_COMPILE")) {
-      return true;
+      return CompileMode::disabled;
     } else {
-      return false;
+      return CompileMode::enabled;
     }
   };
-  static bool compiler_disabled_ = get_val();
-  return compiler_disabled_;
+  static CompileMode compile_mode_ = get_val();
+  return compile_mode_;
 }
 
 using CompileFn = std::function<std::vector<array>(const std::vector<array>&)>;
 using ParentsMap =
     std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>;
+
+// Helper that fuses two arrays in the graph by setting the parents of the
+// source to point to the destination
+void fuse(array& dst, array& src, ParentsMap& parents_map) {
+  // Canonicalize the order of the primitives outputs
+  auto sources = src.outputs();
+  auto dests = dst.outputs();
+  // For each src parent, point it to the corresponding dest
+  for (int i = 0; i < sources.size(); ++i) {
+    auto src_parents = parents_map.find(sources[i].id());
+    if (src_parents == parents_map.end()) {
+      continue;
+    }
+    auto& pairs = parents_map[dests[i].id()];
+    for (auto& parent : src_parents->second) {
+      parent.first.inputs()[parent.second] = dests[i];
+      pairs.push_back(parent);
+    }
+    // Remove the source from the map to avoid fusing with it again
+    parents_map.erase(src_parents);
+  }
+};
 
 template <typename T, typename... U>
 size_t getAddress(std::function<T(U...)> f) {
@@ -385,28 +408,6 @@ void compile_simplify(
     }
   }
 
-  // Helper that fuses two arrays in the graph by setting the parents of the
-  // source to point to the destination
-  auto fuse = [&](array& dst, array& src) {
-    // Canonicalize the order of the primitives outputs
-    auto sources = src.outputs();
-    auto dests = dst.outputs();
-    // For each src parent, point it to the corresponding dest
-    for (int i = 0; i < sources.size(); ++i) {
-      auto src_parents = parents_map.find(sources[i].id());
-      if (src_parents == parents_map.end()) {
-        continue;
-      }
-      auto& pairs = parents_map[dests[i].id()];
-      for (auto& parent : src_parents->second) {
-        parent.first.inputs()[parent.second] = dests[i];
-        pairs.push_back(parent);
-      }
-      // Remove the source from the map to avoid fusing with it again
-      parents_map.erase(src_parents);
-    }
-  };
-
   // Depth-1 array equivalence check.
   auto array_equivalent = [](const array& a, const array& b) {
     if (!a.has_primitive() || !b.has_primitive()) {
@@ -441,7 +442,7 @@ void compile_simplify(
     if (is_scalar(arr)) {
       auto scalar = scalars.find(get_scalar_rep(arr));
       if (scalar->second.id() != arr.id()) {
-        fuse(scalar->second, arr);
+        fuse(scalar->second, arr, parents_map);
         // Don't keep orphaned scalars in the tape
         continue;
       }
@@ -476,7 +477,7 @@ void compile_simplify(
               auto& src = parents->second[j].first;
               auto& dst = parents->second[i].first;
               if (src.id() != dst.id() && array_equivalent(src, dst)) {
-                fuse(dst, src);
+                fuse(dst, src, parents_map);
                 mask[j] = true;
               }
             }
@@ -512,85 +513,100 @@ void compile_simplify(
 void compile_reduce(
     std::vector<array>& tape,
     ParentsMap& parents_map,
-    const std::vector<array>& outputs) {
-  std::vector<array> new_tape;
-  std::unordered_set<uintptr_t> cache;
-  std::vector<array> fused_inputs;
-  std::vector<array> fused_outputs;
+    std::vector<array>& outputs) {
+  // Track outputs to replace with new compiled outputs
+  std::unordered_map<uintptr_t, array> output_map;
+  for (auto& o : outputs) {
+    output_map.insert({o.id(), o});
+  }
 
   // Go through the tape in reverse order
   // Keep iterating backward until either of:
-  // - Max compile depth
+  // - Max compile depth TODO
   // - Reach an array with a parent outside the current section
   // - Reach an array with a primitve that we cannot compile
-  for (int i = tape.size() - 1; i >= 0; --i) {
-    cache.clear();
-    fused_inputs.clear();
-    fused_outputs.clear();
+  std::vector<array> new_tape;
+  for (int i = tape.size() - 1; i >= 0;) {
+    // array id -> boolean indicating an input
+    std::unordered_map<uintptr_t, bool> cache;
+    std::vector<array> old_outputs;
 
     auto s = i;
-    while (s >= 0) {
-      // Constant
+    for (; s >= 0; --s) {
       auto& in = tape[s];
-      if (!in.has_primitive()) {
-        cache.insert(in.id());
-        s--;
-        continue;
-      }
-      if (!is_fusable(in.primitive())) {
-        break;
-      }
       auto p_it = parents_map.find(in.id());
 
-      // If no parents
-      if (p_it == parents_map.end()) {
-        fused_outputs.push_back(in);
-        cache.insert(in.id());
-        s--;
-        continue;
-      }
-      auto& parents = p_it->second;
-      if (parents.size() == 0) {
-        throw std::runtime_error(
-            "[compile_reduce] Why are you in the map without parents?");
-      }
       bool all_parents_out = true;
       bool all_parents_in = true;
-      bool continue_fusing = true;
-      for (auto& [p, idx] : parents) {
-        // Stop fusion, as parent is external to this section
-        // of the tape
-        auto in_cache = cache.find(p.id()) != cache.end();
-        all_parents_in &= in_cache;
-        all_parents_out &= !in_cache;
-        if (!(all_parents_in || all_parents_out)) {
-          continue_fusing = false;
-          break;
+      if (p_it == parents_map.end()) {
+        all_parents_in = false;
+      } else {
+        auto& parents = p_it->second;
+        if (parents.size() == 0) {
+          throw std::runtime_error(
+              "[compile_reduce] Why are you in the map without parents?");
+        }
+        for (auto& [p, idx] : parents) {
+          auto it = cache.find(p.id());
+          auto in_cache = (it != cache.end());
+          if (in_cache) {
+            // Not an input
+            it->second = false;
+          }
+          all_parents_in &= in_cache;
+          all_parents_out &= !in_cache;
         }
       }
 
-      if (!continue_fusing) {
+      // Constant input
+      if (!in.has_primitive()) {
+        cache.insert({in.id(), true});
+        continue;
+      }
+
+      // Non-constant input
+      if (!is_fusable(in.primitive())) {
+        cache.insert({in.id(), true});
+        s--;
         break;
       }
+
+      // Arrays with a mix of parents outside this stretch
+      // of tape are not fusable
+      if (!(all_parents_in || all_parents_out)) {
+        break;
+      }
+
       // If all parents are outside its an output
-      fused_outputs.push_back(in);
-      // If all parents are inside its an input
-      fused_inputs.push_back(in);
+      if (all_parents_out) {
+        old_outputs.push_back(in);
+      }
 
       // Store in cache
-      cache.insert(in.id());
-
-      s--;
+      cache.insert({in.id(), true});
     }
+
+    // Go up one to the start of the fusable section
+    s++;
+
     // No change needed if no fusion happened
-    if (s == i) {
+    if (s >= i) {
+      new_tape.push_back(tape[i]);
+      i--;
       continue;
     }
 
+    // Extract inputs from the fused section:
+    std::vector<array> inputs;
     std::vector<array> fused_tape(tape.begin() + s, tape.begin() + i + 1);
+    for (auto& a : fused_tape) {
+      if (cache.at(a.id())) {
+        inputs.push_back(a);
+      }
+    }
     std::vector<std::vector<int>> shapes;
     std::vector<Dtype> types;
-    for (auto& o : fused_outputs) {
+    for (auto& o : old_outputs) {
       shapes.push_back(o.shape());
       types.push_back(o.dtype());
     }
@@ -599,17 +615,35 @@ void compile_reduce(
         types,
         std::make_shared<Compiled>(
             outputs.back().primitive().stream(),
-            fused_inputs,
-            std::move(fused_outputs),
+            inputs,
+            old_outputs,
             std::move(fused_tape)),
-        fused_inputs);
+        inputs);
+
     // One output per primitive
     new_tape.push_back(compiled_outputs[0]);
-    new_tape.insert(new_tape.end(), fused_inputs.rbegin(), fused_inputs.rend());
+    new_tape.insert(new_tape.end(), inputs.rbegin(), inputs.rend());
+
+    // - Update outputs parents to point to compiled outputs
+    // - Update any overall graph outputs to be compiled outputs
+    for (int o = 0; o < old_outputs.size(); ++o) {
+      fuse(compiled_outputs[o], old_outputs[o], parents_map);
+      if (auto it = output_map.find(old_outputs[o].id());
+          it != output_map.end()) {
+        it->second = compiled_outputs[o];
+      }
+    }
+    // Skip the processed part of the tape
+    i = s - 1;
   }
 
   std::reverse(new_tape.begin(), new_tape.end());
   tape = std::move(new_tape);
+
+  // Replace output with potentially compiled output
+  for (auto& o : outputs) {
+    o = output_map.at(o.id());
+  }
   // TODO, handle mismatched streams
   // TODO, maybe something special for siblings?
 }
@@ -667,7 +701,7 @@ std::vector<array> compile_replace(
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     size_t fun_id) {
-  if (compiler_disabled()) {
+  if (compile_mode() == CompileMode::disabled) {
     return fun;
   }
   return [fun, fun_id](const std::vector<array>& inputs) {
@@ -689,10 +723,16 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
           compile_dfs(entry.inputs, entry.outputs);
 
       // Simplify the tape
-      compile_simplify(entry.tape, parents_map, entry.outputs, /* passes */ 3);
+      if (compile_mode() != CompileMode::no_simplify) {
+        compile_simplify(
+            entry.tape, parents_map, entry.outputs, /* passes */ 3);
+      }
 
-      // This is a good point to do more optimizations, e.g. kernel fusion to
-      // generate new primitives. The tape needs to be updated accordingly
+      // Kernel fusion to generate Compiled primitives. The tape and
+      // new outputs must be updated accordingly
+      if (compile_mode() != CompileMode::no_fuse) {
+        compile_reduce(entry.tape, parents_map, entry.outputs);
+      }
     }
 
     // At this point we must have a tape, now replace the placeholders
@@ -709,7 +749,7 @@ void compile_erase(size_t fun_id) {
 
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun) {
-  if (detail::compiler_disabled()) {
+  if (detail::compile_mode() == CompileMode::disabled) {
     return fun;
   }
   auto fun_id = detail::getAddress(fun);
@@ -717,11 +757,15 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 }
 
 void disable_compile() {
-  detail::compiler_disabled() = true;
+  detail::compile_mode() = CompileMode::disabled;
 }
 
 void enable_compile() {
-  detail::compiler_disabled() = false;
+  detail::compile_mode() = CompileMode::enabled;
+}
+
+void set_compile_mode(CompileMode mode) {
+  detail::compile_mode() = mode;
 }
 
 } // namespace mlx::core
