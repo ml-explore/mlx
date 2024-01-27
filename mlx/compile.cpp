@@ -11,7 +11,10 @@
 
 namespace mlx::core {
 
-bool is_unary_primitive(const Primitive& p) {
+// TODO how to set this?
+constexpr int max_compile_size = 8;
+
+bool is_unary(const Primitive& p) {
   // TODO fix this mess.
   return (
       typeid(p) == typeid(Abs) || typeid(p) == typeid(ArcCos) ||
@@ -31,7 +34,7 @@ bool is_unary_primitive(const Primitive& p) {
       typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh));
 }
 
-bool is_binary_primitive(const Primitive& p) {
+bool is_binary(const Primitive& p) {
   // TODO fix this mess.
   return (
       typeid(p) == typeid(Add) || typeid(p) == typeid(Divide) ||
@@ -42,16 +45,15 @@ bool is_binary_primitive(const Primitive& p) {
       typeid(p) == typeid(LogAddExp) || typeid(p) == typeid(Maximum) ||
       typeid(p) == typeid(Minimum) || typeid(p) == typeid(Multiply) ||
       typeid(p) == typeid(NotEqual) || typeid(p) == typeid(Power) ||
-      typeid(p) == typeid(Subtract);
+      typeid(p) == typeid(Subtract));
 }
 
-bool is_broadcast_primitive(const Primitive& p) {
+bool is_broadcast(const Primitive& p) {
   return typeid(p) == typeid(Broadcast);
 }
 
 bool is_fusable(const Primitive& p) {
-  return is_unary_primitive(p) || is_binary_primitive(p) ||
-      is_broadcast_primitive(p);
+  return is_unary(p) || is_binary(p) || is_broadcast(p);
 }
 
 std::pair<std::vector<array>, std::vector<array>> convert_trace_to_real(
@@ -108,6 +110,16 @@ std::pair<std::vector<array>, std::vector<array>> convert_trace_to_real(
   }
   return {tape, outputs};
 }
+
+Compiled::Compiled(
+    Stream stream,
+    std::vector<array> inputs,
+    std::vector<array> outputs,
+    std::vector<array> tape)
+    : Primitive(stream),
+      inputs_(std::move(inputs)),
+      outputs_(std::move(outputs)),
+      tape_(std::move(tape)) {}
 
 std::vector<array> Compiled::vjp(
     const std::vector<array>& primals,
@@ -170,7 +182,7 @@ std::pair<std::vector<array>, std::vector<int>> Compiled::vmap(
 }
 
 bool Compiled::is_equivalent(const Primitive& other) const {
-  // equivalent if the tapes of primitives are equivalent?
+  // TODO equivalent if the tapes of primitives are equivalent?
   return false;
 }
 
@@ -194,8 +206,6 @@ bool& compiler_disabled() {
   static bool compiler_disabled_ = get_val();
   return compiler_disabled_;
 }
-
-#define MAX_OPS_PER_BUFFER max_ops_per_buffer()
 
 using CompileFn = std::function<std::vector<array>(const std::vector<array>&)>;
 using ParentsMap =
@@ -497,50 +507,111 @@ void compile_simplify(
   }
 }
 
-// Extracts sections of the graph that can be compile and replace
-// them with a Compiled Primitive.
+// Extract sub-graphs of the graph that can be compiled
+// and replace them with a Compiled Primitive.
 void compile_reduce(
     std::vector<array>& tape,
     ParentsMap& parents_map,
     const std::vector<array>& outputs) {
-  // Start with consecutive unary ops
-  std::unordered_set<uintptr_t> cache;
   std::vector<array> new_tape;
-  for (auto it = tape.rbegin(); it != tape.rend(); ++it) {
-    auto& a = *it;
+  std::unordered_set<uintptr_t> cache;
+  std::vector<array> fused_inputs;
+  std::vector<array> fused_outputs;
 
-    // Already compiled it
-    if (cache.find(a.id()) != cache.end()) {
+  // Go through the tape in reverse order
+  // Keep iterating backward until either of:
+  // - Max compile depth
+  // - Reach an array with a parent outside the current section
+  // - Reach an array with a primitve that we cannot compile
+  for (int i = tape.size() - 1; i >= 0; --i) {
+    cache.clear();
+    fused_inputs.clear();
+    fused_outputs.clear();
+
+    auto s = i;
+    while (s >= 0) {
+      // Constant
+      auto& in = tape[s];
+      if (!in.has_primitive()) {
+        cache.insert(in.id());
+        s--;
+        continue;
+      }
+      if (!is_fusable(in.primitive())) {
+        break;
+      }
+      auto p_it = parents_map.find(in.id());
+
+      // If no parents
+      if (p_it == parents_map.end()) {
+        fused_outputs.push_back(in);
+        cache.insert(in.id());
+        s--;
+        continue;
+      }
+      auto& parents = p_it->second;
+      if (parents.size() == 0) {
+        throw std::runtime_error(
+            "[compile_reduce] Why are you in the map without parents?");
+      }
+      bool all_parents_out = true;
+      bool all_parents_in = true;
+      bool continue_fusing = true;
+      for (auto& [p, idx] : parents) {
+        // Stop fusion, as parent is external to this section
+        // of the tape
+        auto in_cache = cache.find(p.id()) != cache.end();
+        all_parents_in &= in_cache;
+        all_parents_out &= !in_cache;
+        if (!(all_parents_in || all_parents_out)) {
+          continue_fusing = false;
+          break;
+        }
+      }
+
+      if (!continue_fusing) {
+        break;
+      }
+      // If all parents are outside its an output
+      fused_outputs.push_back(in);
+      // If all parents are inside its an input
+      fused_inputs.push_back(in);
+
+      // Store in cache
+      cache.insert(in.id());
+
+      s--;
+    }
+    // No change needed if no fusion happened
+    if (s == i) {
       continue;
     }
-    if (has_primitive(a) && is_fusable_primitive(a.primitive())) {
-      // Check input has one parent
-      auto& parents = parents_map[a.inputs()[0].id()];
-      if (parents.size() == 1) {
-        a =
-      }
-      auto& parents = parents_it->second;
+
+    std::vector<array> fused_tape(tape.begin() + s, tape.begin() + i + 1);
+    std::vector<std::vector<int>> shapes;
+    std::vector<Dtype> types;
+    for (auto& o : fused_outputs) {
+      shapes.push_back(o.shape());
+      types.push_back(o.dtype());
     }
+    auto compiled_outputs = array::make_arrays(
+        shapes,
+        types,
+        std::make_shared<Compiled>(
+            outputs.back().primitive().stream(),
+            fused_inputs,
+            std::move(fused_outputs),
+            std::move(fused_tape)),
+        fused_inputs);
+    // One output per primitive
+    new_tape.push_back(compiled_outputs[0]);
+    new_tape.insert(new_tape.end(), fused_inputs.rbegin(), fused_inputs.rend());
   }
 
-  for (auto&
-  for (auto& a : tape) {
-    std::vector<array> fused_inputs;
-    std::vector<array> fused_tape;
-    std::vector<array> fused_outputs;
-    int fusion_depth = 0;
-    while (auto parents_it = parents_map.find(a.id());
-           parents_it != parents_map.end()) {
-      auto& parents = parents_it->second;
-      if (parents.size() == 1 &&
-          is_fusable_primitive(parents[0].first.primitive())) {
-        // fused_inputs.push_back(a);
-        if (tape
-        fused_tape.push_back(a);
-        a = parents[0].first;
-      }
-    }
-  }
+  std::reverse(new_tape.begin(), new_tape.end());
+  tape = std::move(new_tape);
+  // TODO, handle mismatched streams
+  // TODO, maybe something special for siblings?
 }
 
 std::vector<array> compile_replace(
