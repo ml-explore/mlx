@@ -155,6 +155,14 @@ void array::copy_shared_buffer(const array& other) {
   copy_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
+void array::move_shared_buffer(array other) {
+  array_desc_->data = std::move(other.array_desc_->data);
+  array_desc_->strides = other.strides();
+  array_desc_->flags = other.flags();
+  array_desc_->data_size = other.data_size();
+  array_desc_->data_ptr = other.array_desc_->data_ptr;
+}
+
 array::ArrayDesc::ArrayDesc(const std::vector<int>& shape, Dtype dtype)
     : shape(shape), dtype(dtype) {
   std::tie(size, strides) = cum_prod(shape);

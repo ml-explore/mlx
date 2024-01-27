@@ -98,6 +98,7 @@ void eval(const std::vector<array>& outputs) {
     auto stream = arr.primitive().stream();
     std::vector<std::shared_future<void>> arr_deps;
     for (auto& in : arr.inputs()) {
+      // TODO that's a bug
       if (auto it = deps.find(in.primitive_id()); it != deps.end()) {
         arr_deps.push_back(it->second);
       }

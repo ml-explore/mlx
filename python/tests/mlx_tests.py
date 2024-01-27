@@ -65,11 +65,9 @@ class MLXTestCase(unittest.TestCase):
         )
         if not isinstance(mx_res, mx.array) and not isinstance(expected, mx.array):
             np.testing.assert_allclose(mx_res, expected, rtol=rtol, atol=atol)
+            return
         elif not isinstance(mx_res, mx.array):
             mx_res = mx.array(mx_res)
-            self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))
         elif not isinstance(expected, mx.array):
             expected = mx.array(expected)
-            self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))
-        else:
-            self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))
+        self.assertTrue(mx.allclose(mx_res, expected, rtol=rtol, atol=atol))

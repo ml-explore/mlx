@@ -27,8 +27,8 @@ void binary_op(
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, outputs[0], bopt);
-  set_binary_op_output_data(a, b, outputs[1], bopt);
+  set_binary_op_output_data(a, b, outputs[0], bopt, true);
+  set_binary_op_output_data(a, b, outputs[1], bopt, true);
 
   auto& out = outputs[0];
   if (out.size() == 0) {
@@ -69,8 +69,14 @@ void binary_op(
   auto kernel = d.get_kernel(kname.str());
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
+  // - If a is donated it goes to the first output
+  // - If b is donated it goes to the first output if a was not donated
+  //   otherwise it goes to the second output
+  bool donate_a = a.data_shared_ptr() == nullptr;
+  bool donate_b = b.data_shared_ptr() == nullptr;
+  set_array_buffer(compute_encoder, donate_a ? outputs[0] : a, 0);
+  set_array_buffer(
+      compute_encoder, donate_b ? (donate_a ? outputs[1] : outputs[0]) : b, 1);
   set_array_buffer(compute_encoder, outputs[0], 2);
   set_array_buffer(compute_encoder, outputs[1], 3);
 
@@ -122,7 +128,7 @@ void binary_op(
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, out, bopt);
+  set_binary_op_output_data(a, b, out, bopt, true);
   if (out.size() == 0) {
     return;
   }
@@ -161,8 +167,10 @@ void binary_op(
   auto kernel = d.get_kernel(kname.str());
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
+  bool donate_a = a.data_shared_ptr() == nullptr;
+  bool donate_b = b.data_shared_ptr() == nullptr;
+  set_array_buffer(compute_encoder, donate_a ? out : a, 0);
+  set_array_buffer(compute_encoder, donate_b ? out : b, 1);
   set_array_buffer(compute_encoder, out, 2);
 
   if (bopt == General) {
@@ -212,11 +220,15 @@ void unary_op(
   auto& in = inputs[0];
   bool contig = in.flags().contiguous;
   if (contig) {
-    out.set_data(
-        allocator::malloc_or_wait(in.data_size() * out.itemsize()),
-        in.data_size(),
-        in.strides(),
-        in.flags());
+    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+      out.move_shared_buffer(in);
+    } else {
+      out.set_data(
+          allocator::malloc_or_wait(in.data_size() * out.itemsize()),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+    }
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
@@ -240,7 +252,8 @@ void unary_op(
 
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in, 0);
+  set_array_buffer(
+      compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
   set_array_buffer(compute_encoder, out, 1);
   if (!contig) {
     compute_encoder->setBytes(in.shape().data(), in.ndim() * sizeof(int), 2);

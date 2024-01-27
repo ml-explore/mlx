@@ -237,17 +237,14 @@ void Erf::eval(const std::vector<array>& inputs, array& out) {
   const auto& in = inputs[0];
   switch (out.dtype()) {
     case float32:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
       unary_op<float>(in, out, [](auto x) { return std::erf(x); });
       break;
     case float16:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
       unary_op<float16_t>(in, out, [](auto x) {
         return static_cast<float16_t>(std::erf(static_cast<float>(x)));
       });
       break;
     case bfloat16:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
       unary_op<bfloat16_t>(in, out, [](auto x) {
         return static_cast<bfloat16_t>(std::erf(static_cast<float>(x)));
       });
@@ -264,17 +261,14 @@ void ErfInv::eval(const std::vector<array>& inputs, array& out) {
   const auto& in = inputs[0];
   switch (out.dtype()) {
     case float32:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
       unary_op<float>(in, out, [](auto x) { return erfinv(x); });
       break;
     case float16:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
       unary_op<float16_t>(in, out, [](auto x) {
         return static_cast<float16_t>(erfinv(static_cast<float>(x)));
       });
       break;
     case bfloat16:
-      out.set_data(allocator::malloc_or_wait(out.nbytes()));
       unary_op<bfloat16_t>(in, out, [](auto x) {
         return static_cast<bfloat16_t>(erfinv(static_cast<float>(x)));
       });

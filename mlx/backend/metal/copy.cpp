@@ -12,11 +12,15 @@ namespace mlx::core {
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   if (ctype == CopyType::Vector) {
-    out.set_data(
-        allocator::malloc_or_wait(in.data_size() * out.itemsize()),
-        in.data_size(),
-        in.strides(),
-        in.flags());
+    if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+      out.move_shared_buffer(in);
+    } else {
+      out.set_data(
+          allocator::malloc_or_wait(in.data_size() * out.itemsize()),
+          in.data_size(),
+          in.strides(),
+          in.flags());
+    }
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
@@ -67,7 +71,8 @@ void copy_gpu_inplace(
   auto kernel = d.get_kernel(kname.str());
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in, 0);
+  bool donate_in = in.data_shared_ptr() == nullptr;
+  set_array_buffer(compute_encoder, donate_in ? out : in, 0);
   set_array_buffer(compute_encoder, out, 1);
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
