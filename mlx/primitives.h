@@ -461,9 +461,9 @@ class Compiled : public Primitive {
    */
   explicit Compiled(
       Stream stream,
-      const std::vector<array>& inputs,
-      const std::vector<array>& outputs,
-      const std::vector<array>& tape);
+      std::vector<array> inputs,
+      std::vector<array> outputs,
+      std::vector<array> tape);
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -479,7 +479,6 @@ class Compiled : public Primitive {
   bool is_equivalent(const Primitive& other) const override;
 
  private:
-  const std::string name_;
   const std::vector<array> inputs_;
   const std::vector<array> outputs_;
   const std::vector<array> tape_;
