@@ -57,28 +57,52 @@ void eval(const std::vector<array>& outputs) {
     if (cache.find(id) != cache.end()) {
       return;
     }
-    std::vector<int> recursion_order(a.inputs().size());
-    std::iota(recursion_order.begin(), recursion_order.end(), 0);
-    std::sort(
-        recursion_order.begin(),
-        recursion_order.end(),
-        [&a, largest_branch_first](int i, int j) {
-          auto depth_i = a.inputs()[i].graph_depth();
-          auto depth_j = a.inputs()[j].graph_depth();
-          return largest_branch_first ? depth_i > depth_j : depth_j < depth_i;
-        });
 
-    for (int idx : recursion_order) {
-      auto& in = a.inputs()[idx];
-      recurse(in, true);
-      // If one of the inputs is being computed on a different
-      // stream, we need to manage the dependency.
+    // If the input is being computed on a different stream, we need to manage
+    // the dependency.
+    auto check_dependency = [&](const array& in) {
       if (!in.is_evaled()) {
         if (a.primitive().stream() != in.primitive().stream()) {
           deps.insert({in.primitive_id(), std::shared_future<void>{}});
         }
       }
+    };
+
+    // Recurse to the largest or smallest branch first.
+    size_t num_inputs = a.inputs().size();
+    if (num_inputs == 1) {
+      auto& in = a.inputs()[0];
+      recurse(in, true);
+      check_dependency(in);
+    } else if (num_inputs == 2) {
+      auto depth_1 = a.inputs()[0].graph_depth();
+      auto depth_2 = a.inputs()[1].graph_depth();
+      auto& in1 = a.inputs()[static_cast<int>(
+          !((depth_1 > depth_2) == largest_branch_first))];
+      auto& in2 = a.inputs()[static_cast<int>(
+          ((depth_1 > depth_2) == largest_branch_first))];
+      recurse(in1, true);
+      check_dependency(in1);
+      recurse(in2, true);
+      check_dependency(in2);
+    } else if (num_inputs > 2) {
+      std::vector<int> recursion_order(a.inputs().size());
+      std::iota(recursion_order.begin(), recursion_order.end(), 0);
+      std::sort(
+          recursion_order.begin(),
+          recursion_order.end(),
+          [&a, largest_branch_first](int i, int j) {
+            auto depth_i = a.inputs()[i].graph_depth();
+            auto depth_j = a.inputs()[j].graph_depth();
+            return largest_branch_first ? depth_i > depth_j : depth_j < depth_i;
+          });
+      for (int idx : recursion_order) {
+        auto& in = a.inputs()[idx];
+        recurse(in, true);
+        check_dependency(in);
+      }
     }
+
     cache.insert(id);
     for (auto& s : a.siblings()) {
       cache.insert(s.id());
