@@ -195,6 +195,8 @@ mlx_load_gguf_helper(py::object file, StreamOrDevice s) {
 std::unordered_map<std::string, array> mlx_load_npz_helper(
     py::object file,
     StreamOrDevice s) {
+  bool own_file = py::isinstance<py::str>(file);
+
   py::module_ zipfile = py::module_::import("zipfile");
   if (!is_zip_file(zipfile, file)) {
     throw std::invalid_argument(
@@ -223,9 +225,11 @@ std::unordered_map<std::string, array> mlx_load_npz_helper(
   }
 
   // If we don't own the stream and it was passed to us, eval immediately
-  for (auto& [key, arr] : array_dict) {
+  if (!own_file) {
     py::gil_scoped_release gil;
-    arr.eval();
+    for (auto& [key, arr] : array_dict) {
+      arr.eval();
+    }
   }
 
   return array_dict;
@@ -260,7 +264,7 @@ LoadOutputTypes mlx_load_helper(
       fname = file.attr("name").cast<std::string>();
     } else {
       throw std::invalid_argument(
-          "[load] Input must be a file-like object, or string");
+          "[load] Input must be a file-like object opened in binary mode, or string");
     }
     size_t ext = fname.find_last_of('.');
     if (ext == std::string::npos) {
@@ -432,7 +436,7 @@ void mlx_savez_helper(
     auto py_ostream = zipfile_object.open(fname, 'w');
     auto writer = std::make_shared<PyFileWriter>(py_ostream);
     {
-      py::gil_scoped_release gil;
+      py::gil_scoped_release nogil;
       save(writer, a);
     }
   }
@@ -443,20 +447,20 @@ void mlx_savez_helper(
 void mlx_save_safetensor_helper(py::object file, py::dict d) {
   auto arrays_map = d.cast<std::unordered_map<std::string, array>>();
   if (py::isinstance<py::str>(file)) {
-    save_safetensors(py::cast<std::string>(file), arrays_map);
-    return;
+    {
+      py::gil_scoped_release nogil;
+      save_safetensors(py::cast<std::string>(file), arrays_map);
+    }
   } else if (is_ostream_object(file)) {
     auto writer = std::make_shared<PyFileWriter>(file);
     {
-      py::gil_scoped_release gil;
+      py::gil_scoped_release nogil;
       save_safetensors(writer, arrays_map);
     }
-
-    return;
+  } else {
+    throw std::invalid_argument(
+        "[save_safetensors] Input must be a file-like object, or string");
   }
-
-  throw std::invalid_argument(
-      "[save_safetensors] Input must be a file-like object, or string");
 }
 
 void mlx_save_gguf_helper(
@@ -468,12 +472,17 @@ void mlx_save_gguf_helper(
     if (m) {
       auto metadata_map =
           m.value().cast<std::unordered_map<std::string, MetaData>>();
-      save_gguf(py::cast<std::string>(file), arrays_map, metadata_map);
+      {
+        py::gil_scoped_release nogil;
+        save_gguf(py::cast<std::string>(file), arrays_map, metadata_map);
+      }
     } else {
-      save_gguf(py::cast<std::string>(file), arrays_map);
+      {
+        py::gil_scoped_release nogil;
+        save_gguf(py::cast<std::string>(file), arrays_map);
+      }
     }
-    return;
+  } else {
+    throw std::invalid_argument("[save_gguf] Input must be a string");
   }
-
-  throw std::invalid_argument("[save_safetensors] Input must be a string");
 }

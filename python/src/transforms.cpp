@@ -509,7 +509,10 @@ void init_transforms(py::module_& m) {
       "eval",
       [](const py::args& args) {
         std::vector<array> arrays = tree_flatten(args);
-        eval(arrays);
+        {
+          py::gil_scoped_release nogil;
+          eval(arrays);
+        }
       },
       R"pbdoc(
         eval(*args) -> None

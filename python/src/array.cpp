@@ -39,6 +39,10 @@ py::list to_list(array& a, size_t index, int dim) {
 }
 
 auto to_scalar(array& a) {
+  {
+    py::gil_scoped_release nogil;
+    a.eval();
+  }
   switch (a.dtype()) {
     case bool_:
       return py::cast(a.item<bool>());
@@ -73,7 +77,10 @@ py::object tolist(array& a) {
   if (a.ndim() == 0) {
     return to_scalar(a);
   }
-  a.eval();
+  {
+    py::gil_scoped_release nogil;
+    a.eval();
+  }
   py::object pl;
   switch (a.dtype()) {
     case bool_:
@@ -644,6 +651,7 @@ void init_array(py::module_& m) {
       .def_buffer([](array& a) {
         // Eval if not already evaled
         if (!a.is_evaled()) {
+          py::gil_scoped_release nogil;
           a.eval();
         }
         return pybind11::buffer_info(
@@ -942,6 +950,7 @@ void init_array(py::module_& m) {
           "__repr__",
           [](array& a) {
             if (!a.is_evaled()) {
+              py::gil_scoped_release nogil;
               a.eval();
             }
             std::ostringstream os;
