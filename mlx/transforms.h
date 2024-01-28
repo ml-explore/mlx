@@ -1,18 +1,25 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
-#include "array.h"
+#include "mlx/array.h"
 
 namespace mlx::core {
 
-/** Fuse equivalent arrays to avoid duplicate execution. */
-void simplify(const std::vector<array>& outputs);
+// Compile takes a function and returns a new function
+std::function<std::vector<array>(const std::vector<array>&)> compile(
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun);
 
-template <typename... Arrays>
-void simplify(Arrays... outputs) {
-  simplify(std::vector<array>{std::forward<Arrays>(outputs)...});
-}
+/** Globally disable compilation.
+ * Setting the environment variable ``MLX_DISABLE_COMPILE`` can also
+ * be used to disable compilation.
+ */
+void disable_compile();
+
+/** Globally enable compilation.
+ * This will override the environment variable ``MLX_DISABLE_COMPILE``.
+ */
+void enable_compile();
 
 void eval(const std::vector<array>& outputs);
 

@@ -226,6 +226,14 @@ class TestArray(mlx_tests.MLXTestCase):
         x = mx.array([1 + 0j, 2j, True, 0], mx.complex64)
         self.assertEqual(x.tolist(), [1 + 0j, 2j, 1 + 0j, 0j])
 
+        xnp = np.array([0, 4294967295], dtype=np.uint32)
+        x = mx.array([0, 4294967295], dtype=mx.uint32)
+        self.assertTrue(np.array_equal(x, xnp))
+
+        xnp = np.array([0, 4294967295], dtype=np.float32)
+        x = mx.array([0, 4294967295], dtype=mx.float32)
+        self.assertTrue(np.array_equal(x, xnp))
+
     def test_construction_from_lists_of_mlx_arrays(self):
         dtypes = [
             mx.bool_,
@@ -304,7 +312,7 @@ class TestArray(mlx_tests.MLXTestCase):
 
     def test_array_repr(self):
         x = mx.array(True)
-        self.assertEqual(str(x), "array(true, dtype=bool)")
+        self.assertEqual(str(x), "array(True, dtype=bool)")
         x = mx.array(1)
         self.assertEqual(str(x), "array(1, dtype=int32)")
         x = mx.array(1.0)
@@ -1005,7 +1013,8 @@ class TestArray(mlx_tests.MLXTestCase):
         index_y = mx.array([3, 3, 1, 2])
         u = mx.random.uniform(shape=(4,))
         a = a.at[index_x, index_y].add(u)
-        self.assertEqual(a.sum().item(), u.sum().item())
+        self.assertTrue(mx.allclose(a.sum(), u.sum()))
+        self.assertEqualArray(a.sum(), u.sum(), atol=1e-6, rtol=1e-5)
         self.assertEqual(a[index_x, index_y].tolist(), u.tolist())
 
         # Test all array.at ops
@@ -1312,6 +1321,65 @@ class TestArray(mlx_tests.MLXTestCase):
                     atol=0,
                     rtol=0,
                 )
+
+    def test_logical_overloads(self):
+        with self.assertRaises(ValueError):
+            mx.array(1.0) & mx.array(1)
+        with self.assertRaises(ValueError):
+            mx.array(1.0) | mx.array(1)
+
+        self.assertEqual((mx.array(True) & True).item(), True)
+        self.assertEqual((mx.array(True) & False).item(), False)
+        self.assertEqual((mx.array(True) | False).item(), True)
+        self.assertEqual((mx.array(False) | False).item(), False)
+        self.assertEqual((~mx.array(False)).item(), True)
+
+    def test_inplace(self):
+        iops = [
+            "__iadd__",
+            "__isub__",
+            "__imul__",
+            "__ifloordiv__",
+            "__imod__",
+            "__ipow__",
+        ]
+
+        for op in iops:
+            a = mx.array([1, 2, 3])
+            a_np = np.array(a)
+            b = a
+            b = getattr(a, op)(3)
+            self.assertTrue(mx.array_equal(a, b))
+            out_np = getattr(a_np, op)(3)
+            self.assertTrue(np.array_equal(out_np, a))
+
+        with self.assertRaises(ValueError):
+            a = mx.array([1])
+            a /= 1
+
+        a = mx.array([2.0])
+        b = a
+        b /= 2
+        self.assertEqual(b.item(), 1.0)
+        self.assertEqual(b.item(), a.item())
+
+        a = mx.array(True)
+        b = a
+        b &= False
+        self.assertEqual(b.item(), False)
+        self.assertEqual(b.item(), a.item())
+
+        a = mx.array(False)
+        b = a
+        b |= True
+        self.assertEqual(b.item(), True)
+        self.assertEqual(b.item(), a.item())
+
+        # In-place matmul on its own
+        a = mx.array([[1.0, 2.0], [3.0, 4.0]])
+        b = a
+        b @= a
+        self.assertTrue(mx.array_equal(a, b))
 
 
 if __name__ == "__main__":

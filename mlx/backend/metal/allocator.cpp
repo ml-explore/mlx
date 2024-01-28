@@ -23,6 +23,16 @@ void* Buffer::raw_ptr() {
 
 namespace metal {
 
+static bool cache_enabled_ = true;
+
+bool cache_enabled() {
+  return cache_enabled_;
+}
+
+void set_cache_enabled(bool enabled) {
+  cache_enabled_ = enabled;
+}
+
 namespace {
 
 BufferCache::BufferCache(MTL::Device* device)
@@ -153,6 +163,11 @@ MetalAllocator::MetalAllocator()
       gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()) {}
 
 Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
+  // Metal doesn't like empty buffers
+  if (size == 0) {
+    return Buffer{nullptr};
+  }
+
   // Align up memory
   if (size > vm_page_size) {
     size = vm_page_size * ((size + vm_page_size - 1) / vm_page_size);
@@ -191,7 +206,11 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
-  buffer_cache_.recycle_to_cache(buf);
+  if (cache_enabled()) {
+    buffer_cache_.recycle_to_cache(buf);
+  } else {
+    buf->release();
+  }
 }
 
 MetalAllocator& allocator() {

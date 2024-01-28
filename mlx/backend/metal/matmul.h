@@ -12,7 +12,7 @@
 
 namespace mlx::core {
 
-void mlx_matmul(
+void steel_matmul(
     const Stream& s,
     metal::Device& d,
     const array& a,

@@ -177,4 +177,37 @@ void init_linalg(py::module_& parent_module) {
           >>> la.norm(m[0, :, :]), LA.norm(m[1, :, :])
           (array(3.74166, dtype=float32), array(11.225, dtype=float32))
       )pbdoc");
+  m.def(
+      "qr",
+      &qr,
+      "a"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        qr(a: array, *, stream: Union[None, Stream, Device] = None) -> (array, array)
+
+        The QR factorizatoin of the input matrix.
+
+        This function supports arrays with at least 2 dimensions. The matrices
+        which are factorized are assumed to be in the last two dimensions of
+        the input.
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            tuple(array, array): The ``Q`` and ``R`` matrices.
+
+        Example:
+            >>> A = mx.array([[2., 3.], [1., 2.]])
+            >>> Q, R = mx.linalg.qr(A, stream=mx.cpu)
+            >>> Q
+            array([[-0.894427, -0.447214],
+                   [-0.447214, 0.894427]], dtype=float32)
+            >>> R
+            array([[-2.23607, -3.57771],
+                   [0, 0.447214]], dtype=float32)
+      )pbdoc");
 }

@@ -127,11 +127,7 @@ class array {
     using value_type = const array;
     using reference = value_type;
 
-    explicit ArrayIterator(const array& arr, int idx = 0) : arr(arr), idx(idx) {
-      if (arr.ndim() == 0) {
-        throw std::invalid_argument("Cannot iterate over 0-d array.");
-      }
-    }
+    explicit ArrayIterator(const array& arr, int idx = 0);
 
     reference operator*() const;
 
@@ -176,6 +172,12 @@ class array {
       std::shared_ptr<Primitive> primitive,
       const std::vector<array>& inputs);
 
+  array(
+      std::vector<int> shape,
+      Dtype dtype,
+      std::shared_ptr<Primitive> primitive,
+      std::vector<array>&& inputs);
+
   static std::vector<array> make_arrays(
       const std::vector<std::vector<int>>& shapes,
       const std::vector<Dtype>& dtypes,
@@ -219,6 +221,11 @@ class array {
     return *(array_desc_->primitive);
   };
 
+  /** A shared pointer to the array's primitive. */
+  std::shared_ptr<Primitive>& primitive_ptr() const {
+    return array_desc_->primitive;
+  };
+
   /** Check if the array has an attached primitive or is a leaf node. */
   bool has_primitive() const {
     return array_desc_->primitive != nullptr;
@@ -231,6 +238,11 @@ class array {
 
   std::vector<array>& inputs() {
     return array_desc_->inputs;
+  }
+
+  /** True indicates the arrays buffer is safe to reuse */
+  bool is_donatable() const {
+    return array_desc_.use_count() == 1 && (array_desc_->data.use_count() == 1);
   }
 
   /** The array's siblings. */
@@ -275,6 +287,12 @@ class array {
     return array_desc_->data->buffer;
   };
 
+  // Return a copy of the shared pointer
+  // to the array::Data struct
+  std::shared_ptr<Data> data_shared_ptr() const {
+    return array_desc_->data;
+  }
+  // Return a raw pointer to the arrays data
   template <typename T>
   T* data() {
     return static_cast<T*>(array_desc_->data_ptr);
@@ -314,6 +332,8 @@ class array {
       size_t offset = 0);
 
   void copy_shared_buffer(const array& other);
+
+  void move_shared_buffer(array other);
 
   void overwrite_descriptor(const array& other) {
     array_desc_ = other.array_desc_;
@@ -364,6 +384,12 @@ class array {
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
         const std::vector<array>& inputs);
+
+    explicit ArrayDesc(
+        std::vector<int>&& shape,
+        Dtype dtype,
+        std::shared_ptr<Primitive> primitive,
+        std::vector<array>&& inputs);
   };
 
   // The ArrayDesc contains the details of the materialized array including the

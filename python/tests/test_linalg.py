@@ -89,6 +89,37 @@ class TestLinalg(mlx_tests.MLXTestCase):
         out_mx = mx.linalg.norm(x_mx, ord="fro")
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
+    def test_qr_factorization(self):
+        with self.assertRaises(ValueError):
+            mx.linalg.qr(mx.array(0.0))
+
+        with self.assertRaises(ValueError):
+            mx.linalg.qr(mx.array([0.0, 1.0]))
+
+        with self.assertRaises(ValueError):
+            mx.linalg.qr(mx.array([[0, 1], [1, 0]]))
+
+        A = mx.array([[2.0, 3.0], [1.0, 2.0]])
+        Q, R = mx.linalg.qr(A, stream=mx.cpu)
+        out = Q @ R
+        self.assertTrue(mx.allclose(out, A))
+        out = Q @ Q
+        self.assertTrue(mx.allclose(out, mx.eye(2), rtol=1e-5, atol=1e-7))
+        self.assertTrue(mx.allclose(mx.tril(R, -1), mx.zeros_like(R)))
+        self.assertEqual(Q.dtype, mx.float32)
+        self.assertEqual(R.dtype, mx.float32)
+
+        # Multiple matrices
+        B = mx.array([[-1.0, 2.0], [-4.0, 1.0]])
+        A = mx.stack([A, B])
+        Q, R = mx.linalg.qr(A, stream=mx.cpu)
+        for a, q, r in zip(A, Q, R):
+            out = q @ r
+            self.assertTrue(mx.allclose(out, a))
+            out = q @ q
+            self.assertTrue(mx.allclose(out, mx.eye(2), rtol=1e-5, atol=1e-7))
+            self.assertTrue(mx.allclose(mx.tril(r, -1), mx.zeros_like(r)))
+
 
 if __name__ == "__main__":
     unittest.main()

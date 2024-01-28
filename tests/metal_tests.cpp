@@ -3,6 +3,7 @@
 #include <array>
 #include "doctest/doctest.h"
 
+#include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/mlx.h"
@@ -436,5 +437,77 @@ TEST_CASE("test metal matmul") {
     auto b = ones({3, 1, 2, 2});
     auto out = matmul(a, b, Device::gpu);
     CHECK(array_equal(out, full({3, 3, 2, 2}, 2.0f), Device::cpu).item<bool>());
+  }
+}
+
+TEST_CASE("test metal validation") {
+  // Run this test with Metal validation enabled
+  // METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./tests/tests \
+  //     -tc="test metal validation" \
+
+  auto x = array({});
+  eval(exp(x));
+
+  auto y = array({});
+  eval(add(x, y));
+
+  eval(sum(x));
+
+  x = array({1, 2, 3});
+  y = array(0);
+  eval(gather(x, y, 0, {0}));
+  eval(gather(x, y, 0, {2}));
+
+  eval(gather(x, y, 0, {0}));
+  eval(gather(x, y, 0, {2}));
+
+  eval(scatter(x, y, array({2}), 0));
+
+  x = arange(0, -3, 1);
+  eval(x);
+  array_equal(x, array({})).item<bool>();
+
+  x = array({1.0, 0.0});
+  eval(argmax(x));
+
+  eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
+}
+
+TEST_CASE("test metal enable/disable cache") {
+  // Test enable metal cache
+  {
+    metal::set_cache_enabled(true);
+    CHECK(metal::cache_enabled());
+
+    auto& a = metal::allocator();
+    auto size = 100;
+    auto buf = a.malloc(size, false);
+
+    // Release a
+    a.free(buf);
+
+    // Check size should equals to size
+    CHECK_EQ(static_cast<MTL::Buffer*>(buf.ptr())->length(), size);
+  }
+
+  // Test disable metal cache
+  {
+    metal::set_cache_enabled(false);
+    CHECK(!metal::cache_enabled());
+
+    auto& a = metal::allocator();
+    auto size = 100;
+    auto buf = a.malloc(size, false);
+    auto buf_ptr = static_cast<MTL::Buffer*>(buf.ptr());
+    unsigned char first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
+
+    // Release a
+    a.free(buf);
+
+    // If release successfully, the first byte should be different from the
+    // first byte before release
+    unsigned char new_first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
+
+    CHECK_NE(new_first_byte, first_byte);
   }
 }

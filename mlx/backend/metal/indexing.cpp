@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include <algorithm>
 #include <cassert>
 #include <numeric>
@@ -33,6 +32,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  if (out.size() == 0) {
+    return;
+  }
 
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -110,14 +112,18 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   for (int i = 0; i < nidx; ++i) {
     set_array_buffer(compute_encoder, arg_enc, inputs[i + 1], i);
   }
-  arg_enc->setBuffer(
-      static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), 0, nidx + 1);
-  compute_encoder->useResource(
-      static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), MTL::ResourceUsageRead);
-  arg_enc->setBuffer(
-      static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), 0, nidx + 2);
-  compute_encoder->useResource(
-      static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), MTL::ResourceUsageRead);
+  if (idx_ndim > 0) {
+    arg_enc->setBuffer(
+        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), 0, nidx + 1);
+    compute_encoder->useResource(
+        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()),
+        MTL::ResourceUsageRead);
+    arg_enc->setBuffer(
+        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), 0, nidx + 2);
+    compute_encoder->useResource(
+        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()),
+        MTL::ResourceUsageRead);
+  }
   *static_cast<int*>(arg_enc->constantData(nidx + 3)) = idx_ndim;
 
   // Set all the buffers
@@ -162,6 +168,11 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto copy_type =
       inputs[0].data_size() == 1 ? CopyType::Scalar : CopyType::General;
   copy_gpu(inputs[0], out, copy_type);
+
+  // Empty update
+  if (inputs.back().size() == 0) {
+    return;
+  }
 
   // Get stream
   auto& s = stream();
@@ -254,14 +265,18 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   for (int i = 0; i < nidx; ++i) {
     set_array_buffer(compute_encoder, arg_enc, inputs[i + 1], i);
   }
-  arg_enc->setBuffer(
-      static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), 0, nidx + 1);
-  compute_encoder->useResource(
-      static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), MTL::ResourceUsageRead);
-  arg_enc->setBuffer(
-      static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), 0, nidx + 2);
-  compute_encoder->useResource(
-      static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), MTL::ResourceUsageRead);
+  if (idx_ndim > 0) {
+    arg_enc->setBuffer(
+        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), 0, nidx + 1);
+    compute_encoder->useResource(
+        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()),
+        MTL::ResourceUsageRead);
+    arg_enc->setBuffer(
+        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), 0, nidx + 2);
+    compute_encoder->useResource(
+        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()),
+        MTL::ResourceUsageRead);
+  }
   *static_cast<int*>(arg_enc->constantData(nidx + 3)) = idx_ndim;
 
   compute_encoder->setBuffer(static_cast<MTL::Buffer*>(arg_buf.ptr()), 0, 0);
@@ -272,14 +287,32 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   set_array_buffer(compute_encoder, upd, 1);
   set_array_buffer(compute_encoder, out, 2);
-  compute_encoder->setBytes(upd.shape().data(), upd_ndim * sizeof(int), 3);
-  compute_encoder->setBytes(upd.strides().data(), upd_ndim * sizeof(size_t), 4);
+  if (upd_ndim == 0) {
+    // Need placeholders so Metal doesn't compalain
+    int shape_ = 0;
+    size_t stride_ = 0;
+    compute_encoder->setBytes(&shape_, sizeof(int), 3);
+    compute_encoder->setBytes(&stride_, sizeof(size_t), 4);
+  } else {
+    compute_encoder->setBytes(upd.shape().data(), upd_ndim * sizeof(int), 3);
+    compute_encoder->setBytes(
+        upd.strides().data(), upd_ndim * sizeof(size_t), 4);
+  }
   compute_encoder->setBytes(&upd_ndim, sizeof(size_t), 5);
   compute_encoder->setBytes(&upd_size, sizeof(size_t), 6);
 
   size_t out_ndim = out.ndim();
-  compute_encoder->setBytes(out.shape().data(), out_ndim * sizeof(int), 7);
-  compute_encoder->setBytes(out.strides().data(), out_ndim * sizeof(size_t), 8);
+  if (out_ndim == 0) {
+    // Need placeholders so Metal doesn't compalain
+    int shape_ = 0;
+    size_t stride_ = 0;
+    compute_encoder->setBytes(&shape_, sizeof(int), 7);
+    compute_encoder->setBytes(&stride_, sizeof(size_t), 8);
+  } else {
+    compute_encoder->setBytes(out.shape().data(), out_ndim * sizeof(int), 7);
+    compute_encoder->setBytes(
+        out.strides().data(), out_ndim * sizeof(size_t), 8);
+  }
   compute_encoder->setBytes(&out_ndim, sizeof(size_t), 9);
   compute_encoder->setBytes(axes_.data(), axes_.size() * sizeof(int), 10);
 

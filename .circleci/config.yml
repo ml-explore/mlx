@@ -26,18 +26,28 @@ jobs:
           command: |
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             sudo apt-get update
-            sudo apt-get install libblas-dev
+            sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
       - run:
-          name: Build python package
+          name: Install Python package
           command: |
             CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py build_ext --inplace
             CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py develop
       - run:
-          name: Run the python tests
+          name: Generate package stubs
+          command: |
+            python3 setup.py generate_stubs
+      - run:
+          name: Run Python tests
           command: |
             python3 -m unittest discover python/tests
+      # TODO: Reenable when extension api becomes stable
+      # - run:
+      #     name: Build example extension
+      #     command: |
+      #       cd examples/extensions && python3 -m pip install . 
       - run:
           name: Build CPP only
           command: |
@@ -60,26 +70,47 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install torch
             pip install tensorflow
             pip install unittest-xml-reporting
       - run:
-          name: Build python package
+          name: Install Python package
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env
             CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py build_ext --inplace
             CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py develop
       - run:
-          name: Run the python tests
+          name: Generate package stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
+      - run:
+          name: Run Python tests
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env
             DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
             DEVICE=gpu python -m xmlrunner discover -v python/tests -o test-results/gpu
+      # TODO: Reenable when extension api becomes stable
+      # - run:
+      #     name: Build example extension
+      #     command: |
+      #       eval "$(conda shell.bash hook)"
+      #       conda activate runner-env
+      #       cd examples/extensions && python -m pip install . 
       - store_test_results:
           path: test-results
+      - run:
+          name: Build CPP only
+          command: |
+            mkdir -p build && cd build && cmake .. && make -j
+      - run:
+          name: Run CPP tests
+          command: METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
 
   build_release:
     machine: true
@@ -102,10 +133,27 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install twine
+      # TODO: Update build system to switch away from setup.py develop
       - run:
-          name: Build package
+          name: Install Python package
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              PYPI_RELEASE=1 \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py develop
+      - run:
+          name: Generate package stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
+      - run:
+          name: Publish Python package
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env
@@ -138,10 +186,26 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install twine
       - run:
-          name: Build package
+          name: Install Python package
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              DEV_RELEASE=1 \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py develop
+      - run:
+          name: Generate package stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
+      - run:
+          name: Publish Python package
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env
@@ -174,10 +238,25 @@ jobs:
             conda activate runner-env
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install pybind11-stubgen
             pip install numpy
             pip install twine
       - run:
-          name: Build package
+          name: Install Python package
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python setup.py develop
+      - run:
+          name: Generate package stubs
+          command: |
+            eval "$(conda shell.bash hook)"
+            conda activate runner-env
+            python setup.py generate_stubs
+      - run:
+          name: Build package distribution
           command: |
             eval "$(conda shell.bash hook)"
             conda activate runner-env

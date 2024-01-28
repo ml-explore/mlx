@@ -17,6 +17,7 @@ namespace mlx::core {
 
 NO_GPU(Abs)
 NO_GPU(Add)
+NO_GPU(AddMM)
 NO_GPU(Arange)
 NO_GPU(ArcCos)
 NO_GPU(ArcCosh)
@@ -80,6 +81,7 @@ NO_GPU(Sinh)
 NO_GPU(Slice)
 NO_GPU(Softmax)
 NO_GPU(Sort)
+NO_GPU_MULTI(Split)
 NO_GPU(Square)
 NO_GPU(Sqrt)
 NO_GPU(StopGradient)
@@ -88,5 +90,5 @@ NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
 NO_GPU_MULTI(DivMod)
-
+NO_GPU_MULTI(QRF)
 } // namespace mlx::core

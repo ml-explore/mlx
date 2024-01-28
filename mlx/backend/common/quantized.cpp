@@ -119,6 +119,12 @@ void _qmm_dispatch_typed(
   switch (bits) {
     case 2: {
       switch (group_size) {
+        case 32:
+          if (transposed_w) {
+            return _qmm_t<T, 2, 32>(result, x, w, scales, biases, M, N, K);
+          } else {
+            return _qmm<T, 2, 32>(result, x, w, scales, biases, M, N, K);
+          }
         case 64:
           if (transposed_w) {
             return _qmm_t<T, 2, 64>(result, x, w, scales, biases, M, N, K);
@@ -135,6 +141,12 @@ void _qmm_dispatch_typed(
     }
     case 4: {
       switch (group_size) {
+        case 32:
+          if (transposed_w) {
+            return _qmm_t<T, 4, 32>(result, x, w, scales, biases, M, N, K);
+          } else {
+            return _qmm<T, 4, 32>(result, x, w, scales, biases, M, N, K);
+          }
         case 64:
           if (transposed_w) {
             return _qmm_t<T, 4, 64>(result, x, w, scales, biases, M, N, K);
@@ -151,6 +163,12 @@ void _qmm_dispatch_typed(
     }
     case 8: {
       switch (group_size) {
+        case 32:
+          if (transposed_w) {
+            return _qmm_t<T, 8, 32>(result, x, w, scales, biases, M, N, K);
+          } else {
+            return _qmm<T, 8, 32>(result, x, w, scales, biases, M, N, K);
+          }
         case 64:
           if (transposed_w) {
             return _qmm_t<T, 8, 64>(result, x, w, scales, biases, M, N, K);

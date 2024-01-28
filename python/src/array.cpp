@@ -39,6 +39,10 @@ py::list to_list(array& a, size_t index, int dim) {
 }
 
 auto to_scalar(array& a) {
+  {
+    py::gil_scoped_release nogil;
+    a.eval();
+  }
   switch (a.dtype()) {
     case bool_:
       return py::cast(a.item<bool>());
@@ -73,7 +77,10 @@ py::object tolist(array& a) {
   if (a.ndim() == 0) {
     return to_scalar(a);
   }
-  a.eval();
+  {
+    py::gil_scoped_release nogil;
+    a.eval();
+  }
   py::object pl;
   switch (a.dtype()) {
     case bool_:
@@ -229,9 +236,28 @@ array array_from_list(
       return array(vals.begin(), shape, specified_type.value_or(bool_));
     }
     case pyint: {
-      std::vector<int> vals;
-      fill_vector(pl, vals);
-      return array(vals.begin(), shape, specified_type.value_or(int32));
+      auto dtype = specified_type.value_or(int32);
+      if (dtype == int64) {
+        std::vector<int64_t> vals;
+        fill_vector(pl, vals);
+        return array(vals.begin(), shape, dtype);
+      } else if (dtype == uint64) {
+        std::vector<uint64_t> vals;
+        fill_vector(pl, vals);
+        return array(vals.begin(), shape, dtype);
+      } else if (dtype == uint32) {
+        std::vector<uint32_t> vals;
+        fill_vector(pl, vals);
+        return array(vals.begin(), shape, dtype);
+      } else if (is_floating_point(dtype)) {
+        std::vector<float> vals;
+        fill_vector(pl, vals);
+        return array(vals.begin(), shape, dtype);
+      } else {
+        std::vector<int> vals;
+        fill_vector(pl, vals);
+        return array(vals.begin(), shape, dtype);
+      }
     }
     case pyfloat: {
       std::vector<float> vals;
@@ -493,7 +519,36 @@ class ArrayAt {
   py::object indices_;
 };
 
+class ArrayPythonIterator {
+ public:
+  ArrayPythonIterator(array x) : idx_(0), x_(std::move(x)) {
+    if (x_.shape(0) > 0 && x_.shape(0) < 10) {
+      splits_ = split(x_, x_.shape(0));
+    }
+  }
+
+  array next() {
+    if (idx_ >= x_.shape(0)) {
+      throw py::stop_iteration();
+    }
+
+    if (idx_ >= 0 && idx_ < splits_.size()) {
+      return squeeze(splits_[idx_++], 0);
+    }
+
+    return *(x_.begin() + idx_++);
+  }
+
+ private:
+  int idx_;
+  array x_;
+  std::vector<array> splits_;
+};
+
 void init_array(py::module_& m) {
+  // Set Python print formatting options
+  mlx::core::global_formatter.capitalize_bool = true;
+
   // Types
   py::class_<Dtype>(
       m,
@@ -532,25 +587,19 @@ void init_array(py::module_& m) {
   m.attr("bfloat16") = py::cast(bfloat16);
   m.attr("complex64") = py::cast(complex64);
 
-  py::class_<ArrayAt>(
+  auto array_at_class = py::class_<ArrayAt>(
       m,
       "_ArrayAt",
       R"pbdoc(
       A helper object to apply updates at specific indices.
-      )pbdoc")
-      .def(
-          py::init([](const array& x) { return ArrayAt(x); }),
-          "x"_a,
-          R"pbdoc(
-          __init__(self, x: array)
-        )pbdoc")
-      .def("__getitem__", &ArrayAt::set_indices, "indices"_a)
-      .def("add", &ArrayAt::add, "value"_a)
-      .def("subtract", &ArrayAt::subtract, "value"_a)
-      .def("multiply", &ArrayAt::multiply, "value"_a)
-      .def("divide", &ArrayAt::divide, "value"_a)
-      .def("maximum", &ArrayAt::maximum, "value"_a)
-      .def("minimum", &ArrayAt::minimum, "value"_a);
+      )pbdoc");
+
+  auto array_iterator_class = py::class_<ArrayPythonIterator>(
+      m,
+      "_ArrayIterator",
+      R"pbdoc(
+      A helper object to iterate over the 1st dimension of an array.
+      )pbdoc");
 
   auto array_class = py::class_<array>(
       m,
@@ -573,10 +622,36 @@ void init_array(py::module_& m) {
           )pbdoc");
   }
 
+  array_at_class
+      .def(
+          py::init([](const array& x) { return ArrayAt(x); }),
+          "x"_a,
+          R"pbdoc(
+          __init__(self, x: array)
+        )pbdoc")
+      .def("__getitem__", &ArrayAt::set_indices, "indices"_a)
+      .def("add", &ArrayAt::add, "value"_a)
+      .def("subtract", &ArrayAt::subtract, "value"_a)
+      .def("multiply", &ArrayAt::multiply, "value"_a)
+      .def("divide", &ArrayAt::divide, "value"_a)
+      .def("maximum", &ArrayAt::maximum, "value"_a)
+      .def("minimum", &ArrayAt::minimum, "value"_a);
+
+  array_iterator_class
+      .def(
+          py::init([](const array& x) { return ArrayPythonIterator(x); }),
+          "x"_a,
+          R"pbdoc(
+          __init__(self, x: array)
+        )pbdoc")
+      .def("__next__", &ArrayPythonIterator::next)
+      .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
+
   array_class
       .def_buffer([](array& a) {
         // Eval if not already evaled
         if (!a.is_evaled()) {
+          py::gil_scoped_release nogil;
           a.eval();
         }
         return pybind11::buffer_info(
@@ -680,17 +755,17 @@ void init_array(py::module_& m) {
 
                * - array.at syntax
                  - In-place syntax
-               * - ``x = x.at[idx].add(y)`` 
+               * - ``x = x.at[idx].add(y)``
                  - ``x[idx] += y``
-               * - ``x = x.at[idx].subtract(y)`` 
+               * - ``x = x.at[idx].subtract(y)``
                  - ``x[idx] -= y``
-               * - ``x = x.at[idx].multiply(y)`` 
+               * - ``x = x.at[idx].multiply(y)``
                  - ``x[idx] *= y``
-               * - ``x = x.at[idx].divide(y)`` 
+               * - ``x = x.at[idx].divide(y)``
                  - ``x[idx] /= y``
-               * - ``x = x.at[idx].maximum(y)`` 
+               * - ``x = x.at[idx].maximum(y)``
                  - ``x[idx] = mx.maximum(x[idx], y)``
-               * - ``x = x.at[idx].minimum(y)`` 
+               * - ``x = x.at[idx].minimum(y)``
                 - ``x[idx] = mx.minimum(x[idx], y)``
           )pbdoc")
       .def(
@@ -701,14 +776,18 @@ void init_array(py::module_& m) {
             }
             return a.shape(0);
           })
-      .def(
-          "__iter__",
-          [](const array& a) { return py::make_iterator(a); },
-          py::keep_alive<0, 1>())
+      .def("__iter__", [](const array& a) { return ArrayPythonIterator(a); })
       .def(
           "__add__",
           [](const array& a, const ScalarOrArray v) {
             return add(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__iadd__",
+          [](array& a, const ScalarOrArray v) {
+            a.overwrite_descriptor(add(a, to_array(v, a.dtype())));
+            return a;
           },
           "other"_a)
       .def(
@@ -724,6 +803,13 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
+          "__isub__",
+          [](array& a, const ScalarOrArray v) {
+            a.overwrite_descriptor(subtract(a, to_array(v, a.dtype())));
+            return a;
+          },
+          "other"_a)
+      .def(
           "__rsub__",
           [](const array& a, const ScalarOrArray v) {
             return subtract(to_array(v, a.dtype()), a);
@@ -733,6 +819,13 @@ void init_array(py::module_& m) {
           "__mul__",
           [](const array& a, const ScalarOrArray v) {
             return multiply(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__imul__",
+          [](array& a, const ScalarOrArray v) {
+            a.overwrite_descriptor(multiply(a, to_array(v, a.dtype())));
+            return a;
           },
           "other"_a)
       .def(
@@ -748,22 +841,45 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
-          "__div__",
-          [](const array& a, const ScalarOrArray v) {
-            return divide(a, to_array(v, a.dtype()));
-          },
-          "other"_a)
-      .def(
-          "__floordiv__",
-          [](const array& a, const ScalarOrArray v) {
-            auto b = to_array(v, a.dtype());
-            return floor_divide(a, b);
+          "__itruediv__",
+          [](array& a, const ScalarOrArray v) {
+            if (!is_floating_point(a.dtype())) {
+              throw std::invalid_argument(
+                  "In place division cannot cast to non-floating point type.");
+            }
+            a.overwrite_descriptor(divide(a, to_array(v, a.dtype())));
+            return a;
           },
           "other"_a)
       .def(
           "__rtruediv__",
           [](const array& a, const ScalarOrArray v) {
             return divide(to_array(v, a.dtype()), a);
+          },
+          "other"_a)
+      .def(
+          "__div__",
+          [](const array& a, const ScalarOrArray v) {
+            return divide(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__rdiv__",
+          [](const array& a, const ScalarOrArray v) {
+            return divide(to_array(v, a.dtype()), a);
+          },
+          "other"_a)
+      .def(
+          "__floordiv__",
+          [](const array& a, const ScalarOrArray v) {
+            return floor_divide(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__ifloordiv__",
+          [](array& a, const ScalarOrArray v) {
+            a.overwrite_descriptor(floor_divide(a, to_array(v, a.dtype())));
+            return a;
           },
           "other"_a)
       .def(
@@ -774,15 +890,16 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
-          "__rdiv__",
-          [](const array& a, const ScalarOrArray v) {
-            return divide(to_array(v, a.dtype()), a);
-          },
-          "other"_a)
-      .def(
           "__mod__",
           [](const array& a, const ScalarOrArray v) {
             return remainder(a, to_array(v, a.dtype()));
+          },
+          "other"_a)
+      .def(
+          "__imod__",
+          [](array& a, const ScalarOrArray v) {
+            a.overwrite_descriptor(remainder(a, to_array(v, a.dtype())));
+            return a;
           },
           "other"_a)
       .def(
@@ -833,6 +950,7 @@ void init_array(py::module_& m) {
           "__repr__",
           [](array& a) {
             if (!a.is_evaled()) {
+              py::gil_scoped_release nogil;
               a.eval();
             }
             std::ostringstream os;
@@ -840,7 +958,16 @@ void init_array(py::module_& m) {
             return os.str();
           })
       .def(
-          "__matmul__", [](array& a, array& other) { return matmul(a, other); })
+          "__matmul__",
+          [](const array& a, array& other) { return matmul(a, other); },
+          "other"_a)
+      .def(
+          "__imatmul__",
+          [](array& a, array& other) {
+            a.overwrite_descriptor(matmul(a, other));
+            return a;
+          },
+          "other"_a)
       .def(
           "__pow__",
           [](const array& a, const ScalarOrArray v) {
@@ -848,15 +975,85 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
+          "__ipow__",
+          [](array& a, const ScalarOrArray v) {
+            a.overwrite_descriptor(power(a, to_array(v, a.dtype())));
+            return a;
+          },
+          "other"_a)
+      .def(
+          "__invert__",
+          [](const array& a) {
+            if (is_floating_point(a.dtype())) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with or bitwise inversion.");
+            }
+            if (a.dtype() != bool_) {
+              throw std::invalid_argument(
+                  "Bitwise inversion not yet supported for integer types.");
+            }
+            return logical_not(a);
+          })
+      .def(
           "__and__",
           [](const array& a, const ScalarOrArray v) {
-            return logical_and(a, to_array(v, a.dtype()));
+            auto b = to_array(v, a.dtype());
+            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with bitwise and.");
+            }
+            if (a.dtype() != bool_ && b.dtype() != bool_) {
+              throw std::invalid_argument(
+                  "Bitwise and not yet supported for integer types.");
+            }
+            return logical_and(a, b);
+          },
+          "other"_a)
+      .def(
+          "__iand__",
+          [](array& a, const ScalarOrArray v) {
+            auto b = to_array(v, a.dtype());
+            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with bitwise and.");
+            }
+            if (a.dtype() != bool_ && b.dtype() != bool_) {
+              throw std::invalid_argument(
+                  "Bitwise and not yet supported for integer types.");
+            }
+            a.overwrite_descriptor(logical_and(a, b));
+            return a;
           },
           "other"_a)
       .def(
           "__or__",
           [](const array& a, const ScalarOrArray v) {
-            return logical_or(a, to_array(v, a.dtype()));
+            auto b = to_array(v, a.dtype());
+            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with or bitwise or.");
+            }
+            if (a.dtype() != bool_ && b.dtype() != bool_) {
+              throw std::invalid_argument(
+                  "Bitwise or not yet supported for integer types.");
+            }
+            return logical_or(a, b);
+          },
+          "other"_a)
+      .def(
+          "__ior__",
+          [](array& a, const ScalarOrArray v) {
+            auto b = to_array(v, a.dtype());
+            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with or bitwise or.");
+            }
+            if (a.dtype() != bool_ && b.dtype() != bool_) {
+              throw std::invalid_argument(
+                  "Bitwise or not yet supported for integer types.");
+            }
+            a.overwrite_descriptor(logical_or(a, b));
+            return a;
           },
           "other"_a)
       .def(
@@ -1023,7 +1220,7 @@ void init_array(py::module_& m) {
           "axis2"_a,
           py::kw_only(),
           "stream"_a = none,
-          "See :func:`moveaxis`.")
+          "See :func:`swapaxes`.")
       .def(
           "transpose",
           [](const array& a, py::args axes, StreamOrDevice s) {

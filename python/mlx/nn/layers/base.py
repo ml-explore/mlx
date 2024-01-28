@@ -54,6 +54,8 @@ class Module(dict):
         mx.eval(model.parameters())
     """
 
+    __call__: Callable
+
     def __init__(self):
         """Should be called by the subclasses of ``Module``."""
         self._no_grad = set()
@@ -94,11 +96,11 @@ class Module(dict):
         strict: bool = True,
     ):
         """
-        Update the model's weights from a ``.npz`` or a list.
+        Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
 
         Args:
             file_or_weights (str or list(tuple(str, mx.array))): The path to
-                the weights ``.npz`` file or a list of pairs of parameter names
+                the weights ``.npz`` file (``.npz`` or ``.safetensors``) or a list of pairs of parameter names
                 and arrays.
             strict (bool, optional): If ``True`` then checks that the provided
               weights exactly match the parameters of the model. Otherwise,
@@ -115,6 +117,9 @@ class Module(dict):
 
                 # Load from file
                 model.load_weights("weights.npz")
+
+                # Load from .safetensors file
+                model.load_weights("weights.safetensors")
 
                 # Load from list
                 weights = [
@@ -164,9 +169,20 @@ class Module(dict):
 
     def save_weights(self, file: str):
         """
-        Save the model's weights to a ``.npz`` file.
+        Save the model's weights to a file. The saving method is determined by the file extension:
+        - ``.npz`` will use :func:`mx.savez`
+        - ``.safetensors`` will use :func:`mx.save_safetensors`
         """
-        mx.savez(file, **dict(tree_flatten(self.parameters())))
+        params_dict = dict(tree_flatten(self.parameters()))
+
+        if file.endswith(".npz"):
+            mx.savez(file, **params_dict)
+        elif file.endswith(".safetensors"):
+            mx.save_safetensors(file, params_dict)
+        else:
+            raise ValueError(
+                "Unsupported file extension. Use '.npz' or '.safetensors'."
+            )
 
     @staticmethod
     def is_module(value):

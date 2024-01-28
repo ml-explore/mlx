@@ -60,4 +60,6 @@ norm(const array& a, int axis, bool keepdims = false, StreamOrDevice s = {}) {
   return norm(a, std::vector<int>{axis}, keepdims, s);
 }
 
+std::pair<array, array> qr(const array& a, StreamOrDevice s = {});
+
 } // namespace mlx::core::linalg

@@ -55,7 +55,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array.
             shape (tuple(int)): New shape.
-            stream (Stream, optional): Stream or device. Defaults to ```None```
+            stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
         Returns:
@@ -78,6 +78,11 @@ void init_ops(py::module_& m) {
 
       Flatten an array.
 
+      The axes flattened will be between ``start_axis`` and ``end_axis``,
+      inclusive. Negative axes are supported. After converting negative axis to
+      positive, axes outside the valid range will be clamped to a valid value,
+      ``start_axis`` to ``0`` and ``end_axis`` to ``ndim - 1``.
+
       Args:
           a (array): Input array.
           start_axis (int, optional): The first dimension to flatten. Defaults to ``0``.
@@ -87,6 +92,14 @@ void init_ops(py::module_& m) {
 
       Returns:
           array: The flattened array.
+
+      Example:
+          >>> a = mx.array([[1, 2], [3, 4]])
+          >>> mx.flatten(a)
+          array([1, 2, 3, 4], dtype=int32)
+          >>>
+          >>> mx.flatten(a, start_axis=0, end_axis=-1)
+          array([1, 2, 3, 4], dtype=int32)
   )pbdoc");
   m.def(
       "squeeze",
@@ -112,7 +125,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array.
             axis (int or tuple(int), optional): Axes to remove. Defaults
-            to ```None``` in which case all size one axes are removed.
+            to ``None`` in which case all size one axes are removed.
 
         Returns:
             array: The output array with size one axes removed.
@@ -566,7 +579,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array or scalar.
             b (array): Input array or scalar.
-            equal_nan (bool): If ``True``, NaNs are treated as equal.
+            equal_nan (bool): If ``True``, NaNs are considered equal.
               Defaults to ``False``.
 
         Returns:
@@ -801,7 +814,7 @@ void init_ops(py::module_& m) {
         Element-wise error function.
 
         .. math::
-          \mathrm{erf}(x) = \frac{2}{\sqrt{\pi}} \int_0^t e^{-t^2} \, dx
+          \mathrm{erf}(x) = \frac{2}{\sqrt{\pi}} \int_0^x e^{-t^2} \, dt
 
         Args:
             a (array): Input array.
@@ -1648,11 +1661,14 @@ void init_ops(py::module_& m) {
       "rtol"_a = 1e-5,
       "atol"_a = 1e-8,
       py::kw_only(),
+      "equal_nan"_a = false,
       "stream"_a = none,
       R"pbdoc(
-        allclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, stream: Union[None, Stream, Device] = None) -> array
+        allclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
 
         Approximate comparison of two arrays.
+
+        Infinite values are considered equal if they have the same sign, NaN values are not equal unless ``equal_nan`` is ``True``.
 
         The arrays are considered equal if:
 
@@ -1668,6 +1684,47 @@ void init_ops(py::module_& m) {
             b (array): Input array.
             rtol (float): Relative tolerance.
             atol (float): Absolute tolerance.
+            equal_nan (bool): If ``True``, NaNs are considered equal.
+              Defaults to ``False``.
+
+        Returns:
+            array: The boolean output scalar indicating if the arrays are close.
+      )pbdoc");
+  m.def(
+      "isclose",
+      &isclose,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      "rtol"_a = 1e-5,
+      "atol"_a = 1e-8,
+      py::kw_only(),
+      "equal_nan"_a = false,
+      "stream"_a = none,
+      R"pbdoc(
+        isclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
+
+        Returns a boolean array where two arrays are element-wise equal within a tolerance.
+
+        Infinite values are considered equal if they have the same sign, NaN values are
+        not equal unless ``equal_nan`` is ``True``.
+
+        Two values are considered equal if:
+
+        .. code-block::
+
+         abs(a - b) <= (atol + rtol * abs(b))
+
+        Note unlike :func:`array_equal`, this function supports numpy-style
+        broadcasting.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+            rtol (float): Relative tolerance.
+            atol (float): Absolute tolerance.
+            equal_nan (bool): If ``True``, NaNs are considered equal.
+              Defaults to ``False``.
 
         Returns:
             array: The boolean output scalar indicating if the arrays are close.
@@ -1819,6 +1876,80 @@ void init_ops(py::module_& m) {
 
         Returns:
             array: The ceil of ``a``.
+      )pbdoc");
+  m.def(
+      "isnan",
+      &mlx::core::isnan,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isnan(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Return a boolean array indicating which elements are NaN.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The boolean array indicating which elements are NaN.
+      )pbdoc");
+  m.def(
+      "isinf",
+      &mlx::core::isinf,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isinf(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Return a boolean array indicating which elements are +/- inifnity.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The boolean array indicating which elements are +/- infinity.
+      )pbdoc");
+  m.def(
+      "isposinf",
+      &isposinf,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isposinf(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Return a boolean array indicating which elements are positive infinity.
+
+        Args:
+            a (array): Input array.
+            stream (Union[None, Stream, Device]): Optional stream or device.
+
+        Returns:
+            array: The boolean array indicating which elements are positive infinity.
+      )pbdoc");
+  m.def(
+      "isneginf",
+      &isneginf,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        isneginf(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Return a boolean array indicating which elements are negative infinity.
+
+        Args:
+            a (array): Input array.
+            stream (Union[None, Stream, Device]): Optional stream or device.
+
+        Returns:
+            array: The boolean array indicating which elements are negative infinity.
       )pbdoc");
   m.def(
       "moveaxis",
@@ -2180,7 +2311,7 @@ void init_ops(py::module_& m) {
               singleton dimensions, defaults to `False`.
 
         Returns:
-            array: The output array with the indices of the minimum values.
+            array: The ``uint32`` array with the indices of the minimum values.
       )pbdoc");
   m.def(
       "argmax",
@@ -2213,7 +2344,7 @@ void init_ops(py::module_& m) {
               singleton dimensions, defaults to `False`.
 
         Returns:
-            array: The output array with the indices of the maximum values.
+            array: The ``uint32`` array with the indices of the maximum values.
       )pbdoc");
   m.def(
       "sort",
@@ -2269,7 +2400,7 @@ void init_ops(py::module_& m) {
               If unspecified, it defaults to -1 (sorting over the last axis).
 
         Returns:
-            array: The indices that sort the input array.
+            array: The ``uint32`` array containing indices that sort the input.
       )pbdoc");
   m.def(
       "partition",
@@ -2342,7 +2473,7 @@ void init_ops(py::module_& m) {
               If unspecified, it defaults to ``-1``.
 
         Returns:
-            array: The indices that partition the input array.
+            array: The `uint32`` array containing indices that partition the input.
       )pbdoc");
   m.def(
       "topk",
@@ -2812,6 +2943,10 @@ void init_ops(py::module_& m) {
           throw std::invalid_argument("[convolve] Inputs must be 1D.");
         }
 
+        if (a.size() == 0 || v.size() == 0) {
+          throw std::invalid_argument("[convolve] Inputs cannot be empty.");
+        }
+
         array in = a.size() < v.size() ? v : a;
         array wt = a.size() < v.size() ? a : v;
         wt = slice(wt, {wt.shape(0) - 1}, {-wt.shape(0) - 1}, {-1}, s);
@@ -3043,22 +3178,36 @@ void init_ops(py::module_& m) {
       "file"_a,
       py::pos_only(),
       "format"_a = none,
+      "return_metadata"_a = false,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        load(file: str, /, format: Optional[str] = None, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
+        load(file: str, /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]
 
-        Load array(s) from a binary file in ``.npy``, ``.npz``, or ``.safetensors`` format.
+        Load array(s) from a binary file.
+
+        The supported formats are ``.npy``, ``.npz``, ``.safetensors``, and ``.gguf``.
 
         Args:
             file (file, str): File in which the array is saved.
             format (str, optional): Format of the file. If ``None``, the format
               is inferred from the file extension. Supported formats: ``npy``,
               ``npz``, and ``safetensors``. Default: ``None``.
+            return_metadata (bool, optional): Load the metadata for formats which
+              support matadata. The metadata will be returned as an additional
+              dictionary.
         Returns:
             result (array, dict):
                 A single array if loading from a ``.npy`` file or a dict mapping
                 names to arrays if loading from a ``.npz`` or ``.safetensors`` file.
+                If ``return_metadata` is ``True`` an additional dictionary of metadata
+                will be returned.
+
+        Warning:
+
+          When loading unsupported quantization formats from GGUF, tensors will
+          automatically cast to ``mx.float16``
+
       )pbdoc");
   m.def(
       "save_safetensors",
@@ -3070,11 +3219,33 @@ void init_ops(py::module_& m) {
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
-        For more information on the format see https://huggingface.co/docs/safetensors/index.
+        See the `Safetensors documentation <https://huggingface.co/docs/safetensors/index>`_
+        for more information on the format.
 
         Args:
-            file (file, str): File in which the array is saved>
+            file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+      )pbdoc");
+  m.def(
+      "save_gguf",
+      &mlx_save_gguf_helper,
+      "file"_a,
+      "arrays"_a,
+      "metadata"_a = none,
+      R"pbdoc(
+        save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str, Union[array, str, List[str]]])
+
+        Save array(s) to a binary file in ``.gguf`` format.
+
+        See the `GGUF documentation <https://github.com/ggerganov/ggml/blob/master/docs/gguf.md>`_ for
+        more information on the format.
+
+        Args:
+            file (file, str): File in which the array is saved.
+            arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+            metadata (dict(str, Union[array, str, list(str)])): The dictionary of
+               metadata to be saved. The values can be a scalar or 1D obj:`array`,
+               a :obj:`str`, or a :obj:`list` of :obj:`str`.
       )pbdoc");
   m.def(
       "where",
@@ -3290,23 +3461,23 @@ void init_ops(py::module_& m) {
       "a"_a,
       "b"_a,
       py::pos_only(),
-      "dims"_a = 2,
+      "axes"_a = 2,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        tensordot(a: array, b: array, /, dims: Union[int, List[List[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array
+        tensordot(a: array, b: array, /, axes: Union[int, List[List[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array
 
         Compute the tensor dot product along the specified axes.
 
         Args:
           a (array): Input array
           b (array): Input array
-          dims (int or list(list(int)), optional): The number of dimensions to
+          axes (int or list(list(int)), optional): The number of dimensions to
             sum over. If an integer is provided, then sum over the last
-            ``dims`` dimensions of ``a`` and the first ``dims`` dimensions of
+            ``axes`` dimensions of ``a`` and the first ``axes`` dimensions of
             ``b``. If a list of lists is provided, then sum over the
             corresponding dimensions of ``a`` and ``b``. (default: 2)
-        
+
         Returns:
           result (array): The tensor dot product.
       )pbdoc");
@@ -3350,4 +3521,60 @@ void init_ops(py::module_& m) {
       Returns:
         result (array): The outer product.
     )pbdoc");
+  m.def(
+      "tile",
+      [](const array& a, const IntOrVec& reps, StreamOrDevice s) {
+        if (auto pv = std::get_if<int>(&reps); pv) {
+          return tile(a, {*pv}, s);
+        } else {
+          return tile(a, std::get<std::vector<int>>(reps), s);
+        }
+      },
+      "a"_a,
+      "reps"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      tile(a: array, reps: Union[int, List[int]], /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Construct an array by repeating ``a`` the number of times given by ``reps``.
+
+      Args:
+        a (array): Input array
+        reps (int or list(int)): The number of times to repeat ``a`` along each axis.
+
+      Returns:
+        result (array): The tiled array.
+    )pbdoc");
+  m.def(
+      "addmm",
+      &addmm,
+      "c"_a,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      "alpha"_a = 1.0f,
+      "beta"_a = 1.0f,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        addmm(c: array, a: array, b: array, /, alpha: float = 1.0, beta: float = 1.0,  *, stream: Union[None, Stream, Device] = None) -> array
+
+        Matrix multiplication with addition and optional scaling.
+
+        Perform the (possibly batched) matrix multiplication of two arrays and add to the result
+        with optional scaling factors.
+
+        Args:
+            c (array): Input array or scalar.
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+            alpha (float, optional): Scaling factor for the
+                matrix product of ``a`` and ``b`` (default: ``1``)
+            beta (float, optional): Scaling factor for ``c`` (default: ``1``)
+
+        Returns:
+            array: ``alpha * (a @ b)  + beta * c``
+      )pbdoc");
 }

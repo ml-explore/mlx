@@ -51,6 +51,10 @@ Operations
    greater_equal
    identity
    inner
+   isnan
+   isposinf
+   isneginf
+   isinf
    less
    less_equal
    linspace
@@ -89,6 +93,7 @@ Operations
    save
    savez
    savez_compressed
+   save_gguf
    save_safetensors
    sigmoid
    sign

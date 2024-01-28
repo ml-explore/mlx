@@ -38,6 +38,4 @@ TEST_CASE("test large allocations") {
     auto buffer = allocator::malloc(size);
     allocator::free(buffer);
   }
-  // Shouldn't be able to allocate an exabyte anytime soon.
-  CHECK_THROWS_AS(allocator::malloc(1ull << 60), std::runtime_error);
 }

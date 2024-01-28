@@ -56,23 +56,32 @@ struct SignOp {
 struct RoundOp {
   template <typename T>
   T operator()(T x) {
-    return std::round(x);
+    return std::rint(x);
   }
 
   complex64_t operator()(complex64_t x) {
-    return {std::round(x.real()), std::round(x.imag())};
+    return {std::rint(x.real()), std::rint(x.imag())};
   }
 };
+
+void set_unary_output_data(const array& in, array& out) {
+  if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+    out.copy_shared_buffer(in);
+  } else {
+    auto size = in.data_size();
+    out.set_data(
+        allocator::malloc_or_wait(size * out.itemsize()),
+        size,
+        in.strides(),
+        in.flags());
+  }
+}
 
 template <typename T, typename Op>
 void unary_op(const array& a, array& out, Op op) {
   const T* a_ptr = a.data<T>();
   if (a.flags().contiguous) {
-    out.set_data(
-        allocator::malloc_or_wait(a.data_size() * out.itemsize()),
-        a.data_size(),
-        a.strides(),
-        a.flags());
+    set_unary_output_data(a, out);
     T* dst = out.data<T>();
     for (size_t i = 0; i < a.data_size(); ++i) {
       dst[i] = op(a_ptr[i]);

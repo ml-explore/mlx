@@ -321,6 +321,44 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertFalse(mx.array_equal(x, y))
                 self.assertTrue(mx.array_equal(x, y, equal_nan=True))
 
+    def test_isnan(self):
+        x = mx.array([0.0, float("nan")])
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.float16)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("nan")]).astype(mx.complex64)
+        self.assertEqual(mx.isnan(x).tolist(), [False, True])
+
+        self.assertEqual(mx.isnan(0 * mx.array(float("inf"))).tolist(), True)
+
+    def test_isinf(self):
+        x = mx.array([0.0, float("inf")])
+        self.assertEqual(mx.isinf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("inf")]).astype(mx.float16)
+        self.assertEqual(mx.isinf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("inf")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isinf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("inf")]).astype(mx.complex64)
+        self.assertEqual(mx.isinf(x).tolist(), [False, True])
+
+        self.assertEqual(mx.isinf(0 * mx.array(float("inf"))).tolist(), False)
+
+        x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
+        result = mx.isinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
+        x = mx.array([-32768, 0, 32767], dtype=mx.int16)
+        result = mx.isinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
             for diag in [-1, 0, 1, -2]:
@@ -371,17 +409,63 @@ class TestOps(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.ceil(mx.array([22 + 3j, 19 + 98j]))
 
+    def test_isposinf(self):
+        x = mx.array([0.0, float("-inf")])
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.float16)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.complex64)
+        self.assertEqual(mx.isposinf(x).tolist(), [False, False])
+
+        self.assertEqual(mx.isposinf(0 * mx.array(float("inf"))).tolist(), False)
+
+        x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
+        result = mx.isposinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
+        x = mx.array([-32768, 0, 32767], dtype=mx.int16)
+        result = mx.isposinf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
+    def test_isneginf(self):
+        x = mx.array([0.0, float("-inf")])
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.float16)
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.bfloat16)
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        x = mx.array([0.0, float("-inf")]).astype(mx.complex64)
+        self.assertEqual(mx.isneginf(x).tolist(), [False, True])
+
+        self.assertEqual(mx.isneginf(0 * mx.array(float("inf"))).tolist(), False)
+
+        x = mx.array([-2147483648, 0, 2147483647], dtype=mx.int32)
+        result = mx.isneginf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
+        x = mx.array([-32768, 0, 32767], dtype=mx.int16)
+        result = mx.isneginf(x)
+        self.assertEqual(result.tolist(), [False, False, False])
+
     def test_round(self):
         # float
         x = mx.array(
-            [0.5, -0.5, 1.5, -1.5, -22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf]
+            [0.5, -0.5, 1.5, -1.5, -21.03, 19.98, -27, 9, 0.0, -np.inf, np.inf]
         )
-        expected = [1, -1, 2, -2, -22, 20, -27, 9, 0, -np.inf, np.inf]
+        expected = [0, -0, 2, -2, -21, 20, -27, 9, 0, -np.inf, np.inf]
         self.assertListEqual(mx.round(x).tolist(), expected)
 
         # complex
-        y = mx.round(mx.array([22.2 + 3.6j, 19.5 + 98.2j]))
-        self.assertListEqual(y.tolist(), [22 + 4j, 20 + 98j])
+        y = mx.round(mx.array([22.2 + 3.6j, 18.5 + 98.2j]))
+        self.assertListEqual(y.tolist(), [22 + 4j, 18 + 98j])
 
         # decimals
         y0 = mx.round(mx.array([15, 122], mx.int32), decimals=0)
@@ -398,6 +482,16 @@ class TestOps(mlx_tests.MLXTestCase):
         y2 = mx.round(mx.array([1.537, 1.471], mx.float32), decimals=2)
         self.assertTrue(mx.allclose(y1, mx.array([1.5, 1.5])))
         self.assertTrue(mx.allclose(y2, mx.array([1.54, 1.47])))
+
+        # check round to nearest for different types
+        dtypes = [mx.bfloat16, mx.float16, mx.float32]
+        for dtype in dtypes:
+            x = mx.arange(10, dtype=dtype) - 4.5
+            x = mx.round(x)
+            self.assertEqual(
+                x.astype(mx.float32).tolist(),
+                [-4.0, -4.0, -2.0, -2.0, -0.0, 0.0, 2.0, 2.0, 4.0, 4.0],
+            )
 
     def test_transpose_noargs(self):
         x = mx.array([[0, 1, 1], [1, 0, 0]])
@@ -761,6 +855,21 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertFalse(mx.allclose(a, b, 0.01).item())
         self.assertTrue(mx.allclose(a, b, 0.01, 0.1).item())
 
+        c = mx.array(float("inf"))
+        self.assertTrue(mx.allclose(c, c).item())
+
+    def test_isclose(self):
+        a = mx.array([float("inf"), float("inf"), float("-inf")])
+        b = mx.array([float("inf"), float("-inf"), float("-inf")])
+
+        self.assertListEqual(mx.isclose(a, b).tolist(), [True, False, True])
+
+        a = mx.array([np.nan])
+        self.assertListEqual(mx.isclose(a, a).tolist(), [False])
+
+        a = mx.array([np.nan])
+        self.assertListEqual(mx.isclose(a, a, equal_nan=True).tolist(), [True])
+
     def test_all(self):
         a = mx.array([[True, False], [True, True]])
 
@@ -886,6 +995,17 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.tolist(), [5, 6, 7])
 
     def test_arange_overload_dispatch(self):
+        with self.assertRaises(ValueError):
+            a = mx.arange(float("nan"), 1, 5)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, float("nan"), 5)
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, 2, float("nan"))
+        with self.assertRaises(ValueError):
+            a = mx.arange(0, float("inf"), float("inf"))
+        with self.assertRaises(ValueError):
+            a = mx.arange(float("inf"), 1, float("inf"))
+
         a = mx.arange(5)
         expected = [0, 1, 2, 3, 4]
         self.assertListEqual(a.tolist(), expected)
@@ -1240,6 +1360,11 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertEqual(list(c_npy.shape), list(c_mlx.shape))
                 self.assertTrue(np.allclose(c_npy, c_mlx, atol=1e-6))
 
+        with self.assertRaises(ValueError):
+            a = mx.array([[1, 2], [1, 2], [1, 2]])
+            b = mx.array([1, 2])
+            mx.concatenate([a, b], axis=0)
+
     def test_pad(self):
         pad_width_and_values = [
             ([(1, 1), (1, 1), (1, 1)], 0),
@@ -1550,23 +1675,23 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertCmpNumpy(
                     [(3, 4, 5), (4, 3, 2)],
                     mx.tensordot,
-                    lambda x, y, dims: np.tensordot(x, y, axes=dims),
+                    np.tensordot,
                     dtype=dtype,
-                    dims=([1, 0], [0, 1]),
+                    axes=([1, 0], [0, 1]),
                 )
                 self.assertCmpNumpy(
                     [(3, 4, 5), (4, 5, 6)],
                     mx.tensordot,
-                    lambda x, y, dims: np.tensordot(x, y, axes=dims),
+                    np.tensordot,
                     dtype=dtype,
-                    dims=2,
+                    axes=2,
                 )
                 self.assertCmpNumpy(
                     [(3, 5, 4, 6), (6, 4, 5, 3)],
                     mx.tensordot,
-                    lambda x, y, dims: np.tensordot(x, y, axes=dims),
+                    np.tensordot,
                     dtype=dtype,
-                    dims=([2, 1, 3], [1, 2, 0]),
+                    axes=([2, 1, 3], [1, 2, 0]),
                 )
 
     def test_inner(self):
@@ -1618,6 +1743,23 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(
                     np.allclose(np_out[0], mx_out[0]), msg=f"Shapes {s1} {s2}, Type {t}"
                 )
+
+    def test_tile(self):
+        self.assertCmpNumpy([(2,), [2]], mx.tile, np.tile)
+        self.assertCmpNumpy([(2, 3, 4), [2]], mx.tile, np.tile)
+        self.assertCmpNumpy([(2, 3, 4), [2, 1]], mx.tile, np.tile)
+        self.assertCmpNumpy(
+            [
+                (2, 3, 4),
+                [
+                    2,
+                    2,
+                ],
+            ],
+            mx.tile,
+            np.tile,
+        )
+        self.assertCmpNumpy([(3,), [2, 2, 2]], mx.tile, np.tile)
 
 
 if __name__ == "__main__":

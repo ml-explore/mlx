@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 #include <cmath>
+#include <iostream> // TODO
 #include <numeric>
 
 #include "doctest/doctest.h"
@@ -479,6 +480,63 @@ TEST_CASE("test comparison ops") {
   }
 }
 
+TEST_CASE("test is nan") {
+  array x(1.0f);
+  CHECK_FALSE(isnan(x).item<bool>());
+
+  array y(NAN);
+  CHECK(isnan(y).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(all(isnan(z)).item<bool>());
+
+  array w = array({1.0f, NAN, 2.0f});
+  CHECK_FALSE(all(isnan(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isnan(a).item<bool>());
+
+  array b(1.0f, float16);
+  CHECK_FALSE(isnan(b).item<bool>());
+
+  array c(NAN, bfloat16);
+  CHECK(isnan(c).item<bool>());
+
+  array d(NAN, float16);
+  CHECK(isnan(d).item<bool>());
+}
+
+TEST_CASE("test is inf") {
+  array x(1.0f);
+  CHECK_FALSE(isinf(x).item<bool>());
+
+  auto inf = std::numeric_limits<float>::infinity();
+
+  array y(inf);
+  CHECK(isinf(y).item<bool>());
+
+  auto neginf = -std::numeric_limits<float>::infinity();
+  CHECK(isinf(array(neginf)).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(any(isinf(z)).item<bool>());
+
+  array w = array({1.0f, inf, 2.0f});
+  CHECK(array_equal({false, true, false}, isinf(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isinf(a).item<bool>());
+
+  array b(1.0f, float16);
+  CHECK_FALSE(isinf(b).item<bool>());
+
+  array c(inf, bfloat16);
+  CHECK(isinf(c).item<bool>());
+
+  array d(inf, float16);
+  CHECK(isinf(d).item<bool>());
+}
+
 TEST_CASE("test all close") {
   array x(1.0f);
   array y(1.0f);
@@ -489,6 +547,36 @@ TEST_CASE("test all close") {
   CHECK(allclose(x, y, 0.1).item<bool>());
   CHECK_FALSE(allclose(x, y, 0.01).item<bool>());
   CHECK(allclose(x, y, 0.01, 0.1).item<bool>());
+}
+
+TEST_CASE("test is close") {
+  {
+    array a({1.0, std::numeric_limits<float>::infinity()});
+    array b({1.0, std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
+  }
+  {
+    array a({1.0, -std::numeric_limits<float>::infinity()});
+    array b({1.0, -std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
+  }
+  {
+    array a({1.0, std::numeric_limits<float>::infinity()});
+    array b({1.0, -std::numeric_limits<float>::infinity()});
+    CHECK(array_equal(isclose(a, b), array({true, false})).item<bool>());
+  }
+  {
+    array a({1.0, std::nan("1"), std::nan("1")});
+    array b({1.0, std::nan("1"), 2.0});
+    CHECK(array_equal(isclose(a, b), array({true, false, false})).item<bool>());
+  }
+  {
+    array a({1.0, std::nan("1"), std::nan("1")});
+    array b({1.0, std::nan("1"), 2.0});
+    CHECK(
+        array_equal(isclose(a, b, 1e-5, 1e-8, true), array({true, true, false}))
+            .item<bool>());
+  }
 }
 
 TEST_CASE("test reduction ops") {
@@ -903,7 +991,7 @@ TEST_CASE("test arithmetic unary ops") {
   // Test round
   {
     array x({0.5, -0.5, 1.5, -1.5, 2.3, 2.6});
-    CHECK(array_equal(round(x), array({1, -1, 2, -2, 2, 3})).item<bool>());
+    CHECK(array_equal(round(x), array({0, -0, 2, -2, 2, 3})).item<bool>());
 
     x = array({11, 222, 32});
     CHECK(array_equal(round(x, -1), array({10, 220, 30})).item<bool>());
@@ -1826,6 +1914,74 @@ TEST_CASE("test scatter") {
   CHECK(array_equal(out, array({1, 0, 1, 0}, {2, 2})).item<bool>());
 }
 
+TEST_CASE("test is positive infinity") {
+  array x(1.0f);
+  CHECK_FALSE(isposinf(x).item<bool>());
+
+  array y(std::numeric_limits<float>::infinity());
+  CHECK(isposinf(y).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(all(isposinf(z)).item<bool>());
+
+  array w = array({1.0f, std::numeric_limits<float>::infinity(), 2.0f});
+  CHECK_FALSE(all(isposinf(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isposinf(a).item<bool>());
+
+  array b(std::numeric_limits<float>::infinity(), float16);
+  CHECK(isposinf(b).item<bool>());
+
+  array c(std::numeric_limits<float>::infinity(), bfloat16);
+  CHECK(isposinf(c).item<bool>());
+}
+
+TEST_CASE("test is negative infinity") {
+  array x(1.0f);
+  CHECK_FALSE(isneginf(x).item<bool>());
+
+  array y(-std::numeric_limits<float>::infinity());
+  CHECK(isneginf(y).item<bool>());
+
+  array z = identity(7);
+  CHECK_FALSE(all(isneginf(z)).item<bool>());
+
+  array w = array({1.0f, -std::numeric_limits<float>::infinity(), 2.0f});
+  CHECK_FALSE(all(isneginf(w)).item<bool>());
+
+  array a(1.0f, bfloat16);
+  CHECK_FALSE(isneginf(a).item<bool>());
+
+  array b(-std::numeric_limits<float>::infinity(), float16);
+  CHECK(isneginf(b).item<bool>());
+
+  array c(-std::numeric_limits<float>::infinity(), bfloat16);
+  CHECK(isneginf(c).item<bool>());
+}
+
+TEST_CASE("test scatter types") {
+  for (auto t : {bool_, uint8, uint16, int8, int16}) {
+    auto in = zeros({4, 4}, t);
+    auto inds = {arange(4), arange(4)};
+    auto updates = ones({4, 1, 1}, t);
+    auto out = scatter(in, inds, updates, {0, 1});
+    auto expected =
+        array({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}, {4, 4}, t);
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+
+  for (auto t : {float16, bfloat16}) {
+    auto in = zeros({4, 4}, t);
+    auto inds = {arange(4), arange(4)};
+    auto updates = ones({4, 1, 1}, t);
+    auto out = scatter(in, inds, updates, {0, 1});
+    auto expected =
+        array({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}, {4, 4}, t);
+    CHECK(allclose(out, expected).item<bool>());
+  }
+}
+
 TEST_CASE("test complex ops") {
   //  Creation ops
   {
@@ -2256,15 +2412,15 @@ TEST_CASE("test linspace") {
 
 TEST_CASE("test quantize dequantize") {
   auto x1 = ones({128, 1});
-  auto x2 = expand_dims(arange(0, 128, float32), 0);
+  auto x2 = expand_dims(arange(0, 512, float32), 0);
   auto x = x1 * x2;
 
   for (int i = 2; i <= 8; i *= 2) {
     int el_per_int = 32 / i;
     auto [x_q, scales, biases] = quantize(x, 128, i);
-    CHECK_EQ(x_q.shape(), std::vector<int>{128, 128 / el_per_int});
-    CHECK_EQ(scales.shape(), std::vector<int>{128, 1});
-    CHECK_EQ(biases.shape(), std::vector<int>{128, 1});
+    CHECK_EQ(x_q.shape(), std::vector<int>{128, 512 / el_per_int});
+    CHECK_EQ(scales.shape(), std::vector<int>{128, 4});
+    CHECK_EQ(biases.shape(), std::vector<int>{128, 4});
 
     auto x_hat = dequantize(x_q, scales, biases, 128, i);
     auto max_diff = max(abs(x - x_hat)).item<float>();
@@ -2315,6 +2471,32 @@ TEST_CASE("test repeat") {
 
   // negative repeats
   CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
+}
+
+TEST_CASE("tile") {
+  auto x = array({1, 2, 3}, {3});
+  auto y = tile(x, {2});
+  auto expected = array({1, 2, 3, 1, 2, 3}, {6});
+  CHECK(array_equal(y, expected).item<bool>());
+  x = array({1, 2, 3, 4}, {2, 2});
+  y = tile(x, {2});
+  expected = array({1, 2, 1, 2, 3, 4, 3, 4}, {2, 4});
+  CHECK(array_equal(y, expected).item<bool>());
+  x = array({1, 2, 3, 4}, {2, 2});
+  y = tile(x, {4, 1});
+  expected = array({1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4}, {8, 2});
+  CHECK(array_equal(y, expected).item<bool>());
+
+  x = array({1, 2, 3, 4}, {2, 2});
+  y = tile(x, {2, 2});
+  expected = array({1, 2, 1, 2, 3, 4, 3, 4, 1, 2, 1, 2, 3, 4, 3, 4}, {4, 4});
+  CHECK(array_equal(y, expected).item<bool>());
+  x = array({1, 2, 3}, {3});
+  y = tile(x, {2, 2, 2});
+  expected = array(
+      {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3},
+      {2, 2, 6});
+  CHECK(array_equal(y, expected).item<bool>());
 }
 
 TEST_CASE("tensordot") {

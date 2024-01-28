@@ -922,6 +922,35 @@ TEST_CASE("test concatenate grads") {
       array_equal(out[0], array({0.0f, 0.0f, 2.0f, 0.0f, 3.0f})).item<bool>());
 }
 
+TEST_CASE("test split grads") {
+  array x = arange(6, float32);
+  eval(x);
+
+  {
+    auto fn = [](const array& x) {
+      auto parts = split(x, 3);
+      return parts[0] * parts[1] + parts[2];
+    };
+    auto out = vjp(fn, {x}, {ones({2})}).second;
+
+    CHECK_EQ(out.size(), 6);
+    CHECK(array_equal(out, array({2.0f, 3.0f, 0.0f, 1.0f, 1.0f, 1.0f}))
+              .item<bool>());
+  }
+
+  {
+    auto fn = [](const array& x) {
+      auto parts = split(x, 3);
+      return parts[0] * parts[2];
+    };
+    auto out = vjp(fn, {x}, {ones({2})}).second;
+
+    CHECK_EQ(out.size(), 6);
+    CHECK(array_equal(out, array({4.0f, 5.0f, 0.0f, 0.0f, 0.0f, 1.0f}))
+              .item<bool>());
+  }
+}
+
 TEST_CASE("test comparison grads") {
   auto x = ones({3, 1});
   auto y = zeros({1, 3});
@@ -1201,4 +1230,30 @@ TEST_CASE("test update state") {
   CHECK(!state.has_primitive());
   CHECK(state.is_evaled());
   CHECK(array_equal(state, array({1.0, 1.0})).item<bool>());
+}
+
+TEST_CASE("test grad types") {
+  {
+    auto fn = [](array x) { return sum(x); };
+
+    for (auto t : {float16, bfloat16, float32}) {
+      auto x = array(1.0, t);
+      auto dfdx = grad(fn)(x);
+      CHECK_EQ(dfdx.dtype(), t);
+    }
+  }
+
+  {
+    // Check for multi-input grad
+    auto fn = [](std::vector<array> inputs) {
+      return sum(inputs[0] + inputs[1]);
+    };
+
+    for (auto t : {float16, bfloat16, float32}) {
+      auto x = array(1.0, t);
+      auto y = array(1.0, t);
+      auto out = grad(fn)({x, y});
+      CHECK_EQ(out[0].dtype(), t);
+    }
+  }
 }

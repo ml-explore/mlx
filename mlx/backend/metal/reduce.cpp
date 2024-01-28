@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 #include <sstream>
 
 #include "mlx/backend/common/reduce.h"
@@ -21,8 +20,12 @@ namespace mlx::core {
 
 namespace {
 
-inline auto safe_divup(size_t n, size_t m) {
+inline auto safe_div(size_t n, size_t m) {
   return m == 0 ? 0 : (n + m - 1) / m;
+}
+
+inline auto safe_divup(size_t n, size_t m) {
+  return safe_div(n, m) * m;
 }
 
 // All Reduce
@@ -56,7 +59,7 @@ void all_reduce_dispatch(
       mod_in_size > thread_group_size ? thread_group_size : mod_in_size;
 
   // If the number of thread groups needed exceeds 1024, we reuse threads groups
-  uint n_thread_groups = safe_divup(mod_in_size, thread_group_size);
+  uint n_thread_groups = safe_div(mod_in_size, thread_group_size);
   n_thread_groups = std::min(n_thread_groups, 1024u);
   uint nthreads = n_thread_groups * thread_group_size;
 
@@ -204,7 +207,8 @@ void strided_reduce_general_dispatch(
   //       if we ever come to doubles. In that case, we should also cut
   //       down the number of threads we launch in a threadgroup
   compute_encoder->setThreadgroupMemoryLength(
-      threadgroup_dim_x * threadgroup_dim_y * out.itemsize(), 0);
+      safe_divup(threadgroup_dim_x * threadgroup_dim_y * out.itemsize(), 16),
+      0);
 
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 }
@@ -231,7 +235,10 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(!axes_.empty());
 
   // Continue with reduction operation
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  // Minimum of 4 bytes since we use size 4 structs for all reduce
+  // and metal will complain o/w
+  size_t min_bytes = std::max(out.nbytes(), 4ul);
+  out.set_data(allocator::malloc_or_wait(min_bytes));
   std::string op_name;
   switch (reduce_type_) {
     case Reduce::And:
@@ -273,7 +280,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Reduce
-  {
+  if (in.size() > 0) {
     std::vector<array> copies;
     ReductionPlan plan = get_reduction_plan(in, axes_);
 

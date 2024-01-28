@@ -1,5 +1,5 @@
 // Copyright © 2023 Apple Inc.
-
+#include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <set>
@@ -79,7 +79,14 @@ array arange(
     msg << bool_ << " not supported for arange.";
     throw std::invalid_argument(msg.str());
   }
-  int size = std::max(static_cast<int>(std::ceil((stop - start) / step)), 0);
+  if (std::isnan(start) || std::isnan(step) || std::isnan(stop)) {
+    throw std::invalid_argument("[arange] Cannot compute length.");
+  }
+  double real_size = std::ceil((stop - start) / step);
+  if (std::isnan(real_size)) {
+    throw std::invalid_argument("[arange] Cannot compute length.");
+  }
+  int size = std::max(static_cast<int>(real_size), 0);
   return array(
       {size},
       dtype,
@@ -219,20 +226,20 @@ array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (n <= 0 || m <= 0) {
     throw std::invalid_argument("N and M must be positive integers.");
   }
-  array result = zeros({n * m}, dtype, s);
+  array result = zeros({n, m}, dtype, s);
   if (k >= m || -k >= n) {
-    return reshape(result, {n, m}, s);
+    return result;
   }
 
   int diagonal_length = k >= 0 ? std::min(n, m - k) : std::min(n + k, m);
-  int start_index = (k >= 0) ? k : -k * m;
 
-  array diag_indices_array = arange(
-      start_index, start_index + diagonal_length * (m + 1), m + 1, int32, s);
-  array ones_array = ones({diagonal_length, 1}, dtype, s);
-  result = scatter(result, diag_indices_array, ones_array, 0, s);
-
-  return reshape(result, {n, m}, s);
+  std::vector<array> indices;
+  auto s1 = std::max(0, -k);
+  auto s2 = std::max(0, k);
+  indices.push_back(arange(s1, diagonal_length + s1, int32, s));
+  indices.push_back(arange(s2, diagonal_length + s2, int32, s));
+  array ones_array = ones({diagonal_length, 1, 1}, dtype, s);
+  return scatter(result, indices, ones_array, {0, 1}, s);
 }
 
 array identity(int n, Dtype dtype, StreamOrDevice s /* = {} */) {
@@ -245,7 +252,7 @@ array tri(int n, int m, int k, Dtype type, StreamOrDevice s /* = {} */) {
   return astype(greater_equal(l, r, s), type, s);
 }
 
-array tril(array x, int k, StreamOrDevice s /* = {} */) {
+array tril(array x, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
     throw std::invalid_argument("[tril] array must be at least 2-D");
   }
@@ -253,7 +260,7 @@ array tril(array x, int k, StreamOrDevice s /* = {} */) {
   return where(mask, x, zeros_like(x, s), s);
 }
 
-array triu(array x, int k, StreamOrDevice s /* = {} */) {
+array triu(array x, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   if (x.ndim() < 2) {
     throw std::invalid_argument("[triu] array must be at least 2-D");
   }
@@ -574,6 +581,29 @@ std::vector<array> split(
         << " for array with shape " << a.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
+
+  if (indices.empty()) {
+    return {a};
+  }
+
+  if (indices.size() < 10 &&
+      std::is_sorted(indices.begin(), indices.end(), std::less<>{}) &&
+      indices[0] > 0 && indices.back() < a.shape(ax)) {
+    std::vector<Dtype> dtypes(indices.size() + 1, a.dtype());
+    std::vector<std::vector<int>> shapes(indices.size() + 1, a.shape());
+    shapes[0][ax] = indices[0];
+    for (int i = 1; i < indices.size(); i++) {
+      shapes[i][ax] = indices[i] - indices[i - 1];
+    }
+    shapes.back()[ax] = a.shape(ax) - indices.back();
+
+    return array::make_arrays(
+        shapes,
+        dtypes,
+        std::make_shared<Split>(to_stream(s), indices, ax),
+        {a});
+  }
+
   std::vector<array> res;
   auto out_shape = a.shape();
   auto start_indices = std::vector<int>(a.ndim(), 0);
@@ -639,26 +669,27 @@ array concatenate(
     int axis,
     StreamOrDevice s /* = {} */) {
   if (arrays.size() == 0) {
-    throw std::invalid_argument("No arrays provided for concatenation");
+    throw std::invalid_argument(
+        "[concatenate] No arrays provided for concatenation");
   }
 
   // Normalize the given axis
   auto ax = axis < 0 ? axis + arrays[0].ndim() : axis;
   if (ax < 0 || ax >= arrays[0].ndim()) {
     std::ostringstream msg;
-    msg << "Invalid axis (" << axis << ") passed to concatenate"
+    msg << "[concatenate] Invalid axis (" << axis << ") passed to concatenate"
         << " for array with shape " << arrays[0].shape() << ".";
     throw std::invalid_argument(msg.str());
   }
 
   auto throw_invalid_shapes = [&]() {
     std::ostringstream msg;
-    msg << "All the input array dimensions must match exactly except"
-        << " for the concatenation axis. However, the provided shapes are ";
+    msg << "[concatenate] All the input array dimensions must match exactly "
+        << "except for the concatenation axis. However, the provided shapes are ";
     for (auto& a : arrays) {
       msg << a.shape() << ", ";
     }
-    msg << "and the concatenation axis is " << axis;
+    msg << "and the concatenation axis is " << axis << ".";
     throw std::invalid_argument(msg.str());
   };
 
@@ -667,6 +698,13 @@ array concatenate(
   // Make the output shape and validate that all arrays have the same shape
   // except for the concatenation axis.
   for (auto& a : arrays) {
+    if (a.ndim() != shape.size()) {
+      std::ostringstream msg;
+      msg << "[concatenate] All the input arrays must have the same number of "
+          << "dimensions. However, got arrays with dimensions " << shape.size()
+          << " and " << a.ndim() << ".";
+      throw std::invalid_argument(msg.str());
+    }
     for (int i = 0; i < a.ndim(); i++) {
       if (i == ax) {
         continue;
@@ -752,6 +790,36 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
 
 array repeat(const array& arr, int repeats, StreamOrDevice s) {
   return repeat(flatten(arr, s), repeats, 0, s);
+}
+
+array tile(
+    const array& arr,
+    std::vector<int> reps,
+    StreamOrDevice s /* = {} */) {
+  auto shape = arr.shape();
+  if (reps.size() < shape.size()) {
+    reps.insert(reps.begin(), shape.size() - reps.size(), 1);
+  }
+  if (reps.size() > shape.size()) {
+    shape.insert(shape.begin(), reps.size() - shape.size(), 1);
+  }
+
+  std::vector<int> expand_shape;
+  std::vector<int> broad_shape;
+  std::vector<int> final_shape;
+  for (int i = 0; i < shape.size(); i++) {
+    if (reps[i] != 1) {
+      expand_shape.push_back(1);
+      broad_shape.push_back(reps[i]);
+    }
+    expand_shape.push_back(shape[i]);
+    broad_shape.push_back(shape[i]);
+    final_shape.push_back(reps[i] * shape[i]);
+  }
+
+  auto x = reshape(arr, expand_shape, s);
+  x = broadcast_to(x, broad_shape, s);
+  return reshape(x, final_shape, s);
 }
 
 /** Pad an array with a constant value */
@@ -1051,6 +1119,31 @@ array array_equal(
   }
 }
 
+array isnan(const array& a, StreamOrDevice s /* = {} */) {
+  if (is_integral(a.dtype())) {
+    return full(a.shape(), false, bool_, s);
+  }
+  return not_equal(a, a, s);
+}
+
+array isinf(const array& a, StreamOrDevice s /* = {} */) {
+  return logical_or(isposinf(a, s), isneginf(a, s), s);
+}
+
+array isposinf(const array& a, StreamOrDevice s /* = {} */) {
+  if (is_integral(a.dtype())) {
+    return full(a.shape(), false, bool_, s);
+  }
+  return equal(a, array(std::numeric_limits<float>::infinity(), a.dtype()), s);
+}
+
+array isneginf(const array& a, StreamOrDevice s /* = {} */) {
+  if (is_integral(a.dtype())) {
+    return full(a.shape(), false, bool_, s);
+  }
+  return equal(a, array(-std::numeric_limits<float>::infinity(), a.dtype()), s);
+}
+
 array where(
     const array& condition,
     const array& x,
@@ -1066,11 +1159,43 @@ array allclose(
     const array& b,
     double rtol /* = 1e-5 */,
     double atol /* = 1e-8 */,
+    bool equal_nan /* = false */,
+    StreamOrDevice s /* = {}*/) {
+  return all(isclose(a, b, rtol, atol, equal_nan, s), s);
+}
+
+array isclose(
+    const array& a,
+    const array& b,
+    double rtol /* = 1e-5 */,
+    double atol /* = 1e-8 */,
+    bool equal_nan /* = false */,
     StreamOrDevice s /* = {}*/) {
   // |a - b| <= atol + rtol * |b|
   auto rhs = add(array(atol), multiply(array(rtol), abs(b, s), s), s);
   auto lhs = abs(subtract(a, b, s), s);
-  return all(less_equal(lhs, rhs, s), s);
+  auto out = less_equal(lhs, rhs, s);
+
+  // Correct the result for infinite values.
+  auto any_inf = logical_or(isinf(a, s), isinf(b, s), s);
+  auto both_inf = logical_or(
+      logical_and(isposinf(a, s), isposinf(b, s), s),
+      logical_and(isneginf(a, s), isneginf(b, s), s),
+      s);
+
+  // Convert all elements where either value is infinite to False.
+  out = logical_and(out, logical_not(any_inf, s), s);
+
+  // Convert all the elements where both values are infinite and of the same
+  // sign to True.
+  out = logical_or(out, both_inf, s);
+
+  if (equal_nan) {
+    auto both_nan = logical_and(isnan(a, s), isnan(b, s), s);
+    out = logical_or(out, both_nan, s);
+  }
+
+  return out;
 }
 
 array all(const array& a, bool keepdims, StreamOrDevice s /* = {}*/) {
@@ -2531,9 +2656,40 @@ inline std::vector<int> conv_out_shape(
   std::vector<int> out_shape(in_shape.size());
   int i = 0;
   out_shape[i++] = N;
+
   for (; i < in_shape.size() - 1; i++) {
+    if (pads[i - 1] < 0) {
+      std::ostringstream msg;
+      msg << "[conv] Padding sizes must be non-negative."
+          << " Got padding " << pads << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (strides[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Stride sizes must be positive."
+          << " Got strides " << strides << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (dilation[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Dilation sizes must be positive."
+          << " Got dilation " << dilation << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
     out_shape[i] = conv_out_axis_size(
         in_shape[i], wt_shape[i], strides[i - 1], pads[i - 1], dilation[i - 1]);
+
+    if (out_shape[i] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Spatial dimensions of input after padding "
+          << " cannot be smaller than weight spatial dimensions."
+          << " Got input with shape " << in_shape << " and padding " << pads
+          << " for weight of shape " << wt_shape << ".";
+      throw std::invalid_argument(msg.str());
+    }
   }
   out_shape[i] = O;
 
@@ -2764,16 +2920,25 @@ std::tuple<array, array, array> quantize(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
+  if (group_size != 32 && group_size != 64 && group_size != 128) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested group size " << group_size
+        << " is not supported. The supported group sizes are 64 and 128.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (bits != 2 && bits != 4 && bits != 8) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested number of bits " << bits
+        << " is not supported. The supported bits are 2, 4 and 8.";
+    throw std::invalid_argument(msg.str());
+  }
+
   if (w.ndim() != 2) {
     throw std::invalid_argument("[quantize] Only matrices supported for now");
   }
 
-  if ((w.shape(0) % 32) != 0) {
-    throw std::invalid_argument(
-        "[quantize] All dimensions should be divisible by 32 for now");
-  }
-
-  if ((w.shape(-1) % group_size) != 0) {
+  if ((w.shape(1) % group_size) != 0) {
     std::ostringstream msg;
     msg << "[quantize] The last dimension of the matrix needs to be divisible by "
         << "the quantization group size " << group_size
@@ -2787,6 +2952,20 @@ std::tuple<array, array, array> quantize(
   int el_per_int = 32 / bits;
   array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
   shifts = reshape(shifts, {1, 1, -1}, s);
+
+  // Check that the w matrix will fill up a whole SIMD.
+  // This is an implementation detail which should be removed in the future but
+  // at least we bail out early which will result in a nice readable error.
+  //
+  // Hopefully nobody is quantizing matrices that small anyway.
+  if (w.shape(1) < 32 * el_per_int) {
+    std::ostringstream msg;
+    msg << "[quantize] The feature dimension (2nd dimension of the matrix) is "
+        << "too small for quantization. We support >=512 for 2 bits, "
+        << ">= 256 for 4 bits and >= 128 for 8 bits. The provided matrix has "
+        << "shape " << w.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
 
   // Compute scales and biases
   array packed_w =
@@ -2814,13 +2993,18 @@ array dequantize(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
+  if (bits <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for bits: " << bits;
+    throw std::invalid_argument(msg.str());
+  }
+  if (group_size <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for group_size: " << group_size;
+    throw std::invalid_argument(msg.str());
+  }
   if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {
     throw std::invalid_argument("[dequantize] Only matrices supported for now");
-  }
-
-  if ((w.shape(0) % 32) != 0) {
-    throw std::invalid_argument(
-        "[dequantize] All dimensions should be divisible by 32 for now");
   }
 
   if (w.shape(0) != scales.shape(0) || w.shape(0) != biases.shape(0)) {
@@ -2968,6 +3152,100 @@ array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   }
 
   return tensordot(a, b, {{-1}, {-1}}, s);
+}
+
+/** Compute D = beta * C + alpha * (A @ B) */
+array addmm(
+    array c,
+    array a,
+    array b,
+    const float& alpha /* = 1.f */,
+    const float& beta /* = 1.f */,
+    StreamOrDevice s /* = {} */) {
+  // Divert in the case of vector-matrix multiplication
+  // TODO: Add the needed specializtion
+  if (a.ndim() == 1 || b.ndim() == 1) {
+    array X = matmul(a, b, s);
+    array alpha_arr = array(alpha, X.dtype());
+    array aX = multiply(alpha_arr, X, s);
+
+    array beta_arr = array(beta, c.dtype());
+    array bY = multiply(beta_arr, c, s);
+    return add(aX, bY, s);
+  }
+
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    throw std::invalid_argument(
+        "[addmm] Got 0 dimension input. Inputs must "
+        "have at least one dimension.");
+  }
+
+  if (a.shape(-1) != b.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[addmm] Last dimension of first input with shape " << a.shape()
+        << " must match second to last dimension of"
+        << " second input with shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Type promotion
+  auto out_type = result_type({a, b, c});
+  if (!is_floating_point(out_type) || is_complex(out_type)) {
+    std::ostringstream msg;
+    msg << "[addmm] Only real floating point types are supported but "
+        << c.dtype() << ", " << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+  c = astype(c, out_type, s);
+
+  // We can batch the multiplication by reshaping a
+  if (a.ndim() > 2 && b.ndim() == 2 && c.ndim() <= 1) {
+    std::vector<int> out_shape = a.shape();
+    a = reshape(a, {-1, out_shape.back()}, s);
+    out_shape.back() = b.shape(-1);
+    c = broadcast_to(c, {a.shape(0), b.shape(1)}, s);
+    auto out = array(
+        {a.shape(0), b.shape(1)},
+        out_type,
+        std::make_unique<AddMM>(to_stream(s), alpha, beta),
+        {a, b, c});
+    return reshape(out, out_shape, s);
+  }
+
+  if (a.ndim() > 2 || b.ndim() > 2) {
+    std::vector<int> bsx_a(a.shape().begin(), a.shape().end() - 2);
+    std::vector<int> bsx_b(b.shape().begin(), b.shape().end() - 2);
+    auto inner_shape = broadcast_shapes(bsx_a, bsx_b);
+
+    // Broadcast a
+    inner_shape.push_back(a.shape(-2));
+    inner_shape.push_back(a.shape(-1));
+    a = broadcast_to(a, inner_shape, s);
+
+    // Broadcast b
+    *(inner_shape.end() - 2) = b.shape(-2);
+    *(inner_shape.end() - 1) = b.shape(-1);
+    b = broadcast_to(b, inner_shape, s);
+  }
+
+  auto out_shape = a.shape();
+  out_shape.back() = b.shape(-1);
+
+  auto c_broadcast_shape = broadcast_shapes(c.shape(), out_shape);
+  c = broadcast_to(c, c_broadcast_shape, s);
+
+  auto out = array(
+      out_shape,
+      out_type,
+      std::make_unique<AddMM>(to_stream(s), alpha, beta),
+      {a, b, c});
+
+  return out;
 }
 
 } // namespace mlx::core

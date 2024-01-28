@@ -21,7 +21,8 @@
   std::vector<array> vjp(                        \
       const std::vector<array>& primals,         \
       const std::vector<array>& cotangents,      \
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,           \
+      const std::vector<array>& outputs) override;
 
 #define DEFINE_PRINT(PRIMITIVE)           \
   void print(std::ostream& os) override { \
@@ -78,7 +79,8 @@ class Primitive {
   virtual std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums);
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs);
 
   /**
    * The primitive must know how to vectorize itself across
@@ -167,6 +169,29 @@ class Add : public UnaryPrimitive {
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
+};
+
+class AddMM : public UnaryPrimitive {
+ public:
+  explicit AddMM(Stream stream, float alpha, float beta)
+      : UnaryPrimitive(stream), alpha_(alpha), beta_(beta){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(AddMM)
+
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  const float alpha_;
+  const float beta_;
 };
 
 class Arange : public UnaryPrimitive {
@@ -464,7 +489,8 @@ class Convolution : public UnaryPrimitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(Convolution)
   bool is_equivalent(const Primitive& other) const override;
@@ -919,7 +945,8 @@ class Matmul : public UnaryPrimitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(Matmul)
   DEFINE_DEFAULT_IS_EQUIVALENT()
@@ -1153,7 +1180,8 @@ class Reduce : public UnaryPrimitive {
   std::vector<array> vjp(
       const std::vector<array>& primals,
       const std::vector<array>& cotangents,
-      const std::vector<int>& argnums) override;
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   void print(std::ostream& os) override {
     switch (reduce_type_) {
@@ -1421,6 +1449,28 @@ class Sort : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Split : public Primitive {
+ public:
+  explicit Split(Stream stream, const std::vector<int>& indices, int axis)
+      : Primitive(stream), indices_(indices), axis_(axis){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Split)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+
+  std::vector<int> indices_;
+  int axis_;
+};
+
 class Square : public UnaryPrimitive {
  public:
   explicit Square(Stream stream) : UnaryPrimitive(stream){};
@@ -1550,6 +1600,22 @@ class Transpose : public UnaryPrimitive {
   std::vector<int> axes_;
 
   void eval(const std::vector<array>& inputs, array& out);
+};
+
+/* QR Factorization primitive. */
+class QRF : public Primitive {
+ public:
+  explicit QRF(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(QRF)
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 } // namespace mlx::core

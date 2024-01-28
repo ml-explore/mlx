@@ -15,7 +15,7 @@ from setuptools.command.build_ext import build_ext
 def get_version(version):
     if "PYPI_RELEASE" not in os.environ:
         today = datetime.date.today()
-        version = f"{version}.dev{today.year}{today.month}{today.day}"
+        version = f"{version}.dev{today.year}{today.month:02d}{today.day:02d}"
 
         if "DEV_RELEASE" not in os.environ:
             git_hash = (
@@ -135,18 +135,6 @@ class GenerateStubs(Command):
 
     def run(self) -> None:
         subprocess.run(["pybind11-stubgen", "mlx.core", "-o", "python"])
-        # Note, sed inplace on macos requires a backup prefix, delete the file after its generated
-        # this sed is needed to replace references from py::cpp_function to a generic Callable
-        subprocess.run(
-            [
-                "sed",
-                "-i",
-                "''",
-                "s/cpp_function/typing.Callable/g",
-                "python/mlx/core/__init__.pyi",
-            ]
-        )
-        subprocess.run(["rm", "python/mlx/core/__init__.pyi''"])
 
 
 # Read the content of README.md
@@ -160,16 +148,17 @@ if __name__ == "__main__":
         where="python", exclude=["src", "tests", "tests.*"]
     )
     package_dir = {"": "python"}
-    package_data = {"mlx": ["lib/*", "include/*", "share/*"]}
+    package_data = {"mlx": ["lib/*", "include/*", "share/*"], "mlx.core": ["*.pyi"]}
 
     setup(
         name="mlx",
-        version=get_version("0.0.7"),
+        version=get_version("0.0.11"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
         long_description=long_description,
         long_description_content_type="text/markdown",
+        url="https://github.com/ml-explore/mlx",
         packages=packages,
         package_dir=package_dir,
         package_data=package_data,

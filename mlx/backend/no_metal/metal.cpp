@@ -19,4 +19,10 @@ std::function<void()> make_task(
       "[metal::make_task] Cannot make GPU task without metal backend");
 }
 
+// No cache for CPU only
+bool cache_enabled(void) {
+  return false;
+}
+void set_cache_enabled(bool) {}
+
 } // namespace mlx::core::metal

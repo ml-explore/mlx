@@ -5,13 +5,15 @@
 import os
 import subprocess
 
+import mlx.core as mx
+
 # -- Project information -----------------------------------------------------
 
 project = "MLX"
 copyright = "2023, MLX Contributors"
 author = "MLX Contributors"
-version = "0.0.7"
-release = "0.0.7"
+version = ".".join(mx.__version__.split(".")[:3])
+release = version
 
 # -- General configuration ---------------------------------------------------
 

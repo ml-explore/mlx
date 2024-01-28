@@ -1,14 +1,13 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
 #include <optional>
 #include <variant>
 
-#include "array.h"
-#include "device.h"
-#include "io/load.h"
-#include "stream.h"
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/stream.h"
 
 namespace mlx::core {
 
@@ -124,8 +123,8 @@ inline array tri(int n, Dtype type, StreamOrDevice s = {}) {
   return tri(n, n, 0, type, s);
 }
 
-array tril(array x, int k, StreamOrDevice s = {});
-array triu(array x, int k, StreamOrDevice s = {});
+array tril(array x, int k = 0, StreamOrDevice s = {});
+array triu(array x, int k = 0, StreamOrDevice s = {});
 
 /** array manipulation */
 
@@ -217,6 +216,8 @@ array stack(const std::vector<array>& arrays, StreamOrDevice s = {});
 /** Repeat an array along an axis. */
 array repeat(const array& arr, int repeats, int axis, StreamOrDevice s = {});
 array repeat(const array& arr, int repeats, StreamOrDevice s = {});
+
+array tile(const array& arr, std::vector<int> reps, StreamOrDevice s = {});
 
 /** Permutes the dimensions according to the given axes. */
 array transpose(const array& a, std::vector<int> axes, StreamOrDevice s = {});
@@ -374,6 +375,14 @@ array_equal(const array& a, const array& b, StreamOrDevice s = {}) {
   return array_equal(a, b, false, s);
 }
 
+array isnan(const array& a, StreamOrDevice s = {});
+
+array isinf(const array& a, StreamOrDevice s = {});
+
+array isposinf(const array& a, StreamOrDevice s = {});
+
+array isneginf(const array& a, StreamOrDevice s = {});
+
 /** Select from x or y depending on condition. */
 array where(
     const array& condition,
@@ -395,6 +404,17 @@ array allclose(
     const array& b,
     double rtol = 1e-5,
     double atol = 1e-8,
+    bool equal_nan = false,
+    StreamOrDevice s = {});
+
+/** Returns a boolean array where two arrays are element-wise equal within the
+ * specified tolerance. */
+array isclose(
+    const array& a,
+    const array& b,
+    double rtol = 1e-5,
+    double atol = 1e-8,
+    bool equal_nan = false,
     StreamOrDevice s = {});
 
 /**
@@ -1030,20 +1050,6 @@ array conv2d(
     int groups = 1,
     StreamOrDevice s = {});
 
-/** Serialization operations */
-
-/** Save array to out stream in .npy format */
-void save(std::shared_ptr<io::Writer> out_stream, array a);
-
-/** Save array to file in .npy format */
-void save(const std::string& file, array a);
-
-/** Load array from reader in .npy format */
-array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
-
-/** Load array from file in .npy format */
-array load(const std::string& file, StreamOrDevice s = {});
-
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
     const array& x,
@@ -1090,18 +1096,13 @@ array outer(const array& a, const array& b, StreamOrDevice s = {});
 /** Compute the inner product of two vectors. */
 array inner(const array& a, const array& b, StreamOrDevice s = {});
 
-/** Load array map from .safetensors file format */
-std::unordered_map<std::string, array> load_safetensors(
-    std::shared_ptr<io::Reader> in_stream,
-    StreamOrDevice s = {});
-std::unordered_map<std::string, array> load_safetensors(
-    const std::string& file,
+/** Compute D = beta * C + alpha * (A @ B) */
+array addmm(
+    array c,
+    array a,
+    array b,
+    const float& alpha = 1.f,
+    const float& beta = 1.f,
     StreamOrDevice s = {});
 
-void save_safetensors(
-    std::shared_ptr<io::Writer> in_stream,
-    std::unordered_map<std::string, array>);
-void save_safetensors(
-    const std::string& file,
-    std::unordered_map<std::string, array>);
 } // namespace mlx::core
