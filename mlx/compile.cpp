@@ -12,8 +12,7 @@
 
 namespace mlx::core {
 
-// TODO how to set this?
-constexpr int max_compile_size = 8;
+constexpr int max_compile_depth = 6;
 
 bool is_unary(const Primitive& p) {
   // TODO fix this mess.
@@ -221,9 +220,9 @@ using CompileFn = std::function<std::vector<array>(const std::vector<array>&)>;
 using ParentsMap =
     std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>;
 
-// Helper that fuses two arrays in the graph by setting the parents of the
+// Helper that merges two arrays in the graph by setting the parents of the
 // source to point to the destination
-void fuse(array& dst, array& src, ParentsMap& parents_map) {
+void merge(array& dst, array& src, ParentsMap& parents_map) {
   // Canonicalize the order of the primitives outputs
   auto sources = src.outputs();
   auto dests = dst.outputs();
@@ -444,14 +443,14 @@ void compile_simplify(
     return pa.is_equivalent(pb);
   };
 
-  // Pass 0: fuse scalars
+  // Pass 0: merge scalars
   std::vector<array> new_tape;
   for (auto& arr : tape) {
-    // Check if we can fuse scalars
+    // Check if we can merge scalars
     if (is_scalar(arr)) {
       auto scalar = scalars.find(get_scalar_rep(arr));
       if (scalar->second.id() != arr.id()) {
-        fuse(scalar->second, arr, parents_map);
+        merge(scalar->second, arr, parents_map);
         // Don't keep orphaned scalars in the tape
         continue;
       }
@@ -465,12 +464,12 @@ void compile_simplify(
   for (auto& o : outputs) {
     output_set.insert(o.id());
   }
-  // Pass 1..passes: fuse only keeping non-orphaned arrays in the tape
+  // Pass 1..passes: merge only keeping non-orphaned arrays in the tape
   for (int pass = 0; pass < passes; ++pass) {
     for (auto& arr : tape) {
-      // Helper to check if we can fuse the parents of the
+      // Helper to check if we can merge the parents of the
       // given array
-      auto maybe_fuse_parents = [&](auto& a) {
+      auto maybe_merge_parents = [&](auto& a) {
         auto parents = parents_map.find(a.id());
         if (parents != parents_map.end()) {
           auto N = parents->second.size();
@@ -486,7 +485,7 @@ void compile_simplify(
               auto& src = parents->second[j].first;
               auto& dst = parents->second[i].first;
               if (src.id() != dst.id() && array_equivalent(src, dst)) {
-                fuse(dst, src, parents_map);
+                merge(dst, src, parents_map);
                 mask[j] = true;
               }
             }
@@ -503,9 +502,9 @@ void compile_simplify(
         }
       };
 
-      bool discard = maybe_fuse_parents(arr);
+      bool discard = maybe_merge_parents(arr);
       for (auto& s : arr.siblings()) {
-        discard &= maybe_fuse_parents(s);
+        discard &= maybe_merge_parents(s);
       }
       // If an array and its siblings have no parents, and none of them are
       // outputs, it is safe to remove it from the tape
@@ -519,7 +518,7 @@ void compile_simplify(
 
 // Extract sub-graphs of the graph that can be compiled
 // and replace them with a Compiled Primitive.
-void compile_reduce(
+void compile_fuse(
     std::vector<array>& tape,
     ParentsMap& parents_map,
     std::vector<array>& outputs) {
@@ -529,99 +528,79 @@ void compile_reduce(
     output_map.insert({o.id(), o});
   }
 
-  // Go through the tape in reverse order.
-  // Iterate backward from each spot until either of:
-  // - Max compile depth TODO
-  // - Different stream TODO
-  // - Reach an array with a parent outside the current section
-  // - Reach an array with a primitve that we cannot compile
+  // Go through the tape in reverse order and check for fusable sub-graphs
   std::vector<array> new_tape;
-  for (int i = tape.size() - 1; i >= 0;) {
-    // array id -> boolean indicating an input
-    std::unordered_map<uintptr_t, bool> cache;
-    std::vector<array> old_outputs;
-
-    auto s = i;
-    for (; s >= 0; --s) {
-      auto& in = tape[s];
-      auto p_it = parents_map.find(in.id());
-
-      bool all_parents_out = true;
-      bool all_parents_in = true;
-      if (p_it == parents_map.end()) {
-        all_parents_in = false;
-      } else {
-        auto& parents = p_it->second;
-        if (parents.size() == 0) {
-          throw std::runtime_error(
-              "[compile_reduce] Why are you in the map without parents?");
-        }
-        for (auto& [p, idx] : parents) {
-          auto it = cache.find(p.id());
-          auto in_cache = (it != cache.end());
-          if (in_cache) {
-            // Not an input
-            it->second = false;
-          }
-          all_parents_in &= in_cache;
-          all_parents_out &= !in_cache;
-        }
-      }
-
-      // Constant input
-      if (!in.has_primitive()) {
-        cache.insert({in.id(), true});
-        continue;
-      }
-
-      // Non-constant input
-      if (!is_fusable(in.primitive())) {
-        cache.insert({in.id(), true});
-        s--;
-        break;
-      }
-
-      // Arrays with a mix of parents outside this stretch
-      // of tape are not fusable
-      if (!(all_parents_in || all_parents_out)) {
-        break;
-      }
-
-      // If all parents are outside its an output
-      if (all_parents_out) {
-        old_outputs.push_back(in);
-      }
-
-      // Store in cache
-      cache.insert({in.id(), true});
-    }
-
-    // Go up to the start of the fusable section
-    s++;
-
-    // No fusion
-    if (s + 1 >= i) {
-      new_tape.push_back(tape[i]);
-      i--;
+  std::unordered_set<uintptr_t> global_cache;
+  for (int i = tape.size() - 1; i >= 0; --i) {
+    // Already compiled
+    if (global_cache.find(tape[i].id()) != global_cache.end()) {
       continue;
     }
 
-    // Extract inputs from the fused section:
+    std::function<void(const array&, int, const Stream&)> recurse;
+    std::unordered_set<uintptr_t> cache;
     std::vector<array> inputs;
     std::vector<array> fused_tape;
-    for (int k = s; k < i + 1; k++) {
-      if (cache.at(tape[k].id())) {
-        inputs.push_back(tape[k]);
-      } else {
-        fused_tape.push_back(tape[k]);
+    recurse = [&](const array& a, int depth, const Stream& s) {
+      bool all_parents_in = true;
+      if (depth > 0) {
+        // Guaranteed to have a parent since is nested in the
+        // recursion.
+        auto& parents = parents_map.at(a.id());
+        for (auto& [p, idx] : parents) {
+          auto in_cache = cache.find(p.id()) != cache.end();
+          if (!in_cache) {
+            all_parents_in = false;
+            break;
+          }
+        }
       }
+
+      // Arrays with a mix of parents outside the compilable section
+      // are not fusable
+      if (!all_parents_in) {
+        return;
+      }
+
+      cache.insert({a.id()});
+
+      // Stop fusing and make input if:
+      // - Depth limit exceeded
+      // - Constant input
+      // - Stream mismatch
+      // - Non fusable primitive
+      if (depth >= max_compile_depth || !a.has_primitive() ||
+          a.primitive().stream() != s || !is_fusable(a.primitive())) {
+        inputs.push_back(a);
+        return;
+      }
+
+      // Check if all parents are inside
+      // if they are recurse on it. If they aren't put it in the back
+      // of the queue and try again.
+      // Keep going until the queue size does not change.
+      for (auto& in : a.inputs()) {
+        recurse(in, depth + 1, s);
+      }
+      fused_tape.push_back(a);
+    };
+
+    // TODO handle multiple outputs
+    std::vector<array> old_outputs;
+    if (tape[i].has_primitive()) {
+      Stream s = tape[i].primitive().stream();
+      recurse(tape[i], 0, s);
+      old_outputs.push_back(tape[i]);
     }
 
     // Not worth fusing a single primitive
-    if (fused_tape.size() == 1) {
+    if (fused_tape.size() <= 1) {
       new_tape.push_back(tape[i]);
-      i--;
       continue;
+    }
+
+    for (auto& f : fused_tape) {
+      global_cache.insert({f.id()});
     }
 
     std::vector<std::vector<int>> shapes;
@@ -642,19 +621,16 @@ void compile_reduce(
 
     // One output per primitive
     new_tape.push_back(compiled_outputs[0]);
-    new_tape.insert(new_tape.end(), inputs.rbegin(), inputs.rend());
 
     // - Update outputs parents to point to compiled outputs
     // - Update any overall graph outputs to be compiled outputs
     for (int o = 0; o < old_outputs.size(); ++o) {
-      fuse(compiled_outputs[o], old_outputs[o], parents_map);
+      merge(compiled_outputs[o], old_outputs[o], parents_map);
       if (auto it = output_map.find(old_outputs[o].id());
           it != output_map.end()) {
         it->second = compiled_outputs[o];
       }
     }
-    // Skip the processed part of the tape
-    i = s - 1;
   }
 
   std::reverse(new_tape.begin(), new_tape.end());
@@ -749,7 +725,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       // Kernel fusion to generate Compiled primitives. The tape and
       // new outputs must be updated accordingly
       if (compile_mode() != CompileMode::no_fuse) {
-        compile_reduce(entry.tape, parents_map, entry.outputs);
+        compile_fuse(entry.tape, parents_map, entry.outputs);
       }
     }
 
