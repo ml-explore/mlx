@@ -391,3 +391,59 @@ TEST_CASE("test compile binary fused") {
     CHECK_EQ(cout.inputs()[1].id(), y.id());
   }
 }
+
+auto gelu_1(const std::vector<array>& inputs) {
+  auto& x = inputs[0];
+  auto out = x * (1.0f + erf(x / M_SQRT2)) / 2.0f;
+  return std::vector<array>{out};
+}
+
+TEST_CASE("test compile gelu") {
+  {
+    auto cfun = compile(gelu_1);
+    auto x = array(1.0);
+    auto out = cfun({x})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    CHECK_EQ(out.inputs().size(), 4);
+    for (auto& in : out.inputs()) {
+      CHECK(in.inputs().empty());
+    }
+    auto expected_out = gelu_1({x})[0];
+    CHECK(allclose(out, expected_out).item<bool>());
+  }
+
+  {
+    auto cfun = compile(gelu_1);
+    auto x = array({1.0, 0.5});
+    auto out = cfun({x})[0];
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    CHECK_EQ(out.inputs().size(), 4);
+    for (auto& in : out.inputs()) {
+      CHECK(in.inputs().empty());
+    }
+
+    auto expected_out = gelu_1({x})[0];
+    CHECK(allclose(out, expected_out).item<bool>());
+  }
+}
+
+// Uncompilable input outside fused tape
+auto unary_with_two_outputs(const std::vector<array>& inputs) {
+  auto x = exp(inputs[0]);
+  return std::vector<array>{exp(x), sum(x)};
+}
+
+TEST_CASE("test compile tape with outside inputs") {
+  {
+    auto cfun = compile(unary_with_two_outputs);
+    auto x = array({2.0, 2.0});
+    auto out = cfun({x});
+
+    auto& p1 = out[0].primitive();
+    CHECK_EQ(typeid(p1), typeid(Exp));
+    auto& p2 = out[1].primitive();
+    CHECK_EQ(typeid(p2), typeid(Reduce));
+  }
+}
