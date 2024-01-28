@@ -1,4 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
+
 #include <cstdlib>
 #include <map>
 #include <unordered_map>
@@ -182,16 +183,24 @@ std::pair<std::vector<array>, std::vector<int>> Compiled::vmap(
 }
 
 bool Compiled::is_equivalent(const Primitive& other) const {
-  // TODO equivalent if the tapes of primitives are equivalent?
-  return false;
+  const Compiled& a_other = static_cast<const Compiled&>(other);
+  return std::equal(
+      tape_.begin(),
+      tape_.end(),
+      a_other.tape_.begin(),
+      a_other.tape_.end(),
+      [](const array& a1, const array& a2) {
+        auto& p1 = a1.primitive();
+        auto& p2 = a2.primitive();
+        return typeid(p1) == typeid(p2) && p1.is_equivalent(p2);
+      });
 }
 
 void Compiled::print(std::ostream& os) {
-  // TODO maybe print the compiled name here instead.
   os << "Compiled";
-  //  for (auto& a : tape_) {
-  //    a.primitive().print(os);
-  //  }
+  for (auto& a : tape_) {
+    a.primitive().print(os);
+  }
 }
 
 namespace detail {
@@ -520,9 +529,10 @@ void compile_reduce(
     output_map.insert({o.id(), o});
   }
 
-  // Go through the tape in reverse order
-  // Keep iterating backward until either of:
+  // Go through the tape in reverse order.
+  // Iterate backward from each spot until either of:
   // - Max compile depth TODO
+  // - Different stream TODO
   // - Reach an array with a parent outside the current section
   // - Reach an array with a primitve that we cannot compile
   std::vector<array> new_tape;
@@ -586,11 +596,11 @@ void compile_reduce(
       cache.insert({in.id(), true});
     }
 
-    // Go up one to the start of the fusable section
+    // Go up to the start of the fusable section
     s++;
 
-    // No change needed if no fusion happened
-    if (s >= i) {
+    // No fusion
+    if (s + 1 >= i) {
       new_tape.push_back(tape[i]);
       i--;
       continue;
@@ -598,12 +608,22 @@ void compile_reduce(
 
     // Extract inputs from the fused section:
     std::vector<array> inputs;
-    std::vector<array> fused_tape(tape.begin() + s, tape.begin() + i + 1);
-    for (auto& a : fused_tape) {
-      if (cache.at(a.id())) {
-        inputs.push_back(a);
+    std::vector<array> fused_tape;
+    for (int k = s; k < i + 1; k++) {
+      if (cache.at(tape[k].id())) {
+        inputs.push_back(tape[k]);
+      } else {
+        fused_tape.push_back(tape[k]);
       }
     }
+
+    // Not worth fusing a single primitive
+    if (fused_tape.size() == 1) {
+      new_tape.push_back(tape[i]);
+      i--;
+      continue;
+    }
+
     std::vector<std::vector<int>> shapes;
     std::vector<Dtype> types;
     for (auto& o : old_outputs) {
@@ -644,8 +664,6 @@ void compile_reduce(
   for (auto& o : outputs) {
     o = output_map.at(o.id());
   }
-  // TODO, handle mismatched streams
-  // TODO, maybe something special for siblings?
 }
 
 std::vector<array> compile_replace(
