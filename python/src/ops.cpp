@@ -3613,4 +3613,25 @@ void init_ops(py::module_& m) {
             array: The diagonal array.
 
       )pbdoc");
+  m.def(
+      "diag",
+      [](const array& a, int k, StreamOrDevice s) { return diag(a, k, s); },
+      "a"_a,
+      py::pos_only(),
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        diag(a: array, /, k: int = 0, *, stream: Union[None, Stream, Device] = None) -> array 
+        
+        Extract a diagonal or construct a diagonal array.
+
+        Args:
+            a (array): Input array.
+            k (int, optional): Which diagonal to extract or construct. Default is 0.
+            stream (StreamOrDevice, optional): The stream or device to use for the operation.
+
+        Returns:
+            array: The extracted diagonal or the constructed diagonal array.
+        )pbdoc");
 }

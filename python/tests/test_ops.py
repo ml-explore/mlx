@@ -1799,6 +1799,29 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [[1, 14], [5, 18], [9, 22]]
         self.assertListEqual(mx.diagonal(x, -1, 2, 0).tolist(), expected)
 
+    def test_diag(self):
+        # Test 1D input
+        x = mx.array([1, 2, 3, 4])
+        expected = mx.array([[1, 0, 0, 0],
+                            [0, 2, 0, 0],
+                            [0, 0, 3, 0],
+                            [0, 0, 0, 4]])
+        result = mx.diag(x)
+        self.assertTrue(mx.array_equal(result, expected))
+
+        # Test 2D input
+        x = mx.array([[1, 2, 3],
+                      [4, 5, 6],
+                      [7, 8, 9]])
+        expected = mx.array([1, 5, 9])
+        result = mx.diag(x)
+        self.assertTrue(mx.array_equal(result, expected))
+
+        # Test with offset
+        expected = mx.array([2, 6])
+        result = mx.diag(x, 1)
+        self.assertTrue(mx.array_equal(result, expected))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2674,3 +2674,46 @@ TEST_CASE("test diagonal") {
   x = array({0, 1}, {2});
   CHECK_THROWS_AS(diagonal(x, 0, 0, 1), std::invalid_argument);
 }
+
+TEST_CASE("test diag") {
+  // Test with 1D array
+  auto x = array({0, 1, 2, 3}, {4});
+  auto out = diag(x, 0);
+  CHECK(
+      array_equal(
+          out, array({0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 3}, {4, 4}))
+          .item<bool>());
+
+  out = diag(x, 1);
+  CHECK(array_equal(
+            out,
+            array(
+                {0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+                 2, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0},
+                {5, 5}))
+            .item<bool>());
+
+  out = diag(x, -1);
+  CHECK(array_equal(
+            out,
+            array(
+                {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
+                 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 3, 0},
+                {5, 5}))
+            .item<bool>());
+
+  // Test with 2D array
+  x = array({0, 1, 2, 3, 4, 5, 6, 7, 8}, {3, 3});
+  out = diag(x, 0);
+  CHECK(array_equal(out, array({0, 4, 8}, {3})).item<bool>());
+
+  out = diag(x, 1);
+  CHECK(array_equal(out, array({1, 5}, {2})).item<bool>());
+
+  out = diag(x, -1);
+  CHECK(array_equal(out, array({3, 7}, {2})).item<bool>());
+
+  // Test with invalid offset
+  CHECK_THROWS_AS(diag(x, 4), std::out_of_range);
+  CHECK_THROWS_AS(diag(x, -4), std::out_of_range);
+}

@@ -1113,4 +1113,7 @@ array diagonal(
     int axis2,
     StreamOrDevice s = {});
 
+/** Extract diagonal from a 2d array or create a diagonal matrix. */
+array diag(const array& a, int k, StreamOrDevice s = {});
+
 } // namespace mlx::core
