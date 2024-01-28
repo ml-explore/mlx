@@ -3369,28 +3369,6 @@ array diag(const array& a, int k, StreamOrDevice s /* = {} */) {
   } else {
     throw std::invalid_argument("Input must be 1- or 2-d.");
   }
-
-  if (ndim == 1) {
-    int n = a.size() + std::abs(k);
-    int a_size = a.size();
-    array res = zeros({n, n}, a.dtype(), s);
-    int diagonal_length = k >= 0 ? std::min(n, n - k) : std::min(n + k, n);
-
-    std::vector<array> indices;
-    auto s1 = std::max(0, -k);
-    auto s2 = std::max(0, k);
-    indices.push_back(arange(s1, diagonal_length + s1, int32, s));
-    indices.push_back(arange(s2, diagonal_length + s2, int32, s));
-
-    return scatter(res, indices, reshape(a, {a_size, 1, 1}), {0, 1}, s);
-  } else if (ndim == 2) {
-    if (a.shape(0) != a.shape(1)) {
-      throw std::invalid_argument("Input must be 2-d and square.");
-    }
-    return diagonal(a, k, 0, 1, s);
-  } else {
-    throw std::invalid_argument("Input must be 1- or 2-d.");
-  }
 }
 
 } // namespace mlx::core
