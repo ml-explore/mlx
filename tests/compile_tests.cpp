@@ -221,9 +221,22 @@ TEST_CASE("test simplify multi output") {
   set_compile_mode(CompileMode::enabled);
 }
 
+// No fusion
+auto unary_fused_0(const std::vector<array>& inputs) {
+  return std::vector<array>{exp(inputs[0])};
+}
+
 // All compilable
 auto unary_fused_1(const std::vector<array>& inputs) {
   return std::vector<array>{abs(negative(exp(inputs[0])))};
+}
+
+auto unary_fused_1_copy(const std::vector<array>& inputs) {
+  return std::vector<array>{abs(negative(exp(inputs[0])))};
+}
+
+auto unary_fused_1_diff(const std::vector<array>& inputs) {
+  return std::vector<array>{abs(exp(negative(inputs[0])))};
 }
 
 // Output into un-compilable primitive
@@ -240,13 +253,26 @@ TEST_CASE("test compile unary fused") {
   // NB: some of these tests are brittle and may need to be
   // updated if we change compile conditions
   {
-    auto cfun = compile(unary_fused_1);
-    auto x = array(1.0);
-    auto out = cfun({x});
+    auto cfun = compile(unary_fused_0);
+    auto x = array(2.0);
+    auto out = cfun({x})[0];
 
-    auto& p = out[0].primitive();
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Exp));
+    CHECK_EQ(out.inputs()[0].id(), x.id());
+  }
+
+  {
+    auto cfun = compile(unary_fused_1);
+    auto x = array(2.0);
+    auto out = cfun({x})[0];
+
+    auto& p = out.primitive();
     CHECK_EQ(typeid(p), typeid(Compiled));
-    CHECK_EQ(out[0].inputs()[0].id(), x.id());
+    CHECK_EQ(out.inputs()[0].id(), x.id());
+
+    auto expected_out = unary_fused_1({array(2.0)})[0];
+    CHECK_EQ(out.item<float>(), expected_out.item<float>());
   }
 
   {
@@ -277,5 +303,91 @@ TEST_CASE("test compile unary fused") {
     auto& sp = sout.primitive();
     CHECK_EQ(typeid(sp), typeid(Reduce));
     CHECK_EQ(sout.inputs()[0].id(), x.id());
+  }
+
+  // Is equivalent works
+  {
+    auto out1 = compile(unary_fused_1)({array(1.0)});
+    auto out2 = compile(unary_fused_1_copy)({array(1.0)});
+    CHECK(out1[0].primitive().is_equivalent(out2[0].primitive()));
+    auto out3 = compile(unary_fused_1_diff)({array(1.0)});
+    CHECK(!out1[0].primitive().is_equivalent(out3[0].primitive()));
+  }
+}
+
+// All compilable
+auto binary_fused_0(const std::vector<array>& inputs) {
+  return std::vector<array>{inputs[0] + inputs[1]};
+}
+
+// Binary into unary
+auto binary_fused_1(const std::vector<array>& inputs) {
+  return std::vector<array>{abs(inputs[0] + inputs[1])};
+}
+
+// Binary into binary
+auto binary_fused_2(const std::vector<array>& inputs) {
+  auto x = inputs[0] + inputs[1];
+  return std::vector<array>{x + inputs[0]};
+}
+
+// Binary into unary into un-compilable
+auto binary_fused_3(const std::vector<array>& inputs) {
+  return std::vector<array>{sum(abs(inputs[0] + inputs[1]))};
+}
+
+TEST_CASE("test compile binary fused") {
+  {
+    auto cfun = compile(binary_fused_0);
+    auto x = array(2.0);
+    auto y = array(2.0);
+    auto out = cfun({x, y})[0];
+
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Add));
+    CHECK_EQ(out.inputs()[0].id(), x.id());
+  }
+
+  {
+    auto cfun = compile(binary_fused_1);
+    auto x = array(2.0);
+    auto y = array(2.0);
+    auto out = cfun({x, y})[0];
+
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    CHECK_EQ(out.inputs()[0].id(), x.id());
+    CHECK_EQ(out.inputs()[1].id(), y.id());
+
+    auto expected_out = binary_fused_1({x, y})[0];
+    CHECK_EQ(out.item<float>(), expected_out.item<float>());
+  }
+
+  {
+    auto cfun = compile(binary_fused_2);
+    auto x = array(2.0);
+    auto y = array(2.0);
+    auto out = cfun({x, y})[0];
+
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Compiled));
+    CHECK_EQ(out.inputs()[0].id(), x.id());
+    CHECK_EQ(out.inputs()[1].id(), y.id());
+  }
+
+  {
+    auto cfun = compile(binary_fused_3);
+    auto x = array({1.0, 2.0});
+    auto y = array({1.0, 2.0});
+    auto out = cfun({x, y})[0];
+
+    auto& p = out.primitive();
+    CHECK_EQ(typeid(p), typeid(Reduce));
+
+    auto cout = out.inputs()[0];
+    auto& cp = cout.primitive();
+    CHECK_EQ(typeid(cp), typeid(Compiled));
+    CHECK_EQ(cout.inputs()[0].id(), x.id());
+    CHECK_EQ(cout.inputs()[1].id(), y.id());
   }
 }
