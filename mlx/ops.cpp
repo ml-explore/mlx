@@ -1,4 +1,5 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>

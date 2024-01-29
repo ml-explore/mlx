@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #ifdef ACCELERATE_NEW_LAPACK
 #include <vecLib/cblas_new.h>

@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <algorithm>
