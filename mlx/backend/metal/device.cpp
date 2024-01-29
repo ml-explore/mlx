@@ -256,6 +256,8 @@ MTL::Library* Device::get_library_cache_(const std::string& lib_name) {
 }
 
 MTL::Library* Device::get_library_(const char* source_string) {
+  auto pool = new_scoped_memory_pool();
+
   auto ns_code = NS::String::string(source_string, NS::ASCIIStringEncoding);
 
   NS::Error* error = nullptr;
@@ -276,6 +278,8 @@ MTL::Library* Device::get_library_(const char* source_string) {
 }
 
 MTL::Library* Device::get_library_(const MTL::StitchedLibraryDescriptor* desc) {
+  auto pool = new_scoped_memory_pool();
+
   NS::Error* error = nullptr;
   auto mtl_lib = device_->newLibrary(desc, &error);
 
@@ -446,6 +450,8 @@ MTL::ComputePipelineState* Device::get_kernel(
     const std::string& specialized_name /* = "" */,
     const MTLFCList& func_consts /* = {} */,
     const MTL::LinkedFunctions* linked_functions /* = nullptr */) {
+  auto pool = new_scoped_memory_pool();
+
   // Look for cached kernel
   const auto& kname = specialized_name.empty() ? name : specialized_name;
   if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
