@@ -4,9 +4,10 @@ import math
 import unittest
 from itertools import permutations
 
-import mlx.core as mx
 import mlx_tests
 import numpy as np
+
+import mlx.core as mx
 
 
 class TestOps(mlx_tests.MLXTestCase):
@@ -386,12 +387,22 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0, -7, 3]
         self.assertListEqual(mx.minimum(x, y).tolist(), expected)
 
+        a = mx.array([float("nan")])
+        b = mx.array([0.0])
+        self.assertTrue(math.isnan(mx.minimum(a, b).item()))
+        self.assertTrue(math.isnan(mx.minimum(b, a).item()))
+
     def test_maximum(self):
         x = mx.array([0.0, -5, 10.0])
         y = mx.array([1.0, -7.0, 3.0])
 
         expected = [1, -5, 10]
         self.assertListEqual(mx.maximum(x, y).tolist(), expected)
+
+        a = mx.array([float("nan")])
+        b = mx.array([0.0])
+        self.assertTrue(math.isnan(mx.maximum(a, b).item()))
+        self.assertTrue(math.isnan(mx.maximum(b, a).item()))
 
     def test_floor(self):
         x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
@@ -759,6 +770,10 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.logaddexp(a, b, dtype=np.float32)
 
         self.assertTrue(np.allclose(result, expected))
+
+        a = mx.array([float("nan")])
+        b = mx.array([0.0])
+        self.assertTrue(math.isnan(mx.logaddexp(a, b).item()))
 
     def test_log(self):
         a = mx.array([1, 0.5, 10, 100])
