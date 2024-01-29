@@ -31,6 +31,9 @@ inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
   return mtllib_path;
 }
 
+using MTLFCList =
+    std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
+
 class Device {
  public:
   Device();
@@ -66,10 +69,8 @@ class Device {
   MTL::ComputePipelineState* get_kernel(
       const std::string& name,
       const std::string& specialized_name,
-      const MTL::FunctionConstantValues* func_consts,
+      const MTLFCList& func_consts,
       const std::string& lib_name = "mlx");
-
-  MTL::FunctionConstantValues* get_function_consts(const std::string& name);
 
   bool has_kernel(
       const std::string& specialized_name,
@@ -79,13 +80,32 @@ class Device {
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
  private:
+  MTL::Library* get_library_cache_(const std::string& name);
+
+  MTL::Function* get_fuction_(const std::string& name, MTL::Library* mtl_lib);
+
+  MTL::Function* get_fuction_(
+      const std::string& name,
+      const std::string& specialized_name,
+      const MTLFCList& func_consts,
+      MTL::Library* mtl_lib);
+
+  MTL::ComputePipelineState* get_kernel_(
+      const std::string& name,
+      const MTL::Function* mtl_function);
+
+  MTL::ComputePipelineState* get_kernel_(
+      const std::string& name,
+      const MTL::Function* mtl_function,
+      const MTL::LinkedFunctions* linked_functions);
+
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
   std::unordered_map<int32_t, MTL::ComputeCommandEncoder*> encoder_map_;
+  std::unordered_map<std::string, MTL::Function*> function_map_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
-  std::unordered_map<std::string, MTL::FunctionConstantValues*> fconst_map_;
   std::mutex mtx_;
 };
 
