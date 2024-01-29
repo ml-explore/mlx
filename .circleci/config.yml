@@ -42,7 +42,7 @@ jobs:
       - run:
           name: Run Python tests
           command: |
-            python3 -m unittest discover python/tests
+            python3 -m unittest discover python/tests -v
       # TODO: Reenable when extension api becomes stable
       # - run:
       #     name: Build example extension
