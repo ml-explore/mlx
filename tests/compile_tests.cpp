@@ -465,7 +465,6 @@ TEST_CASE("test compile tape with outside parents") {
     auto y = array({1.6, 0.6});
     auto outs = cfun({x, y});
 
-    // export_to_dot(std::cout, outs);
     auto& p1 = outs[0].primitive();
     CHECK_EQ(typeid(p1), typeid(Compiled));
     auto& p2 = outs[1].primitive();
@@ -483,7 +482,6 @@ TEST_CASE("test compile tape with outside parents") {
     auto y = array({1.6, 0.6});
     auto outs = cfun({x, y});
 
-    // export_to_dot(std::cout, outs);
     auto& p1 = outs[0].primitive();
     CHECK_EQ(typeid(p1), typeid(Compiled));
     auto& p2 = outs[1].primitive();
