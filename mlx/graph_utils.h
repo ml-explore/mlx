@@ -26,4 +26,6 @@ void export_to_dot(std::ostream& os, Arrays... outputs) {
   export_to_dot(os, std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 
+void generate_kernel(std::ostream& os, const std::vector<array>& outputs);
+
 } // namespace mlx::core

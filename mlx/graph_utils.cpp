@@ -146,4 +146,74 @@ void export_to_dot(std::ostream& os, const std::vector<array>& outputs) {
   os << "}";
 }
 
+void generate_kernel(std::ostream& os, const std::vector<array>& outputs) {
+  auto get_type_string = [](Dtype d) {
+    if (d == float32) {
+      return "float";
+    } else {
+      throw std::runtime_error("Unsupported type");
+    }
+  };
+
+  std::unordered_set<std::uintptr_t> input_set;
+  std::vector<array> inputs;
+  NodeNamer namer;
+
+  // Collect inputs
+  depth_first_traversal(
+      [&](const array& x) {
+        if (!x.has_primitive()) {
+          if (auto [__, inserted] = input_set.insert(x.id()); inserted) {
+            inputs.push_back(x);
+          }
+        }
+      },
+      outputs);
+
+  // Start the kernel
+  os << "[[kernel]] void some_generated_kernel_name(" << std::endl;
+  for (auto& x : inputs) {
+    os << "    device const " << get_type_string(x.dtype()) << "* "
+       << namer.get_name(x) << "," << std::endl;
+  }
+  for (auto& x : outputs) {
+    os << "    device " << get_type_string(x.dtype()) << "* "
+       << namer.get_name(x) << "," << std::endl;
+  }
+  os << "    uint index [[thread_position_in_grid]]) {" << std::endl;
+
+  // Read the inputs in tmps
+  for (auto& x : inputs) {
+    os << "  " << get_type_string(x.dtype()) << " tmp_" << namer.get_name(x)
+       << " = " << namer.get_name(x) << "[index];" << std::endl;
+  }
+
+  // Actually write the computation
+  depth_first_traversal(
+      [&](const array& x) {
+        if (!x.has_primitive()) {
+          return;
+        }
+
+        os << "  " << get_type_string(x.dtype()) << " tmp_" << namer.get_name(x)
+           << " = ";
+        x.primitive().print(os);
+        os << "()(";
+        for (int i = 0; i < x.inputs().size() - 1; i++) {
+          os << "tmp_" << namer.get_name(x.inputs()[i]) << ", ";
+        }
+        os << "tmp_" << namer.get_name(x.inputs().back()) << ");" << std::endl;
+      },
+      outputs);
+
+  // Write the outputs from tmps
+  for (auto& x : outputs) {
+    os << "  " << namer.get_name(x) << "[index] = tmp_" << namer.get_name(x)
+       << ";" << std::endl;
+  }
+
+  // Finish the kernel
+  os << "}" << std::endl;
+}
+
 } // namespace mlx::core
