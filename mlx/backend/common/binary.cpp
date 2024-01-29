@@ -233,14 +233,33 @@ void Maximum::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
-  binary(a, b, out, [](auto x, auto y) { return (x > y) ? x : y; });
+
+  if (is_floating_point(out.dtype())) {
+    binary(a, b, out, [](auto x, auto y) {
+      if (std::isnan(x)) {
+        return x;
+      }
+      return (x > y) ? x : y;
+    });
+  } else {
+    binary(a, b, out, [](auto x, auto y) { return (x > y) ? x : y; });
+  }
 }
 
 void Minimum::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
-  binary(a, b, out, [](auto x, auto y) { return (x < y) ? x : y; });
+  if (is_floating_point(out.dtype())) {
+    binary(a, b, out, [](auto x, auto y) {
+      if (std::isnan(x)) {
+        return x;
+      }
+      return (x < y) ? x : y;
+    });
+  } else {
+    binary(a, b, out, [](auto x, auto y) { return (x < y) ? x : y; });
+  }
 }
 
 void Multiply::eval(const std::vector<array>& inputs, array& out) {

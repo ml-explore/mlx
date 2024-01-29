@@ -386,12 +386,22 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = [0, -7, 3]
         self.assertListEqual(mx.minimum(x, y).tolist(), expected)
 
+        a = mx.array([float("nan")])
+        b = mx.array([0.0])
+        self.assertTrue(math.isnan(mx.minimum(a, b).item()))
+        self.assertTrue(math.isnan(mx.minimum(b, a).item()))
+
     def test_maximum(self):
         x = mx.array([0.0, -5, 10.0])
         y = mx.array([1.0, -7.0, 3.0])
 
         expected = [1, -5, 10]
         self.assertListEqual(mx.maximum(x, y).tolist(), expected)
+
+        a = mx.array([float("nan")])
+        b = mx.array([0.0])
+        self.assertTrue(math.isnan(mx.maximum(a, b).item()))
+        self.assertTrue(math.isnan(mx.maximum(b, a).item()))
 
     def test_floor(self):
         x = mx.array([-22.03, 19.98, -27, 9, 0.0, -np.inf, np.inf])
@@ -759,6 +769,10 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.logaddexp(a, b, dtype=np.float32)
 
         self.assertTrue(np.allclose(result, expected))
+
+        a = mx.array([float("nan")])
+        b = mx.array([0.0])
+        self.assertTrue(math.isnan(mx.logaddexp(a, b).item()))
 
     def test_log(self):
         a = mx.array([1, 0.5, 10, 100])
@@ -1760,6 +1774,16 @@ class TestOps(mlx_tests.MLXTestCase):
             np.tile,
         )
         self.assertCmpNumpy([(3,), [2, 2, 2]], mx.tile, np.tile)
+
+    def test_empty_matmuls(self):
+        a = mx.array([])
+        b = mx.array([])
+        self.assertEqual(mx.inner(a, b).item(), 0.0)
+
+        a = mx.zeros((10, 0))
+        b = mx.zeros((0, 10))
+        out = a @ b
+        self.assertTrue(mx.array_equal(out, mx.zeros((10, 10))))
 
 
 if __name__ == "__main__":

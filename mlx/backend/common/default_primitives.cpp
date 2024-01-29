@@ -6,6 +6,8 @@
 #include <cblas.h>
 #endif
 
+#include <cstring>
+
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/utils.h"
@@ -127,6 +129,11 @@ inline void matmul_common_general(
   size_t M = a.shape(-2);
   size_t N = b.shape(-1);
   size_t K = a.shape(-1);
+
+  if (K == 0) {
+    std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
+    return;
+  }
 
   for (int i = 0; i < (a.size() / (M * K)); ++i) {
     cblas_sgemm(

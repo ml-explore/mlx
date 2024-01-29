@@ -151,6 +151,12 @@ TEST_CASE("test astype") {
 }
 
 TEST_CASE("test full") {
+  // Check throws on bad shape
+  {
+    CHECK_THROWS(full({-5, 0}, 0));
+    CHECK_THROWS(full({0, -5}, 0));
+  }
+
   // Check full works for different types
   {
     auto x = full({}, 0);
