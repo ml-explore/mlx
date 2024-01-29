@@ -270,9 +270,10 @@ struct CompilerCache {
     auto is_match = [](const std::vector<array>& in1,
                        const std::vector<array>& in2) {
       if (in1.size() != in2.size()) {
-        throw std::runtime_error(
-            "[compiler] Got different number of inputs to function,"
-            " this should never happen.");
+        std::ostringstream msg;
+        msg << "[compiler] Unexpected number of inputs to compiled function:"
+            << " expected " << in2.size() << " got " << in1.size() << ".";
+        throw std::invalid_argument(msg.str());
       }
       for (int i = 0; i < in1.size(); ++i) {
         if (in1[i].shape() != in2[i].shape()) {
@@ -587,7 +588,6 @@ void compile_fuse(
       fused_tape.push_back(a);
     };
 
-    // TODO handle multiple outputs
     std::vector<array> old_outputs;
     if (tape[i].has_primitive()) {
       Stream s = tape[i].primitive().stream();
@@ -601,7 +601,23 @@ void compile_fuse(
       continue;
     }
 
-    for (auto& f : fused_tape) {
+    // Add to global cache and add any global outputs to outputs
+    // of new primitive
+    for (int j = 0; j < fused_tape.size() - 1; ++j) {
+      auto& f = fused_tape[j];
+      if (output_map.find(f.id()) != output_map.end()) {
+        old_outputs.insert(old_outputs.begin(), f);
+        // Parents are now siblings, update the parent map
+        auto& pairs = parents_map[f.id()];
+        pairs.erase(
+            std::remove_if(
+                pairs.begin(),
+                pairs.end(),
+                [&](auto& p) {
+                  return cache.find(p.first.id()) != cache.end();
+                }),
+            pairs.end());
+      }
       global_cache.insert({f.id()});
     }
 
@@ -622,7 +638,21 @@ void compile_fuse(
         inputs);
 
     // One output per primitive
-    new_tape.push_back(compiled_outputs[0]);
+    new_tape.push_back(compiled_outputs.back());
+
+    // Replace inputs old parents with compiled_outputs
+    for (int i = 0; i < inputs.size(); ++i) {
+      auto& pairs = parents_map[inputs[i].id()];
+      pairs.erase(
+          std::remove_if(
+              pairs.begin(),
+              pairs.end(),
+              [&](auto& p) { return cache.find(p.first.id()) != cache.end(); }),
+          pairs.end());
+      for (auto& o : compiled_outputs) {
+        pairs.push_back({o, i});
+      }
+    }
 
     // - Update outputs parents to point to compiled outputs
     // - Update any overall graph outputs to be compiled outputs
