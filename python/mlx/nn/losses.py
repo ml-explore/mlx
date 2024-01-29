@@ -579,7 +579,9 @@ def margin_ranking_loss(
     """
     if not (inputs1.shape == inputs2.shape == targets.shape):
         raise ValueError(
-            f"The shapes of the arguments do not match. The provided shapes are inputs1.shape={inputs1.shape}, inputs2.shape={inputs2.shape}, and targets.shape={targets.shape}"
+            f"The shapes of the arguments do not match. The provided shapes are "
+            f"inputs1.shape={inputs1.shape}, inputs2.shape={inputs2.shape}, and "
+            f"targets.shape={targets.shape}."
         )
 
     differences = inputs1 - inputs2
