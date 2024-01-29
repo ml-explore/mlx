@@ -46,6 +46,11 @@ inline void matmul_cblas_general(
   size_t N = b.shape(-1);
   size_t K = a.shape(-1);
 
+  if (K == 0) {
+    std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
+    return;
+  }
+
   for (int i = 0; i < (a.size() / (M * K)); ++i) {
     cblas_sgemm(
         CblasRowMajor,
@@ -56,9 +61,9 @@ inline void matmul_cblas_general(
         K,
         alpha, // alpha
         a.data<float>() + elem_to_loc(M * K * i, a.shape(), a.strides()),
-        std::max(lda, 1ul),
+        lda,
         b.data<float>() + elem_to_loc(K * N * i, b.shape(), b.strides()),
-        std::max(ldb, 1ul),
+        ldb,
         beta, // beta
         out.data<float>() + M * N * i,
         out.shape(-1) // ldc
@@ -88,6 +93,11 @@ inline void matmul_bnns_general(
   size_t M = a.shape(-2);
   size_t N = b.shape(-1);
   size_t K = a.shape(-1);
+
+  if (K == 0) {
+    std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
+    return;
+  }
 
   BNNSDataType bnns_dtype = to_bnns_dtype(out.dtype());
 
