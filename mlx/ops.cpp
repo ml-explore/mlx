@@ -189,6 +189,9 @@ array full(
     const array& vals,
     Dtype dtype,
     StreamOrDevice s /* = {} */) {
+  if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
+    throw std::invalid_argument("[full] Negative dimensions not allowed.");
+  }
   auto in = broadcast_to(astype(vals, dtype, s), shape, s);
   return array(shape, dtype, std::make_unique<Full>(to_stream(s)), {in});
 }
