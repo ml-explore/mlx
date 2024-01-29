@@ -62,25 +62,36 @@ class Device {
       const std::function<std::string(const std::string&)>& lib_path_func =
           get_colocated_mtllib_path);
 
-  MTL::ComputePipelineState* get_kernel(
+  MTL::Library*
+  get_library(const std::string& name, const char* source, bool cache = true);
+
+  MTL::Library* get_library(
       const std::string& name,
-      const std::string& lib_name = "mlx");
+      const MTL::StitchedLibraryDescriptor* desc,
+      bool cache = true);
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& name,
-      const std::string& specialized_name,
-      const MTLFCList& func_consts,
-      const std::string& lib_name = "mlx");
+      MTL::Library* mtl_lib,
+      const std::string& specialized_name = "",
+      const MTLFCList& func_consts = {},
+      const MTL::LinkedFunctions* linked_functions = nullptr);
 
-  bool has_kernel(
-      const std::string& specialized_name,
-      const std::string& lib_name = "mlx");
+  MTL::ComputePipelineState* get_kernel(
+      const std::string& name,
+      const std::string& lib_name = "mlx",
+      const std::string& specialized_name = "",
+      const MTLFCList& func_consts = {},
+      const MTL::LinkedFunctions* linked_functions = nullptr);
 
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
  private:
   MTL::Library* get_library_cache_(const std::string& name);
+
+  MTL::Library* get_library_(const char* source_string);
+  MTL::Library* get_library_(const MTL::StitchedLibraryDescriptor* desc);
 
   MTL::Function* get_fuction_(const std::string& name, MTL::Library* mtl_lib);
 
