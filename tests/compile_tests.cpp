@@ -435,7 +435,19 @@ auto unary_with_two_outputs(const std::vector<array>& inputs) {
   return std::vector<array>{exp(x), sum(x)};
 }
 
-TEST_CASE("test compile tape with outside inputs") {
+auto uncompilable_inputs(const std::vector<array>& inputs) {
+  auto& x = inputs[0];
+  auto& y = inputs[1];
+  return std::vector<array>{x * abs(exp(y)), sum(x)};
+}
+
+auto uncompilable_inputs_order_matters(const std::vector<array>& inputs) {
+  auto& x = inputs[0];
+  auto& y = inputs[1];
+  return std::vector<array>{x / abs(exp(y)), sum(x)};
+}
+
+TEST_CASE("test compile tape with outside parents") {
   {
     auto cfun = compile(unary_with_two_outputs);
     auto x = array({2.0, 2.0});
@@ -445,5 +457,41 @@ TEST_CASE("test compile tape with outside inputs") {
     CHECK_EQ(typeid(p1), typeid(Exp));
     auto& p2 = out[1].primitive();
     CHECK_EQ(typeid(p2), typeid(Reduce));
+  }
+
+  {
+    auto cfun = compile(uncompilable_inputs);
+    auto x = array({2.0, 2.0});
+    auto y = array({1.6, 0.6});
+    auto outs = cfun({x, y});
+
+    // export_to_dot(std::cout, outs);
+    auto& p1 = outs[0].primitive();
+    CHECK_EQ(typeid(p1), typeid(Compiled));
+    auto& p2 = outs[1].primitive();
+    CHECK_EQ(typeid(p2), typeid(Reduce));
+    CHECK_EQ(outs[0].inputs().size(), 2);
+
+    auto expected_outs = uncompilable_inputs({x, y});
+    CHECK(allclose(outs[0], expected_outs[0]).item<bool>());
+    CHECK(allclose(outs[1], expected_outs[1]).item<bool>());
+  }
+
+  {
+    auto cfun = compile(uncompilable_inputs_order_matters);
+    auto x = array({2.0, 2.0});
+    auto y = array({1.6, 0.6});
+    auto outs = cfun({x, y});
+
+    // export_to_dot(std::cout, outs);
+    auto& p1 = outs[0].primitive();
+    CHECK_EQ(typeid(p1), typeid(Compiled));
+    auto& p2 = outs[1].primitive();
+    CHECK_EQ(typeid(p2), typeid(Reduce));
+    CHECK_EQ(outs[0].inputs().size(), 2);
+
+    auto expected_outs = uncompilable_inputs_order_matters({x, y});
+    CHECK(allclose(outs[0], expected_outs[0]).item<bool>());
+    CHECK(allclose(outs[1], expected_outs[1]).item<bool>());
   }
 }
