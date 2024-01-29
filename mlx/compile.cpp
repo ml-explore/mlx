@@ -542,9 +542,19 @@ void compile_fuse(
     std::vector<array> inputs;
     std::vector<array> fused_tape;
     recurse = [&](const array& a, int depth, const Stream& s) {
+      // Stop fusing and make input if:
+      // - Depth limit exceeded
+      // - Constant input
+      // - Stream mismatch
+      // - Non fusable primitive
+      if (depth >= max_compile_depth || !a.has_primitive() ||
+          a.primitive().stream() != s || !is_fusable(a.primitive())) {
+        return;
+      }
+
       bool all_parents_in = true;
       if (depth > 0) {
-        // Guaranteed to have a parent since is nested in the
+        // Guaranteed to have a parent since nested in the
         // recursion.
         auto& parents = parents_map.at(a.id());
         for (auto& [p, idx] : parents) {
@@ -564,24 +574,16 @@ void compile_fuse(
 
       cache.insert({a.id()});
 
-      // Stop fusing and make input if:
-      // - Depth limit exceeded
-      // - Constant input
-      // - Stream mismatch
-      // - Non fusable primitive
-      if (depth >= max_compile_depth || !a.has_primitive() ||
-          a.primitive().stream() != s || !is_fusable(a.primitive())) {
-        inputs.push_back(a);
-        return;
-      }
-
-      // Check if all parents are inside
-      // if they are recurse on it. If they aren't put it in the back
-      // of the queue and try again.
-      // Keep going until the queue size does not change.
       for (auto& in : a.inputs()) {
         recurse(in, depth + 1, s);
       }
+      for (auto& in : a.inputs()) {
+        if (cache.find(in.id()) == cache.end()) {
+          inputs.push_back(in);
+          cache.insert(in.id());
+        }
+      }
+
       fused_tape.push_back(a);
     };
 
