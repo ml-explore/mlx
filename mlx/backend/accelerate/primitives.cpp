@@ -50,6 +50,8 @@ DEFAULT(LogicalNot)
 DEFAULT(LogicalAnd)
 DEFAULT(LogicalOr)
 DEFAULT(LogAddExp)
+DEFAULT(Maximum)
+DEFAULT(Minimum)
 DEFAULT(NotEqual)
 DEFAULT(Pad)
 DEFAULT(Partition)
@@ -393,47 +395,6 @@ void Log1p::eval_cpu(const std::vector<array>& inputs, array& out) {
     throw std::invalid_argument(
         "[log1p] Cannot compute log of elements in array with"
         " non floating point type.");
-  }
-}
-
-void Maximum::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-  if (out.dtype() == float32) {
-    binary(
-        a,
-        b,
-        out,
-        [](auto x, auto y) { return (x > y) ? x : y; },
-        UseDefaultBinaryOp(),
-        UseDefaultBinaryOp(),
-        [](const auto* a, const auto* b, auto* out, int n) {
-          vDSP_vmax((const float*)a, 1, (const float*)b, 1, (float*)out, 1, n);
-        });
-  } else {
-    binary(a, b, out, [](auto x, auto y) { return (x > y) ? x : y; });
-  }
-}
-
-void Minimum::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-
-  if (out.dtype() == float32) {
-    binary(
-        a,
-        b,
-        out,
-        [](auto x, auto y) { return (x < y) ? x : y; },
-        UseDefaultBinaryOp(),
-        UseDefaultBinaryOp(),
-        [](const auto* a, const auto* b, auto* out, int n) {
-          vDSP_vmin((const float*)a, 1, (const float*)b, 1, (float*)out, 1, n);
-        });
-  } else {
-    binary(a, b, out, [](auto x, auto y) { return (x < y) ? x : y; });
   }
 }
 
