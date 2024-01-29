@@ -4,10 +4,9 @@ import math
 import unittest
 from itertools import permutations
 
+import mlx.core as mx
 import mlx_tests
 import numpy as np
-
-import mlx.core as mx
 
 
 class TestOps(mlx_tests.MLXTestCase):
@@ -1775,6 +1774,16 @@ class TestOps(mlx_tests.MLXTestCase):
             np.tile,
         )
         self.assertCmpNumpy([(3,), [2, 2, 2]], mx.tile, np.tile)
+
+    def test_empty_matmuls(self):
+        a = mx.array([])
+        b = mx.array([])
+        self.assertEqual(mx.inner(a, b).item(), 0.0)
+
+        a = mx.zeros((10, 0))
+        b = mx.zeros((0, 10))
+        out = a @ b
+        self.assertTrue(mx.array_equal(out, mx.zeros((10, 10))))
 
 
 if __name__ == "__main__":

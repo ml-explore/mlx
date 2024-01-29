@@ -138,9 +138,9 @@ inline void matmul_common_general(
         K,
         alpha, // alpha
         a.data<float>() + elem_to_loc(M * K * i, a.shape(), a.strides()),
-        lda,
+        std::max(lda, 1ul),
         b.data<float>() + elem_to_loc(K * N * i, b.shape(), b.strides()),
-        ldb,
+        std::max(ldb, 1ul),
         beta, // beta
         out.data<float>() + M * N * i,
         out.shape(-1) // ldc
