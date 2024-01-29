@@ -493,3 +493,83 @@ TEST_CASE("test compile tape with outside parents") {
     CHECK(allclose(outs[1], expected_outs[1]).item<bool>());
   }
 }
+
+auto compile_accross_streams(const std::vector<array>& inputs) {
+  auto s2 = new_stream(default_device());
+  auto x = exp(abs(inputs[0]));
+  auto y = exp(abs(x, s2), s2);
+  return std::vector<array>{y};
+}
+
+TEST_CASE("test compile accross streams") {
+  auto cfun = compile(compile_accross_streams);
+  auto x = array({2.0f});
+  auto out = cfun({x})[0];
+  auto& p1 = out.primitive();
+  CHECK_EQ(typeid(p1), typeid(Compiled));
+  CHECK_EQ(out.inputs().size(), 1);
+  auto child = out.inputs()[0];
+  auto& p2 = child.primitive();
+  CHECK_EQ(typeid(p2), typeid(Compiled));
+  CHECK_EQ(child.inputs()[0].id(), x.id());
+}
+
+auto unary_compile_outputs(const std::vector<array>& inputs) {
+  auto x = abs(inputs[0]);
+  auto y = square(x);
+  return std::vector<array>{x, y};
+}
+
+auto binary_compile_outputs(const std::vector<array>& inputs) {
+  auto x = inputs[0];
+  auto y = inputs[1];
+  x = x + y;
+  y = x + y;
+  return std::vector<array>{x, y};
+}
+
+TEST_CASE("test compile internal output") {
+  {
+    auto cfun = compile(unary_compile_outputs);
+    auto x = array({3, -2});
+    auto outs = cfun({x});
+    auto& p1 = outs[0].primitive();
+    CHECK_EQ(typeid(p1), typeid(Compiled));
+    auto& p2 = outs[1].primitive();
+    CHECK_EQ(typeid(p2), typeid(Compiled));
+    CHECK_EQ(outs[0].siblings()[0].id(), outs[1].id());
+    auto expected_outs = unary_compile_outputs({x});
+    CHECK(array_equal(outs[0], expected_outs[0]).item<bool>());
+    CHECK(array_equal(outs[1], expected_outs[1]).item<bool>());
+  }
+
+  {
+    auto cfun = compile(binary_compile_outputs);
+    auto x = array({3, -2});
+    auto y = array({1, -1});
+    auto outs = cfun({x, y});
+    auto& p1 = outs[0].primitive();
+    CHECK_EQ(typeid(p1), typeid(Compiled));
+    auto& p2 = outs[1].primitive();
+    CHECK_EQ(typeid(p2), typeid(Compiled));
+    auto expected_outs = binary_compile_outputs({x, y});
+    CHECK(array_equal(outs[0], expected_outs[0]).item<bool>());
+    CHECK(array_equal(outs[1], expected_outs[1]).item<bool>());
+  }
+}
+
+auto deep_unary_compile(const std::vector<array>& inputs) {
+  auto x = inputs[0];
+  for (int i = 0; i < 10; ++i) {
+    x = cos(sin(x));
+  }
+  return std::vector<array>{x};
+}
+
+TEST_CASE("test compile deep graph") {
+  auto cfun = compile(deep_unary_compile);
+  auto x = array({3.0f, -2.0f});
+  auto out = cfun({x})[0];
+  auto expected_out = deep_unary_compile({x})[0];
+  CHECK(allclose(out, expected_out).item<bool>());
+}
