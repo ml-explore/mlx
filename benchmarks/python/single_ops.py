@@ -44,6 +44,13 @@ def time_matmul():
     time_fn(mx.matmul, a, b)
 
 
+def time_maximum():
+    a = mx.random.uniform(shape=(32, 1024, 1024))
+    b = mx.random.uniform(shape=(32, 1024, 1024))
+    mx.eval(a, b)
+    time_fn(mx.maximum, a, b)
+
+
 def time_negative():
     a = mx.random.uniform(shape=(10000, 1000))
     mx.eval(a)
@@ -101,6 +108,7 @@ if __name__ == "__main__":
 
     time_add()
     time_matmul()
+    time_maximum()
     time_exp()
     time_negative()
     time_logsumexp()
