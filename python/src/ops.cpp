@@ -3634,23 +3634,4 @@ void init_ops(py::module_& m) {
         Returns:
             array: The extracted diagonal or the constructed diagonal matrix.
         )pbdoc");
-  m.def(
-      "checkpoint",
-      [](const py::function& fun, const std::vector<array>& inputs) {
-        auto vfun = [fun](const std::vector<array>& primals) -> array {
-          py::gil_scoped_acquire gil;
-          py::args args = py::tuple(primals.size());
-          for (int i = 0; i < primals.size(); ++i) {
-            args[i] = primals[i];
-          }
-          auto out = fun(*args);
-
-          return py::cast<array>(out);
-        };
-
-        py::gil_scoped_release nogil;
-        return checkpoint(vfun, inputs);
-      },
-      "fun"_a,
-      "args"_a);
 }
