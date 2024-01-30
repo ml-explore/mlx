@@ -195,20 +195,18 @@ std::function<std::vector<array>(const std::vector<array>&)> vmap(
  * Return the results of calling fun with args but if their vjp is computed it
  * will be computed by fun_vjp.
  */
-std::vector<array> custom_vjp(
+std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::function<std::vector<array>(
         const std::vector<array>&,
         const std::vector<array>&,
-        const std::vector<array>&)> fun_vjp,
-    const std::vector<array>& args);
+        const std::vector<array>&)> fun_vjp);
 
 /**
  * Checkpoint the gradient of a function. Namely, discard all intermediate
  * state and recalculate it when we need to compute the gradient.
  */
-std::vector<array> checkpoint(
-    std::function<std::vector<array>(const std::vector<array>&)> fun,
-    const std::vector<array>& args);
+std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
+    std::function<std::vector<array>(const std::vector<array>&)> fun);
 
 } // namespace mlx::core

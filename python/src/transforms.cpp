@@ -538,37 +538,59 @@ struct PyCompiledFun {
 
 class PyCheckpointedFun {
  public:
-  PyCheckpointedFun(
-      py::function fun,
-      py::object args_structure,
-      std::weak_ptr<py::object> output_structure)
-      : fun_(std::move(fun)),
-        args_structure_(std::move(args_structure)),
-        output_structure_(output_structure) {}
+  PyCheckpointedFun(py::function fun) : fun_(std::move(fun)) {}
+
   ~PyCheckpointedFun() {
     py::gil_scoped_acquire gil;
 
     fun_.release().dec_ref();
-    args_structure_.release().dec_ref();
   }
 
-  std::vector<array> operator()(const std::vector<array>& inputs) {
-    py::gil_scoped_acquire gil;
+  struct InnerFunction {
+    py::object fun_;
+    py::object args_structure_;
+    std::weak_ptr<py::object> output_structure_;
 
-    auto args = py::cast<py::tuple>(
-        tree_unflatten_from_structure(args_structure_, inputs));
-    auto [outputs, output_structure] =
-        tree_flatten_with_structure(fun_(*args[0], **args[1]), false);
-    if (auto s = output_structure_.lock()) {
-      *s = output_structure;
+    InnerFunction(
+        py::object fun,
+        py::object args_structure,
+        std::weak_ptr<py::object> output_structure)
+        : fun_(std::move(fun)),
+          args_structure_(std::move(args_structure)),
+          output_structure_(output_structure) {}
+    ~InnerFunction() {
+      py::gil_scoped_acquire gil;
+
+      fun_.release().dec_ref();
+      args_structure_.release().dec_ref();
     }
-    return outputs;
+
+    std::vector<array> operator()(const std::vector<array>& inputs) {
+      auto args = py::cast<py::tuple>(
+          tree_unflatten_from_structure(args_structure_, inputs));
+      auto [outputs, output_structure] =
+          tree_flatten_with_structure(fun_(*args[0], **args[1]), false);
+      if (auto s = output_structure_.lock()) {
+        *s = output_structure;
+      }
+      return outputs;
+    }
+  };
+
+  py::object operator()(const py::args& args, const py::kwargs& kwargs) {
+    auto output_structure = std::make_shared<py::object>();
+    auto full_args = py::make_tuple(args, kwargs);
+    auto [inputs, args_structure] =
+        tree_flatten_with_structure(full_args, false);
+
+    auto outputs = checkpoint(
+        InnerFunction(fun_, args_structure, output_structure))(inputs);
+
+    return tree_unflatten_from_structure(*output_structure, outputs);
   }
 
  private:
   py::function fun_;
-  py::object args_structure_;
-  std::weak_ptr<py::object> output_structure_;
 };
 
 void init_transforms(py::module_& m) {
@@ -874,16 +896,7 @@ void init_transforms(py::module_& m) {
       )pbdoc");
   m.def(
       "checkpoint",
-      [](py::function fun, const py::args& args, const py::kwargs& kwargs) {
-        auto output_structure = std::make_shared<py::object>();
-        auto full_args = py::make_tuple(args, kwargs);
-        auto [inputs, args_structure] =
-            tree_flatten_with_structure(full_args, false);
-        auto ckpt_fun = PyCheckpointedFun(
-            std::move(fun), std::move(args_structure), output_structure);
-        auto outputs = checkpoint(std::move(ckpt_fun), std::move(inputs));
-        return tree_unflatten_from_structure(*output_structure, outputs);
-      },
+      [](py::function fun) { return py::cpp_function(PyCheckpointedFun{fun}); },
       "fun"_a);
 
   // Register static Python object cleanup before the interpreter exits
