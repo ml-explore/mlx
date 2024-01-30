@@ -533,16 +533,31 @@ void compile_fuse(
   std::vector<array> new_tape;
   std::unordered_set<uintptr_t> global_cache;
   for (int i = tape.size() - 1; i >= 0; --i) {
+    auto& arr = tape[i];
+
     // Already compiled
-    if (global_cache.find(tape[i].id()) != global_cache.end()) {
+    if (global_cache.find(arr.id()) != global_cache.end()) {
       continue;
     }
 
+    // Two pass recursion:
+    // First pass:
+    //  - Collect all the primitives which we can fuse with
+    //  - Keeps a cache of fusable primitives which may be added out of
+    //    DAG order. We have to determine if all of a fused primitive's
+    //    outptus are also in the fused section, and this may not be the
+    //    case the first time we visit it.
+    // Second pass:
+    //  - Collect inputs to the new compiled primitive
+    //  - Add fusable primitives to a tape in the correct order
+
     std::function<void(const array&, int, const Stream&)> recurse;
     std::unordered_set<uintptr_t> cache;
-    std::vector<array> inputs;
-    std::vector<array> fused_tape;
     recurse = [&](const array& a, int depth, const Stream& s) {
+      if (cache.find(a.id()) != cache.end()) {
+        return;
+      }
+
       // Stop fusing and make input if:
       // - Depth limit exceeded
       // - Constant input
@@ -578,41 +593,52 @@ void compile_fuse(
       for (auto& in : a.inputs()) {
         recurse(in, depth + 1, s);
       }
-      for (auto& in : a.inputs()) {
-        // Add inputs to the cache
-        if (cache.find(in.id()) == cache.end()) {
-          inputs.push_back(in);
-          cache.insert(in.id());
-        }
-      }
-
-      fused_tape.push_back(a);
     };
 
-    std::vector<array> old_outputs;
-    if (tape[i].has_primitive()) {
-      Stream s = tape[i].primitive().stream();
-      recurse(tape[i], 0, s);
-      old_outputs.push_back(tape[i]);
+    if (arr.has_primitive()) {
+      Stream s = arr.primitive().stream();
+      recurse(arr, 0, s);
     }
 
     // Not worth fusing a single primitive
-    if (fused_tape.size() <= 1) {
-      new_tape.push_back(tape[i]);
+    if (cache.size() <= 1) {
+      new_tape.push_back(arr);
       continue;
     }
 
-    // Remove inputs from the cache for later use
-    for (auto& in : inputs) {
-      cache.erase(in.id());
-    }
+    // Recurse a second time to build the tape in the right
+    // order and collect the inputs
+    std::unordered_set<uintptr_t> input_set;
+    std::vector<array> inputs;
+    std::vector<array> fused_tape;
+    std::unordered_set<uintptr_t> tape_set;
+    std::function<void(const array&)> recurse_tape;
+    recurse_tape = [&](const array& a) {
+      if (cache.find(a.id()) == cache.end()) {
+        if (input_set.find(a.id()) == input_set.end()) {
+          input_set.insert(a.id());
+          inputs.push_back(a);
+        }
+        return;
+      }
+      if (tape_set.find(a.id()) != tape_set.end()) {
+        return;
+      }
+      tape_set.insert(a.id());
+      for (auto& in : a.inputs()) {
+        recurse_tape(in);
+      }
+      fused_tape.push_back(a);
+    };
+    recurse_tape(arr);
 
+    std::vector<array> old_outputs;
     // Add to global cache and add any global outputs to outputs
     // of new primitive
     for (int j = 0; j < fused_tape.size() - 1; ++j) {
       auto& f = fused_tape[j];
       if (output_map.find(f.id()) != output_map.end()) {
-        old_outputs.insert(old_outputs.begin(), f);
+        old_outputs.push_back(f);
         // Parents are now siblings, update the parent map
         auto& pairs = parents_map[f.id()];
         pairs.erase(
@@ -626,6 +652,7 @@ void compile_fuse(
       }
       global_cache.insert({f.id()});
     }
+    old_outputs.push_back(arr);
 
     std::vector<std::vector<int>> shapes;
     std::vector<Dtype> types;
