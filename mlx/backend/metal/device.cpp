@@ -297,7 +297,7 @@ MTL::Library* Device::get_library_(const MTL::StitchedLibraryDescriptor* desc) {
   return mtl_lib;
 }
 
-MTL::Function* Device::get_fuction_(
+MTL::Function* Device::get_function_(
     const std::string& name,
     MTL::Library* mtl_lib) {
   // Pull kernel from library
@@ -307,13 +307,13 @@ MTL::Function* Device::get_fuction_(
   return mtl_function;
 }
 
-MTL::Function* Device::get_fuction_(
+MTL::Function* Device::get_function_(
     const std::string& name,
     const std::string& specialized_name,
     const MTLFCList& func_consts,
     MTL::Library* mtl_lib) {
-  if (func_consts.empty()) {
-    return get_fuction_(name, mtl_lib);
+  if (func_consts.empty() && (specialized_name == name)) {
+    return get_function_(name, mtl_lib);
   }
 
   // Prepare function constants
@@ -323,16 +323,21 @@ MTL::Function* Device::get_fuction_(
     mtl_func_consts->setConstantValue(value, type, index);
   }
 
+  // Prepare function desc
+  auto desc = MTL::FunctionDescriptor::functionDescriptor();
+  desc->setName(NS::String::string(name.c_str(), NS::ASCIIStringEncoding));
+  desc->setSpecializedName(
+      NS::String::string(specialized_name.c_str(), NS::ASCIIStringEncoding));
+  desc->setConstantValues(mtl_func_consts);
+
   // Pull kernel from library
   NS::Error* error = nullptr;
-  auto ns_name = NS::String::string(name.c_str(), NS::ASCIIStringEncoding);
-  auto mtl_function = mtl_lib->newFunction(ns_name, mtl_func_consts, &error);
+  auto mtl_function = mtl_lib->newFunction(desc, &error);
 
   // Throw error if unable to build metal function
   if (!mtl_function) {
     std::ostringstream msg;
-    msg << "[metal::Device] Unable to load function " << specialized_name
-        << "\n";
+    msg << "[metal::Device] Unable to load function " << name << "\n";
     if (error) {
       msg << error->localizedDescription()->utf8String() << "\n";
     }
@@ -340,6 +345,7 @@ MTL::Function* Device::get_fuction_(
   }
 
   mtl_func_consts->release();
+  desc->release();
 
   return mtl_function;
 }
@@ -444,13 +450,30 @@ MTL::Library* Device::get_library(
   return mtl_lib;
 }
 
-MTL::LinkedFunctions* get_linked_functions(
+MTL::Function* Device::get_function(
+    const std::string& base_name,
+    MTL::Library* mtl_lib,
+    const std::string& specialized_name /* = "" */,
+    const MTLFCList& func_consts /* = {} */) {
+  return get_function_(base_name, specialized_name, func_consts, mtl_lib);
+}
+
+MTL::Function* Device::get_function(
+    const std::string& base_name,
+    const std::string& lib_name /* = "mlx" */,
+    const std::string& specialized_name /*  = "" */,
+    const MTLFCList& func_consts /* = {} */) {
+  // Search for cached metal lib
+  MTL::Library* mtl_lib = get_library_cache_(lib_name);
+
+  return get_function(base_name, mtl_lib, specialized_name, func_consts);
+}
+
+MTL::LinkedFunctions* Device::get_linked_functions(
     const std::vector<MTL::Function*>& funcs) {
   if (funcs.empty()) {
     return nullptr;
   }
-
-  auto pool = new_scoped_memory_pool();
 
   auto lfuncs = MTL::LinkedFunctions::linkedFunctions();
 
@@ -463,30 +486,28 @@ MTL::LinkedFunctions* get_linked_functions(
 
   lfuncs->setPrivateFunctions(funcs_arr);
 
-  funcs_arr->release();
-
   return lfuncs;
 }
 
 MTL::ComputePipelineState* Device::get_kernel(
-    const std::string& name,
+    const std::string& base_name,
     MTL::Library* mtl_lib,
-    const std::string& specialized_name /* = "" */,
+    const std::string& hash_name /* = "" */,
     const MTLFCList& func_consts /* = {} */,
     const MTL::LinkedFunctions* linked_functions /* = nullptr */) {
   auto pool = new_scoped_memory_pool();
 
   // Look for cached kernel
-  const auto& kname = specialized_name.empty() ? name : specialized_name;
+  const auto& kname = hash_name.empty() ? base_name : hash_name;
   if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
     return it->second;
   }
 
   // Pull kernel from library
-  auto mtl_function = get_fuction_(name, kname, func_consts, mtl_lib);
+  auto mtl_function = get_function_(base_name, kname, func_consts, mtl_lib);
 
   // Compile kernel to compute pipeline
-  auto kernel = get_kernel_(name, mtl_function, linked_functions);
+  auto kernel = get_kernel_(kname, mtl_function, linked_functions);
   mtl_function->release();
 
   // Add kernel to cache
@@ -495,13 +516,13 @@ MTL::ComputePipelineState* Device::get_kernel(
 }
 
 MTL::ComputePipelineState* Device::get_kernel(
-    const std::string& name,
+    const std::string& base_name,
     const std::string& lib_name /* = "mlx" */,
-    const std::string& specialized_name /*  = "" */,
+    const std::string& hash_name /*  = "" */,
     const MTLFCList& func_consts /*  = {} */,
     const MTL::LinkedFunctions* linked_functions /*  = nullptr */) {
   // Look for cached kernel
-  const auto& kname = specialized_name.size() == 0 ? name : specialized_name;
+  const auto& kname = hash_name.size() == 0 ? base_name : hash_name;
   if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
     return it->second;
   }
@@ -509,7 +530,7 @@ MTL::ComputePipelineState* Device::get_kernel(
   // Search for cached metal lib
   MTL::Library* mtl_lib = get_library_cache_(lib_name);
 
-  return get_kernel(name, mtl_lib, kname, func_consts, linked_functions);
+  return get_kernel(base_name, mtl_lib, kname, func_consts, linked_functions);
 }
 
 Device& device(mlx::core::Device) {

@@ -72,20 +72,32 @@ class Device {
       const MTL::StitchedLibraryDescriptor* desc,
       bool cache = true);
 
+  MTL::Function* get_function(
+      const std::string& base_name,
+      MTL::Library* mtl_lib,
+      const std::string& specialized_name = "",
+      const MTLFCList& func_consts = {});
+
+  MTL::Function* get_function(
+      const std::string& base_name,
+      const std::string& lib_name = "mlx",
+      const std::string& specialized_name = "",
+      const MTLFCList& func_consts = {});
+
   MTL::LinkedFunctions* get_linked_functions(
       const std::vector<MTL::Function*>& funcs);
 
   MTL::ComputePipelineState* get_kernel(
-      const std::string& name,
+      const std::string& base_name,
       MTL::Library* mtl_lib,
-      const std::string& specialized_name = "",
+      const std::string& hash_name = "",
       const MTLFCList& func_consts = {},
       const MTL::LinkedFunctions* linked_functions = nullptr);
 
   MTL::ComputePipelineState* get_kernel(
-      const std::string& name,
+      const std::string& base_name,
       const std::string& lib_name = "mlx",
-      const std::string& specialized_name = "",
+      const std::string& hash_name = "",
       const MTLFCList& func_consts = {},
       const MTL::LinkedFunctions* linked_functions = nullptr);
 
@@ -98,9 +110,9 @@ class Device {
   MTL::Library* get_library_(const char* source_string);
   MTL::Library* get_library_(const MTL::StitchedLibraryDescriptor* desc);
 
-  MTL::Function* get_fuction_(const std::string& name, MTL::Library* mtl_lib);
+  MTL::Function* get_function_(const std::string& name, MTL::Library* mtl_lib);
 
-  MTL::Function* get_fuction_(
+  MTL::Function* get_function_(
       const std::string& name,
       const std::string& specialized_name,
       const MTLFCList& func_consts,
@@ -119,7 +131,6 @@ class Device {
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
   std::unordered_map<int32_t, MTL::ComputeCommandEncoder*> encoder_map_;
-  std::unordered_map<std::string, MTL::Function*> function_map_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
   std::mutex mtx_;
