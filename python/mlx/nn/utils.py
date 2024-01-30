@@ -29,6 +29,7 @@ def value_and_grad(model: Module, fn: Callable):
 
     value_grad_fn = mx.value_and_grad(inner_fn)
 
+    @wraps(fn)
     def wrapped_value_grad_fn(*args, **kwargs):
         value, grad = value_grad_fn(model.trainable_parameters(), *args, **kwargs)
         return value, grad
@@ -36,51 +37,29 @@ def value_and_grad(model: Module, fn: Callable):
     return wrapped_value_grad_fn
 
 
-def maybe_checkpoint(fn: Callable):
-    """Transform the passed function ``fn`` to a function that optionally
-    performs gradient checkpointing.
-
-    If the function's first argument is a module (always true when it is a
-    method) then the checkpointing considers the module's parameters.
-
-    To check if checkpointing needs to be applied, the transformed function
-    looks at the ``checkpoint`` keyword argument or the ``checkpoint``
-    attribute in case it is a module call.
+def checkpoint(module: Module, fn: Callable):
+    """Transform the passed callable to one that performs gradient
+    checkpointing with respect to the trainable parameters of the module (and
+    the callable's inputs).
 
     Args:
-        fn (Callable): The function to be checkpointed
+        module (mlx.nn.Module): The module for whose parameters we will be
+            performing gradient checkpointing.
+        fn (Callable): The function to checkpoint.
 
     Returns:
-        A function that maybe applies gradient checkpointing when calling
-        ``fn``
+        A callable that saves the inputs and outputs during the forward pass
+        and recomputes all intermediate states during the backward pass.
     """
 
+    def inner_fn(params, *args, **kwargs):
+        module.update(params)
+        return fn(*args, **kwargs)
+
+    checkpointed_fn = mx.checkpoint(inner_fn)
+
     @wraps(fn)
-    def checkpointable_fn(*args, **kwargs):
-        checkpoint = False
-        module = None
-        if isinstance(args[0], Module):
-            module = args[0]
-            if hasattr(module, "checkpoint"):
-                checkpoint = module.checkpoint
-            else:
-                checkpoint = kwargs.pop("checkpoint", False)
-        else:
-            checkpoint = kwargs.pop("checkpoint", False)
+    def wrapped_checkpointed_fn(*args, **kwargs):
+        return checkpointed_fn(module.trainable_parameters(), *args, **kwargs)
 
-        if not checkpoint:
-            return fn(*args, **kwargs)
-
-        if module is not None:
-
-            def pure_module_call(params, *args, **kwargs):
-                module.update(params)
-                return fn(module, *args, **kwargs)
-
-            return mx.checkpoint(
-                pure_module_call, module.parameters(), *args[1:], **kwargs
-            )
-        else:
-            return mx.checkpoint(fn, *args, **kwargs)
-
-    return checkpointable_fn
+    return wrapped_checkpointed_fn

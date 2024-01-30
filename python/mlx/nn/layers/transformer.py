@@ -9,7 +9,7 @@ from mlx.nn.layers.base import Module
 from mlx.nn.layers.dropout import Dropout
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.normalization import LayerNorm
-from mlx.nn.utils import maybe_checkpoint
+from mlx.nn.utils import checkpoint
 
 
 class MultiHeadAttention(Module):
@@ -130,7 +130,6 @@ class TransformerEncoderLayer(Module):
         self.activation = activation
         self.norm_first = norm_first
 
-    @maybe_checkpoint
     def __call__(self, x, mask):
         if self.norm_first:
             y = self.ln1(x)
@@ -183,7 +182,10 @@ class TransformerEncoder(Module):
 
     def __call__(self, x, mask):
         for l in self.layers:
-            x = l(x, mask, checkpoint=self.checkpoint)
+            if self.checkpoint:
+                x = checkpoint(l, l)(x, mask)
+            else:
+                x = l(x, mask)
         return self.ln(x)
 
 
@@ -212,7 +214,6 @@ class TransformerDecoderLayer(Module):
         self.activation = activation
         self.norm_first = norm_first
 
-    @maybe_checkpoint
     def __call__(self, x, memory, x_mask, memory_mask):
         if self.norm_first:
             y = self.ln1(x)
@@ -274,7 +275,10 @@ class TransformerDecoder(Module):
 
     def __call__(self, x, memory, x_mask, memory_mask):
         for l in self.layers:
-            x = l(x, memory, x_mask, memory_mask, checkpoint=self.checkpoint)
+            if self.checkpoint:
+                x = checkpoint(l, l)(x, memory, x_mask, memory_mask)
+            else:
+                x = l(x, memory, x_mask, memory_mask)
         return self.ln(x)
 
 
