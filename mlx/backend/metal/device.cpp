@@ -450,6 +450,8 @@ MTL::LinkedFunctions* get_linked_functions(
     return nullptr;
   }
 
+  auto pool = new_scoped_memory_pool();
+
   auto lfuncs = MTL::LinkedFunctions::linkedFunctions();
 
   std::vector<NS::Object*> objs(funcs.size());
