@@ -190,6 +190,18 @@ class TestCompile(mlx_tests.MLXTestCase):
         n_enable_compiled = count_prims(cfun(x))
         self.assertEqual(n_compiled, n_enable_compiled)
 
+    def test_compile_two_input_grad(self):
+        def loss(w, x):
+            y = x * w
+            return (y * mx.exp(y)).sum()
+
+        x = mx.array([1.0, 0.5, 2.0, -0.5])
+        w = mx.array([-1.0, 0.3, 1.0, -0.9])
+
+        expected_grad = mx.grad(loss)(w, x)
+        compiled_grad = mx.compile(mx.grad(loss))(w, x)
+        self.assertTrue(mx.allclose(expected_grad, compiled_grad))
+
 
 if __name__ == "__main__":
     unittest.main()
