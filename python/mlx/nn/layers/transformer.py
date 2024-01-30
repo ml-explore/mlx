@@ -183,7 +183,7 @@ class TransformerEncoder(Module):
     def __call__(self, x, mask):
         for l in self.layers:
             if self.checkpoint:
-                x = checkpoint(l, l)(x, mask)
+                x = checkpoint(l)(x, mask)
             else:
                 x = l(x, mask)
         return self.ln(x)
@@ -276,7 +276,7 @@ class TransformerDecoder(Module):
     def __call__(self, x, memory, x_mask, memory_mask):
         for l in self.layers:
             if self.checkpoint:
-                x = checkpoint(l, l)(x, memory, x_mask, memory_mask)
+                x = checkpoint(l)(x, memory, x_mask, memory_mask)
             else:
                 x = l(x, memory, x_mask, memory_mask)
         return self.ln(x)

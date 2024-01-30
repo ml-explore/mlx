@@ -37,7 +37,7 @@ def value_and_grad(model: Module, fn: Callable):
     return wrapped_value_grad_fn
 
 
-def checkpoint(module: Module, fn: Callable):
+def checkpoint(module: Module, fn: Callable = None):
     """Transform the passed callable to one that performs gradient
     checkpointing with respect to the trainable parameters of the module (and
     the callable's inputs).
@@ -45,12 +45,17 @@ def checkpoint(module: Module, fn: Callable):
     Args:
         module (mlx.nn.Module): The module for whose parameters we will be
             performing gradient checkpointing.
-        fn (Callable): The function to checkpoint.
+        fn (Callable, optional): The function to checkpoint. If not provided it
+            defaults to the provided module.
 
     Returns:
         A callable that saves the inputs and outputs during the forward pass
         and recomputes all intermediate states during the backward pass.
     """
+    if fn is None:
+        # Capturing module instead of module.__call__ allows someone to
+        # monkey-patch __call__ later on and the correct method will be used
+        fn = module
 
     def inner_fn(params, *args, **kwargs):
         module.update(params)
