@@ -3579,9 +3579,7 @@ void init_ops(py::module_& m) {
       )pbdoc");
   m.def(
       "diagonal",
-      [](const array& a, int offset, int axis1, int axis2, StreamOrDevice s) {
-        return diagonal(a, offset, axis1, axis2, s);
-      },
+      &diagonal,
       "a"_a,
       "offset"_a = 0,
       "axis1"_a = 0,
@@ -3590,48 +3588,50 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         diagonal(a: array, offset: int = 0, axis1: int = 0, axis2: int = 1, stream: Union[None, Stream, Device] = None) -> array
 
-        Return specified diagonals
-        If `a` is 2-D, then a 1-D array containing the diagonal and of the
-        same type as `a` is returned unless `a` is a `matrix`, in which case
-        a 1-D array rather than a (2-D) `matrix` is returned in order to
-        maintain backward compatibility.
+        Return specified diagonals.
 
-        If ``a.ndim > 2``, then the dimensions specified by `axis1` and `axis2`
-        are removed, and a new axis inserted at the end corresponding to the
-        diagonal.
+        If ``a`` is 2-D, then a 1-D array containing the diagonal at the given
+        ``offset`` is returned.
+
+        If ``a`` has more than two dimensions, then ``axis1`` and ``axis2``
+        determine the 2D subarrays from which diagonals are extracted. The new
+        shape is the original shape with ``axis1`` and ``axis2`` removed and a
+        new dimension inserted at the end corresponding to the diagonal.
 
         Args:
           a (array): Input array
           offset (int, optional): Offset of the diagonal from the main diagonal.
             Can be positive or negative. Default: ``0``.
-          axis1 (int, optional): Axis to be used as the first axis of the 2-D sub-arrays from which
+          axis1 (int, optional): The first axis of the 2-D sub-arrays from which
               the diagonals should be taken. Default: ``0``.
-          axis2 (int, optional): Axis to be used as the second axis of the 2-D sub-arrays from which
+          axis2 (int, optional): The second axis of the 2-D sub-arrays from which
               the diagonals should be taken. Default: ``1``.
 
         Returns:
-            array: The diagonal array.
-
+            array: The diagonals of the array.
       )pbdoc");
   m.def(
       "diag",
-      [](const array& a, int k, StreamOrDevice s) { return diag(a, k, s); },
+      &diag,
       "a"_a,
       py::pos_only(),
       "k"_a = 0,
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        diag(a: array, /, k: int = 0, *, stream: Union[None, Stream, Device] = None) -> array 
-        
-        Extract a diagonal or construct a diagonal array.
+        diag(a: array, /, k: int = 0, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Extract a diagonal or construct a diagonal matrix.
+        If ``a`` is 1-D then a diagonal matrix is constructed with ``a`` on the
+        :math:`k`-th diagonal. If ``a`` is 2-D then the :math:`k`-th diagonal is
+        returned.
 
         Args:
-            a (array): Input array.
-            k (int, optional): Which diagonal to extract or construct. Default is 0.
-            stream (StreamOrDevice, optional): The stream or device to use for the operation.
+            a (array): 1-D or 2-D input array.
+            k (int, optional): The diagonal to extract or construct.
+                Default: ``0``.
 
         Returns:
-            array: The extracted diagonal or the constructed diagonal array.
+            array: The extracted diagonal or the constructed diagonal matrix.
         )pbdoc");
 }
