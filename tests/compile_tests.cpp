@@ -573,3 +573,17 @@ TEST_CASE("test compile deep graph") {
   auto expected_out = deep_unary_compile({x})[0];
   CHECK(allclose(out, expected_out).item<bool>());
 }
+
+auto repeat_input_to_compiled(const std::vector<array>& inputs) {
+  auto x = abs(exp(inputs[0]));
+  auto y = abs(exp(sum(x)));
+  return std::vector<array>{x + y};
+}
+
+TEST_CASE("test compile repeat input") {
+  auto cfun = compile(repeat_input_to_compiled);
+  auto x = array({3.0f, -2.0f});
+  auto out = cfun({x})[0];
+  auto expected_out = repeat_input_to_compiled({x})[0];
+  CHECK(allclose(out, expected_out).item<bool>());
+}

@@ -579,6 +579,7 @@ void compile_fuse(
         recurse(in, depth + 1, s);
       }
       for (auto& in : a.inputs()) {
+        // Add inputs to the cache
         if (cache.find(in.id()) == cache.end()) {
           inputs.push_back(in);
           cache.insert(in.id());
@@ -599,6 +600,11 @@ void compile_fuse(
     if (fused_tape.size() <= 1) {
       new_tape.push_back(tape[i]);
       continue;
+    }
+
+    // Remove inputs from the cache for later use
+    for (auto& in : inputs) {
+      cache.erase(in.id());
     }
 
     // Add to global cache and add any global outputs to outputs
