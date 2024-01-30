@@ -62,13 +62,18 @@ class Device {
       const std::function<std::string(const std::string&)>& lib_path_func =
           get_colocated_mtllib_path);
 
-  MTL::Library*
-  get_library(const std::string& name, const char* source, bool cache = true);
+  MTL::Library* get_library(
+      const std::string& name,
+      const char* source_string,
+      bool cache = true);
 
   MTL::Library* get_library(
       const std::string& name,
       const MTL::StitchedLibraryDescriptor* desc,
       bool cache = true);
+
+  MTL::LinkedFunctions* get_linked_functions(
+      const std::vector<MTL::Function*>& funcs);
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& name,

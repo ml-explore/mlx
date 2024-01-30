@@ -444,6 +444,28 @@ MTL::Library* Device::get_library(
   return mtl_lib;
 }
 
+MTL::LinkedFunctions* get_linked_functions(
+    const std::vector<MTL::Function*>& funcs) {
+  if (funcs.empty()) {
+    return nullptr;
+  }
+
+  auto lfuncs = MTL::LinkedFunctions::linkedFunctions();
+
+  std::vector<NS::Object*> objs(funcs.size());
+  for (int i = 0; i < funcs.size(); i++) {
+    objs[i] = funcs[i];
+  }
+
+  NS::Array* funcs_arr = NS::Array::array(objs.data(), funcs.size());
+
+  lfuncs->setPrivateFunctions(funcs_arr);
+
+  funcs_arr->release();
+
+  return lfuncs;
+}
+
 MTL::ComputePipelineState* Device::get_kernel(
     const std::string& name,
     MTL::Library* mtl_lib,
