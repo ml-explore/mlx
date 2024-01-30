@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-24 Apple Inc.
 
 #include <dlfcn.h>
 #include <cstdlib>
@@ -255,10 +255,11 @@ MTL::Library* Device::get_library_cache_(const std::string& lib_name) {
   return mtl_lib;
 }
 
-MTL::Library* Device::get_library_(const char* source_string) {
+MTL::Library* Device::get_library_(const std::string& source_string) {
   auto pool = new_scoped_memory_pool();
 
-  auto ns_code = NS::String::string(source_string, NS::ASCIIStringEncoding);
+  auto ns_code =
+      NS::String::string(source_string.c_str(), NS::ASCIIStringEncoding);
 
   NS::Error* error = nullptr;
   auto mtl_lib = device_->newLibrary(ns_code, nullptr, &error);
@@ -414,7 +415,7 @@ MTL::ComputePipelineState* Device::get_kernel_(
 
 MTL::Library* Device::get_library(
     const std::string& name,
-    const char* source,
+    const std::string& source,
     bool cache /* = true */) {
   if (cache) {
     if (auto it = library_map_.find(name); it != library_map_.end()) {
@@ -469,7 +470,7 @@ MTL::Function* Device::get_function(
   return get_function(base_name, mtl_lib, specialized_name, func_consts);
 }
 
-MTL::LinkedFunctions* Device::get_linked_functions(
+MTL::LinkedFunctions* Device::get_linked_functions_(
     const std::vector<MTL::Function*>& funcs) {
   if (funcs.empty()) {
     return nullptr;
@@ -494,7 +495,7 @@ MTL::ComputePipelineState* Device::get_kernel(
     MTL::Library* mtl_lib,
     const std::string& hash_name /* = "" */,
     const MTLFCList& func_consts /* = {} */,
-    const MTL::LinkedFunctions* linked_functions /* = nullptr */) {
+    const std::vector<MTL::Function*>& linked_functions /* = {} */) {
   auto pool = new_scoped_memory_pool();
 
   // Look for cached kernel
@@ -507,8 +508,10 @@ MTL::ComputePipelineState* Device::get_kernel(
   auto mtl_function = get_function_(base_name, kname, func_consts, mtl_lib);
 
   // Compile kernel to compute pipeline
-  auto kernel = get_kernel_(kname, mtl_function, linked_functions);
+  auto mtl_linked_funcs = get_linked_functions_(linked_functions);
+  auto kernel = get_kernel_(kname, mtl_function, mtl_linked_funcs);
   mtl_function->release();
+  mtl_linked_funcs->release();
 
   // Add kernel to cache
   kernel_map_.insert({kname, kernel});
@@ -520,7 +523,7 @@ MTL::ComputePipelineState* Device::get_kernel(
     const std::string& lib_name /* = "mlx" */,
     const std::string& hash_name /*  = "" */,
     const MTLFCList& func_consts /*  = {} */,
-    const MTL::LinkedFunctions* linked_functions /*  = nullptr */) {
+    const std::vector<MTL::Function*>& linked_functions /*  = {} */) {
   // Look for cached kernel
   const auto& kname = hash_name.size() == 0 ? base_name : hash_name;
   if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {

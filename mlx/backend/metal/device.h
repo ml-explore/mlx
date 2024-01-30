@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-24 Apple Inc.
 
 #pragma once
 
@@ -64,7 +64,7 @@ class Device {
 
   MTL::Library* get_library(
       const std::string& name,
-      const char* source_string,
+      const std::string& source_string,
       bool cache = true);
 
   MTL::Library* get_library(
@@ -84,22 +84,19 @@ class Device {
       const std::string& specialized_name = "",
       const MTLFCList& func_consts = {});
 
-  MTL::LinkedFunctions* get_linked_functions(
-      const std::vector<MTL::Function*>& funcs);
-
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
       MTL::Library* mtl_lib,
       const std::string& hash_name = "",
       const MTLFCList& func_consts = {},
-      const MTL::LinkedFunctions* linked_functions = nullptr);
+      const std::vector<MTL::Function*>& linked_functions = {});
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
       const std::string& lib_name = "mlx",
       const std::string& hash_name = "",
       const MTLFCList& func_consts = {},
-      const MTL::LinkedFunctions* linked_functions = nullptr);
+      const std::vector<MTL::Function*>& linked_functions = {});
 
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
@@ -107,7 +104,7 @@ class Device {
  private:
   MTL::Library* get_library_cache_(const std::string& name);
 
-  MTL::Library* get_library_(const char* source_string);
+  MTL::Library* get_library_(const std::string& source_string);
   MTL::Library* get_library_(const MTL::StitchedLibraryDescriptor* desc);
 
   MTL::Function* get_function_(const std::string& name, MTL::Library* mtl_lib);
@@ -117,6 +114,9 @@ class Device {
       const std::string& specialized_name,
       const MTLFCList& func_consts,
       MTL::Library* mtl_lib);
+
+  MTL::LinkedFunctions* get_linked_functions_(
+      const std::vector<MTL::Function*>& funcs);
 
   MTL::ComputePipelineState* get_kernel_(
       const std::string& name,
