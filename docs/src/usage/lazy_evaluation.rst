@@ -20,7 +20,7 @@ Transforming Compute Graphs
 
 Lazy evaluation let's us record a compute graph without actually doing any
 computations. This is useful for function transformations like :func:`grad` and
-:func:`vmap` and graph optimizations like :func:`simplify`.
+:func:`vmap` and graph optimizations.
 
 Currently, MLX does not compile and rerun compute graphs. They are all
 generated dynamically. However, lazy evaluation makes it much easier to
