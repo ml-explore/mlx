@@ -675,17 +675,14 @@ void init_array(py::module_& m) {
           "nbytes",
           &array::nbytes,
           R"pbdoc(The number of bytes in the array.)pbdoc")
-      // TODO, this makes a deep copy of the shape
-      // implement alternatives to use reference
-      // https://pybind11.readthedocs.io/en/stable/advanced/cast/stl.html
       .def_property_readonly(
           "shape",
-          [](const array& a) { return a.shape(); },
+          [](const array& a) { return py::tuple(py::cast(a.shape())); },
           R"pbdoc(
           The shape of the array as a Python list.
 
           Returns:
-            list(int): A list containing the sizes of each dimension.
+            tuple(int): A tuple containing the sizes of each dimension.
         )pbdoc")
       .def_property_readonly(
           "dtype",
