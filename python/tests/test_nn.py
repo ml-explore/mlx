@@ -136,20 +136,20 @@ class TestLayers(mlx_tests.MLXTestCase):
         inputs = mx.zeros((10, 4))
         layer = nn.Identity()
         outputs = layer(inputs)
-        self.assertEqual(tuple(inputs.shape), tuple(outputs.shape))
+        self.assertEqual(inputs.shape, outputs.shape)
 
     def test_linear(self):
         inputs = mx.zeros((10, 4))
         layer = nn.Linear(input_dims=4, output_dims=8)
         outputs = layer(inputs)
-        self.assertEqual(tuple(outputs.shape), (10, 8))
+        self.assertEqual(outputs.shape, (10, 8))
 
     def test_bilinear(self):
         inputs1 = mx.zeros((10, 2))
         inputs2 = mx.zeros((10, 4))
         layer = nn.Bilinear(input1_dims=2, input2_dims=4, output_dims=6)
         outputs = layer(inputs1, inputs2)
-        self.assertEqual(tuple(outputs.shape), (10, 6))
+        self.assertEqual(outputs.shape, (10, 6))
 
     def test_group_norm(self):
         x = mx.arange(100, dtype=mx.float32)
@@ -573,12 +573,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         c = nn.Conv1d(in_channels=C_in, out_channels=C_out, kernel_size=ks)
         c.weight = mx.ones_like(c.weight)
         y = c(x)
-        self.assertEqual(y.shape, [N, L - ks + 1, C_out])
+        self.assertEqual(y.shape, (N, L - ks + 1, C_out))
         self.assertTrue(mx.allclose(y, mx.full(y.shape, ks * C_in, mx.float32)))
 
         c = nn.Conv1d(in_channels=C_in, out_channels=C_out, kernel_size=ks, stride=2)
         y = c(x)
-        self.assertEqual(y.shape, [N, (L - ks + 1) // 2, C_out])
+        self.assertEqual(y.shape, (N, (L - ks + 1) // 2, C_out))
         self.assertTrue("bias" in c.parameters())
 
         c = nn.Conv1d(in_channels=C_in, out_channels=C_out, kernel_size=ks, bias=False)
@@ -588,7 +588,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         x = mx.ones((4, 8, 8, 3))
         c = nn.Conv2d(3, 1, 8)
         y = c(x)
-        self.assertEqual(y.shape, [4, 1, 1, 1])
+        self.assertEqual(y.shape, (4, 1, 1, 1))
         c.weight = mx.ones_like(c.weight) / 8 / 8 / 3
         y = c(x)
         self.assertTrue(np.allclose(y[:, 0, 0, 0], x.mean(axis=(1, 2, 3))))
@@ -596,13 +596,13 @@ class TestLayers(mlx_tests.MLXTestCase):
         # 3x3 conv no padding stride 1
         c = nn.Conv2d(3, 8, 3)
         y = c(x)
-        self.assertEqual(y.shape, [4, 6, 6, 8])
+        self.assertEqual(y.shape, (4, 6, 6, 8))
         self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
 
         # 3x3 conv padding 1 stride 1
         c = nn.Conv2d(3, 8, 3, padding=1)
         y = c(x)
-        self.assertEqual(y.shape, [4, 8, 8, 8])
+        self.assertEqual(y.shape, (4, 8, 8, 8))
         self.assertLess(mx.abs(y[:, 1:7, 1:7] - c.weight.sum((1, 2, 3))).max(), 1e-4)
         self.assertLess(
             mx.abs(y[:, 0, 0] - c.weight[:, 1:, 1:].sum(axis=(1, 2, 3))).max(),
@@ -624,14 +624,14 @@ class TestLayers(mlx_tests.MLXTestCase):
         # 3x3 conv no padding stride 2
         c = nn.Conv2d(3, 8, 3, padding=0, stride=2)
         y = c(x)
-        self.assertEqual(y.shape, [4, 3, 3, 8])
+        self.assertEqual(y.shape, (4, 3, 3, 8))
         self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
 
     def test_sequential(self):
         x = mx.ones((10, 2))
         m = nn.Sequential(nn.Linear(2, 10), nn.ReLU(), nn.Linear(10, 1))
         y = m(x)
-        self.assertEqual(y.shape, [10, 1])
+        self.assertEqual(y.shape, (10, 1))
         params = m.parameters()
         self.assertTrue("layers" in params)
         self.assertEqual(len(params["layers"]), 3)
@@ -667,7 +667,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         x = mx.arange(10)
         y = m(x)
 
-        self.assertEqual(y.shape, [10, 16])
+        self.assertEqual(y.shape, (10, 16))
         similarities = y @ y.T
         self.assertLess(
             mx.abs(similarities[mx.arange(10), mx.arange(10)] - 1).max(), 1e-5
@@ -686,19 +686,19 @@ class TestLayers(mlx_tests.MLXTestCase):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.relu(x)
         self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0])))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_leaky_relu(self):
         x = mx.array([1.0, -1.0, 0.0])
         y = nn.leaky_relu(x)
         self.assertTrue(mx.array_equal(y, mx.array([1.0, -0.01, 0.0])))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
         y = nn.LeakyReLU(negative_slope=0.1)(x)
         self.assertTrue(mx.array_equal(y, mx.array([1.0, -0.1, 0.0])))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_elu(self):
@@ -707,21 +707,21 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([1.0, -0.6321, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
         y = nn.ELU(alpha=1.1)(x)
         epsilon = 1e-4
         expected_y = mx.array([1.0, -0.6953, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_relu6(self):
         x = mx.array([1.0, -1.0, 0.0, 7.0, -7.0])
         y = nn.relu6(x)
         self.assertTrue(mx.array_equal(y, mx.array([1.0, 0.0, 0.0, 6.0, 0.0])))
-        self.assertEqual(y.shape, [5])
+        self.assertEqual(y.shape, (5,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_softmax(self):
@@ -730,7 +730,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([0.6652, 0.0900, 0.2447])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_softplus(self):
@@ -739,7 +739,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([1.3133, 0.3133, 0.6931])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_softsign(self):
@@ -748,7 +748,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([0.5, -0.5, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_softshrink(self):
@@ -772,13 +772,13 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([1.0, -0.6321, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
         y = nn.CELU(alpha=1.1)(x)
         expected_y = mx.array([1.0, -0.6568, 0.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_log_softmax(self):
@@ -787,7 +787,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([-2.4076, -1.4076, -0.4076])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_log_sigmoid(self):
@@ -796,7 +796,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([-0.3133, -1.3133, -0.6931])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [3])
+        self.assertEqual(y.shape, (3,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_prelu(self):
@@ -817,7 +817,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         epsilon = 1e-4
         expected_y = mx.array([0.0, -0.375, 0.0, 1.125, 3.0])
         self.assertTrue(mx.all(mx.abs(y - expected_y) < epsilon))
-        self.assertEqual(y.shape, [5])
+        self.assertEqual(y.shape, (5,))
         self.assertEqual(y.dtype, mx.float32)
 
     def test_glu(self):

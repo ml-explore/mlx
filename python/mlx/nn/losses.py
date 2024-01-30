@@ -70,8 +70,9 @@ def cross_entropy(
     targets_as_probs = targets.ndim == logits.ndim
 
     def _drop_dim(shape, axis):
+        shape = list(shape)
         shape.pop(axis)
-        return shape
+        return tuple(shape)
 
     # Check shapes in two cases: targets as class indices and targets as probabilities
     if (targets_as_probs and targets.shape != logits.shape) or (
