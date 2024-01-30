@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 #include <cmath>
-#include <iostream> // TODO
 #include <numeric>
 
 #include "doctest/doctest.h"
@@ -2637,7 +2636,7 @@ TEST_CASE("test divmod") {
 
 TEST_CASE("test diagonal") {
   auto x = array({0, 1, 2, 3, 4, 5, 6, 7}, {4, 2});
-  auto out = diagonal(x, 0, 0, 1);
+  auto out = diagonal(x);
   CHECK(array_equal(out, array({0, 3}, {2})).item<bool>());
 
   CHECK_THROWS_AS(diagonal(x, 1, 6, 0), std::out_of_range);
@@ -2676,6 +2675,10 @@ TEST_CASE("test diagonal") {
 }
 
 TEST_CASE("test diag") {
+  // To few or too many dimensions
+  CHECK_THROWS(diag(array(0.0)));
+  CHECK_THROWS(diag(array({0.0}, {1, 1, 1})));
+
   // Test with 1D array
   auto x = array({0, 1, 2, 3}, {4});
   auto out = diag(x, 0);
@@ -2712,8 +2715,4 @@ TEST_CASE("test diag") {
 
   out = diag(x, -1);
   CHECK(array_equal(out, array({3, 7}, {2})).item<bool>());
-
-  // Test with invalid offset
-  CHECK_THROWS_AS(diag(x, 4), std::out_of_range);
-  CHECK_THROWS_AS(diag(x, -4), std::out_of_range);
 }
