@@ -256,3 +256,21 @@ inline bfloat16_t log1p(bfloat16_t x) {
 
   return bfloat16_t(x * (metal::log(xp1) / (xp1 - 1.0f)));
 }
+
+///////////////////////////////////////////////////////////////////////////////
+// SIMD shuffle ops
+///////////////////////////////////////////////////////////////////////////////
+
+inline uint64_t simd_shuffle_down(uint64_t data, uint16_t delta) {
+  return as_type<uint64_t>(
+      metal::simd_shuffle_down(as_type<uint2>(data), delta));
+}
+
+inline int64_t simd_shuffle_down(int64_t data, uint16_t delta) {
+  return as_type<int64_t>(
+      metal::simd_shuffle_down(as_type<uint2>(data), delta));
+}
+
+inline bool simd_shuffle_down(bool data, uint16_t delta) {
+  return simd_shuffle_down(static_cast<uint32_t>(data), delta);
+}
