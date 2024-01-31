@@ -465,8 +465,8 @@ class Lion(Optimizer):
 
     .. math::
 
-        c_{t + 1} &= \beta_1 m_t + (1 - \beta_1) g_t
-        m_{t + 1} &= \beta_2 m_t + (1 - \beta_2) g_t
+        c_{t + 1} &= \beta_1 m_t + (1 - \beta_1) g_t \\
+        m_{t + 1} &= \beta_2 m_t + (1 - \beta_2) g_t \\
         w_{t + 1} &= w_t - \eta (\text{sign}(c_t) + \lambda w_t)
 
     Args:
