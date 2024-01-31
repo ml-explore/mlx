@@ -40,22 +40,18 @@ void all_reduce_dispatch(
     MTL::ComputeCommandEncoder* compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  // Get kernel and encode buffers
-
   Dtype out_dtype = out.dtype();
   bool is_out_64b_int = is_64b_int(out_dtype);
-  std::string kernel_name =
-      (is_out_64b_int) ? "all_reduce_no_atomics_" : "all_reduce_";
-  kernel_name += (op_name + type_to_name(in));
+  auto kernel = (is_out_64b_int)
+      ? d.get_kernel("all_reduce_no_atomics_" + op_name + type_to_name(in))
+      : d.get_kernel("all_reduce_" + op_name + type_to_name(in));
 
-  auto kernel = d.get_kernel(kernel_name);
+  compute_encoder->setComputePipelineState(kernel);
 
   // We make sure each thread has enough to do by making it read in
   // at least n_reads inputs
   int n_reads = REDUCE_N_READS;
-
   size_t in_size = in.size();
-  size_t intermediate_size;
 
   // mod_in_size gives us the groups of n_reads needed to go over the entire
   // input
@@ -72,33 +68,32 @@ void all_reduce_dispatch(
   n_thread_groups = std::min(n_thread_groups, 1024u);
   uint nthreads = n_thread_groups * thread_group_size;
 
-  array* output = &out;
-
-  // Allocate intermediate array to store partial reduction results
-  std::vector<array> intermediates;
-  if (is_out_64b_int && n_thread_groups > 1) {
-    intermediate_size = n_thread_groups;
-    array intermediate =
-        array({static_cast<int>(intermediate_size)}, out_dtype, nullptr, {});
-    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
-    intermediates.push_back(intermediate);
-    output = &intermediate;
-  }
-
-  // First compute dispatch
-  compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in, 0);
-  set_array_buffer(compute_encoder, *output, 1);
-  compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
-
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
 
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  // Encode buffers and dispatch
+  if (is_out_64b_int == false || n_thread_groups == 1) {
+    set_array_buffer(compute_encoder, in, 0);
+    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
 
-  if (is_out_64b_int && n_thread_groups > 1) {
+  } else {
+    // Allocate intermediate array to store partial reduction results
+    size_t intermediate_size = n_thread_groups;
+    array intermediate =
+        array({static_cast<int>(intermediate_size)}, out_dtype, nullptr, {});
+    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+    std::vector<array> intermediates = {intermediate};
+
+    // First dispatch
+    set_array_buffer(compute_encoder, in, 0);
+    set_array_buffer(compute_encoder, intermediate, 1);
+    compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
+
     // Second pass to reduce intermediate reduction results written to DRAM
-    set_array_buffer(compute_encoder, intermediates.front(), 0);
+    set_array_buffer(compute_encoder, intermediate, 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 2);
 
@@ -113,13 +108,15 @@ void all_reduce_dispatch(
     // If the number of thread groups needed exceeds 1024, we reuse threads
     // groups
     nthreads = thread_group_size;
-
     group_dims = MTL::Size(thread_group_size, 1, 1);
     grid_dims = MTL::Size(nthreads, 1, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
+
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [intermediates](MTL::CommandBuffer*) mutable {
+          intermediates.clear();
+        });
   }
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [intermediates](MTL::CommandBuffer*) mutable { intermediates.clear(); });
 }
 
 void row_reduce_general_dispatch(
@@ -133,11 +130,12 @@ void row_reduce_general_dispatch(
     const Stream& s) {
   Dtype out_dtype = out.dtype();
   bool is_out_64b_int = is_64b_int(out_dtype);
+  auto kernel = (is_out_64b_int)
+      ? d.get_kernel(
+            "row_reduce_general_no_atomics_" + op_name + type_to_name(in))
+      : d.get_kernel("row_reduce_general_" + op_name + type_to_name(in));
 
-  std::string kernel_name = (is_out_64b_int) ? "row_reduce_general_no_atomics_"
-                                             : "row_reduce_general_";
-  kernel_name += (op_name + type_to_name(in));
-  auto kernel = d.get_kernel(kernel_name);
+  compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
   int n_reads = REDUCE_N_READS;
@@ -162,31 +160,6 @@ void row_reduce_general_dispatch(
   }
   int ndim = shape.size();
 
-  array* output = &out;
-
-  // Allocate intermediate array to store partial reduction results
-  std::vector<array> intermediates;
-  if (is_out_64b_int && non_row_reductions > 1) {
-    array intermediate = array(
-        {static_cast<int>(out.size()), static_cast<int>(non_row_reductions)},
-        out_dtype,
-        nullptr,
-        {});
-    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
-    intermediates.push_back(intermediate);
-    output = &intermediate;
-  }
-
-  // Set the arguments for the kernel
-  compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in, 0);
-  set_array_buffer(compute_encoder, *output, 1);
-  compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
-  compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
-  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
-  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
-  compute_encoder->setBytes(&ndim, sizeof(int), 6);
-
   // Each thread group is responsible for 1 output
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   thread_group_size =
@@ -203,12 +176,40 @@ void row_reduce_general_dispatch(
   MTL::Size grid_dims = MTL::Size(n_threads, non_row_reductions, 1);
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
 
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  if (is_out_64b_int == false || non_row_reductions == 1) {
+    // Set the arguments for the kernel
+    set_array_buffer(compute_encoder, in, 0);
+    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+    compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+    compute_encoder->setBytes(
+        strides.data(), strides.size() * sizeof(size_t), 5);
+    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
 
-  // Second pass to reduce intermediate results written to DRAM
-  // This dispatch reduces row reduction results of non row dimensions that need
-  // to be reduced.
-  if (is_out_64b_int && non_row_reductions > 1) {
+  } else {
+    // Allocate intermediate array to store partial reduction results
+    array intermediate = array(
+        {static_cast<int>(out.size()), static_cast<int>(non_row_reductions)},
+        out_dtype,
+        nullptr,
+        {});
+    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+    std::vector<array> intermediates = {intermediate};
+
+    // Set the arguments for the kernel
+    set_array_buffer(compute_encoder, in, 0);
+    set_array_buffer(compute_encoder, intermediate, 1);
+    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+    compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+    compute_encoder->setBytes(
+        strides.data(), strides.size() * sizeof(size_t), 5);
+    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
+
+    // Set up second dispatch
     reduction_size = non_row_reductions;
     out_size = 1;
 
@@ -222,11 +223,10 @@ void row_reduce_general_dispatch(
     for (int i = new_shape.size() - 2; i >= 0; i--) {
       new_strides[i] = new_shape[i + 1] * new_strides[i + 1];
     }
-
     ndim = new_shape.size();
 
     // Set the arguments for the kernel
-    set_array_buffer(compute_encoder, intermediates.front(), 0);
+    set_array_buffer(compute_encoder, intermediate, 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
@@ -252,9 +252,12 @@ void row_reduce_general_dispatch(
     group_dims = MTL::Size(thread_group_size, 1, 1);
 
     compute_encoder->dispatchThreads(grid_dims, group_dims);
+
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [intermediates](MTL::CommandBuffer*) mutable {
+          intermediates.clear();
+        });
   }
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [intermediates](MTL::CommandBuffer*) mutable { intermediates.clear(); });
 }
 
 void strided_reduce_general_dispatch(
@@ -268,11 +271,12 @@ void strided_reduce_general_dispatch(
     const Stream& s) {
   Dtype out_dtype = out.dtype();
   bool is_out_64b_int = is_64b_int(out_dtype);
+  auto kernel = (is_out_64b_int)
+      ? d.get_kernel(
+            "col_reduce_general_no_atomics_" + op_name + type_to_name(in))
+      : d.get_kernel("col_reduce_general_" + op_name + type_to_name(in));
 
-  std::string kernel_name = (is_out_64b_int) ? "col_reduce_general_no_atomics_"
-                                             : "col_reduce_general_";
-  kernel_name += (op_name + type_to_name(in));
-  auto kernel = d.get_kernel(kernel_name);
+  compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
   size_t reduction_size = plan.shape.back();
@@ -323,12 +327,38 @@ void strided_reduce_general_dispatch(
   uint n_threadgroups_y =
       (n_threads_per_output + threadgroup_dim_y - 1) / threadgroup_dim_y;
 
-  array* output = &out;
+  // Launch enough thread groups for each output
+  MTL::Size grid_dims =
+      MTL::Size(n_threadgroups_x, n_threadgroups_y, non_col_reductions);
+  MTL::Size group_dims = MTL::Size(threadgroup_dim_x, threadgroup_dim_y, 1);
 
-  // Allocate intermediate array to store reduction results from all thread
-  // groups
-  std::vector<array> intermediates;
-  if (is_out_64b_int) {
+  if (is_out_64b_int == false) {
+    // Set the arguments for the kernel
+    set_array_buffer(compute_encoder, in, 0);
+    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+    compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
+    compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 5);
+    compute_encoder->setBytes(
+        strides.data(), strides.size() * sizeof(size_t), 6);
+    compute_encoder->setBytes(&ndim, sizeof(int), 7);
+
+    // We set shared memory to be exploited here for reductions within a
+    // threadgroup - each thread must be able to update its accumulated output
+    // Note: Each threadgroup should have 32kB of data in threadgroup memory
+    //       and threadgroup_dim_x * threadgroup_dim_y <= 1024 by design
+    //       This should be fine for floats, but we might need to revisit
+    //       if we ever come to doubles. In that case, we should also cut
+    //       down the number of threads we launch in a threadgroup
+    compute_encoder->setThreadgroupMemoryLength(
+        safe_divup(threadgroup_dim_x * threadgroup_dim_y * out.itemsize(), 16),
+        0);
+    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+
+  } else {
+    // Allocate intermediate array to store reduction results from all thread
+    // groups
     array intermediate = array(
         {static_cast<int>(out.size()),
          static_cast<int>(n_threadgroups_y * non_col_reductions)},
@@ -336,39 +366,31 @@ void strided_reduce_general_dispatch(
         nullptr,
         {});
     intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
-    intermediates.push_back(intermediate);
-    output = &intermediate;
-  }
+    std::vector<array> intermediates = {intermediate};
 
-  // Set the arguments for the kernel
-  compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, in, 0);
-  set_array_buffer(compute_encoder, *output, 1);
-  compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
-  compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
-  compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
-  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 5);
-  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 6);
-  compute_encoder->setBytes(&ndim, sizeof(int), 7);
+    // Set the arguments for the kernel
+    set_array_buffer(compute_encoder, in, 0);
+    set_array_buffer(compute_encoder, intermediate, 1);
+    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+    compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
+    compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 5);
+    compute_encoder->setBytes(
+        strides.data(), strides.size() * sizeof(size_t), 6);
+    compute_encoder->setBytes(&ndim, sizeof(int), 7);
 
-  // Launch enough thread groups for each output
-  MTL::Size grid_dims =
-      MTL::Size(n_threadgroups_x, n_threadgroups_y, non_col_reductions);
-  MTL::Size group_dims = MTL::Size(threadgroup_dim_x, threadgroup_dim_y, 1);
+    // We set shared memory to be exploited here for reductions within a
+    // threadgroup - each thread must be able to update its accumulated output
+    // Note: Each threadgroup should have 32kB of data in threadgroup memory
+    //       and threadgroup_dim_x * threadgroup_dim_y <= 1024 by design
+    //       This should be fine for floats, but we might need to revisit
+    //       if we ever come to doubles. In that case, we should also cut
+    //       down the number of threads we launch in a threadgroup
+    compute_encoder->setThreadgroupMemoryLength(
+        safe_divup(threadgroup_dim_x * threadgroup_dim_y * out.itemsize(), 16),
+        0);
+    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 
-  // We set shared memory to be exploited here for reductions within a
-  // threadgroup - each thread must be able to update its accumulated output
-  // Note: Each threadgroup should have 32kB of data in threadgroup memory
-  //       and threadgroup_dim_x * threadgroup_dim_y <= 1024 by design
-  //       This should be fine for floats, but we might need to revisit
-  //       if we ever come to doubles. In that case, we should also cut
-  //       down the number of threads we launch in a threadgroup
-  compute_encoder->setThreadgroupMemoryLength(
-      safe_divup(threadgroup_dim_x * threadgroup_dim_y * out.itemsize(), 16),
-      0);
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
-
-  if (is_out_64b_int) {
     // Perform second pass of reductions
     // Reduce results of threadgroups along y, z from first pass, that
     // collectively work on each output element.
@@ -389,9 +411,9 @@ void strided_reduce_general_dispatch(
 
     auto row_reduce_kernel = d.get_kernel(
         "row_reduce_general_no_atomics_" + op_name +
-        type_to_name(intermediates.front()));
+        type_to_name(intermediate));
     compute_encoder->setComputePipelineState(row_reduce_kernel);
-    set_array_buffer(compute_encoder, intermediates.front(), 0);
+    set_array_buffer(compute_encoder, intermediate, 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
@@ -420,9 +442,12 @@ void strided_reduce_general_dispatch(
     group_dims = MTL::Size(thread_group_size, 1, 1);
 
     compute_encoder->dispatchThreads(grid_dims, group_dims);
+
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [intermediates](MTL::CommandBuffer*) mutable {
+          intermediates.clear();
+        });
   }
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [intermediates](MTL::CommandBuffer*) mutable { intermediates.clear(); });
 }
 
 } // namespace
