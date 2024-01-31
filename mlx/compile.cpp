@@ -636,6 +636,9 @@ void compile_fuse(
         it->second = compiled_outputs[o];
       }
     }
+
+    // TODO remove inner fused arays parents from the parents map to leave
+    // it in a valid state
   }
 
   std::reverse(new_tape.begin(), new_tape.end());
