@@ -267,6 +267,11 @@ class array {
     return outputs;
   };
 
+  /** The depth of the array in the graph. Evaluated arrays have depth 0. */
+  uint16_t graph_depth() const {
+    return array_desc_->depth;
+  }
+
   /** Detach the array from the graph. */
   void detach();
 
@@ -376,6 +381,9 @@ class array {
     std::vector<array> siblings;
     // The arrays position in the output list
     uint32_t position{0};
+
+    // The depth of the array in the graph.
+    uint16_t depth{0};
 
     explicit ArrayDesc(const std::vector<int>& shape, Dtype dtype);
 

@@ -21,6 +21,7 @@ target_sources(tests PRIVATE
   autograd_tests.cpp
   blas_tests.cpp
   compile_tests.cpp
+  custom_vjp_tests.cpp
   creations_tests.cpp
   device_tests.cpp
   eval_tests.cpp

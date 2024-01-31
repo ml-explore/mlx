@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 #include <cmath>
@@ -35,6 +35,8 @@ DEFAULT(Broadcast)
 DEFAULT(Ceil)
 DEFAULT(Concatenate)
 DEFAULT(Copy)
+DEFAULT_MULTI(CustomVJP)
+DEFAULT_MULTI(Depends)
 DEFAULT(Equal)
 DEFAULT(Erf)
 DEFAULT(ErfInv)

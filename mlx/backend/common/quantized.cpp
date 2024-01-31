@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
-#include <iostream>
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/primitives.h"

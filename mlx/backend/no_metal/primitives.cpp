@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/primitives.h"
 
@@ -37,6 +37,8 @@ NO_GPU(Convolution)
 NO_GPU(Copy)
 NO_GPU(Cos)
 NO_GPU(Cosh)
+NO_GPU_MULTI(CustomVJP)
+NO_GPU_MULTI(Depends)
 NO_GPU(Divide)
 NO_GPU(Remainder)
 NO_GPU(Equal)

@@ -1,4 +1,5 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -7,6 +8,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -3325,6 +3327,28 @@ array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
+}
+
+std::vector<array> depends(
+    const std::vector<array>& inputs,
+    const std::vector<array>& dependencies) {
+  std::vector<array> all_inputs = inputs;
+  all_inputs.insert(all_inputs.end(), dependencies.begin(), dependencies.end());
+
+  // Compute the stream. Maybe do it in a smarter way at some point in the
+  // future.
+  Stream s = (inputs[0].has_primitive()) ? inputs[0].primitive().stream()
+                                         : to_stream({});
+  // Make the output info
+  std::vector<std::vector<int>> shapes;
+  std::vector<Dtype> dtypes;
+  for (const auto& in : inputs) {
+    shapes.emplace_back(in.shape());
+    dtypes.emplace_back(in.dtype());
+  }
+
+  return array::make_arrays(
+      shapes, dtypes, std::make_shared<Depends>(to_stream(s)), all_inputs);
 }
 
 } // namespace mlx::core

@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -550,6 +550,60 @@ class Cosh : public UnaryPrimitive {
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
+};
+
+class CustomVJP : public Primitive {
+ public:
+  explicit CustomVJP(
+      Stream stream,
+      std::function<std::vector<array>(
+          const std::vector<array>&,
+          const std::vector<array>&,
+          const std::vector<array>&)> fun)
+      : Primitive(stream), vjp_fun_(std::move(fun)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotan,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(CustomVJP);
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+
+  std::function<std::vector<array>(
+      const std::vector<array>&,
+      const std::vector<array>&,
+      const std::vector<array>&)>
+      vjp_fun_;
+};
+
+class Depends : public Primitive {
+ public:
+  explicit Depends(Stream stream) : Primitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotan,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(Depends);
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 class Divide : public UnaryPrimitive {

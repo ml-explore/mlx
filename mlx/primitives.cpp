@@ -1,4 +1,5 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -795,6 +796,43 @@ std::pair<std::vector<array>, std::vector<int>> Cosh::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
   return {{cosh(inputs[0], stream())}, axes};
+}
+
+std::vector<array> CustomVJP::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  std::vector<array> inputs(primals.begin(), primals.end() - outputs.size());
+  auto all_vjps = vjp_fun_(inputs, cotangents, outputs);
+  for (const auto& cot : cotangents) {
+    all_vjps.emplace_back(cot);
+  }
+
+  std::vector<array> vjps;
+  vjps.reserve(argnums.size());
+  for (auto arg : argnums) {
+    vjps.push_back(all_vjps[arg]);
+  }
+
+  return vjps;
+}
+
+std::vector<array> Depends::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  std::vector<array> vjps;
+
+  for (auto arg : argnums) {
+    if (arg < cotangents.size()) {
+      vjps.push_back(cotangents[arg]);
+    } else {
+      vjps.push_back(zeros_like(primals[arg]));
+    }
+  }
+  return vjps;
 }
 
 std::vector<array> Divide::vjp(
