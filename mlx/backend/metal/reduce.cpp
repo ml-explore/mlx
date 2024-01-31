@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <memory>
 #include <sstream>
 
 #include "mlx/backend/common/reduce.h"
@@ -39,7 +38,8 @@ void all_reduce_dispatch(
     array& out,
     const std::string& op_name,
     MTL::ComputeCommandEncoder* compute_encoder,
-    metal::Device& d) {
+    metal::Device& d,
+    const Stream& s) {
   // Get kernel and encode buffers
 
   Dtype out_dtype = out.dtype();
@@ -72,20 +72,17 @@ void all_reduce_dispatch(
   n_thread_groups = std::min(n_thread_groups, 1024u);
   uint nthreads = n_thread_groups * thread_group_size;
 
-  // Allocate intermediate array to store partial reduction results from all
-  // thread groups
   array* output = &out;
 
   // Allocate intermediate array to store partial reduction results
-  std::unique_ptr<array> intermediate;
-  if (is_out_64b_int) {
-    std::vector<array> inputs = {};
+  std::vector<array> intermediates;
+  if (is_out_64b_int && n_thread_groups > 1) {
     intermediate_size = n_thread_groups;
-    std::vector<int> intermediate_shape = {static_cast<int>(intermediate_size)};
-    intermediate =
-        std::make_unique<array>(intermediate_shape, out_dtype, nullptr, inputs);
-    intermediate->set_data(allocator::malloc_or_wait(intermediate->nbytes()));
-    output = intermediate.get();
+    array intermediate =
+        array({static_cast<int>(intermediate_size)}, out_dtype, nullptr, {});
+    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+    intermediates.push_back(intermediate);
+    output = &intermediate;
   }
 
   // First compute dispatch
@@ -99,9 +96,9 @@ void all_reduce_dispatch(
 
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 
-  if (is_out_64b_int) {
+  if (is_out_64b_int && n_thread_groups > 1) {
     // Second pass to reduce intermediate reduction results written to DRAM
-    set_array_buffer(compute_encoder, *intermediate, 0);
+    set_array_buffer(compute_encoder, intermediates.front(), 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 2);
 
@@ -115,14 +112,14 @@ void all_reduce_dispatch(
 
     // If the number of thread groups needed exceeds 1024, we reuse threads
     // groups
-    n_thread_groups = safe_div(mod_in_size, thread_group_size);
-    n_thread_groups = std::min(n_thread_groups, 1024u);
-    nthreads = n_thread_groups * thread_group_size;
+    nthreads = thread_group_size;
 
     group_dims = MTL::Size(thread_group_size, 1, 1);
     grid_dims = MTL::Size(nthreads, 1, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [intermediates](MTL::CommandBuffer*) mutable { intermediates.clear(); });
 }
 
 void row_reduce_general_dispatch(
@@ -132,7 +129,8 @@ void row_reduce_general_dispatch(
     const ReductionPlan& plan,
     const std::vector<int>& axes,
     MTL::ComputeCommandEncoder* compute_encoder,
-    metal::Device& d) {
+    metal::Device& d,
+    const Stream& s) {
   Dtype out_dtype = out.dtype();
   bool is_out_64b_int = is_64b_int(out_dtype);
 
@@ -167,15 +165,16 @@ void row_reduce_general_dispatch(
   array* output = &out;
 
   // Allocate intermediate array to store partial reduction results
-  std::unique_ptr<array> intermediate;
+  std::vector<array> intermediates;
   if (is_out_64b_int && non_row_reductions > 1) {
-    std::vector<array> inputs = {};
-    std::vector<int> intermediate_shape = {
-        static_cast<int>(out.size()), static_cast<int>(non_row_reductions)};
-    intermediate =
-        std::make_unique<array>(intermediate_shape, out_dtype, nullptr, inputs);
-    intermediate->set_data(allocator::malloc_or_wait(intermediate->nbytes()));
-    output = intermediate.get();
+    array intermediate = array(
+        {static_cast<int>(out.size()), static_cast<int>(non_row_reductions)},
+        out_dtype,
+        nullptr,
+        {});
+    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+    intermediates.push_back(intermediate);
+    output = &intermediate;
   }
 
   // Set the arguments for the kernel
@@ -227,7 +226,7 @@ void row_reduce_general_dispatch(
     ndim = new_shape.size();
 
     // Set the arguments for the kernel
-    set_array_buffer(compute_encoder, *intermediate, 0);
+    set_array_buffer(compute_encoder, intermediates.front(), 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
@@ -254,6 +253,8 @@ void row_reduce_general_dispatch(
 
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [intermediates](MTL::CommandBuffer*) mutable { intermediates.clear(); });
 }
 
 void strided_reduce_general_dispatch(
@@ -263,7 +264,8 @@ void strided_reduce_general_dispatch(
     const ReductionPlan& plan,
     const std::vector<int>& axes,
     MTL::ComputeCommandEncoder* compute_encoder,
-    metal::Device& d) {
+    metal::Device& d,
+    const Stream& s) {
   Dtype out_dtype = out.dtype();
   bool is_out_64b_int = is_64b_int(out_dtype);
 
@@ -325,16 +327,17 @@ void strided_reduce_general_dispatch(
 
   // Allocate intermediate array to store reduction results from all thread
   // groups
-  std::unique_ptr<array> intermediate;
+  std::vector<array> intermediates;
   if (is_out_64b_int) {
-    std::vector<array> inputs = {};
-    std::vector<int> intermediate_shape = {
-        static_cast<int>(out.size()),
-        static_cast<int>(n_threadgroups_y * non_col_reductions)};
-    intermediate =
-        std::make_unique<array>(intermediate_shape, out_dtype, nullptr, inputs);
-    intermediate->set_data(allocator::malloc_or_wait(intermediate->nbytes()));
-    output = intermediate.get();
+    array intermediate = array(
+        {static_cast<int>(out.size()),
+         static_cast<int>(n_threadgroups_y * non_col_reductions)},
+        out_dtype,
+        nullptr,
+        {});
+    intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
+    intermediates.push_back(intermediate);
+    output = &intermediate;
   }
 
   // Set the arguments for the kernel
@@ -386,9 +389,9 @@ void strided_reduce_general_dispatch(
 
     auto row_reduce_kernel = d.get_kernel(
         "row_reduce_general_no_atomics_" + op_name +
-        type_to_name(*intermediate));
+        type_to_name(intermediates.front()));
     compute_encoder->setComputePipelineState(row_reduce_kernel);
-    set_array_buffer(compute_encoder, *intermediate, 0);
+    set_array_buffer(compute_encoder, intermediates.front(), 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
@@ -418,6 +421,8 @@ void strided_reduce_general_dispatch(
 
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [intermediates](MTL::CommandBuffer*) mutable { intermediates.clear(); });
 }
 
 } // namespace
@@ -496,7 +501,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Reducing over everything and the data is all there no broadcasting or
     // slicing etc.
     if (plan.type == ContiguousAllReduce) {
-      all_reduce_dispatch(in, out, op_name, compute_encoder, d);
+      all_reduce_dispatch(in, out, op_name, compute_encoder, d, s);
     }
 
     // At least the last dimension is row contiguous and we are reducing over
@@ -504,7 +509,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     else if (
         plan.type == ContiguousReduce || plan.type == GeneralContiguousReduce) {
       row_reduce_general_dispatch(
-          in, out, op_name, plan, axes_, compute_encoder, d);
+          in, out, op_name, plan, axes_, compute_encoder, d, s);
     }
 
     // At least the last two dimensions are contiguous and we are doing a
@@ -513,7 +518,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
         plan.type == ContiguousStridedReduce ||
         plan.type == GeneralStridedReduce) {
       strided_reduce_general_dispatch(
-          in, out, op_name, plan, axes_, compute_encoder, d);
+          in, out, op_name, plan, axes_, compute_encoder, d, s);
     }
 
     if (!copies.empty()) {
