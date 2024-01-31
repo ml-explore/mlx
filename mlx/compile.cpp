@@ -15,27 +15,25 @@ namespace mlx::core {
 constexpr int max_compile_depth = 6;
 
 bool is_unary(const Primitive& p) {
-  // TODO fix this mess.
   return (
       typeid(p) == typeid(Abs) || typeid(p) == typeid(ArcCos) ||
       typeid(p) == typeid(ArcCosh) || typeid(p) == typeid(ArcSin) ||
       typeid(p) == typeid(ArcSinh) || typeid(p) == typeid(ArcTan) ||
       typeid(p) == typeid(ArcTanh) || typeid(p) == typeid(AsType) ||
-      typeid(p) == typeid(Ceil) || typeid(p) == typeid(Copy) ||
-      typeid(p) == typeid(Cos) || typeid(p) == typeid(Cosh) ||
-      typeid(p) == typeid(Remainder) || typeid(p) == typeid(Erf) ||
-      typeid(p) == typeid(ErfInv) || typeid(p) == typeid(Exp) ||
-      typeid(p) == typeid(Floor) || typeid(p) == typeid(Log) ||
-      typeid(p) == typeid(Log1p) || typeid(p) == typeid(LogicalNot) ||
-      typeid(p) == typeid(Negative) || typeid(p) == typeid(Round) ||
-      typeid(p) == typeid(Sigmoid) || typeid(p) == typeid(Sign) ||
-      typeid(p) == typeid(Sin) || typeid(p) == typeid(Sinh) ||
-      typeid(p) == typeid(Square) || typeid(p) == typeid(Sqrt) ||
-      typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh));
+      typeid(p) == typeid(Ceil) || typeid(p) == typeid(Cos) ||
+      typeid(p) == typeid(Cosh) || typeid(p) == typeid(Remainder) ||
+      typeid(p) == typeid(Erf) || typeid(p) == typeid(ErfInv) ||
+      typeid(p) == typeid(Exp) || typeid(p) == typeid(Floor) ||
+      typeid(p) == typeid(Log) || typeid(p) == typeid(Log1p) ||
+      typeid(p) == typeid(LogicalNot) || typeid(p) == typeid(Negative) ||
+      typeid(p) == typeid(Round) || typeid(p) == typeid(Sigmoid) ||
+      typeid(p) == typeid(Sign) || typeid(p) == typeid(Sin) ||
+      typeid(p) == typeid(Sinh) || typeid(p) == typeid(Square) ||
+      typeid(p) == typeid(Sqrt) || typeid(p) == typeid(Tan) ||
+      typeid(p) == typeid(Tanh));
 }
 
 bool is_binary(const Primitive& p) {
-  // TODO fix this mess.
   return (
       typeid(p) == typeid(Add) || typeid(p) == typeid(Divide) ||
       typeid(p) == typeid(Equal) || typeid(p) == typeid(Greater) ||
@@ -52,8 +50,12 @@ bool is_broadcast(const Primitive& p) {
   return typeid(p) == typeid(Broadcast);
 }
 
+bool is_noop(const Primitive& p) {
+  return typeid(p) == typeid(Copy) || typeid(p) == typeid(StopGradient);
+}
+
 bool is_fusable(const Primitive& p) {
-  return is_unary(p) || is_binary(p) || is_broadcast(p);
+  return is_unary(p) || is_binary(p) || is_broadcast(p) || is_noop(p);
 }
 
 std::pair<std::vector<array>, std::vector<array>> convert_trace_to_real(
@@ -444,7 +446,7 @@ void compile_simplify(
     return pa.is_equivalent(pb);
   };
 
-  // Pass 0: merge scalars
+  // Merge scalars
   std::vector<array> new_tape;
   for (auto& arr : tape) {
     // Check if we can merge scalars
@@ -458,14 +460,13 @@ void compile_simplify(
     }
     new_tape.push_back(std::move(arr));
   }
-
   tape = std::move(new_tape);
 
   std::unordered_set<uintptr_t> output_set;
   for (auto& o : outputs) {
     output_set.insert(o.id());
   }
-  // Pass 1..passes: merge only keeping non-orphaned arrays in the tape
+  // Multi-pass merge only keeping non-orphaned arrays in the tape
   for (int pass = 0; pass < passes; ++pass) {
     for (auto& arr : tape) {
       // Helper to check if we can merge the parents of the
@@ -696,6 +697,9 @@ void compile_fuse(
         it->second = compiled_outputs[o];
       }
     }
+
+    // TODO remove inner fused arays parents from the parents map to leave
+    // it in a valid state
   }
 
   std::reverse(new_tape.begin(), new_tape.end());
