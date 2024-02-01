@@ -3,7 +3,9 @@
 #include <iostream>
 #include <sstream>
 
+#include "mlx/backend/metal/compiled_preamble.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/utils.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 
@@ -50,30 +52,12 @@ std::string build_kernel_name(
 std::string build_kernel(
     const std::string& kernel_name,
     const std::vector<array>& inputs,
-    const std::vector<array>& real_inputs,
     const std::vector<array>& outputs,
     const std::vector<array>& tape,
     bool contiguous) {
   // All outputs should have the exact same shape and will be row contiguous
   auto output_shape = outputs[0].shape();
   auto output_strides = outputs[0].strides();
-
-  // Constant means we already have the scalar value so include it in the
-  // kernel as a constant.
-  auto is_constant = [](const array& x) {
-    return x.is_evaled() && x.size() == 1;
-  };
-  auto print_constant = [](std::ostream& os, const array& x) {
-    const auto default_precision{os.precision()};
-    switch (x.dtype()) {
-      case float32:
-        os << std::setprecision(std::numeric_limits<float>::digits10 + 1)
-           << x.item<float>() << std::setprecision(default_precision);
-        break;
-      default:
-        throw std::runtime_error("Not implemented");
-    }
-  };
 
   // For scalar we shouldn't do the indexing things, just read at 0
   auto is_scalar = [](const array& x) { return x.size() == 1; };
@@ -88,41 +72,39 @@ std::string build_kernel(
   std::ostringstream os;
   NodeNamer namer;
   bool add_indices = false;
+  int cnt = 0;
 
   // Start the kernel
-  os << "[[kernel]] void " << kernel_name << "(" << std::endl;
+  os << "[[host_name(\"" << kernel_name << "\")]]" << std::endl
+     << "[[kernel]] void " << kernel_name << "(" << std::endl;
 
   // Add the input arguments
-  for (int i = 0; i < inputs.size(); i++) {
-    auto& x = real_inputs[i];
-    auto& tx = inputs[i];
-    auto& xname = namer.get_name(tx);
-
-    // // Constants need no argument
-    // if (is_constant(tx)) {
-    //   continue;
-    // }
+  for (auto& x : inputs) {
+    auto& xname = namer.get_name(x);
 
     // Scalars and contiguous need no strides
-    if (is_scalar(x) || contiguous) { // is_contiguous(x)) {
+    if (is_scalar(x) || contiguous) {
       os << "    device const " << get_type_string(x.dtype()) << "* " << xname
-         << "," << std::endl;
+         << " [[buffer(" << cnt++ << ")]]," << std::endl;
     } else {
       add_indices = true;
       os << "    device const " << get_type_string(x.dtype()) << "* " << xname
-         << "," << std::endl
-         << "    constant const size_t* " << xname << "_strides," << std::endl;
+         << " [[buffer(" << cnt++ << ")]]," << std::endl
+         << "    constant const size_t* " << xname << "_strides [[buffer("
+         << cnt++ << ")]]," << std::endl;
     }
   }
 
   // Add the output arguments
   for (auto& x : outputs) {
     os << "    device " << get_type_string(x.dtype()) << "* "
-       << namer.get_name(x) << "," << std::endl;
+       << namer.get_name(x) << " [[buffer(" << cnt++ << ")]]," << std::endl;
   }
   if (add_indices) {
-    os << "    constant size_t* output_strides," << std::endl
-       << "    constant int* output_shape," << std::endl;
+    os << "    constant size_t* output_strides [[buffer(" << cnt++ << ")]],"
+       << std::endl
+       << "    constant int* output_shape [[buffer(" << cnt++ << ")]],"
+       << std::endl;
   }
 
   // The thread index in the whole grid
@@ -138,24 +120,18 @@ std::string build_kernel(
   }
 
   // Read the inputs in tmps
-  for (int i = 0; i < inputs.size(); i++) {
-    auto& x = real_inputs[i];
-    auto& tx = inputs[i];
-    auto& xname = namer.get_name(tx);
+  for (auto& x : inputs) {
+    auto& xname = namer.get_name(x);
 
-    if (false && is_constant(tx)) {
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = ";
-      print_constant(os, x);
-      os << ";" << std::endl;
-    } else if (is_scalar(x)) {
+    if (is_scalar(x)) {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
          << xname << "[0];" << std::endl;
-    } else if (contiguous) { // is_contiguous(x)) {
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << namer.get_name(tx)
-         << " = " << namer.get_name(tx) << "[index];" << std::endl;
+    } else if (contiguous) {
+      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
+         << xname << "[index];" << std::endl;
     } else {
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << namer.get_name(tx)
-         << " = " << namer.get_name(tx) << "[";
+      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
+         << xname << "[";
       os << "index_0 * " << xname << "_strides[0]";
       for (int i = 1; i < output_shape.size(); i++) {
         os << " + index_" << i << " * " << xname << "_strides[" << i << "]";
@@ -195,44 +171,64 @@ std::string build_kernel(
 void Compiled::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  auto kernel_name = build_kernel_name(inputs_, outputs_, tape_);
-  std::cout << build_kernel(
-                   kernel_name, inputs_, inputs, outputs_, tape_, false)
-            << std::endl;
-  std::cout << build_kernel(kernel_name, inputs_, inputs, outputs_, tape_, true)
-            << std::endl;
-
-  // Just a fall-back to the original tape for now
-  std::unordered_map<uintptr_t, array> trace_to_real;
-  for (int i = 0; i < inputs.size(); ++i) {
-    trace_to_real.insert({inputs_[i].id(), inputs[i]});
-  }
-  for (int i = 0; i < outputs.size(); ++i) {
-    trace_to_real.insert({outputs_[i].id(), outputs[i]});
+  if (kernel_name_.empty()) {
+    kernel_name_ = build_kernel_name(inputs_, outputs_, tape_);
+    kernel_source_ = metal::get_kernel_preamble();
+    kernel_source_ += build_kernel(
+        kernel_name_ + "_contiguous", inputs_, outputs_, tape_, true);
+    kernel_source_ += build_kernel(
+        kernel_name_ + "_strided", inputs_, outputs_, tape_, false);
   }
 
-  for (auto& a : tape_) {
-    std::vector<array> p_inputs;
-    for (auto& in : a.inputs()) {
-      p_inputs.push_back(trace_to_real.at(in.id()));
-    }
-    // If a is an output get it from the map, otherwise create it
-    // NB this is safe as long as no multi-output sub primitves are allowed
-    // in Compiled
-    std::vector<array> p_outputs;
-    if (auto it = trace_to_real.find(a.id()); it != trace_to_real.end()) {
-      p_outputs.push_back(it->second);
-    } else {
-      p_outputs.push_back(array(a.shape(), a.dtype(), a.primitive_ptr(), {}));
-      trace_to_real.insert({a.id(), p_outputs[0]});
-    }
-    a.primitive().eval_gpu(p_inputs, p_outputs);
-  }
   auto& s = stream();
   auto& d = metal::device(s.device);
-  auto command_buffer = d.get_command_buffer(s.index);
-  command_buffer->addCompletedHandler(
-      [trace_to_real](MTL::CommandBuffer*) mutable {});
+  auto lib = d.get_library(kernel_name_, kernel_source_);
+
+  bool contiguous = true;
+  for (auto& x : inputs) {
+    if (!x.flags().row_contiguous && x.size() > 1) {
+      contiguous = false;
+      break;
+    }
+  }
+
+  auto kernel_name = kernel_name_ + ((contiguous) ? "_contiguous" : "_strided");
+  auto kernel = d.get_kernel(kernel_name, lib);
+  auto compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Allocate space for the outputs
+  for (auto& out : outputs) {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  }
+
+  // Put the inputs in
+  int cnt = 0;
+  for (auto& x : inputs) {
+    set_array_buffer(compute_encoder, x, cnt++);
+    if (!contiguous && x.size() > 1) {
+      compute_encoder->setBytes(
+          x.strides().data(), x.ndim() * sizeof(size_t), cnt++);
+    }
+  }
+
+  // Put the outputs in
+  for (auto& x : outputs) {
+    set_array_buffer(compute_encoder, x, cnt++);
+  }
+  if (!contiguous) {
+    compute_encoder->setBytes(
+        outputs[0].strides().data(), outputs[0].ndim() * sizeof(size_t), cnt++);
+    compute_encoder->setBytes(
+        outputs[0].shape().data(), outputs[0].ndim() * sizeof(int), cnt++);
+  }
+
+  // Launch the kernel
+  size_t nthreads = outputs[0].size();
+  MTL::Size grid_dims(nthreads, 1, 1);
+  MTL::Size group_dims(
+      std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
+  compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
 
 } // namespace mlx::core
