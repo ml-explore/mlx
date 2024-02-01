@@ -8,6 +8,7 @@
 #include "mlx/allocator.h"
 #include "mlx/compile.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
 
 namespace mlx::core {
@@ -58,6 +59,16 @@ bool is_fusable(const Primitive& p) {
   return is_unary(p) || is_binary(p) || is_broadcast(p) || is_noop(p);
 }
 
+namespace detail {
+
+std::vector<array> compile_replace(
+    const std::vector<array>& tape,
+    const std::vector<array>& trace_inputs,
+    const std::vector<array>& trace_outputs,
+    const std::vector<array>& inputs);
+
+} // namespace detail
+
 Compiled::Compiled(
     Stream stream,
     std::vector<array> inputs,
@@ -73,53 +84,49 @@ std::vector<array> Compiled::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  throw std::invalid_argument("[Compiled::vjp] NYI");
+  auto fun = [this](const std::vector<array>& inputs) {
+    return detail::compile_replace(tape_, inputs_, outputs_, inputs);
+  };
+
+  auto [_, vjps] = mlx::core::vjp(fun, primals, cotangents);
+  std::vector<array> vjp_outs;
+  for (int i = 0, j = 0; i < vjps.size(); ++i) {
+    if (i < argnums.size() && i == argnums[j]) {
+      vjp_outs.push_back(vjps[i]);
+      j++;
+    }
+  }
+  return vjp_outs;
 }
 
 std::vector<array> Compiled::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  throw std::invalid_argument("[Compiled::jvp] NYI");
+  auto fun = [this](const std::vector<array>& inputs) {
+    return detail::compile_replace(tape_, inputs_, outputs_, inputs);
+  };
+
+  auto [_, jvps] = mlx::core::jvp(fun, primals, tangents);
+  std::vector<array> jvp_outs;
+  for (int i = 0, j = 0; i < jvps.size(); ++i) {
+    if (i < argnums.size() && i == argnums[j]) {
+      jvp_outs.push_back(jvps[i]);
+      j++;
+    }
+  }
+  return jvp_outs;
 }
 
 std::pair<std::vector<array>, std::vector<int>> Compiled::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  // The next part is the standard vmap code, should refactor
-  std::unordered_map<std::uintptr_t, std::pair<array, int>> tmap;
-  for (int i = 0; i < inputs.size(); ++i) {
-    auto& in = inputs_[i];
-    tmap.insert({in.id(), {inputs[i], axes[i]}});
-  }
+  auto fun = [this](const std::vector<array>& inputs) {
+    return detail::compile_replace(tape_, inputs_, outputs_, inputs);
+  };
 
-  for (auto& a : tape_) {
-    std::vector<array> v_inputs;
-    std::vector<int> v_axes;
-    for (auto& in : a.inputs()) {
-      auto it = tmap.find(in.id());
-      auto& [v_in, v_ax] = it->second;
-      v_inputs.push_back(v_in);
-      v_axes.push_back(v_ax);
-    }
-
-    auto [v_outputs, v_out_axes] = a.primitive().vmap(v_inputs, v_axes);
-
-    auto outputs = a.outputs();
-    for (int i = 0; i < v_outputs.size(); ++i) {
-      tmap.insert({outputs[i].id(), {v_outputs[i], v_out_axes[i]}});
-    }
-  }
-
-  // Construct the real outputs from the non-vmapped outputs
-  std::vector<array> outputs;
-  std::vector<int> out_axes;
-  for (auto& o : outputs_) {
-    auto it = tmap.find(o.id());
-    auto& [out, ax] = it->second;
-    outputs.push_back(out);
-    out_axes.push_back(ax);
-  }
+  auto outputs = mlx::core::vmap(fun, axes)(inputs);
+  auto out_axes = std::vector<int>(outputs.size(), 0);
   return {outputs, out_axes};
 }
 
