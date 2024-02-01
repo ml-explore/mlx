@@ -73,11 +73,13 @@ Compiled::Compiled(
     Stream stream,
     std::vector<array> inputs,
     std::vector<array> outputs,
-    std::vector<array> tape)
+    std::vector<array> tape,
+    std::unordered_set<uintptr_t> constant_ids)
     : Primitive(stream),
       inputs_(std::move(inputs)),
       outputs_(std::move(outputs)),
-      tape_(std::move(tape)) {}
+      tape_(std::move(tape)),
+      constant_ids_(std::move(constant_ids)) {}
 
 std::vector<array> Compiled::vjp(
     const std::vector<array>& primals,
@@ -470,11 +472,18 @@ void compile_simplify(
 void compile_fuse(
     std::vector<array>& tape,
     ParentsMap& parents_map,
+    const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   // Track outputs to replace with new compiled outputs
   std::unordered_map<uintptr_t, array> output_map;
   for (auto& o : outputs) {
     output_map.insert({o.id(), o});
+  }
+
+  // Set of inputs to distinguish constants
+  std::unordered_set<uintptr_t> input_ids;
+  for (auto& in : inputs) {
+    input_ids.insert(in.id());
   }
 
   // Go through the tape in reverse order and check for fusable sub-graphs
@@ -608,6 +617,14 @@ void compile_fuse(
       shapes.push_back(o.shape());
       types.push_back(o.dtype());
     }
+    std::unordered_set<uintptr_t> constant_ids;
+    for (auto& in : inputs) {
+      // Scalar constant
+      if (in.size() == 1 && !in.has_primitive() &&
+          input_ids.find(in.id()) == input_ids.end()) {
+        constant_ids.insert(in.id());
+      }
+    }
     auto compiled_outputs = array::make_arrays(
         shapes,
         types,
@@ -615,7 +632,8 @@ void compile_fuse(
             outputs.back().primitive().stream(),
             inputs,
             old_outputs,
-            std::move(fused_tape)),
+            std::move(fused_tape),
+            std::move(constant_ids)),
         inputs);
 
     // One output per primitive
@@ -741,7 +759,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       // Kernel fusion to generate Compiled primitives. The tape and
       // new outputs must be updated accordingly
       if (compile_mode() != CompileMode::no_fuse) {
-        compile_fuse(entry.tape, parents_map, entry.outputs);
+        compile_fuse(entry.tape, parents_map, entry.inputs, entry.outputs);
       }
     }
 
