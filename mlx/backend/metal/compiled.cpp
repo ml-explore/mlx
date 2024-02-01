@@ -184,9 +184,18 @@ void Compiled::eval_gpu(
   auto& d = metal::device(s.device);
   auto lib = d.get_library(kernel_name_, kernel_source_);
 
+  // Allocate space for the outputs
+  for (auto& out : outputs) {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  }
+
+  // Figure out which kernel we are using
+  auto& output_shape = outputs[0].shape();
+  auto& output_strides = outputs[0].strides();
   bool contiguous = true;
   for (auto& x : inputs) {
-    if (!x.flags().row_contiguous && x.size() > 1) {
+    if ((!x.flags().row_contiguous || x.shape() != output_shape) &&
+        x.size() > 1) {
       contiguous = false;
       break;
     }
@@ -197,18 +206,23 @@ void Compiled::eval_gpu(
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
 
-  // Allocate space for the outputs
-  for (auto& out : outputs) {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
-  }
-
   // Put the inputs in
   int cnt = 0;
   for (auto& x : inputs) {
     set_array_buffer(compute_encoder, x, cnt++);
     if (!contiguous && x.size() > 1) {
+      // We need to handle broadcasting ourselves. We put 0 strides in the
+      // beginning if dims are missing and 0 strides for dims with shapes of 1.
+      std::vector<size_t> xstrides(output_shape.size() - x.ndim(), 0);
+      for (int i = 0; i < x.ndim(); i++) {
+        if (x.shape(i) == 1) {
+          xstrides.push_back(0);
+        } else {
+          xstrides.push_back(x.strides()[i]);
+        }
+      }
       compute_encoder->setBytes(
-          x.strides().data(), x.ndim() * sizeof(size_t), cnt++);
+          xstrides.data(), x.ndim() * sizeof(size_t), cnt++);
     }
   }
 
