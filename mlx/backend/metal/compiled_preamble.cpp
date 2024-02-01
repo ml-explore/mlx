@@ -4,7 +4,24 @@ namespace mlx::core::metal {
 
 const char* get_kernel_preamble() {
   return R"preamble(
+// Utils
+
+// https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html#1202
+inline float log1p(float x) {
+  float xp1 = 1.0f + x;
+  if (xp1 == metal::numeric_limits<float>::infinity()) {
+    return metal::numeric_limits<float>::infinity();
+  }
+  if (xp1 == 1.0f) {
+    return x;
+  }
+
+  return x * (metal::log(xp1) / (xp1 - 1.0f));
+}
+
+
 // Unary ops
+
 float erf(float a) {
   float r, s, t, u;
   t = metal::abs(a);

@@ -11,27 +11,78 @@
 
 namespace mlx::core {
 
-inline bool is_noop(const Primitive& p) {
+inline bool is_static_cast(const Primitive& p) {
   return (
       typeid(p) == typeid(Broadcast) || typeid(p) == typeid(Copy) ||
-      typeid(p) == typeid(StopGradient));
+      typeid(p) == typeid(StopGradient) || typeid(p) == typeid(AsType));
 }
 
 inline auto get_type_string(Dtype d) {
-  if (d == float32) {
-    return "float";
-  } else {
-    throw std::runtime_error("Unsupported type");
+  switch (d) {
+    case float32:
+      return "float";
+    case float16:
+      return "float16_t";
+    case bool_:
+      return "bool";
+    case int8:
+      return "int8_t";
+    case int16:
+      return "int16_t";
+    case int32:
+      return "int32_t";
+    case int64:
+      return "int64_t";
+    case uint8:
+      return "uint8_t";
+    case uint16:
+      return "uint16_t";
+    case uint32:
+      return "uint32_t";
+    case uint64:
+      return "uint64_t";
+    default:
+      throw std::runtime_error("Unsupported type");
   }
 }
 
-auto print_constant(std::ostream& os, const array& x) {
+template <typename T>
+void print_float_constant(std::ostream& os, const array& x) {
+  auto old_precision = os.precision();
+  os << std::setprecision(std::numeric_limits<float>::digits10 + 1)
+     << x.item<T>() << std::setprecision(old_precision);
+}
+
+template <typename T>
+void print_int_constant(std::ostream& os, const array& x) {
+  os << x.item<T>();
+}
+
+void print_constant(std::ostream& os, const array& x) {
   switch (x.dtype()) {
-    case float32: {
-      auto old_precision = os.precision();
-      os << std::setprecision(std::numeric_limits<float>::digits10 + 1)
-         << x.item<float>() << std::setprecision(old_precision);
-    } break;
+    case float16:
+      return print_float_constant<float16_t>(os, x);
+    case float32:
+      return print_float_constant<float>(os, x);
+    case int8:
+      return print_int_constant<int8_t>(os, x);
+    case int16:
+      return print_int_constant<int16_t>(os, x);
+    case int32:
+      return print_int_constant<int32_t>(os, x);
+    case int64:
+      return print_int_constant<int64_t>(os, x);
+    case uint8:
+      return print_int_constant<uint8_t>(os, x);
+    case uint16:
+      return print_int_constant<uint16_t>(os, x);
+    case uint32:
+      return print_int_constant<uint32_t>(os, x);
+    case uint64:
+      return print_int_constant<uint64_t>(os, x);
+    case bool_:
+      os << std::boolalpha << x.item<bool>();
+      return;
     default:
       throw std::runtime_error("Unsupported constant type");
   }
@@ -175,8 +226,9 @@ inline std::string build_kernel(
   for (auto& x : tape) {
     os << "  " << get_type_string(x.dtype()) << " tmp_" << namer.get_name(x)
        << " = ";
-    if (is_noop(x.primitive())) {
-      os << "tmp_" << namer.get_name(x.inputs()[0]) << ";" << std::endl;
+    if (is_static_cast(x.primitive())) {
+      os << "static_cast<" << get_type_string(x.dtype()) << ">(tmp_"
+         << namer.get_name(x.inputs()[0]) << ");" << std::endl;
     } else {
       x.primitive().print(os);
       os << "()(";
@@ -219,6 +271,7 @@ void Compiled::eval_gpu(
         tape_,
         constant_ids_,
         false);
+    // std::cout << kernel_source_ << std::endl;
   }
 
   auto& s = stream();
