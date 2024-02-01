@@ -33,5 +33,6 @@ Layers
    Sequential
    SiLU
    SinusoidalPositionalEncoding
+   Softshrink
    Step
    Transformer

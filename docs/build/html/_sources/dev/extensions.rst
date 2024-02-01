@@ -929,7 +929,7 @@ We see some modest improvements right away!
 
 This operation is now good to be used to build other operations, 
 in :class:`mlx.nn.Module` calls, and also as a part of graph 
-transformations such as :meth:`grad` and :meth:`simplify`!
+transformations like :meth:`grad`!
 
 Scripts
 -------
