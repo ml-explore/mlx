@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -359,6 +358,20 @@ bool ArgPartition::is_equivalent(const Primitive& other) const {
 bool ArgReduce::is_equivalent(const Primitive& other) const {
   const ArgReduce& r_other = static_cast<const ArgReduce&>(other);
   return reduce_type_ == r_other.reduce_type_ && axis_ == r_other.axis_;
+}
+
+std::pair<std::vector<array>, std::vector<int>> ArgReduce::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  int reduce_ax = axis_ + (axis_ >= axes[0]);
+  auto& in = inputs[0];
+  std::vector<array> out;
+  if (reduce_type_ == ArgReduce::ArgMin) {
+    out.push_back(argmin(in, reduce_ax, true, stream()));
+  } else {
+    out.push_back(argmax(in, reduce_ax, true, stream()));
+  }
+  return {out, axes};
 }
 
 std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
@@ -2153,7 +2166,36 @@ std::vector<array> Reduce::vjp(
 std::pair<std::vector<array>, std::vector<int>> Reduce::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("Reduce::vmap not yet implemented.");
+  auto ax = axes[0];
+  auto reduce_axes = axes_;
+  for (auto& rax : reduce_axes) {
+    if (rax >= ax) {
+      rax++;
+    }
+  }
+  auto& in = inputs[0];
+  std::vector<array> out;
+  switch (reduce_type_) {
+    case Reduce::And:
+      out.push_back(all(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Or:
+      out.push_back(any(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Sum:
+      out.push_back(sum(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Prod:
+      out.push_back(prod(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Min:
+      out.push_back(min(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Max:
+      out.push_back(max(in, reduce_axes, true, stream()));
+      break;
+  }
+  return {out, axes};
 }
 
 bool Reduce::is_equivalent(const Primitive& other) const {

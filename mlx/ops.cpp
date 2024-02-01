@@ -17,8 +17,7 @@ namespace {
 
 std::pair<std::vector<int>, std::vector<int>> compute_reduce_shape(
     const std::vector<int>& axes,
-    const std::vector<int>& shape,
-    bool keepdims) {
+    const std::vector<int>& shape) {
   std::set<int> axes_set;
   auto ndim = shape.size();
   for (auto ax : axes) {
@@ -38,7 +37,7 @@ std::pair<std::vector<int>, std::vector<int>> compute_reduce_shape(
   for (int i = 0; i < ndim; ++i) {
     if (axes_set.count(i) == 0) {
       out_shape.push_back(shape[i]);
-    } else if (keepdims) {
+    } else {
       out_shape.push_back(1);
     }
   }
@@ -1217,13 +1216,16 @@ array all(
   if (axes.empty()) {
     return astype(a, bool_, s);
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       bool_,
       std::make_unique<Reduce>(to_stream(s), Reduce::And, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array all(
@@ -1248,13 +1250,16 @@ array any(
   if (axes.empty()) {
     return astype(a, bool_, s);
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       bool_,
       std::make_unique<Reduce>(to_stream(s), Reduce::Or, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array any(
@@ -1279,14 +1284,17 @@ array sum(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
   auto out_type = a.dtype() == bool_ ? int32 : a.dtype();
-  return array(
+  auto out = array(
       out_shape,
       out_type,
       std::make_unique<Reduce>(to_stream(s), Reduce::Sum, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array sum(
@@ -1374,13 +1382,16 @@ array prod(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       a.dtype(),
       std::make_unique<Reduce>(to_stream(s), Reduce::Prod, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array prod(
@@ -1408,13 +1419,16 @@ array max(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       a.dtype(),
       std::make_unique<Reduce>(to_stream(s), Reduce::Max, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array max(
@@ -1442,13 +1456,16 @@ array min(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       a.dtype(),
       std::make_unique<Reduce>(to_stream(s), Reduce::Min, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array min(
@@ -1477,14 +1494,17 @@ array argmin(
     throw std::invalid_argument(
         "[argmin] Cannot argmin reduce zero size array.");
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape({axis}, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape({axis}, a.shape());
+  auto out = array(
       out_shape,
       uint32,
       std::make_unique<ArgReduce>(
           to_stream(s), ArgReduce::ArgMin, sorted_axes[0]),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array argmax(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
@@ -1505,14 +1525,17 @@ array argmax(
     throw std::invalid_argument(
         "[argmax] Cannot argmax reduce zero size array.");
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape({axis}, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape({axis}, a.shape());
+  auto out = array(
       out_shape,
       uint32,
       std::make_unique<ArgReduce>(
           to_stream(s), ArgReduce::ArgMax, sorted_axes[0]),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 /** Returns a sorted copy of the flattened array. */
