@@ -2830,7 +2830,7 @@ array conv2d(
     throw std::invalid_argument("[conv2d] Cannot handle groups != 1 yet");
   }
   if (dilation.first != 1 || dilation.second != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle dilation != 1 yet");
+    throw std::invalid_argument("[conv2d] Cannot handle dilation != 1 yet");
   }
 
   // Run checks
