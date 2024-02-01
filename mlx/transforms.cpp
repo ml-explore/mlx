@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
 #include <future>
+#include <iostream> // TODO
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -548,9 +549,8 @@ std::pair<std::vector<array>, std::vector<array>> vmap_trace(
         "[vmap] The number of in axes must match the number of inputs.");
   }
 
-  // Run the function on placeholder inputs
-  // to get the original graph
-  std::vector<array> s_inputs;
+  // Some error checking and get the vmap axis size
+  size_t vmap_ax_size;
   for (int i = 0; i < inputs.size(); ++i) {
     if (in_axes[i] != -1) {
       if (inputs[i].ndim() == 0) {
@@ -563,7 +563,26 @@ std::pair<std::vector<array>, std::vector<array>> vmap_trace(
             << inputs[i].ndim() << " dimensions.";
         throw std::invalid_argument(msg.str());
       }
+      vmap_ax_size = inputs[i].shape(in_axes[i]);
+    }
+  }
+  // Check that all vmapped axes have the same size
+  for (int i = 0; i < inputs.size(); ++i) {
+    if (in_axes[i] != -1) {
+      if (size_t in_ax = inputs[i].shape(in_axes[i]); vmap_ax_size != in_ax) {
+        std::ostringstream msg;
+        msg << "[vmap] Inconsistent axis sizes: " << in_ax << " and "
+            << vmap_ax_size << ".";
+        throw std::invalid_argument(msg.str());
+      }
+    }
+  }
 
+  // Run the function on placeholder inputs
+  // to get the original graph
+  std::vector<array> s_inputs;
+  for (int i = 0; i < inputs.size(); ++i) {
+    if (in_axes[i] != -1) {
       std::vector<int> shape = inputs[i].shape();
       shape.erase(shape.begin() + in_axes[i]);
       array in(shape, inputs[i].dtype(), nullptr, {});

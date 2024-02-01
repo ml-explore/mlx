@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -2153,7 +2152,36 @@ std::vector<array> Reduce::vjp(
 std::pair<std::vector<array>, std::vector<int>> Reduce::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("Reduce::vmap not yet implemented.");
+  auto ax = axes[0];
+  auto reduce_axes = axes_;
+  for (auto& rax : reduce_axes) {
+    if (rax >= ax) {
+      rax++;
+    }
+  }
+  auto& in = inputs[0];
+  std::vector<array> out;
+  switch (reduce_type_) {
+    case Reduce::And:
+      out.push_back(all(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Or:
+      out.push_back(any(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Sum:
+      out.push_back(sum(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Prod:
+      out.push_back(prod(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Min:
+      out.push_back(min(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Max:
+      out.push_back(max(in, reduce_axes, true, stream()));
+      break;
+  }
+  return {out, axes};
 }
 
 bool Reduce::is_equivalent(const Primitive& other) const {
