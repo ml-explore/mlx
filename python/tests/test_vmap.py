@@ -243,6 +243,16 @@ class TestVmap(mlx_tests.MLXTestCase):
         out = mx.vmap(lambda x: x.sum(axis=(0, 1)), in_axes=(2,))(a)
         self.assertTrue(mx.array_equal(out, mx.full((2,), 15)))
 
+    def test_vmap_argreduce(self):
+        a = mx.array([[1, 2, 3], [2, 3, 1]])
+        out = mx.vmap(lambda x: mx.argmin(x))(a)
+        expected = mx.array([0, 2])
+        self.assertTrue(mx.array_equal(out, expected))
+
+        out = mx.vmap(lambda x: mx.argmax(x))(a)
+        expected = mx.array([2, 1])
+        self.assertTrue(mx.array_equal(out, expected))
+
     def test_mismatch_input_sizes(self):
         a = mx.ones((10, 1))
         b = mx.ones((1, 1, 1, 5))

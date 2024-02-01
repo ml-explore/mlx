@@ -360,6 +360,20 @@ bool ArgReduce::is_equivalent(const Primitive& other) const {
   return reduce_type_ == r_other.reduce_type_ && axis_ == r_other.axis_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> ArgReduce::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  int reduce_ax = axis_ + (axis_ >= axes[0]);
+  auto& in = inputs[0];
+  std::vector<array> out;
+  if (reduce_type_ == ArgReduce::ArgMin) {
+    out.push_back(argmin(in, reduce_ax, true, stream()));
+  } else {
+    out.push_back(argmax(in, reduce_ax, true, stream()));
+  }
+  return {out, axes};
+}
+
 std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
