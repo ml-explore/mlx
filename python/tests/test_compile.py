@@ -202,6 +202,48 @@ class TestCompile(mlx_tests.MLXTestCase):
         compiled_grad = mx.compile(mx.grad(loss))(w, x)
         self.assertTrue(mx.allclose(expected_grad, compiled_grad))
 
+    def test_vmap_compiled(self):
+        def simple_unary(x):
+            return -mx.exp(x)
+
+        x = mx.array([[1.0, 2.0], [2.0, 3.0]])
+
+        expected_out = mx.vmap(simple_unary)(x)
+        out = mx.vmap(mx.compile(simple_unary))(x)
+        self.assertTrue(mx.allclose(expected_out, out))
+
+        def simple_binary(x, y):
+            return mx.abs(mx.exp(x + y) + y)
+
+        x = mx.array([[1.0, -3.0], [0.5, -0.5]])
+        y = mx.array([[2.0, -1.0], [0.25, -0.25]])
+
+        expected_out = mx.vmap(simple_binary)(x, y)
+        out = mx.vmap(mx.compile(simple_binary))(x, y)
+        self.assertTrue(mx.allclose(expected_out, out))
+
+        expected_out = mx.vmap(simple_binary, in_axes=(0, 1))(x, y)
+        out = mx.vmap(mx.compile(simple_binary), in_axes=(0, 1))(x, y)
+        self.assertTrue(mx.allclose(expected_out, out))
+
+        y = mx.array([0.25, -0.25])
+        expected_out = mx.vmap(simple_binary, in_axes=(0, None))(x, y)
+        out = mx.vmap(mx.compile(simple_binary), in_axes=(0, None))(x, y)
+        self.assertTrue(mx.allclose(expected_out, out))
+
+        def simple_unary_outer(x):
+            x = mx.abs(x)
+
+            @mx.compile
+            def simple_unary_inner(z):
+                return -mx.exp(x)
+
+            return simple_unary_inner(x)
+
+        expected_out = -mx.exp(mx.abs(x))
+        out = mx.vmap(simple_unary_outer)(x)
+        self.assertTrue(mx.allclose(expected_out, out))
+
 
 if __name__ == "__main__":
     unittest.main()
