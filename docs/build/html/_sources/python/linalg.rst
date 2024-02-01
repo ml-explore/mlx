@@ -9,3 +9,4 @@ Linear Algebra
    :toctree: _autosummary 
 
     norm
+    qr

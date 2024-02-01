@@ -40,6 +40,7 @@ model's parameters and the **optimizer state**.
    SGD
    RMSprop
    Adagrad
+   Adafactor
    AdaDelta
    Adam
    AdamW
