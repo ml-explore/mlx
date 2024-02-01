@@ -35,6 +35,8 @@ Operations
    cos
    cosh
    dequantize
+   diag
+   diagonal
    divide
    divmod
    equal
