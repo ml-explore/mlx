@@ -244,6 +244,42 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = mx.vmap(simple_unary_outer)(x)
         self.assertTrue(mx.allclose(expected_out, out))
 
+    def test_vjp_vjp_compiled(self):
+        def simple_unary(x):
+            return -mx.exp(x)
+
+        x = mx.array([[1.0, 2.0], [2.0, 3.0]])
+        y = mx.array([[1.0, 1.0], [1.0, 1.0]])
+
+        expected_out, expected_vjp_out = mx.vjp(simple_unary, (x,), (y,))
+        out, vjp_out = mx.vjp(mx.compile(simple_unary), (x,), (y,))
+        self.assertTrue(mx.allclose(expected_vjp_out[0], vjp_out[0]))
+        self.assertTrue(mx.allclose(expected_out[0], out[0]))
+
+        expected_out, expected_jvp_out = mx.jvp(simple_unary, (x,), (y,))
+        out, jvp_out = mx.jvp(mx.compile(simple_unary), (x,), (y,))
+        self.assertTrue(mx.allclose(expected_jvp_out[0], jvp_out[0]))
+        self.assertTrue(mx.allclose(expected_out[0], out[0]))
+
+        def simple_binary(x, y):
+            return mx.abs(mx.exp(x + y) + y)
+
+        x = mx.array([[1.0, -3.0], [0.5, -0.5]])
+        y = mx.array([[2.0, -1.0], [0.25, -0.25]])
+        cotans = mx.ones_like(x)
+
+        expected_out, expected_vjp_out = mx.vjp(simple_binary, (x, y), (cotans,))
+        out, vjp_out = mx.vjp(mx.compile(simple_binary), (x, y), (cotans,))
+        self.assertTrue(mx.allclose(expected_out[0], out[0]))
+        self.assertTrue(mx.allclose(expected_vjp_out[0], vjp_out[0]))
+        self.assertTrue(mx.allclose(expected_vjp_out[1], vjp_out[1]))
+
+        tans = (mx.ones_like(x), mx.ones_like(y))
+        expected_out, expected_jvp_out = mx.jvp(simple_binary, (x, y), tans)
+        out, jvp_out = mx.jvp(mx.compile(simple_binary), (x, y), tans)
+        self.assertTrue(mx.allclose(expected_jvp_out[0], jvp_out[0]))
+        self.assertTrue(mx.allclose(expected_out[0], out[0]))
+
 
 if __name__ == "__main__":
     unittest.main()
