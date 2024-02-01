@@ -11,13 +11,13 @@
 
 namespace mlx::core {
 
-bool is_noop(const Primitive& p) {
+inline bool is_noop(const Primitive& p) {
   return (
       typeid(p) == typeid(Broadcast) || typeid(p) == typeid(Copy) ||
       typeid(p) == typeid(StopGradient));
 }
 
-auto get_type_string(Dtype d) {
+inline auto get_type_string(Dtype d) {
   if (d == float32) {
     return "float";
   } else {
@@ -25,10 +25,23 @@ auto get_type_string(Dtype d) {
   }
 }
 
-std::string build_kernel_name(
+auto print_constant(std::ostream& os, const array& x) {
+  switch (x.dtype()) {
+    case float32: {
+      auto old_precision = os.precision();
+      os << std::setprecision(std::numeric_limits<float>::digits10 + 1)
+         << x.item<float>() << std::setprecision(old_precision);
+    } break;
+    default:
+      throw std::runtime_error("Unsupported constant type");
+  }
+}
+
+inline std::string build_kernel_name(
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
-    const std::vector<array>& tape) {
+    const std::vector<array>& tape,
+    const std::unordered_set<uintptr_t>& constant_ids) {
   std::ostringstream os;
 
   auto print_shape = [](std::ostream& os, const array& x) {
@@ -43,21 +56,30 @@ std::string build_kernel_name(
   os << "_OD_" << outputs[0].ndim() << "_";
 
   for (auto& x : inputs) {
+    if (constant_ids.find(x.id()) != constant_ids.end()) {
+      continue;
+    }
     os << ((x.size() == 1) ? "S" : "V");
   }
 
   return os.str();
 }
 
-std::string build_kernel(
+inline std::string build_kernel(
     const std::string& kernel_name,
     const std::vector<array>& inputs,
     const std::vector<array>& outputs,
     const std::vector<array>& tape,
+    const std::unordered_set<uintptr_t>& constant_ids,
     bool contiguous) {
   // All outputs should have the exact same shape and will be row contiguous
   auto output_shape = outputs[0].shape();
   auto output_strides = outputs[0].strides();
+
+  // Constants are scalars that are captured by value and cannot change
+  auto is_constant = [&constant_ids](const array& x) {
+    return constant_ids.find(x.id()) != constant_ids.end();
+  };
 
   // For scalar we shouldn't do the indexing things, just read at 0
   auto is_scalar = [](const array& x) { return x.size() == 1; };
@@ -81,6 +103,11 @@ std::string build_kernel(
   // Add the input arguments
   for (auto& x : inputs) {
     auto& xname = namer.get_name(x);
+
+    // Skip constants from the input list
+    if (is_constant(x)) {
+      continue;
+    }
 
     // Scalars and contiguous need no strides
     if (is_scalar(x) || contiguous) {
@@ -123,7 +150,11 @@ std::string build_kernel(
   for (auto& x : inputs) {
     auto& xname = namer.get_name(x);
 
-    if (is_scalar(x)) {
+    if (is_constant(x)) {
+      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = ";
+      print_constant(os, x);
+      os << ";" << std::endl;
+    } else if (is_scalar(x)) {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
          << xname << "[0];" << std::endl;
     } else if (contiguous) {
@@ -172,12 +203,22 @@ void Compiled::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   if (kernel_name_.empty()) {
-    kernel_name_ = build_kernel_name(inputs_, outputs_, tape_);
+    kernel_name_ = build_kernel_name(inputs_, outputs_, tape_, constant_ids_);
     kernel_source_ = metal::get_kernel_preamble();
     kernel_source_ += build_kernel(
-        kernel_name_ + "_contiguous", inputs_, outputs_, tape_, true);
+        kernel_name_ + "_contiguous",
+        inputs_,
+        outputs_,
+        tape_,
+        constant_ids_,
+        true);
     kernel_source_ += build_kernel(
-        kernel_name_ + "_strided", inputs_, outputs_, tape_, false);
+        kernel_name_ + "_strided",
+        inputs_,
+        outputs_,
+        tape_,
+        constant_ids_,
+        false);
   }
 
   auto& s = stream();
@@ -208,7 +249,11 @@ void Compiled::eval_gpu(
 
   // Put the inputs in
   int cnt = 0;
-  for (auto& x : inputs) {
+  for (int i = 0; i < inputs.size(); i++) {
+    if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
+      continue;
+    }
+    auto& x = inputs[i];
     set_array_buffer(compute_encoder, x, cnt++);
     if (!contiguous && x.size() > 1) {
       // We need to handle broadcasting ourselves. We put 0 strides in the
