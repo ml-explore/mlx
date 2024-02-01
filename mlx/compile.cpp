@@ -58,61 +58,6 @@ bool is_fusable(const Primitive& p) {
   return is_unary(p) || is_binary(p) || is_broadcast(p) || is_noop(p);
 }
 
-std::pair<std::vector<array>, std::vector<array>> convert_trace_to_real(
-    const std::vector<array>& inputs,
-    const std::vector<array>& trace_tape,
-    const std::vector<array>& trace_inputs,
-    const std::vector<array>& trace_outputs) {
-  // TODO refactor this with compile_replace
-  std::unordered_map<uintptr_t, array> trace_to_real;
-  for (int i = 0; i < trace_inputs.size(); ++i) {
-    trace_to_real.insert({trace_inputs[i].id(), inputs[i]});
-  }
-  std::vector<array> tape;
-  for (auto& a : trace_tape) {
-    // Arrays in the tape without primitives are constants
-    // and can be used directly
-    if (!a.has_primitive()) {
-      trace_to_real.insert({a.id(), a});
-      tape.push_back(a);
-    } else {
-      // Find real inputs
-      std::vector<array> real_inputs;
-      for (auto& in : a.inputs()) {
-        real_inputs.push_back(trace_to_real.at(in.id()));
-      }
-      if (a.siblings().empty()) {
-        auto real_a = array(
-            a.shape(), a.dtype(), a.primitive_ptr(), std::move(real_inputs));
-        trace_to_real.insert({a.id(), std::move(real_a)});
-        tape.push_back(real_a);
-      } else {
-        // Ensure the order is correct for multi-output primitives
-        std::vector<std::vector<int>> shapes;
-        std::vector<Dtype> types;
-        auto trace_out = a.outputs();
-        for (auto& o : trace_out) {
-          shapes.push_back(o.shape());
-          types.push_back(o.dtype());
-        }
-        auto real_out =
-            array::make_arrays(shapes, types, a.primitive_ptr(), real_inputs);
-        // TODO choose the array at the sam eposition
-        tape.push_back(real_out[0]);
-        for (int i = 0; i < trace_out.size(); ++i) {
-          trace_to_real.insert({trace_out[i].id(), std::move(real_out[i])});
-        }
-      }
-    }
-  }
-
-  std::vector<array> outputs;
-  for (auto& o : trace_outputs) {
-    outputs.push_back(trace_to_real.at(o.id()));
-  }
-  return {tape, outputs};
-}
-
 Compiled::Compiled(
     Stream stream,
     std::vector<array> inputs,
@@ -141,19 +86,14 @@ std::vector<array> Compiled::jvp(
 std::pair<std::vector<array>, std::vector<int>> Compiled::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  // Inputs are the real inputs
-  auto [s_outputs, tape] =
-      convert_trace_to_real(inputs, inputs_, tape_, outputs_);
-
   // The next part is the standard vmap code, should refactor
   std::unordered_map<std::uintptr_t, std::pair<array, int>> tmap;
   for (int i = 0; i < inputs.size(); ++i) {
-    auto in = inputs_[i];
-    // TODO this may need to be real inputs to real inputs
+    auto& in = inputs_[i];
     tmap.insert({in.id(), {inputs[i], axes[i]}});
   }
 
-  for (auto& a : tape) {
+  for (auto& a : tape_) {
     std::vector<array> v_inputs;
     std::vector<int> v_axes;
     for (auto& in : a.inputs()) {
@@ -174,7 +114,7 @@ std::pair<std::vector<array>, std::vector<int>> Compiled::vmap(
   // Construct the real outputs from the non-vmapped outputs
   std::vector<array> outputs;
   std::vector<int> out_axes;
-  for (auto& o : s_outputs) {
+  for (auto& o : outputs_) {
     auto it = tmap.find(o.id());
     auto& [out, ax] = it->second;
     outputs.push_back(out);
