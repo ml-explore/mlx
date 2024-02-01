@@ -540,7 +540,7 @@ def margin_ranking_loss(
     inputs2: mx.array,
     targets: mx.array,
     margin: float = 0.0,
-    reduction: Reduction = "mean",
+    reduction: Reduction = "none",
 ) -> mx.array:
     r"""
     Calculate the margin ranking loss that loss given inputs :math:`x_1`, :math:`x_2` and a label
@@ -562,7 +562,7 @@ def margin_ranking_loss(
         margin (float, optional): The margin by which the scores should be separated.
             Default: ``0.0``.
         reduction (str, optional): Specifies the reduction to apply to the output:
-            ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
+            ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'none'``.
 
     Returns:
         array: The computed margin ranking loss.
