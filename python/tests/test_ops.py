@@ -1661,7 +1661,7 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array(np.linspace(0, 1, 10))
         self.assertEqualArray(d, expected)
 
-        # Test irrational step size of 1/9
+        # Test num equal to 1
         d = mx.linspace(1, 10, 1)
         expected = mx.array(np.linspace(0, 1, 10))
         self.assertEqualArray(d, expected)
