@@ -12,27 +12,24 @@
 
 namespace mlx::core {
 
-struct NodeNamer {
-  std::unordered_map<std::uintptr_t, std::string> names;
-
-  std::string get_name(const array& x) {
-    auto it = names.find(x.id());
-    if (it == names.end()) {
-      // Get the next name in the sequence
-      // [A, B, ..., Z, AA, AB, ...]
-      std::vector<char> letters;
-      auto var_num = names.size() + 1;
-      while (var_num > 0) {
-        letters.push_back('A' + (var_num - 1) % 26);
-        var_num = (var_num - 1) / 26;
-      }
-      std::string name(letters.rbegin(), letters.rend());
-      names.insert({x.id(), name});
-      return name;
+const std::string& NodeNamer::get_name(const array& x) {
+  auto it = names.find(x.id());
+  if (it == names.end()) {
+    // Get the next name in the sequence
+    // [A, B, ..., Z, AA, AB, ...]
+    std::vector<char> letters;
+    auto var_num = names.size() + 1;
+    while (var_num > 0) {
+      letters.push_back('A' + (var_num - 1) % 26);
+      var_num = (var_num - 1) / 26;
     }
-    return it->second;
+    std::string name(letters.rbegin(), letters.rend());
+    names.insert({x.id(), name});
+
+    return get_name(x);
   }
-};
+  return it->second;
+}
 
 void depth_first_traversal(
     std::function<void(array)> callback,

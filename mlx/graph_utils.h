@@ -6,6 +6,12 @@
 
 namespace mlx::core {
 
+struct NodeNamer {
+  std::unordered_map<std::uintptr_t, std::string> names;
+
+  const std::string& get_name(const array& x);
+};
+
 void print_graph(std::ostream& os, const std::vector<array>& outputs);
 
 template <typename... Arrays>
