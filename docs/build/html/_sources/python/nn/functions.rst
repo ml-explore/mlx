@@ -19,5 +19,6 @@ simple functions.
    prelu
    relu
    selu
+   softshrink
    silu
    step

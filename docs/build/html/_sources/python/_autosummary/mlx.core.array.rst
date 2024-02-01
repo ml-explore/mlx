@@ -25,6 +25,8 @@
       ~array.cummin
       ~array.cumprod
       ~array.cumsum
+      ~array.diag
+      ~array.diagonal
       ~array.exp
       ~array.flatten
       ~array.item
