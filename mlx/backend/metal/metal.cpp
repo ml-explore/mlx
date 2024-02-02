@@ -65,7 +65,7 @@ std::function<void()> make_task(
     auto outputs = arr.outputs();
     {
       // If the array is a tracer hold a reference
-      // to it's inputs so they don't get donated
+      // to its inputs so they don't get donated
       std::vector<array> inputs;
       if (arr.is_tracer()) {
         inputs = arr.inputs();
