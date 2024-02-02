@@ -107,7 +107,9 @@ inline std::string build_kernel_name(
   for (auto& a : tape) {
     a.primitive().print(os);
   }
-  os << "_OD_" << outputs[0].ndim() << "_";
+  os << "_OD_" << outputs[0].ndim() << "_OS";
+  print_shape(os, outputs[0]);
+  os << "_";
 
   for (auto& x : inputs) {
     if (constant_ids.find(x.id()) != constant_ids.end()) {
@@ -181,12 +183,6 @@ inline std::string build_kernel(
     os << "    device " << get_type_string(x.dtype()) << "* "
        << namer.get_name(x) << " [[buffer(" << cnt++ << ")]]," << std::endl;
   }
-  if (add_indices) {
-    os << "    constant size_t* output_strides [[buffer(" << cnt++ << ")]],"
-       << std::endl
-       << "    constant int* output_shape [[buffer(" << cnt++ << ")]],"
-       << std::endl;
-  }
 
   // The thread index in the whole grid
   os << "    uint index [[thread_position_in_grid]]) {" << std::endl;
@@ -195,8 +191,8 @@ inline std::string build_kernel(
   // are broadcasted or transposed
   if (add_indices) {
     for (int i = 0; i < output_shape.size(); i++) {
-      os << "  uint index_" << i << " = (index / output_strides[" << i
-         << "]) % output_shape[" << i << "];" << std::endl;
+      os << "  uint index_" << i << " = (index / " << output_strides[i]
+         << ") % " << output_shape[i] << ";" << std::endl;
     }
   }
 
@@ -289,9 +285,7 @@ void Compiled::eval_gpu(
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
   auto& output_strides = outputs[0].strides();
-  // bool contiguous = true;
-  bool contiguous = false; // TODO: Delete this line if you want to run the
-                           // contiguous kernel if possible
+  bool contiguous = true;
   for (auto& x : inputs) {
     if ((!x.flags().row_contiguous || x.shape() != output_shape) &&
         x.size() > 1) {
@@ -332,12 +326,6 @@ void Compiled::eval_gpu(
   // Put the outputs in
   for (auto& x : outputs) {
     set_array_buffer(compute_encoder, x, cnt++);
-  }
-  if (!contiguous) {
-    compute_encoder->setBytes(
-        outputs[0].strides().data(), outputs[0].ndim() * sizeof(size_t), cnt++);
-    compute_encoder->setBytes(
-        outputs[0].shape().data(), outputs[0].ndim() * sizeof(int), cnt++);
   }
 
   // Launch the kernel
