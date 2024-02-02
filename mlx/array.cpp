@@ -180,7 +180,7 @@ array::ArrayDesc::ArrayDesc(
       primitive(std::move(primitive)),
       inputs(inputs) {
   std::tie(size, strides) = cum_prod(this->shape);
-  for (auto& in : inputs) {
+  for (auto& in : this->inputs) {
     is_tracer |= in.is_tracer();
     depth = std::max(in.graph_depth(), depth);
   }
@@ -197,7 +197,7 @@ array::ArrayDesc::ArrayDesc(
       primitive(std::move(primitive)),
       inputs(std::move(inputs)) {
   std::tie(size, strides) = cum_prod(this->shape);
-  for (auto& in : inputs) {
+  for (auto& in : this->inputs) {
     is_tracer |= in.is_tracer();
     depth = std::max(in.graph_depth(), depth);
   }

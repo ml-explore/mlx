@@ -1779,10 +1779,6 @@ array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       inputs);
 }
 array operator&&(const array& a, const array& b) {
-  // check if a and b are bool arrays
-  if (a.dtype() != bool_ || b.dtype() != bool_) {
-    throw std::invalid_argument("[operator&&] only supported for bool arrays.");
-  }
   return logical_and(a, b);
 }
 
@@ -1797,11 +1793,6 @@ array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       inputs);
 }
 array operator||(const array& a, const array& b) {
-  // check if a and b are bool arrays
-  if (a.dtype() != bool_ || b.dtype() != bool_) {
-    throw std::invalid_argument(
-        "[operator||] is only supported for bool arrays.");
-  }
   return logical_or(a, b);
 }
 
