@@ -149,7 +149,7 @@ array linspace(
     throw std::invalid_argument(msg.str());
   }
   if (num == 1) {
-    return astype(array(start), dtype, to_stream(s));
+    return astype(array({start}), dtype, to_stream(s));
   }
   array sequence = arange(0, num, float32, to_stream(s));
   float step = (stop - start) / (num - 1);

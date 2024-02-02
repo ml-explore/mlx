@@ -1663,7 +1663,8 @@ class TestOps(mlx_tests.MLXTestCase):
 
         # Test num equal to 1
         d = mx.linspace(1, 10, 1)
-        expected = mx.array(np.linspace(0, 1, 10))
+        expected = mx.array(np.linspace(1, 10, 1))
+        breakpoint()
         self.assertEqualArray(d, expected)
 
     def test_repeat(self):
