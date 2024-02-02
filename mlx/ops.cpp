@@ -1320,9 +1320,8 @@ array mean(
   for (int axis : axes) {
     if (axis < -ndim || axis >= ndim) {
       std::ostringstream msg;
-      msg << "[mean] axis " + std::to_string(axis) +
-              " is out of bounds for array with " + std::to_string(ndim) +
-              " dimensions.";
+      msg << "[mean] axis " << axis + " is out of bounds for array with "
+          << ndim + " dimensions.";
       throw std::invalid_argument(msg.str());
     }
   }
