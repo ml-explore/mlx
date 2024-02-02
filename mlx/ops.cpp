@@ -1319,10 +1319,11 @@ array mean(
   int ndim = a.ndim();
   for (int axis : axes) {
     if (axis < -ndim || axis >= ndim) {
-      throw std::invalid_argument(
-          "[mean] axis " + std::to_string(axis) +
-          " is out of bounds for array with " + std::to_string(ndim) +
-          " dimensions.");
+      std::ostringstream msg;
+      msg << "[mean] axis " + std::to_string(axis) +
+              " is out of bounds for array with " + std::to_string(ndim) +
+              " dimensions.";
+      throw std::invalid_argument(msg.str());
     }
   }
   auto nelements = compute_number_of_elements(a, axes);
