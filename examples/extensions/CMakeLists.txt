@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.27)
 
 project(mlx_sample_extensions LANGUAGES CXX)
 

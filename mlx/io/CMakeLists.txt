@@ -11,14 +11,8 @@ MESSAGE(STATUS "Downloading json")
 FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz)
 FetchContent_MakeAvailable(json)
 target_include_directories(
-    mlx PUBLIC
+  mlx PRIVATE
     $<BUILD_INTERFACE:${json_SOURCE_DIR}/single_include/nlohmann>
-    $<INSTALL_INTERFACE:include/json>
-)
-install(
-    DIRECTORY ${json_SOURCE_DIR}/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/json
-    COMPONENT json_source
 )
 
 MESSAGE(STATUS "Downloading gguflib")
@@ -28,14 +22,8 @@ FetchContent_Declare(gguflib
 )
 FetchContent_MakeAvailable(gguflib)
 target_include_directories(
-    mlx PUBLIC
+  mlx PRIVATE
     $<BUILD_INTERFACE:${gguflib_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/gguflib>
-)
-install(
-  DIRECTORY ${gguflib_SOURCE_DIR}/
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gguflib
-  COMPONENT gguflib_source
 )
 
 add_library(
