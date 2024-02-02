@@ -101,6 +101,9 @@ inline std::string build_kernel_name(
     }
   };
 
+  // TODO: Fix this with a better way of getting unique kernel names
+  os << "C" << reinterpret_cast<size_t>(&tape) << "_";
+
   for (auto& a : tape) {
     a.primitive().print(os);
   }
@@ -286,7 +289,9 @@ void Compiled::eval_gpu(
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
   auto& output_strides = outputs[0].strides();
-  bool contiguous = true;
+  // bool contiguous = true;
+  bool contiguous = false; // TODO: Delete this line if you want to run the
+                           // contiguous kernel if possible
   for (auto& x : inputs) {
     if ((!x.flags().row_contiguous || x.shape() != output_shape) &&
         x.size() > 1) {
