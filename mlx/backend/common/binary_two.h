@@ -391,9 +391,9 @@ void binary_op(
             outputs[0],
             outputs[1],
             op,
-            DefaultScalarVector<T, T, Op>(op),
-            DefaultVectorScalar<T, T, Op>(op),
-            DefaultVectorVector<T, T, Op>(op));
+            DefaultScalarVector<T, T, T, Op>(op),
+            DefaultVectorScalar<T, T, T, Op>(op),
+            DefaultVectorVector<T, T, T, Op>(op));
       } else {
         // opsv and opvs were UseDefaultBinaryOp
         binary_op<T, T>(
@@ -402,8 +402,8 @@ void binary_op(
             outputs[0],
             outputs[1],
             op,
-            DefaultScalarVector<T, T, Op>(op),
-            DefaultVectorScalar<T, T, Op>(op),
+            DefaultScalarVector<T, T, T, Op>(op),
+            DefaultVectorScalar<T, T, T, Op>(op),
             opvv);
       }
     } else if (std::is_same<decltype(opvv), UseDefaultBinaryOp>::value) {
@@ -414,9 +414,9 @@ void binary_op(
           outputs[0],
           outputs[1],
           op,
-          DefaultScalarVector<T, T, Op>(op),
+          DefaultScalarVector<T, T, T, Op>(op),
           opvs,
-          DefaultVectorVector<T, T, Op>(op));
+          DefaultVectorVector<T, T, T, Op>(op));
     } else {
       // opsv was UseDefaultBinaryOp
       binary_op<T, T>(
@@ -425,7 +425,7 @@ void binary_op(
           outputs[0],
           outputs[1],
           op,
-          DefaultScalarVector<T, T, Op>(op),
+          DefaultScalarVector<T, T, T, Op>(op),
           opvs,
           opvv);
     }
@@ -439,8 +439,8 @@ void binary_op(
           outputs[1],
           op,
           opsv,
-          DefaultVectorScalar<T, T, Op>(op),
-          DefaultVectorVector<T, T, Op>(op));
+          DefaultVectorScalar<T, T, T, Op>(op),
+          DefaultVectorVector<T, T, T, Op>(op));
     } else {
       // opvs was UseDefaultBinaryOp
       binary_op<T, T>(
@@ -450,7 +450,7 @@ void binary_op(
           outputs[1],
           op,
           opsv,
-          DefaultVectorScalar<T, T, Op>(op),
+          DefaultVectorScalar<T, T, T, Op>(op),
           opvv);
     }
   } else if (std::is_same<decltype(opvv), UseDefaultBinaryOp>::value) {
@@ -463,7 +463,7 @@ void binary_op(
         op,
         opsv,
         opvs,
-        DefaultVectorVector<T, T, Op>(op));
+        DefaultVectorVector<T, T, T, Op>(op));
   } else {
     // All ops provided
     binary_op<T, T>(a, b, outputs[0], outputs[1], op, opsv, opvs, opvv);
@@ -476,9 +476,9 @@ void binary_op(
     const array& b,
     std::vector<array>& outputs,
     Op op) {
-  DefaultScalarVector<T, T, Op> opsv(op);
-  DefaultVectorScalar<T, T, Op> opvs(op);
-  DefaultVectorVector<T, T, Op> opvv(op);
+  DefaultScalarVector<T, T, T, Op> opsv(op);
+  DefaultVectorScalar<T, T, T, Op> opvs(op);
+  DefaultVectorVector<T, T, T, Op> opvv(op);
   binary_op<T, T>(a, b, outputs[0], outputs[1], op, opsv, opvs, opvv);
 }
 

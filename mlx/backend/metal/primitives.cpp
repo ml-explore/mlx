@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include "mlx/backend/common/binary.h"
+#include "mlx/backend/common/select.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
@@ -211,6 +212,124 @@ void binary_op(
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+}
+
+void select_op(
+    const std::vector<array>& inputs,
+    array& out,
+    const std::string op) {
+  assert(inputs.size() == 3);
+  auto& condition = inputs[0];
+  auto& a = inputs[1];
+  auto& b = inputs[2];
+  BinaryOpType bopt = get_select_binary_op_type(condition, a, b);
+  set_select_binary_op_output_data(condition, a, b, out, bopt, true);
+  bool donate_a = a.data_shared_ptr() == nullptr;
+  bool donate_b = b.data_shared_ptr() == nullptr;
+  if (out.size() == 0) {
+    return;
+  }
+
+  // Try to collapse contiguous dims
+  auto [shape, strides] = collapse_contiguous_dims(condition, a, b, out);
+  auto& strides_condition = strides[0];
+  auto& strides_a = strides[1];
+  auto& strides_b = strides[2];
+  auto& strides_out = strides[3];
+  std::ostringstream kname;
+
+  switch (bopt) {
+    case ScalarScalar:
+      kname << "select_ss";
+      break;
+    case ScalarVector:
+      kname << "select_sv";
+      break;
+    case VectorScalar:
+      kname << "select_vs";
+      break;
+    case VectorVector:
+      kname << "select_vv";
+      break;
+    case General:
+      kname << "select_g";
+      break;
+  }
+
+  kname << op << type_to_name(a);
+  if (bopt == General && out.ndim() <= MAX_BINARY_SPECIALIZED_DIMS) {
+    kname << "_" << shape.size();
+  }
+
+  auto& s = out.primitive().stream();
+  auto& d = metal::device(s.device);
+
+  // kernel1 returns a when condition is *true*.
+  // kernel2 returns b when condition is *false*.
+  auto kernel1 = d.get_kernel(kname.str());
+  auto kernel2 = d.get_kernel(kname.str() + "_invert_predicate");
+  auto compute_encoder = d.get_command_encoder(s.index);
+
+  // Both kernels have the same op type, so these will be the same for both.
+  NS::UInteger thread_group_size = kernel1->maxTotalThreadsPerThreadgroup();
+  MTL::Size grid_dims;
+  MTL::Size group_dims;
+
+  // Setup and run kernel 1.
+  compute_encoder->setComputePipelineState(kernel1);
+  set_array_buffer(compute_encoder, condition, 0);
+  set_array_buffer(compute_encoder, donate_a ? out : a, 1);
+  set_array_buffer(compute_encoder, out, 2);
+
+  size_t ndim = shape.size();
+  if (bopt == General) {
+    if (ndim > 3) {
+      compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 3);
+      compute_encoder->setBytes(
+          strides_condition.data(), ndim * sizeof(size_t), 4);
+      compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 5);
+    } else {
+      compute_encoder->setBytes(
+          strides_condition.data(), ndim * sizeof(size_t), 3);
+      compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 4);
+    }
+
+    if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
+      compute_encoder->setBytes(&ndim, sizeof(int), 6);
+    }
+
+    // Launch up to 3D grid of threads
+    size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+    size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
+    size_t rest = out.size() / (dim0 * dim1);
+
+    if (thread_group_size != 1024) {
+      throw std::runtime_error("[Metal::binary] Must use 1024 sized block");
+    }
+    group_dims = get_block_dims(dim0, dim1, rest);
+    grid_dims = MTL::Size(dim0, dim1, rest);
+  } else {
+    // Launch a 1D grid of threads
+    size_t nthreads = bopt == General ? out.size() : out.data_size();
+    if (thread_group_size > nthreads) {
+      thread_group_size = nthreads;
+    }
+    group_dims = MTL::Size(thread_group_size, 1, 1);
+    grid_dims = MTL::Size(nthreads, 1, 1);
+  }
+  compute_encoder->dispatchThreads(grid_dims, group_dims);
+
+  // Setup and run kernel 2.
+  set_array_buffer(compute_encoder, donate_b ? out : b, 1);
+  if (bopt == General) {
+    if (ndim <= 3) {
+      compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 4);
+    } else {
+      compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 5);
+    }
+  }
+  compute_encoder->setComputePipelineState(kernel2);
+  compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
 
 void unary_op(
@@ -617,6 +736,10 @@ void Ceil::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Multiply::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "mul");
+}
+
+void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
+  select_op(inputs, out, "select");
 }
 
 void Negative::eval_gpu(const std::vector<array>& inputs, array& out) {

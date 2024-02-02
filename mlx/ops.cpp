@@ -5,8 +5,6 @@
 #include <numeric>
 #include <set>
 #include <sstream>
-
-#include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
@@ -1149,13 +1147,23 @@ array isneginf(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array where(
-    const array& condition,
-    const array& x,
-    const array& y,
+    const array& a,
+    const array& b,
+    const array& c,
     StreamOrDevice s /* = {} */) {
-  // TODO, fix this to handle the NaN case when x has infs
-  auto mask = astype(condition, bool_, s);
-  return add(multiply(x, mask, s), multiply(y, logical_not(mask, s), s), s);
+  auto condition = a;
+  if (a.dtype() != bool_) {
+    condition = not_equal(a, zeros_like(a), s);
+  }
+  Dtype out_dtype = promote_types(b.dtype(), c.dtype());
+  auto inputs = broadcast_arrays(
+      {condition, astype(b, out_dtype, s), astype(c, out_dtype, s)}, s);
+
+  return array(
+      inputs[0].shape(),
+      out_dtype,
+      std::make_unique<Select>(to_stream(s)),
+      inputs);
 }
 
 array allclose(

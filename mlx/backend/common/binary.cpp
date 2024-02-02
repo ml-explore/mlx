@@ -15,55 +15,56 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T, typename U, typename Op>
+template <typename T1, typename T2, typename U, typename Op>
 void comparison_op(const array& a, const array& b, array& out, Op op) {
-  DefaultScalarVector<T, U, Op> opsv(op);
-  DefaultVectorScalar<T, U, Op> opvs(op);
-  DefaultVectorVector<T, U, Op> opvv(op);
-  binary_op<T, U>(a, b, out, op, opsv, opvs, opvv);
+  DefaultScalarScalar<T1, T2, U, Op> opss(op);
+  DefaultScalarVector<T1, T2, U, Op> opsv(op);
+  DefaultVectorScalar<T1, T2, U, Op> opvs(op);
+  DefaultVectorVector<T1, T2, U, Op> opvv(op);
+  binary_op<T1, T2, U>(a, b, out, opss, opsv, opvs, opvv);
 }
 
 template <typename Op>
 void comparison_op(const array& a, const array& b, array& out, Op op) {
   switch (a.dtype()) {
     case bool_:
-      comparison_op<bool, bool>(a, b, out, op);
+      comparison_op<bool, bool, bool>(a, b, out, op);
       break;
     case uint8:
-      comparison_op<uint8_t, bool>(a, b, out, op);
+      comparison_op<uint8_t, uint8_t, bool>(a, b, out, op);
       break;
     case uint16:
-      comparison_op<uint16_t, bool>(a, b, out, op);
+      comparison_op<uint16_t, uint16_t, bool>(a, b, out, op);
       break;
     case uint32:
-      comparison_op<uint32_t, bool>(a, b, out, op);
+      comparison_op<uint32_t, uint32_t, bool>(a, b, out, op);
       break;
     case uint64:
-      comparison_op<uint64_t, bool>(a, b, out, op);
+      comparison_op<uint64_t, uint64_t, bool>(a, b, out, op);
       break;
     case int8:
-      comparison_op<int8_t, bool>(a, b, out, op);
+      comparison_op<int8_t, int8_t, bool>(a, b, out, op);
       break;
     case int16:
-      comparison_op<int16_t, bool>(a, b, out, op);
+      comparison_op<int16_t, int16_t, bool>(a, b, out, op);
       break;
     case int32:
-      comparison_op<int32_t, bool>(a, b, out, op);
+      comparison_op<int32_t, int32_t, bool>(a, b, out, op);
       break;
     case int64:
-      comparison_op<int64_t, bool>(a, b, out, op);
+      comparison_op<int64_t, int64_t, bool>(a, b, out, op);
       break;
     case float16:
-      comparison_op<float16_t, bool>(a, b, out, op);
+      comparison_op<float16_t, float16_t, bool>(a, b, out, op);
       break;
     case float32:
-      comparison_op<float, bool>(a, b, out, op);
+      comparison_op<float, float, bool>(a, b, out, op);
       break;
     case bfloat16:
-      comparison_op<bfloat16_t, bool>(a, b, out, op);
+      comparison_op<bfloat16_t, bfloat16_t, bool>(a, b, out, op);
       break;
     case complex64:
-      comparison_op<complex64_t, bool>(a, b, out, op);
+      comparison_op<complex64_t, complex64_t, bool>(a, b, out, op);
       break;
   }
 }

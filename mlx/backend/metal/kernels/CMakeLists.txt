@@ -25,6 +25,7 @@ set(
   "reduce"
   "rope"
   "scan"
+  "select"
   "softmax"
   "sort"
   "unary"
