@@ -241,12 +241,12 @@ auto unary_fused_1_diff(const std::vector<array>& inputs) {
 
 // Output into un-compilable primitive
 auto unary_fused_2(const std::vector<array>& inputs) {
-  return std::vector<array>{sum(abs(negative(exp(inputs[0]))))};
+  return std::vector<array>{sum(abs(negative(exp(inputs[0]))), true)};
 }
 
 // Input from un-compilable primitive
 auto unary_fused_3(const std::vector<array>& inputs) {
-  return std::vector<array>{exp(abs(negative(sum(inputs[0]))))};
+  return std::vector<array>{exp(abs(negative(sum(inputs[0], true))))};
 }
 
 TEST_CASE("test compile unary fused") {
@@ -333,7 +333,7 @@ auto binary_fused_2(const std::vector<array>& inputs) {
 
 // Binary into unary into un-compilable
 auto binary_fused_3(const std::vector<array>& inputs) {
-  return std::vector<array>{sum(abs(inputs[0] + inputs[1]))};
+  return std::vector<array>{sum(abs(inputs[0] + inputs[1]), true)};
 }
 
 TEST_CASE("test compile binary fused") {
@@ -432,19 +432,19 @@ TEST_CASE("test compile gelu") {
 // Uncompilable input outside fused tape
 auto unary_with_two_outputs(const std::vector<array>& inputs) {
   auto x = exp(inputs[0]);
-  return std::vector<array>{exp(x), sum(x)};
+  return std::vector<array>{exp(x), sum(x, true)};
 }
 
 auto uncompilable_inputs(const std::vector<array>& inputs) {
   auto& x = inputs[0];
   auto& y = inputs[1];
-  return std::vector<array>{x * abs(exp(y)), sum(x)};
+  return std::vector<array>{x * abs(exp(y)), sum(x, true)};
 }
 
 auto uncompilable_inputs_order_matters(const std::vector<array>& inputs) {
   auto& x = inputs[0];
   auto& y = inputs[1];
-  return std::vector<array>{x / abs(exp(y)), sum(x)};
+  return std::vector<array>{x / abs(exp(y)), sum(x, true)};
 }
 
 TEST_CASE("test compile tape with outside parents") {
