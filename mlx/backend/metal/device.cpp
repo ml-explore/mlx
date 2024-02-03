@@ -26,7 +26,8 @@ static constexpr const char* default_mtllib_path = METAL_PATH;
 
 auto load_device() {
   auto devices = MTL::CopyAllDevices();
-  auto device = static_cast<MTL::Device*>(devices->object(0));
+  auto device = static_cast<MTL::Device*>(devices->object(0))
+      ?: MTL::CreateSystemDefaultDevice();
   if (!device) {
     throw std::runtime_error("Failed to load device");
   }
