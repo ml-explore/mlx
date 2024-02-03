@@ -280,6 +280,27 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(expected_jvp_out[0], jvp_out[0]))
         self.assertTrue(mx.allclose(expected_out[0], out[0]))
 
+    def test_transform_over_eval_compiled(self):
+        def outer(x):
+            y = mx.exp(mx.abs(x))
+            mx.eval(y)
+            return y.sum()
+
+        x = mx.array([2.0, -1.0, 0.5])
+        dfdx = mx.grad(outer)(x)
+
+        @mx.compile
+        def simple_unary(x):
+            return mx.exp(mx.abs(x))
+
+        def outer(x):
+            y = simple_unary(x)
+            mx.eval(y)
+            return y.sum()
+
+        cdfdx = mx.grad(outer)(x)
+        self.assertTrue(mx.allclose(dfdx, cdfdx))
+
 
 if __name__ == "__main__":
     unittest.main()
