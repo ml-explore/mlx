@@ -606,6 +606,10 @@ void compile_fuse(
                   return cache.find(p.first.id()) != cache.end();
                 }),
             pairs.end());
+      } else {
+        // Remove inner fused arays parents from the parents map
+        // to keep the parents map in a valid state
+        parents_map.erase(f.id());
       }
       global_cache.insert({f.id()});
     }
@@ -662,9 +666,6 @@ void compile_fuse(
         it->second = compiled_outputs[o];
       }
     }
-
-    // TODO remove inner fused arays parents from the parents map to leave
-    // it in a valid state
   }
 
   std::reverse(new_tape.begin(), new_tape.end());
