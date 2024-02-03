@@ -712,8 +712,15 @@ class Equal : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Equal)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  void print(std::ostream& os) override {
+    if (equal_nan_) {
+      os << "NanEqual";
+    } else {
+      os << "Equal";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -948,8 +955,21 @@ class Log : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Log)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  void print(std::ostream& os) override {
+    switch (base_) {
+      case e:
+        os << "Log";
+        break;
+      case two:
+        os << "Log2";
+        break;
+      case ten:
+        os << "Log10";
+        break;
+    }
+  }
 
  private:
   Base base_;
@@ -1597,8 +1617,15 @@ class Sqrt : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Sqrt)
   bool is_equivalent(const Primitive& other) const override;
+
+  void print(std::ostream& os) override {
+    if (recip_) {
+      os << "Rsqrt";
+    } else {
+      os << "Sqrt";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
