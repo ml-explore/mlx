@@ -1110,6 +1110,7 @@ void init_array(py::module_& m) {
           py::kw_only(),
           "stream"_a = none,
           "See :func:`abs`.")
+      .def("__abs__", &mlx::core::abs, "See :func:`abs`.")
       .def(
           "square",
           &square,

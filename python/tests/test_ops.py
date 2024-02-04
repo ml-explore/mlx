@@ -696,6 +696,8 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.abs(a, dtype=np.float32)
         self.assertTrue(np.allclose(result, expected))
 
+        self.assertTrue(np.allclose(a.abs(), abs(a)))
+
     def test_negative(self):
         a = mx.array([-1.0, 1.0, -2.0, 3.0])
         result = mx.negative(a)
