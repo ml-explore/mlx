@@ -1,3 +1,6 @@
+# Copyright © 2023-2024 Apple Inc.
+
+import argparse
 from time import time
 
 import mlx.core as mx
@@ -41,15 +44,18 @@ def benchmark_gather_torch(x_shape, idx_shape, device):
 
 
 if __name__ == "__main__":
-    cpu = False
-    if cpu:
+    parser = argparse.ArgumentParser("Gather benchmarks.")
+    parser.add_argument("--cpu", action="store_true", help="Use the CPU.")
+    args = parser.parse_args()
+
+    if args.cpu:
         mx.set_default_device(mx.cpu)
         device = torch.device("cpu")
     else:
         device = torch.device("mps")
 
-    idx_shapes = [(1_000_000,), (100_000,)]
-    x_shapes = [(100, 64), (100, 1024)]
+    idx_shapes = [(1_000_000,), (100_000,), ()]
+    x_shapes = [(100, 64), (100, 1024), (4, 1_000_000)]
 
     for x_shape, idx_shape in zip(x_shapes, idx_shapes):
         print("=" * 20)
