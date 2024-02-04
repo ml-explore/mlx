@@ -1179,6 +1179,23 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(a_np.flags.owndata)
         self.assertTrue(a_np.flags.writeable)
 
+    def test_strides(self):
+        test_cases = [
+            (mx.bool_, np.bool_, (1, 1)),
+            (mx.bool_, np.bool_, (2, 3)),
+            (mx.uint8, np.uint8, (3, 2)),
+            (mx.float32, np.float32, (1, 2, 3, 4)),
+        ]
+        for mlx_dtype, np_dtype, shape in test_cases:
+            a_np = np.ones(shape, dtype=np_dtype)
+            a_mx = mx.ones(shape, dtype=mlx_dtype)
+            self.assertEqual(
+                a_np.strides, a_mx.strides, f"{shape}{mlx_dtype}{np_dtype}"
+            )
+            self.assertEqual(
+                a_np.T.strides, a_mx.T.strides, f"{shape}{mlx_dtype}{np_dtype}"
+            )
+
     def test_buffer_protocol(self):
         dtypes_list = [
             (mx.bool_, np.bool_, None),

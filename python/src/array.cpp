@@ -450,13 +450,22 @@ std::optional<std::string> buffer_format(const array& a) {
   }
 }
 
-std::vector<size_t> buffer_strides(const array& a) {
-  std::vector<size_t> py_strides;
-  py_strides.reserve(a.strides().size());
+/** The strides of the array in bytes */
+std::vector<size_t> byte_strides(const array& a) {
+  std::vector<size_t> byte_strides;
+  byte_strides.reserve(a.strides().size());
   for (const size_t stride : a.strides()) {
-    py_strides.push_back(stride * a.itemsize());
+    byte_strides.push_back(stride * a.itemsize());
   }
-  return py_strides;
+  return byte_strides;
+}
+
+array ensure_evaled(array& a) {
+  if (!a.is_evaled()) {
+    py::gil_scoped_release nogil;
+    a.eval();
+  }
+  return a;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -649,11 +658,7 @@ void init_array(py::module_& m) {
 
   array_class
       .def_buffer([](array& a) {
-        // Eval if not already evaled
-        if (!a.is_evaled()) {
-          py::gil_scoped_release nogil;
-          a.eval();
-        }
+        ensure_evaled(a);
         return pybind11::buffer_info(
             a.data<void>(),
             a.itemsize(),
@@ -661,7 +666,7 @@ void init_array(py::module_& m) {
                                             // std::string which can't be null
             a.ndim(),
             a.shape(),
-            buffer_strides(a));
+            byte_strides(a));
       })
       .def_property_readonly(
           "size", &array::size, R"pbdoc(Number of elements in the array.)pbdoc")
@@ -683,6 +688,17 @@ void init_array(py::module_& m) {
 
           Returns:
             tuple(int): A tuple containing the sizes of each dimension.
+        )pbdoc")
+      .def_property_readonly(
+          "strides",
+          [](array& a) {
+            return py::tuple(py::cast(byte_strides(ensure_evaled(a))));
+          },
+          R"pbdoc(
+          The strides of the array as a Python tuple.
+
+          Returns:
+            tuple(int): A tuple containing the number of bytes to step in each dimension when traversing an array.
         )pbdoc")
       .def_property_readonly(
           "dtype",
@@ -946,10 +962,7 @@ void init_array(py::module_& m) {
       .def(
           "__repr__",
           [](array& a) {
-            if (!a.is_evaled()) {
-              py::gil_scoped_release nogil;
-              a.eval();
-            }
+            ensure_evaled(a);
             std::ostringstream os;
             os << a;
             return os.str();

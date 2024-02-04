@@ -16,6 +16,7 @@ Array
     array.ndim
     array.shape
     array.size
+    array.strides
     Dtype
     array.abs
     array.all
