@@ -39,9 +39,15 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
   auto& d = metal::device(s.device);
 
+  int idx_ndim = nidx ? inputs[1].ndim() : 0;
+  size_t ndim = src.ndim();
+
   std::ostringstream kname;
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
   kname << "gather" << type_to_name(src) << idx_type_name << "_" << nidx;
+  if (idx_ndim <= 1) {
+    kname << "_" << idx_ndim;
+  }
 
   auto compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
@@ -51,15 +57,11 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     slice_size *= s;
   }
 
-  size_t ndim = src.ndim();
-  size_t nthreads = out.size();
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size > nthreads) {
-    thread_group_size = nthreads;
-  }
-
-  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
-  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+  // Launch 2D grid of threads: indices x slice
+  size_t dim0 = out.size() / slice_size;
+  size_t dim1 = slice_size;
+  auto group_dims = get_block_dims(dim0, dim1, 1);
+  MTL::Size grid_dims = MTL::Size(dim0, dim1, 1);
 
   compute_encoder->setComputePipelineState(kernel);
 
@@ -90,7 +92,6 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto arg_enc = d.argument_encoder(arg_descs);
 
   // Allocate and fill buffers for shapes and strides
-  int idx_ndim = nidx ? inputs[1].ndim() : 0;
   auto idx_shapes_buf = allocator::malloc_or_wait(sizeof(int) * idx_ndim);
   auto idx_strides_buf = allocator::malloc_or_wait(sizeof(size_t) * idx_ndim);
   for (int i = 0; i < nidx; ++i) {
@@ -130,12 +131,12 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   set_array_buffer(compute_encoder, src, 0);
   compute_encoder->setBuffer(static_cast<MTL::Buffer*>(arg_buf.ptr()), 0, 1);
   set_array_buffer(compute_encoder, out, 2);
+
   compute_encoder->setBytes(src.shape().data(), ndim * sizeof(int), 3);
   compute_encoder->setBytes(src.strides().data(), ndim * sizeof(size_t), 4);
   compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
   compute_encoder->setBytes(slice_sizes_.data(), ndim * sizeof(int), 6);
-  compute_encoder->setBytes(&slice_size, sizeof(size_t), 7);
-  compute_encoder->setBytes(axes_.data(), nidx * sizeof(int), 8);
+  compute_encoder->setBytes(axes_.data(), nidx * sizeof(int), 7);
 
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 
