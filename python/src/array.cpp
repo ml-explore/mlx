@@ -679,7 +679,7 @@ void init_array(py::module_& m) {
           "shape",
           [](const array& a) { return py::tuple(py::cast(a.shape())); },
           R"pbdoc(
-          The shape of the array as a Python list.
+          The shape of the array as a Python tuple.
 
           Returns:
             tuple(int): A tuple containing the sizes of each dimension.
