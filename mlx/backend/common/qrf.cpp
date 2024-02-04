@@ -5,11 +5,7 @@
 #include "mlx/primitives.h"
 
 #ifdef ACCELERATE_NEW_LAPACK
-#if __has_include(<vecLib/lapack.h>)
-#include <vecLib/lapack.h>
-#else
 #include <Accelerate/Accelerate.h>
-#endif
 #else
 #include <lapack.h>
 #endif
