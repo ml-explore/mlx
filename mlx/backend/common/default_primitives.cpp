@@ -1,7 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #ifdef ACCELERATE_NEW_LAPACK
-#include <vecLib/cblas_new.h>
+#include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>
 #endif
