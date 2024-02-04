@@ -1661,6 +1661,11 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array(np.linspace(0, 1, 10))
         self.assertEqualArray(d, expected)
 
+        # Test num equal to 1
+        d = mx.linspace(1, 10, 1)
+        expected = mx.array(np.linspace(1, 10, 1))
+        self.assertEqualArray(d, expected)
+
     def test_repeat(self):
         # Setup data for the tests
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
