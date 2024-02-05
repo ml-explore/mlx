@@ -132,7 +132,9 @@ inline void matmul_common_general(
   size_t M = a.shape(-2);
   size_t N = b.shape(-1);
   size_t K = a.shape(-1);
-
+  if (M == 0 || N == 0) {
+    return;
+  }
   if (K == 0) {
     std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
     return;
