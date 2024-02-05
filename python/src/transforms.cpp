@@ -135,11 +135,9 @@ py::object tree_map(
   });
 }
 
-// Fill a pytree (recursive dict or list of dict or list)
-// in place with the given arrays
-// Non dict or list nodes are ignored
-void tree_fill(py::object& tree, const std::vector<array>& values) {
-  size_t index = 0;
+void tree_visit_update(
+    py::object tree,
+    std::function<py::object(py::handle)> visitor) {
   std::function<py::object(py::handle)> recurse;
   recurse = [&](py::handle subtree) {
     if (py::isinstance<py::list>(subtree)) {
@@ -155,7 +153,7 @@ void tree_fill(py::object& tree, const std::vector<array>& values) {
       }
       return py::cast<py::object>(d);
     } else if (py::isinstance<array>(subtree)) {
-      return py::cast(values[index++]);
+      return visitor(subtree);
     } else {
       return py::cast<py::object>(subtree);
     }
@@ -163,39 +161,31 @@ void tree_fill(py::object& tree, const std::vector<array>& values) {
   recurse(tree);
 }
 
+// Fill a pytree (recursive dict or list of dict or list)
+// in place with the given arrays
+// Non dict or list nodes are ignored
+void tree_fill(py::object& tree, const std::vector<array>& values) {
+  size_t index = 0;
+  tree_visit_update(
+      tree, [&](py::handle node) { return py::cast(values[index++]); });
+}
+
+// Replace all the arrays from the src values with the dst values in the tree
 void tree_replace(
     py::object& tree,
-    const std::vector<array>& old_values,
-    const std::vector<array>& new_values) {
-  std::unordered_map<uintptr_t, array> old_to_new;
-  for (int i = 0; i < old_values.size(); ++i) {
-    old_to_new.insert({old_values[i].id(), new_values[i]});
+    const std::vector<array>& src,
+    const std::vector<array>& dst) {
+  std::unordered_map<uintptr_t, array> src_to_dst;
+  for (int i = 0; i < src.size(); ++i) {
+    src_to_dst.insert({src[i].id(), dst[i]});
   }
-  std::function<py::object(py::handle)> recurse;
-  recurse = [&](py::handle subtree) {
-    if (py::isinstance<py::list>(subtree)) {
-      auto l = py::cast<py::list>(subtree);
-      for (int i = 0; i < l.size(); ++i) {
-        l[i] = recurse(l[i]);
-      }
-      return py::cast<py::object>(l);
-    } else if (py::isinstance<py::dict>(subtree)) {
-      auto d = py::cast<py::dict>(subtree);
-      for (auto item : d) {
-        d[item.first] = recurse(item.second);
-      }
-      return py::cast<py::object>(d);
-    } else if (py::isinstance<array>(subtree)) {
-      auto arr = py::cast<array>(subtree);
-      if (auto it = old_to_new.find(arr.id()); it != old_to_new.end()) {
-        return py::cast(it->second);
-      }
-      return py::cast(arr);
-    } else {
-      return py::cast<py::object>(subtree);
+  tree_visit_update(tree, [&](py::handle node) {
+    auto arr = py::cast<array>(node);
+    if (auto it = src_to_dst.find(arr.id()); it != src_to_dst.end()) {
+      return py::cast(it->second);
     }
-  };
-  recurse(tree);
+    return py::cast(arr);
+  });
 }
 
 std::vector<array> tree_flatten(py::object tree, bool strict = true) {
