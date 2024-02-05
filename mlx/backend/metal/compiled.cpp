@@ -336,10 +336,7 @@ void Compiled::eval_gpu(
 
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
-  auto& output_strides = outputs[0].strides();
-  int ndim = output_shape.size();
   bool contiguous = true;
-  bool dynamic = output_shape.size() >= 8;
   for (auto& x : inputs) {
     if ((!x.flags().row_contiguous || x.shape() != output_shape) &&
         x.size() > 1) {
@@ -348,13 +345,61 @@ void Compiled::eval_gpu(
     }
   }
 
+  // Collapse contiguous dims to route to a faster kernel if possible. Also
+  // handle all broadcasting.
+  std::vector<std::vector<size_t>> initial_strides;
+  initial_strides.push_back(outputs[0].strides());
+  std::vector<int> shape;
+  std::vector<std::vector<size_t>> strides;
+  if (!contiguous) {
+    for (int i = 0; i < inputs.size(); i++) {
+      // Skip constants.
+      if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
+        continue;
+      }
+      auto& x = inputs[i];
+
+      // Skip scalar inputs.
+      if (x.size() <= 1) {
+        continue;
+      }
+
+      // Broadcast the inputs to the output shape.
+      std::vector<size_t> xstrides;
+      int j = 0;
+      for (; j < output_shape.size() - x.ndim(); j++) {
+        if (output_shape[j] == 1) {
+          xstrides.push_back(outputs[0].strides()[j]);
+        } else {
+          xstrides.push_back(0);
+        }
+      }
+      for (int i = 0; i < x.ndim(); i++, j++) {
+        if (x.shape(i) == 1) {
+          if (output_shape[j] == 1) {
+            xstrides.push_back(outputs[0].strides()[j]);
+          } else {
+            xstrides.push_back(0);
+          }
+        } else {
+          xstrides.push_back(x.strides()[i]);
+        }
+      }
+      initial_strides.push_back(std::move(xstrides));
+    }
+    std::tie(shape, strides) =
+        collapse_contiguous_dims(output_shape, initial_strides);
+  }
+
   // Get the kernel from the lib
+  int ndim = shape.size();
+  bool dynamic = ndim >= 8;
   auto kernel_name = kernel_lib_ + (contiguous ? "_contiguous" : "_strided_");
   if (!contiguous) {
     if (dynamic) {
       kernel_name += "dynamic";
     } else {
-      kernel_name += std::to_string(output_shape.size());
+      kernel_name += std::to_string(shape.size());
     }
   }
   auto kernel = d.get_kernel(kernel_name, lib);
@@ -363,6 +408,7 @@ void Compiled::eval_gpu(
 
   // Put the inputs in
   int cnt = 0;
+  int stride_idx = 1; // idx 0 is the output strides
   for (int i = 0; i < inputs.size(); i++) {
     if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
       continue;
@@ -370,18 +416,11 @@ void Compiled::eval_gpu(
     auto& x = inputs[i];
     set_array_buffer(compute_encoder, x, cnt++);
     if (!contiguous && x.size() > 1) {
-      // We need to handle broadcasting ourselves. We put 0 strides in the
-      // beginning if dims are missing and 0 strides for dims with shapes of 1.
-      std::vector<size_t> xstrides(output_shape.size() - x.ndim(), 0);
-      for (int i = 0; i < x.ndim(); i++) {
-        if (x.shape(i) == 1) {
-          xstrides.push_back(0);
-        } else {
-          xstrides.push_back(x.strides()[i]);
-        }
-      }
       compute_encoder->setBytes(
-          xstrides.data(), xstrides.size() * sizeof(size_t), cnt++);
+          strides[stride_idx].data(),
+          strides[stride_idx].size() * sizeof(size_t),
+          cnt++);
+      stride_idx++;
     }
   }
 
@@ -393,9 +432,8 @@ void Compiled::eval_gpu(
   // Put the output shape and strides in
   if (!contiguous) {
     compute_encoder->setBytes(
-        output_strides.data(), output_strides.size() * sizeof(size_t), cnt++);
-    compute_encoder->setBytes(
-        output_shape.data(), output_shape.size() * sizeof(int), cnt++);
+        strides[0].data(), strides[0].size() * sizeof(size_t), cnt++);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), cnt++);
   }
 
   // Put the number of dims in if it is dynamic
@@ -411,8 +449,8 @@ void Compiled::eval_gpu(
         std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   } else {
-    size_t dim0 = ndim > 0 ? output_shape[ndim - 1] : 1;
-    size_t dim1 = ndim > 1 ? output_shape[ndim - 2] : 1;
+    size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+    size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
     size_t rest = outputs[0].size() / (dim0 * dim1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
