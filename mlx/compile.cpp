@@ -177,7 +177,7 @@ void merge(array& dst, array& src, ParentsMap& parents_map) {
   // Canonicalize the order of the primitives outputs
   auto sources = src.outputs();
   auto dests = dst.outputs();
-  // For each src parent, point it to the corresponding dest
+  // For each src parent, point it to the corresponding dst
   for (int i = 0; i < sources.size(); ++i) {
     auto src_parents = parents_map.find(sources[i].id());
     if (src_parents == parents_map.end()) {
@@ -502,7 +502,7 @@ void compile_fuse(
     //  - Collect all the primitives which we can fuse with
     //  - Keeps a cache of fusable primitives which may be added out of
     //    DAG order. We have to determine if all of a fused primitive's
-    //    outptus are also in the fused section, and this may not be the
+    //    outputs are also in the fused section, and this may not be the
     //    case the first time we visit it.
     // Second pass:
     //  - Collect inputs to the new compiled primitive
@@ -607,7 +607,7 @@ void compile_fuse(
                 }),
             pairs.end());
       } else {
-        // Remove inner fused arays parents from the parents map
+        // Remove inner fused arrays parents from the parents map
         // to keep the parents map in a valid state
         parents_map.erase(f.id());
       }
