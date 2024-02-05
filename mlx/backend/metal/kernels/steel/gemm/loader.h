@@ -67,23 +67,21 @@ struct BlockLoader {
     }
   }
 
-  /* Load from device memory into threadgroup memory - without bound checking */
-  METAL_FUNC void set_mask(
-      thread const short2& src_tile_dims,
-      thread bool mask[n_rows][vec_size]) {
-    STEEL_PRAGMA_UNROLL
-    for (short i = 0; i < n_rows; i++) {
-      STEEL_PRAGMA_UNROLL
-      for (short j = 0; j < vec_size; j++) {
-        mask[i][j] =
-            ((bi + i) < src_tile_dims.y) && ((bj + j) < src_tile_dims.x);
-      }
-    }
-  }
-
   /* Load from device memory into threadgroup memory - with bound checking */
   METAL_FUNC void load_safe(short2 src_tile_dim) const {
     src_tile_dim = src_tile_dim - short2(bj, bi);
+
+    // Skip loading if thread has no valid reads
+    if (src_tile_dim.x <= 0 || src_tile_dim.y <= 0) {
+      STEEL_PRAGMA_UNROLL
+      for (short i = 0; i < BROWS; i += TROWS) {
+        STEEL_PRAGMA_UNROLL
+        for (short j = 0; j < vec_size; j++) {
+          dst[i * dst_ld + j] = T(0);
+        }
+      }
+      return;
+    }
 
     // Use fast thread memory for bound checks
     bool tmp_idx[vec_size];
@@ -108,39 +106,6 @@ struct BlockLoader {
       for (short j = 0; j < vec_size; j++) {
         tmp_val[j] = tmp_idx[j] ? tmp_val[j] : T(0);
       }
-
-      // Copy values to threadgroup memory
-      STEEL_PRAGMA_UNROLL
-      for (short j = 0; j < vec_size; j++) {
-        dst[i * dst_ld + j] = tmp_val[j];
-      }
-    }
-  }
-
-  /* Load from device memory into threadgroup memory - with bound checking */
-  METAL_FUNC void load_safe(const thread bool mask[n_rows][vec_size]) const {
-    T tmp_val[vec_size];
-
-    STEEL_PRAGMA_UNROLL
-    for (short i = 0, ii = 0; i < BROWS; i += TROWS, ii++) {
-      simdgroup_barrier(mem_flags::mem_none);
-      // Use fast thread memory for bound checks
-
-      // Read valid indices into tmp_val
-      STEEL_PRAGMA_UNROLL
-      for (short j = 0; j < vec_size; j++) {
-        tmp_val[j] = src[(mask[ii][j] ? i * src_ld + j : 0)];
-      }
-
-      simdgroup_barrier(mem_flags::mem_none);
-
-      // Zero out uneeded values
-      STEEL_PRAGMA_UNROLL
-      for (short j = 0; j < vec_size; j++) {
-        tmp_val[j] = mask[ii][j] ? tmp_val[j] : T(0);
-      }
-
-      simdgroup_barrier(mem_flags::mem_none);
 
       // Copy values to threadgroup memory
       STEEL_PRAGMA_UNROLL
