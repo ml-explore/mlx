@@ -515,7 +515,7 @@ void compile_fuse(
         return;
       }
 
-      // Stop fusing and make input if:
+      // Stop fusing if:
       // - Depth limit exceeded
       // - Constant input
       // - Stream mismatch
