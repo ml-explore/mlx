@@ -1319,6 +1319,15 @@ array mean(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
+  int ndim = a.ndim();
+  for (int axis : axes) {
+    if (axis < -ndim || axis >= ndim) {
+      std::ostringstream msg;
+      msg << "[mean] axis " << axis + " is out of bounds for array with "
+          << ndim + " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
   auto nelements = compute_number_of_elements(a, axes);
   auto dtype = at_least_float(a.dtype());
   return multiply(sum(a, axes, keepdims, s), array(1.0 / nelements, dtype), s);
