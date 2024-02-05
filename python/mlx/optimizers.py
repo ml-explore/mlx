@@ -7,39 +7,16 @@ import mlx.core as mx
 from mlx.utils import tree_map
 
 
-class OptimizerState(dict):
-    """The optimizer state implements a recursively defined
-    :class:`collections.defaultdict`, namely a missing key in an optimizer
-    state is an :class:`OptimizerState`.
-
-    .. note::
-       :meth:`OptimizerState.get` in contrast to a normal dictionary also sets
-       the key to the ``default`` value if the ``key`` was not present in the
-       dictionary.
-    """
-
-    def __getitem__(self, key):
-        if key not in self:
-            self[key] = OptimizerState()
-        return super().__getitem__(key)
-
-    def get(self, key, default):
-        """If ``key`` doesn't exist set its value to ``default`` and then return it."""
-        if key not in self:
-            self[key] = default
-        return super().__getitem__(key)
-
-
 class Optimizer:
     """The base class for all optimizers. It allows us to implement an
     optimizer on a per-parameter basis and apply it to a parameter tree.
 
     Attributes:
-        state (OptimizerState): It holds the optimizer's state dictionary.
+        state (dict): Holds the optimizer's state dictionary.
     """
 
     def __init__(self):
-        self.state = OptimizerState()
+        self.state = {}
 
     def update(self, model: "mlx.nn.Module", gradients: dict):
         """Apply the gradients to the parameters of the model and update the
@@ -65,11 +42,11 @@ class Optimizer:
                           the gradients. In that case the returned python tree
                           will be of the same structure as the gradients.
         """
+        if not self.state:
+            self.state = tree_map(lambda x: {}, gradients)
         return tree_map(self.apply_single, gradients, model, self.state)
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """To be extended by the children classes to implement each optimizer's
         update."""
         raise NotImplementedError()
@@ -113,9 +90,7 @@ class SGD(Optimizer):
         self.dampening = dampening
         self.nesterov = nesterov
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the SGD parameter update and stores :math:`v` in the
         optimizer state."""
 
@@ -177,9 +152,7 @@ class RMSprop(Optimizer):
                 f"RMSprop epsilon should be >0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
         lr = self.learning_rate
         alpha = self.alpha
@@ -222,9 +195,7 @@ class Adagrad(Optimizer):
                 f"Adagrad epsilon should be >0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adagrad parameter update and stores :math:`v` in the
         optimizer state."""
         lr = self.learning_rate
@@ -274,9 +245,7 @@ class AdaDelta(Optimizer):
                 f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the AdaDelta parameter update and stores :math:`v` and
         :math:`u` in the optimizer state."""
         lr = self.learning_rate
@@ -329,9 +298,7 @@ class Adam(Optimizer):
         self.betas = betas
         self.eps = eps
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adam parameter update and stores :math:`v` and
         :math:`m` in the optimizer state."""
         lr = self.learning_rate
@@ -385,9 +352,7 @@ class AdamW(Adam):
         super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)
         self.weight_decay = weight_decay
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the AdamW parameter update by modifying the parameters
         passed into Adam.
         """
@@ -430,9 +395,7 @@ class Adamax(Adam):
                 f"Epsilon value should be >=0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adamax parameter update and stores :math:`v` and
         :math:`m` in the optimizer state."""
         lr = self.learning_rate
@@ -489,9 +452,7 @@ class Lion(Optimizer):
         self.betas = betas
         self.weight_decay = weight_decay
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Lion parameter update and stores :math:`m`
         in the optimizer state."""
         lr = self.learning_rate
@@ -585,14 +546,14 @@ class Adafactor(Optimizer):
             mx.expand_dims(r_factor, axis=-1), mx.expand_dims(c_factor, axis=0)
         )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adafactor parameter and state update."""
         gradient_shape = gradient.shape
         factored = len(gradient_shape) >= 2
-        step = state.get("step", 0) + 1
-        state["step"] = step
+
+        step = self.state.get("step", 0) + 1
+        self.state["step"] = step
+
         use_first_moment = self.beta_1 is not None
 
         parameter_rms = self._compute_rms(parameter)

@@ -2,6 +2,7 @@
 
 import io
 import unittest
+from functools import partial
 
 import mlx.core as mx
 import mlx_tests
@@ -300,6 +301,50 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         cdfdx = mx.grad(outer)(x)
         self.assertTrue(mx.allclose(dfdx, cdfdx))
+
+    def test_compile_capture(self):
+        # Test update captured state outside compiled function
+        state = {"y": mx.array(2)}
+
+        @partial(mx.compile, inputs=state)
+        def test_state(x):
+            x = x + state["y"]
+            return x
+
+        test_state(mx.array(1))
+        # Check the state is unchanged
+        self.assertEqual(state["y"], 2)
+
+        # Check the udpated state is used
+        state["y"] = mx.array(3)
+        out = test_state(mx.array(1))
+        self.assertEqual(out.item(), 4)
+
+        # Test state updated inside compiled function
+        state = {}
+
+        @partial(mx.compile, outputs=state)
+        def test_state(x):
+            state["y"] = x + 3
+            return mx.abs(x)
+
+        test_state(mx.array(-1))
+        self.assertEqual(state["y"].item(), 2)
+
+        # Test state changed inside compiled function
+        # triggers recompile
+        state = {}
+
+        @partial(mx.compile, inputs=state, outputs=state)
+        def test_state(x):
+            y = state.get("y", mx.array(0))
+            state["y"] = x + y
+            return x + 2 * y
+
+        test_state(mx.array(1))
+        self.assertEqual(state["y"].item(), 1)
+        test_state(mx.array(1))
+        self.assertEqual(state["y"].item(), 2)
 
 
 if __name__ == "__main__":

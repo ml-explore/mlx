@@ -191,10 +191,7 @@ struct CompilerCache {
     auto is_match = [](const std::vector<array>& in1,
                        const std::vector<array>& in2) {
       if (in1.size() != in2.size()) {
-        std::ostringstream msg;
-        msg << "[compiler] Unexpected number of inputs to compiled function:"
-            << " expected " << in2.size() << " got " << in1.size() << ".";
-        throw std::invalid_argument(msg.str());
+        return false;
       }
       for (int i = 0; i < in1.size(); ++i) {
         if (in1[i].shape() != in2[i].shape()) {

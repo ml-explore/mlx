@@ -135,6 +135,69 @@ py::object tree_map(
   });
 }
 
+// Fill a pytree (recursive dict or list of dict or list)
+// in place with the given arrays
+// Non dict or list nodes are ignored
+void tree_fill(py::object& tree, const std::vector<array>& values) {
+  size_t index = 0;
+  std::function<py::object(py::handle)> recurse;
+  recurse = [&](py::handle subtree) {
+    if (py::isinstance<py::list>(subtree)) {
+      auto l = py::cast<py::list>(subtree);
+      for (int i = 0; i < l.size(); ++i) {
+        l[i] = recurse(l[i]);
+      }
+      return py::cast<py::object>(l);
+    } else if (py::isinstance<py::dict>(subtree)) {
+      auto d = py::cast<py::dict>(subtree);
+      for (auto item : d) {
+        d[item.first] = recurse(item.second);
+      }
+      return py::cast<py::object>(d);
+    } else if (py::isinstance<array>(subtree)) {
+      return py::cast(values[index++]);
+    } else {
+      return py::cast<py::object>(subtree);
+    }
+  };
+  recurse(tree);
+}
+
+void tree_replace(
+    py::object& tree,
+    const std::vector<array>& old_values,
+    const std::vector<array>& new_values) {
+  std::unordered_map<uintptr_t, array> old_to_new;
+  for (int i = 0; i < old_values.size(); ++i) {
+    old_to_new.insert({old_values[i].id(), new_values[i]});
+  }
+  std::function<py::object(py::handle)> recurse;
+  recurse = [&](py::handle subtree) {
+    if (py::isinstance<py::list>(subtree)) {
+      auto l = py::cast<py::list>(subtree);
+      for (int i = 0; i < l.size(); ++i) {
+        l[i] = recurse(l[i]);
+      }
+      return py::cast<py::object>(l);
+    } else if (py::isinstance<py::dict>(subtree)) {
+      auto d = py::cast<py::dict>(subtree);
+      for (auto item : d) {
+        d[item.first] = recurse(item.second);
+      }
+      return py::cast<py::object>(d);
+    } else if (py::isinstance<array>(subtree)) {
+      auto arr = py::cast<array>(subtree);
+      if (auto it = old_to_new.find(arr.id()); it != old_to_new.end()) {
+        return py::cast(it->second);
+      }
+      return py::cast(arr);
+    } else {
+      return py::cast<py::object>(subtree);
+    }
+  };
+  recurse(tree);
+}
+
 std::vector<array> tree_flatten(py::object tree, bool strict = true) {
   std::vector<array> flat_tree;
 
@@ -495,9 +558,15 @@ std::unordered_map<size_t, py::object>& tree_cache() {
 struct PyCompiledFun {
   py::function fun;
   size_t fun_id;
+  py::object captured_inputs;
+  py::object captured_outputs;
+  size_t num_outputs{0};
 
-  PyCompiledFun(const py::function& fun)
-      : fun(fun), fun_id(reinterpret_cast<size_t>(fun.ptr())) {}
+  PyCompiledFun(const py::function& fun, py::object inputs, py::object outputs)
+      : fun(fun),
+        fun_id(reinterpret_cast<size_t>(fun.ptr())),
+        captured_inputs(inputs),
+        captured_outputs(outputs) {}
 
   PyCompiledFun(const PyCompiledFun&) = delete;
   PyCompiledFun& operator=(const PyCompiledFun&) = delete;
@@ -505,23 +574,62 @@ struct PyCompiledFun {
   PyCompiledFun(PyCompiledFun&& other)
       : fun(std::move(other.fun)), fun_id(reinterpret_cast<size_t>(fun.ptr())) {
     other.fun_id = 0;
+    captured_inputs = std::move(other.captured_inputs);
+    captured_outputs = std::move(other.captured_outputs);
+    num_outputs = other.num_outputs;
   };
 
   py::object operator()(const py::args& args) {
     auto compile_fun = [this, &args](const std::vector<array>& a) {
-      // Call the python function and flatten the outputs
-      auto [outputs, py_outputs] = tree_flatten_with_structure(
-          std::move(this->fun(*tree_unflatten(args, a))), true);
+      // Put tracers into captured inputs
+      std::vector<array> flat_in_captures;
+      std::vector<array> trace_captures;
+      if (!py::isinstance<py::none>(captured_inputs)) {
+        flat_in_captures = tree_flatten(captured_inputs, false);
+        trace_captures.insert(
+            trace_captures.end(), a.end() - flat_in_captures.size(), a.end());
+        tree_fill(captured_inputs, trace_captures);
+      }
 
-      tree_cache().insert({this->fun_id, py_outputs});
+      auto [outputs, py_outputs] = tree_flatten_with_structure(
+          std::move(fun(*tree_unflatten(args, a))), true);
+
+      tree_cache().insert({fun_id, py_outputs});
+
+      num_outputs = outputs.size();
+      if (!py::isinstance<py::none>(captured_outputs)) {
+        auto flat_out_captures = tree_flatten(captured_outputs, false);
+        outputs.insert(
+            outputs.end(),
+            std::make_move_iterator(flat_out_captures.begin()),
+            std::make_move_iterator(flat_out_captures.end()));
+      }
+
+      // Replace tracers with originals in captured inputs
+      if (!py::isinstance<py::none>(captured_inputs)) {
+        tree_replace(captured_inputs, trace_captures, flat_in_captures);
+      }
       return outputs;
     };
 
     // Inputs must be array or tree of arrays
     auto inputs = tree_flatten(args, true);
+    if (!py::isinstance<py::none>(captured_inputs)) {
+      auto flat_in_captures = tree_flatten(captured_inputs, false);
+      inputs.insert(
+          inputs.end(),
+          std::make_move_iterator(flat_in_captures.begin()),
+          std::make_move_iterator(flat_in_captures.end()));
+    }
 
     // Compile and call
     auto outputs = detail::compile(compile_fun, fun_id)(inputs);
+    if (!py::isinstance<py::none>(captured_outputs)) {
+      std::vector<array> captures(
+          std::make_move_iterator(outputs.begin() + num_outputs),
+          std::make_move_iterator(outputs.end()));
+      tree_fill(captured_outputs, captures);
+    }
 
     // Put the outputs back in the container
     py::object py_outputs = tree_cache().at(fun_id);
@@ -534,6 +642,8 @@ struct PyCompiledFun {
     tree_cache().erase(fun_id);
     detail::compile_erase(fun_id);
     fun.release().dec_ref();
+    captured_inputs.release().dec_ref();
+    captured_outputs.release().dec_ref();
   }
 };
 
@@ -859,10 +969,14 @@ void init_transforms(py::module_& m) {
       "file"_a);
   m.def(
       "compile",
-      [](const py::function& fun) {
-        return py::cpp_function(PyCompiledFun{fun});
+      [](const py::function& fun,
+         const py::object& inputs,
+         const py::object& outputs) {
+        return py::cpp_function(PyCompiledFun{fun, inputs, outputs});
       },
       "fun"_a,
+      "inputs"_a = std::nullopt,
+      "outputs"_a = std::nullopt,
       R"pbdoc(
         compile(fun: function) -> function
 
