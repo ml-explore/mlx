@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <metal_atomic>
 #include <metal_texture>
@@ -36,29 +36,38 @@ inline size_t offset_neg_idx(uint32_t idx, size_t) {
   return idx;
 }
 
-template <typename T, typename IdxT, int NIDX>
+// IDX_NDIM is the number of dimensions of the indices arrays. Compile-time
+// special case for 0 and 1. Anything >= 2 uses the general case
+template <typename T, typename IdxT, int NIDX, int IDX_NDIM>
 [[kernel]] void gather(
     const device T *src [[buffer(0)]],
-    const device Indices<IdxT, NIDX>& indices [[buffer(1)]],
+    const constant Indices<IdxT, NIDX>& indices [[buffer(1)]],
     device T *out [[buffer(2)]],
-    const device int *src_shape [[buffer(3)]],
-    const device size_t *src_strides [[buffer(4)]],
-    const device size_t& src_ndim [[buffer(5)]],
-    const device int *slice_sizes [[buffer(6)]],
-    const device size_t& slice_size [[buffer(7)]],
-    const device int *axes [[buffer(8)]],
-    uint gid [[thread_position_in_grid]]) {
+    const constant int *src_shape [[buffer(3)]],
+    const constant size_t *src_strides [[buffer(4)]],
+    const constant size_t& src_ndim [[buffer(5)]],
+    const constant int *slice_sizes [[buffer(6)]],
+    const constant int *axes [[buffer(7)]],
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
 
-  auto ind_idx = gid / slice_size;
-  auto ind_offset = gid % slice_size;
+  auto ind_idx = index.x;
+  auto ind_offset = index.y;
 
   size_t src_idx = 0;
   for (int i = 0; i < NIDX; ++i) {
-    auto idx_loc = elem_to_loc(
-        ind_idx,
-        &indices.shapes[indices.ndim * i],
-        &indices.strides[indices.ndim * i],
-        indices.ndim);
+    size_t idx_loc;
+    if (IDX_NDIM == 0) {
+      idx_loc = 0;
+    } else if (IDX_NDIM == 1) {
+      idx_loc = ind_idx * indices.strides[indices.ndim * i];
+    } else {
+      idx_loc = elem_to_loc(
+          ind_idx,
+          &indices.shapes[indices.ndim * i],
+          &indices.strides[indices.ndim * i],
+          indices.ndim);
+    }
     auto ax = axes[i];
     auto idx_val = offset_neg_idx(
         indices.buffers[i][idx_loc], src_shape[ax]);
@@ -67,22 +76,49 @@ template <typename T, typename IdxT, int NIDX>
 
   auto src_offset = elem_to_loc(
       ind_offset, slice_sizes, src_strides, src_ndim);
-  out[gid] = src[src_idx + src_offset];
+
+  size_t out_idx = index.y + static_cast<size_t>(grid_dim.y) * index.x;
+  out[out_idx] = src[src_offset + src_idx];
 }
 
 #define instantiate_gather4(name, src_type, ind_type, nindex) \
-template [[host_name("gather" name "_" #nindex)]] \
-[[kernel]] void gather( \
+template [[host_name("gather" name "_" #nindex "_0")]] \
+[[kernel]] void gather<src_type, ind_type, nindex, 0>( \
     const device src_type *src [[buffer(0)]], \
-    const device Indices<ind_type, nindex>& indices [[buffer(1)]], \
+    const constant Indices<ind_type, nindex>& indices [[buffer(1)]], \
     device src_type *out [[buffer(2)]], \
-    const device int *src_shape [[buffer(3)]], \
-    const device size_t *src_strides [[buffer(4)]], \
-    const device size_t& src_ndim [[buffer(5)]], \
-    const device int *slice_sizes [[buffer(6)]], \
-    const device size_t& slice_size [[buffer(7)]], \
-    const device int* axes [[buffer(8)]], \
-    uint gid [[thread_position_in_grid]]);
+    const constant int *src_shape [[buffer(3)]], \
+    const constant size_t *src_strides [[buffer(4)]], \
+    const constant size_t& src_ndim [[buffer(5)]], \
+    const constant int *slice_sizes [[buffer(6)]], \
+    const constant int* axes [[buffer(7)]], \
+    uint2 index [[thread_position_in_grid]], \
+    uint2 grid_dim [[threads_per_grid]]); \
+template [[host_name("gather" name "_" #nindex "_1")]] \
+[[kernel]] void gather<src_type, ind_type, nindex, 1>( \
+    const device src_type *src [[buffer(0)]], \
+    const constant Indices<ind_type, nindex>& indices [[buffer(1)]], \
+    device src_type *out [[buffer(2)]], \
+    const constant int *src_shape [[buffer(3)]], \
+    const constant size_t *src_strides [[buffer(4)]], \
+    const constant size_t& src_ndim [[buffer(5)]], \
+    const constant int *slice_sizes [[buffer(6)]], \
+    const constant int* axes [[buffer(7)]], \
+    uint2 index [[thread_position_in_grid]], \
+    uint2 grid_dim [[threads_per_grid]]); \
+template [[host_name("gather" name "_" #nindex)]] \
+[[kernel]] void gather<src_type, ind_type, nindex, 2>( \
+    const device src_type *src [[buffer(0)]], \
+    const constant Indices<ind_type, nindex>& indices [[buffer(1)]], \
+    device src_type *out [[buffer(2)]], \
+    const constant int *src_shape [[buffer(3)]], \
+    const constant size_t *src_strides [[buffer(4)]], \
+    const constant size_t& src_ndim [[buffer(5)]], \
+    const constant int *slice_sizes [[buffer(6)]], \
+    const constant int* axes [[buffer(7)]], \
+    uint2 index [[thread_position_in_grid]], \
+    uint2 grid_dim [[threads_per_grid]]);
+
 
 // Special for case NIDX=0
 instantiate_gather4("bool_", bool, bool, 0)
