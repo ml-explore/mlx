@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 import math
 import unittest
@@ -689,6 +689,14 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertEqual(mx.var(x, axis=0).tolist(), [1.0, 1.0])
         self.assertEqual(mx.var(x, axis=1).tolist(), [0.25, 0.25])
+
+        x = mx.array([1.0, 2.0])
+        out = mx.var(x, ddof=2)
+        self.assertEqual(out.item(), float("inf"))
+
+        x = mx.array([1.0, 2.0])
+        out = mx.var(x, ddof=3)
+        self.assertEqual(out.item(), float("inf"))
 
     def test_abs(self):
         a = mx.array([-1.0, 1.0, -2.0, 3.0])
