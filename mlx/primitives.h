@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <unordered_set>
+
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/io/load.h"
@@ -449,6 +451,46 @@ class Ceil : public UnaryPrimitive {
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Compiled : public Primitive {
+ public:
+  /*
+   * The inputs, outputs and tape are either tracers or constants.
+   * - The tape should not contain the inputs, but it should contain the
+   *   outputs.
+   * - The tape should also have only one array per primitive for multi-output
+   *   primitives.
+   * - The constant_ids contains ids of arrays in the input list that are safe
+   *   to treat as scalar constants.
+   */
+  explicit Compiled(
+      Stream stream,
+      std::vector<array> inputs,
+      std::vector<array> outputs,
+      std::vector<array> tape,
+      std::unordered_set<uintptr_t> constant_ids);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+
+  void print(std::ostream& os) override;
+
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  const std::vector<array> inputs_;
+  const std::vector<array> outputs_;
+  const std::vector<array> tape_;
+  const std::unordered_set<uintptr_t> constant_ids_;
+
+  void eval(const std::vector<array>& inputs, std::vector<array>& out);
 };
 
 class Concatenate : public UnaryPrimitive {
