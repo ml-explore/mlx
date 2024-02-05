@@ -414,6 +414,11 @@ MTL::ComputePipelineState* Device::get_kernel_(
   return kernel;
 }
 
+MTL::Library* Device::get_library(const std::string& name) {
+  auto it = library_map_.find(name);
+  return (it != library_map_.end()) ? it->second : nullptr;
+}
+
 MTL::Library* Device::get_library(
     const std::string& name,
     const std::string& source,

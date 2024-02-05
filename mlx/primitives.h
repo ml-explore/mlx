@@ -490,7 +490,7 @@ class Compiled : public Primitive {
   const std::vector<array> tape_;
   const std::unordered_set<uintptr_t> constant_ids_;
 
-  std::string kernel_name_;
+  std::string kernel_lib_;
   std::string kernel_source_;
 
   void eval(const std::vector<array>& inputs, std::vector<array>& out);

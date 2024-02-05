@@ -62,6 +62,8 @@ class Device {
       const std::function<std::string(const std::string&)>& lib_path_func =
           get_colocated_mtllib_path);
 
+  MTL::Library* get_library(const std::string& name);
+
   MTL::Library* get_library(
       const std::string& name,
       const std::string& source_string,
