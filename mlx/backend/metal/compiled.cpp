@@ -22,7 +22,9 @@ inline auto get_type_string(Dtype d) {
     case float32:
       return "float";
     case float16:
-      return "float16_t";
+      return "half";
+    case bfloat16:
+      return "bfloat16_t";
     case bool_:
       return "bool";
     case int8:
@@ -41,8 +43,11 @@ inline auto get_type_string(Dtype d) {
       return "uint32_t";
     case uint64:
       return "uint64_t";
-    default:
-      throw std::runtime_error("Unsupported type");
+    default: {
+      std::ostringstream msg;
+      msg << "Unsupported compilation type " << d;
+      throw std::runtime_error(msg.str());
+    }
   }
 }
 
