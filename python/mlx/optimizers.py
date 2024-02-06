@@ -16,7 +16,7 @@ class Optimizer:
     """
 
     def __init__(self):
-        self.state = {}
+        self._state = {}
 
     def update(self, model: "mlx.nn.Module", gradients: dict):
         """Apply the gradients to the parameters of the model and update the
@@ -28,6 +28,24 @@ class Optimizer:
                               via :func:`mlx.nn.value_and_grad`.
         """
         model.update(self.apply_gradients(gradients, model))
+
+    def init(self, model: dict):
+        """Initialize the optimizer's state
+
+        Args:
+            model (dict): A Python tree of parameters
+        """
+        self._state = tree_map(lambda x: {}, model)
+        tree_map(self.init_single, model, self._state)
+
+    def init_single(self, parameter: mx.array, state: dict):
+        """To be extended by the children classes to implement each optimizer's
+        state initialization.
+
+        Args:
+            parameter (mx.array): A single parameter that will be optimized.
+        """
+        raise NotImplementedError()
 
     def apply_gradients(self, gradients: dict, model: dict):
         """Apply the gradients to the parameters and return the updated parameters.
@@ -42,14 +60,29 @@ class Optimizer:
                           the gradients. In that case the returned python tree
                           will be of the same structure as the gradients.
         """
-        if not self.state:
-            self.state = tree_map(lambda x: {}, gradients)
+        if not self._state:
+            self.init(gradients)
         return tree_map(self.apply_single, gradients, model, self.state)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
-        """To be extended by the children classes to implement each optimizer's
-        update."""
+        """To be extended by derived classes to implement the optimizer's update.
+
+        Args:
+            gradient (mx.array): The ``parameter`` gradient.
+            parameter (mx.array): The ``parameter`` to update.
+            state (dict): The optimizer's state.
+        """
         raise NotImplementedError()
+
+    @property
+    def state(self):
+        """The optimizer's state dictionary."""
+        return self._state
+
+    @state.setter
+    def state(self, state: dict):
+        """Set optimizer's state dictionary."""
+        self._state = state
 
 
 class SGD(Optimizer):
@@ -90,6 +123,10 @@ class SGD(Optimizer):
         self.dampening = dampening
         self.nesterov = nesterov
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the SGD parameter update and stores :math:`v` in the
         optimizer state."""
@@ -100,20 +137,17 @@ class SGD(Optimizer):
         if self.momentum <= 0:
             return parameter - self.learning_rate * gradient
 
+        v = self.momentum * state.get("v")
         if self.dampening > 0:
-            v = (
-                state.get("v", (self.dampening / self.momentum) * gradient)
-                * self.momentum
-            )
             v += (1 - self.dampening) * gradient
         else:
-            v = state.get("v", mx.zeros_like(gradient)) * self.momentum
             v += gradient
 
         if self.nesterov:
             update = gradient + self.momentum * v
         else:
             update = v
+
         state["v"] = v
         return parameter - self.learning_rate * update
 
@@ -152,13 +186,17 @@ class RMSprop(Optimizer):
                 f"RMSprop epsilon should be >0, {self.eps} was provided instead"
             )
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
         lr = self.learning_rate
         alpha = self.alpha
         eps = self.eps
 
-        v = state.get("v", mx.zeros_like(gradient))
+        v = state["v"]
         v = alpha * v + (1 - alpha) * mx.square(gradient)
         state["v"] = v
 
@@ -195,14 +233,17 @@ class Adagrad(Optimizer):
                 f"Adagrad epsilon should be >0, {self.eps} was provided instead"
             )
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adagrad parameter update and stores :math:`v` in the
         optimizer state."""
         lr = self.learning_rate
         eps = self.eps
 
-        v = state.get("v", mx.zeros_like(gradient))
-        v = v + mx.square(gradient)
+        v = state["v"] + mx.square(gradient)
         state["v"] = v
 
         return parameter - lr * gradient / (mx.sqrt(v) + eps)
@@ -245,6 +286,11 @@ class AdaDelta(Optimizer):
                 f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
             )
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+        state["u"] = mx.zeros_like(parameter)
+
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the AdaDelta parameter update and stores :math:`v` and
         :math:`u` in the optimizer state."""
@@ -252,8 +298,8 @@ class AdaDelta(Optimizer):
         rho = self.rho
         eps = self.eps
 
-        v = state.get("v", mx.zeros_like(gradient))
-        u = state.get("u", mx.zeros_like(gradient))
+        v = state["v"]
+        u = state["u"]
 
         v = rho * v + (1 - rho) * mx.square(gradient)
         d = mx.sqrt(u + eps) / mx.sqrt(v + eps) * gradient
@@ -298,6 +344,11 @@ class Adam(Optimizer):
         self.betas = betas
         self.eps = eps
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["m"] = mx.zeros_like(parameter)
+        state["v"] = mx.zeros_like(parameter)
+
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adam parameter update and stores :math:`v` and
         :math:`m` in the optimizer state."""
@@ -305,8 +356,8 @@ class Adam(Optimizer):
         b1, b2 = self.betas
         eps = self.eps
 
-        m = state.get("m", gradient)
-        v = state.get("v", mx.square(gradient))
+        m = state["m"]
+        v = state["v"]
         m = b1 * m + (1 - b1) * gradient
         v = b2 * v + (1 - b2) * mx.square(gradient)
         state["m"] = m
@@ -395,6 +446,11 @@ class Adamax(Adam):
                 f"Epsilon value should be >=0, {self.eps} was provided instead"
             )
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["m"] = mx.zeros_like(parameter)
+        state["v"] = mx.zeros_like(parameter)
+
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adamax parameter update and stores :math:`v` and
         :math:`m` in the optimizer state."""
@@ -402,8 +458,8 @@ class Adamax(Adam):
         b1, b2 = self.betas
         eps = self.eps
 
-        m = state.get("m", mx.zeros_like(gradient))
-        v = state.get("v", mx.zeros_like(gradient))
+        m = state["m"]
+        v = state["v"]
 
         m = b1 * m + (1 - b1) * gradient
         v = mx.maximum(b2 * v, mx.abs(gradient))
@@ -452,6 +508,10 @@ class Lion(Optimizer):
         self.betas = betas
         self.weight_decay = weight_decay
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["m"] = mx.zeros_like(parameter)
+
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Lion parameter update and stores :math:`m`
         in the optimizer state."""
@@ -459,7 +519,7 @@ class Lion(Optimizer):
         b1, b2 = self.betas
         weight_decay = self.weight_decay
 
-        m = state.get("m", gradient)
+        m = state["m"]
         c = b1 * m + (1 - b1) * gradient
         state["m"] = b2 * m + (1 - b2) * gradient
         if weight_decay > 0:
@@ -523,6 +583,20 @@ class Adafactor(Optimizer):
         self.relative_step = relative_step
         self.warmup_init = warmup_init
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["step"] = 0
+        if parameter.ndim >= 2:
+            shape = parameter.shape
+            dtype = parameter.dtype
+            state["exp_avg_sq_row"] = mx.zeros(shape[:-1], dtype=dtype)
+            state["exp_avg_sq_col"] = mx.zeros(shape[:-2] + shape[-1:], dtype=dtype)
+        else:
+            state["exp_avg_sq"] = mx.zeros_like(parameter)
+
+        if self.beta_1 is not None:
+            state["exp_avg"] = mx.zeros_like(parameter)
+
     def _compute_rms(self, inputs):
         return mx.sqrt(mx.mean(mx.square(inputs)))
 
@@ -548,12 +622,10 @@ class Adafactor(Optimizer):
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adafactor parameter and state update."""
-        gradient_shape = gradient.shape
-        factored = len(gradient_shape) >= 2
+        factored = gradient.ndim >= 2
 
-        step = self.state.get("step", 0) + 1
-        self.state["step"] = step
-
+        step = state["step"] + 1
+        state["step"] = step
         use_first_moment = self.beta_1 is not None
 
         parameter_rms = self._compute_rms(parameter)
@@ -562,15 +634,8 @@ class Adafactor(Optimizer):
         update = mx.square(gradient) + self.eps[0]
 
         if factored:
-            exp_avg_sq_row = state.get(
-                "exp_avg_sq_row", mx.zeros(gradient_shape[:-1], dtype=gradient.dtype)
-            )
-            exp_avg_sq_col = state.get(
-                "exp_avg_sq_col",
-                mx.zeros(
-                    gradient_shape[:-2] + gradient_shape[-1:], dtype=gradient.dtype
-                ),
-            )
+            exp_avg_sq_row = state["exp_avg_sq_row"]
+            exp_avg_sq_col = state["exp_avg_sq_col"]
             exp_avg_sq_row = (beta_2 * exp_avg_sq_row) + (
                 (1 - beta_2) * mx.mean(update, axis=-1)
             )
@@ -582,7 +647,7 @@ class Adafactor(Optimizer):
             update = self._approximate_exp_moving_avg(exp_avg_sq_row, exp_avg_sq_col)
             update = update * gradient
         else:
-            exp_avg_sq = state.get("exp_avg_sq", mx.zeros_like(gradient))
+            exp_avg_sq = state["exp_avg_sq"]
             exp_avg_sq = (beta_2 * exp_avg_sq) + ((1 - beta_2) * update)
             state["exp_avg_sq"] = exp_avg_sq
             update = mx.rsqrt(exp_avg_sq) * gradient
@@ -593,7 +658,7 @@ class Adafactor(Optimizer):
         update = learning_rate * update
 
         if use_first_moment:
-            exp_avg = state.get("exp_avg", mx.zeros_like(gradient))
+            exp_avg = state["exp_avg"]
             exp_avg = (self.beta_1 * exp_avg) + ((1 - self.beta_1) * update)
             state["exp_avg"] = exp_avg
             update = exp_avg

@@ -130,6 +130,11 @@ class TestBase(mlx_tests.MLXTestCase):
                 ]
             )
 
+    def test_module_state(self):
+        m = nn.Linear(10, 1)
+        m.state["hello"] = "world"
+        self.assertEqual(m.state["hello"], "world")
+
 
 class TestLayers(mlx_tests.MLXTestCase):
     def test_identity(self):
