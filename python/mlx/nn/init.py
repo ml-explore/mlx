@@ -60,7 +60,7 @@ def normal(
     """
 
     def initializer(a: mx.array) -> mx.array:
-        return std * mx.random.normal(shape=a.shape, dtype=dtype) + mean
+        return mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
     return initializer
 
@@ -184,7 +184,7 @@ def glorot_normal(
     def initializer(a: mx.array, gain: float = 1.0) -> mx.array:
         fan_in, fan_out = _calculate_fan_in_fan_out(a)
         std = gain * math.sqrt(2.0 / (fan_in + fan_out))
-        return mx.random.normal(shape=a.shape, dtype=dtype) * std
+        return mx.random.normal(shape=a.shape, scale=std, dtype=dtype)
 
     return initializer
 
@@ -285,7 +285,7 @@ def he_normal(
             raise ValueError(f"Invalid mode: {mode}. Valid modes are: fan_in, fan_out")
 
         std = gain / math.sqrt(fan)
-        return mx.random.normal(shape=a.shape, dtype=dtype) * std
+        return mx.random.normal(shape=a.shape, scale=std, dtype=dtype)
 
     return initializer
 
