@@ -66,6 +66,7 @@ jobs:
           name: Install dependencies
           command: |
             brew install python
+            pip3 install --upgrade pip
             pip3 install --upgrade cmake
             pip3 install --upgrade pybind11[global]
             pip3 install pybind11-stubgen
