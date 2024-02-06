@@ -179,7 +179,7 @@ workflows:
   nightly_build:
     when: << pipeline.parameters.nightly_build >>
     jobs:
-      - build_package:
+      - build_release:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
@@ -187,7 +187,7 @@ workflows:
 #  weekly_build:
 #    when: << pipeline.parameters.weekly_build >>
 #    jobs:
-#      - build_dev_release:
+#      - build_release:
 #          matrix:
 #            parameters:
 #              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
