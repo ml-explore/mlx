@@ -161,8 +161,12 @@ array normal(
   auto low = array(std::nextafter(-1.0f, 0.0f), dtype);
   auto high = array(1.0f, dtype);
   auto samples = uniform(low, high, shape, dtype, key, stream);
-  auto normal_samples = multiply(array(std::sqrt(2.0), dtype), erfinv(samples, stream), stream);
-  return add(multiply(normal_samples, array(scale, dtype), stream), array(loc, dtype), stream);
+  auto normal_samples =
+      multiply(array(std::sqrt(2.0), dtype), erfinv(samples, stream), stream);
+  return add(
+      multiply(normal_samples, array(scale, dtype), stream),
+      array(loc, dtype),
+      stream);
 }
 
 array randint(
