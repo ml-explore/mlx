@@ -99,13 +99,17 @@ void init_random(py::module_& parent_module) {
       "normal",
       [](const std::vector<int>& shape,
          std::optional<Dtype> type,
+         float loc,
+         float scale,
          const std::optional<array>& key,
          StreamOrDevice s) {
-        return normal(shape, type.value_or(float32), key, s);
+        return normal(shape, type.value_or(float32), loc, scale, key, s);
       },
 
       "shape"_a = std::vector<int>{},
       "dtype"_a = std::optional{float32},
+      "loc"_a = 0.0,
+      "scale"_a = 1.0,
       "key"_a = none,
       "stream"_a = none,
       R"pbdoc(
@@ -114,6 +118,8 @@ void init_random(py::module_& parent_module) {
         Args:
             shape (list(int), optional): Shape of the output. Default is ``()``.
             dtype (Dtype, optional): Type of the output. Default is ``float32``.
+            loc (float, optional): Mean of the distribution. Default is ``0.0``.
+            scale (float, optional): Standard deviation of the distribution. Default is ``1.0``.
             key (array, optional): A PRNG key. Default: None.
 
         Returns:
