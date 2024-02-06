@@ -275,6 +275,10 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(z.dtype, dt)
             self.assertEqual(z.item(), 1)
 
+            z = -1 % x
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), 1)
+
     def test_comparisons(self):
         a = mx.array([0.0, 1.0, 5.0])
         b = mx.array([-1.0, 2.0, 5.0])
