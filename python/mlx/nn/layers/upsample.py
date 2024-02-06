@@ -6,7 +6,7 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-def upsample2d_nearest(x: mx.array, scale: Union[Tuple[int, int], Tuple[float, float]]):
+def upsample2d_nearest(x: mx.array, scale: Tuple[float, float]):
     # Integer scales means we can simply expand-broadcast and reshape
     if tuple(map(int, scale)) == scale:
         sh, sw = map(int, scale)
@@ -27,9 +27,7 @@ def upsample2d_nearest(x: mx.array, scale: Union[Tuple[int, int], Tuple[float, f
         return x[:, idx_y[:, None], idx_x[None]]
 
 
-def upsample2d_bilinear(
-    x: mx.array, scale: Union[Tuple[int, int], Tuple[float, float]]
-):
+def upsample2d_bilinear(x: mx.array, scale: Tuple[float, float]):
     sh, sw = scale
     B, H, W, C = x.shape
     new_H = int(H * sh)
@@ -47,8 +45,8 @@ def upsample2d_bilinear(
     c = x[:, idx_y_b[:, None], idx_x_l[None]]
     d = x[:, idx_y_b[:, None], idx_x_r[None]]
     # Compute bilinear interpolation weights
-    y_weight = (idx_y - idx_y_t)[:, None]
-    x_weight = (idx_x - idx_x_l)[:, None]
+    y_weight = (idx_y - idx_y_t)[:, None, None]
+    x_weight = (idx_x - idx_x_l)[None, :, None]
     w_a = (1 - x_weight) * (1 - y_weight)
     w_b = x_weight * (1 - y_weight)
     w_c = y_weight * (1 - x_weight)
@@ -131,11 +129,14 @@ class Upsample2d(Module):
         super().__init__()
         if mode not in ["nearest", "bilinear"]:
             raise ValueError("[upsample2d] unsupported upsampling algorithm")
-        self.scale = tuple(map(float, scale))
+        if isinstance(scale, (list, tuple)):
+            self.scale = tuple(map(float, scale))
+        else:
+            self.scale = (float(scale), float(scale))
         self.mode = mode
 
     def _extra_repr(self) -> str:
-        return f"scale={self.scale}, mode={self.mode}"
+        return f"scale={self.scale}, mode={self.mode!r}"
 
     def __call__(self, x: mx.array) -> mx.array:
         if self.mode == "bilinear":

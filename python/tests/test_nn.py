@@ -1046,27 +1046,28 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(upsample_bilinear(x), expected_bilinear))
 
         # Test repr
-        self.assertTrue(
-            str(nn.Upsample2d(scale=2)) == "Upsample2d(scale=2, mode=nearest)"
+        self.assertEqual(
+            str(nn.Upsample2d(scale=2)), "Upsample2d(scale=(2.0, 2.0), mode='nearest')"
         )
-        self.assertTrue(
-            str(nn.Upsample2d(scale=2, mode="nearest"))
-            == "Upsample2d(scale=2, mode=nearest)"
+        self.assertEqual(
+            str(nn.Upsample2d(scale=2, mode="nearest")),
+            "Upsample2d(scale=(2.0, 2.0), mode='nearest')",
         )
-        self.assertTrue(
-            str(nn.Upsample2d(scale=2, mode="bilinear"))
-            == "Upsample2d(scale=2, mode=bilinear)"
+        self.assertEqual(
+            str(nn.Upsample2d(scale=2, mode="bilinear")),
+            "Upsample2d(scale=(2.0, 2.0), mode='bilinear')",
         )
-        self.assertTrue(
-            str(nn.Upsample2d(scale=(2, 3))) == "Upsample2d(scale=(2, 3), mode=nearest)"
+        self.assertEqual(
+            str(nn.Upsample2d(scale=(2, 3))),
+            "Upsample2d(scale=(2.0, 3.0), mode='nearest')",
         )
-        self.assertTrue(
-            str(nn.Upsample2d(scale=(2, 3), mode="nearest"))
-            == "Upsample2d(scale=(2, 3), mode=nearest)"
+        self.assertEqual(
+            str(nn.Upsample2d(scale=(2, 3), mode="nearest")),
+            "Upsample2d(scale=(2.0, 3.0), mode='nearest')",
         )
-        self.assertTrue(
-            str(nn.Upsample2d(scale=(2, 3), mode="bilinear"))
-            == "Upsample2d(scale=(2, 3), mode=bilinear)"
+        self.assertEqual(
+            str(nn.Upsample2d(scale=(2, 3), mode="bilinear")),
+            "Upsample2d(scale=(2.0, 3.0), mode='bilinear')",
         )
 
 
