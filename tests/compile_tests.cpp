@@ -4,7 +4,6 @@
 
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
-#include "mlx/transforms_impl.h"
 
 using namespace mlx::core;
 
@@ -633,29 +632,21 @@ TEST_CASE("test metal fusion kernel reuse") {
   auto cfun = compile(gelu_1);
   auto x = array({2.0f, -2.0f});
   auto y = cfun({x})[0];
-  {
-    mlx::core::detail::InTracing in_tracing;
-    y.set_tracer(true);
-    y.eval();
-  }
+  auto p = std::dynamic_pointer_cast<Compiled>(y.primitive_ptr());
+  eval(y);
 
-  const Compiled& p = static_cast<const Compiled&>(y.primitive());
-  std::string lib_name = p.metal_lib_name();
-  std::string lib_source = p.metal_lib_source();
+  std::string lib_name = p->metal_lib_name();
+  std::string lib_source = p->metal_lib_source();
   CHECK(!lib_name.empty());
   CHECK(!lib_source.empty());
 
   x = astype(reshape(arange(10), {2, 5}), float32);
   auto z = cfun({x})[0];
-  {
-    mlx::core::detail::InTracing in_tracing;
-    z.set_tracer(true);
-    z.eval();
-  }
+  auto pz = std::dynamic_pointer_cast<Compiled>(z.primitive_ptr());
+  eval(z);
 
-  const Compiled& pz = static_cast<const Compiled&>(z.primitive());
-  std::string lib_name_z = pz.metal_lib_name();
-  std::string lib_source_z = pz.metal_lib_source();
+  std::string lib_name_z = pz->metal_lib_name();
+  std::string lib_source_z = pz->metal_lib_source();
   CHECK(!lib_name_z.empty());
   CHECK(lib_source_z.empty());
 
@@ -674,29 +665,21 @@ TEST_CASE("test metal fusion types") {
   auto cfun = compile(add3);
   auto x = array({2.0f, -2.0f});
   auto y = cfun({x})[0];
-  {
-    mlx::core::detail::InTracing in_tracing;
-    y.set_tracer(true);
-    y.eval();
-  }
+  auto p = std::dynamic_pointer_cast<Compiled>(y.primitive_ptr());
+  eval(y);
 
-  const Compiled& p = static_cast<const Compiled&>(y.primitive());
-  std::string lib_name = p.metal_lib_name();
-  std::string lib_source = p.metal_lib_source();
+  std::string lib_name = p->metal_lib_name();
+  std::string lib_source = p->metal_lib_source();
   CHECK(!lib_name.empty());
   CHECK(!lib_source.empty());
 
   x = array({2, -2}, int32);
   auto z = cfun({x})[0];
-  {
-    mlx::core::detail::InTracing in_tracing;
-    z.set_tracer(true);
-    z.eval();
-  }
+  auto pz = std::dynamic_pointer_cast<Compiled>(z.primitive_ptr());
+  eval(z);
 
-  const Compiled& pz = static_cast<const Compiled&>(z.primitive());
-  std::string lib_name_z = pz.metal_lib_name();
-  std::string lib_source_z = pz.metal_lib_source();
+  std::string lib_name_z = pz->metal_lib_name();
+  std::string lib_source_z = pz->metal_lib_source();
   CHECK(!lib_name_z.empty());
   CHECK(!lib_source_z.empty());
 }
