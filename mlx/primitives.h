@@ -473,16 +473,20 @@ class Compiled : public Primitive {
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
-
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-
   void print(std::ostream& os) override;
-
   bool is_equivalent(const Primitive& other) const override;
+
+  std::string metal_lib_name() const {
+    return kernel_lib_;
+  }
+  std::string metal_lib_source() const {
+    return kernel_source_;
+  }
 
  private:
   const std::vector<array> inputs_;

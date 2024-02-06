@@ -4,6 +4,7 @@
 
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms_impl.h"
 
 using namespace mlx::core;
 
@@ -622,4 +623,80 @@ TEST_CASE("test transform compiled function") {
   CHECK_EQ(outs[0].siblings()[0].id(), outs[1].id());
   CHECK(!outs[0].inputs()[0].has_primitive());
   CHECK(!outs[0].inputs()[1].has_primitive());
+}
+
+TEST_CASE("test metal fusion kernel reuse") {
+  if (default_device() != Device::gpu) {
+    return;
+  }
+
+  auto cfun = compile(gelu_1);
+  auto x = array({2.0f, -2.0f});
+  auto y = cfun({x})[0];
+  {
+    mlx::core::detail::InTracing in_tracing;
+    y.set_tracer(true);
+    y.eval();
+  }
+
+  const Compiled& p = static_cast<const Compiled&>(y.primitive());
+  std::string lib_name = p.metal_lib_name();
+  std::string lib_source = p.metal_lib_source();
+  CHECK(!lib_name.empty());
+  CHECK(!lib_source.empty());
+
+  x = astype(reshape(arange(10), {2, 5}), float32);
+  auto z = cfun({x})[0];
+  {
+    mlx::core::detail::InTracing in_tracing;
+    z.set_tracer(true);
+    z.eval();
+  }
+
+  const Compiled& pz = static_cast<const Compiled&>(z.primitive());
+  std::string lib_name_z = pz.metal_lib_name();
+  std::string lib_source_z = pz.metal_lib_source();
+  CHECK(!lib_name_z.empty());
+  CHECK(lib_source_z.empty());
+
+  CHECK_EQ(lib_name, lib_name_z);
+}
+
+auto add3(const std::vector<array>& xs) {
+  return std::vector<array>{xs[0] + xs[0] + xs[0]};
+}
+
+TEST_CASE("test metal fusion types") {
+  if (default_device() != Device::gpu) {
+    return;
+  }
+
+  auto cfun = compile(add3);
+  auto x = array({2.0f, -2.0f});
+  auto y = cfun({x})[0];
+  {
+    mlx::core::detail::InTracing in_tracing;
+    y.set_tracer(true);
+    y.eval();
+  }
+
+  const Compiled& p = static_cast<const Compiled&>(y.primitive());
+  std::string lib_name = p.metal_lib_name();
+  std::string lib_source = p.metal_lib_source();
+  CHECK(!lib_name.empty());
+  CHECK(!lib_source.empty());
+
+  x = array({2, -2}, int32);
+  auto z = cfun({x})[0];
+  {
+    mlx::core::detail::InTracing in_tracing;
+    z.set_tracer(true);
+    z.eval();
+  }
+
+  const Compiled& pz = static_cast<const Compiled&>(z.primitive());
+  std::string lib_name_z = pz.metal_lib_name();
+  std::string lib_source_z = pz.metal_lib_source();
+  CHECK(!lib_name_z.empty());
+  CHECK(!lib_source_z.empty());
 }

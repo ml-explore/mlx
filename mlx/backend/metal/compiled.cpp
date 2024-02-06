@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <iostream>
 #include <sstream>
 
 #include "mlx/backend/metal/compiled_preamble.h"
@@ -8,6 +7,7 @@
 #include "mlx/backend/metal/utils.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
@@ -110,6 +110,13 @@ inline std::string build_lib_name(
     } else {
       os << ((x.size() == 1) ? "S" : "V");
     }
+  }
+  os << "_";
+  for (auto& x : inputs) {
+    if (constant_ids.find(x.id()) != constant_ids.end()) {
+      continue;
+    }
+    os << kindof(x.dtype()) << x.itemsize();
   }
   os << "_" << std::hash<std::string>{}(constant_hasher.str());
 
@@ -322,10 +329,6 @@ void Compiled::eval_gpu(
         /* dynamic_dims = */ true);
 
     kernel_source_ = kernel.str();
-    //{
-    //  std::ofstream debug_out("/tmp/debug_kernel.metal");
-    //  debug_out << kernel_source_;
-    //}
     lib = d.get_library(kernel_lib_, kernel_source_);
   }
 
