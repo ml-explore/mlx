@@ -858,24 +858,6 @@ void init_transforms(py::module_& m) {
       },
       "file"_a);
   m.def(
-      "generate_kernel",
-      [](py::object file, const py::args& args) {
-        std::vector<array> arrays = tree_flatten(args);
-        if (py::isinstance<py::str>(file)) {
-          std::ofstream out(py::cast<std::string>(file));
-          generate_kernel(out, arrays);
-        } else if (py::hasattr(file, "write")) {
-          std::ostringstream out;
-          generate_kernel(out, arrays);
-          auto write = file.attr("write");
-          write(out.str());
-        } else {
-          throw std::invalid_argument(
-              "generate_kernel accepts file-like objects or strings to be used as filenames");
-        }
-      },
-      "file"_a);
-  m.def(
       "compile",
       [](const py::function& fun) {
         return py::cpp_function(PyCompiledFun{fun});
