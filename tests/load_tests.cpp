@@ -61,7 +61,7 @@ TEST_CASE("test gguf") {
   }
 
   // Test saving and loading string metadata
-  std::unordered_map<std::string, MetaData> original_metadata;
+  std::unordered_map<std::string, GGUFMetaData> original_metadata;
   original_metadata.insert({"test_str", "my string"});
 
   save_gguf(file_path, original_weights, original_metadata);
@@ -103,7 +103,7 @@ TEST_CASE("test gguf metadata") {
 
   // Scalar array
   {
-    std::unordered_map<std::string, MetaData> original_metadata;
+    std::unordered_map<std::string, GGUFMetaData> original_metadata;
     original_metadata.insert({"test_arr", array(1.0)});
     save_gguf(file_path, original_weights, original_metadata);
 
@@ -117,7 +117,7 @@ TEST_CASE("test gguf metadata") {
 
   // 1D Array
   {
-    std::unordered_map<std::string, MetaData> original_metadata;
+    std::unordered_map<std::string, GGUFMetaData> original_metadata;
     auto arr = array({1.0, 2.0});
     original_metadata.insert({"test_arr", arr});
     save_gguf(file_path, original_weights, original_metadata);
@@ -144,21 +144,21 @@ TEST_CASE("test gguf metadata") {
 
   // > 1D array throws
   {
-    std::unordered_map<std::string, MetaData> original_metadata;
+    std::unordered_map<std::string, GGUFMetaData> original_metadata;
     original_metadata.insert({"test_arr", array({1.0}, {1, 1})});
     CHECK_THROWS(save_gguf(file_path, original_weights, original_metadata));
   }
 
   // empty array throws
   {
-    std::unordered_map<std::string, MetaData> original_metadata;
+    std::unordered_map<std::string, GGUFMetaData> original_metadata;
     original_metadata.insert({"test_arr", array({})});
     CHECK_THROWS(save_gguf(file_path, original_weights, original_metadata));
   }
 
   // vector of string
   {
-    std::unordered_map<std::string, MetaData> original_metadata;
+    std::unordered_map<std::string, GGUFMetaData> original_metadata;
     std::vector<std::string> data = {"data1", "data2", "data1234"};
     original_metadata.insert({"meta", data});
     save_gguf(file_path, original_weights, original_metadata);
@@ -175,7 +175,7 @@ TEST_CASE("test gguf metadata") {
 
   // vector of string, string, scalar, and array
   {
-    std::unordered_map<std::string, MetaData> original_metadata;
+    std::unordered_map<std::string, GGUFMetaData> original_metadata;
     std::vector<std::string> data = {"data1", "data2", "data1234"};
     original_metadata.insert({"meta1", data});
     original_metadata.insert({"meta2", array(2.5)});

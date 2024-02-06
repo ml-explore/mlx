@@ -82,7 +82,7 @@ void set_mx_value_from_gguf(
     gguf_ctx* ctx,
     uint32_t type,
     gguf_value* val,
-    MetaData& value) {
+    GGUFMetaData& value) {
   switch (type) {
     case GGUF_VALUE_TYPE_UINT8:
       value = array(val->uint8, uint8);
@@ -191,12 +191,12 @@ void set_mx_value_from_gguf(
   }
 }
 
-std::unordered_map<std::string, MetaData> load_metadata(gguf_ctx* ctx) {
-  std::unordered_map<std::string, MetaData> metadata;
+std::unordered_map<std::string, GGUFMetaData> load_metadata(gguf_ctx* ctx) {
+  std::unordered_map<std::string, GGUFMetaData> metadata;
   gguf_key key;
   while (gguf_get_key(ctx, &key)) {
     std::string key_name = std::string(key.name, key.namelen);
-    auto& val = metadata.insert({key_name, MetaData{}}).first->second;
+    auto& val = metadata.insert({key_name, GGUFMetaData{}}).first->second;
     set_mx_value_from_gguf(ctx, key.type, key.val, val);
   }
   return metadata;
@@ -230,10 +230,7 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   return array_map;
 }
 
-std::pair<
-    std::unordered_map<std::string, array>,
-    std::unordered_map<std::string, MetaData>>
-load_gguf(const std::string& file, StreamOrDevice s) {
+GGUFLoad load_gguf(const std::string& file, StreamOrDevice s) {
   gguf_ctx* ctx = gguf_open(file.c_str());
   if (!ctx) {
     throw std::runtime_error("[load_gguf] gguf_init failed");
@@ -280,7 +277,7 @@ void append_kv_array(
 void save_gguf(
     std::string file,
     std::unordered_map<std::string, array> array_map,
-    std::unordered_map<std::string, MetaData> metadata /* = {} */) {
+    std::unordered_map<std::string, GGUFMetaData> metadata /* = {} */) {
   // Add .gguf to file name if it is not there
   if (file.length() < 5 || file.substr(file.length() - 5, 5) != ".gguf") {
     file += ".gguf";

@@ -182,10 +182,7 @@ mlx_load_safetensor_helper(py::object file, StreamOrDevice s) {
       "[load_safetensors] Input must be a file-like object, or string");
 }
 
-std::pair<
-    std::unordered_map<std::string, array>,
-    std::unordered_map<std::string, MetaData>>
-mlx_load_gguf_helper(py::object file, StreamOrDevice s) {
+GGUFLoad mlx_load_gguf_helper(py::object file, StreamOrDevice s) {
   if (py::isinstance<py::str>(file)) { // Assume .gguf file path string
     return load_gguf(py::cast<std::string>(file), s);
   }
@@ -491,7 +488,7 @@ void mlx_save_gguf_helper(
   if (py::isinstance<py::str>(file)) {
     if (m) {
       auto metadata_map =
-          m.value().cast<std::unordered_map<std::string, MetaData>>();
+          m.value().cast<std::unordered_map<std::string, GGUFMetaData>>();
       {
         py::gil_scoped_release nogil;
         save_gguf(py::cast<std::string>(file), arrays_map, metadata_map);

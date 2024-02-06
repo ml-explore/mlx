@@ -93,10 +93,9 @@ Dtype dtype_from_safetensor_str(std::string str) {
 }
 
 /** Load array from reader in safetensor format */
-std::pair<
-    std::unordered_map<std::string, array>,
-    std::unordered_map<std::string, std::string>>
-load_safetensors(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
+SafeTensorsLoad load_safetensors(
+    std::shared_ptr<io::Reader> in_stream,
+    StreamOrDevice s) {
   ////////////////////////////////////////////////////////
   // Open and check file
   if (!in_stream->good() || !in_stream->is_open()) {
@@ -145,10 +144,7 @@ load_safetensors(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   return {res, metadata_map};
 }
 
-std::pair<
-    std::unordered_map<std::string, array>,
-    std::unordered_map<std::string, std::string>>
-load_safetensors(const std::string& file, StreamOrDevice s) {
+SafeTensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
   return load_safetensors(std::make_shared<io::FileReader>(file), s);
 }
 
@@ -156,8 +152,7 @@ load_safetensors(const std::string& file, StreamOrDevice s) {
 void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a,
-    std::unordered_map<std::string, std::string>
-        metadata /* = {"format", "mlx"} */) {
+    std::unordered_map<std::string, std::string> metadata /* = {} */) {
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
