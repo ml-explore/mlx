@@ -19,8 +19,14 @@ TEST_CASE("test save_safetensors") {
   auto map = std::unordered_map<std::string, array>();
   map.insert({"test", array({1.0, 2.0, 3.0, 4.0})});
   map.insert({"test2", ones({2, 2})});
-  save_safetensors(file_path, map);
-  auto dict = load_safetensors(file_path);
+  auto _metadata = std::unordered_map<std::string, std::string>();
+  _metadata.insert({"test", "test"});
+  _metadata.insert({"test2", "test2"});
+  save_safetensors(file_path, map, _metadata);
+  auto [dict, metadata] = load_safetensors(file_path);
+
+  CHECK_EQ(metadata, _metadata);
+
   CHECK_EQ(dict.size(), 2);
   CHECK_EQ(dict.count("test"), 1);
   CHECK_EQ(dict.count("test2"), 1);

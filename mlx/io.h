@@ -24,19 +24,23 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
 array load(const std::string& file, StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */
-std::unordered_map<std::string, array> load_safetensors(
-    std::shared_ptr<io::Reader> in_stream,
-    StreamOrDevice s = {});
-std::unordered_map<std::string, array> load_safetensors(
-    const std::string& file,
-    StreamOrDevice s = {});
+std::pair<
+    std::unordered_map<std::string, array>,
+    std::unordered_map<std::string, std::string>>
+load_safetensors(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
+std::pair<
+    std::unordered_map<std::string, array>,
+    std::unordered_map<std::string, std::string>>
+load_safetensors(const std::string& file, StreamOrDevice s = {});
 
 void save_safetensors(
     std::shared_ptr<io::Writer> in_stream,
-    std::unordered_map<std::string, array>);
+    std::unordered_map<std::string, array>,
+    std::unordered_map<std::string, std::string> metadata = {});
 void save_safetensors(
     const std::string& file,
-    std::unordered_map<std::string, array>);
+    std::unordered_map<std::string, array>,
+    std::unordered_map<std::string, std::string> metadata = {});
 
 using MetaData =
     std::variant<std::monostate, array, std::string, std::vector<std::string>>;
