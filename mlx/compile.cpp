@@ -86,20 +86,20 @@ std::vector<array> Compiled::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  throw std::runtime_error("[Compiled] Cannot VJP Compiled primitive.");
+  throw std::runtime_error("[Compiled] Cannot vjp primitive.");
 }
 
 std::vector<array> Compiled::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  throw std::runtime_error("[Compiled] Cannot JVP Compiled primitive.");
+  throw std::runtime_error("[Compiled] Cannot jvp primitive.");
 }
 
 std::pair<std::vector<array>, std::vector<int>> Compiled::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("[Compiled] Cannot VMAP Compiled primitive.");
+  throw std::runtime_error("[Compiled] Cannot vmap primitive.");
 }
 
 bool Compiled::is_equivalent(const Primitive& other) const {
