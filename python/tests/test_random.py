@@ -80,6 +80,20 @@ class TestRandom(mlx_tests.MLXTestCase):
             a = mx.random.normal(dtype=t)
             self.assertEqual(a.dtype, t)
 
+        # Generate with a given mean and standard deviation
+        a = mx.random.normal(shape=(3, 2), loc=1, scale=2.0)
+        b = mx.array([[0.0371162, 2.54261], [3.65259, 0.821914], [-2.07296, 2.24906]])
+        self.assertTrue(mx.all(mx.abs(a - b) < 1e-5).item())
+
+        # Generate with a given mean and standard deviation and dtype
+        a = mx.random.normal(shape=(3, 2), loc=1, scale=2.0, dtype=mx.float16)
+        self.assertEqual(a.dtype, mx.float16)
+        b = mx.array(
+            [[1.26758, 0.763184], [-1.0293, 2.33984], [0.598633, 2.9082]],
+            dtype=mx.float16,
+        )
+        self.assertTrue(mx.all(mx.abs(a - b) < 1e-5).item())
+
         self.assertEqual(mx.random.normal().dtype, mx.random.normal(dtype=None).dtype)
 
     def test_randint(self):
