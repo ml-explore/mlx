@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
 from itertools import permutations
 
@@ -1566,8 +1567,11 @@ class TestOps(mlx_tests.MLXTestCase):
                             d_np = np.take(b_mx, np.arange(kth), axis=axis)
                             self.assertTrue(np.all(d_np <= c_mx))
 
+    @unittest.skipIf(
+        os.getenv("LOW_MEMORY", None) is not None,
+        "This test requires a lot of memory",
+    )
     def test_large_binary(self):
-        return
         a = mx.ones([1000, 2147484], mx.int8)
         b = mx.ones([2147484], mx.int8)
         self.assertEqual((a + b)[0, 0].item(), 2)
