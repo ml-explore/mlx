@@ -75,9 +75,11 @@ class TestLoad(mlx_tests.MLXTestCase):
                             self.test_dir, f"mlx_{dt}_{i}_fs.safetensors"
                         )
                         save_dict = {
-                            "test": mx.random.normal(shape=shape, dtype=getattr(mx, dt))
-                            if dt in ["float32", "float16", "bfloat16"]
-                            else mx.ones(shape, dtype=getattr(mx, dt))
+                            "test": (
+                                mx.random.normal(shape=shape, dtype=getattr(mx, dt))
+                                if dt in ["float32", "float16", "bfloat16"]
+                                else mx.ones(shape, dtype=getattr(mx, dt))
+                            )
                         }
 
                         with open(save_file_mlx, "wb") as f:
@@ -104,9 +106,11 @@ class TestLoad(mlx_tests.MLXTestCase):
                             self.test_dir, f"mlx_{dt}_{i}_fs.gguf"
                         )
                         save_dict = {
-                            "test": mx.random.normal(shape=shape, dtype=getattr(mx, dt))
-                            if dt in ["float32", "float16", "bfloat16"]
-                            else mx.ones(shape, dtype=getattr(mx, dt))
+                            "test": (
+                                mx.random.normal(shape=shape, dtype=getattr(mx, dt))
+                                if dt in ["float32", "float16", "bfloat16"]
+                                else mx.ones(shape, dtype=getattr(mx, dt))
+                            )
                         }
 
                         mx.save_gguf(save_file_mlx, save_dict)

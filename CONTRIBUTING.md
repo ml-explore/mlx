@@ -5,26 +5,26 @@ possible.
 
 ## Pull Requests
 
-1. Fork and submit pull requests to the repo. 
+1. Fork and submit pull requests to the repo.
 2. If you've added code that should be tested, add tests.
 3. If a change is likely to impact efficiency, run some of the benchmarks before
    and after the change. Examples of benchmarks can be found in `benchmarks/python/`.
 4. If you've changed APIs, update the documentation.
-5. Every PR should have passing tests and at least one review. 
+5. Every PR should have passing tests and at least one review.
 6. For code formatting install `pre-commit` using something like `pip install pre-commit` and run `pre-commit install`.
    This should install hooks for running `black` and `clang-format` to ensure
    consistent style for C++ and python code.
- 
+
    You can also run the formatters manually as follows:
- 
-     ```
-     clang-format -i file.cpp
-     ```
- 
-     ```
-     black file.py
-     ```
- 
+
+   ```bash
+   clang-format -i file.cpp
+   ```
+
+   ```bash
+   black file.py
+   ```
+
    or run `pre-commit run --all-files` to check all files in the repo.
 
 ## Issues

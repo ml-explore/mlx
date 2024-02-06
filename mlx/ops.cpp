@@ -2734,7 +2734,8 @@ inline std::vector<int> conv_out_shape(
   return out_shape;
 }
 
-inline void run_conv_checks(const array& in, const array& wt, int n_dim) {
+inline void
+run_conv_checks(const array& in, const array& wt, int n_dim, int n_groups) {
   if (!is_floating_point(in.dtype()) && kindof(in.dtype()) != Dtype::Kind::c) {
     std::ostringstream msg;
     msg << "[conv] Invalid input array with type " << in.dtype() << "."
@@ -2767,6 +2768,22 @@ inline void run_conv_checks(const array& in, const array& wt, int n_dim) {
         << " input: " << in.shape() << " and weight: " << wt.shape();
     throw std::invalid_argument(msg.str());
   }
+
+  if (in.shape(n_dim + 1) % n_groups != 0) {
+    std::ostringstream msg;
+    msg << "[conv] The number of input channels must be divisible by the number"
+        << " of groups. Got input with shape " << in.shape() << " and groups "
+        << n_groups << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (wt.shape(n_dim + 1) % n_groups != 0) {
+    std::ostringstream msg;
+    msg << "[conv] The number of output channels must be divisible by the number"
+        << " of groups. Got weight with shape " << wt.shape() << " and groups "
+        << n_groups << ".";
+    throw std::invalid_argument(msg.str());
+  }
 }
 
 } // namespace
@@ -2781,15 +2798,15 @@ array conv1d(
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   // Run checks
-  if (groups != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle groups != 1 yet");
+  if (groups < 1) {
+    throw std::invalid_argument("[conv1d] Invalid groups < 1");
   }
   if (dilation != 1) {
     throw std::invalid_argument("[conv1d] Cannot handle dilation != 1 yet");
   }
 
   // Run checks
-  run_conv_checks(in_, wt_, 1);
+  run_conv_checks(in_, wt_, 1, groups);
 
   auto in = in_;
   auto wt = wt_;
@@ -2802,21 +2819,48 @@ array conv1d(
   std::vector<int> strides_vec = {stride};
   std::vector<int> padding_vec = {padding};
   std::vector<int> dilation_vec = {dilation};
+  std::vector<int> input_dilation_vec = {1, 1};
 
-  // Get output shapes
-  std::vector<int> out_shape = conv_out_shape(
-      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
-
-  return array(
-      out_shape,
-      in.dtype(),
-      std::make_unique<Convolution>(
-          to_stream(s),
-          padding_vec,
+  if (groups == 1) {
+    // Get output shapes
+    std::vector<int> out_shape = conv_out_shape(
+        in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
+    return array(
+        out_shape,
+        in.dtype(),
+        std::make_unique<Convolution>(
+            to_stream(s),
+            padding_vec,
+            strides_vec,
+            dilation_vec,
+            input_dilation_vec),
+        {in, wt});
+  } else {
+    // Grouped convolution
+    auto in_slices = split(in, groups, -1, s);
+    auto wt_slices = split(wt, groups, 0, s);
+    std::vector<array> out_slices;
+    for (auto i = 0; i < groups; i++) {
+      auto out_shape = conv_out_shape(
+          in_slices[i].shape(),
+          wt_slices[i].shape(),
           strides_vec,
-          dilation_vec,
-          std::vector<int>(1, 1)),
-      {in, wt});
+          padding_vec,
+          dilation_vec);
+      auto out_slice = array(
+          out_shape,
+          in.dtype(),
+          std::make_unique<Convolution>(
+              to_stream(s),
+              padding_vec,
+              strides_vec,
+              dilation_vec,
+              input_dilation_vec),
+          {in_slices[i], wt_slices[i]});
+      out_slices.push_back(out_slice);
+    }
+    return concatenate(out_slices, -1, s);
+  }
 }
 
 /** 2D convolution with a filter */
@@ -2829,15 +2873,15 @@ array conv2d(
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
   // Run checks
-  if (groups != 1) {
-    throw std::invalid_argument("[conv2d] Cannot handle groups != 1 yet");
+  if (groups < 1) {
+    throw std::invalid_argument("[conv2d] Invalid groups < 1");
   }
   if (dilation.first != 1 || dilation.second != 1) {
     throw std::invalid_argument("[conv2d] Cannot handle dilation != 1 yet");
   }
 
   // Run checks
-  run_conv_checks(in_, wt_, 2);
+  run_conv_checks(in_, wt_, 2, groups);
 
   auto in = in_;
   auto wt = wt_;
@@ -2850,21 +2894,49 @@ array conv2d(
   std::vector<int> strides_vec = {stride.first, stride.second};
   std::vector<int> padding_vec = {padding.first, padding.second};
   std::vector<int> dilation_vec = {dilation.first, dilation.second};
+  std::vector<int> input_dilation_vec = {2, 1};
 
-  // Get output shapes
-  std::vector<int> out_shape = conv_out_shape(
-      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
+  if (groups == 1) {
+    // Get output shapes
+    std::vector<int> out_shape = conv_out_shape(
+        in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
 
-  return array(
-      out_shape,
-      in.dtype(),
-      std::make_unique<Convolution>(
-          to_stream(s),
-          padding_vec,
+    return array(
+        out_shape,
+        in.dtype(),
+        std::make_unique<Convolution>(
+            to_stream(s),
+            padding_vec,
+            strides_vec,
+            dilation_vec,
+            input_dilation_vec),
+        {in, wt});
+  } else {
+    // Grouped convolution
+    auto in_slices = split(in, groups, -1, s);
+    auto wt_slices = split(wt, groups, 0, s);
+    std::vector<array> out_slices;
+    for (auto i = 0; i < groups; i++) {
+      auto out_shape = conv_out_shape(
+          in_slices[i].shape(),
+          wt_slices[i].shape(),
           strides_vec,
-          dilation_vec,
-          std::vector<int>(2, 1)),
-      {in, wt});
+          padding_vec,
+          dilation_vec);
+      auto out_slice = array(
+          out_shape,
+          in.dtype(),
+          std::make_unique<Convolution>(
+              to_stream(s),
+              padding_vec,
+              strides_vec,
+              dilation_vec,
+              input_dilation_vec),
+          {in_slices[i], wt_slices[i]});
+      out_slices.push_back(out_slice);
+    }
+    return concatenate(out_slices, -1, s);
+  }
 }
 
 array quantized_matmul(
