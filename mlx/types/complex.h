@@ -35,6 +35,16 @@ inline bool operator>(const complex64_t& a, const complex64_t& b) {
   return (a.real() > b.real()) || (a.real() == b.real() && a.imag() > b.imag());
 }
 
+inline complex64_t operator%(complex64_t a, complex64_t b) {
+  auto real = a.real() - (b.real() * static_cast<int64_t>(a.real() / b.real()));
+  auto imag = a.imag() - (b.imag() * static_cast<int64_t>(a.imag() / b.imag()));
+  if (real < 0 && b.real() > 0)
+    real += b.real();
+  if (imag < 0 && b.imag() > 0)
+    imag += b.imag();
+  return {real, imag};
+}
+
 inline bool operator<=(const complex64_t& a, const complex64_t& b) {
   return operator>=(b, a);
 }
@@ -70,7 +80,7 @@ inline complex64_t operator-(const complex64_t& v) {
   complex_binop_helper(_op_, _operator_, bfloat16_t)                          \
   complex_binop_helper(_op_, _operator_, const std::complex<float>&)          \
   complex_binop_helper(_op_, _operator_, float)
-// clang-format on
+// clang-format on  
 
 complex_binop(+, operator+)
 
