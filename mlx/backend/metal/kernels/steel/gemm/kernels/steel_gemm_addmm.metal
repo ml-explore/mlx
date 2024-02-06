@@ -112,14 +112,8 @@ template <typename T,
         short2 tile_dims_A = transpose_a ? short2(BM, lbk) : short2(lbk, BM);
         short2 tile_dims_B = transpose_b ? short2(lbk, BN) : short2(BN, lbk);
 
-        thread bool mask_A[loader_a_t::n_rows][loader_a_t::vec_size];
-        thread bool mask_B[loader_b_t::n_rows][loader_b_t::vec_size];
-
-        loader_a.set_mask(tile_dims_A, mask_A);
-        loader_b.set_mask(tile_dims_B, mask_B);
-
-        loader_a.load_safe(mask_A);
-        loader_b.load_safe(mask_B);
+        loader_a.load_safe(tile_dims_A);
+        loader_b.load_safe(tile_dims_B);
 
         threadgroup_barrier(mem_flags::mem_threadgroup);
 
