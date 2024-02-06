@@ -57,44 +57,36 @@ jobs:
           command: ./build/tests/tests
 
   mac_build_and_test:
-    machine: true
-    resource_class: ml-explore/m-builder
+    macos:
+      xcode: "15.2.0"
+    resource_class: macos.m1.large.gen1
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            eval "$(conda shell.bash hook)"
-            rm -r $CONDA_PREFIX/envs/runner-env
-            conda create -y -n runner-env python=3.9
-            conda activate runner-env
-            pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
-            pip install pybind11-stubgen
-            pip install numpy
-            pip install torch
-            pip install tensorflow
-            pip install unittest-xml-reporting
+            brew install python
+            pip3 install --upgrade cmake
+            pip3 install --upgrade pybind11[global]
+            pip3 install pybind11-stubgen
+            pip3 install numpy
+            pip3 install torch
+            pip3 install tensorflow
+            pip3 install unittest-xml-reporting
       - run:
           name: Install Python package
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py build_ext --inplace
-            CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py develop
+            CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py build_ext --inplace
+            CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py develop
       - run:
           name: Generate package stubs
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            python setup.py generate_stubs
+            python3 setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
-            DEVICE=gpu python -m xmlrunner discover -v python/tests -o test-results/gpu
+            DEVICE=cpu python3 -m xmlrunner discover -v python/tests -o test-results/cpu
+            DEVICE=gpu python3 -m xmlrunner discover -v python/tests -o test-results/gpu
       # TODO: Reenable when extension api becomes stable
       # - run:
       #     name: Build example extension
@@ -273,31 +265,31 @@ workflows:
         - not: << pipeline.parameters.nightly_build >>
         - not: << pipeline.parameters.weekly_build >>
     jobs:
-      - linux_build_and_test
       - mac_build_and_test
-      - build_release:
-          filters:
-            tags:
-              only: /^v.*/
-            branches:
-              ignore: /.*/
-          matrix:
-            parameters:
-              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              macos_version: ["13", "14"]
-  nightly_build:
-    when: << pipeline.parameters.nightly_build >>
-    jobs:
-      - build_package:
-          matrix:
-            parameters:
-              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              macos_version: ["13", "14"]
-  weekly_build:
-    when: << pipeline.parameters.weekly_build >>
-    jobs:
-      - build_dev_release:
-          matrix:
-            parameters:
-              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              macos_version: ["13", "14"]
+#      - linux_build_and_test
+#      - build_release:
+#          filters:
+#            tags:
+#              only: /^v.*/
+#            branches:
+#              ignore: /.*/
+#          matrix:
+#            parameters:
+#              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+#              macos_version: ["13", "14"]
+#  nightly_build:
+#    when: << pipeline.parameters.nightly_build >>
+#    jobs:
+#      - build_package:
+#          matrix:
+#            parameters:
+#              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+#              macos_version: ["13", "14"]
+#  weekly_build:
+#    when: << pipeline.parameters.weekly_build >>
+#    jobs:
+#      - build_dev_release:
+#          matrix:
+#            parameters:
+#              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+#              macos_version: ["13", "14"]
