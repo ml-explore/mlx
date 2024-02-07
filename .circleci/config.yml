@@ -166,7 +166,7 @@ jobs:
                 name: Upload package
                 command: |
                   source env/bin/activate
-                  echo twine upload dist/*
+                  twine upload dist/*
       - store_artifacts:
           path: dist/
 
@@ -196,8 +196,7 @@ workflows:
       - build_release:
           matrix:
             parameters:
-              #python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              python_version: ["3.12"]
+              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               xcode_version: ["14.3.1", "15.2.0"]
   weekly_build:
     when: << pipeline.parameters.weekly_build >>
