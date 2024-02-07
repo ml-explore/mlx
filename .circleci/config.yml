@@ -80,8 +80,7 @@ jobs:
           name: Install Python package
           command: |
             source env/bin/activate
-            CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py build_ext --inplace
-            CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py develop
+            CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
@@ -136,6 +135,7 @@ jobs:
             pip install --upgrade pip
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install --upgrade setuptools
             pip install pybind11-stubgen
             pip install numpy
             pip install twine
@@ -146,7 +146,7 @@ jobs:
             source env/bin/activate
             DEV_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              pip install .
+              pip install . -v
       - run:
           name: Generate package stubs
           command: |
@@ -199,12 +199,12 @@ workflows:
               #python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               python_version: ["3.12"]
               xcode_version: ["14.3.1", "15.2.0"]
-#  weekly_build:
-#    when: << pipeline.parameters.weekly_build >>
-#    jobs:
-#      - build_release:
-#          matrix:
-#            parameters:
-#              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-#              xcode_version: ["14.3.1", "15.2.0"]
-#              build_env: ["DEV_RELEASE=1"]
+  weekly_build:
+    when: << pipeline.parameters.weekly_build >>
+    jobs:
+      - build_release:
+          matrix:
+            parameters:
+              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+              xcode_version: ["14.3.1", "15.2.0"]
+              build_env: ["DEV_RELEASE=1"]
