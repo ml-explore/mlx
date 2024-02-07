@@ -125,6 +125,7 @@ jobs:
           name: Install dependencies
           command: |
             brew install python@<< parameters.python_version >>
+            python<< parameters.python_version >> -m pip install --upgrade pip
             python<< parameters.python_version >> -m pip install --upgrade cmake
             python<< parameters.python_version >> -m pip install --upgrade pybind11[global]
             python<< parameters.python_version >> -m pip install pybind11-stubgen
@@ -183,7 +184,8 @@ workflows:
       - build_release:
           matrix:
             parameters:
-              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+              #python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+              python_version: ["3.12"]
               xcode_version: ["14.3.1", "15.2.0"]
 #  weekly_build:
 #    when: << pipeline.parameters.weekly_build >>
