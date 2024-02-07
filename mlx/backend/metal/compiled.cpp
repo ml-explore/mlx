@@ -283,6 +283,15 @@ inline void build_kernel(
 
   // Finish the kernel
   os << "}" << std::endl;
+
+  if (cnt > 31) {
+    std::ostringstream msg;
+    msg << "[compile] Too many inputs/outputs fused in the Metal Compile "
+        << "primitive which exhausted the available argument buffers for "
+        << "the kernel. Please file an issue with the function that results "
+        << "in this error. The name of the kernel is '" << kernel_name << "'";
+    throw std::runtime_error(msg.str());
+  }
 }
 
 void Compiled::eval_gpu(
