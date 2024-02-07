@@ -15,7 +15,7 @@ using GGUFMetaData =
 using GGUFLoad = std::pair<
     std::unordered_map<std::string, array>,
     std::unordered_map<std::string, GGUFMetaData>>;
-using SafeTensorsLoad = std::pair<
+using SafetensorsLoad = std::pair<
     std::unordered_map<std::string, array>,
     std::unordered_map<std::string, std::string>>;
 
@@ -32,10 +32,10 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
 array load(const std::string& file, StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */
-SafeTensorsLoad load_safetensors(
+SafetensorsLoad load_safetensors(
     std::shared_ptr<io::Reader> in_stream,
     StreamOrDevice s = {});
-SafeTensorsLoad load_safetensors(
+SafetensorsLoad load_safetensors(
     const std::string& file,
     StreamOrDevice s = {});
 

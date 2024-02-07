@@ -93,7 +93,7 @@ Dtype dtype_from_safetensor_str(std::string str) {
 }
 
 /** Load array from reader in safetensor format */
-SafeTensorsLoad load_safetensors(
+SafetensorsLoad load_safetensors(
     std::shared_ptr<io::Reader> in_stream,
     StreamOrDevice s) {
   ////////////////////////////////////////////////////////
@@ -144,7 +144,7 @@ SafeTensorsLoad load_safetensors(
   return {res, metadata_map};
 }
 
-SafeTensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
+SafetensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
   return load_safetensors(std::make_shared<io::FileReader>(file), s);
 }
 
@@ -209,7 +209,7 @@ void save_safetensors(
 void save_safetensors(
     const std::string& file_,
     std::unordered_map<std::string, array> a,
-    std::unordered_map<std::string, std::string> metadata) {
+    std::unordered_map<std::string, std::string> metadata /* = {} */) {
   // Open and check file
   std::string file = file_;
 

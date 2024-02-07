@@ -15,10 +15,10 @@ using namespace mlx::core;
 using LoadOutputTypes = std::variant<
     array,
     std::unordered_map<std::string, array>,
-    SafeTensorsLoad,
+    SafetensorsLoad,
     GGUFLoad>;
 
-SafeTensorsLoad mlx_load_safetensor_helper(py::object file, StreamOrDevice s);
+SafetensorsLoad mlx_load_safetensor_helper(py::object file, StreamOrDevice s);
 void mlx_save_safetensor_helper(
     py::object file,
     py::dict d,
