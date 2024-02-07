@@ -600,7 +600,7 @@ void compile_fuse(
         shapes,
         types,
         std::make_shared<Compiled>(
-            outputs.back().primitive().stream(),
+            old_outputs.back().primitive().stream(),
             inputs,
             old_outputs,
             std::move(fused_tape),
