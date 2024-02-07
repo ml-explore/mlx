@@ -582,7 +582,7 @@ struct PyCompiledFun {
       }
 
       auto [outputs, py_outputs] = tree_flatten_with_structure(
-          std::move(fun(*tree_unflatten(args, a))), true);
+          std::move(fun(*tree_unflatten(args, a))), false);
 
       tree_cache().insert({fun_id, py_outputs});
 
@@ -602,8 +602,7 @@ struct PyCompiledFun {
       return outputs;
     };
 
-    // Inputs must be array or tree of arrays
-    auto inputs = tree_flatten(args, true);
+    auto inputs = tree_flatten(args, false);
     if (!py::isinstance<py::none>(captured_inputs)) {
       auto flat_in_captures = tree_flatten(captured_inputs, false);
       inputs.insert(
