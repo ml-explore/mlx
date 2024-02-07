@@ -71,7 +71,7 @@ class TestBase(mlx_tests.MLXTestCase):
 
     def test_save_safetensors_weights(self):
         def make_model():
-            return nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
+            return nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2), nn.ReLU())
 
         m = make_model()
         tdir = tempfile.TemporaryDirectory()
