@@ -719,7 +719,7 @@ void init_transforms(py::module_& m) {
         Args:
             *args (arrays or trees of arrays): Each argument can be a single array
               or a tree of arrays. If a tree is given the nodes can be a Python
-              :class:`list`, :class:`tuple` or :class:`dict`. Leafs which are not
+              :class:`list`, :class:`tuple` or :class:`dict`. Leaves which are not
               arrays are ignored.
       )pbdoc");
   m.def(
