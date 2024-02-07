@@ -312,7 +312,7 @@ class Module(dict):
                         elif isinstance(current_value, (dict, list)):
                             apply(current_value, new_value)
             elif isinstance(parameters, list):
-                for i in range(len(dst)):
+                for i in range(len(parameters)):
                     current_value = dst[i]
                     new_value = parameters[i]
                     if isinstance(current_value, mx.array):
