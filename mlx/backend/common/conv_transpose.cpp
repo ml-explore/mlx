@@ -20,68 +20,68 @@ namespace {
 // Naive reference transpose conv
 ///////////////////////////////////////////////////////////////////////////////
 
-template <typename T>
-void slow_conv_1D(
-    const array& in,
-    const array& wt,
-    array out,
-    const std::vector<int>& padding,
-    const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
-  const T* start_wt_ptr = wt.data<T>();
+// TODO
+// template <typename T>
+// void slow_conv_1D(
+//     const array& in,
+//     const array& wt,
+//     array out,
+//     const std::vector<int>& padding,
+//     const std::vector<int>& wt_strides,
+//     const std::vector<int>& wt_dilation) {
+//   const T* start_wt_ptr = wt.data<T>();
 
-  const T* in_ptr = in.data<T>();
-  T* out_ptr = out.data<T>();
+//   const T* in_ptr = in.data<T>();
+//   T* out_ptr = out.data<T>();
 
-  const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
-  const int iH = in.shape(1); // Input spatial dim
-  const int oH = out.shape(1); // Output spatial dim
-  const int O = wt.shape(0); // Out channels
-  const int C = wt.shape(2); // In channels
-  const int wH = wt.shape(1); // Weight spatial dim
+//   const int N = in.shape(0); // Batch size, should be the same as
+//   out.shape(0) const int iH = in.shape(1); // Input spatial dim const int oH
+//   = out.shape(1); // Output spatial dim const int O = wt.shape(0); // Out
+//   channels const int C = wt.shape(2); // In channels const int wH =
+//   wt.shape(1); // Weight spatial dim
 
-  const size_t in_stride_N = in.strides()[0];
-  const size_t in_stride_H = in.strides()[1];
-  const size_t in_stride_C = in.strides()[2];
+//   const size_t in_stride_N = in.strides()[0];
+//   const size_t in_stride_H = in.strides()[1];
+//   const size_t in_stride_C = in.strides()[2];
 
-  const size_t wt_stride_O = wt.strides()[0];
-  const size_t wt_stride_H = wt.strides()[1];
-  const size_t wt_stride_C = wt.strides()[2];
+//   const size_t wt_stride_O = wt.strides()[0];
+//   const size_t wt_stride_H = wt.strides()[1];
+//   const size_t wt_stride_C = wt.strides()[2];
 
-  const size_t out_stride_N = out.strides()[0];
-  const size_t out_stride_H = out.strides()[1];
-  const size_t out_stride_O = out.strides()[2];
+//   const size_t out_stride_N = out.strides()[0];
+//   const size_t out_stride_H = out.strides()[1];
+//   const size_t out_stride_O = out.strides()[2];
 
-  for (int n = 0; n < N; ++n) {
-    for (int oh = 0; oh < oH; ++oh) {
-      for (int o = 0; o < O; ++o) {
-        const T* filter_wt_ptr = start_wt_ptr + o * wt_stride_O;
-        float r = 0.;
+//   for (int n = 0; n < N; ++n) {
+//     for (int oh = 0; oh < oH; ++oh) {
+//       for (int o = 0; o < O; ++o) {
+//         const T* filter_wt_ptr = start_wt_ptr + o * wt_stride_O;
+//         float r = 0.;
 
-        for (int wh = 0; wh < wH; ++wh) {
-          const T* wt_ptr = filter_wt_ptr + wh * wt_stride_H;
+//         for (int wh = 0; wh < wH; ++wh) {
+//           const T* wt_ptr = filter_wt_ptr + wh * wt_stride_H;
 
-          int ih = oh * wt_strides[0] - padding[0] + wh * wt_dilation[0];
+//           int ih = oh * wt_strides[0] - padding[0] + wh * wt_dilation[0];
 
-          if (ih >= 0 && ih < iH) {
-            for (int c = 0; c < C; ++c) {
-              r += static_cast<float>(
-                       in_ptr[ih * in_stride_H + c * in_stride_C]) *
-                  static_cast<float>(wt_ptr[c * wt_stride_C]);
-            } // c
+//           if (ih >= 0 && ih < iH) {
+//             for (int c = 0; c < C; ++c) {
+//               r += static_cast<float>(
+//                        in_ptr[ih * in_stride_H + c * in_stride_C]) *
+//                   static_cast<float>(wt_ptr[c * wt_stride_C]);
+//             } // c
 
-          } // ih check
-        } // wh
+//           } // ih check
+//         } // wh
 
-        out_ptr[oh * out_stride_H + o * out_stride_O] = static_cast<T>(r);
-      } // o
-    } // oh
+//         out_ptr[oh * out_stride_H + o * out_stride_O] = static_cast<T>(r);
+//       } // o
+//     } // oh
 
-    in_ptr += in_stride_N;
-    out_ptr += out_stride_N;
+//     in_ptr += in_stride_N;
+//     out_ptr += out_stride_N;
 
-  } // n
-}
+//   } // n
+// }
 
 template <typename T>
 void slow_conv_transpose_2D(
@@ -177,6 +177,8 @@ void slow_conv_transpose_2D(
                 for (int c = 0; c < C; ++c) {
                   r += static_cast<float>(in_ptr_pt[0]) *
                       static_cast<float>(wt_ptr_pt[0]);
+
+                  out_ptr[0] = static_cast<T>(r);
                   in_ptr_pt += in_stride_C;
                   wt_ptr_pt += wt_stride_C;
                 } // c
@@ -185,7 +187,6 @@ void slow_conv_transpose_2D(
             } // ww
           } // wh
 
-          out_ptr[0] = static_cast<T>(r);
           out_ptr += out_stride_O;
           wt_ptr += wt_stride_O;
         } // o
