@@ -130,12 +130,13 @@ jobs:
             python<< parameters.python_version >> -m pip install pybind11-stubgen
             python<< parameters.python_version >> -m pip install numpy
             python<< parameters.python_version >> -m pip install twine
+            python<< parameters.python_version >> -m pip install build
       - run:
           name: Install Python package
           command: |
             DEV_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python<< parameters.python_version >> setup.py develop
+              python<< parameters.python_version >> -m pip install .
       - run:
           name: Generate package stubs
           command: |
@@ -145,7 +146,7 @@ jobs:
           command: |
             << parameters.build_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python<< parameters.python_version >> setup.py bdist_wheel
+              python<< parameters.python_version >> -m build -w
       - when:
           condition: << parameters.build_env >>
           steps:
