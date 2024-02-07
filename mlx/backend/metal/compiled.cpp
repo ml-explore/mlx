@@ -65,10 +65,12 @@ void print_int_constant(std::ostream& os, const array& x) {
 
 void print_constant(std::ostream& os, const array& x) {
   switch (x.dtype()) {
-    case float16:
-      return print_float_constant<float16_t>(os, x);
     case float32:
       return print_float_constant<float>(os, x);
+    case float16:
+      return print_float_constant<float16_t>(os, x);
+    case bfloat16:
+      return print_float_constant<bfloat16_t>(os, x);
     case int8:
       return print_int_constant<int8_t>(os, x);
     case int16:

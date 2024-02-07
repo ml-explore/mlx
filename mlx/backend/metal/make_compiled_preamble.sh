@@ -1,4 +1,10 @@
 #!/bin/bash
+#
+# This script generates a C++ function that provides the Metal unary and binary
+# ops at runtime for use with kernel generation.
+#
+# Copyright © 2023-24 Apple Inc.
+
 
 OUTPUT_FILE=$1
 CC=$2
