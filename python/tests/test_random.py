@@ -81,18 +81,18 @@ class TestRandom(mlx_tests.MLXTestCase):
             self.assertEqual(a.dtype, t)
 
         # Generate with a given mean and standard deviation
-        a = mx.random.normal(shape=(3, 2), loc=1, scale=2.0)
-        b = mx.array([[0.0371162, 2.54261], [3.65259, 0.821914], [-2.07296, 2.24906]])
-        self.assertTrue(mx.all(mx.abs(a - b) < 1e-5).item())
+        loc = 1.0
+        scale = 2.0
 
-        # Generate with a given mean and standard deviation and dtype
-        a = mx.random.normal(shape=(3, 2), loc=1, scale=2.0, dtype=mx.float16)
-        self.assertEqual(a.dtype, mx.float16)
-        b = mx.array(
-            [[1.26758, 0.763184], [-1.0293, 2.33984], [0.598633, 2.9082]],
-            dtype=mx.float16,
+        a = mx.random.normal(shape=(3, 2), loc=loc, scale=scale, key=key)
+        b = scale * mx.random.normal(shape=(3, 2), key=key) + loc
+        self.assertTrue(mx.allclose(a, b))
+
+        a = mx.random.normal(
+            shape=(3, 2), loc=loc, scale=scale, dtype=mx.float16, key=key
         )
-        self.assertTrue(mx.all(mx.abs(a - b) < 1e-5).item())
+        b = scale * mx.random.normal(shape=(3, 2), dtype=mx.float16, key=key) + loc
+        self.assertTrue(mx.allclose(a, b))
 
         self.assertEqual(mx.random.normal().dtype, mx.random.normal(dtype=None).dtype)
 
