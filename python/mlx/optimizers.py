@@ -584,7 +584,8 @@ class Adafactor(Optimizer):
         warmup_init: bool = False,
     ):
         super().__init__()
-        self.learning_rate = learning_rate
+        if learning_rate is not None:
+            self.learning_rate = learning_rate
         self.eps = eps
         self.clip_threshold = clip_threshold
         self.decay_rate = decay_rate
