@@ -141,7 +141,6 @@ void slow_conv_transpose_2D(
                 r += static_cast<float>(in_ptr_pt[0]) *
                     static_cast<float>(wt_ptr_pt[0]);
 
-                out_ptr[0] = static_cast<T>(r);
                 in_ptr_pt += in_stride_C;
                 wt_ptr_pt += wt_stride_C;
               } // c
@@ -149,6 +148,7 @@ void slow_conv_transpose_2D(
             } // ww
           } // wh
 
+          out_ptr[0] = static_cast<T>(r);
           out_ptr += out_stride_O;
           wt_ptr += wt_stride_O;
         } // o
@@ -177,8 +177,6 @@ void slow_conv_transpose_2D(
                 for (int c = 0; c < C; ++c) {
                   r += static_cast<float>(in_ptr_pt[0]) *
                       static_cast<float>(wt_ptr_pt[0]);
-
-                  out_ptr[0] = static_cast<T>(r);
                   in_ptr_pt += in_stride_C;
                   wt_ptr_pt += wt_stride_C;
                 } // c
@@ -187,6 +185,7 @@ void slow_conv_transpose_2D(
             } // ww
           } // wh
 
+          out_ptr[0] = static_cast<T>(r);
           out_ptr += out_stride_O;
           wt_ptr += wt_stride_O;
         } // o
