@@ -146,6 +146,11 @@ void tree_visit_update(
         l[i] = recurse(l[i]);
       }
       return py::cast<py::object>(l);
+    } else if (py::isinstance<py::tuple>(subtree)) {
+      for (auto item : subtree) {
+        recurse(item);
+      }
+      return py::cast<py::object>(subtree);
     } else if (py::isinstance<py::dict>(subtree)) {
       auto d = py::cast<py::dict>(subtree);
       for (auto item : d) {

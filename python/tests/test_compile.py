@@ -320,6 +320,34 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = test_state(mx.array(1))
         self.assertEqual(out.item(), 4)
 
+        # Capture list
+        state = [mx.array(2)]
+
+        @partial(mx.compile, inputs=state)
+        def test_state(x):
+            x = x + state[0]
+            return x
+
+        out = test_state(mx.array(1))
+        self.assertEqual(out.item(), 3)
+        state[0] = mx.array(3)
+        out = test_state(mx.array(1))
+        self.assertEqual(out.item(), 4)
+
+        # Capture tuple of list
+        state = ([mx.array(2)],)
+
+        @partial(mx.compile, inputs=state)
+        def test_state(x):
+            x = x + state[0][0]
+            return x
+
+        out = test_state(mx.array(1))
+        self.assertEqual(out.item(), 3)
+        state[0][0] = mx.array(3)
+        out = test_state(mx.array(1))
+        self.assertEqual(out.item(), 4)
+
         # Test state updated inside compiled function
         state = {}
 
