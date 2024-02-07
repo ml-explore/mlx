@@ -13,7 +13,7 @@
 
 namespace mlx::core {
 
-constexpr int max_compile_depth = 6;
+constexpr int max_compile_depth = 10;
 
 bool is_unary(const Primitive& p) {
   return (

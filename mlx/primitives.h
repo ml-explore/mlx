@@ -473,22 +473,29 @@ class Compiled : public Primitive {
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
-
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-
   void print(std::ostream& os) override;
-
   bool is_equivalent(const Primitive& other) const override;
+
+  std::string metal_lib_name() const {
+    return kernel_lib_;
+  }
+  std::string metal_lib_source() const {
+    return kernel_source_;
+  }
 
  private:
   const std::vector<array> inputs_;
   const std::vector<array> outputs_;
   const std::vector<array> tape_;
   const std::unordered_set<uintptr_t> constant_ids_;
+
+  std::string kernel_lib_;
+  std::string kernel_source_;
 
   void eval(const std::vector<array>& inputs, std::vector<array>& out);
 };
@@ -709,8 +716,15 @@ class Equal : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Equal)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  void print(std::ostream& os) override {
+    if (equal_nan_) {
+      os << "NanEqual";
+    } else {
+      os << "Equal";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -945,8 +959,21 @@ class Log : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Log)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  void print(std::ostream& os) override {
+    switch (base_) {
+      case e:
+        os << "Log";
+        break;
+      case two:
+        os << "Log2";
+        break;
+      case ten:
+        os << "Log10";
+        break;
+    }
+  }
 
  private:
   Base base_;
@@ -1594,8 +1621,15 @@ class Sqrt : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Sqrt)
   bool is_equivalent(const Primitive& other) const override;
+
+  void print(std::ostream& os) override {
+    if (recip_) {
+      os << "Rsqrt";
+    } else {
+      os << "Sqrt";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);

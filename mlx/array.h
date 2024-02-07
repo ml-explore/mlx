@@ -121,6 +121,9 @@ class array {
   template <typename T>
   T item();
 
+  template <typename T>
+  T item() const;
+
   struct ArrayIterator {
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = size_t;
@@ -451,6 +454,18 @@ T array::item() {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
   eval();
+  return *data<T>();
+}
+
+template <typename T>
+T array::item() const {
+  if (size() != 1) {
+    throw std::invalid_argument("item can only be called on arrays of size 1.");
+  }
+  if (!is_evaled()) {
+    throw std::invalid_argument(
+        "item() const can only be called on evaled arrays");
+  }
   return *data<T>();
 }
 

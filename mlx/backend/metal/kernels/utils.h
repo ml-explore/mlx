@@ -12,10 +12,10 @@
 
 template <typename U>
 struct Limits {
-  static const constant U max;
-  static const constant U min;
-  static const constant U finite_max;
-  static const constant U finite_min;
+  static const constant U max = metal::numeric_limits<U>::max();
+  static const constant U min = metal::numeric_limits<U>::min();
+  static const constant U finite_max = metal::numeric_limits<U>::max();
+  static const constant U finite_min = metal::numeric_limits<U>::min();
 };
 
 #define instantiate_default_limit(type)                                      \
