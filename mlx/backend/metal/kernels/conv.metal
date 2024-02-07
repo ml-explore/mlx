@@ -553,3 +553,68 @@ template <typename T,
 
 instantiate_winograd_conv_2d(float32, float);
 instantiate_winograd_conv_2d(float16, half);
+
+///////////////////////////////////////////////////////////////////////////////
+/// Naive Conv2D Transpose
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, 
+          const int BM, /* Threadgroup rows (in threads) */
+          const int BN, /* Threadgroup cols (in threads) */
+          const int TM, /* Thread rows (in elements) */
+          const int TN, /* Thread cols (in elements) */
+          const int BC = 16>
+[[kernel]] void naive_conv_transpose_2d(
+    const device T* in [[buffer(0)]],
+    const device T* wt [[buffer(1)]],
+    device T* out [[buffer(2)]],
+    const constant MLXConvParams<2>& params [[buffer(3)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+
+  (void)simd_gid;
+  (void)simd_lid;
+
+  int in_h = tid.y;
+  int in_w = tid.x;
+  int in_c = tid.z;
+
+  for(int kh = 0; kh < params.wS[0]; ++kh) {
+    for(int kw = 0; kw < params.wS[1]; ++kw) {
+      for(int kc = 0; kc < params.C; ++kc) {
+        int out_h = in_h * params.str[0] - params.pad[0] + kh * params.dil[0];
+        int out_w = in_w * params.str[1] - params.pad[1] + kw * params.dil[1];
+
+        if(out_h >= 0 && out_h < params.oS[0] && out_w >= 0 && out_w < params.oS[1]) {
+          out[out_h * params.out_strides[1] + out_w * params.out_strides[2] + kc] +=
+              in[in_h * params.in_strides[1] + in_w * params.in_strides[2] + in_c] *
+              wt[kh * params.wt_strides[1] + kw * params.wt_strides[2] + kc];
+        }
+      }
+    }
+  }
+}
+
+// Instantiations
+
+#define instantiate_naive_conv_transpose_2d(name, itype, bm, bn, tm, tn) \
+  template [[host_name("naive_conv_transpose_2d_" #name "_bm" #bm "_bn" #bn "_tm" #tm "_tn" #tn)]] \
+  [[kernel]] void naive_conv_transpose_2d<itype, bm, bn, tm, tn>( \
+      const device itype* in [[buffer(0)]], \
+      const device itype* wt [[buffer(1)]], \
+      device itype* out [[buffer(2)]], \
+      const constant MLXConvParams<2>& params [[buffer(3)]], \
+      uint3 tid [[threadgroup_position_in_grid]], \
+      uint3 lid [[thread_position_in_threadgroup]], \
+      uint simd_gid [[simdgroup_index_in_threadgroup]], \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
+#define instantiate_naive_conv_transpose_2d_blocks(name, itype) \
+    instantiate_naive_conv_transpose_2d(name, itype, 16, 8, 4, 4) \
+    instantiate_naive_conv_transpose_2d(name, itype, 16, 8, 2, 4) 
+
+instantiate_naive_conv_transpose_2d_blocks(float32, float);
+instantiate_naive_conv_transpose_2d_blocks(float16, half);
+instantiate_naive_conv_transpose_2d_blocks(bfloat16, bfloat16_t);

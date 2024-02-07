@@ -1050,6 +1050,15 @@ array conv2d(
     int groups = 1,
     StreamOrDevice s = {});
 
+array conv_transpose_2d(
+    const array& input,
+    const array& weight,
+    const std::pair<int, int>& stride = {1, 1},
+    const std::pair<int, int>& padding = {0, 0},
+    const std::pair<int, int>& dilation = {1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
+
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
     const array& x,

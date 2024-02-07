@@ -2734,6 +2734,103 @@ inline void run_conv_checks(const array& in, const array& wt, int n_dim) {
   }
 }
 
+// Transpose Conv helpers
+inline int transpose_conv_out_axis_size(
+    int in_dim,
+    int wt_dim,
+    int stride,
+    int padding,
+    int dilation) {
+  return (in_dim - 1) * stride + (wt_dim - 1) * dilation + 1 - 2 * padding;
+}
+
+inline std::vector<int> transpose_conv_out_shape(
+    const std::vector<int>& in_shape,
+    const std::vector<int>& wt_shape,
+    const std::vector<int>& strides,
+    const std::vector<int>& pads,
+    const std::vector<int>& dilation) {
+  int N = in_shape[0];
+  int O = wt_shape[0];
+  std::vector<int> out_shape(in_shape.size());
+  int i = 0;
+  out_shape[i++] = N;
+
+  for (; i < in_shape.size() - 1; i++) {
+    if (pads[i - 1] < 0) {
+      std::ostringstream msg;
+      msg << "[conv_transpose] Padding sizes must be non-negative."
+          << " Got padding " << pads << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (strides[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv_transpose] Stride sizes must be positive."
+          << " Got strides " << strides << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (dilation[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv_transpose] Dilation sizes must be positive."
+          << " Got dilation " << dilation << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    out_shape[i] = transpose_conv_out_axis_size(
+        in_shape[i], wt_shape[i], strides[i - 1], pads[i - 1], dilation[i - 1]);
+
+    if (out_shape[i] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv_transpose] Spatial dimensions of input after padding "
+          << " cannot be smaller than weight spatial dimensions."
+          << " Got input with shape " << in_shape << " and padding " << pads
+          << " for weight of shape " << wt_shape << ".";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+  out_shape[i] = O;
+
+  return out_shape;
+}
+
+inline void
+run_conv_transpose_checks(const array& in, const array& wt, int n_dim) {
+  if (!is_floating_point(in.dtype()) && kindof(in.dtype()) != Dtype::Kind::c) {
+    std::ostringstream msg;
+    msg << "[conv_transpose] Invalid input array with type " << in.dtype()
+        << "."
+        << " Transpose Convolution currently only supports floating point types";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (in.ndim() != n_dim + 2) {
+    std::ostringstream msg;
+    msg << "[conv_transpose] Invalid input array with " << in.ndim()
+        << " dimensions for " << n_dim << "D transpose convolution."
+        << " Expected an array with " << n_dim + 2
+        << " dimensions following the format [N, ..., C_in].";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (wt.ndim() != n_dim + 2) {
+    std::ostringstream msg;
+    msg << "[conv_transpose] Invalid weight array with " << wt.ndim()
+        << " dimensions for " << n_dim << "D transpose convolution."
+        << " Expected an array with " << n_dim + 2
+        << " dimensions following the format [C_out, ..., C_in].";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (in.shape(n_dim + 1) != wt.shape(n_dim + 1)) {
+    std::ostringstream msg;
+    msg << "[conv_transpose] Expect the input channels in the input"
+        << " and weight array to match but got shapes -"
+        << " input: " << in.shape() << " and weight: " << wt.shape();
+    throw std::invalid_argument(msg.str());
+  }
+}
 } // namespace
 
 /** 1D convolution with a filter */
@@ -2824,6 +2921,54 @@ array conv2d(
       out_shape,
       in.dtype(),
       std::make_unique<Convolution>(
+          to_stream(s),
+          padding_vec,
+          strides_vec,
+          dilation_vec,
+          std::vector<int>(2, 1)),
+      {in, wt});
+}
+
+/** 2D transpose convolution with a filter */
+array conv_transpose_2d(
+    const array& in_,
+    const array& wt_,
+    const std::pair<int, int>& stride /* = {1, 1} */,
+    const std::pair<int, int>& padding /* = {0, 0} */,
+    const std::pair<int, int>& dilation /* = {1, 1} */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  // Run checks
+  if (groups != 1) {
+    throw std::invalid_argument("[conv2d] Cannot handle groups != 1 yet");
+  }
+  if (dilation.first != 1 || dilation.second != 1) {
+    throw std::invalid_argument("[conv1d] Cannot handle dilation != 1 yet");
+  }
+
+  // Run checks
+  run_conv_transpose_checks(in_, wt_, 2);
+
+  auto in = in_;
+  auto wt = wt_;
+
+  // Type promotion
+  auto out_type = promote_types(in.dtype(), wt.dtype());
+  in = astype(in, out_type, s);
+  wt = astype(wt, out_type, s);
+
+  std::vector<int> strides_vec = {stride.first, stride.second};
+  std::vector<int> padding_vec = {padding.first, padding.second};
+  std::vector<int> dilation_vec = {dilation.first, dilation.second};
+
+  // Get output shapes
+  std::vector<int> out_shape = transpose_conv_out_shape(
+      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
+
+  return array(
+      out_shape,
+      in.dtype(),
+      std::make_unique<TransposeConvolution>(
           to_stream(s),
           padding_vec,
           strides_vec,

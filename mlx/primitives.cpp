@@ -719,6 +719,15 @@ bool Convolution::is_equivalent(const Primitive& other) const {
       input_dilation_ == c_other.input_dilation_;
 }
 
+bool TransposeConvolution::is_equivalent(const Primitive& other) const {
+  const TransposeConvolution& c_other =
+      static_cast<const TransposeConvolution&>(other);
+  return padding_ == c_other.padding_ &&
+      kernel_strides_ == c_other.kernel_strides_ &&
+      kernel_dilation_ == c_other.kernel_dilation_ &&
+      input_dilation_ == c_other.input_dilation_;
+}
+
 std::vector<array> Copy::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

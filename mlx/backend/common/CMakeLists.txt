@@ -4,6 +4,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/conv_transpose.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/erf.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp

@@ -504,6 +504,42 @@ class Convolution : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class TransposeConvolution : public UnaryPrimitive {
+ public:
+  explicit TransposeConvolution(
+      Stream stream,
+      const std::vector<int>& padding,
+      const std::vector<int>& kernel_strides,
+      const std::vector<int>& kernel_dilation,
+      const std::vector<int>& input_dilation)
+      : UnaryPrimitive(stream),
+        padding_(padding),
+        kernel_strides_(kernel_strides),
+        kernel_dilation_(kernel_dilation),
+        input_dilation_(input_dilation){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  // TODO
+  // std::vector<array> vjp(
+  //     const std::vector<array>& primals,
+  //     const std::vector<array>& cotangents,
+  //     const std::vector<int>& argnums,
+  //     const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(TransposeConvolution)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  std::vector<int> padding_;
+  std::vector<int> kernel_strides_;
+  std::vector<int> kernel_dilation_;
+  std::vector<int> input_dilation_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Copy : public UnaryPrimitive {
  public:
   explicit Copy(Stream stream) : UnaryPrimitive(stream){};
