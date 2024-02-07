@@ -705,7 +705,7 @@ void init_transforms(py::module_& m) {
   m.def(
       "eval",
       [](const py::args& args) {
-        std::vector<array> arrays = tree_flatten(args);
+        std::vector<array> arrays = tree_flatten(args, false);
         {
           py::gil_scoped_release nogil;
           eval(arrays);
@@ -719,8 +719,8 @@ void init_transforms(py::module_& m) {
         Args:
             *args (arrays or trees of arrays): Each argument can be a single array
               or a tree of arrays. If a tree is given the nodes can be a Python
-              :class:`list`, :class:`tuple` or :class:`dict` but the leafs must all be
-              an :class:`array`.
+              :class:`list`, :class:`tuple` or :class:`dict`. Leafs which are not
+              arrays are ignored.
       )pbdoc");
   m.def(
       "jvp",
@@ -980,6 +980,16 @@ void init_transforms(py::module_& m) {
             fun (function): A function which takes a variable number of
               :class:`array` or trees of :class:`array` and returns
               a variable number of :class:`array` or trees of :class:`array`.
+            inputs (list or dict, optional): These inputs will be captured during
+              the function compilation along with the inputs to ``fun``. The ``inputs``
+              can be a :obj:`list` or a :obj:`dict` containing arbitrarily nested
+              lists, dictionaries, or arrays. Leaf nodes that are not
+              :obj:`array` are ignored. Default: ``None``
+            outputs (list or dict, optional): These outputs will be captured and
+              updated in a compiled function. The ``outputs`` can be a
+              :obj:`list` or a :obj:`dict` containing arbitrarily nested lists,
+              dictionaries, or arrays. Leaf nodes that are not :obj:`array` are ignored.
+              Default: ``None``
 
         Returns:
             function: A compiled function which has the same input arguments

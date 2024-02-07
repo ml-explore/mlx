@@ -374,6 +374,13 @@ class TestCompile(mlx_tests.MLXTestCase):
         test_state(mx.array(1))
         self.assertEqual(state["y"].item(), 2)
 
+    def test_compile_rng(self):
+        @partial(mx.compile, inputs=mx.random.state, outputs=mx.random.state)
+        def fun():
+            return mx.random.uniform(shape=(10, 10))
+
+        self.assertFalse(mx.allclose(fun(), fun(), 1e-2, 1e-2))
+
 
 if __name__ == "__main__":
     unittest.main()
