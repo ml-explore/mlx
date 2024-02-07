@@ -104,6 +104,7 @@ jobs:
       - run:
           name: Build CPP only
           command: |
+            source env/bin/activate
             mkdir -p build && cd build && cmake .. && make -j
       - run:
           name: Run CPP tests
