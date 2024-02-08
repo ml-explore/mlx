@@ -18,6 +18,7 @@ Loss Functions
    kl_div_loss
    l1_loss
    log_cosh_loss
+   margin_ranking_loss
    mse_loss
    nll_loss
    smooth_l1_loss
