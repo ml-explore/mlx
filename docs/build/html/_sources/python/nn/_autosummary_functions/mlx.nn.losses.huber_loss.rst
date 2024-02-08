@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autoclass:: huber_loss
-
-   
+.. autofunction:: huber_loss

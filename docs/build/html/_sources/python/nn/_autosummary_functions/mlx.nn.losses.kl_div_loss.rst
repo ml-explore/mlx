@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autoclass:: kl_div_loss
-
-   
+.. autofunction:: kl_div_loss

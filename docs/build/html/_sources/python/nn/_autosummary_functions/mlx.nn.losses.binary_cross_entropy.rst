@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autoclass:: binary_cross_entropy
-
-   
+.. autofunction:: binary_cross_entropy
