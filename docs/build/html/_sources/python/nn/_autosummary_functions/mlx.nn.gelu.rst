@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn
 
-.. autoclass:: gelu
-
-   
+.. autofunction:: gelu
