@@ -212,9 +212,6 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     thread_group_size = nthreads;
   }
 
-  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
-  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-
   compute_encoder->setComputePipelineState(kernel);
 
   // Make the argument buffer to store the indices for the
@@ -317,6 +314,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(&out_ndim, sizeof(size_t), 9);
   compute_encoder->setBytes(axes_.data(), axes_.size() * sizeof(int), 10);
 
+  MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
+  MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 
   // Cleanup temporaries
