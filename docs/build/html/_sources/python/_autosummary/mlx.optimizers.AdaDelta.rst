@@ -14,5 +14,6 @@
    
          ~AdaDelta.__init__
          ~AdaDelta.apply_single
+         ~AdaDelta.init_single
    
    
