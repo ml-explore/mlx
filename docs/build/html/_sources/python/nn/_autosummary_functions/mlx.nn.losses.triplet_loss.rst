@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autoclass:: triplet_loss
-
-   
+.. autofunction:: triplet_loss
