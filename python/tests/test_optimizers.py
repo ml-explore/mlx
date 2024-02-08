@@ -285,7 +285,7 @@ class TestOptimizers(mlx_tests.MLXTestCase):
 
         @partial(mx.compile, inputs=optim.state)
         def update(grads):
-            return optim.apply_gradients(params, grads)
+            return optim.apply_gradients(grads, params)
 
         result = update(grads)
         self.assertTrue(mx.allclose(result["w"], mx.full((5, 5), 2.0)))

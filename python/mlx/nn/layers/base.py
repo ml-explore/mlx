@@ -73,7 +73,7 @@ class Module(dict):
         The module's state dictionary contains any attribute set on the
         module including parameters in :meth:`Module.parameters`
 
-        Unlike :meth:`Module.parameters`, the :prop:`Module.state` property is
+        Unlike :meth:`Module.parameters`, the :attr:`Module.state` property is
         a reference to the module's state. Updates to it will be reflected in
         the original module.
         """

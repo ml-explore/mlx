@@ -107,7 +107,7 @@ void init_random(py::module_& parent_module) {
          std::optional<Dtype> type,
          const std::optional<array>& key_,
          StreamOrDevice s) {
-        auto key = key_.value_or(default_key().next());
+        auto key = key_ ? key_.value() : default_key().next();
         return uniform(
             to_array(low),
             to_array(high),
@@ -147,7 +147,7 @@ void init_random(py::module_& parent_module) {
          float scale,
          const std::optional<array>& key_,
          StreamOrDevice s) {
-        auto key = key_.value_or(default_key().next());
+        auto key = key_ ? key_.value() : default_key().next();
         return normal(shape, type.value_or(float32), loc, scale, key, s);
       },
       "shape"_a = std::vector<int>{},
@@ -177,7 +177,7 @@ void init_random(py::module_& parent_module) {
          std::optional<Dtype> type,
          const std::optional<array>& key_,
          StreamOrDevice s) {
-        auto key = key_.value_or(default_key().next());
+        auto key = key_ ? key_.value() : default_key().next();
         return randint(
             to_array(low), to_array(high), shape, type.value_or(int32), key, s);
       },
@@ -210,7 +210,7 @@ void init_random(py::module_& parent_module) {
          const std::optional<std::vector<int>> shape,
          const std::optional<array>& key_,
          StreamOrDevice s) {
-        auto key = key_.value_or(default_key().next());
+        auto key = key_ ? key_.value() : default_key().next();
         auto p = to_array(p_);
         if (shape.has_value()) {
           return bernoulli(p, shape.value(), key, s);
@@ -247,7 +247,7 @@ void init_random(py::module_& parent_module) {
          std::optional<Dtype> type,
          const std::optional<array>& key_,
          StreamOrDevice s) {
-        auto key = key_.value_or(default_key().next());
+        auto key = key_ ? key_.value() : default_key().next();
         auto lower = to_array(lower_);
         auto upper = to_array(upper_);
         auto t = type.value_or(float32);
@@ -288,7 +288,7 @@ void init_random(py::module_& parent_module) {
          std::optional<Dtype> type,
          const std::optional<array>& key_,
          StreamOrDevice s) {
-        auto key = key_.value_or(default_key().next());
+        auto key = key_ ? key_.value() : default_key().next();
         return gumbel(shape, type.value_or(float32), key, s);
       },
       "shape"_a = std::vector<int>{},
@@ -317,7 +317,7 @@ void init_random(py::module_& parent_module) {
          const std::optional<int> num_samples,
          const std::optional<array>& key_,
          StreamOrDevice s) {
-        auto key = key_.value_or(default_key().next());
+        auto key = key_ ? key_.value() : default_key().next();
         if (shape.has_value() && num_samples.has_value()) {
           throw std::invalid_argument(
               "[categorical] At most one of shape or num_samples can be specified.");

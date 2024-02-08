@@ -10,9 +10,6 @@ from mlx.utils import tree_map
 class Optimizer:
     """The base class for all optimizers. It allows us to implement an
     optimizer on a per-parameter basis and apply it to a parameter tree.
-
-    Attributes:
-        state (dict): Holds the optimizer's state dictionary.
     """
 
     def __init__(self):
@@ -30,14 +27,29 @@ class Optimizer:
         """
         model.update(self.apply_gradients(gradients, model))
 
-    def init(self, model: dict):
+    def init(self, parameters: dict):
         """Initialize the optimizer's state
 
+        This function can be used to initialize optimizers which have state
+        (like momentum in :class:`SGD`). Using this method is optional as the
+        optimizer will initialize itself if the state is not yet set. However,
+        there are some cases where explicit initialization is useful in order
+        to have access to the :attr:`Optimizer.state` before the first call to
+        :meth:`Optimizer.update`.
+
         Args:
-            model (dict): A Python tree of parameters
+            model (dict): A Python tree of parameters.
+
+        Example:
+            >>> optimizer = optim.SGD(learning_rate=1e-1, momentum=0.9)
+            >>> model = nn.Linear(2, 2)
+            >>> optimizer.init(model.trainable_parameters())
+            >>> optimizer.state
+            {'learning_rate': array(0.1, dtype=float32), 'weight': {'v': array([[0, 0],
+                   [0, 0]], dtype=float32)}, 'bias': {'v': array([0, 0], dtype=float32)}}
         """
-        self._state.update(tree_map(lambda x: {}, model))
-        tree_map(self.init_single, model, self._state)
+        self._state.update(tree_map(lambda x: {}, parameters))
+        tree_map(self.init_single, parameters, self._state)
         self._initialized = True
 
     def init_single(self, parameter: mx.array, state: dict):
@@ -49,7 +61,7 @@ class Optimizer:
         """
         raise NotImplementedError()
 
-    def apply_gradients(self, gradients: dict, model: dict):
+    def apply_gradients(self, gradients: dict, parameters: dict):
         """Apply the gradients to the parameters and return the updated parameters.
 
         Can be used to update a model via
@@ -58,13 +70,13 @@ class Optimizer:
 
         Args:
             gradients (dict): A Python tree of gradients.
-            model (dict): A Python tree of parameters. It can be a superset of
-                          the gradients. In that case the returned python tree
-                          will be of the same structure as the gradients.
+            parameters (dict): A Python tree of parameters. It can be a
+              superset of the gradients. In that case the returned python
+              tree will be of the same structure as the gradients.
         """
         if not self._initialized:
             self.init(gradients)
-        return tree_map(self.apply_single, gradients, model, self.state)
+        return tree_map(self.apply_single, gradients, parameters, self.state)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """To be extended by derived classes to implement the optimizer's update.
@@ -83,7 +95,6 @@ class Optimizer:
 
     @state.setter
     def state(self, state: dict):
-        """Set optimizer's state dictionary."""
         self._state = state
 
     @property
