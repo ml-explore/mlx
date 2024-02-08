@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
 #include <cassert>
@@ -492,6 +492,7 @@ void conv_2D_gpu(
   }
 
   // Direct to implicit gemm conv
+  // TODO: Allow C, O to be 1, 2, 3, 4 as well
   else if (conv_params.C % 32 == 0 && conv_params.O % 32 == 0) {
     implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
