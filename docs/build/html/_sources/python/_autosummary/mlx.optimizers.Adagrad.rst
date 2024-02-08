@@ -14,5 +14,6 @@
    
          ~Adagrad.__init__
          ~Adagrad.apply_single
+         ~Adagrad.init_single
    
    

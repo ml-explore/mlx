@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Developer Documentation &#8212; MLX 0.1.0 documentation</title>
+    <title>Developer Documentation &#8212; MLX 0.2.0 documentation</title>
   
   
   
@@ -133,8 +133,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.1.0 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.1.0 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.2.0 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.2.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -152,6 +152,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../usage/indexing.html">Indexing Arrays</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../usage/saving_and_loading.html">Saving and Loading Arrays</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../usage/function_transforms.html">Function Transforms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage/compile.html">Compilation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../usage/numpy.html">Conversion to NumPy and Other Frameworks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../usage/using_streams.html">Using Streams</a></li>
 </ul>
@@ -347,6 +348,9 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.eval.html">mlx.core.eval</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.compile.html">mlx.core.compile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.disable_compile.html">mlx.core.disable_compile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.enable_compile.html">mlx.core.enable_compile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.grad.html">mlx.core.grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.value_and_grad.html">mlx.core.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.jvp.html">mlx.core.jvp</a></li>
@@ -378,6 +382,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/module.html">Module</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.training.html">mlx.nn.Module.training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.state.html">mlx.nn.Module.state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.apply.html">mlx.nn.Module.apply</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.apply_to_modules.html">mlx.nn.Module.apply_to_modules</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.children.html">mlx.nn.Module.children</a></li>
@@ -450,6 +455,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.log_cosh_loss.html">mlx.nn.losses.log_cosh_loss</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.margin_ranking_loss.html">mlx.nn.losses.margin_ranking_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.smooth_l1_loss.html">mlx.nn.losses.smooth_l1_loss</a></li>
@@ -470,8 +476,13 @@
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-14"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.OptimizerState.html">mlx.optimizers.OptimizerState</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.html">mlx.optimizers.Optimizer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizer.html">Optimizer</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.state.html">mlx.optimizers.Optimizer.state</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.apply_gradients.html">mlx.optimizers.Optimizer.apply_gradients</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.init.html">mlx.optimizers.Optimizer.init</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.update.html">mlx.optimizers.Optimizer.update</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.SGD.html">mlx.optimizers.SGD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.RMSprop.html">mlx.optimizers.RMSprop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Adagrad.html">mlx.optimizers.Adagrad</a></li>
@@ -483,7 +494,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Lion.html">mlx.optimizers.Lion</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-16"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>
@@ -1326,9 +1337,9 @@ the python package</p></li>
 </ul>
 <section id="binding-to-python">
 <h3>Binding to Python<a class="headerlink" href="#binding-to-python" title="Permalink to this heading">#</a></h3>
-<p>We use <a class="reference external" href="https://pybind11.readthedocs.io/en/stable/">PyBind11</a> to build a Python API for the C++ library. Since bindings
-for all needed components such as <cite>mlx.core.array</cite>, <cite>mlx.core.stream</cite>, etc.
-are already provided, adding our <code class="xref py py-meth docutils literal notranslate"><span class="pre">axpby()</span></code> becomes very simple!</p>
+<p>We use <a class="reference external" href="https://pybind11.readthedocs.io/en/stable/">PyBind11</a> to build a Python API for the C++ library. Since bindings for
+components such as <a class="reference internal" href="../python/_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.core.array</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.core.stream</span></code>, etc. are
+already provided, adding our <code class="xref py py-meth docutils literal notranslate"><span class="pre">axpby()</span></code> is simple!</p>
 <div class="highlight-C++ notranslate"><div class="highlight"><pre><span></span><span class="n">PYBIND11_MODULE</span><span class="p">(</span><span class="n">mlx_sample_extensions</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
 <span class="w">    </span><span class="n">m</span><span class="p">.</span><span class="n">doc</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Sample C++ and metal extensions for MLX&quot;</span><span class="p">;</span><span class="w"></span>
 
@@ -1552,16 +1563,16 @@ with the naive <code class="xref py py-meth docutils literal notranslate"><span 
 </pre></div>
 </div>
 <p>We see some modest improvements right away!</p>
-<p>This operation is now good to be used to build other operations,
-in <a class="reference internal" href="../python/nn/module.html#mlx.nn.Module" title="mlx.nn.Module"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.nn.Module</span></code></a> calls, and also as a part of graph
-transformations like <code class="xref py py-meth docutils literal notranslate"><span class="pre">grad()</span></code>!</p>
+<p>This operation is now good to be used to build other operations, in
+<a class="reference internal" href="../python/nn/module.html#mlx.nn.Module" title="mlx.nn.Module"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.nn.Module</span></code></a> calls, and also as a part of graph transformations like
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">grad()</span></code>!</p>
 </section>
 </section>
 <section id="scripts">
 <h2>Scripts<a class="headerlink" href="#scripts" title="Permalink to this heading">#</a></h2>
 <div class="admonition-download-the-code admonition">
 <p class="admonition-title">Download the code</p>
-<p>The full example code is available in <a class="reference external" href="code">mlx-examples</a>.</p>
+<p>The full example code is available in <a class="reference external" href="code">mlx</a>.</p>
 </div>
 </section>
 </section>

@@ -4,5 +4,3 @@
 .. currentmodule:: mlx.nn
 
 .. autoclass:: MultiHeadAttention
-
-   

@@ -14,5 +14,6 @@
    
          ~Adam.__init__
          ~Adam.apply_single
+         ~Adam.init_single
    
    

@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autoclass:: nll_loss
-
-   
+.. autofunction:: nll_loss

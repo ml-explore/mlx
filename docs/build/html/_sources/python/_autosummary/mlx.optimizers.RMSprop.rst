@@ -14,5 +14,6 @@
    
          ~RMSprop.__init__
          ~RMSprop.apply_single
+         ~RMSprop.init_single
    
    

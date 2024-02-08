@@ -14,5 +14,6 @@
    
          ~Adamax.__init__
          ~Adamax.apply_single
+         ~Adamax.init_single
    
    

@@ -14,5 +14,6 @@
    
          ~Lion.__init__
          ~Lion.apply_single
+         ~Lion.init_single
    
    

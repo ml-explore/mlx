@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn
 
-.. autoclass:: selu
-
-   
+.. autofunction:: selu
