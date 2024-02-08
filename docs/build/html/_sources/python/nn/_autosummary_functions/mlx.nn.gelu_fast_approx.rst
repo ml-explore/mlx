@@ -3,6 +3,4 @@
 
 .. currentmodule:: mlx.nn
 
-.. autoclass:: gelu_fast_approx
-
-   
+.. autofunction:: gelu_fast_approx
