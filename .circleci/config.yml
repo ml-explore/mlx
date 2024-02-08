@@ -7,6 +7,9 @@ parameters:
   weekly_build:
     type: boolean
     default: false
+  test_release:
+    type: boolean
+    default: false
 
 jobs:
   linux_build_and_test:
@@ -170,12 +173,61 @@ jobs:
       - store_artifacts:
           path: dist/
 
+  build_linux_test_release:
+    parameters:
+      python_version:
+        type: string
+        default: "3.9"
+      extra_env:
+        type: string
+        default: "DEV_RELEASE=1"
+    docker:
+      - image: ubuntu:20.04
+    steps:
+      - checkout
+      - run:
+          name: Build wheel
+          command: |
+            PYTHON=python<< parameters.python_version >>
+            apt-get update
+            apt-get upgrade -y
+            DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
+            apt-get install -y apt-utils
+            apt-get install -y software-properties-common
+            add-apt-repository -y ppa:deadsnakes/ppa
+            apt-get install -y $PYTHON $PYTHON-dev $PYTHON-full
+            apt-get install -y libblas-dev liblapack-dev liblapacke-dev
+            apt-get install -y build-essential git
+            $PYTHON -m venv env
+            source env/bin/activate
+            pip install --upgrade pip
+            pip install --upgrade cmake
+            pip install --upgrade pybind11[global]
+            pip install --upgrade setuptools
+            pip install pybind11-stubgen
+            pip install numpy
+            pip install auditwheel
+            pip install patchelf
+            pip install build
+            << parameters.extra_env >> \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              pip install . -v
+            python setup.py generate_stubs
+            << parameters.extra_env >> \
+              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              python -m build --wheel
+            auditwheel show dist/*
+            auditwheel repair dist/* --plat manylinux_2_31_x86_64
+      - store_artifacts:
+          path: wheelhouse/
+
 workflows:
   build_and_test:
     when:
       and:
         - not: << pipeline.parameters.nightly_build >>
         - not: << pipeline.parameters.weekly_build >>
+        - not: << pipeline.parameters.test_release >>
     jobs:
       - mac_build_and_test
       - linux_build_and_test
@@ -207,3 +259,11 @@ workflows:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               xcode_version: ["14.3.1", "15.2.0"]
               build_env: ["DEV_RELEASE=1"]
+  linux_test_release:
+    when: << pipeline.parameters.test_release >>
+    jobs:
+      - build_linux_test_release:
+          matrix:
+            parameters:
+              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+              extra_env: ["PYPI_RELEASE=1"]
