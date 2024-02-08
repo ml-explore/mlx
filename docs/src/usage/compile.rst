@@ -16,7 +16,7 @@ that are good to be aware of for more complex graphs and advanced usage.
 Basics of Compile
 -----------------
 
-Let's start with a very simple example.
+Let's start with a simple example:
 
 .. code-block:: python
 
@@ -55,11 +55,11 @@ should typically compile functions that you plan to use more than once.
 
   compiled_fun = mx.compile(fun)
 
-  # Compiled here:
-  print(compiled_fun(x, y))
+  # Compiled here
+  compiled_fun(x, y)
 
   # Not compiled again
-  print(compiled_fun(x, y))
+  compiled_fun(x, y)
 
   # Not compiled again
   mx.compile(fun)(x, y)
@@ -125,7 +125,7 @@ handles synchronization:
       print(f"Time per iteration {tpi:.3f} (ms)")
 
 
-Now make an array and benchmark both functions:
+Now make an array, and benchmark both functions:
 
 .. code-block:: python
 
@@ -133,8 +133,8 @@ Now make an array and benchmark both functions:
   timeit(nn.gelu, x)
   timeit(mx.compile(nn.gelu), x)
 
-On an M1 Max the times are 15.5 milliseconds and 3.1 millisecond. The
-compiled ``gelu`` is five times faster.
+On an M1 Max the times are 15.5 and 3.1 milliseconds. The compiled ``gelu`` is
+five times faster.
 
 .. note::
 
@@ -147,7 +147,7 @@ Debugging
 ---------
 
 When a compiled function is first called, it is traced with placeholder
-inputs. This means you cannot evaluate arrays (for example to print their
+inputs. This means you can't evaluate arrays (for example to print their
 contents) inside compiled functions.
 
 .. code-block:: python
@@ -198,7 +198,7 @@ effects. For example:
   print(state)
 
 After the first call of ``fun``, the ``state`` list will hold a placeholder
-array. The placeholder does not have any data. It is only used to build the
+array. The placeholder does not have any data; it is only used to build the
 computation graph. Printing such an array results in a crash.
 
 You have two options to deal with this. The first option is to simply return
@@ -263,10 +263,9 @@ constants. For example:
   print(fun(mx.array(1.0)))
 
 In order to have the change of state reflected in the outputs of ``fun`` you
-again have two options. The first option is to simply pass ``state``
-as input to the function. However, in some cases this can be pretty
-inconvenient. Hence, :func:`compile` also has a parameter to capture
-implicit inputs:
+again have two options. The first option is to simply pass ``state`` as input
+to the function. In some cases this can be pretty inconvenient. Hence,
+:func:`compile` also has a parameter to capture implicit inputs:
 
 .. code-block:: python
 
@@ -375,7 +374,7 @@ appropriate input and output captures. Here's the same example but compiled:
 .. note::
 
   If you are using a module which performs random sampling such as
-  :func:`mlx.nn.Dropout` make sure you also include ``mx.random.state`` in the
+  :func:`mlx.nn.Dropout`, make sure you also include ``mx.random.state`` in the
   ``state`` captured by :func:`compile`, i.e. ``state = [model.state,
   optimizer.state, mx.random.state]``.
 
@@ -389,8 +388,8 @@ Transformations with Compile
 ----------------------------
 
 In MLX function transformations are composable. You can apply any function
-transformation to the output of any other function transformation. For more
-on this, see the documentation on :ref:`function trasnforms
+transformation to the output of any other function transformation. For more on
+this, see the documentation on :ref:`function transforms
 <function_transforms>`.
 
 Compiling transformed functions works just as expected:
@@ -407,9 +406,15 @@ Compiling transformed functions works just as expected:
   # Also prints: array(2.71828, dtype=float32)
   print(compiled_grad_fn(mx.array(1.0)))
 
-You can also compile functions which themselves call compiled functions. In
-fact, a good practice is to compile the outer most function as there will be
-more opportunity for :func:`compile` to optimize the computation graph:
+.. note::
+
+   In order to compile as much as possible, a transformation of a compiled
+   function will not by default be compiled. To compile the transformed
+   function simply pass it through :func:`compile`. 
+
+You can also compile functions which themselves call compiled functions. A
+good practice is to compile the outer most function to give :func:`compile`
+the most opportunity to optimize the computation graph:
 
 .. code-block:: python
 
