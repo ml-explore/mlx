@@ -144,16 +144,24 @@ struct RemainderFn {
       T numerator,
       T denominator) {
     auto r = std::fmod(numerator, denominator);
-    if (r < 0 && denominator > 0)
+    if (r != 0 && (r < 0 != denominator < 0))
       r += denominator;
     return r;
   }
+
   template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, T> operator()(
+  std::enable_if_t<std::is_integral_v<T> & !std::is_signed_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    return numerator % denominator;
+  }
+
+  template <typename T>
+  std::enable_if_t<std::is_integral_v<T> & std::is_signed_v<T>, T> operator()(
       T numerator,
       T denominator) {
     auto r = numerator % denominator;
-    if (r < 0 && denominator > 0)
+    if (r != 0 && (r < 0 != denominator < 0))
       r += denominator;
     return r;
   }
