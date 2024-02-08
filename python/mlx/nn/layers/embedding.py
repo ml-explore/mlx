@@ -21,7 +21,7 @@ class Embedding(Module):
     def __init__(self, num_embeddings: int, dims: int):
         super().__init__()
         scale = math.sqrt(1 / dims)
-        self.weight = mx.random.normal((num_embeddings, dims)) * scale
+        self.weight = mx.random.normal(shape=(num_embeddings, dims), scale=scale)
 
     def _extra_repr(self):
         return f"{self.weight.shape[0]}, {self.weight.shape[1]}"
