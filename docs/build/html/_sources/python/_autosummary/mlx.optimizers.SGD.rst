@@ -14,5 +14,6 @@
    
          ~SGD.__init__
          ~SGD.apply_single
+         ~SGD.init_single
    
    
