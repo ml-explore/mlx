@@ -1008,7 +1008,7 @@ void init_transforms(py::module_& m) {
       "enable_compile",
       &enable_compile,
       R"pbdoc(
-        enable_compiler() -> None
+        enable_compile() -> None
 
         Globally enable compilation. This will override the environment
         variable ``MLX_DISABLE_COMPILE`` if set.
