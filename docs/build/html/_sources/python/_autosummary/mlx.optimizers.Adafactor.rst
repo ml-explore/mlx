@@ -14,5 +14,6 @@
    
          ~Adafactor.__init__
          ~Adafactor.apply_single
+         ~Adafactor.init_single
    
    

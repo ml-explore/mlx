@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.nn.initializers.identity &#8212; MLX  documentation</title>
+    <title>mlx.nn.losses.margin_ranking_loss &#8212; MLX 0.2.0 documentation</title>
   
   
   
@@ -43,9 +43,12 @@
     <script src="../../../_static/_sphinx_javascript_frameworks_compat.js"></script>
     <script src="../../../_static/doctools.js"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?digest=5a5c038af52cf7bc1a1ec88eea08e6366ee68824"></script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'python/nn/_autosummary_functions/mlx.nn.initializers.identity';</script>
+    <script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'python/nn/_autosummary_functions/mlx.nn.losses.margin_ranking_loss';</script>
     <link rel="index" title="Index" href="../../../genindex.html" />
     <link rel="search" title="Search" href="../../../search.html" />
+    <link rel="next" title="mlx.nn.losses.mse_loss" href="mlx.nn.losses.mse_loss.html" />
+    <link rel="prev" title="mlx.nn.losses.log_cosh_loss" href="mlx.nn.losses.log_cosh_loss.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -132,8 +135,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX  documentation - Home"/>
-    <script>document.write(`<img src="../../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX  documentation - Home"/>`);</script>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.2.0 documentation - Home"/>
+    <script>document.write(`<img src="../../../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.2.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -151,6 +154,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/indexing.html">Indexing Arrays</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/saving_and_loading.html">Saving and Loading Arrays</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/function_transforms.html">Function Transforms</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage/compile.html">Compilation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/numpy.html">Conversion to NumPy and Other Frameworks</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../../usage/using_streams.html">Using Streams</a></li>
 </ul>
@@ -161,7 +165,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../../examples/llama-inference.html">LLM inference</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../array.html">Array</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-1"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.array.html">mlx.core.array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.array.astype.html">mlx.core.array.astype</a></li>
@@ -239,6 +243,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.cos.html">mlx.core.cos</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.cosh.html">mlx.core.cosh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.dequantize.html">mlx.core.dequantize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.diag.html">mlx.core.diag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.diagonal.html">mlx.core.diagonal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.divide.html">mlx.core.divide</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.divmod.html">mlx.core.divmod</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.equal.html">mlx.core.equal</a></li>
@@ -344,12 +350,14 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.eval.html">mlx.core.eval</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.compile.html">mlx.core.compile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.disable_compile.html">mlx.core.disable_compile</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.enable_compile.html">mlx.core.enable_compile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.grad.html">mlx.core.grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.value_and_grad.html">mlx.core.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.jvp.html">mlx.core.jvp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.vjp.html">mlx.core.vjp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.vmap.html">mlx.core.vmap</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.simplify.html">mlx.core.simplify</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -369,12 +377,14 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../linalg.html">Linear Algebra</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-7"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.norm.html">mlx.core.linalg.norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.linalg.qr.html">mlx.core.linalg.qr</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../nn.html">Neural Networks</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../../nn.html">Neural Networks</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../module.html">Module</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Module.training.html">mlx.nn.Module.training</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Module.state.html">mlx.nn.Module.state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Module.apply.html">mlx.nn.Module.apply</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Module.apply_to_modules.html">mlx.nn.Module.apply_to_modules</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Module.children.html">mlx.nn.Module.children</a></li>
@@ -419,6 +429,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Sequential.html">mlx.nn.Sequential</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.SinusoidalPositionalEncoding.html">mlx.nn.SinusoidalPositionalEncoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Softshrink.html">mlx.nn.Softshrink</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.Transformer.html">mlx.nn.Transformer</a></li>
 </ul>
@@ -431,11 +442,12 @@
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.relu.html">mlx.nn.relu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.selu.html">mlx.nn.selu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="mlx.nn.softshrink.html">mlx.nn.softshrink</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.silu.html">mlx.nn.silu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.step.html">mlx.nn.step</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../losses.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-12"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 current active has-children"><a class="reference internal" href="../losses.html">Loss Functions</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-12"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.cosine_similarity_loss.html">mlx.nn.losses.cosine_similarity_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
@@ -445,21 +457,38 @@
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.kl_div_loss.html">mlx.nn.losses.kl_div_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.l1_loss.html">mlx.nn.losses.l1_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.log_cosh_loss.html">mlx.nn.losses.log_cosh_loss</a></li>
+<li class="toctree-l3 current active"><a class="current reference internal" href="#">mlx.nn.losses.margin_ranking_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.mse_loss.html">mlx.nn.losses.mse_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.nll_loss.html">mlx.nn.losses.nll_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.smooth_l1_loss.html">mlx.nn.losses.smooth_l1_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="mlx.nn.losses.triplet_loss.html">mlx.nn.losses.triplet_loss</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../init.html">Initializers</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../init.html">Initializers</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-13"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.constant.html">mlx.nn.init.constant</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.normal.html">mlx.nn.init.normal</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.uniform.html">mlx.nn.init.uniform</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.identity.html">mlx.nn.init.identity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.glorot_normal.html">mlx.nn.init.glorot_normal</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.glorot_uniform.html">mlx.nn.init.glorot_uniform</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.he_normal.html">mlx.nn.init.he_normal</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../_autosummary/mlx.nn.init.he_uniform.html">mlx.nn.init.he_uniform</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-13"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.OptimizerState.html">mlx.optimizers.OptimizerState</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Optimizer.html">mlx.optimizers.Optimizer</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-14"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../optimizer.html">Optimizer</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Optimizer.state.html">mlx.optimizers.Optimizer.state</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Optimizer.apply_gradients.html">mlx.optimizers.Optimizer.apply_gradients</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Optimizer.init.html">mlx.optimizers.Optimizer.init</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Optimizer.update.html">mlx.optimizers.Optimizer.update</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.SGD.html">mlx.optimizers.SGD</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.RMSprop.html">mlx.optimizers.RMSprop</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Adagrad.html">mlx.optimizers.Adagrad</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Adafactor.html">mlx.optimizers.Adafactor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.AdaDelta.html">mlx.optimizers.AdaDelta</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Adam.html">mlx.optimizers.Adam</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.AdamW.html">mlx.optimizers.AdamW</a></li>
@@ -467,7 +496,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.optimizers.Lion.html">mlx.optimizers.Lion</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../../tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-14"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-16"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>
@@ -550,7 +579,7 @@
       
       
       
-      <li><a href="../../../_sources/python/nn/_autosummary_functions/mlx.nn.initializers.identity.rst" target="_blank"
+      <li><a href="../../../_sources/python/nn/_autosummary_functions/mlx.nn.losses.margin_ranking_loss.rst" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -632,7 +661,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>mlx.nn.initializers.identity</h1>
+    <h1>mlx.nn.losses.margin_ranking_loss</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -646,8 +675,51 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article" role="main">
                   
-  <section id="mlx-nn-initializers-identity">
-<h1>mlx.nn.initializers.identity<a class="headerlink" href="#mlx-nn-initializers-identity" title="Permalink to this heading">#</a></h1>
+  <section id="mlx-nn-losses-margin-ranking-loss">
+<h1>mlx.nn.losses.margin_ranking_loss<a class="headerlink" href="#mlx-nn-losses-margin-ranking-loss" title="Permalink to this heading">#</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="mlx.nn.losses.margin_ranking_loss">
+<span class="sig-prename descclassname"><span class="pre">mlx.nn.losses.</span></span><span class="sig-name descname"><span class="pre">margin_ranking_loss</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">inputs2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">margin</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reduction</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'none'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'mean'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'sum'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'none'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.nn.losses.margin_ranking_loss" title="Permalink to this definition">#</a></dt>
+<dd><p>Calculate the margin ranking loss that loss given inputs <span class="math notranslate nohighlight">\(x_1\)</span>, <span class="math notranslate nohighlight">\(x_2\)</span> and a label
+<span class="math notranslate nohighlight">\(y\)</span> (containing 1 or -1).</p>
+<p>The loss is given by:</p>
+<div class="math notranslate nohighlight">
+\[\text{loss} = \max (0, -y * (x_1 - x_2) + \text{margin})\]</div>
+<p>Where <span class="math notranslate nohighlight">\(y\)</span> represents <code class="docutils literal notranslate"><span class="pre">targets</span></code>, <span class="math notranslate nohighlight">\(x_1\)</span> represents <code class="docutils literal notranslate"><span class="pre">inputs1</span></code> and <span class="math notranslate nohighlight">\(x_2\)</span>
+represents <code class="docutils literal notranslate"><span class="pre">inputs2</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>inputs1</strong> (<a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Scores for the first input.</p></li>
+<li><p><strong>inputs2</strong> (<a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Scores for the second input.</p></li>
+<li><p><strong>targets</strong> (<a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Labels indicating whether samples in <code class="docutils literal notranslate"><span class="pre">inputs1</span></code> should be ranked higher
+than samples in <code class="docutils literal notranslate"><span class="pre">inputs2</span></code>. Values should be 1 or -1.</p></li>
+<li><p><strong>margin</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – The margin by which the scores should be separated.
+Default: <code class="docutils literal notranslate"><span class="pre">0.0</span></code>.</p></li>
+<li><p><strong>reduction</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.12)"><em>str</em></a><em>, </em><em>optional</em>) – Specifies the reduction to apply to the output:
+<code class="docutils literal notranslate"><span class="pre">'none'</span></code> | <code class="docutils literal notranslate"><span class="pre">'mean'</span></code> | <code class="docutils literal notranslate"><span class="pre">'sum'</span></code>. Default: <code class="docutils literal notranslate"><span class="pre">'none'</span></code>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The computed margin ranking loss.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a></p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">mlx.core</span> <span class="k">as</span> <span class="nn">mx</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">mlx.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">targets</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">inputs1</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="o">-</span><span class="mf">0.573409</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.765166</span><span class="p">,</span> <span class="o">-</span><span class="mf">0.0638</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">inputs2</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.75596</span><span class="p">,</span> <span class="mf">0.225763</span><span class="p">,</span> <span class="mf">0.256995</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loss</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">losses</span><span class="o">.</span><span class="n">margin_ranking_loss</span><span class="p">(</span><span class="n">inputs1</span><span class="p">,</span> <span class="n">inputs2</span><span class="p">,</span> <span class="n">targets</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">loss</span>
+<span class="go">array(0.773433, dtype=float32)</span>
+</pre></div>
+</div>
+</dd></dl>
+
 </section>
 
 
@@ -661,6 +733,24 @@ document.write(`
                 <footer class="prev-next-footer">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="mlx.nn.losses.log_cosh_loss.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">mlx.nn.losses.log_cosh_loss</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="mlx.nn.losses.mse_loss.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">mlx.nn.losses.mse_loss</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
 </div>
                 </footer>
               

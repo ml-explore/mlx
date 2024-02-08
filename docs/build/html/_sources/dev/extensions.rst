@@ -677,9 +677,9 @@ Let's look at the overall directory structure first.
 Binding to Python
 ^^^^^^^^^^^^^^^^^^
 
-We use PyBind11_ to build a Python API for the C++ library. Since bindings 
-for all needed components such as `mlx.core.array`, `mlx.core.stream`, etc. 
-are already provided, adding our :meth:`axpby` becomes very simple!
+We use PyBind11_ to build a Python API for the C++ library. Since bindings for
+components such as :class:`mlx.core.array`, :class:`mlx.core.stream`, etc. are
+already provided, adding our :meth:`axpby` is simple!
 
 .. code-block:: C++
 
@@ -927,18 +927,18 @@ Results:
 
 We see some modest improvements right away! 
 
-This operation is now good to be used to build other operations, 
-in :class:`mlx.nn.Module` calls, and also as a part of graph 
-transformations like :meth:`grad`!
+This operation is now good to be used to build other operations, in
+:class:`mlx.nn.Module` calls, and also as a part of graph transformations like
+:meth:`grad`!
 
 Scripts
 -------
 
 .. admonition:: Download the code
 
-   The full example code is available in `mlx-examples <code>`_.
+   The full example code is available in `mlx <code>`_.
 
-.. code: `TODO_LINK/extensions`_
+.. code: `https://github.com/ml-explore/mlx/tree/main/examples/extensions/`_
 
 .. _Accelerate: https://developer.apple.com/documentation/accelerate/blas?language=objc
 .. _Metal: https://developer.apple.com/documentation/metal?language=objc
