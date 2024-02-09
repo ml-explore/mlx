@@ -1,6 +1,6 @@
 # Copyright © 2023-2024 Apple Inc.
 
-from typing import List, Literal, Tuple, Union
+from typing import Literal, Tuple, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -103,7 +103,9 @@ class Upsample2d(Module):
     ):
         super().__init__()
         if mode not in ["nearest", "bilinear"]:
-            raise ValueError(f"[Upsample2d] Got unsupported upsampling algorithm: {mode}")
+            raise ValueError(
+                f"[Upsample2d] Got unsupported upsampling algorithm: {mode}"
+            )
         if isinstance(scale, (list, tuple)):
             self.scale = tuple(map(float, scale))
         else:
