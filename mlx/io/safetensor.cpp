@@ -93,7 +93,7 @@ Dtype dtype_from_safetensor_str(std::string str) {
 }
 
 /** Load array from reader in safetensor format */
-std::unordered_map<std::string, array> load_safetensors(
+SafetensorsLoad load_safetensors(
     std::shared_ptr<io::Reader> in_stream,
     StreamOrDevice s) {
   ////////////////////////////////////////////////////////
@@ -121,9 +121,12 @@ std::unordered_map<std::string, array> load_safetensors(
   size_t offset = jsonHeaderLength + 8;
   // Load the arrays using metadata
   std::unordered_map<std::string, array> res;
+  std::unordered_map<std::string, std::string> metadata_map;
   for (const auto& item : metadata.items()) {
     if (item.key() == "__metadata__") {
-      // ignore metadata for now
+      for (const auto& meta_item : item.value().items()) {
+        metadata_map.insert({meta_item.key(), meta_item.value()});
+      }
       continue;
     }
     std::string dtype = item.value().at("dtype");
@@ -138,19 +141,18 @@ std::unordered_map<std::string, array> load_safetensors(
         std::vector<array>{});
     res.insert({item.key(), loaded_array});
   }
-  return res;
+  return {res, metadata_map};
 }
 
-std::unordered_map<std::string, array> load_safetensors(
-    const std::string& file,
-    StreamOrDevice s) {
+SafetensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
   return load_safetensors(std::make_shared<io::FileReader>(file), s);
 }
 
 /** Save array to out stream in .npy format */
 void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
-    std::unordered_map<std::string, array> a) {
+    std::unordered_map<std::string, array> a,
+    std::unordered_map<std::string, std::string> metadata /* = {} */) {
   ////////////////////////////////////////////////////////
   // Check file
   if (!out_stream->good() || !out_stream->is_open()) {
@@ -161,9 +163,11 @@ void save_safetensors(
   ////////////////////////////////////////////////////////
   // Check array map
   json parent;
-  parent["__metadata__"] = json::object({
-      {"format", "mlx"},
-  });
+  json _metadata;
+  for (auto& [key, value] : metadata) {
+    _metadata[key] = value;
+  }
+  parent["__metadata__"] = _metadata;
   size_t offset = 0;
   for (auto& [key, arr] : a) {
     arr.eval();
@@ -204,7 +208,8 @@ void save_safetensors(
 
 void save_safetensors(
     const std::string& file_,
-    std::unordered_map<std::string, array> a) {
+    std::unordered_map<std::string, array> a,
+    std::unordered_map<std::string, std::string> metadata /* = {} */) {
   // Open and check file
   std::string file = file_;
 
@@ -214,7 +219,7 @@ void save_safetensors(
     file += ".safetensors";
 
   // Serialize array
-  save_safetensors(std::make_shared<io::FileWriter>(file), a);
+  save_safetensors(std::make_shared<io::FileWriter>(file), a, metadata);
 }
 
 } // namespace mlx::core

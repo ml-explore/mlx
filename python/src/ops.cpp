@@ -3214,8 +3214,9 @@ void init_ops(py::module_& m) {
       &mlx_save_safetensor_helper,
       "file"_a,
       "arrays"_a,
+      "metadata"_a = none,
       R"pbdoc(
-        save_safetensors(file: str, arrays: Dict[str, array])
+        save_safetensors(file: str, arrays: Dict[str, array], metadata: Optional[Dict[str, str]] = None)
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
@@ -3225,6 +3226,7 @@ void init_ops(py::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+            metadata (dict(str, str), optional): The dictionary of metadata to be saved.
       )pbdoc");
   m.def(
       "save_gguf",
