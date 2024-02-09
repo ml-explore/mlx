@@ -66,11 +66,10 @@ class Upsample2d(Module):
         - ``C`` is the number of input channels
 
     Parameters:
-        scale (float or Tuple[float, float]): The multiplier for spatial size.
-            If a single number is provided, the provided value is the
-            multiplier for both the height and width. Otherwise, the first
-            element of the tuple is the height multipler, while the second is
-            the width multipler.
+        scale (float or Tuple[float, float]): The multiplier for the spatial size.
+            If a ``float`` is provided, it is the multiplier for both the height and
+            width. Otherwise, the first element of the tuple is the height multiplier
+            and the second is the width multiplier.
         mode (str, optional): The upsampling algorithm: one of ``"nearest"`` and
             ``"bilinear"``. Default: ``"nearest"``.
 
