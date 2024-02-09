@@ -128,7 +128,7 @@ class Upsample2d(Module):
     ):
         super().__init__()
         if mode not in ["nearest", "bilinear"]:
-            raise ValueError("[upsample2d] unsupported upsampling algorithm")
+            raise ValueError(f"[Upsample2d] Got unsupported upsampling algorithm: {mode}")
         if isinstance(scale, (list, tuple)):
             self.scale = tuple(map(float, scale))
         else:
