@@ -66,13 +66,12 @@ class Upsample2d(Module):
         - ``C`` is the number of input channels
 
     Parameters:
-        scale (float or Tuple[float, float]): The multiplier for spatial size.
-            If a single number is provided, the provided value is the
-            multiplier for both the height and width. Otherwise, the first
-            element of the tuple is the height multipler, while the second is
-            the width multipler.
-        mode (str, optional): The upsampling algorithm: one of ``nearest`` and
-            ``bilinear``. Default: ``nearest``.
+        scale (float or Tuple[float, float]): The multiplier for the spatial size.
+            If a ``float`` is provided, it is the multiplier for both the height and
+            width. Otherwise, the first element of the tuple is the height multiplier
+            and the second is the width multiplier.
+        mode (str, optional): The upsampling algorithm: one of ``"nearest"`` and
+            ``"bilinear"``. Default: ``"nearest"``.
 
     Examples:
         >>> import mlx.core as mx
@@ -104,7 +103,7 @@ class Upsample2d(Module):
     ):
         super().__init__()
         if mode not in ["nearest", "bilinear"]:
-            raise ValueError("[upsample2d] unsupported upsampling algorithm")
+            raise ValueError(f"[Upsample2d] Got unsupported upsampling algorithm: {mode}")
         if isinstance(scale, (list, tuple)):
             self.scale = tuple(map(float, scale))
         else:
