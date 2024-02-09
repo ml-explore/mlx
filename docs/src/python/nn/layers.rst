@@ -8,7 +8,8 @@ Layers
 .. autosummary::
    :toctree: _autosummary
    :template: nn-module-template.rst
-
+   AvgPool1d
+   AvgPool2d
    ALiBi
    BatchNorm
    Conv1d
@@ -22,6 +23,8 @@ Layers
    InstanceNorm
    LayerNorm
    Linear
+   MaxPool1d
+   MaxPool2d
    Mish
    MultiHeadAttention
    PReLU
