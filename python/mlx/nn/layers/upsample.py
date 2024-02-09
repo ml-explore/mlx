@@ -71,8 +71,8 @@ class Upsample2d(Module):
             multiplier for both the height and width. Otherwise, the first
             element of the tuple is the height multipler, while the second is
             the width multipler.
-        mode (str, optional): The upsampling algorithm: one of ``nearest`` and
-            ``bilinear``. Default: ``nearest``.
+        mode (str, optional): The upsampling algorithm: one of ``"nearest"`` and
+            ``"bilinear"``. Default: ``"nearest"``.
 
     Examples:
         >>> import mlx.core as mx
