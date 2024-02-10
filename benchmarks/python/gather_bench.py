@@ -5,18 +5,7 @@ from time import time
 
 import mlx.core as mx
 import torch
-
-
-def measure_runtime(fn, **kwargs):
-    # Warmup
-    for _ in range(5):
-        fn(**kwargs)
-
-    tic = time()
-    iters = 10
-    for _ in range(iters):
-        fn(**kwargs)
-    return (time() - tic) * 1000 / iters
+from time_utils import measure_runtime
 
 
 def benchmark_gather_mlx(x_shape, idx_shape):
