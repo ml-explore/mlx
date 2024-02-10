@@ -151,7 +151,7 @@ target_include_directories(
 
 if (MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
-  find_package(Python COMPONENTS Interpreter Development.Module)
+  find_package(Python COMPONENTS Interpreter Development)
   find_package(pybind11 CONFIG REQUIRED)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
 endif()
