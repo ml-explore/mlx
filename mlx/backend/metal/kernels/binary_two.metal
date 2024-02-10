@@ -14,32 +14,28 @@ struct FloorDivide {
 };
 
 struct Remainder {
-  template <typename T> T operator()(T x, T y) {
+  template <typename T>
+  metal::enable_if_t<metal::is_integral_v<T> & !metal::is_signed_v<T>, T> operator()(T x, T y) {
+    return x % y;
+  }
+  template <typename T>
+  metal::enable_if_t<metal::is_integral_v<T> & metal::is_signed_v<T>, T> operator()(T x, T y) {
     auto r = x % y;
-    if (r != 0 && (r < 0 != y < 0))
+    if (r != 0 && (r < 0 != y < 0)) {
       r += y;
+    }
+    return r; 
+  }
+  template <typename T>
+  metal::enable_if_t<!metal::is_integral_v<T>, T> operator()(T x, T y) {
+    T r = fmod(x, y);
+    if (r != 0 && (r < 0 != y < 0)) {
+      r += y;
+    }
     return r; 
   }
   template <> complex64_t operator()(complex64_t x, complex64_t y) {
     return x % y; 
-  }
-  template <> float operator()(float x, float y) {
-    float r = fmod(x, y);
-    if (r != 0 && (r < 0 != y < 0))
-      r += y;
-     return r; 
-  }
-  template <> half operator()(half x, half y) { 
-      half r = fmod(x, y);
-      if (r != 0 && (r < 0 != y < 0))
-        r += y;
-     return r; 
-  }
-  template <> bfloat16_t operator()(bfloat16_t x, bfloat16_t y) { 
-      bfloat16_t r = fmod(x, y);
-      if (r != 0 && (r < 0 != y < 0))
-        r += y;
-     return r; 
   }
 };
 
