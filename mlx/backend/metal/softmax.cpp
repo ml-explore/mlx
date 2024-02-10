@@ -24,7 +24,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto check_input = [&copies, &s](const array& x) {
     bool no_copy = x.strides()[x.ndim() - 1] == 1;
     if (x.ndim() > 1) {
-      auto s = x.strides()[x.ndim() - 1];
+      auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
