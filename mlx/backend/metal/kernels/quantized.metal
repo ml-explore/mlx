@@ -55,8 +55,6 @@ template <typename T, const int BM, const int BN, const int group_size, const in
   thread U scale = 1;
   thread U bias = 0;
   thread U x_thread[el_per_thread];
-  // 32 x 32 x 1 thread group
-  // 1 x (out / 32) x 1
 
   // Adjust positions
   const int in_vec_size_w = in_vec_size / el_per_thread;
