@@ -80,10 +80,8 @@ if __name__ == "__main__":
     _filter = make_predicate(args.filter, args.negative_filter)
 
     if args.mlx_dtypes:
-        compare_filtered = (
-            lambda x: compare_mlx_dtypes(
-                x.split() + rest, args.mlx_dtypes[0], args.mlx_dtypes[1]
-            )
+        compare_filtered = lambda x: (
+            compare_mlx_dtypes(x.split() + rest, args.mlx_dtypes[0], args.mlx_dtypes[1])
             if _filter(x)
             else None
         )

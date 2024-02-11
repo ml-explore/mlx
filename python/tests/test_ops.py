@@ -1333,9 +1333,7 @@ class TestOps(mlx_tests.MLXTestCase):
         for d in dims:
             anp = np.random.randint(-20, 20, (size**d,)).reshape([size] * d)
             for n_bsx in range(d):
-                bnp = np.random.randint(-20, 20, (size**n_bsx,)).reshape(
-                    [size] * n_bsx
-                )
+                bnp = np.random.randint(-20, 20, (size**n_bsx,)).reshape([size] * n_bsx)
                 for _ in range(trial_mul * d):
                     amlx = mx.array(anp)
                     bmlx = mx.array(bnp)
