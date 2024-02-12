@@ -66,12 +66,19 @@ template <typename T, const int BM, const int BN, const int group_size, const in
   x += tid.z * in_vec_size;
   y += tid.z * out_vec_size;
 
+  if (out_row >= out_vec_size) {
+    return;
+  }
+
   // Loop over in_vec in blocks of colgroup
   for (int i=0; i<in_vec_size; i+=colgroup) {
     // Load the vec to shared memory
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (simd_gid < simdgroups_fetching_vec) {
-      x_block[lid] = x[lid + i];
+    if (simd_gid == 0) {
+      #pragma clang loop unroll(full)
+      for (int j=0; j<el_per_thread; j++) {
+        x_block[simd_lid * el_per_thread + j] = x[i + simd_lid * el_per_thread + j];
+      }
     }
     if (simd_lid == 0) {
       #pragma clang loop unroll(full)
