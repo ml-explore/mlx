@@ -1229,21 +1229,21 @@ class TestLayers(mlx_tests.MLXTestCase):
             )
         )
         # Test repr
-        self.assertTrue(
-            str(nn.MaxPool1d(kernel_size=3, padding=2))
-            == "MaxPool1d(3, stride=3, padding=2)"
+        self.assertEqual(
+            str(nn.MaxPool1d(kernel_size=3, padding=2)),
+            "MaxPool1d(kernel_size=(3,), stride=(3,), padding=(2,))",
         )
-        self.assertTrue(
-            str(nn.AvgPool1d(kernel_size=2, stride=3))
-            == "AvgPool1d(2, stride=3, padding=0)"
+        self.assertEqual(
+            str(nn.AvgPool1d(kernel_size=2, stride=3)),
+            "AvgPool1d(kernel_size=(2,), stride=(3,), padding=(0,))",
         )
-        self.assertTrue(
-            str(nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
-            == "MaxPool2d(3, stride=2, padding=1)"
+        self.assertEqual(
+            str(nn.MaxPool2d(kernel_size=3, stride=2, padding=1)),
+            "MaxPool2d(kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))",
         )
-        self.assertTrue(
-            str(nn.AvgPool2d(kernel_size=(1, 2), stride=2, padding=(1, 2)))
-            == "AvgPool2d((1, 2), stride=2, padding=(1, 2))"
+        self.assertEqual(
+            str(nn.AvgPool2d(kernel_size=(1, 2), stride=2, padding=(1, 2))),
+            "AvgPool2d(kernel_size=(1, 2), stride=(2, 2), padding=(1, 2))",
         )
 
 
