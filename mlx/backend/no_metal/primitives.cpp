@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/primitives.h"
+#include "mlx/extensions.h"
 
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
@@ -94,5 +95,9 @@ NO_GPU(Subtract)
 NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
+
+namespace ext {
+NO_GPU_MULTI(RoPE)
+} // namespace ext
 
 } // namespace mlx::core

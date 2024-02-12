@@ -17,28 +17,29 @@ void init_extensions(py::module_& parent_module) {
   auto m = parent_module.def_submodule("ext", "mlx.core.ext: fast operations");
 
   m.def(
-      "rms_norm",
+      "rope",
       [](const array& x,
-         const array& weight,
-         float eps,
-         bool precise,
-         StreamOrDevice s) {
-        return ext::rms_norm(x, weight, eps, precise, s);
+         int dims,
+         float base,
+         float scale,
+         bool traditional,
+         int offset,
+         StreamOrDevice s /* = {} */) {
+        return ext::rope(x, dims, base, scale, traditional, offset, s);
       },
       "x"_a,
-      "weight"_a,
-      "eps"_a = 1e-5,
-      "precise"_a = false,
+      "dims"_a,
+      "base"_a,
+      "scale"_a,
+      "traditional"_a,
+      "offset"_a,
       py::kw_only(),
       "stream"_a = std::nullopt,
       R"pbdoc(
-        RMS norm.
+        RoPE.
 
         Args:
             x (array): Input array.
-            weight (array): Weight array.
-            eps (float, optional): Constant for numerical stability. Default is ``1e-5``.
-            precise (bool, optional): Perform the normalization in ``float32``. Default: ``False``.
 
         Returns:
             array: The output array.

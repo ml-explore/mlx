@@ -7,28 +7,76 @@
 
 namespace mlx::core::ext {
 
-class Extended : public Primitive {
+// Custom primitive accepts a fallback function which it uses for
+// transformations. Transformations are virtual so that derived classes may to
+// override the default behavior
+class Custom : public Primitive {
  public:
-  explicit Extended(Stream stream)
-      : Primitive(stream) {} //, std::function<> fallback);
+  explicit Custom(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Primitive(stream), fallback_(fallback){};
+
+  virtual std::pair<std::vector<array>, std::vector<int>> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+
+  virtual std::vector<array> jvp(
+      const std::vector<array>& primals,
+      const std::vector<array>& tangents,
+      const std::vector<int>& argnums) override;
+
+  virtual std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+ private:
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+};
+
+array rope(
+    const array& x,
+    int dims,
+    float base,
+    float scale,
+    bool traditional,
+    int offset,
+    StreamOrDevice s /* = {} */);
+
+class RoPE : public Custom {
+ public:
+  RoPE(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      int dims,
+      float base,
+      float scale,
+      bool traditional,
+      int offset)
+      : Custom(stream, fallback),
+        dims_(dims),
+        base_(base),
+        scale_(scale),
+        traditional_(traditional),
+        offset_(offset){};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_VMAP()
-  DEFINE_GRADS()
+  DEFINE_PRINT(RoPE)
+  bool is_equivalent(const Primitive& other) const override;
 
  private:
-  //  std::function<std::vector<array>(std::vector<array>);
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+  int dims_;
+  float base_;
+  float scale_;
+  bool traditional_;
+  int offset_;
 };
-
-array rms_norm(
-    array x,
-    const array& w,
-    float eps = 1e-5,
-    bool precise = false,
-    StreamOrDevice s = {});
 
 } // namespace mlx::core::ext
