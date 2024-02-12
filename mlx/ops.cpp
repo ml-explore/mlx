@@ -5,6 +5,8 @@
 #include <numeric>
 #include <set>
 #include <sstream>
+
+#include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
