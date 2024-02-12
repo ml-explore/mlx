@@ -140,16 +140,34 @@ void Divide::eval(const std::vector<array>& inputs, array& out) {
 
 struct RemainderFn {
   template <typename T>
-  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
+  std::enable_if_t<std::is_integral_v<T> & !std::is_signed_v<T>, T> operator()(
       T numerator,
       T denominator) {
-    return std::fmod(numerator, denominator);
+    return numerator % denominator;
   }
 
   template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, T> operator()(
+  std::enable_if_t<std::is_integral_v<T> & std::is_signed_v<T>, T> operator()(
       T numerator,
       T denominator) {
+    auto r = numerator % denominator;
+    if (r != 0 && (r < 0 != denominator < 0))
+      r += denominator;
+    return r;
+  }
+
+  template <typename T>
+  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
+      T numerator,
+      T denominator) {
+    auto r = std::fmod(numerator, denominator);
+    if (r != 0 && (r < 0 != denominator < 0)) {
+      r += denominator;
+    }
+    return r;
+  }
+
+  complex64_t operator()(complex64_t numerator, complex64_t denominator) {
     return numerator % denominator;
   }
 };

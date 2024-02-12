@@ -275,6 +275,20 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(z.dtype, dt)
             self.assertEqual(z.item(), 1)
 
+            z = -1 % x
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), 1)
+
+            z = -1 % -x
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), -1)
+
+            x = mx.arange(10).astype(dt) - 5
+            y = x % 5
+            z = x % -5
+            self.assertEqual(y.tolist(), [0, 1, 2, 3, 4, 0, 1, 2, 3, 4])
+            self.assertEqual(z.tolist(), [0, -4, -3, -2, -1, 0, -4, -3, -2, -1])
+
     def test_comparisons(self):
         a = mx.array([0.0, 1.0, 5.0])
         b = mx.array([-1.0, 2.0, 5.0])
@@ -1319,9 +1333,7 @@ class TestOps(mlx_tests.MLXTestCase):
         for d in dims:
             anp = np.random.randint(-20, 20, (size**d,)).reshape([size] * d)
             for n_bsx in range(d):
-                bnp = np.random.randint(-20, 20, (size**n_bsx,)).reshape(
-                    [size] * n_bsx
-                )
+                bnp = np.random.randint(-20, 20, (size**n_bsx,)).reshape([size] * n_bsx)
                 for _ in range(trial_mul * d):
                     amlx = mx.array(anp)
                     bmlx = mx.array(bnp)
@@ -1371,6 +1383,11 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertFalse(np.any(np.isnan(a)))
             self.assertTrue((a[:-1] < 1e-9).all())
             self.assertEqual(a[-1], 1)
+
+        # Sliced inputs
+        y = mx.random.uniform(shape=(8, 4))
+        out = mx.softmax(y[:, 0:2], axis=-1)
+        self.assertAlmostEqual(out.sum().item(), 8.0)
 
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)

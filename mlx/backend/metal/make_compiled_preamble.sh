@@ -12,7 +12,7 @@ SRCDIR=$3
 
 CONTENT=$($CC -I $SRCDIR -E $SRCDIR/mlx/backend/metal/kernels/compiled_preamble.h 2>/dev/null)
 
-cat << EOF > $OUTPUT_FILE
+cat << EOF > "$OUTPUT_FILE"
 // Copyright © 2023-24 Apple Inc.
 
 namespace mlx::core::metal {

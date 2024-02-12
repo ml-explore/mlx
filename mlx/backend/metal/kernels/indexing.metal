@@ -187,11 +187,11 @@ template <typename T, typename IdxT, typename Op, int NIDX>
     const device size_t *out_strides [[buffer(8)]],
     const device size_t& out_ndim [[buffer(9)]],
     const device int* axes [[buffer(10)]],
-    uint gid [[thread_position_in_grid]]) {
+    uint2 gid [[thread_position_in_grid]]) {
 
   Op op;
-  auto ind_idx = gid / upd_size;
-  auto ind_offset = gid % upd_size;
+  auto ind_idx = gid.y;
+  auto ind_offset = gid.x;
 
   size_t out_idx = 0;
   for (int i = 0; i < NIDX; ++i) {
@@ -208,7 +208,7 @@ template <typename T, typename IdxT, typename Op, int NIDX>
 
   auto out_offset = elem_to_loc(
       ind_offset, upd_shape + indices.ndim, out_strides, out_ndim);
-  auto upd_idx = elem_to_loc(gid, upd_shape, upd_strides, upd_ndim);
+  auto upd_idx = elem_to_loc(gid.y * upd_size + gid.x, upd_shape, upd_strides, upd_ndim);
   op.atomic_update(out, updates[upd_idx], out_idx + out_offset);
 }
 
@@ -226,7 +226,7 @@ template [[host_name("scatter" name "_" #nindex)]] \
     const device size_t *out_strides [[buffer(8)]], \
     const device size_t& out_ndim [[buffer(9)]], \
     const device int* axes [[buffer(10)]], \
-    uint gid [[thread_position_in_grid]]);
+    uint2 gid [[thread_position_in_grid]]);
 
 // Special case NINDEX=0
 #define instantiate_scatter_nd0(name, type) \
