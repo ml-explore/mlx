@@ -1,6 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/ext.h"
+#include "mlx/extensions.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core::ext {
