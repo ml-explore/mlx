@@ -41,6 +41,9 @@ class TestExt(mlx_tests.MLXTestCase):
         # Defaults: dims, dtype, base, scale, offset, traditional
         defaults = (8, mx.float32, 10000.0, 1.0, 0, False)
 
+        # Per dtype absolute tolerance
+        tolerances = {mx.float32: 1e-6, mx.float16: 1e-3, mx.bfloat16: 1e-2}
+
         # Test cases:
         dtypes = [mx.float32, mx.float16, mx.bfloat16]
         bases = [10000.0, 1000000.0]
@@ -48,42 +51,39 @@ class TestExt(mlx_tests.MLXTestCase):
         offsets = [0, 3]
         traditional = [True, False]
 
-        dims, dtype, _, scale, offset, traditional = defaults
-        for base in bases:
-            x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-            rx = rope_orig(x, dims, traditional, base, scale, offset)
-            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
-            self.assertTrue(mx.allclose(rx, rx_ext))
+        for traditional in [True, False]:
+            dims, dtype, _, scale, offset, _ = defaults
+            for base in bases:
+                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                rx = rope_orig(x, dims, traditional, base, scale, offset)
+                rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
+                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
 
-        dims, _, base, scale, offset, traditional = defaults
-        for dtype in dtypes:
-            x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-            rx = rope_orig(x, dims, traditional, base, scale, offset)
-            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
-            self.assertTrue(mx.allclose(rx, rx_ext))
+            dims, _, base, scale, offset, _ = defaults
+            for dtype in dtypes:
+                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                ry = rope_orig(
+                    x.astype(mx.float32), dims, traditional, base, scale, offset
+                )
+                rx = rope_orig(x, dims, traditional, base, scale, offset)
+                rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
+                if dtype != mx.float32:
+                    self.assertLess(mx.abs(ry - rx_ext).max(), mx.abs(ry - rx).max())
+                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
 
-        dims, dtype, base, scale, _, traditional = defaults
-        for offset in offsets:
-            x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-            rx = rope_orig(x, dims, traditional, base, scale, offset)
-            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
-            rx = rope_orig(x, dims, base, scale, traditional, offset)
-            rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
-            self.assertTrue(mx.allclose(rx, rx_ext))
+            dims, dtype, base, scale, _, _ = defaults
+            for offset in offsets:
+                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                rx = rope_orig(x, dims, base, scale, traditional, offset)
+                rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
+                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
 
-        dims, dtype, base, _, offset, traditional = defaults
-        for scale in scales:
-            x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-            rx = rope_orig(x, dims, traditional, base, scale, offset)
-            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
-            self.assertTrue(mx.allclose(rx, rx_ext))
-
-        dims, dtype, base, scale, offset, _ = defaults
-        traditional = True
-        x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-        rx = rope_orig(x, dims, traditional, base, scale, offset)
-        rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
-        self.assertTrue(mx.allclose(rx, rx_ext))
+            dims, dtype, base, _, offset, _ = defaults
+            for scale in scales:
+                x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+                rx = rope_orig(x, dims, traditional, base, scale, offset)
+                rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
+                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
 
     def test_ext_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))

@@ -35,17 +35,17 @@ template <typename T, bool traditional>
   float d = static_cast<float>(pos.x) / static_cast<float>(grid.x);
 
   // Compute costheta, sintheta
-  T theta = static_cast<T>(L * metal::exp2(-d * base));
-  T costheta = metal::cos(theta);
-  T sintheta = metal::sin(theta);
+  float theta = L * metal::exp2(-d * base);
+  float costheta = metal::fast::cos(theta);
+  float sintheta = metal::fast::sin(theta);
 
   // Read and write the output
-  T x1 = in[in_index_1];
-  T x2 = in[in_index_2];
-  T rx1 = x1 * costheta - x2 * sintheta;
-  T rx2 = x1 * sintheta + x2 * costheta;
-  out[out_index_1] = rx1;
-  out[out_index_2] = rx2;
+  float x1 = static_cast<float>(in[in_index_1]);
+  float x2 = static_cast<float>(in[in_index_2]);
+  float rx1 = x1 * costheta - x2 * sintheta;
+  float rx2 = x1 * sintheta + x2 * costheta;
+  out[out_index_1] = static_cast<T>(rx1);
+  out[out_index_2] = static_cast<T>(rx2);
 }
 
 #define instantiate_rope(name, type, traditional) \
