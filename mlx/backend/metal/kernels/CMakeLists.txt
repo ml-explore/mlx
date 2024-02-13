@@ -6,6 +6,7 @@ set(
   ${CMAKE_CURRENT_SOURCE_DIR}/complex.h
   ${CMAKE_CURRENT_SOURCE_DIR}/defines.h
   ${CMAKE_CURRENT_SOURCE_DIR}/erf.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/indexing.h
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.h
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
 )
@@ -26,7 +27,8 @@ set(
   "softmax"
   "sort"
   "unary"
-  "indexing"
+  "gather"
+  "scatter"
 )
 
 function(build_kernel_base TARGET SRCFILE DEPS)
