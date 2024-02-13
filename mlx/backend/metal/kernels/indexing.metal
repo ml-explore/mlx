@@ -15,10 +15,10 @@ using namespace metal;
 
 template <typename IdxT, int NIDX>
 struct Indices {
-  const array<const device IdxT*, NIDX> buffers [[id(0)]];
-  const device int* shapes [[id(NIDX + 1)]];
-  const device size_t* strides [[id(NIDX + 2)]];
-  const int ndim [[id(NIDX + 3)]];
+  const array<const device IdxT*, NIDX> buffers;
+  const constant int* shapes;
+  const constant size_t* strides;
+  const int ndim;
 };
 
 template <typename IdxT>
@@ -29,16 +29,6 @@ METAL_FUNC size_t offset_neg_idx(IdxT idx, size_t size) {
     return (idx < 0) ? idx + size : idx;
   }
 }
-
-// template <>
-// METAL_FUNC size_t offset_neg_idx(bool idx, size_t) {
-//   return idx;
-// }
-
-// template <>
-// METAL_FUNC size_t offset_neg_idx(uint32_t idx, size_t) {
-//   return idx;
-// }
 
 #define IDX_ARG_N(idx_t, n) const device idx_t* idx ## n [[buffer(n)]],
 
@@ -122,8 +112,8 @@ template <typename T, typename IdxT, int NIDX, int IDX_NDIM>  \
     const constant size_t& src_ndim [[buffer(4)]],            \
     const constant int *slice_sizes [[buffer(5)]], \
     const constant int *axes [[buffer(6)]], \
-    const device int *idx_shapes [[buffer(7)]], \
-    const device size_t *idx_strides [[buffer(8)]], \
+    const constant int *idx_shapes [[buffer(7)]], \
+    const constant size_t *idx_strides [[buffer(8)]], \
     const constant int& idx_ndim [[buffer(9)]], \
     IDX_ARG(IdxT) \
     uint2 index [[thread_position_in_grid]], \
@@ -172,8 +162,8 @@ template [[host_name("gather" name "_" #nidx "" #nd_name)]] \
     const constant size_t& src_ndim [[buffer(4)]], \
     const constant int *slice_sizes [[buffer(5)]], \
     const constant int *axes [[buffer(6)]], \
-    const device int *idx_shapes [[buffer(7)]], \
-    const device size_t *idx_strides [[buffer(8)]], \
+    const constant int *idx_shapes [[buffer(7)]], \
+    const constant size_t *idx_strides [[buffer(8)]], \
     const constant int& idx_ndim [[buffer(9)]], \
     IDX_ARG(idx_t) \
     uint2 index [[thread_position_in_grid]], \
@@ -247,14 +237,14 @@ template <typename T, typename IdxT, typename Op, int NIDX>
 METAL_FUNC void scatter_impl(
     const device T *updates [[buffer(1)]],
     device mlx_atomic<T> *out [[buffer(2)]],
-    const device int *upd_shape [[buffer(3)]],
-    const device size_t *upd_strides [[buffer(4)]],
-    const device size_t& upd_ndim [[buffer(5)]],
-    const device size_t& upd_size [[buffer(6)]],
-    const device int *out_shape [[buffer(7)]],
-    const device size_t *out_strides [[buffer(8)]],
-    const device size_t& out_ndim [[buffer(9)]],
-    const device int* axes [[buffer(10)]],
+    const constant int *upd_shape [[buffer(3)]],
+    const constant size_t *upd_strides [[buffer(4)]],
+    const constant size_t& upd_ndim [[buffer(5)]],
+    const constant size_t& upd_size [[buffer(6)]],
+    const constant int *out_shape [[buffer(7)]],
+    const constant size_t *out_strides [[buffer(8)]],
+    const constant size_t& out_ndim [[buffer(9)]],
+    const constant int* axes [[buffer(10)]],
     const thread Indices<IdxT, NIDX>& indices,
     uint2 gid [[thread_position_in_grid]]) {
 
@@ -287,16 +277,16 @@ template <typename T, typename IdxT, typename Op, int NIDX>  \
 [[kernel]] void scatter(                                       \
     const device T *updates [[buffer(1)]], \
     device mlx_atomic<T> *out [[buffer(2)]], \
-    const device int *upd_shape [[buffer(3)]], \
-    const device size_t *upd_strides [[buffer(4)]], \
-    const device size_t& upd_ndim [[buffer(5)]], \
-    const device size_t& upd_size [[buffer(6)]], \
-    const device int *out_shape [[buffer(7)]], \
-    const device size_t *out_strides [[buffer(8)]], \
-    const device size_t& out_ndim [[buffer(9)]], \
-    const device int* axes [[buffer(10)]], \
-    const device int *idx_shapes [[buffer(11)]], \
-    const device size_t *idx_strides [[buffer(12)]], \
+    const constant int *upd_shape [[buffer(3)]], \
+    const constant size_t *upd_strides [[buffer(4)]], \
+    const constant size_t& upd_ndim [[buffer(5)]], \
+    const constant size_t& upd_size [[buffer(6)]], \
+    const constant int *out_shape [[buffer(7)]], \
+    const constant size_t *out_strides [[buffer(8)]], \
+    const constant size_t& out_ndim [[buffer(9)]], \
+    const constant int* axes [[buffer(10)]], \
+    const constant int *idx_shapes [[buffer(11)]], \
+    const constant size_t *idx_strides [[buffer(12)]], \
     const constant int& idx_ndim [[buffer(13)]], \
     IDX_ARG(IdxT) \
     uint2 gid [[thread_position_in_grid]]) { \
@@ -341,16 +331,16 @@ template [[host_name("scatter" name "_" #nidx)]] \
 [[kernel]] void scatter<src_t, idx_t, op_t, nidx>( \
     const device src_t *updates [[buffer(1)]], \
     device mlx_atomic<src_t> *out [[buffer(2)]], \
-    const device int *upd_shape [[buffer(3)]], \
-    const device size_t *upd_strides [[buffer(4)]], \
-    const device size_t& upd_ndim [[buffer(5)]], \
-    const device size_t& upd_size [[buffer(6)]], \
-    const device int *out_shape [[buffer(7)]], \
-    const device size_t *out_strides [[buffer(8)]], \
-    const device size_t& out_ndim [[buffer(9)]], \
-    const device int* axes [[buffer(10)]], \
-    const device int *idx_shapes [[buffer(11)]], \
-    const device size_t *idx_strides [[buffer(12)]], \
+    const constant int *upd_shape [[buffer(3)]], \
+    const constant size_t *upd_strides [[buffer(4)]], \
+    const constant size_t& upd_ndim [[buffer(5)]], \
+    const constant size_t& upd_size [[buffer(6)]], \
+    const constant int *out_shape [[buffer(7)]], \
+    const constant size_t *out_strides [[buffer(8)]], \
+    const constant size_t& out_ndim [[buffer(9)]], \
+    const constant int* axes [[buffer(10)]], \
+    const constant int *idx_shapes [[buffer(11)]], \
+    const constant size_t *idx_strides [[buffer(12)]], \
     const constant int& idx_ndim [[buffer(13)]], \
     IDX_ARG(idx_t) \
     uint2 gid [[thread_position_in_grid]]);

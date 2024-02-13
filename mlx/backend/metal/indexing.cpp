@@ -68,15 +68,15 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::vector<int> idx_shapes;
   std::vector<size_t> idx_strides;
 
-  for (int i = 0; i < nidx; ++i) { 
+  for (int i = 0; i < nidx; ++i) {
     idx_shapes.insert(
-        idx_shapes.end(), 
-        inputs[i + 1].shape().begin(), 
+        idx_shapes.end(),
+        inputs[i + 1].shape().begin(),
         inputs[i + 1].shape().end());
-    
+
     idx_strides.insert(
-        idx_strides.end(), 
-        inputs[i + 1].strides().begin(), 
+        idx_strides.end(),
+        inputs[i + 1].strides().begin(),
         inputs[i + 1].strides().end());
   }
 
@@ -92,8 +92,10 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(axes_.data(), nidx * sizeof(int), 6);
 
   // Set index info
-  compute_encoder->setBytes(idx_shapes.data(), idx_shapes.size() * sizeof(int), 7);
-  compute_encoder->setBytes(idx_strides.data(), idx_strides.size() * sizeof(size_t), 8);
+  compute_encoder->setBytes(
+      idx_shapes.data(), idx_shapes.size() * sizeof(int), 7);
+  compute_encoder->setBytes(
+      idx_strides.data(), idx_strides.size() * sizeof(size_t), 8);
   compute_encoder->setBytes(&idx_ndim, sizeof(int), 9);
 
   // Set index buffers
@@ -174,15 +176,15 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::vector<int> idx_shapes;
   std::vector<size_t> idx_strides;
 
-  for (int i = 0; i < nidx; ++i) { 
+  for (int i = 0; i < nidx; ++i) {
     idx_shapes.insert(
-        idx_shapes.end(), 
-        inputs[i + 1].shape().begin(), 
+        idx_shapes.end(),
+        inputs[i + 1].shape().begin(),
         inputs[i + 1].shape().end());
-    
+
     idx_strides.insert(
-        idx_strides.end(), 
-        inputs[i + 1].strides().begin(), 
+        idx_strides.end(),
+        inputs[i + 1].strides().begin(),
         inputs[i + 1].strides().end());
   }
 
@@ -227,8 +229,10 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(axes_.data(), axes_.size() * sizeof(int), 10);
 
   // Set index info
-  compute_encoder->setBytes(idx_shapes.data(), idx_shapes.size() * sizeof(int), 11);
-  compute_encoder->setBytes(idx_strides.data(), idx_strides.size() * sizeof(size_t), 12);
+  compute_encoder->setBytes(
+      idx_shapes.data(), idx_shapes.size() * sizeof(int), 11);
+  compute_encoder->setBytes(
+      idx_strides.data(), idx_strides.size() * sizeof(size_t), 12);
   compute_encoder->setBytes(&idx_ndim, sizeof(int), 13);
 
   // Set index buffers
