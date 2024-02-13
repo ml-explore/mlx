@@ -6,7 +6,9 @@ import mlx.core as mx
 
 
 class Device(ContextDecorator):
-    def __init__(self, device):
+    """Context Manager to temporarily change the default device."""
+
+    def __init__(self, device: mx.Device):
         self.device = device
 
     def __enter__(self):
