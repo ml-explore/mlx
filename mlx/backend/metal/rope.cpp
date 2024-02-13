@@ -10,6 +10,7 @@ void RoPE::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() == 1);
+  assert(outputs.size() == 1);
   auto& in = inputs[0];
   auto& out = outputs[0];
 

@@ -60,7 +60,7 @@ array rope(
   }
   if (traditional && x.shape(-1) != dims) {
     throw std::invalid_argument(
-        "[rope] Does not support parital traditional application.");
+        "[rope] Does not support partial traditional application.");
   }
 
   auto fallback = [dims, traditional, base, scale, offset, s](

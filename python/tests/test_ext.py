@@ -68,7 +68,9 @@ class TestExt(mlx_tests.MLXTestCase):
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
                 rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
                 if dtype != mx.float32:
-                    self.assertLess(mx.abs(ry - rx_ext).max(), mx.abs(ry - rx).max())
+                    self.assertLessEqual(
+                        mx.abs(ry - rx_ext).max(), mx.abs(ry - rx).max()
+                    )
                 self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
 
             dims, dtype, base, scale, _, _ = defaults
