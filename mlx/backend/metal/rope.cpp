@@ -1,7 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <iostream>
-
 #include "mlx/backend/metal/utils.h"
 #include "mlx/extensions.h"
 #include "mlx/primitives.h"

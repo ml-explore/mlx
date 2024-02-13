@@ -85,6 +85,32 @@ class TestExt(mlx_tests.MLXTestCase):
         rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
         self.assertTrue(mx.allclose(rx, rx_ext))
 
+    def test_ext_transforms(self):
+        x = mx.random.uniform(shape=(2, 2, 8))
+
+        # Defaults: dims, traditional, base, scale, offset
+        defaults = (8, False, 10000.0, 1.0, 0)
+
+        # VJP
+        _, vjp_out = mx.vjp(lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),))
+        _, vjp_ext_out = mx.vjp(
+            lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),)
+        )
+        self.assertTrue(mx.allclose(vjp_out[0], vjp_ext_out[0]))
+
+        # JVP
+        _, jvp_out = mx.jvp(lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),))
+        _, jvp_ext_out = mx.jvp(
+            lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),)
+        )
+        self.assertTrue(mx.allclose(jvp_out[0], jvp_ext_out[0]))
+
+        # VMAP
+        x = mx.random.uniform(shape=(2, 2, 2, 8))
+        vmap_out = mx.vmap(lambda x: rope_orig(x, *defaults))(x)
+        vmap_ext_out = mx.vmap(lambda x: rope_orig(x, *defaults))(x)
+        self.assertTrue(mx.allclose(vmap_out, vmap_ext_out))
+
 
 if __name__ == "__main__":
     unittest.main()
