@@ -7,7 +7,7 @@ import mlx.core as mx
 import mlx_tests
 
 
-def rope_orig(x, dims, base, scale, traditional, offset):
+def rope_orig(x, dims, traditional, base, scale, offset):
     N = x.shape[1] + offset
     dtype = x.dtype
     half_D = dims // 2
@@ -42,7 +42,6 @@ class TestExt(mlx_tests.MLXTestCase):
         defaults = (8, mx.float32, 10000.0, 1.0, 0, False)
 
         # Test cases:
-        dims = [8, 9]
         dtypes = [mx.float32, mx.float16, mx.bfloat16]
         bases = [10000.0, 1000000.0]
         scales = [1.0, 2.0]
@@ -52,20 +51,22 @@ class TestExt(mlx_tests.MLXTestCase):
         dims, dtype, _, scale, offset, traditional = defaults
         for base in bases:
             x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-            rx = rope_orig(x, dims, base, scale, traditional, offset)
-            rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
+            rx = rope_orig(x, dims, traditional, base, scale, offset)
+            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
             self.assertTrue(mx.allclose(rx, rx_ext))
 
         dims, _, base, scale, offset, traditional = defaults
         for dtype in dtypes:
             x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-            rx = rope_orig(x, dims, base, scale, traditional, offset)
-            rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
+            rx = rope_orig(x, dims, traditional, base, scale, offset)
+            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
             self.assertTrue(mx.allclose(rx, rx_ext))
 
         dims, dtype, base, scale, _, traditional = defaults
         for offset in offsets:
             x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
+            rx = rope_orig(x, dims, traditional, base, scale, offset)
+            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
             rx = rope_orig(x, dims, base, scale, traditional, offset)
             rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
             self.assertTrue(mx.allclose(rx, rx_ext))
@@ -73,15 +74,15 @@ class TestExt(mlx_tests.MLXTestCase):
         dims, dtype, base, _, offset, traditional = defaults
         for scale in scales:
             x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-            rx = rope_orig(x, dims, base, scale, traditional, offset)
-            rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
+            rx = rope_orig(x, dims, traditional, base, scale, offset)
+            rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
             self.assertTrue(mx.allclose(rx, rx_ext))
 
         dims, dtype, base, scale, offset, _ = defaults
         traditional = True
         x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-        rx = rope_orig(x, dims, base, scale, traditional, offset)
-        rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
+        rx = rope_orig(x, dims, traditional, base, scale, offset)
+        rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
         self.assertTrue(mx.allclose(rx, rx_ext))
 
 

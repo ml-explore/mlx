@@ -63,7 +63,7 @@ array rope(
         "[rope] Does not support parital traditional application.");
   }
 
-  auto fallback = [dims, base, scale, traditional, offset, s](
+  auto fallback = [dims, traditional, base, scale, offset, s](
                       const std::vector<array>& inputs) {
     auto& x = inputs[0];
     auto t = x.dtype();
