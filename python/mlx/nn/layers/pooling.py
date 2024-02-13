@@ -232,7 +232,7 @@ class MaxPool2d(_Pool2d):
         - a single ``int`` -- in which case the same value is used for both the
           height and width axis;
         - a ``tuple`` of two ``int`` s -- in which case, the first ``int`` is
-          used for the height axis, the second `int` for the width axis.
+          used for the height axis, the second ``int`` for the width axis.
 
     Args:
         kernel_size (int or tuple(int, int)): The size of the pooling window.
@@ -281,7 +281,7 @@ class AvgPool2d(_Pool2d):
         - a single ``int`` -- in which case the same value is used for both the
           height and width axis;
         - a ``tuple`` of two ``int`` s -- in which case, the first ``int`` is
-          used for the height axis, the second `int` for the width axis.
+          used for the height axis, the second ``int`` for the width axis.
 
     Args:
         kernel_size (int or tuple(int, int)): The size of the pooling window.
