@@ -138,9 +138,11 @@ class MaxPool1d(_Pool1d):
     Assuming an input of shape :math:`(N, L, C)` and ``kernel_size`` is
     :math:`k`, the output is a tensor of shape :math:`(N, L_{out}, C)`, given
     by:
+
         .. math::
-            \text{out}(N_i, k, C_j) = \max_{m=0, \ldots, k - 1}
-                    \text{input}(N_i, \text{stride} \times k + m, C_j),
+            \text{out}(N_i, t, C_j) = \max_{m=0, \ldots, k - 1}
+                    \text{input}(N_i, \text{stride} \times t + m, C_j),
+
     where :math:`L_{out} = \left\lfloor \frac{L + 2 \times \text{padding} -
     \text{kernel_size}}{\text{stride}}\right\rfloor + 1`.
 
@@ -175,9 +177,11 @@ class AvgPool1d(_Pool1d):
     Assuming an input of shape :math:`(N, L, C)` and ``kernel_size`` is
     :math:`k`, the output is a tensor of shape :math:`(N, L_{out}, C)`, given
     by:
+
         .. math::
-            \text{out}(N_i, k, C_j) = \frac{1}{k} \sum_{m=0, \ldots, k - 1}
-                    \text{input}(N_i, \text{stride} \times k + m, C_j),
+            \text{out}(N_i, t, C_j) = \frac{1}{k} \sum_{m=0, \ldots, k - 1}
+                    \text{input}(N_i, \text{stride} \times t + m, C_j),
+
     where :math:`L_{out} = \left\lfloor \frac{L + 2 \times \text{padding} -
     \text{kernel_size}}{\text{stride}}\right\rfloor + 1`.
 
@@ -219,10 +223,12 @@ class MaxPool2d(_Pool2d):
                                     & \text{input}(N_i, \text{stride[0]} \times h + m,
                                                 \text{stride[1]} \times w + n, C_j),
         \end{aligned}
+
     where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
     :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
     The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
+
         - a single ``int`` -- in which case the same value is used for both the
           height and width axis;
         - a ``tuple`` of two ``int`` s -- in which case, the first ``int`` is
@@ -236,7 +242,7 @@ class MaxPool2d(_Pool2d):
             padding to apply to the input. The padding is applied on both sides
             of the height and width axis. Default: ``0``.
 
-    Examples: 
+    Examples:
         >>> import mlx.core as mx
         >>> import mlx.nn.layers as nn
         >>> x = mx.random.normal(shape=(8, 32, 32, 4))
@@ -266,10 +272,12 @@ class AvgPool2d(_Pool2d):
                                     & \text{input}(N_i, \text{stride[0]} \times h + m,
                                                 \text{stride[1]} \times w + n, C_j),
         \end{aligned}
+
     where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
     :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
     The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
+
         - a single ``int`` -- in which case the same value is used for both the
           height and width axis;
         - a ``tuple`` of two ``int`` s -- in which case, the first ``int`` is
@@ -283,7 +291,7 @@ class AvgPool2d(_Pool2d):
             padding to apply to the input. The padding is applied on both sides
             of the height and width axis. Default: ``0``.
 
-    Examples: 
+    Examples:
         >>> import mlx.core as mx
         >>> import mlx.nn.layers as nn
         >>> x = mx.random.normal(shape=(8, 32, 32, 4))

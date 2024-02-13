@@ -8,6 +8,7 @@ Layers
 .. autosummary::
    :toctree: _autosummary
    :template: nn-module-template.rst
+
    ALiBi
    AvgPool1d
    AvgPool2d
