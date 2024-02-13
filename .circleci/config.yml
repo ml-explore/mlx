@@ -225,6 +225,7 @@ workflows:
   build_and_test:
     when:
       and:
+        - equal: [ main, << pipeline.git.branch >> ]
         - not: << pipeline.parameters.nightly_build >>
         - not: << pipeline.parameters.weekly_build >>
         - not: << pipeline.parameters.test_release >>
@@ -242,8 +243,23 @@ workflows:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               xcode_version: ["14.3.1", "15.2.0"]
               build_env: ["PYPI_RELEASE=1"]
+  prb:
+    when:
+      matches:
+        pattern: "^pull/\\d+(/head)?$"
+        value: << pipeline.git.branch >>
+    jobs:
+      - hold:
+          type: approval
+      - mac_build_and_test:
+          requires: [ hold ]
+      - linux_build_and_test:
+          requires: [ hold ]
   nightly_build:
-    when: << pipeline.parameters.nightly_build >>
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.nightly_build >>
     jobs:
       - build_release:
           matrix:
@@ -251,7 +267,10 @@ workflows:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               xcode_version: ["14.3.1", "15.2.0"]
   weekly_build:
-    when: << pipeline.parameters.weekly_build >>
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.weekly_build >>
     jobs:
       - build_release:
           matrix:
@@ -260,7 +279,10 @@ workflows:
               xcode_version: ["14.3.1", "15.2.0"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
-    when: << pipeline.parameters.test_release >>
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.test_release >>
     jobs:
       - build_linux_test_release:
           matrix:
