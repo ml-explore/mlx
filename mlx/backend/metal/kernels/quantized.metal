@@ -39,11 +39,12 @@ template <typename T, const int BM, const int BN, const int group_size, const in
 
   static_assert(BN == SIMD_SIZE, "qmv expects BN to be equal to SIMD_SIZE");
 
+  (void)lid;
+
   constexpr int bitmask = (1 << bits) - 1;
   constexpr int el_per_thread = 32 / bits;
   constexpr int colgroup = BN * el_per_thread;
   constexpr int groups_per_block = colgroup / group_size;
-  constexpr int simdgroups_fetching_vec = colgroup / SIMD_SIZE;
 
   typedef typename AccT<T>::acc_t U;
   threadgroup U scales_block[BM * groups_per_block];
@@ -257,7 +258,6 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK, BK>;
   using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE, 1, 4>;
 
-
   threadgroup T scales_block[BN * groups_per_block];
   threadgroup T biases_block[BN * groups_per_block];
   threadgroup T Xs[BM * BK];
@@ -320,7 +320,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
           const device uint32_t * w_local = w + offset_row * K_w + offset_col;
           threadgroup T * Ws_local = Ws + offset_row * BK + offset_col * el_per_int;
 
-          if (y_col + offset_col < N) {
+          if (y_row + offset_row < N) {
             uint32_t wi = *w_local;
             T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
             T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
@@ -435,8 +435,9 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   for (int k=0; k<K; k += BK) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
     // Load the x tile
-    if (num_els < BM) {
-        loader_x.load_safe(short2(BK, num_els));
+    short num_k = min(BK, K - k);
+    if (num_els < BM || num_k < BK) {
+        loader_x.load_safe(short2(num_k, num_els));
     } else {
         loader_x.load_unsafe();
     }
@@ -464,7 +465,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
     // Load the w tile
     {
-      if (k + BK >= K) {
+      if (num_k < BK) {
         for (int wo=0; wo<w_els_per_thread; wo++) {
           int offset = lid * w_els_per_thread + wo;
           int offset_row = offset / (BN / el_per_int);
