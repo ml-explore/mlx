@@ -4,6 +4,7 @@ import itertools
 import unittest
 
 import mlx.core as mx
+import mlx.utils as mxutils
 import mlx_tests
 import numpy as np
 
@@ -18,10 +19,8 @@ class TestFFT(mlx_tests.MLXTestCase):
             out_mx = op_mx(a_mx, s=s, axes=axes)
             self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
+    @mxutils.Device(mx.cpu)
     def test_fft(self):
-        default = mx.default_device()
-        mx.set_default_device(mx.cpu)
-
         def check_mx_np(op_mx, op_np, a_np, **kwargs):
             out_np = op_np(a_np, **kwargs)
             a_mx = mx.array(a_np)
@@ -64,12 +63,8 @@ class TestFFT(mlx_tests.MLXTestCase):
         check_mx_np(mx.fft.irfft, np.fft.irfft, a_np, n=80)
         check_mx_np(mx.fft.irfft, np.fft.irfft, a_np, n=120)
 
-        mx.set_default_device(default)
-
+    @mxutils.Device(mx.cpu)
     def test_fftn(self):
-        default = mx.default_device()
-        mx.set_default_device(mx.cpu)
-
         r = np.random.randn(8, 8, 8).astype(np.float32)
         i = np.random.randn(8, 8, 8).astype(np.float32)
         a = r + 1j * i
@@ -83,8 +78,6 @@ class TestFFT(mlx_tests.MLXTestCase):
             if op in ["rfft2", "rfftn"]:
                 x = r
             self.check_mx_np(op, x, axes=ax, s=s)
-
-        mx.set_default_device(default)
 
 
 if __name__ == "__main__":

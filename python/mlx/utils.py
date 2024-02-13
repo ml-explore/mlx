@@ -1,6 +1,20 @@
 # Copyright © 2023 Apple Inc.
-
 from collections import defaultdict
+from contextlib import ContextDecorator
+
+import mlx.core as mx
+
+
+class Device(ContextDecorator):
+    def __init__(self, device):
+        self.device = device
+
+    def __enter__(self):
+        self.prev_device = mx.default_device()
+        mx.set_default_device(self.device)
+
+    def __exit__(self, *exc):
+        mx.set_default_device(self.prev_device)
 
 
 def tree_map(fn, tree, *rest, is_leaf=None):
