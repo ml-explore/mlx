@@ -23,6 +23,7 @@ set(
   "quantized"
   "random"
   "reduce"
+  "rope"
   "scan"
   "softmax"
   "sort"

@@ -105,12 +105,13 @@ array rope(
     }
   };
   // TODO change to condition for using custom prim
-  if (false) {
+  auto stream = to_stream(s);
+  if (stream.device == Device::gpu && x.shape(-1) == dims) {
     return array(
         x.shape(),
         x.dtype(),
         std::make_unique<RoPE>(
-            to_stream(s), fallback, dims, base, scale, traditional, offset),
+            stream, fallback, dims, base, scale, traditional, offset),
         {x});
   }
   return fallback({x})[0];
