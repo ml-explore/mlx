@@ -1,7 +1,28 @@
+add_custom_command(
+    OUTPUT  compiled_preamble.cpp
+    COMMAND /bin/bash
+              ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
+              ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
+              ${CMAKE_C_COMPILER}
+              ${CMAKE_SOURCE_DIR}
+    DEPENDS make_compiled_preamble.sh
+            kernels/compiled_preamble.h
+            kernels/unary.h
+            kernels/binary.h
+)
+
+add_custom_target(
+  compiled_preamble
+  DEPENDS compiled_preamble.cpp
+)
+
+add_dependencies(mlx compiled_preamble)
+
 target_sources(
   mlx
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
@@ -15,6 +36,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
+  ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
 )
 
 if (NOT MLX_METAL_PATH)

@@ -579,5 +579,28 @@ class TestBlas(mlx_tests.MLXTestCase):
             self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-4).item())
 
             for r, t in zip(dout_ref, dout_test):
-                self.assertListEqual(r.shape, t.shape)
+                self.assertEqual(r.shape, t.shape)
                 self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
+
+    def test_empty_matmul(self):
+        a = mx.array([[], []]).T
+        b = mx.array([[1.0, 2.0], [2.0, 3.0]])
+        c = a @ b
+        mx.eval(c)
+        self.assertEqual(c.shape, (0, 2))
+
+        a = mx.array([[1.0, 2.0], [2.0, 3.0]])
+        b = mx.array([[], []])
+        c = a @ b
+        mx.eval(c)
+        self.assertEqual(c.shape, (2, 0))
+
+        a = mx.array([[], []]).T
+        b = mx.array([[], []])
+        c = a @ b
+        mx.eval(c)
+        self.assertEqual(c.shape, (0, 0))
+
+
+if __name__ == "__main__":
+    unittest.main()

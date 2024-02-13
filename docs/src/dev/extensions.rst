@@ -35,7 +35,7 @@ However, you work with vector math libraries often and realize that the
 You would really like the part of your applications that does this operation 
 on the CPU to be very fast - so you decide that you want it to rely on the 
 ``axpby`` routine provided by the Accelerate_ framework. Continuing to impose 
-our assumptions on to you, let's also assume that you want to learn how add 
+our assumptions on to you, let's also assume that you want to learn how to add 
 your own implementation for the gradients of your new operation while going 
 over the ins-and-outs of the MLX framework. 
 
@@ -677,9 +677,9 @@ Let's look at the overall directory structure first.
 Binding to Python
 ^^^^^^^^^^^^^^^^^^
 
-We use PyBind11_ to build a Python API for the C++ library. Since bindings 
-for all needed components such as `mlx.core.array`, `mlx.core.stream`, etc. 
-are already provided, adding our :meth:`axpby` becomes very simple!
+We use PyBind11_ to build a Python API for the C++ library. Since bindings for
+components such as :class:`mlx.core.array`, :class:`mlx.core.stream`, etc. are
+already provided, adding our :meth:`axpby` is simple!
 
 .. code-block:: C++
 
@@ -927,18 +927,18 @@ Results:
 
 We see some modest improvements right away! 
 
-This operation is now good to be used to build other operations, 
-in :class:`mlx.nn.Module` calls, and also as a part of graph 
-transformations such as :meth:`grad` and :meth:`simplify`!
+This operation is now good to be used to build other operations, in
+:class:`mlx.nn.Module` calls, and also as a part of graph transformations like
+:meth:`grad`!
 
 Scripts
 -------
 
 .. admonition:: Download the code
 
-   The full example code is available in `mlx-examples <code>`_.
+   The full example code is available in `mlx <code>`_.
 
-.. code: `TODO_LINK/extensions`_
+.. code: `https://github.com/ml-explore/mlx/tree/main/examples/extensions/`_
 
 .. _Accelerate: https://developer.apple.com/documentation/accelerate/blas?language=objc
 .. _Metal: https://developer.apple.com/documentation/metal?language=objc

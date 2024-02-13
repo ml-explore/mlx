@@ -121,6 +121,9 @@ class array {
   template <typename T>
   T item();
 
+  template <typename T>
+  T item() const;
+
   struct ArrayIterator {
     using iterator_category = std::random_access_iterator_tag;
     using difference_type = size_t;
@@ -267,6 +270,11 @@ class array {
     return outputs;
   };
 
+  /** The depth of the array in the graph. Evaluated arrays have depth 0. */
+  uint16_t graph_depth() const {
+    return array_desc_->depth;
+  }
+
   /** Detach the array from the graph. */
   void detach();
 
@@ -377,6 +385,9 @@ class array {
     // The arrays position in the output list
     uint32_t position{0};
 
+    // The depth of the array in the graph.
+    uint16_t depth{0};
+
     explicit ArrayDesc(const std::vector<int>& shape, Dtype dtype);
 
     explicit ArrayDesc(
@@ -395,7 +406,7 @@ class array {
   // The ArrayDesc contains the details of the materialized array including the
   // shape, strides, the data type. It also includes
   // the primitive which knows how to compute the array's data from its inputs
-  // and a the list of array's inputs for the primitive.
+  // and the list of array's inputs for the primitive.
   std::shared_ptr<ArrayDesc> array_desc_{nullptr};
 };
 
@@ -443,6 +454,18 @@ T array::item() {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
   eval();
+  return *data<T>();
+}
+
+template <typename T>
+T array::item() const {
+  if (size() != 1) {
+    throw std::invalid_argument("item can only be called on arrays of size 1.");
+  }
+  if (!is_evaled()) {
+    throw std::invalid_argument(
+        "item() const can only be called on evaled arrays");
+  }
   return *data<T>();
 }
 

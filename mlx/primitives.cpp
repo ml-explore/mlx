@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -358,6 +358,20 @@ bool ArgPartition::is_equivalent(const Primitive& other) const {
 bool ArgReduce::is_equivalent(const Primitive& other) const {
   const ArgReduce& r_other = static_cast<const ArgReduce&>(other);
   return reduce_type_ == r_other.reduce_type_ && axis_ == r_other.axis_;
+}
+
+std::pair<std::vector<array>, std::vector<int>> ArgReduce::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  int reduce_ax = axis_ + (axis_ >= axes[0]);
+  auto& in = inputs[0];
+  std::vector<array> out;
+  if (reduce_type_ == ArgReduce::ArgMin) {
+    out.push_back(argmin(in, reduce_ax, true, stream()));
+  } else {
+    out.push_back(argmax(in, reduce_ax, true, stream()));
+  }
+  return {out, axes};
 }
 
 std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
@@ -795,6 +809,43 @@ std::pair<std::vector<array>, std::vector<int>> Cosh::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
   return {{cosh(inputs[0], stream())}, axes};
+}
+
+std::vector<array> CustomVJP::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  std::vector<array> inputs(primals.begin(), primals.end() - outputs.size());
+  auto all_vjps = vjp_fun_(inputs, cotangents, outputs);
+  for (const auto& cot : cotangents) {
+    all_vjps.emplace_back(cot);
+  }
+
+  std::vector<array> vjps;
+  vjps.reserve(argnums.size());
+  for (auto arg : argnums) {
+    vjps.push_back(all_vjps[arg]);
+  }
+
+  return vjps;
+}
+
+std::vector<array> Depends::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  std::vector<array> vjps;
+
+  for (auto arg : argnums) {
+    if (arg < cotangents.size()) {
+      vjps.push_back(cotangents[arg]);
+    } else {
+      vjps.push_back(zeros_like(primals[arg]));
+    }
+  }
+  return vjps;
 }
 
 std::vector<array> Divide::vjp(
@@ -2115,7 +2166,36 @@ std::vector<array> Reduce::vjp(
 std::pair<std::vector<array>, std::vector<int>> Reduce::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("Reduce::vmap not yet implemented.");
+  auto ax = axes[0];
+  auto reduce_axes = axes_;
+  for (auto& rax : reduce_axes) {
+    if (rax >= ax) {
+      rax++;
+    }
+  }
+  auto& in = inputs[0];
+  std::vector<array> out;
+  switch (reduce_type_) {
+    case Reduce::And:
+      out.push_back(all(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Or:
+      out.push_back(any(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Sum:
+      out.push_back(sum(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Prod:
+      out.push_back(prod(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Min:
+      out.push_back(min(in, reduce_axes, true, stream()));
+      break;
+    case Reduce::Max:
+      out.push_back(max(in, reduce_axes, true, stream()));
+      break;
+  }
+  return {out, axes};
 }
 
 bool Reduce::is_equivalent(const Primitive& other) const {

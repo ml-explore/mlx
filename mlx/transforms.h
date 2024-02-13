@@ -6,21 +6,6 @@
 
 namespace mlx::core {
 
-// Compile takes a function and returns a new function
-std::function<std::vector<array>(const std::vector<array>&)> compile(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun);
-
-/** Globally disable compilation.
- * Setting the environment variable ``MLX_DISABLE_COMPILE`` can also
- * be used to disable compilation.
- */
-void disable_compile();
-
-/** Globally enable compilation.
- * This will override the environment variable ``MLX_DISABLE_COMPILE``.
- */
-void enable_compile();
-
 void eval(const std::vector<array>& outputs);
 
 template <typename... Arrays>
@@ -190,5 +175,23 @@ std::function<std::vector<array>(const std::vector<array>&)> vmap(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<int>& in_axes = {},
     const std::vector<int>& out_axes = {});
+
+/**
+ * Return the results of calling fun with args but if their vjp is computed it
+ * will be computed by fun_vjp.
+ */
+std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<array>&)> fun_vjp);
+
+/**
+ * Checkpoint the gradient of a function. Namely, discard all intermediate
+ * state and recalculate it when we need to compute the gradient.
+ */
+std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
+    std::function<std::vector<array>(const std::vector<array>&)> fun);
 
 } // namespace mlx::core

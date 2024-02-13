@@ -1,4 +1,5 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
+
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -7,6 +8,7 @@
 
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
+#include "mlx/transforms.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -15,8 +17,7 @@ namespace {
 
 std::pair<std::vector<int>, std::vector<int>> compute_reduce_shape(
     const std::vector<int>& axes,
-    const std::vector<int>& shape,
-    bool keepdims) {
+    const std::vector<int>& shape) {
   std::set<int> axes_set;
   auto ndim = shape.size();
   for (auto ax : axes) {
@@ -36,7 +37,7 @@ std::pair<std::vector<int>, std::vector<int>> compute_reduce_shape(
   for (int i = 0; i < ndim; ++i) {
     if (axes_set.count(i) == 0) {
       out_shape.push_back(shape[i]);
-    } else if (keepdims) {
+    } else {
       out_shape.push_back(1);
     }
   }
@@ -147,6 +148,9 @@ array linspace(
     msg << "[linspace] number of samples, " << num << ", must be non-negative.";
     throw std::invalid_argument(msg.str());
   }
+  if (num == 1) {
+    return astype(array({start}), dtype, to_stream(s));
+  }
   array sequence = arange(0, num, float32, to_stream(s));
   float step = (stop - start) / (num - 1);
   return astype(
@@ -189,6 +193,9 @@ array full(
     const array& vals,
     Dtype dtype,
     StreamOrDevice s /* = {} */) {
+  if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
+    throw std::invalid_argument("[full] Negative dimensions not allowed.");
+  }
   auto in = broadcast_to(astype(vals, dtype, s), shape, s);
   return array(shape, dtype, std::make_unique<Full>(to_stream(s)), {in});
 }
@@ -224,7 +231,7 @@ array ones_like(const array& a, StreamOrDevice s /* = {} */) {
 
 array eye(int n, int m, int k, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (n <= 0 || m <= 0) {
-    throw std::invalid_argument("N and M must be positive integers.");
+    throw std::invalid_argument("[eye] N and M must be positive integers.");
   }
   array result = zeros({n, m}, dtype, s);
   if (k >= m || -k >= n) {
@@ -1212,13 +1219,16 @@ array all(
   if (axes.empty()) {
     return astype(a, bool_, s);
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       bool_,
       std::make_unique<Reduce>(to_stream(s), Reduce::And, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array all(
@@ -1243,13 +1253,16 @@ array any(
   if (axes.empty()) {
     return astype(a, bool_, s);
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       bool_,
       std::make_unique<Reduce>(to_stream(s), Reduce::Or, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array any(
@@ -1274,14 +1287,17 @@ array sum(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
   auto out_type = a.dtype() == bool_ ? int32 : a.dtype();
-  return array(
+  auto out = array(
       out_shape,
       out_type,
       std::make_unique<Reduce>(to_stream(s), Reduce::Sum, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array sum(
@@ -1303,6 +1319,15 @@ array mean(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
+  int ndim = a.ndim();
+  for (int axis : axes) {
+    if (axis < -ndim || axis >= ndim) {
+      std::ostringstream msg;
+      msg << "[mean] axis " << axis << " is out of bounds for array with "
+          << ndim << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
   auto nelements = compute_number_of_elements(a, axes);
   auto dtype = at_least_float(a.dtype());
   return multiply(sum(a, axes, keepdims, s), array(1.0 / nelements, dtype), s);
@@ -1332,11 +1357,18 @@ array var(
     bool keepdims /* = false */,
     int ddof /* = 0*/,
     StreamOrDevice s /* = {}*/) {
-  auto nelements = compute_number_of_elements(a, axes);
   auto dtype = at_least_float(a.dtype());
-  auto mu = mean(a, axes, true, s);
-  auto S = sum(square(subtract(a, mu, s), s), axes, keepdims, s);
-  return multiply(S, array(1.0 / (nelements - ddof), dtype), s);
+  auto mu2 = square(mean(a, axes, keepdims, s), s);
+  auto a2 = mean(square(a, s), axes, keepdims, s);
+  auto v = subtract(a2, mu2, s);
+
+  if (ddof != 0) {
+    auto nelements = compute_number_of_elements(a, axes);
+    auto factor = nelements / static_cast<float>(std::max(nelements - ddof, 0));
+    v = multiply(v, array(factor, dtype), s);
+  }
+
+  return v;
 }
 
 array var(
@@ -1362,13 +1394,16 @@ array prod(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       a.dtype(),
       std::make_unique<Reduce>(to_stream(s), Reduce::Prod, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array prod(
@@ -1396,13 +1431,16 @@ array max(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       a.dtype(),
       std::make_unique<Reduce>(to_stream(s), Reduce::Max, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array max(
@@ -1430,13 +1468,16 @@ array min(
   if (axes.empty()) {
     return a;
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape(axes, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape(axes, a.shape());
+  auto out = array(
       out_shape,
       a.dtype(),
       std::make_unique<Reduce>(to_stream(s), Reduce::Min, sorted_axes),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array min(
@@ -1465,14 +1506,17 @@ array argmin(
     throw std::invalid_argument(
         "[argmin] Cannot argmin reduce zero size array.");
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape({axis}, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape({axis}, a.shape());
+  auto out = array(
       out_shape,
       uint32,
       std::make_unique<ArgReduce>(
           to_stream(s), ArgReduce::ArgMin, sorted_axes[0]),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 array argmax(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
@@ -1493,14 +1537,17 @@ array argmax(
     throw std::invalid_argument(
         "[argmax] Cannot argmax reduce zero size array.");
   }
-  auto [out_shape, sorted_axes] =
-      compute_reduce_shape({axis}, a.shape(), keepdims);
-  return array(
+  auto [out_shape, sorted_axes] = compute_reduce_shape({axis}, a.shape());
+  auto out = array(
       out_shape,
       uint32,
       std::make_unique<ArgReduce>(
           to_stream(s), ArgReduce::ArgMax, sorted_axes[0]),
       {a});
+  if (!keepdims) {
+    out = squeeze(out, sorted_axes, s);
+  }
+  return out;
 }
 
 /** Returns a sorted copy of the flattened array. */
@@ -1744,10 +1791,6 @@ array logical_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       inputs);
 }
 array operator&&(const array& a, const array& b) {
-  // check if a and b are bool arrays
-  if (a.dtype() != bool_ || b.dtype() != bool_) {
-    throw std::invalid_argument("[operator&&] only supported for bool arrays.");
-  }
   return logical_and(a, b);
 }
 
@@ -1762,11 +1805,6 @@ array logical_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
       inputs);
 }
 array operator||(const array& a, const array& b) {
-  // check if a and b are bool arrays
-  if (a.dtype() != bool_ || b.dtype() != bool_) {
-    throw std::invalid_argument(
-        "[operator||] is only supported for bool arrays.");
-  }
   return logical_or(a, b);
 }
 
@@ -2795,7 +2833,7 @@ array conv2d(
     throw std::invalid_argument("[conv2d] Cannot handle groups != 1 yet");
   }
   if (dilation.first != 1 || dilation.second != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle dilation != 1 yet");
+    throw std::invalid_argument("[conv2d] Cannot handle dilation != 1 yet");
   }
 
   // Run checks
@@ -3246,6 +3284,104 @@ array addmm(
       {a, b, c});
 
   return out;
+}
+
+array diagonal(
+    const array& a,
+    int offset /* = 0 */,
+    int axis1 /* = 0 */,
+    int axis2 /* = 1 */,
+    StreamOrDevice s /* = {} */
+) {
+  int ndim = a.ndim();
+  if (ndim < 2) {
+    std::ostringstream msg;
+    msg << "[diagonal] Array must have at least two dimensions, but got "
+        << ndim << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
+  if (ax1 < 0 || ax1 >= ndim) {
+    std::ostringstream msg;
+    msg << "[diagonal] Invalid axis1 " << axis1 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  auto ax2 = (axis2 < 0) ? axis2 + ndim : axis2;
+  if (ax2 < 0 || ax2 >= ndim) {
+    std::ostringstream msg;
+    msg << "[diagonal] Invalid axis2 " << axis2 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  if (ax1 == ax2) {
+    throw std::invalid_argument(
+        "[diagonal] axis1 and axis2 cannot be the same axis");
+  }
+
+  auto off1 = std::max(-offset, 0);
+  auto off2 = std::max(offset, 0);
+
+  auto diag_size = std::min(a.shape(ax1) - off1, a.shape(ax2) - off2);
+  diag_size = std::max(diag_size, 0);
+
+  std::vector<array> indices = {
+      arange(off1, off1 + diag_size, s), arange(off2, off2 + diag_size, s)};
+
+  std::vector<int> slice_sizes = a.shape();
+  slice_sizes[ax1] = 1;
+  slice_sizes[ax2] = 1;
+
+  auto out = gather(a, indices, {ax1, ax2}, slice_sizes, s);
+  return moveaxis(squeeze(out, {ax1 + 1, ax2 + 1}, s), 0, -1, s);
+}
+
+array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
+  if (a.ndim() == 1) {
+    int a_size = a.size();
+    int n = a_size + std::abs(k);
+    auto res = zeros({n, n}, a.dtype(), s);
+
+    std::vector<array> indices;
+    auto s1 = std::max(0, -k);
+    auto s2 = std::max(0, k);
+    indices.push_back(arange(s1, a_size + s1, uint32, s));
+    indices.push_back(arange(s2, a_size + s2, uint32, s));
+
+    return scatter(res, indices, reshape(a, {a_size, 1, 1}, s), {0, 1}, s);
+  } else if (a.ndim() == 2) {
+    return diagonal(a, k, 0, 1, s);
+  } else {
+    std::ostringstream msg;
+    msg << "[diag] array must be 1-D or 2-D, got array with " << a.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+}
+
+std::vector<array> depends(
+    const std::vector<array>& inputs,
+    const std::vector<array>& dependencies) {
+  std::vector<array> all_inputs = inputs;
+  all_inputs.insert(all_inputs.end(), dependencies.begin(), dependencies.end());
+
+  // Compute the stream. Maybe do it in a smarter way at some point in the
+  // future.
+  Stream s = (inputs[0].has_primitive()) ? inputs[0].primitive().stream()
+                                         : to_stream({});
+  // Make the output info
+  std::vector<std::vector<int>> shapes;
+  std::vector<Dtype> dtypes;
+  for (const auto& in : inputs) {
+    shapes.emplace_back(in.shape());
+    dtypes.emplace_back(in.dtype());
+  }
+
+  return array::make_arrays(
+      shapes, dtypes, std::make_shared<Depends>(to_stream(s)), all_inputs);
 }
 
 } // namespace mlx::core

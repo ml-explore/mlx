@@ -92,6 +92,14 @@ class TestLosses(mlx_tests.MLXTestCase):
             expected_sum = mx.sum(expected_none)
             self.assertEqual(losses_sum, expected_sum)
 
+            # With weights, no label smoothing
+            weights = mx.array([1.0, 2.0, 1.0, 2.0])
+            expected = mx.array([0.747215, 1.62186, 0.262365, 0.672944])
+            loss = nn.losses.binary_cross_entropy(
+                logits, targets, weights=weights, reduction="none"
+            )
+            self.assertTrue(mx.allclose(loss, expected))
+
         def _test_probs_as_inputs():
             probs = mx.array([0.5, 0.6, 0.7, 0.8])
             targets = mx.array([0, 0, 1, 1])
@@ -358,6 +366,25 @@ class TestLosses(mlx_tests.MLXTestCase):
         )
         expected_sum = mx.sum(expected_none)
         self.assertTrue(mx.allclose(losses_sum, expected_sum))
+
+    def test_margin_ranking_loss(self):
+        inputs1 = mx.array([-0.573409, -0.765166, -0.0638])
+        inputs2 = mx.array([0.75596, 0.225763, 0.256995])
+        targets = mx.array([1, 1, -1])
+
+        # Test with no margin
+        losses = nn.losses.margin_ranking_loss(
+            inputs1, inputs2, targets, reduction="none"
+        )
+        expected = mx.array([1.329369, 0.990929, 0.0])
+        self.assertTrue(mx.allclose(losses, expected))
+
+        # Test with margin
+        losses = nn.losses.margin_ranking_loss(
+            inputs1, inputs2, targets, margin=0.5, reduction="none"
+        )
+        expected = mx.array([1.829369, 1.490929, 0.179205])
+        self.assertTrue(mx.allclose(losses, expected))
 
 
 if __name__ == "__main__":

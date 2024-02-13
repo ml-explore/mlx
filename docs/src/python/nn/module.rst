@@ -11,6 +11,7 @@ Module
       :toctree: _autosummary
    
       Module.training
+      Module.state
    
    .. rubric:: Methods
 

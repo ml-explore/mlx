@@ -1,10 +1,12 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #ifdef ACCELERATE_NEW_LAPACK
-#include <vecLib/cblas_new.h>
+#include <Accelerate/Accelerate.h>
 #else
 #include <cblas.h>
 #endif
+
+#include <cstring>
 
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
@@ -39,12 +41,16 @@ DEFAULT(ArgSort)
 DEFAULT(AsType)
 DEFAULT(AsStrided)
 DEFAULT(Broadcast)
+DEFAULT_MULTI(DivMod)
 DEFAULT(Ceil)
+DEFAULT_MULTI(Compiled)
 DEFAULT(Concatenate)
 DEFAULT(Convolution)
 DEFAULT(Copy)
 DEFAULT(Cos)
 DEFAULT(Cosh)
+DEFAULT_MULTI(CustomVJP)
+DEFAULT_MULTI(Depends)
 DEFAULT(Divide)
 DEFAULT(Remainder)
 DEFAULT(Equal)
@@ -74,6 +80,7 @@ DEFAULT(NotEqual)
 DEFAULT(Pad)
 DEFAULT(Partition)
 DEFAULT(Power)
+DEFAULT_MULTI(QRF)
 DEFAULT(QuantizedMatmul)
 DEFAULT(RandomBits)
 DEFAULT(Reduce)
@@ -96,8 +103,6 @@ DEFAULT(Subtract)
 DEFAULT(Tan)
 DEFAULT(Tanh)
 DEFAULT(Transpose)
-DEFAULT_MULTI(DivMod)
-DEFAULT_MULTI(QRF)
 
 namespace {
 
@@ -127,6 +132,13 @@ inline void matmul_common_general(
   size_t M = a.shape(-2);
   size_t N = b.shape(-1);
   size_t K = a.shape(-1);
+  if (M == 0 || N == 0) {
+    return;
+  }
+  if (K == 0) {
+    std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
+    return;
+  }
 
   for (int i = 0; i < (a.size() / (M * K)); ++i) {
     cblas_sgemm(

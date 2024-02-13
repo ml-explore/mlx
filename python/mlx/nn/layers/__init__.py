@@ -18,6 +18,7 @@ from mlx.nn.layers.activations import (
     SiLU,
     Softmax,
     Softplus,
+    Softshrink,
     Softsign,
     Step,
     Tanh,
@@ -39,6 +40,7 @@ from mlx.nn.layers.activations import (
     silu,
     softmax,
     softplus,
+    softshrink,
     softsign,
     step,
     tanh,
@@ -56,6 +58,7 @@ from mlx.nn.layers.normalization import (
     LayerNorm,
     RMSNorm,
 )
+from mlx.nn.layers.pooling import AvgPool1d, AvgPool2d, MaxPool1d, MaxPool2d
 from mlx.nn.layers.positional_encoding import ALiBi, RoPE, SinusoidalPositionalEncoding
 from mlx.nn.layers.quantized import QuantizedLinear
 from mlx.nn.layers.transformer import (

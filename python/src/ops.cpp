@@ -3214,8 +3214,9 @@ void init_ops(py::module_& m) {
       &mlx_save_safetensor_helper,
       "file"_a,
       "arrays"_a,
+      "metadata"_a = none,
       R"pbdoc(
-        save_safetensors(file: str, arrays: Dict[str, array])
+        save_safetensors(file: str, arrays: Dict[str, array], metadata: Optional[Dict[str, str]] = None)
 
         Save array(s) to a binary file in ``.safetensors`` format.
 
@@ -3225,6 +3226,7 @@ void init_ops(py::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to be saved.
+            metadata (dict(str, str), optional): The dictionary of metadata to be saved.
       )pbdoc");
   m.def(
       "save_gguf",
@@ -3577,4 +3579,61 @@ void init_ops(py::module_& m) {
         Returns:
             array: ``alpha * (a @ b)  + beta * c``
       )pbdoc");
+  m.def(
+      "diagonal",
+      &diagonal,
+      "a"_a,
+      "offset"_a = 0,
+      "axis1"_a = 0,
+      "axis2"_a = 1,
+      "stream"_a = none,
+      R"pbdoc(
+        diagonal(a: array, offset: int = 0, axis1: int = 0, axis2: int = 1, stream: Union[None, Stream, Device] = None) -> array
+
+        Return specified diagonals.
+
+        If ``a`` is 2-D, then a 1-D array containing the diagonal at the given
+        ``offset`` is returned.
+
+        If ``a`` has more than two dimensions, then ``axis1`` and ``axis2``
+        determine the 2D subarrays from which diagonals are extracted. The new
+        shape is the original shape with ``axis1`` and ``axis2`` removed and a
+        new dimension inserted at the end corresponding to the diagonal.
+
+        Args:
+          a (array): Input array
+          offset (int, optional): Offset of the diagonal from the main diagonal.
+            Can be positive or negative. Default: ``0``.
+          axis1 (int, optional): The first axis of the 2-D sub-arrays from which
+              the diagonals should be taken. Default: ``0``.
+          axis2 (int, optional): The second axis of the 2-D sub-arrays from which
+              the diagonals should be taken. Default: ``1``.
+
+        Returns:
+            array: The diagonals of the array.
+      )pbdoc");
+  m.def(
+      "diag",
+      &diag,
+      "a"_a,
+      py::pos_only(),
+      "k"_a = 0,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        diag(a: array, /, k: int = 0, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Extract a diagonal or construct a diagonal matrix.
+        If ``a`` is 1-D then a diagonal matrix is constructed with ``a`` on the
+        :math:`k`-th diagonal. If ``a`` is 2-D then the :math:`k`-th diagonal is
+        returned.
+
+        Args:
+            a (array): 1-D or 2-D input array.
+            k (int, optional): The diagonal to extract or construct.
+                Default: ``0``.
+
+        Returns:
+            array: The extracted diagonal or the constructed diagonal matrix.
+        )pbdoc");
 }

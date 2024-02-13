@@ -1105,4 +1105,24 @@ array addmm(
     const float& beta = 1.f,
     StreamOrDevice s = {});
 
+/** Extract a diagonal or construct a diagonal array */
+array diagonal(
+    const array& a,
+    int offset = 0,
+    int axis1 = 0,
+    int axis2 = 1,
+    StreamOrDevice s = {});
+
+/** Extract diagonal from a 2d array or create a diagonal matrix. */
+array diag(const array& a, int k = 0, StreamOrDevice s = {});
+
+/**
+ * Implements the identity function but allows injecting dependencies to other
+ * arrays. This ensures that these other arrays will have been computed
+ * when the outputs of this function are computed.
+ */
+std::vector<array> depends(
+    const std::vector<array>& inputs,
+    const std::vector<array>& dependencies);
+
 } // namespace mlx::core

@@ -6,8 +6,8 @@
 
 [![CircleCI](https://circleci.com/gh/ml-explore/mlx.svg?style=svg)](https://circleci.com/gh/ml-explore/mlx)
 
-MLX is an array framework for machine learning on Apple silicon, brought to you
-by Apple machine learning research.
+MLX is an array framework for machine learning research on Apple silicon,
+brought to you by Apple machine learning research.
 
 Some key features of MLX include:
 

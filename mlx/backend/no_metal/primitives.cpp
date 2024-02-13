@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/primitives.h"
 
@@ -32,12 +32,16 @@ NO_GPU(AsType)
 NO_GPU(AsStrided)
 NO_GPU(Broadcast)
 NO_GPU(Ceil)
+NO_GPU_MULTI(Compiled)
 NO_GPU(Concatenate)
 NO_GPU(Convolution)
 NO_GPU(Copy)
 NO_GPU(Cos)
 NO_GPU(Cosh)
+NO_GPU_MULTI(CustomVJP)
+NO_GPU_MULTI(Depends)
 NO_GPU(Divide)
+NO_GPU_MULTI(DivMod)
 NO_GPU(Remainder)
 NO_GPU(Equal)
 NO_GPU(Erf)
@@ -67,6 +71,7 @@ NO_GPU(NotEqual)
 NO_GPU(Pad)
 NO_GPU(Partition)
 NO_GPU(Power)
+NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
 NO_GPU(RandomBits)
 NO_GPU(Reduce)
@@ -89,6 +94,5 @@ NO_GPU(Subtract)
 NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
-NO_GPU_MULTI(DivMod)
-NO_GPU_MULTI(QRF)
+
 } // namespace mlx::core

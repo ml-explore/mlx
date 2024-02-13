@@ -12,10 +12,10 @@
 
 template <typename U>
 struct Limits {
-  static const constant U max;
-  static const constant U min;
-  static const constant U finite_max;
-  static const constant U finite_min;
+  static const constant U max = metal::numeric_limits<U>::max();
+  static const constant U min = metal::numeric_limits<U>::min();
+  static const constant U finite_max = metal::numeric_limits<U>::max();
+  static const constant U finite_min = metal::numeric_limits<U>::min();
 };
 
 #define instantiate_default_limit(type)                                      \
@@ -235,12 +235,42 @@ inline size_t ceildiv(size_t N, size_t M) {
 // https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html#1202
 inline float log1p(float x) {
   float xp1 = 1.0f + x;
-  return (xp1 == 1.0f) ? x : x * (metal::log(xp1) / (xp1 - 1.0f));
+  if (xp1 == Limits<float>::max) {
+    return Limits<float>::max;
+  }
+  if (xp1 == 1.0f) {
+    return x;
+  }
+
+  return x * (metal::log(xp1) / (xp1 - 1.0f));
 }
 
 inline bfloat16_t log1p(bfloat16_t x) {
   float xp1 = 1.0f + static_cast<float>(x);
-  bfloat16_t ret =
-      (xp1 == 1.0f) ? x : bfloat16_t(x * (metal::log(xp1) / (xp1 - 1.0f)));
-  return ret;
+  if (xp1 == Limits<float>::max) {
+    return Limits<bfloat16_t>::max;
+  }
+  if (xp1 == 1.0f) {
+    return x;
+  }
+
+  return bfloat16_t(x * (metal::log(xp1) / (xp1 - 1.0f)));
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// SIMD shuffle ops
+///////////////////////////////////////////////////////////////////////////////
+
+inline uint64_t simd_shuffle_down(uint64_t data, uint16_t delta) {
+  return as_type<uint64_t>(
+      metal::simd_shuffle_down(as_type<uint2>(data), delta));
+}
+
+inline int64_t simd_shuffle_down(int64_t data, uint16_t delta) {
+  return as_type<int64_t>(
+      metal::simd_shuffle_down(as_type<uint2>(data), delta));
+}
+
+inline bool simd_shuffle_down(bool data, uint16_t delta) {
+  return simd_shuffle_down(static_cast<uint32_t>(data), delta);
 }

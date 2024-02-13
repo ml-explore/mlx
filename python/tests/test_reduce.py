@@ -55,6 +55,8 @@ class TestReduce(mlx_tests.MLXTestCase):
             "uint8",
             "uint16",
             "uint32",
+            "int64",
+            "uint64",
         ]
         float_dtypes = ["float32"]
 

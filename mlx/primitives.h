@@ -1,6 +1,8 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
+
+#include <unordered_set>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
@@ -341,6 +343,7 @@ class ArgReduce : public UnaryPrimitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
+  DEFINE_VMAP()
   DEFINE_PRINT(ArgReduce)
   bool is_equivalent(const Primitive& other) const override;
 
@@ -450,6 +453,53 @@ class Ceil : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Compiled : public Primitive {
+ public:
+  /*
+   * The inputs, outputs and tape are either tracers or constants.
+   * - The tape should not contain the inputs, but it should contain the
+   *   outputs.
+   * - The tape should also have only one array per primitive for multi-output
+   *   primitives.
+   * - The constant_ids contains ids of arrays in the input list that are safe
+   *   to treat as scalar constants.
+   */
+  explicit Compiled(
+      Stream stream,
+      std::vector<array> inputs,
+      std::vector<array> outputs,
+      std::vector<array> tape,
+      std::unordered_set<uintptr_t> constant_ids);
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  void print(std::ostream& os) override;
+  bool is_equivalent(const Primitive& other) const override;
+
+  std::string metal_lib_name() const {
+    return kernel_lib_;
+  }
+  std::string metal_lib_source() const {
+    return kernel_source_;
+  }
+
+ private:
+  const std::vector<array> inputs_;
+  const std::vector<array> outputs_;
+  const std::vector<array> tape_;
+  const std::unordered_set<uintptr_t> constant_ids_;
+
+  std::string kernel_lib_;
+  std::string kernel_source_;
+
+  void eval(const std::vector<array>& inputs, std::vector<array>& out);
+};
+
 class Concatenate : public UnaryPrimitive {
  public:
   explicit Concatenate(Stream stream, int axis)
@@ -552,6 +602,60 @@ class Cosh : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class CustomVJP : public Primitive {
+ public:
+  explicit CustomVJP(
+      Stream stream,
+      std::function<std::vector<array>(
+          const std::vector<array>&,
+          const std::vector<array>&,
+          const std::vector<array>&)> fun)
+      : Primitive(stream), vjp_fun_(std::move(fun)) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotan,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(CustomVJP);
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+
+  std::function<std::vector<array>(
+      const std::vector<array>&,
+      const std::vector<array>&,
+      const std::vector<array>&)>
+      vjp_fun_;
+};
+
+class Depends : public Primitive {
+ public:
+  explicit Depends(Stream stream) : Primitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotan,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(Depends);
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+};
+
 class Divide : public UnaryPrimitive {
  public:
   explicit Divide(Stream stream) : UnaryPrimitive(stream){};
@@ -612,8 +716,15 @@ class Equal : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Equal)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  void print(std::ostream& os) override {
+    if (equal_nan_) {
+      os << "NanEqual";
+    } else {
+      os << "Equal";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -848,8 +959,21 @@ class Log : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Log)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+
+  void print(std::ostream& os) override {
+    switch (base_) {
+      case e:
+        os << "Log";
+        break;
+      case two:
+        os << "Log2";
+        break;
+      case ten:
+        os << "Log10";
+        break;
+    }
+  }
 
  private:
   Base base_;
@@ -1497,8 +1621,15 @@ class Sqrt : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Sqrt)
   bool is_equivalent(const Primitive& other) const override;
+
+  void print(std::ostream& os) override {
+    if (recip_) {
+      os << "Rsqrt";
+    } else {
+      os << "Sqrt";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);

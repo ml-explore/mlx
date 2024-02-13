@@ -7,6 +7,9 @@ parameters:
   weekly_build:
     type: boolean
     default: false
+  test_release:
+    type: boolean
+    default: false
 
 jobs:
   linux_build_and_test:
@@ -42,7 +45,7 @@ jobs:
       - run:
           name: Run Python tests
           command: |
-            python3 -m unittest discover python/tests
+            python3 -m unittest discover python/tests -v
       # TODO: Reenable when extension api becomes stable
       # - run:
       #     name: Build example extension
@@ -57,17 +60,18 @@ jobs:
           command: ./build/tests/tests
 
   mac_build_and_test:
-    machine: true
-    resource_class: ml-explore/m-builder
+    macos:
+      xcode: "15.2.0"
+    resource_class: macos.m1.large.gen1
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            eval "$(conda shell.bash hook)"
-            rm -r $CONDA_PREFIX/envs/runner-env
-            conda create -y -n runner-env python=3.9
-            conda activate runner-env
+            brew install python@3.9
+            python3.9 -m venv env
+            source env/bin/activate
+            pip install --upgrade pip
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
             pip install pybind11-stubgen
@@ -78,203 +82,156 @@ jobs:
       - run:
           name: Install Python package
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py build_ext --inplace
-            CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py develop
+            source env/bin/activate
+            CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
+            source env/bin/activate
             python setup.py generate_stubs
       - run:
           name: Run Python tests
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
-            DEVICE=gpu python -m xmlrunner discover -v python/tests -o test-results/gpu
+            source env/bin/activate
+            LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
+            # TODO: Reenable when Circle CI can run gpu jobs
+            # DEVICE=gpu python3.9 -m xmlrunner discover -v python/tests -o test-results/gpu
       # TODO: Reenable when extension api becomes stable
       # - run:
       #     name: Build example extension
       #     command: |
-      #       eval "$(conda shell.bash hook)"
-      #       conda activate runner-env
-      #       cd examples/extensions && python -m pip install . 
+      #       cd examples/extensions && python3.11 -m pip install . 
       - store_test_results:
           path: test-results
       - run:
           name: Build CPP only
           command: |
+            source env/bin/activate
             mkdir -p build && cd build && cmake .. && make -j
       - run:
           name: Run CPP tests
-          command: METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
+          #command: METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
+          command: DEVICE=cpu ./build/tests/tests
 
   build_release:
-    machine: true
-    resource_class: ml-explore/m-builder
     parameters:
       python_version:
         type: string
         default: "3.9"
-      macos_version:
+      xcode_version:
         type: string
-        default: "14"
+        default: "15.2.0"
+      build_env:
+        type: string
+        default: ""
+    macos:
+      xcode: << parameters.xcode_version >>
+    resource_class: macos.m1.large.gen1
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            eval "$(conda shell.bash hook)"
-            rm -r $CONDA_PREFIX/envs/runner-env
-            conda create -y -n runner-env python=<< parameters.python_version >>
-            conda activate runner-env
+            brew install python@<< parameters.python_version >>
+            python<< parameters.python_version >> -m venv env
+            source env/bin/activate
+            pip install --upgrade pip
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install --upgrade setuptools
             pip install pybind11-stubgen
             pip install numpy
             pip install twine
-      # TODO: Update build system to switch away from setup.py develop
+            pip install build
       - run:
           name: Install Python package
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
-              PYPI_RELEASE=1 \
+            source env/bin/activate
+            DEV_RELEASE=1 \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py develop
+              pip install . -v
       - run:
           name: Generate package stubs
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
+            source env/bin/activate
             python setup.py generate_stubs
       - run:
-          name: Publish Python package
+          name: Build Python package
           command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
-              PYPI_RELEASE=1 \
+            source env/bin/activate
+            << parameters.build_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py bdist_wheel
-            twine upload dist/* --repository mlx
+              python -m build -w
+      - when:
+          condition: << parameters.build_env >>
+          steps:
+            - run:
+                name: Upload package
+                command: |
+                  source env/bin/activate
+                  twine upload dist/*
       - store_artifacts:
           path: dist/
 
-  build_dev_release:
-    machine: true
-    resource_class: ml-explore/m-builder
+  build_linux_test_release:
     parameters:
       python_version:
         type: string
         default: "3.9"
-      macos_version:
+      extra_env:
         type: string
-        default: "14"
+        default: "DEV_RELEASE=1"
+    docker:
+      - image: ubuntu:20.04
     steps:
       - checkout
       - run:
-          name: Install dependencies
+          name: Build wheel
           command: |
-            eval "$(conda shell.bash hook)"
-            rm -r $CONDA_PREFIX/envs/runner-env
-            conda create -y -n runner-env python=<< parameters.python_version >>
-            conda activate runner-env
+            PYTHON=python<< parameters.python_version >>
+            apt-get update
+            apt-get upgrade -y
+            DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata
+            apt-get install -y apt-utils
+            apt-get install -y software-properties-common
+            add-apt-repository -y ppa:deadsnakes/ppa
+            apt-get install -y $PYTHON $PYTHON-dev $PYTHON-full
+            apt-get install -y libblas-dev liblapack-dev liblapacke-dev
+            apt-get install -y build-essential git
+            $PYTHON -m venv env
+            source env/bin/activate
+            pip install --upgrade pip
             pip install --upgrade cmake
             pip install --upgrade pybind11[global]
+            pip install --upgrade setuptools
             pip install pybind11-stubgen
             pip install numpy
-            pip install twine
-      - run:
-          name: Install Python package
-          command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
-              DEV_RELEASE=1 \
+            pip install auditwheel
+            pip install patchelf
+            pip install build
+            << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py develop
-      - run:
-          name: Generate package stubs
-          command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
+              pip install . -v
             python setup.py generate_stubs
-      - run:
-          name: Publish Python package
-          command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
-              DEV_RELEASE=1 \
+            << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py bdist_wheel
-            twine upload dist/* --repository mlx
+              python -m build --wheel
+            auditwheel show dist/*
+            auditwheel repair dist/* --plat manylinux_2_31_x86_64
       - store_artifacts:
-          path: dist/
-
-  build_package:
-    machine: true
-    resource_class: ml-explore/m-builder
-    parameters:
-      python_version:
-        type: string
-        default: "3.9"
-      macos_version:
-        type: string
-        default: "14"
-    steps:
-      - checkout
-      - run:
-          name: Install dependencies
-          command: |
-            eval "$(conda shell.bash hook)"
-            rm -r $CONDA_PREFIX/envs/runner-env
-            conda create -y -n runner-env python=<< parameters.python_version >>
-            conda activate runner-env
-            pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
-            pip install pybind11-stubgen
-            pip install numpy
-            pip install twine
-      - run:
-          name: Install Python package
-          command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
-              CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py develop
-      - run:
-          name: Generate package stubs
-          command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            python setup.py generate_stubs
-      - run:
-          name: Build package distribution
-          command: |
-            eval "$(conda shell.bash hook)"
-            conda activate runner-env
-            DEVELOPER_DIR=$(developer_dir_macos_<< parameters.macos_version >>) \
-              CMAKE_BUILD_PARALLEL_LEVEL="" \
-              python setup.py bdist_wheel
-      - store_artifacts:
-          path: dist/
+          path: wheelhouse/
 
 workflows:
   build_and_test:
     when:
       and:
+        - equal: [ main, << pipeline.git.branch >> ]
         - not: << pipeline.parameters.nightly_build >>
         - not: << pipeline.parameters.weekly_build >>
+        - not: << pipeline.parameters.test_release >>
     jobs:
-      - linux_build_and_test
       - mac_build_and_test
+      - linux_build_and_test
       - build_release:
           filters:
             tags:
@@ -284,20 +241,51 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              macos_version: ["13", "14"]
+              xcode_version: ["14.3.1", "15.2.0"]
+              build_env: ["PYPI_RELEASE=1"]
+  prb:
+    when:
+      matches:
+        pattern: "^pull/\\d+(/head)?$"
+        value: << pipeline.git.branch >>
+    jobs:
+      - hold:
+          type: approval
+      - mac_build_and_test:
+          requires: [ hold ]
+      - linux_build_and_test:
+          requires: [ hold ]
   nightly_build:
-    when: << pipeline.parameters.nightly_build >>
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.nightly_build >>
     jobs:
-      - build_package:
+      - build_release:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              macos_version: ["13", "14"]
+              xcode_version: ["14.3.1", "15.2.0"]
   weekly_build:
-    when: << pipeline.parameters.weekly_build >>
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.weekly_build >>
     jobs:
-      - build_dev_release:
+      - build_release:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              macos_version: ["13", "14"]
+              xcode_version: ["14.3.1", "15.2.0"]
+              build_env: ["DEV_RELEASE=1"]
+  linux_test_release:
+    when:
+      and:
+        - equal: [ main, << pipeline.git.branch >> ]
+        - << pipeline.parameters.test_release >>
+    jobs:
+      - build_linux_test_release:
+          matrix:
+            parameters:
+              python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+              extra_env: ["PYPI_RELEASE=1"]

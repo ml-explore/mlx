@@ -9,6 +9,7 @@ from mlx.nn.layers.base import Module
 from mlx.nn.layers.dropout import Dropout
 from mlx.nn.layers.linear import Linear
 from mlx.nn.layers.normalization import LayerNorm
+from mlx.nn.utils import checkpoint
 
 
 class MultiHeadAttention(Module):
@@ -115,7 +116,7 @@ class TransformerEncoderLayer(Module):
         mlp_dims: Optional[int] = None,
         dropout: float = 0.0,
         activation: Callable[[Any], Any] = relu,
-        norm_first: bool = False,
+        norm_first: bool = True,
     ):
         super().__init__()
         mlp_dims = mlp_dims or dims * 4
@@ -166,7 +167,8 @@ class TransformerEncoder(Module):
         mlp_dims: Optional[int] = None,
         dropout: float = 0.0,
         activation=relu,
-        norm_first: bool = False,
+        norm_first: bool = True,
+        checkpoint: bool = False,
     ):
         super().__init__()
         self.layers = [
@@ -176,9 +178,11 @@ class TransformerEncoder(Module):
             for i in range(num_layers)
         ]
         self.ln = LayerNorm(dims)
+        self.checkpoint = checkpoint
 
     def __call__(self, x, mask):
         for l in self.layers:
+            l = checkpoint(l) if self.checkpoint else l
             x = l(x, mask)
         return self.ln(x)
 
@@ -191,7 +195,7 @@ class TransformerDecoderLayer(Module):
         mlp_dims: Optional[int] = None,
         dropout: float = 0.0,
         activation: Callable[[Any], Any] = relu,
-        norm_first: bool = False,
+        norm_first: bool = True,
     ):
         super().__init__()
         mlp_dims = mlp_dims or dims * 4
@@ -254,7 +258,8 @@ class TransformerDecoder(Module):
         mlp_dims: Optional[int] = None,
         dropout: float = 0.0,
         activation=relu,
-        norm_first: bool = False,
+        norm_first: bool = True,
+        checkpoint: bool = False,
     ):
         super().__init__()
         self.layers = [
@@ -264,9 +269,11 @@ class TransformerDecoder(Module):
             for i in range(num_layers)
         ]
         self.ln = LayerNorm(dims)
+        self.checkpoint = checkpoint
 
     def __call__(self, x, memory, x_mask, memory_mask):
         for l in self.layers:
+            l = checkpoint(l) if self.checkpoint else l
             x = l(x, memory, x_mask, memory_mask)
         return self.ln(x)
 
@@ -306,7 +313,10 @@ class Transformer(Module):
             standard Transformer decoder. Default: ``None``.
         norm_first (bool, optional): if ``True``, encoder and decoder layers
             will perform layer normalization before attention and MLP
-            operations, otherwise after. Default: ``False``.
+            operations, otherwise after. Default: ``True``.
+        chekpoint (bool, optional): if ``True`` perform gradient checkpointing
+            to reduce the memory usage at the expense of more computation.
+            Default: ``False``.
     """
 
     def __init__(
@@ -320,34 +330,32 @@ class Transformer(Module):
         activation: Callable[[Any], Any] = relu,
         custom_encoder: Optional[Any] = None,
         custom_decoder: Optional[Any] = None,
-        norm_first: bool = False,
+        norm_first: bool = True,
+        checkpoint: bool = False,
     ):
         super().__init__()
-        if custom_encoder is not None:
-            self.encoder = custom_encoder
-        else:
-            self.encoder = TransformerEncoder(
-                num_encoder_layers,
-                dims,
-                num_heads,
-                mlp_dims,
-                dropout,
-                activation,
-                norm_first,
-            )
 
-        if custom_decoder is not None:
-            self.decoder = custom_decoder
-        else:
-            self.decoder = TransformerDecoder(
-                num_decoder_layers,
-                dims,
-                num_heads,
-                mlp_dims,
-                dropout,
-                activation,
-                norm_first,
-            )
+        self.encoder = custom_encoder or TransformerEncoder(
+            num_encoder_layers,
+            dims,
+            num_heads,
+            mlp_dims,
+            dropout,
+            activation,
+            norm_first,
+            checkpoint,
+        )
+
+        self.decoder = custom_decoder or TransformerDecoder(
+            num_decoder_layers,
+            dims,
+            num_heads,
+            mlp_dims,
+            dropout,
+            activation,
+            norm_first,
+            checkpoint,
+        )
 
     def __call__(self, src, tgt, src_mask, tgt_mask, memory_mask):
         memory = self.encoder(src, src_mask)

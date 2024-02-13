@@ -165,6 +165,70 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_non_multiples(self):
+        w = mx.random.normal(shape=(33, 256))
+        w_q, scales, biases = mx.quantize(w)
+        w_hat = mx.dequantize(w_q, scales, biases)
+
+        # Test qmv
+        x = mx.random.normal(shape=(1, 256))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=True)
+        y_hat = x @ w_hat.T
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test qmm_t
+        x = mx.random.normal(shape=(10, 256))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=True)
+        y_hat = x @ w_hat.T
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test qvm
+        x = mx.random.normal(shape=(1, 33))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=False)
+        y_hat = x @ w_hat
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test qmm
+        x = mx.random.normal(shape=(10, 33))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=False)
+        y_hat = x @ w_hat
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Smaller than 8
+        w = mx.random.normal(shape=(3, 256))
+        w_q, scales, biases = mx.quantize(w)
+        w_hat = mx.dequantize(w_q, scales, biases)
+
+        # Test qmv
+        x = mx.random.normal(shape=(1, 256))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=True)
+        y_hat = x @ w_hat.T
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test qmm_t
+        x = mx.random.normal(shape=(10, 256))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=True)
+        y_hat = x @ w_hat.T
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test qvm
+        x = mx.random.normal(shape=(1, 3))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=False)
+        y_hat = x @ w_hat
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
+        # Test qmm
+        x = mx.random.normal(shape=(10, 3))
+        y_q = mx.quantized_matmul(x, w_q, scales, biases, transpose=False)
+        y_hat = x @ w_hat
+        self.assertEqual(y_q.shape, y_hat.shape)
+        self.assertLess((y_q - y_hat).abs().max(), 1e-3)
+
 
 if __name__ == "__main__":
     unittest.main()

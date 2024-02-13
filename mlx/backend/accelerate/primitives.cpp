@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 #include <cmath>
@@ -33,8 +33,12 @@ DEFAULT(ArgSort)
 DEFAULT(AsStrided)
 DEFAULT(Broadcast)
 DEFAULT(Ceil)
+DEFAULT_MULTI(Compiled)
 DEFAULT(Concatenate)
 DEFAULT(Copy)
+DEFAULT_MULTI(CustomVJP)
+DEFAULT_MULTI(Depends)
+DEFAULT_MULTI(DivMod)
 DEFAULT(Equal)
 DEFAULT(Erf)
 DEFAULT(ErfInv)
@@ -50,11 +54,15 @@ DEFAULT(LogicalNot)
 DEFAULT(LogicalAnd)
 DEFAULT(LogicalOr)
 DEFAULT(LogAddExp)
+DEFAULT(Maximum)
+DEFAULT(Minimum)
 DEFAULT(NotEqual)
 DEFAULT(Pad)
 DEFAULT(Partition)
+DEFAULT_MULTI(QRF)
 DEFAULT(RandomBits)
 DEFAULT(Reshape)
+DEFAULT(Remainder)
 DEFAULT(Round)
 DEFAULT(Scatter)
 DEFAULT(Sigmoid)
@@ -64,8 +72,6 @@ DEFAULT_MULTI(Split)
 DEFAULT(Sort)
 DEFAULT(StopGradient)
 DEFAULT(Transpose)
-DEFAULT_MULTI(DivMod)
-DEFAULT_MULTI(QRF)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
@@ -287,45 +293,6 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
-// TODO: Avoid code duplication with the common backend.
-struct RemainderFn {
-  template <typename T>
-  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
-      T numerator,
-      T denominator) {
-    return std::fmod(numerator, denominator);
-  }
-
-  template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, T> operator()(
-      T numerator,
-      T denominator) {
-    return numerator % denominator;
-  }
-};
-
-void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-
-  if (a.dtype() == float32) {
-    binary(
-        a,
-        b,
-        out,
-        RemainderFn{},
-        UseDefaultBinaryOp(),
-        UseDefaultBinaryOp(),
-        [](const auto* a, const auto* b, auto* o, auto n) {
-          int num_el = n;
-          vvremainderf((float*)o, (const float*)a, (const float*)b, &num_el);
-        });
-  } else {
-    binary(a, b, out, RemainderFn{});
-  }
-}
-
 void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
@@ -393,47 +360,6 @@ void Log1p::eval_cpu(const std::vector<array>& inputs, array& out) {
     throw std::invalid_argument(
         "[log1p] Cannot compute log of elements in array with"
         " non floating point type.");
-  }
-}
-
-void Maximum::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-  if (out.dtype() == float32) {
-    binary(
-        a,
-        b,
-        out,
-        [](auto x, auto y) { return (x > y) ? x : y; },
-        UseDefaultBinaryOp(),
-        UseDefaultBinaryOp(),
-        [](const auto* a, const auto* b, auto* out, int n) {
-          vDSP_vmax((const float*)a, 1, (const float*)b, 1, (float*)out, 1, n);
-        });
-  } else {
-    binary(a, b, out, [](auto x, auto y) { return (x > y) ? x : y; });
-  }
-}
-
-void Minimum::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-
-  if (out.dtype() == float32) {
-    binary(
-        a,
-        b,
-        out,
-        [](auto x, auto y) { return (x < y) ? x : y; },
-        UseDefaultBinaryOp(),
-        UseDefaultBinaryOp(),
-        [](const auto* a, const auto* b, auto* out, int n) {
-          vDSP_vmin((const float*)a, 1, (const float*)b, 1, (float*)out, 1, n);
-        });
-  } else {
-    binary(a, b, out, [](auto x, auto y) { return (x < y) ? x : y; });
   }
 }
 

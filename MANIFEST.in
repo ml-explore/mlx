@@ -1,3 +1,4 @@
 include CMakeLists.txt
 recursive-include mlx/ *
 include python/src/*
+include python/mlx/py.typed # support type hinting as in PEP-561

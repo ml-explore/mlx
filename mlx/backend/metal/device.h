@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-24 Apple Inc.
 
 #pragma once
 
@@ -31,6 +31,9 @@ inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
   return mtllib_path;
 }
 
+using MTLFCList =
+    std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
+
 class Device {
  public:
   Device();
@@ -59,14 +62,73 @@ class Device {
       const std::function<std::string(const std::string&)>& lib_path_func =
           get_colocated_mtllib_path);
 
-  MTL::ComputePipelineState* get_kernel(
+  MTL::Library* get_library(const std::string& name);
+
+  MTL::Library* get_library(
       const std::string& name,
-      const std::string& lib_name = "mlx");
+      const std::string& source_string,
+      bool cache = true);
+
+  MTL::Library* get_library(
+      const std::string& name,
+      const MTL::StitchedLibraryDescriptor* desc,
+      bool cache = true);
+
+  MTL::Function* get_function(
+      const std::string& base_name,
+      MTL::Library* mtl_lib,
+      const std::string& specialized_name = "",
+      const MTLFCList& func_consts = {});
+
+  MTL::Function* get_function(
+      const std::string& base_name,
+      const std::string& lib_name = "mlx",
+      const std::string& specialized_name = "",
+      const MTLFCList& func_consts = {});
+
+  MTL::ComputePipelineState* get_kernel(
+      const std::string& base_name,
+      MTL::Library* mtl_lib,
+      const std::string& hash_name = "",
+      const MTLFCList& func_consts = {},
+      const std::vector<MTL::Function*>& linked_functions = {});
+
+  MTL::ComputePipelineState* get_kernel(
+      const std::string& base_name,
+      const std::string& lib_name = "mlx",
+      const std::string& hash_name = "",
+      const MTLFCList& func_consts = {},
+      const std::vector<MTL::Function*>& linked_functions = {});
 
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
  private:
+  MTL::Library* get_library_cache_(const std::string& name);
+
+  MTL::Library* get_library_(const std::string& source_string);
+  MTL::Library* get_library_(const MTL::StitchedLibraryDescriptor* desc);
+
+  MTL::Function* get_function_(const std::string& name, MTL::Library* mtl_lib);
+
+  MTL::Function* get_function_(
+      const std::string& name,
+      const std::string& specialized_name,
+      const MTLFCList& func_consts,
+      MTL::Library* mtl_lib);
+
+  MTL::LinkedFunctions* get_linked_functions_(
+      const std::vector<MTL::Function*>& funcs);
+
+  MTL::ComputePipelineState* get_kernel_(
+      const std::string& name,
+      const MTL::Function* mtl_function);
+
+  MTL::ComputePipelineState* get_kernel_(
+      const std::string& name,
+      const MTL::Function* mtl_function,
+      const MTL::LinkedFunctions* linked_functions);
+
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;

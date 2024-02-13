@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 
@@ -55,7 +55,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       int bo = std::min(32, O);
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, bo, 1);
-      MTL::Size grid_dims = MTL::Size(1, O / bo, B);
+      MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
 
       set_array_buffer(compute_encoder, w, 0);
       set_array_buffer(compute_encoder, scales, 1);

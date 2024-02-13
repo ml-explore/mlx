@@ -153,14 +153,23 @@ array uniform(
 array normal(
     const std::vector<int>& shape,
     Dtype dtype,
+    const float loc /* = 0.0 */,
+    const float scale /* = 1.0 */,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
   auto low = array(std::nextafter(-1.0f, 0.0f), dtype);
   auto high = array(1.0f, dtype);
   auto samples = uniform(low, high, shape, dtype, key, stream);
-  return multiply(
-      array(std::sqrt(2.0), dtype), erfinv(samples, stream), stream);
+  samples =
+      multiply(array(std::sqrt(2.0), dtype), erfinv(samples, stream), stream);
+  if (scale != 1.0) {
+    samples = multiply(array(scale, dtype), samples, stream);
+  }
+  if (loc != 0.0) {
+    samples = add(array(loc, dtype), samples, stream);
+  }
+  return samples;
 }
 
 array randint(

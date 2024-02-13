@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
 #include <cassert>
@@ -60,7 +60,7 @@ void binary_op(
       break;
   }
   kname << op << type_to_name(a);
-  if (bopt == General && out.ndim() <= MAX_BINARY_SPECIALIZED_DIMS) {
+  if (bopt == General && shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
     kname << "_" << shape.size();
   }
 
@@ -158,7 +158,7 @@ void binary_op(
       break;
   }
   kname << op << type_to_name(a);
-  if (bopt == General && out.ndim() <= MAX_BINARY_SPECIALIZED_DIMS) {
+  if (bopt == General && shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
     kname << "_" << shape.size();
   }
 
@@ -484,6 +484,18 @@ void Cos::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Cosh::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "cosh");
+}
+
+void CustomVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
+}
+
+void Depends::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  eval(inputs, outputs);
 }
 
 void Divide::eval_gpu(const std::vector<array>& inputs, array& out) {
