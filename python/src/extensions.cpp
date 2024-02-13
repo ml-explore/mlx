@@ -44,7 +44,7 @@ void init_extensions(py::module_& parent_module) {
             dims (int): The feature dimensions to be rotated. If the input feature
                 is larger than dims then the rest is left unchanged.
             traditional (bool): If set to ``True`` choose the traditional
-                implementation which is slightly less efficient.
+                implementation which rotates consecutive dimensions.
             base (float): The base used to compute angular frequency for
                 each dimension in the positional encodings.
             scale (float): The scale used to scale the positions.

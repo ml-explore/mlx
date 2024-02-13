@@ -30,7 +30,6 @@ template <typename T, bool traditional>
     in_index_2 = in_index_1 + grid.x * strides[2];
   }
 
-
   // Figure out L and d.
   float L = scale * static_cast<float>(pos.y + offset);
   float d = static_cast<float>(pos.x) / static_cast<float>(grid.x);

@@ -111,7 +111,7 @@ array rope(
         x.shape(),
         x.dtype(),
         std::make_unique<RoPE>(
-            stream, fallback, dims, base, scale, traditional, offset),
+            stream, fallback, dims, traditional, base, scale, offset),
         {x});
   }
   return fallback({x})[0];
