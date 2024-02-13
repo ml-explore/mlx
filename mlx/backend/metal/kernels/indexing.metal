@@ -15,39 +15,69 @@ using namespace metal;
 
 template <typename IdxT, int NIDX>
 struct Indices {
-  const array<device IdxT*, NIDX> buffers [[id(0)]];
-  device int* shapes [[id(NIDX + 1)]];
-  device size_t* strides [[id(NIDX + 2)]];
+  const array<const device IdxT*, NIDX> buffers [[id(0)]];
+  const device int* shapes [[id(NIDX + 1)]];
+  const device size_t* strides [[id(NIDX + 2)]];
   const int ndim [[id(NIDX + 3)]];
 };
 
 template <typename IdxT>
-inline size_t offset_neg_idx(IdxT idx, size_t size) {
-  return (idx < 0) ? idx + size : idx;
+METAL_FUNC size_t offset_neg_idx(IdxT idx, size_t size) {
+  if(is_unsigned_v<IdxT>) {
+    return idx;
+  } else {
+    return (idx < 0) ? idx + size : idx;
+  }
 }
 
-template <>
-inline size_t offset_neg_idx(bool idx, size_t) {
-  return idx;
-}
+// template <>
+// METAL_FUNC size_t offset_neg_idx(bool idx, size_t) {
+//   return idx;
+// }
 
-template <>
-inline size_t offset_neg_idx(uint32_t idx, size_t) {
-  return idx;
-}
+// template <>
+// METAL_FUNC size_t offset_neg_idx(uint32_t idx, size_t) {
+//   return idx;
+// }
 
-// IDX_NDIM is the number of dimensions of the indices arrays. Compile-time
-// special case for 0 and 1. Anything >= 2 uses the general case
+#define IDX_ARG_N(idx_t, n) const device idx_t* idx ## n [[buffer(n)]],
+
+#define IDX_ARG_0(idx_t)
+#define IDX_ARG_1(idx_t) IDX_ARG_0(idx_t) IDX_ARG_N(idx_t, 21)
+#define IDX_ARG_2(idx_t) IDX_ARG_1(idx_t) IDX_ARG_N(idx_t, 22)
+#define IDX_ARG_3(idx_t) IDX_ARG_2(idx_t) IDX_ARG_N(idx_t, 23)
+#define IDX_ARG_4(idx_t) IDX_ARG_3(idx_t) IDX_ARG_N(idx_t, 24)
+#define IDX_ARG_5(idx_t) IDX_ARG_4(idx_t) IDX_ARG_N(idx_t, 25)
+#define IDX_ARG_6(idx_t) IDX_ARG_5(idx_t) IDX_ARG_N(idx_t, 26)
+#define IDX_ARG_7(idx_t) IDX_ARG_6(idx_t) IDX_ARG_N(idx_t, 27)
+#define IDX_ARG_8(idx_t) IDX_ARG_7(idx_t) IDX_ARG_N(idx_t, 28)
+#define IDX_ARG_9(idx_t) IDX_ARG_8(idx_t) IDX_ARG_N(idx_t, 29)
+#define IDX_ARG_10(idx_t) IDX_ARG_9(idx_t) IDX_ARG_N(idx_t, 30)
+
+#define IDX_ARR_N(n) idx ## n, 
+
+#define IDX_ARR_0()
+#define IDX_ARR_1() IDX_ARR_0() IDX_ARR_N(21)
+#define IDX_ARR_2() IDX_ARR_1() IDX_ARR_N(22)
+#define IDX_ARR_3() IDX_ARR_2() IDX_ARR_N(23)
+#define IDX_ARR_4() IDX_ARR_3() IDX_ARR_N(24)
+#define IDX_ARR_5() IDX_ARR_4() IDX_ARR_N(25)
+#define IDX_ARR_6() IDX_ARR_5() IDX_ARR_N(26)
+#define IDX_ARR_7() IDX_ARR_6() IDX_ARR_N(27)
+#define IDX_ARR_8() IDX_ARR_7() IDX_ARR_N(28)
+#define IDX_ARR_9() IDX_ARR_8() IDX_ARR_N(29)
+#define IDX_ARR_10() IDX_ARR_9() IDX_ARR_N(30)
+
 template <typename T, typename IdxT, int NIDX, int IDX_NDIM>
-[[kernel]] void gather(
+METAL_FUNC void gather_impl(
     const device T *src [[buffer(0)]],
-    const constant Indices<IdxT, NIDX>& indices [[buffer(1)]],
-    device T *out [[buffer(2)]],
-    const constant int *src_shape [[buffer(3)]],
-    const constant size_t *src_strides [[buffer(4)]],
-    const constant size_t& src_ndim [[buffer(5)]],
-    const constant int *slice_sizes [[buffer(6)]],
-    const constant int *axes [[buffer(7)]],
+    device T *out [[buffer(1)]],
+    const constant int *src_shape [[buffer(2)]],
+    const constant size_t *src_strides [[buffer(3)]],
+    const constant size_t& src_ndim [[buffer(4)]],
+    const constant int *slice_sizes [[buffer(5)]],
+    const constant int *axes [[buffer(6)]],
+    const thread Indices<IdxT, NIDX>& indices,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
 
@@ -79,45 +109,83 @@ template <typename T, typename IdxT, int NIDX, int IDX_NDIM>
 
   size_t out_idx = index.y + static_cast<size_t>(grid_dim.y) * index.x;
   out[out_idx] = src[src_offset + src_idx];
+
 }
 
-#define instantiate_gather4(name, src_type, ind_type, nindex) \
-template [[host_name("gather" name "_" #nindex "_0")]] \
-[[kernel]] void gather<src_type, ind_type, nindex, 0>( \
-    const device src_type *src [[buffer(0)]], \
-    const constant Indices<ind_type, nindex>& indices [[buffer(1)]], \
-    device src_type *out [[buffer(2)]], \
-    const constant int *src_shape [[buffer(3)]], \
-    const constant size_t *src_strides [[buffer(4)]], \
-    const constant size_t& src_ndim [[buffer(5)]], \
-    const constant int *slice_sizes [[buffer(6)]], \
-    const constant int* axes [[buffer(7)]], \
+#define make_gather_impl(IDX_ARG, IDX_ARR) \
+template <typename T, typename IdxT, int NIDX, int IDX_NDIM>  \
+[[kernel]] void gather(                                       \
+    const device T *src [[buffer(0)]],                        \
+    device T *out [[buffer(1)]],                              \
+    const constant int *src_shape [[buffer(2)]],              \
+    const constant size_t *src_strides [[buffer(3)]],         \
+    const constant size_t& src_ndim [[buffer(4)]],            \
+    const constant int *slice_sizes [[buffer(5)]], \
+    const constant int *axes [[buffer(6)]], \
+    const device int *idx_shapes [[buffer(7)]], \
+    const device size_t *idx_strides [[buffer(8)]], \
+    const constant int& idx_ndim [[buffer(9)]], \
+    IDX_ARG(IdxT) \
     uint2 index [[thread_position_in_grid]], \
-    uint2 grid_dim [[threads_per_grid]]); \
-template [[host_name("gather" name "_" #nindex "_1")]] \
-[[kernel]] void gather<src_type, ind_type, nindex, 1>( \
-    const device src_type *src [[buffer(0)]], \
-    const constant Indices<ind_type, nindex>& indices [[buffer(1)]], \
-    device src_type *out [[buffer(2)]], \
-    const constant int *src_shape [[buffer(3)]], \
-    const constant size_t *src_strides [[buffer(4)]], \
-    const constant size_t& src_ndim [[buffer(5)]], \
-    const constant int *slice_sizes [[buffer(6)]], \
-    const constant int* axes [[buffer(7)]], \
-    uint2 index [[thread_position_in_grid]], \
-    uint2 grid_dim [[threads_per_grid]]); \
-template [[host_name("gather" name "_" #nindex)]] \
-[[kernel]] void gather<src_type, ind_type, nindex, 2>( \
-    const device src_type *src [[buffer(0)]], \
-    const constant Indices<ind_type, nindex>& indices [[buffer(1)]], \
-    device src_type *out [[buffer(2)]], \
-    const constant int *src_shape [[buffer(3)]], \
-    const constant size_t *src_strides [[buffer(4)]], \
-    const constant size_t& src_ndim [[buffer(5)]], \
-    const constant int *slice_sizes [[buffer(6)]], \
-    const constant int* axes [[buffer(7)]], \
+    uint2 grid_dim [[threads_per_grid]]) { \
+ \
+  Indices<IdxT, NIDX> idxs{ \
+      {{IDX_ARR()}}, \
+      idx_shapes, \
+      idx_strides, \
+      idx_ndim}; \
+ \
+  return gather_impl<T, IdxT, NIDX, IDX_NDIM>( \
+      src, \
+      out, \
+      src_shape, \
+      src_strides, \
+      src_ndim, \
+      slice_sizes, \
+      axes, \
+      idxs, \
+      index, \
+      grid_dim); \
+} 
+
+#define make_gather(n) make_gather_impl(IDX_ARG_ ##n, IDX_ARR_ ##n)
+
+make_gather(0)
+make_gather(1)
+make_gather(2)
+make_gather(3)
+make_gather(4)
+make_gather(5)
+make_gather(6)
+make_gather(7)
+make_gather(8)
+make_gather(9)
+make_gather(10)
+
+#define instantiate_gather6(name, src_t, idx_t, nidx, IDX_ARG, nd, nd_name) \
+template [[host_name("gather" name "_" #nidx "" #nd_name)]] \
+[[kernel]] void gather<src_t, idx_t, nidx, nd>( \
+    const device src_t *src [[buffer(0)]], \
+    device src_t *out [[buffer(1)]], \
+    const constant int *src_shape [[buffer(2)]], \
+    const constant size_t *src_strides [[buffer(3)]], \
+    const constant size_t& src_ndim [[buffer(4)]], \
+    const constant int *slice_sizes [[buffer(5)]], \
+    const constant int *axes [[buffer(6)]], \
+    const device int *idx_shapes [[buffer(7)]], \
+    const device size_t *idx_strides [[buffer(8)]], \
+    const constant int& idx_ndim [[buffer(9)]], \
+    IDX_ARG(idx_t) \
     uint2 index [[thread_position_in_grid]], \
     uint2 grid_dim [[threads_per_grid]]);
+
+#define instantiate_gather5(name, src_t, idx_t, nidx, nd, nd_name) \
+  instantiate_gather6(name, src_t, idx_t, nidx, IDX_ARG_ ##nidx, nd, nd_name)
+
+#define instantiate_gather4(name, src_t, idx_t, nidx) \
+  instantiate_gather5(name, src_t, idx_t, nidx, 0, _0) \
+  instantiate_gather5(name, src_t, idx_t, nidx, 1, _1) \
+  instantiate_gather5(name, src_t, idx_t, nidx, 2, )
 
 
 // Special for case NIDX=0
@@ -174,9 +242,9 @@ instantiate_gather(bfloat16, bfloat16_t)
 // Scatter kernel
 /////////////////////////////////////////////////////////////////////
 
+
 template <typename T, typename IdxT, typename Op, int NIDX>
-[[kernel]] void scatter(
-    const device Indices<IdxT, NIDX>& indices [[buffer(0)]],
+METAL_FUNC void scatter_impl(
     const device T *updates [[buffer(1)]],
     device mlx_atomic<T> *out [[buffer(2)]],
     const device int *upd_shape [[buffer(3)]],
@@ -187,6 +255,7 @@ template <typename T, typename IdxT, typename Op, int NIDX>
     const device size_t *out_strides [[buffer(8)]],
     const device size_t& out_ndim [[buffer(9)]],
     const device int* axes [[buffer(10)]],
+    const thread Indices<IdxT, NIDX>& indices,
     uint2 gid [[thread_position_in_grid]]) {
 
   Op op;
@@ -210,14 +279,14 @@ template <typename T, typename IdxT, typename Op, int NIDX>
       ind_offset, upd_shape + indices.ndim, out_strides, out_ndim);
   auto upd_idx = elem_to_loc(gid.y * upd_size + gid.x, upd_shape, upd_strides, upd_ndim);
   op.atomic_update(out, updates[upd_idx], out_idx + out_offset);
+
 }
 
-#define instantiate_scatter4(name, type, ind_type, op_type, nindex) \
-template [[host_name("scatter" name "_" #nindex)]] \
-[[kernel]] void scatter<type, ind_type, op_type, nindex>( \
-    const device Indices<ind_type, nindex>& indices [[buffer(0)]], \
-    const device type *updates [[buffer(1)]], \
-    device mlx_atomic<type> *out [[buffer(2)]], \
+#define make_scatter_impl(IDX_ARG, IDX_ARR) \
+template <typename T, typename IdxT, typename Op, int NIDX>  \
+[[kernel]] void scatter(                                       \
+    const device T *updates [[buffer(1)]], \
+    device mlx_atomic<T> *out [[buffer(2)]], \
     const device int *upd_shape [[buffer(3)]], \
     const device size_t *upd_strides [[buffer(4)]], \
     const device size_t& upd_ndim [[buffer(5)]], \
@@ -226,7 +295,68 @@ template [[host_name("scatter" name "_" #nindex)]] \
     const device size_t *out_strides [[buffer(8)]], \
     const device size_t& out_ndim [[buffer(9)]], \
     const device int* axes [[buffer(10)]], \
+    const device int *idx_shapes [[buffer(11)]], \
+    const device size_t *idx_strides [[buffer(12)]], \
+    const constant int& idx_ndim [[buffer(13)]], \
+    IDX_ARG(IdxT) \
+    uint2 gid [[thread_position_in_grid]]) { \
+ \
+  Indices<IdxT, NIDX> idxs{ \
+      {{IDX_ARR()}}, \
+      idx_shapes, \
+      idx_strides, \
+      idx_ndim}; \
+ \
+  return scatter_impl<T, IdxT, Op, NIDX>( \
+      updates, \
+      out, \
+      upd_shape, \
+      upd_strides, \
+      upd_ndim, \
+      upd_size, \
+      out_shape, \
+      out_strides, \
+      out_ndim, \
+      axes, \
+      idxs, \
+      gid); \
+} 
+
+#define make_scatter(n) make_scatter_impl(IDX_ARG_ ##n, IDX_ARR_ ##n)
+
+make_scatter(0)
+make_scatter(1)
+make_scatter(2)
+make_scatter(3)
+make_scatter(4)
+make_scatter(5)
+make_scatter(6)
+make_scatter(7)
+make_scatter(8)
+make_scatter(9)
+make_scatter(10)
+
+#define instantiate_scatter5(name, src_t, idx_t, op_t, nidx, IDX_ARG) \
+template [[host_name("scatter" name "_" #nidx)]] \
+[[kernel]] void scatter<src_t, idx_t, op_t, nidx>( \
+    const device src_t *updates [[buffer(1)]], \
+    device mlx_atomic<src_t> *out [[buffer(2)]], \
+    const device int *upd_shape [[buffer(3)]], \
+    const device size_t *upd_strides [[buffer(4)]], \
+    const device size_t& upd_ndim [[buffer(5)]], \
+    const device size_t& upd_size [[buffer(6)]], \
+    const device int *out_shape [[buffer(7)]], \
+    const device size_t *out_strides [[buffer(8)]], \
+    const device size_t& out_ndim [[buffer(9)]], \
+    const device int* axes [[buffer(10)]], \
+    const device int *idx_shapes [[buffer(11)]], \
+    const device size_t *idx_strides [[buffer(12)]], \
+    const constant int& idx_ndim [[buffer(13)]], \
+    IDX_ARG(idx_t) \
     uint2 gid [[thread_position_in_grid]]);
+
+#define instantiate_scatter4(name, src_t, idx_t, op_t, nidx) \
+  instantiate_scatter5(name, src_t, idx_t, op_t, nidx, IDX_ARG_ ##nidx)
 
 // Special case NINDEX=0
 #define instantiate_scatter_nd0(name, type) \
