@@ -47,9 +47,9 @@ std::pair<std::vector<array>, std::vector<int>> Custom::vmap(
 array rope(
     const array& x,
     int dims,
+    bool traditional,
     float base,
     float scale,
-    bool traditional,
     int offset,
     StreamOrDevice s /* = {} */) {
   if (x.ndim() != 3) {

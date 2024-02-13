@@ -39,9 +39,9 @@ class Custom : public Primitive {
 array rope(
     const array& x,
     int dims,
+    bool traditional,
     float base,
     float scale,
-    bool traditional,
     int offset,
     StreamOrDevice s /* = {} */);
 
@@ -51,15 +51,15 @@ class RoPE : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       int dims,
+      bool traditional,
       float base,
       float scale,
-      bool traditional,
       int offset)
       : Custom(stream, fallback),
         dims_(dims),
+        traditional_(traditional),
         base_(base),
         scale_(scale),
-        traditional_(traditional),
         offset_(offset){};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -73,9 +73,9 @@ class RoPE : public Custom {
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;
   int dims_;
+  bool traditional_;
   float base_;
   float scale_;
-  bool traditional_;
   int offset_;
 };
 

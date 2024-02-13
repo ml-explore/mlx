@@ -5,6 +5,7 @@
 
 #include "mlx/extensions.h"
 #include "mlx/ops.h"
+#include "python/src/utils.h"
 
 namespace py = pybind11;
 using namespace py::literals;
@@ -20,26 +21,34 @@ void init_extensions(py::module_& parent_module) {
       "rope",
       [](const array& x,
          int dims,
+         bool traditional,
          float base,
          float scale,
-         bool traditional,
          int offset,
-         StreamOrDevice s /* = {} */) {
-        return ext::rope(x, dims, base, scale, traditional, offset, s);
+         const StreamOrDevice& s /* = {} */) {
+        return ext::rope(x, dims, traditional, base, scale, offset, s);
       },
       "x"_a,
       "dims"_a,
+      "traditional"_a,
       "base"_a,
       "scale"_a,
-      "traditional"_a,
       "offset"_a,
       py::kw_only(),
-      "stream"_a = std::nullopt,
+      "stream"_a = none,
       R"pbdoc(
-        RoPE.
+        Apply rotary positional encoding to the input.
 
         Args:
             x (array): Input array.
+            dims (int): The feature dimensions to be rotated. If the input feature
+                is larger than dims then the rest is left unchanged.
+            traditional (bool): If set to ``True`` choose the traditional
+                implementation which is slightly less efficient.
+            base (float): The base used to compute angular frequency for
+                each dimension in the positional encodings.
+            scale (float): The scale used to scale the positions.
+            offset (int): The position offset to start at.
 
         Returns:
             array: The output array.
