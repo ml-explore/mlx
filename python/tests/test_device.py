@@ -44,7 +44,7 @@ class TestDevice(mlx_tests.MLXTestCase):
         default = mx.default_device()
         diff = mx.cpu if default == mx.gpu else mx.gpu
         self.assertNotEqual(default, diff)
-        with mxutils.Device(diff):
+        with mx.StreamContextManager(diff):
             a = mx.add(mx.zeros((2, 2)), mx.ones((2, 2)))
             mx.eval(a)
             self.assertEqual(mx.default_device(), diff)

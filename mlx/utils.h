@@ -9,6 +9,24 @@
 
 namespace mlx::core {
 
+using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
+Stream to_stream(StreamOrDevice s);
+
+struct StreamContextManager {
+ public:
+  StreamContextManager(StreamOrDevice s)
+      : _stream(default_stream(default_device())) {
+    set_default_stream(to_stream(s));
+  }
+
+  ~StreamContextManager() {
+    set_default_stream(_stream);
+  }
+
+ private:
+  Stream _stream;
+};
+
 struct PrintFormatter {
   inline void print(std::ostream& os, bool val);
   inline void print(std::ostream& os, int16_t val);
