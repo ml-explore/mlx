@@ -10,6 +10,8 @@ Layers
    :template: nn-module-template.rst
 
    ALiBi
+   AvgPool1d
+   AvgPool2d
    BatchNorm
    Conv1d
    Conv2d
@@ -22,6 +24,8 @@ Layers
    InstanceNorm
    LayerNorm
    Linear
+   MaxPool1d
+   MaxPool2d
    Mish
    MultiHeadAttention
    PReLU
