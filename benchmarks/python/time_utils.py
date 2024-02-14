@@ -28,7 +28,7 @@ def measure_runtime(fn, **kwargs):
         fn(**kwargs)
 
     tic = time.time()
-    iters = 10
+    iters = 100
     for _ in range(iters):
         fn(**kwargs)
     return (time.time() - tic) * 1000 / iters
