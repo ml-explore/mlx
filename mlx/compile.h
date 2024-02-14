@@ -8,9 +8,10 @@ namespace mlx::core {
 
 enum class CompileMode { disabled, no_simplify, no_fuse, enabled };
 
-// Compile takes a function and returns a new function
+/** Compile takes a function and returns a compiled function. */
 std::function<std::vector<array>(const std::vector<array>&)> compile(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun);
+    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
+    bool shapeless = false);
 
 /** Globally disable compilation.
  * Setting the environment variable ``MLX_DISABLE_COMPILE`` can also
