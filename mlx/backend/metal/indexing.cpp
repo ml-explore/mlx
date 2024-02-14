@@ -92,6 +92,9 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(axes_.data(), nidx * sizeof(int), 6);
 
   // Set index info
+  //
+  // We don't need to check for empty idx_shapes because gather has a
+  // idx_ndim == 0 specialization
   compute_encoder->setBytes(
       idx_shapes.data(), idx_shapes.size() * sizeof(int), 7);
   compute_encoder->setBytes(
@@ -229,6 +232,12 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(axes_.data(), axes_.size() * sizeof(int), 10);
 
   // Set index info
+  if (idx_ndim == 0) {
+    // Add a 0 in idx_shapes and strides to avoid the missing buffer binding
+    // error in the metal API.
+    idx_shapes.push_back(0);
+    idx_strides.push_back(0);
+  }
   compute_encoder->setBytes(
       idx_shapes.data(), idx_shapes.size() * sizeof(int), 11);
   compute_encoder->setBytes(

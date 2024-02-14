@@ -50,7 +50,6 @@ METAL_FUNC void scatter_impl(
       ind_offset, upd_shape + indices.ndim, out_strides, out_ndim);
   auto upd_idx = elem_to_loc(gid.y * upd_size + gid.x, upd_shape, upd_strides, upd_ndim);
   op.atomic_update(out, updates[upd_idx], out_idx + out_offset);
-
 }
 
 #define make_scatter_impl(IDX_ARG, IDX_ARR) \
