@@ -9,11 +9,11 @@ using namespace py::literals;
 using namespace mlx::core;
 
 // Slightly different from the original, with python context on init we are not
-// in the context yet. Only create the inner context on enter then de   lete on
+// in the context yet. Only create the inner context on enter then delete on
 // exit.
-class PyStreamContextManager {
+class PyStreamContext {
  public:
-  PyStreamContextManager(StreamOrDevice s) : _s(s), _inner(nullptr) {}
+  PyStreamContext(StreamOrDevice s) : _s(s), _inner(nullptr) {}
 
   void enter() {
     _inner = new StreamContextManager(_s);
@@ -32,27 +32,26 @@ class PyStreamContextManager {
 };
 
 void init_utils(py::module_& m) {
-  py::class_<PyStreamContextManager>(m, "StreamContextManager", R"pbdoc(
+  py::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
         A context manager for setting the current device and stream.
-    
-        Example:
-        ```python
-        import mlx.core as mx
-    
-        # Create a context manager for the current device and stream.
-        with mx.StreamContextManager(mx.cpu):
-            # Run some code that uses the current device and stream.
-            pass
-        ```
-    
+        
         Args:
             s: The stream or device to set as the current device and stream.
+
+        Example:
+        .. code-block::python
+          import mlx.core as mx
+      
+          # Create a context manager for the current device and stream.
+          with mx.StreamContext(mx.cpu):
+              # Run some code that uses the current device and stream.
+              pass
   )pbdoc")
       .def(py::init<StreamOrDevice>(), "s"_a)
-      .def("__enter__", [](PyStreamContextManager& scm) { scm.enter(); })
+      .def("__enter__", [](PyStreamContext& scm) { scm.enter(); })
       .def(
           "__exit__",
-          [](PyStreamContextManager& scm,
+          [](PyStreamContext& scm,
              const std::optional<py::type>& exc_type,
              const std::optional<py::object>& exc_value,
              const std::optional<py::object>& traceback) { scm.exit(); });
