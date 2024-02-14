@@ -26,6 +26,7 @@ extensions = [
 
 python_use_unqualified_type_names = True
 autosummary_generate = True
+autosummary_filename_map = {"mlx.core.Stream": "stream_class"}
 
 intersphinx_mapping = {
     "https://docs.python.org/3": None,

@@ -2,12 +2,38 @@
 
 #pragma once
 
+#include <variant>
+
 #include "array.h"
 #include "device.h"
 #include "dtype.h"
 #include "stream.h"
 
 namespace mlx::core {
+
+using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
+Stream to_stream(StreamOrDevice s);
+
+struct StreamContext {
+ public:
+  StreamContext(StreamOrDevice s) : _stream(default_stream(default_device())) {
+    if (std::holds_alternative<std::monostate>(s)) {
+      throw std::runtime_error(
+          "[StreamContext] Invalid argument, please specify a stream or device.");
+    }
+    auto _s = to_stream(s);
+    set_default_device(_s.device);
+    set_default_stream(_s);
+  }
+
+  ~StreamContext() {
+    set_default_device(_stream.device);
+    set_default_stream(_stream);
+  }
+
+ private:
+  Stream _stream;
+};
 
 struct PrintFormatter {
   inline void print(std::ostream& os, bool val);

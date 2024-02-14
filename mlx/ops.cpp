@@ -59,16 +59,6 @@ Dtype at_least_float(const Dtype& d) {
 
 } // namespace
 
-Stream to_stream(StreamOrDevice s) {
-  if (std::holds_alternative<std::monostate>(s)) {
-    return default_stream(default_device());
-  } else if (std::holds_alternative<Device>(s)) {
-    return default_stream(std::get<Device>(s));
-  } else {
-    return std::get<Stream>(s);
-  }
-}
-
 array arange(
     double start,
     double stop,
