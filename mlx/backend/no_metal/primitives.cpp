@@ -1,7 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/primitives.h"
-#include "mlx/extensions.h"
+#include "mlx/fast.h"
 
 #define NO_GPU_MULTI(func)                                             \
   void func::eval_gpu(                                                 \
