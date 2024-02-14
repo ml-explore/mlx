@@ -11,6 +11,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/rope.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/scan.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
