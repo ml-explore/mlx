@@ -55,21 +55,30 @@ def upsample2d_bilinear(x: mx.array, scale: Tuple[float, float]):
     return w_a * a + w_b * b + w_c * c + w_d * d
 
 
-class Upsample2d(Module):
+class Upsample(Module):
     r"""Upsamples the given spatial data.
 
-    The input  is assumed to be a 4D tensor where the channels are expected to be last.
-    Thus, the input shape should be :math:`(N, H, W, C)` where:
+    The input is assumed to be a 4D tensor or 5D tensor where the channels are expected to be last.
+
+    In case of 4D input, the input shape should be :math:`(N, H, W, C)` where:
         - ``N`` is the batch dimension
         - ``H`` is the input image height
         - ``W`` is the input image width
         - ``C`` is the number of input channels
 
+    In case of 5D input, the input shape should be :math:`(N, D, H, W, C)` where:
+        - ``N`` is the batch dimension
+        - ``D`` is the first spatial dimension
+        - ``H`` is the second spatial dimension
+        - ``W`` is the third spatial dimension
+        - ``C`` is the number of input channels
+
     Parameters:
         scale (float or Tuple[float, float]): The multiplier for the spatial size.
-            If a ``float`` is provided, it is the multiplier for both the height and
-            width. Otherwise, the first element of the tuple is the height multiplier
-            and the second is the width multiplier.
+            If a ``float`` is provided, it is the multiplier for all spatial dimensions.
+            Otherwise, the first element of the tuple is the first spatial dimension multiplier,
+            the second element of the tuple is the second spatial dimension multipler, and
+            the third element of the tuple is the third spatial dimension multiplier.
         mode (str, optional): The upsampling algorithm: one of ``"nearest"`` and
             ``"bilinear"``. Default: ``"nearest"``.
 
@@ -82,13 +91,13 @@ class Upsample2d(Module):
                  [2]],
                 [[3],
                  [4]]]], dtype=int32)
-        >>> n = nn.Upsample2d(scale=2, mode='nearest')
+        >>> n = nn.Upsample(scale=2, mode='nearest')
         >>> n(x).squeeze()
         array([[1, 1, 2, 2],
                [1, 1, 2, 2],
                [3, 3, 4, 4],
                [3, 3, 4, 4]], dtype=int32)
-        >>> b = nn.Upsample2d(scale=2, mode='bilinear')
+        >>> b = nn.Upsample(scale=2, mode='bilinear')
         >>> b(x).squeeze()
         array([[1, 1.33333, 1.66667, 2],
                [1.66667, 2, 2.33333, 2.66667],
@@ -103,9 +112,7 @@ class Upsample2d(Module):
     ):
         super().__init__()
         if mode not in ["nearest", "bilinear"]:
-            raise ValueError(
-                f"[Upsample2d] Got unsupported upsampling algorithm: {mode}"
-            )
+            raise ValueError(f"[Upsample] Got unsupported upsampling algorithm: {mode}")
         if isinstance(scale, (list, tuple)):
             self.scale = tuple(map(float, scale))
         else:
@@ -116,6 +123,10 @@ class Upsample2d(Module):
         return f"scale={self.scale}, mode={self.mode!r}"
 
     def __call__(self, x: mx.array) -> mx.array:
+        if x.ndim != 4:
+            raise ValueError(
+                f"[Upsample] The input tensor is {x.ndim}D. Currently, only 4D input is currently supported."
+            )
         if self.mode == "bilinear":
             return upsample2d_bilinear(x, self.scale)
         else:

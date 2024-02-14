@@ -905,11 +905,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertTrue(y.shape, x.shape)
         self.assertTrue(y.dtype, mx.float16)
 
-    def test_upsample2d(self):
+    def test_upsample(self):
         b, h, w, c = 1, 2, 2, 1
         scale = 2
-        upsample_nearest = nn.Upsample2d(scale=scale, mode="nearest")
-        upsample_bilinear = nn.Upsample2d(scale=scale, mode="bilinear")
+        upsample_nearest = nn.Upsample(scale=scale, mode="nearest")
+        upsample_bilinear = nn.Upsample(scale=scale, mode="bilinear")
         # Test single feature map
         x = mx.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
         expected_nearest = mx.array(
@@ -934,8 +934,8 @@ class TestLayers(mlx_tests.MLXTestCase):
         scale = 2
         x = mx.arange((b * h * w * c)).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
 
-        upsample_nearest = nn.Upsample2d(scale=scale, mode="nearest")
-        upsample_bilinear = nn.Upsample2d(scale=scale, mode="bilinear")
+        upsample_nearest = nn.Upsample(scale=scale, mode="nearest")
+        upsample_bilinear = nn.Upsample(scale=scale, mode="bilinear")
 
         expected_nearest = mx.array(
             [
@@ -1023,8 +1023,8 @@ class TestLayers(mlx_tests.MLXTestCase):
         # Test different height and width scale
         b, h, w, c = 1, 2, 2, 2
         x = mx.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
-        upsample_nearest = nn.Upsample2d(scale=(2, 3), mode="nearest")
-        upsample_bilinear = nn.Upsample2d(scale=(2, 3), mode="bilinear")
+        upsample_nearest = nn.Upsample(scale=(2, 3), mode="nearest")
+        upsample_bilinear = nn.Upsample(scale=(2, 3), mode="bilinear")
 
         expected_nearest = mx.array(
             [
@@ -1067,27 +1067,27 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         # Test repr
         self.assertEqual(
-            str(nn.Upsample2d(scale=2)), "Upsample2d(scale=(2.0, 2.0), mode='nearest')"
+            str(nn.Upsample(scale=2)), "Upsample(scale=(2.0, 2.0), mode='nearest')"
         )
         self.assertEqual(
-            str(nn.Upsample2d(scale=2, mode="nearest")),
-            "Upsample2d(scale=(2.0, 2.0), mode='nearest')",
+            str(nn.Upsample(scale=2, mode="nearest")),
+            "Upsample(scale=(2.0, 2.0), mode='nearest')",
         )
         self.assertEqual(
-            str(nn.Upsample2d(scale=2, mode="bilinear")),
-            "Upsample2d(scale=(2.0, 2.0), mode='bilinear')",
+            str(nn.Upsample(scale=2, mode="bilinear")),
+            "Upsample(scale=(2.0, 2.0), mode='bilinear')",
         )
         self.assertEqual(
-            str(nn.Upsample2d(scale=(2, 3))),
-            "Upsample2d(scale=(2.0, 3.0), mode='nearest')",
+            str(nn.Upsample(scale=(2, 3))),
+            "Upsample(scale=(2.0, 3.0), mode='nearest')",
         )
         self.assertEqual(
-            str(nn.Upsample2d(scale=(2, 3), mode="nearest")),
-            "Upsample2d(scale=(2.0, 3.0), mode='nearest')",
+            str(nn.Upsample(scale=(2, 3), mode="nearest")),
+            "Upsample(scale=(2.0, 3.0), mode='nearest')",
         )
         self.assertEqual(
-            str(nn.Upsample2d(scale=(2, 3), mode="bilinear")),
-            "Upsample2d(scale=(2.0, 3.0), mode='bilinear')",
+            str(nn.Upsample(scale=(2, 3), mode="bilinear")),
+            "Upsample(scale=(2.0, 3.0), mode='bilinear')",
         )
 
     def test_pooling(self):
