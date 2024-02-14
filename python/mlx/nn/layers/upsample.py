@@ -6,19 +6,19 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-def upsample2d_nearest(x: mx.array, scale: Tuple[float, float]):
-    # Integer scales means we can simply expand-broadcast and reshape
-    if tuple(map(int, scale)) == scale:
-        sh, sw = map(int, scale)
+def upsample2d_nearest(x: mx.array, scale_factor: Tuple[float, float]):
+    # Integer scale_factors means we can simply expand-broadcast and reshape
+    if tuple(map(int, scale_factor)) == scale_factor:
+        sh, sw = map(int, scale_factor)
         B, H, W, C = x.shape
         x = x[:, :, None, :, None]
         x = mx.broadcast_to(x, (B, H, sh, W, sw, C))
         x = x.reshape(B, H * sh, W * sw, C)
         return x
 
-    # Floating point scale means we need to do indexing
+    # Floating point scale_factor means we need to do indexing
     else:
-        sh, sw = scale
+        sh, sw = scale_factor
         B, H, W, C = x.shape
         new_H = int(H * sh)
         new_W = int(W * sw)
@@ -27,8 +27,8 @@ def upsample2d_nearest(x: mx.array, scale: Tuple[float, float]):
         return x[:, idx_y[:, None], idx_x[None]]
 
 
-def upsample2d_bilinear(x: mx.array, scale: Tuple[float, float]):
-    sh, sw = scale
+def upsample2d_bilinear(x: mx.array, scale_factor: Tuple[float, float]):
+    sh, sw = scale_factor
     B, H, W, C = x.shape
     new_H = int(H * sh)
     new_W = int(W * sw)
@@ -74,7 +74,7 @@ class Upsample(Module):
         - ``C`` is the number of input channels
 
     Parameters:
-        scale (float or Tuple[float, float]): The multiplier for the spatial size.
+        scale_factor (float or Tuple[float, float]): The multiplier for the spatial size.
             If a ``float`` is provided, it is the multiplier for all spatial dimensions.
             Otherwise, the first element of the tuple is the first spatial dimension multiplier,
             the second element of the tuple is the second spatial dimension multipler, and
@@ -91,13 +91,13 @@ class Upsample(Module):
                  [2]],
                 [[3],
                  [4]]]], dtype=int32)
-        >>> n = nn.Upsample(scale=2, mode='nearest')
+        >>> n = nn.Upsample(scale_factor=2, mode='nearest')
         >>> n(x).squeeze()
         array([[1, 1, 2, 2],
                [1, 1, 2, 2],
                [3, 3, 4, 4],
                [3, 3, 4, 4]], dtype=int32)
-        >>> b = nn.Upsample(scale=2, mode='bilinear')
+        >>> b = nn.Upsample(scale_factor=2, mode='bilinear')
         >>> b(x).squeeze()
         array([[1, 1.33333, 1.66667, 2],
                [1.66667, 2, 2.33333, 2.66667],
@@ -107,20 +107,20 @@ class Upsample(Module):
 
     def __init__(
         self,
-        scale: Union[float, Tuple[float, float]],
+        scale_factor: Union[float, Tuple[float, float]],
         mode: Literal["nearest", "bilinear"] = "nearest",
     ):
         super().__init__()
         if mode not in ["nearest", "bilinear"]:
             raise ValueError(f"[Upsample] Got unsupported upsampling algorithm: {mode}")
-        if isinstance(scale, (list, tuple)):
-            self.scale = tuple(map(float, scale))
+        if isinstance(scale_factor, (list, tuple)):
+            self.scale_factor = tuple(map(float, scale_factor))
         else:
-            self.scale = (float(scale), float(scale))
+            self.scale_factor = (float(scale_factor), float(scale_factor))
         self.mode = mode
 
     def _extra_repr(self) -> str:
-        return f"scale={self.scale}, mode={self.mode!r}"
+        return f"scale_factor={self.scale_factor}, mode={self.mode!r}"
 
     def __call__(self, x: mx.array) -> mx.array:
         if x.ndim != 4:
@@ -128,6 +128,6 @@ class Upsample(Module):
                 f"[Upsample] The input tensor is {x.ndim}D. Currently, only 4D input is currently supported."
             )
         if self.mode == "bilinear":
-            return upsample2d_bilinear(x, self.scale)
+            return upsample2d_bilinear(x, self.scale_factor)
         else:
-            return upsample2d_nearest(x, self.scale)
+            return upsample2d_nearest(x, self.scale_factor)
