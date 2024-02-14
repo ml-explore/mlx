@@ -208,18 +208,16 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         x = mx.zeros((5, 5))
         grad = mx.ones_like(x)
         optimizer = opt.Adafactor()
-        optimizer.init(x)
         for _ in range(2):
-            xp = optimizer.apply_single(grad, x, optimizer.state)
+            xp = optimizer.apply_gradients(grad, x)
             self.assertEqual(xp.dtype, x.dtype)
             self.assertEqual(xp.shape, x.shape)
 
         x = mx.zeros((5, 5), mx.float16)
         grad = mx.ones_like(x)
         optimizer = opt.Adafactor()
-        optimizer.init(x)
         for _ in range(2):
-            xp = optimizer.apply_single(grad, x, optimizer.state)
+            xp = optimizer.apply_gradients(grad, x)
             self.assertEqual(xp.dtype, x.dtype)
             self.assertEqual(xp.shape, x.shape)
         self.assertEqual(optimizer.state["step"], 2)
@@ -298,75 +296,49 @@ class TestOptimizers(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(result["w"], mx.full((5, 5), 3.0)))
 
 
-class TestLRSchedulers(unittest.TestCase):
-    def test_step_lr_with_optimizers(self):
+class TestSchedulers(unittest.TestCase):
+    def test_decay_lr(self):
         for optim_class in optimizers_dict.values():
-            optimizer = optim_class(learning_rate=0.1)
-            scheduler = opt.StepLR(optimizer, step_size=1, gamma=0.9)
+            lr_schedule = opt.step_decay(1e-1, 0.9, 1000)
+            optimizer = optim_class(learning_rate=lr_schedule)
 
-            for epoch in range(10):
-                scheduler.step()
-                expected_lr = 0.1 * (0.9**epoch)
+            params = {"w": mx.ones((5, 5))}
+            grads = tree_map(lambda x: mx.ones_like(x), params)
+
+            for it in range(10):
+                expected_lr = 0.1 * (0.9**it)
                 self.assertAlmostEqual(optimizer.learning_rate, expected_lr, delta=1e-7)
+                return optimizer.apply_gradients(grads, params)
 
-    def test_exponential_lr_with_optimizers(self):
-        for optim_class in optimizers_dict.values():
-            optimizer = optim_class(learning_rate=0.1)
-            scheduler = opt.ExponentialLR(optimizer, gamma=0.9)
+    def test_step_decay(self):
+        lr_schedule = opt.step_decay(1e-1, 0.9, 1000)
+        lr = lr_schedule(2500)
+        expected_lr = 0.1 * (0.9**2)
+        self.assertAlmostEqual(lr, expected_lr, delta=1e-7)
 
-            for epoch in range(10):
-                scheduler.step()
-                expected_lr = 0.1 * (0.9**epoch)
-                self.assertAlmostEqual(optimizer.learning_rate, expected_lr, delta=1e-7)
+    def test_exponential_decay(self):
+        lr_schedule = opt.exponential_decay(1e-1, 0.99)
+        lr = lr_schedule(10)
+        expected_lr = 0.1 * (0.99**10)
+        self.assertAlmostEqual(lr, expected_lr, delta=1e-7)
 
-    def test_multi_step_lr_with_optimizers(self):
-        for optim_class in optimizers_dict.values():
-            optimizer = optim_class(learning_rate=0.1)
-            scheduler = opt.MultiStepLR(optimizer, milestones=[2, 4], gamma=0.1)
+    def test_cosine_decay(self):
+        lr_schedule = opt.cosine_decay(0.1, 10)
+        lr = lr_schedule(4)
+        expected_lr = 0.1 * 0.5 * (1.0 + math.cos(math.pi * 4 / 10))
+        self.assertAlmostEqual(lr, expected_lr, delta=1e-7)
 
-            for epoch in range(6):
-                scheduler.step()
-                expected_lr = 0.1 * (
-                    0.1 ** sum(epoch >= milestone for milestone in [2, 4])
-                )
-                self.assertAlmostEqual(optimizer.learning_rate, expected_lr, delta=1e-7)
+    def test_compile_with_schedule(self):
+        lr_schedule = opt.exponential_decay(1e-1, 0.9)
+        optimizer = opt.SGD(learning_rate=lr_schedule)
 
-    def test_lambda_lr_with_optimizers(self):
-        lr_lambda = lambda epoch: 0.95**epoch
-        for optim_class in optimizers_dict.values():
-            optimizer = optim_class(learning_rate=0.1)
-            scheduler = opt.LambdaLR(optimizer, lr_lambda)
+        @partial(mx.compile, inputs=optimizer.state, outputs=optimizer.state)
+        def update():
+            optimizer.update({}, {})
 
-            for epoch in range(5):
-                scheduler.step()
-                expected_lr = 0.1 * (0.95**epoch)
-                self.assertAlmostEqual(optimizer.learning_rate, expected_lr, delta=1e-7)
-
-    def test_polynomial_lr_with_optimizers(self):
-        for optim_class in optimizers_dict.values():
-            optimizer = optim_class(learning_rate=0.1)
-            scheduler = opt.PolynomialLR(
-                optimizer, max_decay_steps=5, end_lr=0.01, power=2
-            )
-
-            for epoch in range(7):
-                scheduler.step()
-                decay_steps = min(epoch, 5)
-                decay_factor = (1 - decay_steps / 5) ** 2
-                expected_lr = (0.1 - 0.01) * decay_factor + 0.01
-                self.assertAlmostEqual(optimizer.learning_rate, expected_lr, delta=1e-7)
-
-    def test_cosine_annealing_lr_with_optimizers(self):
-        for optim_class in optimizers_dict.values():
-            optimizer = optim_class(learning_rate=0.1)
-            scheduler = opt.CosineAnnealingLR(optimizer, T_max=10, eta_min=0.01)
-
-            for epoch in range(12):
-                scheduler.step()
-                expected_lr = (
-                    0.01 + (0.1 - 0.01) * (1 + math.cos(math.pi * epoch / 10)) / 2
-                )
-                self.assertAlmostEqual(optimizer.learning_rate, expected_lr, delta=1e-7)
+        for step in range(5):
+            update()
+            self.assertAlmostEqual(lr_schedule(step), optimizer.learning_rate.item())
 
 
 if __name__ == "__main__":
