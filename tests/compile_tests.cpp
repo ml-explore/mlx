@@ -683,3 +683,39 @@ TEST_CASE("test metal fusion types") {
   CHECK(!lib_name_z.empty());
   CHECK(!lib_source_z.empty());
 }
+
+auto compile_shapeless_not_ok(const std::vector<array>& inputs) {
+  auto x = reshape(inputs[0], {2, 2});
+  return std::vector<array>{x};
+}
+
+auto compile_shapeless_ok(const std::vector<array>& inputs) {
+  auto x = inputs[0] + array({2});
+  return std::vector<array>{x};
+}
+
+TEST_CASE("test shapeless compile") {
+  {
+    auto cfun = compile(compile_shapeless_not_ok, /* shapeless */ true);
+    CHECK_THROWS(cfun({array({1, 2, 3, 4})}));
+  }
+
+  {
+    auto cfun = compile(compile_shapeless_ok, /* shapeless */ true);
+    auto out = cfun({array({1, 2})})[0];
+    auto out2 = cfun({array({1, 2, 3, 4})})[0];
+
+    // Not making a new constant array since no recompile,
+    // hence the ids should be the same
+    CHECK_EQ(out.inputs()[1].id(), out2.inputs()[1].id());
+    CHECK(array_equal(out2, array({3, 4, 5, 6})).item<bool>());
+
+    // Recompile since type changes
+    out2 = cfun({array({1.0, 2.0})})[0];
+    CHECK_NE(out.inputs()[1].id(), out2.inputs()[1].id());
+
+    // Recompile since ndim changes
+    out2 = cfun({array({1.0, 2.0}, {1, 2})})[0];
+    CHECK_NE(out.inputs()[1].id(), out2.inputs()[1].id());
+  }
+}

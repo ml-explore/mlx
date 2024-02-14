@@ -555,13 +555,19 @@ struct PyCompiledFun {
   size_t fun_id;
   py::object captured_inputs;
   py::object captured_outputs;
+  bool shapeless;
   size_t num_outputs{0};
 
-  PyCompiledFun(const py::function& fun, py::object inputs, py::object outputs)
+  PyCompiledFun(
+      const py::function& fun,
+      py::object inputs,
+      py::object outputs,
+      bool shapeless)
       : fun(fun),
         fun_id(reinterpret_cast<size_t>(fun.ptr())),
         captured_inputs(inputs),
-        captured_outputs(outputs) {}
+        captured_outputs(outputs),
+        shapeless(shapeless) {}
 
   PyCompiledFun(const PyCompiledFun&) = delete;
   PyCompiledFun& operator=(const PyCompiledFun&) = delete;
@@ -571,6 +577,7 @@ struct PyCompiledFun {
     other.fun_id = 0;
     captured_inputs = std::move(other.captured_inputs);
     captured_outputs = std::move(other.captured_outputs);
+    shapeless = other.shapeless;
     num_outputs = other.num_outputs;
   };
 
@@ -617,7 +624,7 @@ struct PyCompiledFun {
     }
 
     // Compile and call
-    auto outputs = detail::compile(compile_fun, fun_id)(inputs);
+    auto outputs = detail::compile(compile_fun, fun_id, shapeless)(inputs);
     if (!py::isinstance<py::none>(captured_outputs)) {
       std::vector<array> captures(
           std::make_move_iterator(outputs.begin() + num_outputs),
@@ -965,12 +972,14 @@ void init_transforms(py::module_& m) {
       "compile",
       [](const py::function& fun,
          const py::object& inputs,
-         const py::object& outputs) {
-        return py::cpp_function(PyCompiledFun{fun, inputs, outputs});
+         const py::object& outputs,
+         bool shapeless) {
+        return py::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless});
       },
       "fun"_a,
       "inputs"_a = std::nullopt,
       "outputs"_a = std::nullopt,
+      "shapeless"_a = false,
       R"pbdoc(
         compile(fun: function) -> function
 
@@ -990,6 +999,12 @@ void init_transforms(py::module_& m) {
               :obj:`list` or a :obj:`dict` containing arbitrarily nested lists,
               dictionaries, or arrays. Leaf nodes that are not :obj:`array` are ignored.
               Default: ``None``
+            shapeless (bool, optional): A function compiled with the ``shapeless``
+              option enabled will not be recompiled when the input shape changes. Not all
+              functions can be compiled with ``shapeless`` enabled. Attempting to compile
+              such functions with shapeless enabled will throw. Note, changing the number
+              of dimensions or type of any input will result in a recompilation even with
+              ``shapeless`` set to ``True``. Default: ``False``
 
         Returns:
             function: A compiled function which has the same input arguments

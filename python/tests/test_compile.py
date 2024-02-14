@@ -381,6 +381,60 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertFalse(mx.allclose(fun(), fun(), 1e-2, 1e-2))
 
+    def test_shapeless_compile(self):
+        y = 1
+
+        @partial(mx.compile, shapeless=True)
+        def fun(x):
+            return x + y
+
+        x = mx.array([1, 2])
+        self.assertTrue(mx.array_equal(fun(x), mx.array([2, 3])))
+
+        # The function is not recompiled, so the change
+        # to y should not be reflected in the output
+        y = 2
+        x = mx.array([1, 2, 3])
+        self.assertTrue(mx.array_equal(fun(x), mx.array([2, 3, 4])))
+
+        # Type change recompiles
+        x = mx.array([1.0, 2.0, 3.0])
+        self.assertTrue(mx.array_equal(fun(x), mx.array([3.0, 4.0, 5.0])))
+
+        # Dim change recompiles
+        x = mx.array([[1, 2, 3]])
+        self.assertTrue(mx.array_equal(fun(x), mx.array([[3, 4, 5]])))
+
+    def test_shapeless_compile_with_broadcasts(self):
+        x = mx.ones((2, 2))
+        y = mx.array([2, 2])
+
+        def fun(x, y):
+            return x * y
+
+        cfun = mx.compile(fun, shapeless=True)
+        self.assertTrue(mx.array_equal(cfun(x, y), fun(x, y)))
+        self.assertTrue(mx.array_equal(cfun(y, x), fun(y, x)))
+        y = mx.array([[3]])
+        self.assertTrue(mx.array_equal(cfun(x, y), fun(x, y)))
+        self.assertTrue(mx.array_equal(cfun(y, x), fun(y, x)))
+
+    def test_shapeless_compile_with_reduction(self):
+        # Test shapeless compile with a reduction
+        z = 1
+
+        @partial(mx.compile, shapeless=True)
+        def fun(x, y):
+            return x + y.sum(0, keepdims=True) + z
+
+        x = mx.ones((2, 2), mx.int32)
+        y = mx.ones((2, 2), mx.int32)
+        self.assertTrue(mx.array_equal(fun(x, y), mx.full(shape=(2, 2), vals=4)))
+        x = mx.ones((3, 3), mx.int32)
+        y = mx.ones((3, 3), mx.int32)
+        z = 2
+        self.assertTrue(mx.array_equal(fun(x, y), mx.full(shape=(3, 3), vals=5)))
+
 
 if __name__ == "__main__":
     unittest.main()
