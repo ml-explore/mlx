@@ -2735,7 +2735,7 @@ array conv2d(
     throw std::invalid_argument("[conv2d] Cannot handle groups != 1 yet");
   }
   if (dilation.first != 1 || dilation.second != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle dilation != 1 yet");
+    throw std::invalid_argument("[conv2d] Cannot handle dilation != 1 yet");
   }
 
   // Run checks
@@ -2766,6 +2766,58 @@ array conv2d(
           strides_vec,
           dilation_vec,
           std::vector<int>(2, 1)),
+      {in, wt});
+}
+
+/** 3d Convolution with a filter */
+array conv3d(
+    const array& in_,
+    const array& wt_,
+    const std::tuple<int, int, int>& stride /* = {1, 1, 1} */,
+    const std::tuple<int, int, int>& padding /* = {0, 0, 0} */,
+    const std::tuple<int, int, int>& dilation /* = {1, 1, 1} */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  // Run checks
+  if (groups != 1) {
+    throw std::invalid_argument("[conv3d] Cannot handle groups != 1 yet");
+  }
+  if (std::get<0>(dilation) != 1 || std::get<1>(dilation) != 1 ||
+      std::get<2>(dilation) != 1) {
+    throw std::invalid_argument("[conv3d] Cannot handle dilation != 1 yet");
+  }
+
+  // Run checks
+  run_conv_checks(in_, wt_, 2);
+
+  auto in = in_;
+  auto wt = wt_;
+
+  // Type promotion
+  auto out_type = promote_types(in.dtype(), wt.dtype());
+  in = astype(in, out_type, s);
+  wt = astype(wt, out_type, s);
+
+  std::vector<int> strides_vec = {
+      std::get<0>(dilation), std::get<1>(dilation), std::get<2>(dilation)};
+  std::vector<int> padding_vec = {
+      std::get<0>(dilation), std::get<1>(dilation), std::get<2>(dilation)};
+  std::vector<int> dilation_vec = {
+      std::get<0>(dilation), std::get<1>(dilation), std::get<2>(dilation)};
+
+  // Get output shapes
+  std::vector<int> out_shape = conv_out_shape(
+      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
+
+  return array(
+      out_shape,
+      in.dtype(),
+      std::make_unique<Convolution>(
+          to_stream(s),
+          padding_vec,
+          strides_vec,
+          dilation_vec,
+          std::vector<int>(3, 1)),
       {in, wt});
 }
 

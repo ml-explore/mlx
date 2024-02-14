@@ -85,6 +85,16 @@ def conv2d(x, y):
 
 
 @torch.no_grad()
+def conv3d(x, y):
+    x = torch.permute(x, (0, 4, 1, 2, 3))
+    y = torch.permute(y, (0, 4, 1, 2, 3))
+    ys = []
+    for _ in range(10):
+        ys.append(torch.nn.functional.conv3d(x, y))
+    sync_if_needed(x)
+
+
+@torch.no_grad()
 def binary(op, x, y):
     for i in range(100):
         y = getattr(torch, op)(x, y)
@@ -439,6 +449,9 @@ if __name__ == "__main__":
 
     elif args.benchmark == "conv2d":
         print(bench(conv2d, *xs))
+
+    elif args.benchmark == "conv3d":
+        print(bench(conv3d, *xs))
 
     elif args.benchmark == "sort":
         print(bench(sort, axis, x))

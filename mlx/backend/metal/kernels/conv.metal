@@ -94,6 +94,39 @@ template <typename T,
 
 }
 
+template <typename T,
+          const int BM, /* Threadgroup rows (in threads) */
+          const int BN, /* Threadgroup cols (in threads) */
+          const int BD, /* Threadgroup depth (in threads) */
+          const int TM, /* Thread rows (in elements) */
+          const int TN, /* Thread cols (in elements) */
+          const int TD, /* Thread depth (in elements) */
+          const int BC = 16>
+[[kernel]] void naive_conv_2d(
+    const device T* in [[buffer(0)]],
+    const device T* wt [[buffer(1)]],
+    device T* out [[buffer(2)]],
+    const constant MLXConvParams<3>& params [[buffer(3)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  
+  (void)simd_gid;
+  (void)simd_lid;
+
+  in += tid.z * params.in_strides[0];
+  out += tid.z * params.out_strides[0];
+
+  int out_d = tid.z * BD * TD + lid.z * TD; // depth
+  int out_d = tid.y * BM * TM + lid.y * TM; // width
+  int out_w = tid.x * BN * TN + lid.x * TN; // height
+  
+  /** TODO: 
+        build out weight loading + accumulation 
+  */
+}
+
 // Instantiations
 
 #define instantiate_naive_conv_2d(name, itype, bm, bn, tm, tn) \
