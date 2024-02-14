@@ -22,6 +22,7 @@ class PyStreamContextManager {
   void exit() {
     if (_inner != nullptr) {
       delete _inner;
+      _inner = nullptr;
     }
   }
 
@@ -31,7 +32,26 @@ class PyStreamContextManager {
 };
 
 void init_utils(py::module_& m) {
-  py::class_<PyStreamContextManager>(m, "StreamContextManager")
+  py::class_<PyStreamContextManager>(m, "StreamContextManager", R"pbdoc(
+        A context manager for setting the current device and stream.
+    
+        This class is a Python wrapper around the C++ class
+        `mlx::core::StreamContextManager`. It is used to set the current device
+        and stream for the duration of a Python context block.
+    
+        Example:
+        ```python
+        import mlx.utils as mlx
+    
+        # Create a context manager for the current device and stream.
+        with mlx.StreamContextManager(mx.cpu):
+            # Run some code that uses the current device and stream.
+            pass
+        ```
+    
+        Args:
+            s: The stream or device to set as the current device and stream.
+  )pbdoc")
       .def(py::init<StreamOrDevice>(), "s"_a)
       .def("__enter__", [](PyStreamContextManager& scm) { scm.enter(); })
       .def(

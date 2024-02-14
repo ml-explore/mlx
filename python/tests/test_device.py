@@ -3,7 +3,6 @@
 import unittest
 
 import mlx.core as mx
-import mlx.utils as mxutils
 import mlx_tests
 
 
