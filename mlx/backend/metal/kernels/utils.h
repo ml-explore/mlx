@@ -71,7 +71,7 @@ inline size_t elem_to_loc(
     device const size_t* strides,
     int ndim) {
   size_t loc = 0;
-  for (int i = ndim - 1; i >= 0; --i) {
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
     loc += (elem % shape[i]) * strides[i];
     elem /= shape[i];
   }
@@ -84,7 +84,7 @@ inline size_t elem_to_loc(
     constant const size_t* strides,
     int ndim) {
   size_t loc = 0;
-  for (int i = ndim - 1; i >= 0; --i) {
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
     loc += (elem % shape[i]) * strides[i];
     elem /= shape[i];
   }

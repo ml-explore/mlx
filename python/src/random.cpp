@@ -133,7 +133,7 @@ void init_random(py::module_& parent_module) {
             low (scalar or array, optional): Lower bound of the distribution. Default is ``0``.
             high (scalar or array, optional): Upper bound of the distribution. Default is ``1``.
             shape (list(int), optional): Shape of the output. Default is ``()``.
-            key (array, optional): A PRNG key. Default: None.
+            key (array, optional): A PRNG key. Default: ``None``.
             dtype (Dtype, optional): Type of the output. Default is ``float32``.
 
         Returns:
