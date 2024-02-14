@@ -55,4 +55,17 @@ void init_utils(py::module_& m) {
              const std::optional<py::type>& exc_type,
              const std::optional<py::object>& exc_value,
              const std::optional<py::object>& traceback) { scm.exit(); });
+  m.def(
+      "stream",
+      [](StreamOrDevice s) { return PyStreamContext(s); },
+      "s"_a,
+      R"pbdoc(
+        Wrap around the Context-manager StreamContext that selects a given stream.
+
+        Args:
+            s: The stream or device to set as the current device and stream.
+        
+        Returns:
+            A context manager for setting the current device and stream.
+      )pbdoc");
 }
