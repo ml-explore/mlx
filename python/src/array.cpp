@@ -965,7 +965,6 @@ void init_array(py::module_& m) {
             return a;
           },
           "other"_a)
-
       .def(
           "__pow__",
           [](const array& a, const ScalarOrArray v) {
