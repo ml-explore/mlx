@@ -774,7 +774,7 @@ array repeat(const array& arr, int repeats, int axis, StreamOrDevice s) {
   }
 
   if (repeats == 0) {
-    return array(std::initializer_list<int>{}, arr.dtype());
+    return array({}, arr.dtype());
   }
 
   if (repeats == 1) {
