@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <variant>
+
 #include "array.h"
 #include "device.h"
 #include "dtype.h"

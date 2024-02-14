@@ -3,7 +3,6 @@
 #pragma once
 
 #include <optional>
-#include <variant>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
