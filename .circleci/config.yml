@@ -225,10 +225,9 @@ workflows:
   build_and_test:
     when:
       and:
-        - not:
-            matches:
-              pattern: "^pull/\\d+(/head)?$"
-              value: << pipeline.git.branch >>
+        - matches:
+            pattern: "^(?!pull/)[-\\w]+$"
+            value: << pipeline.git.branch >>
         - not: << pipeline.parameters.nightly_build >>
         - not: << pipeline.parameters.weekly_build >>
         - not: << pipeline.parameters.test_release >>
