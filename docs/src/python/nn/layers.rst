@@ -40,4 +40,4 @@ Layers
    Softshrink
    Step
    Transformer
-   Upsample2d
+   Upsample
