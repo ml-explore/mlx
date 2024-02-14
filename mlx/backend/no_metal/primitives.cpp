@@ -96,8 +96,8 @@ NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
 
-namespace ext {
+namespace fast {
 NO_GPU_MULTI(RoPE)
-} // namespace ext
+} // namespace fast
 
 } // namespace mlx::core

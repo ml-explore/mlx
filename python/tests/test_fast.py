@@ -34,7 +34,7 @@ def rope_orig(x, dims, traditional, base, scale, offset):
         return rx
 
 
-class TestExt(mlx_tests.MLXTestCase):
+class TestFast(mlx_tests.MLXTestCase):
     def test_rope(self):
         T = 4
 
@@ -56,8 +56,15 @@ class TestExt(mlx_tests.MLXTestCase):
             for base in bases:
                 x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
-                rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
-                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
+                rx_fast = mx.fast.rope(
+                    x,
+                    dims,
+                    traditional=traditional,
+                    base=base,
+                    scale=scale,
+                    offset=offset,
+                )
+                self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
             dims, _, base, scale, offset, _ = defaults
             for dtype in dtypes:
@@ -66,52 +73,85 @@ class TestExt(mlx_tests.MLXTestCase):
                     x.astype(mx.float32), dims, traditional, base, scale, offset
                 )
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
-                rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
+                rx_fast = mx.fast.rope(
+                    x,
+                    dims,
+                    traditional=traditional,
+                    base=base,
+                    scale=scale,
+                    offset=offset,
+                )
                 if dtype != mx.float32:
                     self.assertLessEqual(
-                        mx.abs(ry - rx_ext).max(), mx.abs(ry - rx).max()
+                        mx.abs(ry - rx_fast).max(), mx.abs(ry - rx).max()
                     )
-                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
+                self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
             dims, dtype, base, scale, _, _ = defaults
             for offset in offsets:
                 x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
-                rx = rope_orig(x, dims, base, scale, traditional, offset)
-                rx_ext = mx.ext.rope(x, dims, base, scale, traditional, offset)
-                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
+                rx = rope_orig(x, dims, traditional, base, scale, offset)
+                rx_fast = mx.fast.rope(
+                    x,
+                    dims,
+                    traditional=traditional,
+                    base=base,
+                    scale=scale,
+                    offset=offset,
+                )
+                self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
             dims, dtype, base, _, offset, _ = defaults
             for scale in scales:
                 x = mx.random.uniform(shape=(2, T, dims)).astype(dtype)
                 rx = rope_orig(x, dims, traditional, base, scale, offset)
-                rx_ext = mx.ext.rope(x, dims, traditional, base, scale, offset)
-                self.assertLess(mx.abs(rx - rx_ext).max(), tolerances[dtype])
+                rx_fast = mx.fast.rope(
+                    x,
+                    dims,
+                    traditional=traditional,
+                    base=base,
+                    scale=scale,
+                    offset=offset,
+                )
+                self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
-    def test_ext_transforms(self):
+    def test_fast_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))
 
-        # Defaults: dims, traditional, base, scale, offset
         defaults = (8, False, 10000.0, 1.0, 0)
+        dims, traditional, base, scale, offset = defaults
 
         # VJP
         _, vjp_out = mx.vjp(lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),))
-        _, vjp_ext_out = mx.vjp(
-            lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),)
+        _, vjp_fast_out = mx.vjp(
+            lambda x: mx.fast.rope(
+                x, dims, traditional=traditional, base=base, scale=scale, offset=offset
+            ),
+            (x,),
+            (mx.ones_like(x),),
         )
-        self.assertTrue(mx.allclose(vjp_out[0], vjp_ext_out[0]))
+        self.assertTrue(mx.allclose(vjp_out[0], vjp_fast_out[0]))
 
         # JVP
         _, jvp_out = mx.jvp(lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),))
-        _, jvp_ext_out = mx.jvp(
-            lambda x: rope_orig(x, *defaults), (x,), (mx.ones_like(x),)
+        _, jvp_fast_out = mx.jvp(
+            lambda x: mx.fast.rope(
+                x, dims, traditional=traditional, base=base, scale=scale, offset=offset
+            ),
+            (x,),
+            (mx.ones_like(x),),
         )
-        self.assertTrue(mx.allclose(jvp_out[0], jvp_ext_out[0]))
+        self.assertTrue(mx.allclose(jvp_out[0], jvp_fast_out[0]))
 
         # VMAP
         x = mx.random.uniform(shape=(2, 2, 2, 8))
         vmap_out = mx.vmap(lambda x: rope_orig(x, *defaults))(x)
-        vmap_ext_out = mx.vmap(lambda x: rope_orig(x, *defaults))(x)
-        self.assertTrue(mx.allclose(vmap_out, vmap_ext_out))
+        vmap_fast_out = mx.vmap(
+            lambda x: mx.fast.rope(
+                x, dims, traditional=traditional, base=base, scale=scale, offset=offset
+            )
+        )(x)
+        self.assertTrue(mx.allclose(vmap_out, vmap_fast_out))
 
 
 if __name__ == "__main__":

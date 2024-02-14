@@ -1,9 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/extensions.h"
+#include "mlx/fast.h"
 #include "mlx/transforms.h"
 
-namespace mlx::core::ext {
+namespace mlx::core::fast {
 
 std::vector<array> Custom::vjp(
     const std::vector<array>& primals,
@@ -125,4 +125,4 @@ bool RoPE::is_equivalent(const Primitive& other) const {
       offset_ == a_other.offset_);
 }
 
-} // namespace mlx::core::ext
+} // namespace mlx::core::fast

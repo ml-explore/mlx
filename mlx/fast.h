@@ -5,7 +5,7 @@
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 
-namespace mlx::core::ext {
+namespace mlx::core::fast {
 
 // Custom primitive accepts a fallback function which it uses for
 // transformations. Transformations are virtual so that derived classes may to
@@ -79,4 +79,4 @@ class RoPE : public Custom {
   int offset_;
 };
 
-} // namespace mlx::core::ext
+} // namespace mlx::core::fast

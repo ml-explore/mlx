@@ -46,7 +46,14 @@ class RoPE(Module):
     def __call__(self, x, offset: int = 0):
         shape = x.shape
         x = mx.reshape(x, (-1, shape[-2], shape[-1]))
-        x = mx.ext.rope(x, self.dims, self.traditional, self.base, self.scale, offset)
+        x = mx.fast.rope(
+            x,
+            self.dims,
+            traditional=self.traditional,
+            base=self.base,
+            scale=self.scale,
+            offset=offset,
+        )
         return mx.reshape(x, shape)
 
 

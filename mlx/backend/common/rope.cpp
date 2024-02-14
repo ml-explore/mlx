@@ -1,9 +1,9 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/extensions.h"
+#include "mlx/fast.h"
 #include "mlx/primitives.h"
 
-namespace mlx::core::ext {
+namespace mlx::core::fast {
 
 void RoPE::eval_cpu(
     const std::vector<array>& inputs,
@@ -11,4 +11,4 @@ void RoPE::eval_cpu(
   throw std::runtime_error("NYI");
 }
 
-} // namespace mlx::core::ext
+} // namespace mlx::core::fast

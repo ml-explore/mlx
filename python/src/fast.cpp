@@ -3,7 +3,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-#include "mlx/extensions.h"
+#include "mlx/fast.h"
 #include "mlx/ops.h"
 #include "python/src/utils.h"
 
@@ -15,32 +15,35 @@ void init_extensions(py::module_& parent_module) {
   py::options options;
   options.disable_function_signatures();
 
-  auto m = parent_module.def_submodule("ext", "mlx.core.ext: fast operations");
+  auto m =
+      parent_module.def_submodule("fast", "mlx.core.fast: fast operations");
 
   m.def(
       "rope",
-      [](const array& x,
+      [](const array& a,
          int dims,
          bool traditional,
          float base,
          float scale,
          int offset,
          const StreamOrDevice& s /* = {} */) {
-        return ext::rope(x, dims, traditional, base, scale, offset, s);
+        return fast::rope(a, dims, traditional, base, scale, offset, s);
       },
-      "x"_a,
+      "a"_a,
       "dims"_a,
+      py::kw_only(),
       "traditional"_a,
       "base"_a,
       "scale"_a,
       "offset"_a,
-      py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
+        rope(a: array, dims: int, *, traditinoal: bool, base: float, scale: float, offset: int, stream: Union[None, Stream, Device] = None) -> array
+
         Apply rotary positional encoding to the input.
 
         Args:
-            x (array): Input array.
+            a (array): Input array.
             dims (int): The feature dimensions to be rotated. If the input feature
                 is larger than dims then the rest is left unchanged.
             traditional (bool): If set to ``True`` choose the traditional
