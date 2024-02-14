@@ -20,9 +20,7 @@ class PyStreamContextManager {
   }
 
   void exit() {
-    if (_inner.has_value()) {
-      _inner.reset();
-    }
+    _inner.reset();
   }
 
  private:
@@ -33,16 +31,6 @@ class PyStreamContextManager {
 void init_utils(py::module_& m) {
   py::class_<PyStreamContextManager>(m, "StreamContextManager")
       .def(py::init<StreamOrDevice>(), "s"_a)
-      .def(
-          "__enter__",
-          [](PyStreamContextManager& scm) {
-            scm.enter();
-            return &scm;
-          })
-      .def(
-          "__exit__",
-          [](PyStreamContextManager& scm,
-             const std::optional<py::type>& exc_type,
-             const std::optional<py::object>& exc_value,
-             const std::optional<py::object>& traceback) { scm.exit(); });
+      .def("__enter__", &PyStreamContextManager::enter)
+      .def("__exit__", &PyStreamContextManager::exit);
 }
