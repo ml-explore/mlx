@@ -12,7 +12,8 @@ using namespace py::literals;
 using namespace mlx::core;
 
 void init_device(py::module_& m) {
-  auto device_class = py::class_<Device>(m, "Device");
+  auto device_class = py::class_<Device>(
+      m, "Device", R"pbdoc(A device to run operations on.)pbdoc");
   py::enum_<Device::DeviceType>(m, "DeviceType")
       .value("cpu", Device::DeviceType::cpu)
       .value("gpu", Device::DeviceType::gpu)
@@ -39,6 +40,13 @@ void init_device(py::module_& m) {
 
   py::implicitly_convertible<Device::DeviceType, Device>();
 
-  m.def("default_device", &default_device);
-  m.def("set_default_device", &set_default_device, "device"_a);
+  m.def(
+      "default_device",
+      &default_device,
+      R"pbdoc(Get the default device.)pbdoc");
+  m.def(
+      "set_default_device",
+      &set_default_device,
+      "device"_a,
+      R"pbdoc(Set the default device.)pbdoc");
 }

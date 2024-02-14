@@ -34,18 +34,11 @@ class PyStreamContext {
 void init_utils(py::module_& m) {
   py::class_<PyStreamContext>(m, "StreamContext", R"pbdoc(
         A context manager for setting the current device and stream.
-        
-        Args:
-            s: The stream or device to set as the current device and stream.
 
-        Example:
-        .. code-block::python
-          import mlx.core as mx
-      
-          # Create a context manager for the current device and stream.
-          with mx.stream(mx.cpu):
-              # Run some code that uses the current device and stream.
-              pass
+        See :func:`stream` for usage.
+
+        Args:
+            s: The stream or device to set as the default.
   )pbdoc")
       .def(py::init<StreamOrDevice>(), "s"_a)
       .def("__enter__", [](PyStreamContext& scm) { scm.enter(); })
@@ -60,12 +53,23 @@ void init_utils(py::module_& m) {
       [](StreamOrDevice s) { return PyStreamContext(s); },
       "s"_a,
       R"pbdoc(
-        A wrapper around :obj:`StreamContext` to select the given stream.
+        Create a context manager to set the default device and stream.
 
         Args:
-            s: The stream or device to set as the default device and stream.
-        
+            s: The :obj:`Stream` or :obj:`Device` to set as the default.
+
         Returns:
             A context manager that sets the default device and stream.
+
+        Example:
+
+        .. code-block::python
+
+          import mlx.core as mx
+
+          # Create a context manager for the default device and stream.
+          with mx.stream(mx.cpu):
+              # Operations here will use mx.cpu by default.
+              pass
       )pbdoc");
 }

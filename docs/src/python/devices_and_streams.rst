@@ -9,11 +9,10 @@ Devices and Streams
   :toctree: _autosummary
 
    Device
-   StreamContext
-   stream
+   Stream
    default_device
    set_default_device
-   Stream
    default_stream
    new_stream
    set_default_stream
+   stream
