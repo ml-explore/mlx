@@ -10,6 +10,7 @@ Devices and Streams
 
    Device
    StreamContext
+   stream
    default_device
    set_default_device
    Stream

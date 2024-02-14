@@ -14,16 +14,15 @@ namespace mlx::core {
 using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
 Stream to_stream(StreamOrDevice s);
 
-struct StreamContextManager {
+struct StreamContext {
  public:
-  StreamContextManager(StreamOrDevice s)
-      : _stream(default_stream(default_device())) {
+  StreamContext(StreamOrDevice s) : _stream(default_stream(default_device())) {
     auto _s = to_stream(s);
     set_default_device(_s.device);
     set_default_stream(_s);
   }
 
-  ~StreamContextManager() {
+  ~StreamContext() {
     set_default_device(_stream.device);
     set_default_stream(_stream);
   }

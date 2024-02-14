@@ -25,7 +25,7 @@ class TestFFT(mlx_tests.MLXTestCase):
             out_mx = op_mx(a_mx, **kwargs)
             self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5, rtol=1e-6))
 
-        with mx.StreamContext(mx.cpu):
+        with mx.stream(mx.cpu):
             r = np.random.rand(100).astype(np.float32)
             i = np.random.rand(100).astype(np.float32)
             a_np = r + 1j * i
@@ -63,7 +63,7 @@ class TestFFT(mlx_tests.MLXTestCase):
             check_mx_np(mx.fft.irfft, np.fft.irfft, a_np, n=120)
 
     def test_fftn(self):
-        with mx.StreamContext(mx.cpu):
+        with mx.stream(mx.cpu):
             r = np.random.randn(8, 8, 8).astype(np.float32)
             i = np.random.randn(8, 8, 8).astype(np.float32)
             a = r + 1j * i
