@@ -16,10 +16,13 @@ struct StreamContextManager {
  public:
   StreamContextManager(StreamOrDevice s)
       : _stream(default_stream(default_device())) {
-    set_default_stream(to_stream(s));
+    auto _s = to_stream(s);
+    set_default_device(_s.device);
+    set_default_stream(_s);
   }
 
   ~StreamContextManager() {
+    set_default_device(_stream.device);
     set_default_stream(_stream);
   }
 

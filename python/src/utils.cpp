@@ -9,28 +9,35 @@ using namespace py::literals;
 using namespace mlx::core;
 
 // Slightly different from the original, with python context on init we are not
-// in the context yet. Only create the inner context on enter then delete on
+// in the context yet. Only create the inner context on enter then de   lete on
 // exit.
 class PyStreamContextManager {
  public:
-  PyStreamContextManager(StreamOrDevice s) : _s(s) {}
+  PyStreamContextManager(StreamOrDevice s) : _s(s), _inner(nullptr) {}
 
   void enter() {
-    _inner = StreamContextManager(_s);
+    _inner = new StreamContextManager(_s);
   }
 
   void exit() {
-    _inner.reset();
+    if (_inner != nullptr) {
+      delete _inner;
+    }
   }
 
  private:
   StreamOrDevice _s;
-  std::optional<StreamContextManager> _inner = {};
+  StreamContextManager* _inner;
 };
 
 void init_utils(py::module_& m) {
   py::class_<PyStreamContextManager>(m, "StreamContextManager")
       .def(py::init<StreamOrDevice>(), "s"_a)
-      .def("__enter__", &PyStreamContextManager::enter)
-      .def("__exit__", &PyStreamContextManager::exit);
+      .def("__enter__", [](PyStreamContextManager& scm) { scm.enter(); })
+      .def(
+          "__exit__",
+          [](PyStreamContextManager& scm,
+             const std::optional<py::type>& exc_type,
+             const std::optional<py::object>& exc_value,
+             const std::optional<py::object>& traceback) { scm.exit(); });
 }
