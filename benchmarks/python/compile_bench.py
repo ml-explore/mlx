@@ -17,7 +17,7 @@ def bench_gelu():
 
     def gen_fun(fun):
         def bench_fun(x):
-            for _ in range(30):
+            for _ in range(10):
                 x = fun(x)
             return x
 
@@ -32,10 +32,9 @@ def bench_gelu():
     def gen_fun(fun):
         def bench_fun(x, y):
             x = x[: randint()]
-            y = y[: randint()]
-            for _ in range(30):
-                y = fun(y)
+            for _ in range(10):
                 x = fun(x)
+                y = fun(y)
             return x, y
 
         return bench_fun
@@ -65,11 +64,11 @@ def bench_layernorm():
         x = x.astype(mx.float16)
         return weight * x + bias
 
-    x = mx.random.uniform(shape=(1000, 4096))
+    x = mx.random.uniform(shape=(1000, 4096)).astype(mx.float16)
 
     def gen_fun(fun):
         def bench_fun(x):
-            for _ in range(30):
+            for _ in range(10):
                 x = fun(x)
             return x
 
@@ -84,7 +83,7 @@ def bench_layernorm():
     def gen_fun(fun):
         def bench_fun(x):
             x = x[: randint()]
-            for _ in range(30):
+            for _ in range(10):
                 x = fun(x)
             return x
 
