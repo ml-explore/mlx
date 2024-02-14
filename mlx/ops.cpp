@@ -83,6 +83,11 @@ array arange(
   if (std::isnan(start) || std::isnan(step) || std::isnan(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
+  if (std::isinf(start) || std::isinf(stop)) {
+    throw std::invalid_argument("[arange] Cannot compute length.");
+  }
+  step = std::clamp(
+      step, static_cast<double>(INT_MIN), static_cast<double>(INT_MAX));
   double real_size = std::ceil((stop - start) / step);
   if (std::isnan(real_size)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
