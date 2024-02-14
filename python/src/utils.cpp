@@ -13,7 +13,13 @@ using namespace mlx::core;
 // exit.
 class PyStreamContext {
  public:
-  PyStreamContext(StreamOrDevice s) : _s(s), _inner(nullptr) {}
+  PyStreamContext(StreamOrDevice s) : _inner(nullptr) {
+    if (std::holds_alternative<std::monostate>(s)) {
+      throw std::runtime_error(
+          "[StreamContext] Invalid argument, please specify a stream or device.");
+    }
+    _s = s;
+  }
 
   void enter() {
     _inner = new StreamContext(_s);
