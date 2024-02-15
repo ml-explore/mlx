@@ -57,8 +57,7 @@ void* compile(
 
   // Open source file and write source code to it
   std::ofstream source_file(source_file_path);
-  source_file
-      << "#include <iostream>\nextern \"C\" void fun() { std::cout << \"Hello world\" << std::endl; }\n";
+  source_file << source_code;
   source_file.close();
 
   {
@@ -73,12 +72,13 @@ void* compile(
   libs.emplace_back(shared_lib_path);
 
   // Load function
-  void* fun = dlsym(libs.back().lib, "fun");
-
-  // Example call:
-  void (*fun2)(void) = (void (*)(void))(fun);
-  fun2();
-
+  void* fun = dlsym(libs.back().lib, kernel_name.c_str());
+  if (!fun) {
+    std::ostringstream msg;
+    msg << "[Compile::eval_cpu] Failed to load compiled function "
+        << kernel_name;
+    throw std::runtime_error(msg.str());
+  }
   return fun;
 }
 
@@ -86,16 +86,22 @@ void Compiled::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   if (kernel_lib_.empty()) {
-    kernel_lib_ = "test_cpu_compile"; // build_lib_name(inputs_, outputs_,
-                                      // tape_, constant_ids_);
+    kernel_lib_ = "fun"; // build_lib_name(inputs_, outputs_,
+                         // tape_, constant_ids_);
   }
 
   // Check if it has already been compiled
-  auto fn = compile(kernel_lib_);
-  if (fn == nullptr) {
+  auto fn_ptr = compile(kernel_lib_);
+  if (fn_ptr == nullptr) {
     // Build the code and compile it
-    compile(kernel_lib_, "sourcecode");
+    auto source_code =
+        "#include <iostream>\nextern \"C\" void fun() { std::cout << \"Hello world\" << std::endl; }\n";
+    fn_ptr = compile(kernel_lib_, source_code);
   }
+
+  // Example call:
+  void (*fun)(void) = (void (*)(void))(fn_ptr);
+  fun();
 
   // Allocate space for the outputs
   for (auto& out : outputs) {
