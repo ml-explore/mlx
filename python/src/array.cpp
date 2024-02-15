@@ -972,6 +972,12 @@ void init_array(py::module_& m) {
           },
           "other"_a)
       .def(
+          "__rpow__",
+          [](const array& a, const ScalarOrArray v) {
+            return power(to_array(v, a.dtype()), a);
+          },
+          "other"_a)
+      .def(
           "__ipow__",
           [](array& a, const ScalarOrArray v) {
             a.overwrite_descriptor(power(a, to_array(v, a.dtype())));
