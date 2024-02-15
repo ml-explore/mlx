@@ -1028,7 +1028,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(z.tolist(), [[5, 6]])
 
         with self.assertRaises(ValueError):
-           mx.split(a, 3, axis=2)
+            mx.split(a, 3, axis=2)
 
         a = mx.arange(8)
         x, y, z = mx.split(a, [1, 5])
