@@ -119,7 +119,7 @@ class Optimizer:
         self.state["learning_rate"] = mx.array(learning_rate)
 
     def _maybe_schedule(
-        self, name: str, param: Union[float, Callable[mx.array, mx.array]]
+        self, name: str, param: Union[float, Callable[[mx.array], mx.array]]
     ):
         """
         To be used by derived classes to optionally put a parameter on a schedule.
@@ -152,7 +152,7 @@ class SGD(Optimizer):
 
     def __init__(
         self,
-        learning_rate: Union[float, Callable[mx.array, mx.array]],
+        learning_rate: Union[float, Callable[[mx.array], mx.array]],
         momentum: float = 0.0,
         weight_decay: float = 0.0,
         dampening: float = 0.0,
