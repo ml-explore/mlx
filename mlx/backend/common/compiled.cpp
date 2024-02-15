@@ -250,7 +250,7 @@ inline void build_kernel(
     os << "  for (size_t i = 0; i < size; ++i) {" << std::endl;
   } else {
     for (int d = 0; d < ndim; ++d) {
-      os << "  for (size_t i" << d << " = 0; i" << d << " < shape[" << d
+      os << "  for (int i" << d << " = 0; i" << d << " < shape[" << d
          << "]; ++i" << d << ") {" << std::endl;
     }
   }
@@ -418,10 +418,25 @@ void Compiled::eval_cpu(
     fn_ptr = compile(kernel_name, kernel.str());
   }
 
-  // Allocate space for the outputs
-  // TODO donate
-  for (auto& out : outputs) {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  // Allocate space for the outputs possibly with input donation
+  {
+    int o = 0;
+    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
+      auto& in = inputs[i];
+      // Conditions for donation
+      // - Row contiguous
+      // - Donatable
+      // - Correct size
+      // - Not a constant
+      if (in.flags().row_contiguous && in.nbytes() == outputs[o].nbytes() &&
+          in.is_donatable() &&
+          constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
+        outputs[o++].copy_shared_buffer(in);
+      }
+    }
+    for (; o < outputs.size(); ++o) {
+      outputs[o].set_data(allocator::malloc_or_wait(outputs[o].nbytes()));
+    }
   }
 
   for (auto& x : outputs) {
