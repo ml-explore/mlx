@@ -635,7 +635,7 @@ split(const array& a, int num_splits, int axis, StreamOrDevice s /* = {} */) {
   auto ax = axis < 0 ? axis + a.ndim() : axis;
   if (ax < 0 || ax >= a.ndim()) {
     std::ostringstream msg;
-    msg << "Invalid axis(" << axis << ") passed to split"
+    msg << "Invalid axis " << axis << " passed to split"
         << " for array with shape " << a.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
