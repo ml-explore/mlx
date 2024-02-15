@@ -250,7 +250,7 @@ inline void build_kernel(
     os << "  for (size_t i = 0; i < size; ++i) {" << std::endl;
   } else {
     for (int d = 0; d < ndim; ++d) {
-      os << "  for (size_t i" << d << " = 0; i" << d << " < shape[i" << d
+      os << "  for (size_t i" << d << " = 0; i" << d << " < shape[" << d
          << "]; ++i" << d << ") {" << std::endl;
     }
   }
