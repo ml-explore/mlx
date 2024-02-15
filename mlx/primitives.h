@@ -340,6 +340,7 @@ class ArgPartition : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_PRINT(ArgPartition)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
@@ -385,6 +386,7 @@ class ArgSort : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_PRINT(ArgSort)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
@@ -1246,6 +1248,7 @@ class Partition : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Partition)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
