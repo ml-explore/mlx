@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <metal_stdlib>
 #include <metal_simdgroup>
@@ -22,6 +22,101 @@ template <typename T> struct AccT {
 template <> struct AccT<bfloat16_t> {
   typedef float acc_t;
 };
+
+template <typename T>
+[[kernel]] void qmv_4_32(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+
+  constexpr int BM = 8;
+  constexpr int BN = 32;
+  constexpr int bits = 4;
+  constexpr int group_size = 32;
+  constexpr int bitmask = (1 << bits) - 1;
+  constexpr int el_per_thread = 32 / bits;
+  constexpr int colgroup = BN * el_per_thread;
+  constexpr int groups_per_block = colgroup / group_size;
+  static_assert(BM == el_per_thread, "BM should match the pack factor");
+
+  typedef typename AccT<T>::acc_t U;
+  threadgroup U scales_block[BM * groups_per_block];
+  threadgroup U biases_block[BM * groups_per_block];
+  threadgroup U x_block[colgroup];
+
+  thread uint32_t w_local;
+  thread U result = 0;
+  thread U scale = 1;
+  thread U bias = 0;
+  thread U x_thread[el_per_thread];
+
+  // Adjust positions
+  const int in_vec_size_w = in_vec_size / el_per_thread;
+  const int in_vec_size_g = in_vec_size / group_size;
+  int out_row = tid.y * BM + simd_gid;
+  w += out_row * in_vec_size_w;
+  scales += out_row * in_vec_size_g;
+  biases += out_row * in_vec_size_g;
+  x += tid.z * in_vec_size;
+  y += tid.z * out_vec_size;
+
+  if (out_row >= out_vec_size) {
+    return;
+  }
+
+  // Loop over in_vec in blocks of colgroup
+  for (int i=0; i<in_vec_size; i+=colgroup) {
+    // Load the vec to shared memory
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    x_block[lid] = x[lid];
+    if (simd_lid < groups_per_block) {
+      scales_block[simd_gid * groups_per_block + simd_lid] = scales[simd_lid];
+      biases_block[simd_gid * groups_per_block + simd_lid] = biases[simd_lid];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Load in_vec, scale, bias to registers
+    #pragma clang loop unroll(full)
+    for (int j=0; j<el_per_thread; j++) {
+      x_thread[j] = x_block[simd_lid*el_per_thread + j];
+    }
+    scale = scales_block[simd_gid * groups_per_block + simd_lid / (group_size / el_per_thread)];
+    bias = biases_block[simd_gid * groups_per_block + simd_lid / (group_size / el_per_thread)];
+
+    // Load the matrix elements
+    w_local = w[simd_lid];
+
+    // Do all the work.
+    #pragma clang loop unroll(full)
+    for (int k=0; k<el_per_thread; k++) {
+      result += (scale * static_cast<U>(w_local & bitmask) + bias) * x_thread[k];
+      w_local >>= bits;
+    }
+
+    // Advance the pointers
+    x += colgroup;
+    w += BN;
+    scales += groups_per_block;
+    biases += groups_per_block;
+  }
+
+  // Accumulate in the simdgroup
+  result = simd_sum(result);
+
+  // Store the result
+  if (simd_lid == 0) {
+    y[out_row] = static_cast<T>(result);
+  }
+}
+
 
 template <typename T, const int BM, const int BN, const int group_size, const int bits>
 [[kernel]] void qmv(
@@ -531,6 +626,25 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   }
 }
 
+
+#define instantiate_qmv_4_32(name, itype) \
+  template [[host_name("qmv_" #name "_gs_32_b_4_fast")]] \
+  [[kernel]] void qmv_4_32<itype>( \
+    const device uint32_t* w [[buffer(0)]], \
+    const device itype* scales [[buffer(1)]], \
+    const device itype* biases [[buffer(2)]], \
+    const device itype* x [[buffer(3)]], \
+    device itype* y [[buffer(4)]], \
+    const constant int& in_vec_size [[buffer(5)]], \
+    const constant int& out_vec_size [[buffer(6)]], \
+    uint3 tid [[threadgroup_position_in_grid]], \
+    uint lid [[thread_index_in_threadgroup]], \
+    uint simd_gid [[simdgroup_index_in_threadgroup]], \
+    uint simd_lid [[thread_index_in_simdgroup]]);
+
+instantiate_qmv_4_32(float32, float)
+instantiate_qmv_4_32(float16, half)
+instantiate_qmv_4_32(bfloat16, bfloat16_t)
 
 #define instantiate_qmv(name, itype, group_size, bits) \
   template [[host_name("qmv_" #name "_gs_" #group_size "_b_" #bits)]] \
