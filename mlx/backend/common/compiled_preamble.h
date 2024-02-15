@@ -39,23 +39,18 @@ struct Abs {
   T operator()(T x) {
     return std::abs(x);
   };
-  template <>
   uint8_t operator()(uint8_t x) {
     return x;
   };
-  template <>
   uint16_t operator()(uint16_t x) {
     return x;
   };
-  template <>
   uint32_t operator()(uint32_t x) {
     return x;
   };
-  template <>
   uint64_t operator()(uint64_t x) {
     return x;
   };
-  template <>
   bool operator()(bool x) {
     return x;
   };
@@ -108,39 +103,30 @@ struct Ceil {
   T operator()(T x) {
     return std::ceil(x);
   };
-  template <>
   int8_t operator()(int8_t x) {
     return x;
   };
-  template <>
   int16_t operator()(int16_t x) {
     return x;
   };
-  template <>
   int32_t operator()(int32_t x) {
     return x;
   };
-  template <>
   int64_t operator()(int64_t x) {
     return x;
   };
-  template <>
   uint8_t operator()(uint8_t x) {
     return x;
   };
-  template <>
   uint16_t operator()(uint16_t x) {
     return x;
   };
-  template <>
   uint32_t operator()(uint32_t x) {
     return x;
   };
-  template <>
   uint64_t operator()(uint64_t x) {
     return x;
   };
-  template <>
   bool operator()(bool x) {
     return x;
   };
@@ -186,39 +172,30 @@ struct Floor {
   T operator()(T x) {
     return std::floor(x);
   };
-  template <>
   int8_t operator()(int8_t x) {
     return x;
   };
-  template <>
   int16_t operator()(int16_t x) {
     return x;
   };
-  template <>
   int32_t operator()(int32_t x) {
     return x;
   };
-  template <>
   int64_t operator()(int64_t x) {
     return x;
   };
-  template <>
   uint8_t operator()(uint8_t x) {
     return x;
   };
-  template <>
   uint16_t operator()(uint16_t x) {
     return x;
   };
-  template <>
   uint32_t operator()(uint32_t x) {
     return x;
   };
-  template <>
   uint64_t operator()(uint64_t x) {
     return x;
   };
-  template <>
   bool operator()(bool x) {
     return x;
   };
@@ -290,7 +267,6 @@ struct Sign {
   T operator()(T x) {
     return (x > T(0)) - (x < T(0));
   }
-
   uint8_t operator()(uint8_t x) {
     return x != 0;
   }
@@ -401,9 +377,9 @@ struct Remainder {
       std::complex<float> a, std::complex<float> b) {
       auto real = a.real() - (b.real() * static_cast<int64_t>(a.real() / b.real()));
       auto imag = a.imag() - (b.imag() * static_cast<int64_t>(a.imag() / b.imag()));
-      if (real != 0 && (real < 0 != b.real() < 0))
+      if (real != 0 && ((real < 0) != (b.real() < 0)))
         real += b.real();
-      if (imag != 0 && (imag < 0 != b.imag() < 0))
+      if (imag != 0 && ((imag < 0) != (b.imag() < 0)))
         imag += b.imag();
       return {real, imag};
   }
