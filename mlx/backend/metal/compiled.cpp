@@ -302,6 +302,24 @@ void Compiled::eval_gpu(
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
 
+  // Put the inputs in
+  int cnt = 0;
+  int stride_idx = 1; // idx 0 is the output strides
+  for (int i = 0; i < inputs.size(); i++) {
+    if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
+      continue;
+    }
+    auto& x = inputs[i];
+    set_array_buffer(compute_encoder, x, cnt++);
+    if (!contiguous && x.size() > 1) {
+      compute_encoder->setBytes(
+          strides[stride_idx].data(),
+          strides[stride_idx].size() * sizeof(size_t),
+          cnt++);
+      stride_idx++;
+    }
+  }
+
   // Allocate space for the outputs possibly with input donation
   {
     int o = 0;
@@ -320,24 +338,6 @@ void Compiled::eval_gpu(
     }
     for (; o < outputs.size(); ++o) {
       outputs[o].set_data(allocator::malloc_or_wait(outputs[o].nbytes()));
-    }
-  }
-
-  // Put the inputs in
-  int cnt = 0;
-  int stride_idx = 1; // idx 0 is the output strides
-  for (int i = 0; i < inputs.size(); i++) {
-    if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
-      continue;
-    }
-    auto& x = inputs[i];
-    set_array_buffer(compute_encoder, x, cnt++);
-    if (!contiguous && x.size() > 1) {
-      compute_encoder->setBytes(
-          strides[stride_idx].data(),
-          strides[stride_idx].size() * sizeof(size_t),
-          cnt++);
-      stride_idx++;
     }
   }
 
