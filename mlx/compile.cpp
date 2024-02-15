@@ -63,6 +63,13 @@ bool is_fusable(const Primitive& p) {
   return is_unary(p) || is_binary(p) || is_broadcast(p) || is_noop(p);
 }
 
+bool allows_shapeless(const Primitive& p) {
+  return typeid(p) == typeid(Compiled) || is_unary(p) || is_binary(p) ||
+      is_noop(p) || is_reduction(p) || typeid(p) == typeid(Softmax) ||
+      typeid(p) == typeid(Sort) || typeid(p) == typeid(ArgSort) ||
+      typeid(p) == typeid(ArgPartition) || typeid(p) == typeid(Partition);
+}
+
 Compiled::Compiled(
     Stream stream,
     std::vector<array> inputs,
@@ -731,10 +738,10 @@ void compile_validate_shapeless(const std::vector<array>& tape) {
       continue;
     }
     auto& p = t.primitive();
-    if (typeid(p) == typeid(Compiled) || is_unary(p) || is_binary(p) ||
-        is_noop(p) || is_reduction(p)) {
+    if (allows_shapeless(p)) {
       continue;
     }
+
     std::ostringstream msg;
     msg << "[compile] Cannot compile primitive ";
     p.print(msg);
