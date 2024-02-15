@@ -1506,5 +1506,23 @@ void init_array(py::module_& m) {
           "stream"_a = none,
           R"pbdoc(
             Extract a diagonal or construct a diagonal matrix.
-        )pbdoc");
+        )pbdoc")
+      .def(
+          "atleast_1d",
+          [](const array& a, StreamOrDevice s) { return atleast_1d(a, s); },
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`atleast_1d`.")
+      .def(
+          "atleast_2d",
+          [](const array& a, StreamOrDevice s) { return atleast_2d(a, s); },
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`atleast_2d`.")
+      .def(
+          "atleast_3d",
+          [](const array& a, StreamOrDevice s) { return atleast_3d(a, s); },
+          py::kw_only(),
+          "stream"_a = none,
+          "See :func:`atleast_3d`.");
 }

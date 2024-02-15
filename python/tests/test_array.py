@@ -1381,6 +1381,96 @@ class TestArray(mlx_tests.MLXTestCase):
         b @= a
         self.assertTrue(mx.array_equal(a, b))
 
+    def test_atleast_1d(self):
+        def compare_nested_lists(x, y):
+            if isinstance(x, list) and isinstance(y, list):
+                if len(x) != len(y):
+                    return False
+                for i in range(len(x)):
+                    if not compare_nested_lists(x[i], y[i]):
+                        return False
+                return True
+            else:
+                return x == y
+
+        # Test 1D input
+        arrays = [
+            [1],
+            [1, 2, 3],
+            [1, 2, 3, 4],
+            [[1], [2], [3]],
+            [[1, 2], [3, 4]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[[[1]], [[2]], [[3]]]],
+        ]
+
+        for array in arrays:
+            mx_res = mx.array(array).atleast_1d()
+            np_res = np.atleast_1d(np.array(array))
+            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
+            self.assertEqual(mx_res.shape, np_res.shape)
+            self.assertEqual(mx_res.ndim, np_res.ndim)
+
+    def test_atleast_2d(self):
+        def compare_nested_lists(x, y):
+            if isinstance(x, list) and isinstance(y, list):
+                if len(x) != len(y):
+                    return False
+                for i in range(len(x)):
+                    if not compare_nested_lists(x[i], y[i]):
+                        return False
+                return True
+            else:
+                return x == y
+
+        # Test 1D input
+        arrays = [
+            [1],
+            [1, 2, 3],
+            [1, 2, 3, 4],
+            [[1], [2], [3]],
+            [[1, 2], [3, 4]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[[[1]], [[2]], [[3]]]],
+        ]
+
+        for array in arrays:
+            mx_res = mx.array(array).atleast_2d()
+            np_res = np.atleast_2d(np.array(array))
+            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
+            self.assertEqual(mx_res.shape, np_res.shape)
+            self.assertEqual(mx_res.ndim, np_res.ndim)
+
+    def test_atleast_3d(self):
+        def compare_nested_lists(x, y):
+            if isinstance(x, list) and isinstance(y, list):
+                if len(x) != len(y):
+                    return False
+                for i in range(len(x)):
+                    if not compare_nested_lists(x[i], y[i]):
+                        return False
+                return True
+            else:
+                return x == y
+
+        # Test 1D input
+        arrays = [
+            [1],
+            [1, 2, 3],
+            [1, 2, 3, 4],
+            [[1], [2], [3]],
+            [[1, 2], [3, 4]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[[[1]], [[2]], [[3]]]],
+        ]
+
+        for array in arrays:
+            mx_res = mx.array(array).atleast_3d()
+            np_res = np.atleast_3d(np.array(array))
+            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
+            self.assertEqual(mx_res.shape, np_res.shape)
+            self.assertEqual(mx_res.ndim, np_res.ndim)
+
 
 if __name__ == "__main__":
     unittest.main()

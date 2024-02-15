@@ -3636,4 +3636,64 @@ void init_ops(py::module_& m) {
         Returns:
             array: The extracted diagonal or the constructed diagonal matrix.
         )pbdoc");
+  m.def(
+      "atleast_1d",
+      &atleast_1d,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        atleast_1d(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Convert array to have at least one dimension.
+
+        args:
+            a (array): Input array
+            stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
+
+        Returns:
+            array: An array with at least one dimension.
+
+        )pbdoc");
+  m.def(
+      "atleast_2d",
+      &atleast_2d,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        atleast_2d(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Convert array to have at least two dimensions.
+
+        args:
+            a (array): Input array
+            stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
+
+        Returns:
+            array: An array with at least two dimensions.
+
+        )pbdoc");
+  m.def(
+      "atleast_3d",
+      &atleast_3d,
+      "a"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        atleast_3d(a: array, stream: Union[None, Stream, Device] = None) -> array
+
+        Convert array to contain at least three dimensions.
+
+        args:
+            a (array): Input array
+            stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
+
+        Returns:
+            array: An array with at least three dimensions.
+
+        )pbdoc");
 }
