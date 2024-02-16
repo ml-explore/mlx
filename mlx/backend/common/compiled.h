@@ -22,6 +22,8 @@ std::string build_lib_name(
     const std::vector<array>& tape,
     const std::unordered_set<uintptr_t>& constant_ids);
 
+std::string get_type_string(Dtype d);
+
 template <typename T>
 void print_float_constant(std::ostream& os, const array& x) {
   auto old_precision = os.precision();
@@ -34,8 +36,17 @@ void print_int_constant(std::ostream& os, const array& x) {
   os << x.item<T>();
 }
 
-void print_constant(std::ostream& os, const array& x);
+template <typename T>
+void print_complex_constant(std::ostream& os, const array& x) {
+  auto old_precision = os.precision();
+  T constant = x.item<T>();
 
-std::string get_type_string(Dtype d);
+  os << get_type_string(x.dtype()) << "("
+     << std::setprecision(std::numeric_limits<float>::digits10 + 1)
+     << constant.real() << ", " << constant.imag() << ")"
+     << std::setprecision(old_precision);
+}
+
+void print_constant(std::ostream& os, const array& x);
 
 } // namespace mlx::core
