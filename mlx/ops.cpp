@@ -83,16 +83,16 @@ array arange(
   if (std::isnan(start) || std::isnan(step) || std::isnan(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
+
   if (std::isinf(start) || std::isinf(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
 
-  if (step > 0 && start > stop || step < 0 && start < stop) {
-    return array({}, dtype);
-  }
-
-  if (std::isinf(step)) {
-    step = stop - start;
+  // Check if start and stop specify a valid range because if not, we have to
+  // return an empty array
+  if (std::isinf(step) &&
+      (step > 0 && start < stop || step < 0 && start > stop)) {
+    return array({start}, dtype);
   }
 
   double real_size = std::ceil((stop - start) / step);
