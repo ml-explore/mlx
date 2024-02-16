@@ -713,6 +713,7 @@ class DivMod : public Primitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(DivMod)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
   std::vector<std::vector<int>> output_shapes(
       const std::vector<array>& inputs) override {
     return std::vector{inputs[0].shape(), inputs[0].shape()};
