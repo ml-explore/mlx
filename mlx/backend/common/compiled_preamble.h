@@ -33,7 +33,38 @@ inline float fast_exp(float x) {
   return epart.f * x;
 }
 
-float erfinv(float a) {
+float fast_erf(float a) {
+  float r, s, t, u;
+  t = std::abs(a);
+  s = a * a;
+  if (t > 0.927734375f) {
+    // maximum error 0.99527 ulp
+    r = std::fma(
+        -1.72853470e-5f, t, 3.83197126e-4f); // -0x1.220000p-16,0x1.91cfb2p-12
+    u = std::fma(
+        -3.88396438e-3f, t, 2.42546219e-2f); // -0x1.fd1438p-9, 0x1.8d6342p-6
+    r = std::fma(r, s, u);
+    r = std::fma(r, t, -1.06777877e-1f); // -0x1.b55cb8p-4
+    r = std::fma(r, t, -6.34846687e-1f); // -0x1.450aa0p-1
+    r = std::fma(r, t, -1.28717512e-1f); // -0x1.079d0cp-3
+    r = std::fma(r, t, -t);
+    // TODO, replace with expm1 when implemented
+    r = 1.0f - std::exp(r);
+    r = std::copysign(r, a);
+  } else {
+    // maximum error 0.98929 ulp
+    r = -5.96761703e-4f; // -0x1.38e000p-11
+    r = std::fma(r, s, 4.99119423e-3f); //  0x1.471a58p-8
+    r = std::fma(r, s, -2.67681349e-2f); // -0x1.b691b2p-6
+    r = std::fma(r, s, 1.12819925e-1f); //  0x1.ce1c44p-4
+    r = std::fma(r, s, -3.76125336e-1f); // -0x1.812700p-2
+    r = std::fma(r, s, 1.28379166e-1f); //  0x1.06eba8p-3
+    r = std::fma(r, a, a);
+  }
+  return r;
+}
+
+float fast_erfinv(float a) {
   auto t = std::fma(a, 0.0f - a, 1.0f);
   t = std::log(t);
   float p;
@@ -177,14 +208,14 @@ struct Cosh {
 struct Erf {
   template <typename T>
   T operator()(T x) {
-    return static_cast<T>(std::erf(static_cast<float>(x)));
+    return static_cast<T>(fast_erf(static_cast<float>(x)));
   };
 };
 
 struct ErfInv {
   template <typename T>
   T operator()(T x) {
-    return static_cast<T>(erfinv(static_cast<float>(x)));
+    return static_cast<T>(fast_erfinv(static_cast<float>(x)));
   };
 };
 
