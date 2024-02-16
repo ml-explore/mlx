@@ -908,9 +908,22 @@ class TestLayers(mlx_tests.MLXTestCase):
     def test_upsample(self):
         b, h, w, c = 1, 2, 2, 1
         scale_factor = 2
-        upsample_nearest = nn.Upsample(scale_factor=scale_factor, mode="nearest")
-        upsample_bilinear = nn.Upsample(scale_factor=scale_factor, mode="bilinear")
-        # Test single feature map
+        upsample_nearest = nn.Upsample(
+            scale_factor=scale_factor, mode="nearest", align_corners=True
+        )
+        upsample_bilinear = nn.Upsample(
+            scale_factor=scale_factor, mode="bilinear", align_corners=True
+        )
+        upsample_nearest = nn.Upsample(
+            scale_factor=scale_factor, mode="nearest", align_corners=True
+        )
+        upsample_bilinear_no_align_corners = nn.Upsample(
+            scale_factor=scale_factor, mode="bilinear", align_corners=False
+        )
+        upsample_nearest_no_align_corners = nn.Upsample(
+            scale_factor=scale_factor, mode="nearest", align_corners=False
+        )
+        # Test single feature map, align corners
         x = mx.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
         expected_nearest = mx.array(
             [[[[0, 0, 1, 1], [0, 0, 1, 1], [2, 2, 3, 3], [2, 2, 3, 3]]]]
@@ -927,15 +940,50 @@ class TestLayers(mlx_tests.MLXTestCase):
                 ]
             ]
         ).transpose((0, 2, 3, 1))
-        self.assertTrue(np.allclose(upsample_nearest(x), expected_nearest))
-        self.assertTrue(np.allclose(upsample_bilinear(x), expected_bilinear))
+        # Test single feature map, no align corners
+        x = (
+            mx.arange(1, b * h * w * c + 1)
+            .reshape((b, c, h, w))
+            .transpose((0, 2, 3, 1))
+        )
+        expected_bilinear_no_align_corners = mx.array(
+            [
+                [
+                    [
+                        [1.0000, 1.2500, 1.7500, 2.0000],
+                        [1.5000, 1.7500, 2.2500, 2.5000],
+                        [2.5000, 2.7500, 3.2500, 3.5000],
+                        [3.0000, 3.2500, 3.7500, 4.0000],
+                    ]
+                ]
+            ]
+        ).transpose((0, 2, 3, 1))
+        expected_nearest_no_align_corners = mx.array(
+            [[[[1, 1, 2, 2], [1, 1, 2, 2], [3, 3, 4, 4], [3, 3, 4, 4]]]]
+        ).transpose((0, 2, 3, 1))
+        self.assertTrue(
+            np.allclose(
+                upsample_nearest_no_align_corners(x), expected_nearest_no_align_corners
+            )
+        )
+        self.assertTrue(
+            np.allclose(
+                upsample_bilinear_no_align_corners(x),
+                expected_bilinear_no_align_corners,
+            )
+        )
+
         # Test a more complex batch
         b, h, w, c = 2, 3, 3, 2
         scale_factor = 2
         x = mx.arange((b * h * w * c)).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
 
-        upsample_nearest = nn.Upsample(scale_factor=scale_factor, mode="nearest")
-        upsample_bilinear = nn.Upsample(scale_factor=scale_factor, mode="bilinear")
+        upsample_nearest = nn.Upsample(
+            scale_factor=scale_factor, mode="nearest", align_corners=True
+        )
+        upsample_bilinear = nn.Upsample(
+            scale_factor=scale_factor, mode="bilinear", align_corners=True
+        )
 
         expected_nearest = mx.array(
             [
@@ -1023,8 +1071,12 @@ class TestLayers(mlx_tests.MLXTestCase):
         # Test different height and width scale_factor
         b, h, w, c = 1, 2, 2, 2
         x = mx.arange(b * h * w * c).reshape((b, c, h, w)).transpose((0, 2, 3, 1))
-        upsample_nearest = nn.Upsample(scale_factor=(2, 3), mode="nearest")
-        upsample_bilinear = nn.Upsample(scale_factor=(2, 3), mode="bilinear")
+        upsample_nearest = nn.Upsample(
+            scale_factor=(2, 3), mode="nearest", align_corners=True
+        )
+        upsample_bilinear = nn.Upsample(
+            scale_factor=(2, 3), mode="bilinear", align_corners=True
+        )
 
         expected_nearest = mx.array(
             [
@@ -1068,27 +1120,55 @@ class TestLayers(mlx_tests.MLXTestCase):
         # Test repr
         self.assertEqual(
             str(nn.Upsample(scale_factor=2)),
-            "Upsample(scale_factor=(2.0, 2.0), mode='nearest')",
+            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=False)",
+        )
+        self.assertEqual(
+            str(nn.Upsample(scale_factor=2, align_corners=False)),
+            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=False)",
+        )
+        self.assertEqual(
+            str(nn.Upsample(scale_factor=2, align_corners=True)),
+            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=True)",
         )
         self.assertEqual(
             str(nn.Upsample(scale_factor=2, mode="nearest")),
-            "Upsample(scale_factor=(2.0, 2.0), mode='nearest')",
+            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=False)",
+        )
+        self.assertEqual(
+            str(nn.Upsample(scale_factor=2, mode="nearest", align_corners=True)),
+            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=True)",
         )
         self.assertEqual(
             str(nn.Upsample(scale_factor=2, mode="bilinear")),
-            "Upsample(scale_factor=(2.0, 2.0), mode='bilinear')",
+            "Upsample(scale_factor=(2.0, 2.0), mode='bilinear', align_corners=False)",
+        )
+        self.assertEqual(
+            str(nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)),
+            "Upsample(scale_factor=(2.0, 2.0), mode='bilinear', align_corners=True)",
         )
         self.assertEqual(
             str(nn.Upsample(scale_factor=(2, 3))),
-            "Upsample(scale_factor=(2.0, 3.0), mode='nearest')",
+            "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=False)",
+        )
+        self.assertEqual(
+            str(nn.Upsample(scale_factor=(2, 3), align_corners=True)),
+            "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=True)",
         )
         self.assertEqual(
             str(nn.Upsample(scale_factor=(2, 3), mode="nearest")),
-            "Upsample(scale_factor=(2.0, 3.0), mode='nearest')",
+            "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=False)",
+        )
+        self.assertEqual(
+            str(nn.Upsample(scale_factor=(2, 3), mode="nearest", align_corners=True)),
+            "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=True)",
         )
         self.assertEqual(
             str(nn.Upsample(scale_factor=(2, 3), mode="bilinear")),
-            "Upsample(scale_factor=(2.0, 3.0), mode='bilinear')",
+            "Upsample(scale_factor=(2.0, 3.0), mode='bilinear', align_corners=False)",
+        )
+        self.assertEqual(
+            str(nn.Upsample(scale_factor=(2, 3), mode="bilinear", align_corners=True)),
+            "Upsample(scale_factor=(2.0, 3.0), mode='bilinear', align_corners=True)",
         )
 
     def test_pooling(self):

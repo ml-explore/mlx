@@ -27,13 +27,21 @@ def upsample2d_nearest(x: mx.array, scale_factor: Tuple[float, float]):
         return x[:, idx_y[:, None], idx_x[None]]
 
 
-def upsample2d_bilinear(x: mx.array, scale_factor: Tuple[float, float]):
+def upsample2d_bilinear(
+    x: mx.array, scale_factor: Tuple[float, float], align_corners: bool = False
+):
     sh, sw = scale_factor
     B, H, W, C = x.shape
     new_H = int(H * sh)
     new_W = int(W * sw)
-    idx_y = mx.arange(0, new_H) * ((H - 1) / (new_H - 1))
-    idx_x = mx.arange(0, new_W) * ((W - 1) / (new_W - 1))
+    if not align_corners:
+        idx_y = mx.arange(0, new_H) * ((H - 0.5) / (new_H - 1)) - 0.25
+        idx_x = mx.arange(0, new_W) * ((W - 0.5) / (new_W - 1)) - 0.25
+        idx_y = mx.clip(idx_y, 0, H - 1)
+        idx_x = mx.clip(idx_x, 0, W - 1)
+    else:
+        idx_y = mx.arange(0, new_H) * ((H - 1) / (new_H - 1))
+        idx_x = mx.arange(0, new_W) * ((W - 1) / (new_W - 1))
     # Compute the sampling grid
     idx_y_t = mx.floor(idx_y).astype(mx.int32)
     idx_y_b = mx.ceil(idx_y).astype(mx.int32)
@@ -72,7 +80,8 @@ class Upsample(Module):
         - ``H`` is the second spatial dimension
         - ``W`` is the third spatial dimension
         - ``C`` is the number of input channels
-
+    .. warning::
+       The support for 5D input is not yet implemented.
     Parameters:
         scale_factor (float or Tuple[float, float]): The multiplier for the spatial size.
             If a ``float`` is provided, it is the multiplier for all spatial dimensions.
@@ -81,6 +90,7 @@ class Upsample(Module):
             the third element of the tuple is the third spatial dimension multiplier.
         mode (str, optional): The upsampling algorithm: one of ``"nearest"`` and
             ``"bilinear"``. Default: ``"nearest"``.
+        align_corners (bool, optional): If True, ``(0, 0)`` is the top-left corner of the image and ``(H, W)`` is the bottom-right corner of the image. Otherwise, ``(0, 0)`` and ``(H, W)`` correspond to the center of the top-left and bottom-right pixels respectively. See **Examples** for the clear explanation. Default: ``False``.
 
     Examples:
         >>> import mlx.core as mx
@@ -99,6 +109,12 @@ class Upsample(Module):
                [3, 3, 4, 4]], dtype=int32)
         >>> b = nn.Upsample(scale_factor=2, mode='bilinear')
         >>> b(x).squeeze()
+        array([[1, 1.25, 1.75, 2],
+               [1.5, 1.75, 2.25, 2.5],
+               [2.5, 2.75, 3.25, 3.5],
+               [3, 3.25, 3.75, 4]], dtype=float32)
+        >>> b = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        >>> b(x).squeeze()
         array([[1, 1.33333, 1.66667, 2],
                [1.66667, 2, 2.33333, 2.66667],
                [2.33333, 2.66667, 3, 3.33333],
@@ -109,6 +125,7 @@ class Upsample(Module):
         self,
         scale_factor: Union[float, Tuple[float, float]],
         mode: Literal["nearest", "bilinear"] = "nearest",
+        align_corners: bool = False,
     ):
         super().__init__()
         if mode not in ["nearest", "bilinear"]:
@@ -118,9 +135,10 @@ class Upsample(Module):
         else:
             self.scale_factor = (float(scale_factor), float(scale_factor))
         self.mode = mode
+        self.align_corners = align_corners
 
     def _extra_repr(self) -> str:
-        return f"scale_factor={self.scale_factor}, mode={self.mode!r}"
+        return f"scale_factor={self.scale_factor}, mode={self.mode!r}, align_corners={self.align_corners}"
 
     def __call__(self, x: mx.array) -> mx.array:
         if x.ndim != 4:
@@ -128,6 +146,6 @@ class Upsample(Module):
                 f"[Upsample] The input tensor is {x.ndim}D. Currently, only 4D input is currently supported."
             )
         if self.mode == "bilinear":
-            return upsample2d_bilinear(x, self.scale_factor)
+            return upsample2d_bilinear(x, self.scale_factor, self.align_corners)
         else:
             return upsample2d_nearest(x, self.scale_factor)
