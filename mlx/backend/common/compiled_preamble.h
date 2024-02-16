@@ -5,6 +5,29 @@ const std::string preamble = R"(
 #include <complex>
 #include <stdint.h>
 
+inline float fast_exp(float x) {
+  x *= 1.442695; // multiply with log_2(e)
+  float ipart, fpart;
+  int epart;
+  x = std::max(-80.f, std::min(x, 80.f));
+  ipart = std::floor(x + 0.5);
+  fpart = x - ipart;
+
+  x = 1.535336188319500e-4f;
+  x = x * fpart + 1.339887440266574e-3f;
+  x = x * fpart + 9.618437357674640e-3f;
+  x = x * fpart + 5.550332471162809e-2f;
+  x = x * fpart + 2.402264791363012e-1f;
+  x = x * fpart + 6.931472028550421e-1f;
+  x = x * fpart + 1.000000000000000f;
+
+  // generate 2**ipart in the floating point representation using integer
+  // bitshifting
+  epart = (int(ipart) + 127) << 23;
+
+  return (*(float*)&epart) * x;
+}
+
 float erfinv(float a) {
   auto t = std::fma(a, 0.0f - a, 1.0f);
   t = std::log(t);
@@ -163,7 +186,7 @@ struct ErfInv {
 struct Exp {
   template <typename T>
   T operator()(T x) {
-    return std::exp(x);
+    return fast_exp(x);
   };
 };
 
@@ -258,7 +281,7 @@ struct Sigmoid {
   template <typename T>
   T operator()(T x) {
     auto one = static_cast<decltype(x)>(1.0);
-    return one / (one + std::exp(-x));
+    return one / (one + fast_exp(-x));
   }
 };
 
@@ -436,7 +459,7 @@ struct LogAddExp {
     return (minval == -inf || maxval == inf)
         ? maxval
         : static_cast<decltype(x)>(
-              maxval + std::log1p(std::exp(minval - maxval)));
+              maxval + std::log1p(fast_exp(minval - maxval)));
   };
 };
 
