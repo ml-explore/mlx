@@ -155,6 +155,7 @@ void* compile(
   shared_lib_name << "lib" << kernel_name << ".so";
   auto shared_lib_path = get_temp_file(shared_lib_name.str());
   bool lib_exists = false;
+  //  TODO uncomment before merge
   //  {
   //    std::ifstream f(shared_lib_path.c_str());
   //    lib_exists = f.good();
