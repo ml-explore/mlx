@@ -5,10 +5,15 @@ const std::string preamble = R"(
 #include <complex>
 #include <stdint.h>
 
+typedef union {
+  int i;
+  float f;
+} IntOrFloat;
+
 inline float fast_exp(float x) {
   x *= 1.442695; // multiply with log_2(e)
   float ipart, fpart;
-  int epart;
+  IntOrFloat epart;
   x = std::max(-80.f, std::min(x, 80.f));
   ipart = std::floor(x + 0.5);
   fpart = x - ipart;
@@ -23,9 +28,9 @@ inline float fast_exp(float x) {
 
   // generate 2**ipart in the floating point representation using integer
   // bitshifting
-  epart = (int(ipart) + 127) << 23;
+  epart.i = (int(ipart) + 127) << 23;
 
-  return (*(float*)&epart) * x;
+  return epart.f * x;
 }
 
 float erfinv(float a) {
