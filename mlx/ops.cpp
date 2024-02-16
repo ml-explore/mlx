@@ -87,12 +87,21 @@ array arange(
   if (std::isinf(start) || std::isinf(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
-  step = std::clamp(
-      step, static_cast<double>(INT_MIN), static_cast<double>(INT_MAX));
+
+  if (step > 0 && start > stop || step < 0 && start < stop) {
+    return array({}, dtype);
+  }
+
+  if (std::isinf(step)) {
+    step = stop - start;
+  }
+
   double real_size = std::ceil((stop - start) / step);
-  if (std::isnan(real_size)) {
+
+  if (real_size < INT_MIN || real_size > INT_MAX) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
+
   int size = std::max(static_cast<int>(real_size), 0);
   return array(
       {size},
