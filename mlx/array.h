@@ -41,6 +41,9 @@ class array {
   /* Special case so empty lists default to float32. */
   array(std::initializer_list<float> data);
 
+  /* Special case so array({}, type) is an empty array. */
+  array(std::initializer_list<int> data, Dtype dtype);
+
   template <typename T>
   array(
       std::initializer_list<T> data,

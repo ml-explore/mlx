@@ -1027,6 +1027,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [[3, 4]])
         self.assertEqual(z.tolist(), [[5, 6]])
 
+        with self.assertRaises(ValueError):
+            mx.split(a, 3, axis=2)
+
         a = mx.arange(8)
         x, y, z = mx.split(a, [1, 5])
         self.assertEqual(x.tolist(), [0])
@@ -1699,6 +1702,8 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_repeat(self):
         # Setup data for the tests
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
+        # Test repeat 0 times
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat)
         # Test repeat along axis 0
         self.assertCmpNumpy([data, 2], mx.repeat, np.repeat, axis=0)
         # Test repeat along axis 1

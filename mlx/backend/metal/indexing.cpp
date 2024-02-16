@@ -51,6 +51,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
+  compute_encoder->setComputePipelineState(kernel);
 
   size_t slice_size = 1;
   for (auto s : slice_sizes_) {
@@ -63,91 +64,50 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto group_dims = get_block_dims(dim0, dim1, 1);
   MTL::Size grid_dims = MTL::Size(dim0, dim1, 1);
 
-  compute_encoder->setComputePipelineState(kernel);
+  // Collect all idx shapes and strides into one place
+  std::vector<int> idx_shapes;
+  std::vector<size_t> idx_strides;
 
-  // Make the argument buffer to store the indices for the
-  // `Indices` struct in kernels/indexing.metal
-  std::vector<MTL::ArgumentDescriptor*> arg_descs(4);
-  arg_descs[0] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[0]->setIndex(0);
-  arg_descs[0]->setDataType(MTL::DataType::DataTypePointer);
-  arg_descs[0]->setArrayLength(nidx);
-
-  // Shapes
-  arg_descs[1] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[1]->setDataType(MTL::DataType::DataTypePointer);
-  arg_descs[1]->setIndex(nidx + 1);
-
-  // Strides
-  arg_descs[2] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[2]->setDataType(MTL::DataType::DataTypePointer);
-  arg_descs[2]->setIndex(nidx + 2);
-
-  // Indices ndim
-  arg_descs[3] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[3]->setDataType(MTL::DataType::DataTypeInt);
-  arg_descs[3]->setIndex(nidx + 3);
-
-  // Get the argument encoder
-  auto arg_enc = d.argument_encoder(arg_descs);
-
-  // Allocate and fill buffers for shapes and strides
-  auto idx_shapes_buf = allocator::malloc_or_wait(sizeof(int) * idx_ndim);
-  auto idx_strides_buf = allocator::malloc_or_wait(sizeof(size_t) * idx_ndim);
   for (int i = 0; i < nidx; ++i) {
-    std::copy(
+    idx_shapes.insert(
+        idx_shapes.end(),
         inputs[i + 1].shape().begin(),
-        inputs[i + 1].shape().end(),
-        static_cast<int*>(idx_shapes_buf.raw_ptr()) + i * idx_ndim);
-    std::copy(
+        inputs[i + 1].shape().end());
+
+    idx_strides.insert(
+        idx_strides.end(),
         inputs[i + 1].strides().begin(),
-        inputs[i + 1].strides().end(),
-        static_cast<size_t*>(idx_strides_buf.raw_ptr()) + i * idx_ndim);
+        inputs[i + 1].strides().end());
   }
-
-  // Allocate the argument buffer
-  auto arg_buf = allocator::malloc_or_wait(arg_enc->encodedLength());
-
-  // Register data with the encoder
-  arg_enc->setArgumentBuffer(static_cast<MTL::Buffer*>(arg_buf.ptr()), 0);
-  for (int i = 0; i < nidx; ++i) {
-    set_array_buffer(compute_encoder, arg_enc, inputs[i + 1], i);
-  }
-  if (idx_ndim > 0) {
-    arg_enc->setBuffer(
-        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), 0, nidx + 1);
-    compute_encoder->useResource(
-        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()),
-        MTL::ResourceUsageRead);
-    arg_enc->setBuffer(
-        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), 0, nidx + 2);
-    compute_encoder->useResource(
-        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()),
-        MTL::ResourceUsageRead);
-  }
-  *static_cast<int*>(arg_enc->constantData(nidx + 3)) = idx_ndim;
 
   // Set all the buffers
   set_array_buffer(compute_encoder, src, 0);
-  compute_encoder->setBuffer(static_cast<MTL::Buffer*>(arg_buf.ptr()), 0, 1);
-  set_array_buffer(compute_encoder, out, 2);
+  set_array_buffer(compute_encoder, out, 1);
 
-  compute_encoder->setBytes(src.shape().data(), ndim * sizeof(int), 3);
-  compute_encoder->setBytes(src.strides().data(), ndim * sizeof(size_t), 4);
-  compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
-  compute_encoder->setBytes(slice_sizes_.data(), ndim * sizeof(int), 6);
-  compute_encoder->setBytes(axes_.data(), nidx * sizeof(int), 7);
+  // Set source info
+  compute_encoder->setBytes(src.shape().data(), ndim * sizeof(int), 2);
+  compute_encoder->setBytes(src.strides().data(), ndim * sizeof(size_t), 3);
+  compute_encoder->setBytes(&ndim, sizeof(size_t), 4);
+  compute_encoder->setBytes(slice_sizes_.data(), ndim * sizeof(int), 5);
+  compute_encoder->setBytes(axes_.data(), nidx * sizeof(int), 6);
 
+  // Set index info
+  //
+  // We don't need to check for empty idx_shapes because gather has a
+  // idx_ndim == 0 specialization
+  compute_encoder->setBytes(
+      idx_shapes.data(), idx_shapes.size() * sizeof(int), 7);
+  compute_encoder->setBytes(
+      idx_strides.data(), idx_strides.size() * sizeof(size_t), 8);
+  compute_encoder->setBytes(&idx_ndim, sizeof(int), 9);
+
+  // Set index buffers
+  for (int i = 1; i < nidx + 1; ++i) {
+    set_array_buffer(compute_encoder, inputs[i], 20 + i);
+  }
+
+  // Launch grid
   compute_encoder->dispatchThreads(grid_dims, group_dims);
-
-  // Cleanup temporaries
-  arg_enc->release();
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [arg_buf, idx_shapes_buf, idx_strides_buf](MTL::CommandBuffer*) {
-        allocator::free(arg_buf);
-        allocator::free(idx_shapes_buf);
-        allocator::free(idx_strides_buf);
-      });
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -214,77 +174,33 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   compute_encoder->setComputePipelineState(kernel);
 
-  // Make the argument buffer to store the indices for the
-  // `Indices` struct in kernels/indexing.metal
-  std::vector<MTL::ArgumentDescriptor*> arg_descs(4);
-  arg_descs[0] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[0]->setIndex(0);
-  arg_descs[0]->setDataType(MTL::DataType::DataTypePointer);
-  arg_descs[0]->setArrayLength(nidx);
-
-  // Shapes
-  arg_descs[1] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[1]->setDataType(MTL::DataType::DataTypePointer);
-  arg_descs[1]->setIndex(nidx + 1);
-
-  // Strides
-  arg_descs[2] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[2]->setDataType(MTL::DataType::DataTypePointer);
-  arg_descs[2]->setIndex(nidx + 2);
-
-  // Indices ndim
-  arg_descs[3] = MTL::ArgumentDescriptor::argumentDescriptor();
-  arg_descs[3]->setDataType(MTL::DataType::DataTypeInt);
-  arg_descs[3]->setIndex(nidx + 3);
-
-  // Get the argument encoder
-  auto arg_enc = d.argument_encoder(arg_descs);
-
-  // Allocate and fill buffers for shapes and strides
+  // Collect all idx shapes and strides into one place
   int idx_ndim = nidx ? inputs[1].ndim() : 0;
-  auto idx_shapes_buf = allocator::malloc_or_wait(sizeof(int) * idx_ndim);
-  auto idx_strides_buf = allocator::malloc_or_wait(sizeof(size_t) * idx_ndim);
+  std::vector<int> idx_shapes;
+  std::vector<size_t> idx_strides;
+
   for (int i = 0; i < nidx; ++i) {
-    std::copy(
+    idx_shapes.insert(
+        idx_shapes.end(),
         inputs[i + 1].shape().begin(),
-        inputs[i + 1].shape().end(),
-        static_cast<int*>(idx_shapes_buf.raw_ptr()) + i * idx_ndim);
-    std::copy(
+        inputs[i + 1].shape().end());
+
+    idx_strides.insert(
+        idx_strides.end(),
         inputs[i + 1].strides().begin(),
-        inputs[i + 1].strides().end(),
-        static_cast<size_t*>(idx_strides_buf.raw_ptr()) + i * idx_ndim);
+        inputs[i + 1].strides().end());
   }
 
-  // Allocate the argument buffer
-  auto arg_buf = allocator::malloc_or_wait(arg_enc->encodedLength());
+  // Set all the buffers
+  set_array_buffer(compute_encoder, upd, 1);
+  set_array_buffer(compute_encoder, out, 2);
 
-  // Register data with the encoder
-  arg_enc->setArgumentBuffer(static_cast<MTL::Buffer*>(arg_buf.ptr()), 0);
-  for (int i = 0; i < nidx; ++i) {
-    set_array_buffer(compute_encoder, arg_enc, inputs[i + 1], i);
-  }
-  if (idx_ndim > 0) {
-    arg_enc->setBuffer(
-        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()), 0, nidx + 1);
-    compute_encoder->useResource(
-        static_cast<MTL::Buffer*>(idx_shapes_buf.ptr()),
-        MTL::ResourceUsageRead);
-    arg_enc->setBuffer(
-        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()), 0, nidx + 2);
-    compute_encoder->useResource(
-        static_cast<MTL::Buffer*>(idx_strides_buf.ptr()),
-        MTL::ResourceUsageRead);
-  }
-  *static_cast<int*>(arg_enc->constantData(nidx + 3)) = idx_ndim;
-
-  compute_encoder->setBuffer(static_cast<MTL::Buffer*>(arg_buf.ptr()), 0, 0);
+  // Set update info
   size_t upd_ndim = upd.ndim();
   size_t upd_size = 1;
   for (int i = idx_ndim; i < upd.ndim(); ++i) {
     upd_size *= upd.shape(i);
   }
-  set_array_buffer(compute_encoder, upd, 1);
-  set_array_buffer(compute_encoder, out, 2);
   if (upd_ndim == 0) {
     // Need placeholders so Metal doesn't compalain
     int shape_ = 0;
@@ -299,6 +215,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(&upd_ndim, sizeof(size_t), 5);
   compute_encoder->setBytes(&upd_size, sizeof(size_t), 6);
 
+  // Set output info
   size_t out_ndim = out.ndim();
   if (out_ndim == 0) {
     // Need placeholders so Metal doesn't compalain
@@ -314,18 +231,28 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(&out_ndim, sizeof(size_t), 9);
   compute_encoder->setBytes(axes_.data(), axes_.size() * sizeof(int), 10);
 
+  // Set index info
+  if (idx_ndim == 0) {
+    // Add a 0 in idx_shapes and strides to avoid the missing buffer binding
+    // error in the metal API.
+    idx_shapes.push_back(0);
+    idx_strides.push_back(0);
+  }
+  compute_encoder->setBytes(
+      idx_shapes.data(), idx_shapes.size() * sizeof(int), 11);
+  compute_encoder->setBytes(
+      idx_strides.data(), idx_strides.size() * sizeof(size_t), 12);
+  compute_encoder->setBytes(&idx_ndim, sizeof(int), 13);
+
+  // Set index buffers
+  for (int i = 1; i < nidx + 1; ++i) {
+    set_array_buffer(compute_encoder, inputs[i], 20 + i);
+  }
+
+  // Launch grid
   MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
   MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
   compute_encoder->dispatchThreads(grid_dims, group_dims);
-
-  // Cleanup temporaries
-  arg_enc->release();
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [arg_buf, idx_shapes_buf, idx_strides_buf](MTL::CommandBuffer*) {
-        allocator::free(arg_buf);
-        allocator::free(idx_shapes_buf);
-        allocator::free(idx_strides_buf);
-      });
 }
 
 } // namespace mlx::core

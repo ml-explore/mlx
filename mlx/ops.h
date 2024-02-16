@@ -3,17 +3,13 @@
 #pragma once
 
 #include <optional>
-#include <variant>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/stream.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
-
-using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
-
-Stream to_stream(StreamOrDevice s);
 
 /** Creation operations */
 
