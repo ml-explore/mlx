@@ -155,10 +155,10 @@ void* compile(
   shared_lib_name << "lib" << kernel_name << ".so";
   auto shared_lib_path = get_temp_file(shared_lib_name.str());
   bool lib_exists = false;
-  {
-    std::ifstream f(shared_lib_path.c_str());
-    lib_exists = f.good();
-  }
+  //  {
+  //    std::ifstream f(shared_lib_path.c_str());
+  //    lib_exists = f.good();
+  //  }
 
   if (!lib_exists) {
     // Open source file and write source code to it
@@ -344,10 +344,25 @@ void Compiled::eval_cpu(
   // Figure out which kernel we are using
   auto& shape = outputs[0].shape();
   bool contiguous = true;
-  for (auto& x : inputs) {
-    if ((!x.flags().row_contiguous || x.shape() != shape) && x.size() > 1) {
+  {
+    bool all_contig = true;
+    bool all_row_contig = true;
+    bool all_col_contig = true;
+    int non_scalar_inputs = 0;
+    for (auto& x : inputs) {
+      if (x.size() == 1) {
+        continue;
+      }
+      non_scalar_inputs++;
+      bool shape_eq = x.shape() == shape;
+      all_contig &= (x.flags().contiguous && shape_eq);
+      all_row_contig &= (x.flags().row_contiguous && shape_eq);
+      all_col_contig &= (x.flags().col_contiguous && shape_eq);
+    }
+    if (non_scalar_inputs > 1 && !all_row_contig && !all_col_contig) {
       contiguous = false;
-      break;
+    } else if (non_scalar_inputs == 1 && !all_contig) {
+      contiguous = false;
     }
   }
 
@@ -424,7 +439,37 @@ void Compiled::eval_cpu(
   }
 
   // Allocate space for the outputs possibly with input donation
-  {
+  if (contiguous) {
+    int o = 0;
+    std::vector<size_t> strides;
+    size_t data_size;
+    array::Flags flags;
+    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
+      auto& in = inputs[i];
+      // Conditions for donation
+      // - Contiguous
+      // - Donatable
+      // - Correct size
+      // - Not a constant
+      if (in.flags().contiguous && in.size() > 1 && in.is_donatable() &&
+          constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
+        outputs[o++].copy_shared_buffer(in);
+      }
+      // Get representative input flags to properly set non-donated outputs
+      if (strides.empty() && in.size() == outputs[0].size()) {
+        strides = in.strides();
+        flags = in.flags();
+        data_size = in.data_size();
+      }
+    }
+    for (; o < outputs.size(); ++o) {
+      outputs[o].set_data(
+          allocator::malloc_or_wait(data_size * outputs[o].itemsize()),
+          data_size,
+          strides,
+          flags);
+    }
+  } else {
     int o = 0;
     for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
       auto& in = inputs[i];
@@ -450,7 +495,7 @@ void Compiled::eval_cpu(
   if (!contiguous) {
     args.push_back((void*)outputs[0].shape().data());
   } else {
-    args.push_back((void*)outputs[0].size());
+    args.push_back((void*)outputs[0].data_size());
   }
   auto fun = (void (*)(void**))fn_ptr;
   fun(args.data());
