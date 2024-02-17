@@ -3686,7 +3686,7 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         atleast_3d(a: array, stream: Union[None, Stream, Device] = None) -> array
 
-        Convert array to contain at least three dimensions.
+        Convert array to have at least three dimensions.
 
         args:
             a (array): Input array
