@@ -9,7 +9,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Developer Documentation &#8212; MLX 0.2.0 documentation</title>
+    <title>Developer Documentation &#8212; MLX 0.3.0 documentation</title>
   
   
   
@@ -133,8 +133,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.2.0 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.2.0 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.3.0 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.3.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -205,12 +205,13 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/devices_and_streams.html">Devices and Streams</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-2"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.Device.html">mlx.core.Device</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/stream_class.html">mlx.core.Stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.default_device.html">mlx.core.default_device</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.set_default_device.html">mlx.core.set_default_device</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.Stream.html">mlx.core.Stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.default_stream.html">mlx.core.default_stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.new_stream.html">mlx.core.new_stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.set_default_stream.html">mlx.core.set_default_stream</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.stream.html">mlx.core.stream</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/ops.html">Operations</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-3"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -404,6 +405,8 @@
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/layers.html">Layers</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.ALiBi.html">mlx.nn.ALiBi</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.AvgPool1d.html">mlx.nn.AvgPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.AvgPool2d.html">mlx.nn.AvgPool2d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.BatchNorm.html">mlx.nn.BatchNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
@@ -416,6 +419,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.InstanceNorm.html">mlx.nn.InstanceNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.LayerNorm.html">mlx.nn.LayerNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.MaxPool1d.html">mlx.nn.MaxPool1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.MaxPool2d.html">mlx.nn.MaxPool2d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Mish.html">mlx.nn.Mish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.MultiHeadAttention.html">mlx.nn.MultiHeadAttention</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.PReLU.html">mlx.nn.PReLU</a></li>
@@ -476,25 +481,34 @@
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-14"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizer.html">Optimizer</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.state.html">mlx.optimizers.Optimizer.state</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.apply_gradients.html">mlx.optimizers.Optimizer.apply_gradients</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.init.html">mlx.optimizers.Optimizer.init</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Optimizer.update.html">mlx.optimizers.Optimizer.update</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/optimizer.html">Optimizer</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.state.html">mlx.optimizers.Optimizer.state</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.apply_gradients.html">mlx.optimizers.Optimizer.apply_gradients</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.init.html">mlx.optimizers.Optimizer.init</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.update.html">mlx.optimizers.Optimizer.update</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.SGD.html">mlx.optimizers.SGD</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.RMSprop.html">mlx.optimizers.RMSprop</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Adagrad.html">mlx.optimizers.Adagrad</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Adafactor.html">mlx.optimizers.Adafactor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.AdaDelta.html">mlx.optimizers.AdaDelta</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Adam.html">mlx.optimizers.Adam</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.AdamW.html">mlx.optimizers.AdamW</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Adamax.html">mlx.optimizers.Adamax</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.optimizers.Lion.html">mlx.optimizers.Lion</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/common_optimizers.html">Common Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-16"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.SGD.html">mlx.optimizers.SGD</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.RMSprop.html">mlx.optimizers.RMSprop</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Adagrad.html">mlx.optimizers.Adagrad</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Adafactor.html">mlx.optimizers.Adafactor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.AdaDelta.html">mlx.optimizers.AdaDelta</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Adam.html">mlx.optimizers.Adam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.AdamW.html">mlx.optimizers.AdamW</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Adamax.html">mlx.optimizers.Adamax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Lion.html">mlx.optimizers.Lion</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-16"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/schedulers.html">Schedulers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-17"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.step_decay.html">mlx.optimizers.step_decay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.exponential_decay.html">mlx.optimizers.exponential_decay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.cosine_decay.html">mlx.optimizers.cosine_decay</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-18"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>
@@ -737,7 +751,7 @@ differentiation to MLX.</p>
 You would really like the part of your applications that does this operation
 on the CPU to be very fast - so you decide that you want it to rely on the
 <code class="docutils literal notranslate"><span class="pre">axpby</span></code> routine provided by the <a class="reference external" href="https://developer.apple.com/documentation/accelerate/blas?language=objc">Accelerate</a> framework. Continuing to impose
-our assumptions on to you, let’s also assume that you want to learn how add
+our assumptions on to you, let’s also assume that you want to learn how to add
 your own implementation for the gradients of your new operation while going
 over the ins-and-outs of the MLX framework.</p>
 <p>Well, what a coincidence! You are in the right place. Over the course of this
@@ -1338,7 +1352,7 @@ the python package</p></li>
 <section id="binding-to-python">
 <h3>Binding to Python<a class="headerlink" href="#binding-to-python" title="Permalink to this heading">#</a></h3>
 <p>We use <a class="reference external" href="https://pybind11.readthedocs.io/en/stable/">PyBind11</a> to build a Python API for the C++ library. Since bindings for
-components such as <a class="reference internal" href="../python/_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.core.array</span></code></a>, <code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.core.stream</span></code>, etc. are
+components such as <a class="reference internal" href="../python/_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.core.array</span></code></a>, <a class="reference internal" href="../python/_autosummary/mlx.core.stream.html#mlx.core.stream" title="mlx.core.stream"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.core.stream</span></code></a>, etc. are
 already provided, adding our <code class="xref py py-meth docutils literal notranslate"><span class="pre">axpby()</span></code> is simple!</p>
 <div class="highlight-C++ notranslate"><div class="highlight"><pre><span></span><span class="n">PYBIND11_MODULE</span><span class="p">(</span><span class="n">mlx_sample_extensions</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
 <span class="w">    </span><span class="n">m</span><span class="p">.</span><span class="n">doc</span><span class="p">()</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s">&quot;Sample C++ and metal extensions for MLX&quot;</span><span class="p">;</span><span class="w"></span>
