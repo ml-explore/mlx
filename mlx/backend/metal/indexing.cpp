@@ -142,7 +142,44 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Get kernel name
   std::ostringstream kname;
   std::string idx_type_name = nidx ? type_to_name(inputs[1]) : "";
-  kname << "scatter" << type_to_name(out) << idx_type_name;
+
+  int idx_ndim = nidx ? inputs[1].ndim() : 0;
+  bool index_nd1_specialization = (idx_ndim == 1);
+
+  // Bail from fast path (1d index specialization) if scatter dims aren't
+  // the outermost dims and contiguous since update access won't be raster
+  // order.
+  for (auto i = 0; i < axes_.size() && index_nd1_specialization; i++) {
+    if (axes_[i] != i) {
+      index_nd1_specialization = false;
+      break;
+    }
+  }
+
+  auto check_for_broadcast_dims =
+      [](const std::vector<size_t>& strides) -> bool {
+    for (auto i = 0; i < strides.size(); i++) {
+      if (strides[i] == 0) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Bail from fast path (1d index specialization) if any of the dims are
+  // broadcasted, since we can't rely on linear indexing in that case.
+  for (int i = 1; i < inputs.size() && index_nd1_specialization; i++) {
+    if (check_for_broadcast_dims(inputs[i].strides()) == false) {
+      index_nd1_specialization = false;
+      break;
+    }
+  }
+
+  if (index_nd1_specialization) {
+    kname << "scatter_1d_index" << type_to_name(out) << idx_type_name;
+  } else {
+    kname << "scatter" << type_to_name(out) << idx_type_name;
+  }
   switch (reduce_type_) {
     case Scatter::None:
       kname << "_none";
@@ -170,85 +207,104 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   compute_encoder->setComputePipelineState(kernel);
 
-  // Collect all idx shapes and strides into one place
-  int idx_ndim = nidx ? inputs[1].ndim() : 0;
-  std::vector<int> idx_shapes;
-  std::vector<size_t> idx_strides;
-
-  for (int i = 0; i < nidx; ++i) {
-    idx_shapes.insert(
-        idx_shapes.end(),
-        inputs[i + 1].shape().begin(),
-        inputs[i + 1].shape().end());
-
-    idx_strides.insert(
-        idx_strides.end(),
-        inputs[i + 1].strides().begin(),
-        inputs[i + 1].strides().end());
-  }
-
   // Set all the buffers
   set_array_buffer(compute_encoder, upd, 1);
   set_array_buffer(compute_encoder, out, 2);
 
   // Set update info
-  size_t upd_ndim = upd.ndim();
+  uint upd_ndim = upd.ndim();
   size_t upd_size = 1;
   for (int i = idx_ndim; i < upd.ndim(); ++i) {
     upd_size *= upd.shape(i);
   }
-  if (upd_ndim == 0) {
-    // Need placeholders so Metal doesn't compalain
-    int shape_ = 0;
-    size_t stride_ = 0;
-    compute_encoder->setBytes(&shape_, sizeof(int), 3);
-    compute_encoder->setBytes(&stride_, sizeof(size_t), 4);
-  } else {
-    compute_encoder->setBytes(upd.shape().data(), upd_ndim * sizeof(int), 3);
+
+  if (index_nd1_specialization) {
     compute_encoder->setBytes(
-        upd.strides().data(), upd_ndim * sizeof(size_t), 4);
-  }
-  compute_encoder->setBytes(&upd_ndim, sizeof(size_t), 5);
-  compute_encoder->setBytes(&upd_size, sizeof(size_t), 6);
-
-  // Set output info
-  size_t out_ndim = out.ndim();
-  if (out_ndim == 0) {
-    // Need placeholders so Metal doesn't compalain
-    int shape_ = 0;
-    size_t stride_ = 0;
-    compute_encoder->setBytes(&shape_, sizeof(int), 7);
-    compute_encoder->setBytes(&stride_, sizeof(size_t), 8);
-  } else {
-    compute_encoder->setBytes(out.shape().data(), out_ndim * sizeof(int), 7);
+        out.shape().data(), out.shape().size() * sizeof(int), 3);
     compute_encoder->setBytes(
-        out.strides().data(), out_ndim * sizeof(size_t), 8);
-  }
-  compute_encoder->setBytes(&out_ndim, sizeof(size_t), 9);
-  compute_encoder->setBytes(axes_.data(), axes_.size() * sizeof(int), 10);
+        out.strides().data(), out.strides().size() * sizeof(size_t), 4);
+    compute_encoder->setBytes(&upd_size, sizeof(size_t), 5);
 
-  // Set index info
-  if (idx_ndim == 0) {
-    // Add a 0 in idx_shapes and strides to avoid the missing buffer binding
-    // error in the metal API.
-    idx_shapes.push_back(0);
-    idx_strides.push_back(0);
-  }
-  compute_encoder->setBytes(
-      idx_shapes.data(), idx_shapes.size() * sizeof(int), 11);
-  compute_encoder->setBytes(
-      idx_strides.data(), idx_strides.size() * sizeof(size_t), 12);
-  compute_encoder->setBytes(&idx_ndim, sizeof(int), 13);
+    // Set index buffers
+    for (int i = 1; i < nidx + 1; ++i) {
+      set_array_buffer(compute_encoder, inputs[i], 20 + i);
+    }
 
-  // Set index buffers
-  for (int i = 1; i < nidx + 1; ++i) {
-    set_array_buffer(compute_encoder, inputs[i], 20 + i);
-  }
+    // Launch grid
+    MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
+    MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
 
-  // Launch grid
-  MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
-  MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  } else {
+    // Collect all idx shapes and strides into one place
+    std::vector<int> idx_shapes;
+    std::vector<size_t> idx_strides;
+
+    for (int i = 0; i < nidx; ++i) {
+      idx_shapes.insert(
+          idx_shapes.end(),
+          inputs[i + 1].shape().begin(),
+          inputs[i + 1].shape().end());
+
+      idx_strides.insert(
+          idx_strides.end(),
+          inputs[i + 1].strides().begin(),
+          inputs[i + 1].strides().end());
+    }
+
+    if (upd_ndim == 0) {
+      // Need placeholders so Metal doesn't compalain
+      int shape_ = 0;
+      size_t stride_ = 0;
+      compute_encoder->setBytes(&shape_, sizeof(int), 3);
+      compute_encoder->setBytes(&stride_, sizeof(size_t), 4);
+    } else {
+      compute_encoder->setBytes(upd.shape().data(), upd_ndim * sizeof(int), 3);
+      compute_encoder->setBytes(
+          upd.strides().data(), upd_ndim * sizeof(size_t), 4);
+    }
+    compute_encoder->setBytes(&upd_ndim, sizeof(size_t), 5);
+    compute_encoder->setBytes(&upd_size, sizeof(size_t), 6);
+
+    // Set output info
+    size_t out_ndim = out.ndim();
+    if (out_ndim == 0) {
+      // Need placeholders so Metal doesn't compalain
+      int shape_ = 0;
+      size_t stride_ = 0;
+      compute_encoder->setBytes(&shape_, sizeof(int), 7);
+      compute_encoder->setBytes(&stride_, sizeof(size_t), 8);
+    } else {
+      compute_encoder->setBytes(out.shape().data(), out_ndim * sizeof(int), 7);
+      compute_encoder->setBytes(
+          out.strides().data(), out_ndim * sizeof(size_t), 8);
+    }
+    compute_encoder->setBytes(&out_ndim, sizeof(size_t), 9);
+    compute_encoder->setBytes(axes_.data(), axes_.size() * sizeof(int), 10);
+
+    // Set index info
+    if (idx_ndim == 0) {
+      // Add a 0 in idx_shapes and strides to avoid the missing buffer binding
+      // error in the metal API.
+      idx_shapes.push_back(0);
+      idx_strides.push_back(0);
+    }
+    compute_encoder->setBytes(
+        idx_shapes.data(), idx_shapes.size() * sizeof(int), 11);
+    compute_encoder->setBytes(
+        idx_strides.data(), idx_strides.size() * sizeof(size_t), 12);
+    compute_encoder->setBytes(&idx_ndim, sizeof(int), 13);
+
+    // Set index buffers
+    for (int i = 1; i < nidx + 1; ++i) {
+      set_array_buffer(compute_encoder, inputs[i], 20 + i);
+    }
+
+    // Launch grid
+    MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
+    MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
+  }
 }
 
 } // namespace mlx::core
