@@ -2623,9 +2623,13 @@ std::vector<array> Softmax::vjp(
   assert(cotangents.size() == 1);
   auto& s = outputs[0];
   auto sv = multiply(s, cotangents[0], stream());
-  return {subtract(
-      sv,
-      multiply(s, sum(sv, std::vector<int>{-1}, true, stream()), stream()))};
+  return {multiply(
+      s,
+      subtract(
+          cotangents[0],
+          sum(sv, std::vector<int>{-1}, true, stream()),
+          stream()),
+      stream())};
 }
 
 std::vector<array> Softmax::jvp(

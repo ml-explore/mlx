@@ -161,6 +161,14 @@ def softmax_fused(axis, x):
     mx.eval(ys)
 
 
+def softmax_fused_grad(axis, x):
+    ys = []
+    for i in range(100):
+        y = mx.grad(lambda x, axis: mx.sum(mx.softmax(x, axis=axis)))(x, axis)
+        ys.append(y)
+    mx.eval(ys)
+
+
 def relu(x):
     y = x
     for i in range(100):
@@ -441,6 +449,9 @@ if __name__ == "__main__":
             print(bench(softmax_fused, axis, x))
         else:
             print(bench(softmax, axis, x))
+
+    elif args.benchmark == "softmax_grad":
+        print(bench(softmax_fused_grad, axis, x))
 
     elif args.benchmark == "relu":
         print(bench(relu, x))
