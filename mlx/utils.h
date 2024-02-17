@@ -77,7 +77,7 @@ std::ostream& operator<<(std::ostream& os, array a);
 std::ostream& operator<<(std::ostream& os, const std::vector<int>& v);
 std::ostream& operator<<(std::ostream& os, const std::vector<size_t>& v);
 inline std::ostream& operator<<(std::ostream& os, const complex64_t& v) {
-  return os << v.real() << (v.imag() > 0 ? "+" : "") << v.imag() << "j";
+  return os << v.real() << (v.imag() >= 0 ? "+" : "") << v.imag() << "j";
 }
 inline std::ostream& operator<<(std::ostream& os, const float16_t& v) {
   return os << static_cast<float>(v);

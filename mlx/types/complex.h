@@ -60,25 +60,30 @@ inline complex64_t operator-(const complex64_t& v) {
 // clang-format off
 #define complex_binop_helper(_op_, _operator_, itype)            \
   inline complex64_t _operator_(itype x, const complex64_t& y) { \
-    return x _op_ static_cast<std::complex<float>>(y);           \
+    return static_cast<complex64_t>(x) _op_ y;           \
   }                                                              \
   inline complex64_t _operator_(const complex64_t& x, itype y) { \
-    return static_cast<std::complex<float>>(x) _op_ y;           \
+    return x _op_ static_cast<complex64_t>(y);           \
   }
 
-#define complex_binop(_op_, _operator_)                                       \
-  inline complex64_t _operator_(const complex64_t& x, const complex64_t& y) { \
-    return static_cast<std::complex<float>>(x)                                \
-        _op_ static_cast<std::complex<float>>(y);                             \
-  }                                                                           \
-  complex_binop_helper(_op_, _operator_, bool)                                \
-  complex_binop_helper(_op_, _operator_, uint32_t)                            \
-  complex_binop_helper(_op_, _operator_, uint64_t)                            \
-  complex_binop_helper(_op_, _operator_, int32_t)                             \
-  complex_binop_helper(_op_, _operator_, int64_t)                             \
-  complex_binop_helper(_op_, _operator_, float16_t)                           \
-  complex_binop_helper(_op_, _operator_, bfloat16_t)                          \
-  complex_binop_helper(_op_, _operator_, const std::complex<float>&)          \
+#define complex_binop(_op_, _operator_)                                               \
+  inline complex64_t _operator_(const std::complex<float>& x, const complex64_t& y) { \
+    return x _op_ static_cast<std::complex<float>>(y);                                \
+  }                                                                                   \
+  inline complex64_t _operator_(const complex64_t& x, const std::complex<float>& y) { \
+    return static_cast<std::complex<float>>(x) _op_ y;                                \
+  }                                                                                   \
+  inline complex64_t _operator_(const complex64_t& x, const complex64_t& y) {         \
+    return static_cast<std::complex<float>>(x)                                        \
+        _op_ static_cast<std::complex<float>>(y);                                     \
+  }                                                                                   \
+  complex_binop_helper(_op_, _operator_, bool)                                        \
+  complex_binop_helper(_op_, _operator_, uint32_t)                                    \
+  complex_binop_helper(_op_, _operator_, uint64_t)                                    \
+  complex_binop_helper(_op_, _operator_, int32_t)                                     \
+  complex_binop_helper(_op_, _operator_, int64_t)                                     \
+  complex_binop_helper(_op_, _operator_, float16_t)                                   \
+  complex_binop_helper(_op_, _operator_, bfloat16_t)                                  \
   complex_binop_helper(_op_, _operator_, float)
 // clang-format on
 
