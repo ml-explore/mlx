@@ -1120,55 +1120,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         # Test repr
         self.assertEqual(
             str(nn.Upsample(scale_factor=2)),
-            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=False)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=2, align_corners=False)),
-            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=False)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=2, align_corners=True)),
-            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=True)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=2, mode="nearest")),
-            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=False)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=2, mode="nearest", align_corners=True)),
-            "Upsample(scale_factor=(2.0, 2.0), mode='nearest', align_corners=True)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=2, mode="bilinear")),
-            "Upsample(scale_factor=(2.0, 2.0), mode='bilinear', align_corners=False)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)),
-            "Upsample(scale_factor=(2.0, 2.0), mode='bilinear', align_corners=True)",
+            "Upsample(scale_factor=2.0, mode='nearest', align_corners=False)",
         )
         self.assertEqual(
             str(nn.Upsample(scale_factor=(2, 3))),
             "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=False)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=(2, 3), align_corners=True)),
-            "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=True)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=(2, 3), mode="nearest")),
-            "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=False)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=(2, 3), mode="nearest", align_corners=True)),
-            "Upsample(scale_factor=(2.0, 3.0), mode='nearest', align_corners=True)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=(2, 3), mode="bilinear")),
-            "Upsample(scale_factor=(2.0, 3.0), mode='bilinear', align_corners=False)",
-        )
-        self.assertEqual(
-            str(nn.Upsample(scale_factor=(2, 3), mode="bilinear", align_corners=True)),
-            "Upsample(scale_factor=(2.0, 3.0), mode='bilinear', align_corners=True)",
         )
 
     def test_pooling(self):

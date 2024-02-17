@@ -1,96 +1,132 @@
 # Copyright © 2023-2024 Apple Inc.
 
+import operator
+from functools import reduce
+from itertools import product
 from typing import Literal, Tuple, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-def upsample2d_nearest(x: mx.array, scale_factor: Tuple[float, float]):
+def _scaled_indices(N, scale, align_corners, dim, ndims):
+    M = int(scale * N)
+    if align_corners:
+        indices = mx.arange(M, dtype=mx.float32) * ((N - 1) / (M - 1))
+    else:
+        step = 1 / scale
+        start = ((M - 1) * step - N + 1) / 2
+        indices = mx.arange(M, dtype=mx.float32) * step - start
+        indices = mx.clip(indices, 0, N - 1)
+    shape = [1] * ndims
+    shape[dim] = -1
+
+    return indices.reshape(shape)
+
+
+def _nearest_indices(N, scale, dim, ndims):
+    return _scaled_indices(N, scale, True, dim, ndims).astype(mx.int32)
+
+
+def _linear_indices(N, scale, align_corners, dim, ndims):
+    indices = _scaled_indices(N, scale, align_corners, dim, ndims)
+    indices_l = mx.floor(indices)
+    indices_r = mx.ceil(indices)
+    weight = indices - indices_l
+    weight = mx.expand_dims(weight, -1)
+
+    return (
+        (indices_l.astype(mx.int32), 1 - weight),
+        (indices_r.astype(mx.int32), weight),
+    )
+
+
+def upsample_nearest(x: mx.array, scale_factor: Tuple):
+    dims = x.ndim - 2
+    if dims != len(scale_factor):
+        raise ValueError("A scale needs to be provided for each spatial dimension")
+
     # Integer scale_factors means we can simply expand-broadcast and reshape
     if tuple(map(int, scale_factor)) == scale_factor:
-        sh, sw = map(int, scale_factor)
-        B, H, W, C = x.shape
-        x = x[:, :, None, :, None]
-        x = mx.broadcast_to(x, (B, H, sh, W, sw, C))
-        x = x.reshape(B, H * sh, W * sw, C)
+        shape = list(x.shape)
+        for d in range(dims):
+            shape.insert(2 + 2 * d, 1)
+        x = x.reshape(shape)
+        for d in range(dims):
+            shape[2 + 2 * d] = int(scale_factor[d])
+        x = mx.broadcast_to(x, shape)
+        for d in range(dims):
+            shape[d + 1] *= shape[d + 2]
+            shape.pop(d + 2)
+        x = x.reshape(shape)
         return x
 
-    # Floating point scale_factor means we need to do indexing
     else:
-        sh, sw = scale_factor
-        B, H, W, C = x.shape
-        new_H = int(H * sh)
-        new_W = int(W * sw)
-        idx_y = (mx.arange(0, new_H) / sh).astype(mx.int32)
-        idx_x = (mx.arange(0, new_W) / sw).astype(mx.int32)
-        return x[:, idx_y[:, None], idx_x[None]]
+        B, *N, C = x.shape
+        indices = [slice(None)]
+        for i, (n, s) in enumerate(zip(N, scale_factor)):
+            indices.append(_nearest_indices(n, s, i, dims))
+        indices = tuple(indices)
+
+        return x[indices]
 
 
-def upsample2d_bilinear(
-    x: mx.array, scale_factor: Tuple[float, float], align_corners: bool = False
-):
-    sh, sw = scale_factor
-    B, H, W, C = x.shape
-    new_H = int(H * sh)
-    new_W = int(W * sw)
-    if not align_corners:
-        idx_y = mx.arange(0, new_H) * ((H - 0.5) / (new_H - 1)) - 0.25
-        idx_x = mx.arange(0, new_W) * ((W - 0.5) / (new_W - 1)) - 0.25
-        idx_y = mx.clip(idx_y, 0, H - 1)
-        idx_x = mx.clip(idx_x, 0, W - 1)
-    else:
-        idx_y = mx.arange(0, new_H) * ((H - 1) / (new_H - 1))
-        idx_x = mx.arange(0, new_W) * ((W - 1) / (new_W - 1))
+def upsample_linear(x: mx.array, scale_factor: Tuple, align_corners: bool = False):
+    dims = x.ndim - 2
+    if dims != len(scale_factor):
+        raise ValueError("A scale needs to be provided for each spatial dimension")
+
+    B, *N, C = x.shape
+
     # Compute the sampling grid
-    idx_y_t = mx.floor(idx_y).astype(mx.int32)
-    idx_y_b = mx.ceil(idx_y).astype(mx.int32)
-    idx_x_l = mx.floor(idx_x).astype(mx.int32)
-    idx_x_r = mx.ceil(idx_x).astype(mx.int32)
-    # Sample
-    a = x[:, idx_y_t[:, None], idx_x_l[None]]
-    b = x[:, idx_y_t[:, None], idx_x_r[None]]
-    c = x[:, idx_y_b[:, None], idx_x_l[None]]
-    d = x[:, idx_y_b[:, None], idx_x_r[None]]
-    # Compute bilinear interpolation weights
-    y_weight = (idx_y - idx_y_t)[:, None, None]
-    x_weight = (idx_x - idx_x_l)[None, :, None]
-    w_a = (1 - x_weight) * (1 - y_weight)
-    w_b = x_weight * (1 - y_weight)
-    w_c = y_weight * (1 - x_weight)
-    w_d = x_weight * y_weight
+    indices = []
+    for i, (n, s) in enumerate(zip(N, scale_factor)):
+        indices.append(_linear_indices(n, s, align_corners, i, dims))
+
+    # Sample and compute the weights
+    samples = []
+    weights = []
+    for idx_weight in product(*indices):
+        idx, weight = zip(*idx_weight)
+        samples.append(x[(slice(None),) + idx])
+        weights.append(reduce(operator.mul, weight))
+
     # Interpolate
-    return w_a * a + w_b * b + w_c * c + w_d * d
+    return sum(wi * xi for wi, xi in zip(weights, samples))
 
 
 class Upsample(Module):
-    r"""Upsamples the given spatial data.
+    r"""Upsample the input signal spatially.
 
-    The input is assumed to be a 4D tensor or 5D tensor where the channels are expected to be last.
+    The spatial dimensions are by convention dimensions ``1`` to ``x.ndim -
+    2``. The first is the sample dimension and the last is the feature
+    dimension.
 
-    In case of 4D input, the input shape should be :math:`(N, H, W, C)` where:
-        - ``N`` is the batch dimension
-        - ``H`` is the input image height
-        - ``W`` is the input image width
-        - ``C`` is the number of input channels
+    For example, an audio signal would be 3D with 1 spatial dimension, an image
+    4D with 2 and so on and so forth.
 
-    In case of 5D input, the input shape should be :math:`(N, D, H, W, C)` where:
-        - ``N`` is the batch dimension
-        - ``D`` is the first spatial dimension
-        - ``H`` is the second spatial dimension
-        - ``W`` is the third spatial dimension
-        - ``C`` is the number of input channels
-    .. warning::
-       The support for 5D input is not yet implemented.
+    There are two upsampling algorithms implemented nearest neighbor upsampling
+    and linear, bilinear, trilinear interpolation. The nearest neighbor
+    algorithm can be applied to any number of spatial dimensions and the linear
+    interpolation family are for 1, 2 and 3 spatial dimensions respectively.
+
+    .. note::
+       When using one of the linear interpolation modes the ``align_corners``
+       argument changes how the corners are treated in the input image. If
+       ``align_corners=True`` then the top and left edge of the input and
+       output will be matching as will the bottom right edge.
+
     Parameters:
-        scale_factor (float or Tuple[float, float]): The multiplier for the spatial size.
+        scale_factor (float or tuple): The multiplier for the spatial size.
             If a ``float`` is provided, it is the multiplier for all spatial dimensions.
-            Otherwise, the first element of the tuple is the first spatial dimension multiplier,
-            the second element of the tuple is the second spatial dimension multipler, and
-            the third element of the tuple is the third spatial dimension multiplier.
+            Otherwise, the number of scale factors provided must match the
+            number of spatial dimensions.
         mode (str, optional): The upsampling algorithm: one of ``"nearest"`` and
-            ``"bilinear"``. Default: ``"nearest"``.
-        align_corners (bool, optional): If True, ``(0, 0)`` is the top-left corner of the image and ``(H, W)`` is the bottom-right corner of the image. Otherwise, ``(0, 0)`` and ``(H, W)`` correspond to the center of the top-left and bottom-right pixels respectively. See **Examples** for the clear explanation. Default: ``False``.
+            ``"linear"``, ``"bilinear"`` or ``"trilinear"``. Default: ``"nearest"``.
+        align_corners (bool, optional): Changes the way the corners are treated
+            during ``"linear"``, ``"bilinear"`` or ``"trilinear"`` upsampling.
+            See the note above and the examples below for more details.
+            Default: ``False``.
 
     Examples:
         >>> import mlx.core as mx
@@ -123,29 +159,69 @@ class Upsample(Module):
 
     def __init__(
         self,
-        scale_factor: Union[float, Tuple[float, float]],
-        mode: Literal["nearest", "bilinear"] = "nearest",
+        scale_factor: Union[float, Tuple],
+        mode: Literal["nearest", "linear", "bilinear", "trilinear"] = "nearest",
         align_corners: bool = False,
     ):
         super().__init__()
-        if mode not in ["nearest", "bilinear"]:
+        if mode not in ["nearest", "linear", "bilinear", "trilinear"]:
             raise ValueError(f"[Upsample] Got unsupported upsampling algorithm: {mode}")
         if isinstance(scale_factor, (list, tuple)):
             self.scale_factor = tuple(map(float, scale_factor))
         else:
-            self.scale_factor = (float(scale_factor), float(scale_factor))
+            self.scale_factor = float(scale_factor)
         self.mode = mode
         self.align_corners = align_corners
 
     def _extra_repr(self) -> str:
-        return f"scale_factor={self.scale_factor}, mode={self.mode!r}, align_corners={self.align_corners}"
+        return (
+            f"scale_factor={self.scale_factor}, mode={self.mode!r}, "
+            f"align_corners={self.align_corners}"
+        )
 
     def __call__(self, x: mx.array) -> mx.array:
-        if x.ndim != 4:
+        dims = x.ndim - 2
+        if dims <= 0:
             raise ValueError(
-                f"[Upsample] The input tensor is {x.ndim}D. Currently, only 4D input is currently supported."
+                f"[Upsample] The input should have at least 1 spatial "
+                f"dimension which means it should be at least 3D but "
+                f"{x.ndim}D was provided"
             )
+
+        if self.mode == "linear":
+            if dims != 1:
+                raise ValueError(
+                    f"[Upsample] Linear mode requires 1 spatial "
+                    f"dimension but {dims} were provided."
+                )
+
         if self.mode == "bilinear":
-            return upsample2d_bilinear(x, self.scale_factor, self.align_corners)
+            if dims != 2:
+                raise ValueError(
+                    f"[Upsample] Bilinear mode requires 2 spatial "
+                    f"dimensions but {dims} were provided."
+                )
+
+        if self.mode == "trilinear":
+            if dims != 3:
+                raise ValueError(
+                    f"[Upsample] Trilinear mode requires 3 spatial "
+                    f"dimensions but {dims} were provided."
+                )
+
+        scale_factor = self.scale_factor
+        if isinstance(scale_factor, tuple):
+            if len(scale_factor) != dims:
+                raise ValueError(
+                    f"[Upsample] One scale per spatial dimension is required but "
+                    f"scale_factor={scale_factor} and the number of spatial "
+                    f"dimensions were {dims}"
+                )
         else:
-            return upsample2d_nearest(x, self.scale_factor)
+            scale_factor = (scale_factor,) * dims
+
+        if self.mode == "nearest":
+            return upsample_nearest(x, scale_factor)
+
+        else:
+            return upsample_linear(x, scale_factor, self.align_corners)
