@@ -117,6 +117,16 @@ def softmax_fused(axis, x):
     sync_if_needed(x)
 
 
+def softmax_fused_grad(axis, x):
+    ys = []
+    for i in range(100):
+        y = torch.func.grad(lambda x, axis: torch.sum(torch.softmax(x, axis=axis)))(
+            x, axis
+        )
+        ys.append(y)
+    sync_if_needed(x)
+
+
 @torch.no_grad()
 def relu(x):
     y = x
@@ -386,6 +396,9 @@ if __name__ == "__main__":
             print(bench(softmax_fused, axis, x))
         else:
             print(bench(softmax, axis, x))
+
+    elif args.benchmark == "softmax_grad":
+        print(bench(softmax_fused_grad, axis, x))
 
     elif args.benchmark == "relu":
         print(bench(relu, x))
