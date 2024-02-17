@@ -3,8 +3,8 @@
 namespace mlx::core::fast {
 
 // Custom primitive accepts a fallback function which it uses for
-// transformations. Transformations are virtual so that derived classes may to
-// override the default behavior
+// transformations. Transformations are virtual so that derived classes may
+// override the default behavior.
 class Custom : public Primitive {
  public:
   explicit Custom(
