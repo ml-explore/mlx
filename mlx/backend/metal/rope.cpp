@@ -1,8 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/backend/metal/utils.h"
-#include "mlx/fast.h"
-#include "mlx/primitives.h"
+#include "mlx/fast_primitives.h"
 
 namespace mlx::core::fast {
 
