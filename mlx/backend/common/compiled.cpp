@@ -216,8 +216,6 @@ inline void build_kernel(
     return constant_ids.find(x.id()) != constant_ids.end();
   };
 
-  // For scalar we shouldn't do the indexing things, just read at 0
-
   NodeNamer namer;
 
   // Start the kernel
