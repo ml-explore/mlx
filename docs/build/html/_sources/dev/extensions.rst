@@ -35,7 +35,7 @@ However, you work with vector math libraries often and realize that the
 You would really like the part of your applications that does this operation 
 on the CPU to be very fast - so you decide that you want it to rely on the 
 ``axpby`` routine provided by the Accelerate_ framework. Continuing to impose 
-our assumptions on to you, let's also assume that you want to learn how add 
+our assumptions on to you, let's also assume that you want to learn how to add 
 your own implementation for the gradients of your new operation while going 
 over the ins-and-outs of the MLX framework. 
 

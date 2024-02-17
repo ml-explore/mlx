@@ -31,20 +31,6 @@ model's parameters and the **optimizer state**.
 
 .. toctree::
 
-   optimizer
-
-.. currentmodule:: mlx.optimizers
-
-.. autosummary::
-   :toctree: _autosummary
-   :template: optimizers-template.rst
-
-   SGD
-   RMSprop
-   Adagrad
-   Adafactor
-   AdaDelta
-   Adam
-   AdamW
-   Adamax
-   Lion
+   optimizers/optimizer
+   optimizers/common_optimizers
+   optimizers/schedulers
