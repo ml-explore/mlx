@@ -1,16 +1,102 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <metal_stdlib>
+#include <metal_simdgroup>
+#include <metal_simdgroup_matrix>
+#include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/conv_params.h"
+
+#include "mlx/backend/metal/kernels/steel/conv/params.h"
 #include "mlx/backend/metal/kernels/bf16.h"
 
-#include "mlx/backend/metal/kernels/conv.h"
+#define MLX_MTL_CONST static constant constexpr const
 
 using namespace metal;
 
 ///////////////////////////////////////////////////////////////////////////////
-/// Slow and naive kernels
+/// Naive unfold with dilation
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, int N>
+[[kernel]] void naive_unfold_Nd(
+    const device T* in [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    const constant MLXConvParams<N>* params [[buffer(2)]],
+    uint3 gid [[thread_position_in_grid]]) {
+
+  int filter_size = params->C;
+  for(short i = 0; i < N; i++) filter_size *= params->wS[i];
+
+  int out_pixels = 1;
+  for(short i = 0; i < N; i++) out_pixels *= params->oS[i];
+
+  // Set out 
+  out += gid.z * filter_size + gid.y * (params->C);
+
+  // Corrdinates in input
+  int is[N] = {0};
+
+  // gid.z: N oS (Batch and row in unfolded output)
+  // gid.y: wS (Filter location to unfold input)
+  // gid.x: C (channel)
+
+  int n = (gid.z) / out_pixels;
+  int oS = (gid.z) % out_pixels;
+  int wS = gid.y;
+
+  bool valid = n < params->N;
+
+  // Unroll dimensions 
+  for (int i = N - 1; i >= 0; --i) {
+    int os_ = (oS % params->oS[i]);
+    int ws_ = (wS % params->wS[i]);
+    
+    ws_ = params->flip ? params->wS[i] - ws_ - 1 : ws_;
+
+    int is_ = os_ * params->str[i] - params->pad[i] + ws_ * params->kdil[i];
+    int is_max = 1 + params->idil[i] * (params->iS[i] - 1);
+
+    valid &= is_ >= 0 && is_ < is_max && (is_ % params->idil[0] == 0);
+
+    is[i] = is_ / params->idil[i];
+
+    oS /= params->oS[i];
+    wS /= params->wS[i];
+  }
+
+  if(valid) {
+    size_t in_offset = n * params->in_strides[0];
+
+    for(int i = 0; i < N; ++i) {
+      in_offset += is[i] * params->in_strides[i + 1];
+    }
+
+    out[gid.x] = in[in_offset + gid.x];
+  } else {
+    out[gid.x] = T(0);
+  }
+
+}
+
+#define instantiate_naive_unfold_nd(name, itype, n) \
+  template [[host_name("naive_unfold_nd_" #name "_" #n)]] \
+  [[kernel]] void naive_unfold_Nd( \
+      const device itype* in [[buffer(0)]], \
+      device itype* out [[buffer(1)]], \
+      const constant MLXConvParams<n>* params [[buffer(2)]], \
+      uint3 gid [[thread_position_in_grid]]);
+
+#define instantiate_naive_unfold_nd_dims(name, itype) \
+  instantiate_naive_unfold_nd(name, itype, 1) \
+  instantiate_naive_unfold_nd(name, itype, 2) \
+  instantiate_naive_unfold_nd(name, itype, 3)
+
+instantiate_naive_unfold_nd_dims(float32, float);
+instantiate_naive_unfold_nd_dims(float16, half);
+instantiate_naive_unfold_nd_dims(bfloat16, bfloat16_t);
+
+///////////////////////////////////////////////////////////////////////////////
+/// Slow and naive conv2d kernels
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T, 
@@ -58,8 +144,8 @@ template <typename T,
 
         // Local in
         for(int m = 0; m < TM; m++) {
-          int i = out_h[m] * params.str[0] - params.pad[0] + h * params.dil[0];
-          int j = out_w[m] * params.str[1] - params.pad[1] + w * params.dil[1];
+          int i = out_h[m] * params.str[0] - params.pad[0] + h * params.kdil[0];
+          int j = out_w[m] * params.str[1] - params.pad[1] + w * params.kdil[1];
 
           bool valid = i >= 0 && i < params.iS[0] && j >= 0 && j < params.iS[1];
           in_local[m] = valid ? in[i * params.in_strides[1] + j * params.in_strides[2] + c] : T(0);
@@ -115,59 +201,6 @@ template <typename T,
 instantiate_naive_conv_2d_blocks(float32, float);
 instantiate_naive_conv_2d_blocks(float16, half);
 instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t);
-
-///////////////////////////////////////////////////////////////////////////////
-/// Implicit gemm kernels
-///////////////////////////////////////////////////////////////////////////////
-
-template <typename T,
-          int BM,
-          int BN,
-          int BK,
-          int WM,
-          int WN>
-[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void implicit_gemm_conv_2d(
-    const device T* in [[buffer(0)]],
-    const device T* wt [[buffer(1)]],
-    device T* out [[buffer(2)]],
-    const constant MLXConvParams<2>& params [[buffer(3)]],
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]]) {
-
-  using gemm_kernel = Conv2DImplicitGEMMKernel<T, BM, BN, BK, WM, WN, /*transpose_a*/ false, /*transpose_b*/ true>;
-    
-  threadgroup T tgp_memory[gemm_kernel::tgp_mem_size];
-
-  gemm_kernel::run( 
-    in, wt, out, 
-    params, tgp_memory,
-    tid, lid, simd_gid, simd_lid
-  );
-
-}
-
-#define instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn) \
-  template [[host_name("implicit_gemm_conv_2d_" #name "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn)]] \
-  [[kernel]] void implicit_gemm_conv_2d<itype, bm, bn, bk, wm, wn>( \
-      const device itype* in [[buffer(0)]], \
-      const device itype* wt [[buffer(1)]], \
-      device itype* out [[buffer(2)]], \
-      const constant MLXConvParams<2>& params [[buffer(3)]], \
-      uint3 tid [[threadgroup_position_in_grid]], \
-      uint3 lid [[thread_position_in_threadgroup]], \
-      uint simd_gid [[simdgroup_index_in_threadgroup]], \
-      uint simd_lid [[thread_index_in_simdgroup]]);
-
-#define instantiate_implicit_2d_blocks(name, itype) \
-    instantiate_implicit_conv_2d(name, itype, 32, 32, 32, 2, 2) \
-    instantiate_implicit_conv_2d(name, itype, 32, 32, 16, 2, 2) \
-    instantiate_implicit_conv_2d(name, itype, 64, 64, 16, 2, 2)
-
-instantiate_implicit_2d_blocks(float32, float);
-instantiate_implicit_2d_blocks(float16, half);
-instantiate_implicit_2d_blocks(bfloat16, bfloat16_t);
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Winograd kernels

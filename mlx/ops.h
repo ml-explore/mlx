@@ -1046,6 +1046,18 @@ array conv2d(
     int groups = 1,
     StreamOrDevice s = {});
 
+/** General convolution with a filter */
+array convNd(
+    const array& input,
+    const array& weight,
+    std::vector<int> stride = {},
+    std::vector<int> padding = {},
+    std::vector<int> kernel_dilation = {},
+    std::vector<int> input_dilation = {},
+    int groups = 1,
+    bool flip = false,
+    StreamOrDevice s = {});
+
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
     const array& x,

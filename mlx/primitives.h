@@ -544,15 +544,19 @@ class Convolution : public UnaryPrimitive {
  public:
   explicit Convolution(
       Stream stream,
-      const std::vector<int>& padding,
       const std::vector<int>& kernel_strides,
+      const std::vector<int>& padding,
       const std::vector<int>& kernel_dilation,
-      const std::vector<int>& input_dilation)
+      const std::vector<int>& input_dilation,
+      const int groups = 1,
+      const bool flip = false)
       : UnaryPrimitive(stream),
         padding_(padding),
         kernel_strides_(kernel_strides),
         kernel_dilation_(kernel_dilation),
-        input_dilation_(input_dilation){};
+        input_dilation_(input_dilation),
+        groups_(groups),
+        flip_(flip){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -571,6 +575,8 @@ class Convolution : public UnaryPrimitive {
   std::vector<int> kernel_strides_;
   std::vector<int> kernel_dilation_;
   std::vector<int> input_dilation_;
+  int groups_;
+  bool flip_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };
