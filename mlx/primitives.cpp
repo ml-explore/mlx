@@ -628,7 +628,6 @@ std::vector<array> Convolution::vjp(
   auto& wt = primals[1];
   auto cotan = cotangents[0];
 
-  int N = in.shape(0);
   int O = wt.shape(0);
 
   // Resolve Padded input shapes and strides

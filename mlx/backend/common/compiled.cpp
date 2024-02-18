@@ -410,7 +410,6 @@ void Compiled::eval_cpu(
 
   // Get the kernel name from the lib
   int ndim = shape.size();
-  bool dynamic = ndim >= 8;
   auto kernel_name = kernel_lib_ + (contiguous ? "_contiguous" : "_strided_");
   if (!contiguous) {
     kernel_name += std::to_string(shape.size());
