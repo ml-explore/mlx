@@ -2441,6 +2441,19 @@ std::vector<array> Sign::jvp(
   return {zeros(primals[0].shape(), primals[0].dtype(), stream())};
 }
 
+std::pair<std::vector<array>, std::vector<int>> Pooling::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {}
+std::vector<array> Pooling::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {}
+std::vector<array> Pooling::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {}
+
 std::pair<std::vector<array>, std::vector<int>> Sign::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

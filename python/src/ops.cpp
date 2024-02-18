@@ -3696,4 +3696,43 @@ void init_ops(py::module_& m) {
             array: An array with at least three dimensions.
 
         )pbdoc");
+    m.def(
+      "max_pool_1d",
+      [](const array& a,
+         int kernel_size,
+         std::optional<int> stride,
+         int padding,
+         int dilation,
+         bool ceil_mode,
+         StreamOrDevice s) {
+        return max_pool_1d(
+            a, kernel_size, stride, padding, dilation, ceil_mode, s);
+      },
+      "a"_a,
+      "kernel_size"_a,
+      py::pos_only(),
+      "stride"_a = none,
+      "padding"_a = 0,
+      "dilation"_a = 1,
+      "ceil_mode"_a = false,
+      py::kw_only(),
+      "stream"_a = none);
+  m.def(
+      "avg_pool_1d",
+      [](const array& a,
+         int kernel_size,
+         std::optional<int> stride,
+         int padding,
+         bool ceil_mode,
+         StreamOrDevice s) {
+        return avg_pool_1d(a, kernel_size, stride, padding, ceil_mode, s);
+      },
+      "a"_a,
+      "kernel_size"_a,
+      py::pos_only(),
+      "stride"_a = none,
+      "padding"_a = 0,
+      "ceil_mode"_a = false,
+      py::kw_only(),
+      "stream"_a = none);
 }

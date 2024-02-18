@@ -2864,6 +2864,99 @@ array conv2d(
       {in, wt});
 }
 
+inline int pooling_shape(
+    int in_h,
+    int padding,
+    int dilation,
+    int kernel_size,
+    int stride,
+    bool ceil_mode) {
+  float out_h = (float(
+                     in_h + (padding + padding) - dilation * (kernel_size - 1) -
+                     1 + (ceil_mode ? stride - 1 : 0)) /
+                 stride) +
+      1.;
+  if (ceil_mode) {
+    if ((out_h - 1) * stride >= in_h + padding) {
+      --out_h;
+    }
+  }
+  return out_h;
+}
+
+/** Pooling operations */
+array avg_pool_1d(
+    const array& input,
+    int kernel_size,
+    std::optional<int> stride /** = {} */,
+    int padding /** = 0 */,
+    bool ceil_mode /** = true */,
+    StreamOrDevice s /** = {} */) {
+  if (!is_floating_point(input.dtype())) {
+    throw std::invalid_argument(
+        "[avg_pool_1d] Only floating point types are supported for now");
+  }
+  if (input.ndim() != 3) {
+    throw std::invalid_argument("[avg_pool_1d] input must be 3D (N, H, C)");
+  }
+  auto stride_ = stride.value_or(kernel_size);
+  auto out_shape = input.shape();
+  out_shape[1] = pooling_shape(
+      input.shape(1), padding, 1, kernel_size, stride_, ceil_mode);
+
+  return array(
+      out_shape,
+      input.dtype(),
+      std::make_unique<Pooling>(
+          to_stream(s),
+          std::vector<int>{kernel_size},
+          std::vector<int>{stride_},
+          std::vector<int>{padding},
+          std::vector<int>{1},
+          Pooling::PoolType::Average),
+      {input});
+}
+
+array max_pool_1d(
+    const array& input,
+    int kernel_size,
+    std::optional<int> stride /* = {} */,
+    int padding /* = 0 */,
+    int dilation /* = 1 */,
+    bool ceil_mode /* = false */,
+    StreamOrDevice s /* = {} */) {
+  if (!is_floating_point(input.dtype())) {
+    throw std::invalid_argument(
+        "[max_pool_1d] Only floating point types are supported for now");
+  }
+  if (dilation != 1) {
+    throw std::invalid_argument(
+        "[max_pool_1d] dilation != 1 is not supported yet");
+  }
+  if (padding < 0 || padding > (kernel_size / 2)) {
+    throw std::invalid_argument(
+        "[max_pool_1d] padding must be >= 0 and <= kernel_size / 2");
+  }
+  if (input.ndim() != 3) {
+    throw std::invalid_argument("[max_pool_1d] input must be 3D (N, H, C)");
+  }
+  int stride_ = stride.value_or(kernel_size);
+  auto out_shape = input.shape();
+  out_shape[1] = pooling_shape(
+      input.shape(1), padding, dilation, kernel_size, stride_, ceil_mode);
+  return array(
+      out_shape,
+      input.dtype(),
+      std::make_unique<Pooling>(
+          to_stream(s),
+          std::vector<int>{kernel_size},
+          std::vector<int>{stride_},
+          std::vector<int>{padding},
+          std::vector<int>{dilation},
+          Pooling::PoolType::Max),
+      {input});
+}
+
 array quantized_matmul(
     const array& in_x,
     const array& w,

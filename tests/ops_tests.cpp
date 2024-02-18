@@ -4,7 +4,9 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/device.h"
 #include "mlx/mlx.h"
+#include "mlx/utils.h"
 
 using namespace mlx::core;
 
@@ -2766,4 +2768,110 @@ TEST_CASE("test atleast_3d") {
   out = atleast_3d(x);
   CHECK_EQ(out.ndim(), 3);
   CHECK_EQ(out.shape(), std::vector<int>{3, 1, 1});
+}
+TEST_CASE("avg_pool_1d") {
+  StreamContext ctx(Device::cpu);
+  SUBCASE("1 stride, 1 padding") {
+    auto x = array(
+        {-1.1258, 1.4437, -1.1524, 0.2660,  -0.2506, 1.3894,  -0.4339,
+         1.5863,  0.5988, 0.9463,  -1.5551, -0.8437, -0.3414, 0.9318,
+         1.8530,  1.2590, 0.4681,  2.0050,  -0.1577, 0.0537},
+        {1, 10, 2});
+    auto out = avg_pool_1d(x, 4, 1, 1);
+    auto expected = array(
+        {-0.6322,
+         0.7748,
+         -0.7407,
+         1.1714,
+         -0.3095,
+         1.0470,
+         -0.4102,
+         0.7696,
+         -0.4329,
+         0.6552,
+         0.1388,
+         0.5734,
+         0.1062,
+         0.8380,
+         0.4555,
+         1.0624,
+         0.5408,
+         0.8294},
+        {1, 9, 2});
+    CHECK(allclose(out, expected, 1e-3, 1e-5).item<bool>());
+  }
+  // SUBCASE("padding 1") {
+  //   auto x = array({}, {1, 10, 1});
+  //   auto out = avg_pool_1d(x, 3, {}, 1, 1);
+  // }
+  SUBCASE("Ceil mode true") {
+    auto x = array(
+        {1.5410,
+         -0.2934,
+         -2.1788,
+         0.5684,
+         -1.0845,
+         -1.3986,
+         0.4033,
+         0.8380,
+         -0.7193,
+         -0.4033},
+        {1, 10, 1});
+    auto out = avg_pool_1d(x, 3, {}, 0, true);
+    auto expected = array({-0.3104, -0.6382, 0.1740, -0.4033}, {1, 4, 1});
+    CHECK(allclose(out, expected, 1e-3, 1e-5).item<bool>());
+  }
+}
+
+TEST_CASE("max_pool_1d") {
+  // TODO: Remove when GPU is added
+  StreamContext ctx(Device::cpu);
+  SUBCASE("1 stride, 1 padding") {
+    // stride, padding test
+    auto x = array(
+        {-1.1258, 1.4437, -1.1524, 0.2660,  -0.2506, 1.3894,  -0.4339,
+         1.5863,  0.5988, 0.9463,  -1.5551, -0.8437, -0.3414, 0.9318,
+         1.8530,  1.2590, 0.4681,  2.0050,  -0.1577, 0.0537},
+        {1, 10, 2});
+    auto out = max_pool_1d(x, 4, 1, 1);
+    auto expected = array(
+        {-0.2506,
+         1.4437,
+         -0.2506,
+         1.5863,
+         0.5988,
+         1.5863,
+         0.5988,
+         1.5863,
+         0.5988,
+         1.5863,
+         1.8530,
+         1.2590,
+         1.8530,
+         2.0050,
+         1.8530,
+         2.0050,
+         1.8530,
+         2.0050},
+        {1, 9, 2});
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+  SUBCASE("ceil_mode true") {
+    // ceil mode test with null stride
+    auto x = array(
+        {1.5410,
+         -0.2934,
+         -2.1788,
+         0.5684,
+         -1.0845,
+         -1.3986,
+         0.4033,
+         0.8380,
+         -0.7193,
+         -0.4033},
+        {1, 10, 1});
+    auto out = max_pool_1d(x, 3, {}, 0, 1, true);
+    auto expected = array({1.5410, 0.5684, 0.8380, -0.4033}, {1, 4, 1});
+    CHECK(array_equal(out, expected).item<bool>());
+  }
 }

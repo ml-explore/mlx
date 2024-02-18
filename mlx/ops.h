@@ -1046,6 +1046,25 @@ array conv2d(
     int groups = 1,
     StreamOrDevice s = {});
 
+/** Pooling operations */
+
+array avg_pool_1d(
+    const array& input,
+    int kernel_size,
+    std::optional<int> stride = {},
+    int padding = 0,
+    bool ceil_mode = false,
+    StreamOrDevice s = {});
+
+array max_pool_1d(
+    const array& input,
+    int kernel_size,
+    std::optional<int> stride = {},
+    int padding = 0,
+    int dilation = 1,
+    bool ceil_mode = false,
+    StreamOrDevice s = {});
+
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
     const array& x,

@@ -552,6 +552,42 @@ class Convolution : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Pooling : public UnaryPrimitive {
+ public:
+  enum PoolType { Max, Average };
+
+  explicit Pooling(
+      Stream stream,
+      const std::vector<int>& kernel_size,
+      const std::vector<int>& strides,
+      const std::vector<int>& padding,
+      const std::vector<int>& dilation,
+      PoolType type)
+      : UnaryPrimitive(stream),
+        kernel_size_(kernel_size),
+        strides_(strides),
+        padding_(padding),
+        dilation_(dilation),
+        type_(type){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Pooling)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  std::vector<int> kernel_size_;
+  std::vector<int> strides_;
+  std::vector<int> padding_;
+  std::vector<int> dilation_;
+  PoolType type_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Copy : public UnaryPrimitive {
  public:
   explicit Copy(Stream stream) : UnaryPrimitive(stream){};
