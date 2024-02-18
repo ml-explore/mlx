@@ -381,6 +381,39 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         self.assertFalse(mx.allclose(fun(), fun(), 1e-2, 1e-2))
 
+    def test_compile_kwargs(self):
+
+        @mx.compile
+        def fun(x, y, z):
+            return x + y + z
+
+        x = mx.array(1)
+        y = mx.array(2)
+        z = mx.array(3)
+        out = fun(x, y=y, z=z)
+        self.assertEqual(out.item(), 6)
+
+    def test_shapeless_compile(self):
+        y = 1
+
+        @partial(mx.compile, shapeless=True)
+        def fun(x):
+            return x + y
+
+        x = mx.array([1, 2])
+        self.assertTrue(mx.array_equal(fun(x), mx.array([2, 3])))
+
+        # The function is not recompiled, so the change
+        # to y should not be reflected in the output
+        y = 2
+        x = mx.array([1, 2, 3])
+        self.assertTrue(mx.array_equal(fun(x), mx.array([2, 3, 4])))
+
+        # Type change recompiles
+        x = mx.array([1.0, 2.0, 3.0])
+        self.assertTrue(mx.array_equal(fun(x), mx.array([3.0, 4.0, 5.0])))
+        fun(x, y=y, z=z)
+
     def test_shapeless_compile(self):
         y = 1
 
