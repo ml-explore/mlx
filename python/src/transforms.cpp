@@ -581,8 +581,11 @@ struct PyCompiledFun {
     num_outputs = other.num_outputs;
   };
 
-  py::object operator()(const py::args& args) {
-    auto compile_fun = [this, &args](const std::vector<array>& a) {
+  py::object operator()(const py::args& args, const py::kwargs& kwargs) {
+    auto inputs = tree_flatten(args, false);
+
+    auto compile_fun = [this, &args, &kwargs, num_args = inputs.size()](
+                           const std::vector<array>& a) {
       // Put tracers into captured inputs
       std::vector<array> flat_in_captures;
       std::vector<array> trace_captures;
@@ -593,8 +596,10 @@ struct PyCompiledFun {
         tree_fill(captured_inputs, trace_captures);
       }
 
-      auto [outputs, py_outputs] = tree_flatten_with_structure(
-          std::move(fun(*tree_unflatten(args, a))), false);
+      auto tree_outputs =
+          fun(*tree_unflatten(args, a), **tree_unflatten(kwargs, a, num_args));
+      auto [outputs, py_outputs] =
+          tree_flatten_with_structure(std::move(tree_outputs), false);
 
       tree_cache().insert({fun_id, py_outputs});
 
@@ -614,7 +619,14 @@ struct PyCompiledFun {
       return outputs;
     };
 
-    auto inputs = tree_flatten(args, false);
+    {
+      auto flat_kwargs = tree_flatten(kwargs, false);
+      inputs.insert(
+          inputs.end(),
+          std::make_move_iterator(flat_kwargs.begin()),
+          std::make_move_iterator(flat_kwargs.end()));
+    }
+
     if (!py::isinstance<py::none>(captured_inputs)) {
       auto flat_in_captures = tree_flatten(captured_inputs, false);
       inputs.insert(
