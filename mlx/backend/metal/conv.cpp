@@ -182,7 +182,6 @@ void implicit_gemm_conv_2D_gpu(
 
   int implicit_M = conv_params.N * conv_params.oS[0] * conv_params.oS[1];
   int implicit_N = conv_params.O;
-  int implicit_K = conv_params.wS[0] * conv_params.wS[1] * conv_params.C;
 
   size_t grid_dim_x = (implicit_N + bn - 1) / bn;
   size_t grid_dim_y = (implicit_M + bm - 1) / bm;
