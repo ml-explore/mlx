@@ -508,11 +508,8 @@ class Compiled : public Primitive {
   void print(std::ostream& os) override;
   bool is_equivalent(const Primitive& other) const override;
 
-  std::string metal_lib_name() const {
+  std::string lib_name() const {
     return kernel_lib_;
-  }
-  std::string metal_lib_source() const {
-    return kernel_source_;
   }
 
  private:
@@ -522,7 +519,6 @@ class Compiled : public Primitive {
   const std::unordered_set<uintptr_t> constant_ids_;
 
   std::string kernel_lib_;
-  std::string kernel_source_;
 };
 
 class Concatenate : public UnaryPrimitive {

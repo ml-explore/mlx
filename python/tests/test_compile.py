@@ -435,6 +435,16 @@ class TestCompile(mlx_tests.MLXTestCase):
         z = 2
         self.assertTrue(mx.array_equal(fun(x, y), mx.full(shape=(3, 3), vals=5)))
 
+        x1 = mx.array([[1, 2], [3, 4], [5, 6]])
+        x2 = mx.array([[1, 2]])
+
+        def fun(x):
+            return x * x.sum(-1, keepdims=True)
+
+        cfun = mx.compile(fun, shapeless=True)
+        mx.eval(cfun(x1))
+        self.assertTrue(mx.array_equal(fun(x2), cfun(x2)))
+
 
 if __name__ == "__main__":
     unittest.main()
