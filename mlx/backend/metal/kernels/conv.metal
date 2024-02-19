@@ -56,7 +56,7 @@ template <typename T, int N>
     int is_ = os_ * params->str[i] - params->pad[i] + ws_ * params->kdil[i];
     int is_max = 1 + params->idil[i] * (params->iS[i] - 1);
 
-    valid &= is_ >= 0 && is_ < is_max && (is_ % params->idil[0] == 0);
+    valid &= is_ >= 0 && is_ < is_max && (is_ % params->idil[i] == 0);
 
     is[i] = is_ / params->idil[i];
 

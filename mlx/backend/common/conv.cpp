@@ -27,14 +27,16 @@ void slow_conv_1D(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
+    const std::vector<int>& wt_dilation,
+    const std::vector<int>& in_dilation,
+    bool flip) {
   const T* start_wt_ptr = wt.data<T>();
 
   const T* in_ptr = in.data<T>();
   T* out_ptr = out.data<T>();
 
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
-  const int iH = in.shape(1); // Input spatial dim
+  const int iH = 1 + in_dilation[0] * (in.shape(1) - 1); // Input spatial dim
   const int oH = out.shape(1); // Output spatial dim
   const int O = wt.shape(0); // Out channels
   const int C = wt.shape(2); // In channels
@@ -61,12 +63,15 @@ void slow_conv_1D(
         for (int wh = 0; wh < wH; ++wh) {
           const T* wt_ptr = filter_wt_ptr + wh * wt_stride_H;
 
-          int ih = oh * wt_strides[0] - padding[0] + wh * wt_dilation[0];
+          int wh_flip = flip ? (wH - wh - 1) : wh;
+          int ih = oh * wt_strides[0] - padding[0] + wh_flip * wt_dilation[0];
 
-          if (ih >= 0 && ih < iH) {
+          auto ih_div = std::div(ih, in_dilation[0]);
+
+          if (ih >= 0 && ih < iH && ih_div.rem == 0) {
             for (int c = 0; c < C; ++c) {
               r += static_cast<float>(
-                       in_ptr[ih * in_stride_H + c * in_stride_C]) *
+                       in_ptr[ih_div.quot * in_stride_H + c * in_stride_C]) *
                   static_cast<float>(wt_ptr[c * wt_stride_C]);
             } // c
 
@@ -90,14 +95,16 @@ void slow_conv_2D(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
+    const std::vector<int>& wt_dilation,
+    const std::vector<int>& in_dilation,
+    bool flip) {
   const T* st_wt_ptr = wt.data<T>();
   const T* st_in_ptr = in.data<T>();
   T* st_out_ptr = out.data<T>();
 
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
-  const int iH = in.shape(1); // Input spatial dim
-  const int iW = in.shape(2); // Input spatial dim
+  const int iH = 1 + in_dilation[0] * (in.shape(1) - 1); // Input spatial dim
+  const int iW = 1 + in_dilation[1] * (in.shape(2) - 1); // Input spatial dim
   const int oH = out.shape(1); // Output spatial dim
   const int oW = out.shape(2); // Output spatial dim
   const int O = wt.shape(0); // Out channels
@@ -120,6 +127,8 @@ void slow_conv_2D(
   const size_t out_stride_W = out.strides()[2];
   const size_t out_stride_O = out.strides()[3];
 
+  bool is_idil_one = in_dilation[0] == 1 && in_dilation[1] == 1;
+
   auto pt_conv_no_checks =
       [&](const T* in_ptr, const T* wt_ptr, T* out_ptr, int oh, int ow) {
         out_ptr += oh * out_stride_H + ow * out_stride_W;
@@ -131,8 +140,10 @@ void slow_conv_2D(
 
           for (int wh = 0; wh < wH; ++wh) {
             for (int ww = 0; ww < wW; ++ww) {
-              int ih = ih_base + wh * wt_dilation[0];
-              int iw = iw_base + ww * wt_dilation[1];
+              int wh_flip = flip ? wH - wh - 1 : wh;
+              int ww_flip = flip ? wW - ww - 1 : ww;
+              int ih = ih_base + wh_flip * wt_dilation[0];
+              int iw = iw_base + ww_flip * wt_dilation[1];
 
               const T* wt_ptr_pt = wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
               const T* in_ptr_pt = in_ptr + ih * in_stride_H + iw * in_stride_W;
@@ -164,14 +175,29 @@ void slow_conv_2D(
 
           for (int wh = 0; wh < wH; ++wh) {
             for (int ww = 0; ww < wW; ++ww) {
-              int ih = ih_base + wh * wt_dilation[0];
-              int iw = iw_base + ww * wt_dilation[1];
+              int wh_flip = flip ? wH - wh - 1 : wh;
+              int ww_flip = flip ? wW - ww - 1 : ww;
+              int ih = ih_base + wh_flip * wt_dilation[0];
+              int iw = iw_base + ww_flip * wt_dilation[1];
 
-              if (ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
+              int ih_dil = ih;
+              int iw_dil = iw;
+              bool idil_check = true;
+
+              if (!is_idil_one) {
+                auto ih_div = std::div(ih, in_dilation[0]);
+                auto iw_div = std::div(iw, in_dilation[1]);
+
+                idil_check = (ih_div.rem == 0 && iw_div.rem == 0);
+                ih_dil = ih_div.quot;
+                iw_dil = iw_div.quot;
+              }
+
+              if (idil_check && ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
                 const T* wt_ptr_pt =
                     wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
                 const T* in_ptr_pt =
-                    in_ptr + ih * in_stride_H + iw * in_stride_W;
+                    in_ptr + ih_dil * in_stride_H + iw_dil * in_stride_W;
 
                 for (int c = 0; c < C; ++c) {
                   r += static_cast<float>(in_ptr_pt[0]) *
@@ -191,13 +217,17 @@ void slow_conv_2D(
       };
 
   int oH_border_0 = 0;
-  int oH_border_1 = (padding[0] + wt_strides[0] + 1) / wt_strides[0];
-  int oH_border_2 = (iH + padding[0] - wH * wt_dilation[0]) / wt_strides[0];
+  int oH_border_1 =
+      is_idil_one ? ((padding[0] + wt_strides[0] - 1) / wt_strides[0]) : oH;
+  int oH_border_2 = std::max(
+      oH_border_1, (iH + padding[0] - wH * wt_dilation[0]) / wt_strides[0]);
   int oH_border_3 = oH;
 
   int oW_border_0 = 0;
-  int oW_border_1 = (padding[1] + wt_strides[0] + 1) / wt_strides[1];
-  int oW_border_2 = (iW + padding[1] - wW * wt_dilation[1]) / wt_strides[1];
+  int oW_border_1 =
+      is_idil_one ? ((padding[1] + wt_strides[1] - 1) / wt_strides[1]) : oW;
+  int oW_border_2 = std::max(
+      oW_border_1, (iW + padding[1] - wW * wt_dilation[1]) / wt_strides[1]);
   int oW_border_3 = oW;
 
   for (int n = 0; n < N; ++n) {
@@ -246,15 +276,18 @@ void dispatch_slow_conv_1D(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
+    const std::vector<int>& wt_dilation,
+    const std::vector<int>& in_dilation,
+    bool flip) {
   if (in.dtype() == float32) {
-    return slow_conv_1D<float>(in, wt, out, padding, wt_strides, wt_dilation);
+    return slow_conv_1D<float>(
+        in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
   } else if (in.dtype() == float16) {
     return slow_conv_1D<float16_t>(
-        in, wt, out, padding, wt_strides, wt_dilation);
+        in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
   } else if (in.dtype() == bfloat16) {
     return slow_conv_1D<bfloat16_t>(
-        in, wt, out, padding, wt_strides, wt_dilation);
+        in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
   } else {
     throw std::invalid_argument(
         "[Convolution::eval] got unsupported data type.");
@@ -267,15 +300,18 @@ void dispatch_slow_conv_2D(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
+    const std::vector<int>& wt_dilation,
+    const std::vector<int>& in_dilation,
+    bool flip) {
   if (in.dtype() == float32) {
-    return slow_conv_2D<float>(in, wt, out, padding, wt_strides, wt_dilation);
+    return slow_conv_2D<float>(
+        in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
   } else if (in.dtype() == float16) {
     return slow_conv_2D<float16_t>(
-        in, wt, out, padding, wt_strides, wt_dilation);
+        in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
   } else if (in.dtype() == bfloat16) {
     return slow_conv_2D<bfloat16_t>(
-        in, wt, out, padding, wt_strides, wt_dilation);
+        in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
   } else {
     throw std::invalid_argument(
         "[Convolution::eval] got unsupported data type.");
@@ -493,13 +529,16 @@ void conv_1D_cpu(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
-  if (wt_dilation[0] == 1) {
+    const std::vector<int>& wt_dilation,
+    const std::vector<int>& in_dilation,
+    bool flip) {
+  if (wt_dilation[0] == 1 && in_dilation[0] == 1 && !flip) {
     return explicit_gemm_conv_1D_cpu(
         in, wt, out, padding, wt_strides, wt_dilation);
   }
 
-  return dispatch_slow_conv_1D(in, wt, out, padding, wt_strides, wt_dilation);
+  return dispatch_slow_conv_1D(
+      in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
 }
 
 void conv_2D_cpu(
@@ -508,8 +547,11 @@ void conv_2D_cpu(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
-  return dispatch_slow_conv_2D(in, wt, out, padding, wt_strides, wt_dilation);
+    const std::vector<int>& wt_dilation,
+    const std::vector<int>& in_dilation,
+    bool flip) {
+  return dispatch_slow_conv_2D(
+      in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
 }
 
 } // namespace
@@ -523,12 +565,26 @@ void Convolution::eval(const std::vector<array>& inputs, array& out) {
   // 2D convolution
   if (in.ndim() == (2 + 2)) {
     return conv_2D_cpu(
-        in, wt, out, padding_, kernel_strides_, kernel_dilation_);
+        in,
+        wt,
+        out,
+        padding_,
+        kernel_strides_,
+        kernel_dilation_,
+        input_dilation_,
+        flip_);
   }
   // 1D convolution
   else if (in.ndim() == (1 + 2)) {
     return conv_1D_cpu(
-        in, wt, out, padding_, kernel_strides_, kernel_dilation_);
+        in,
+        wt,
+        out,
+        padding_,
+        kernel_strides_,
+        kernel_dilation_,
+        input_dilation_,
+        flip_);
   }
   // Throw error
   else {
