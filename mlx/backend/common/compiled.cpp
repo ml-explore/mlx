@@ -178,7 +178,13 @@ void* compile(
     build_command << "g++ -std=c++17 -O2 -Wall -fPIC -shared "
                   << source_file_path << " -o " << shared_lib_path;
     std::string build_command_str = build_command.str();
-    system(build_command_str.c_str());
+    auto return_code = system(build_command_str.c_str());
+    if (return_code) {
+      std::ostringstream msg;
+      msg << "[Compile::eval_cpu] Failed to compile function " << kernel_name
+          << " with error code " << return_code << "." << std::endl;
+      throw std::runtime_error(msg.str());
+    }
   }
 
   // load library
@@ -421,7 +427,7 @@ void Compiled::eval_cpu(
   // If it doesn't exist, compile it
   if (fn_ptr == nullptr) {
     std::ostringstream kernel;
-    kernel << preamble << std::endl;
+    kernel << get_kernel_preamble() << std::endl;
     kernel << "extern \"C\"  {" << std::endl;
     build_kernel(
         kernel,

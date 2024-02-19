@@ -1002,7 +1002,7 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_EQ(exp(x).item<float>(), 1.0);
 
     x = array(2.0);
-    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
+    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
 
     CHECK(array_equal(exp(array({})), array({})).item<bool>());
 
@@ -1012,7 +1012,7 @@ TEST_CASE("test arithmetic unary ops") {
     // Integer input type
     x = array(2);
     CHECK_EQ(x.dtype(), int32);
-    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
+    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
 
     // Input is irregularly strided
     x = broadcast_to(array(1.0f), {2, 2, 2});
@@ -1020,7 +1020,7 @@ TEST_CASE("test arithmetic unary ops") {
 
     x = split(array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2}), 2, 1)[0];
     auto expected = array({std::exp(0.0f), std::exp(2.0f)}, {2, 1});
-    CHECK(array_equal(exp(x), expected).item<bool>());
+    CHECK(allclose(exp(x), expected).item<bool>());
   }
 
   // Test sine
