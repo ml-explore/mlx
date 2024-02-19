@@ -231,6 +231,10 @@ struct Exp {
   T operator()(T x) {
     return fast_exp(x);
   };
+
+  complex64_t operator()(complex64_t x) {
+    return std::exp(x);
+  }
 };
 
 struct Floor {
