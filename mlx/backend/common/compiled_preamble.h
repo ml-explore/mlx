@@ -2,8 +2,10 @@
 
 #pragma once
 
-#include "mlx/backend/common/ops.h"
-#include "mlx/types/complex.h"
+// clang-format off
 #include "mlx/types/half_types.h"
+#include "mlx/types/complex.h"
+#include "mlx/backend/common/ops.h"
+// clang-format on
 
 const char* get_kernel_preamble();
