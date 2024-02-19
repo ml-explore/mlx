@@ -3638,62 +3638,78 @@ void init_ops(py::module_& m) {
         )pbdoc");
   m.def(
       "atleast_1d",
-      &atleast_1d,
-      "a"_a,
+      [](const py::args& args,
+         StreamOrDevice s) -> std::variant<py::object, py::list> {
+        py::list result;
+        for (const auto& arg : args) {
+          result.append(atleast_1d(arg.cast<array>(), s));
+        }
+        return result.size() == 1 ? py::cast<py::object>(result[0]) : result;
+      },
       py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_1d(a: array, stream: Union[None, Stream, Device] = None) -> array
+        atleast_1d(*args: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
-        Convert array to have at least one dimension.
+        Convert all arrays to have at least one dimension.
 
-        args:
-            a (array): Input array
+        Args:
+            args (array or list(array)): Input array or list of input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
-            array: An array with at least one dimension.
-
+            array or list(array): An array or list of arrays with at least one dimension.
         )pbdoc");
   m.def(
       "atleast_2d",
-      &atleast_2d,
-      "a"_a,
+      [](const py::args& args,
+         StreamOrDevice s) -> std::variant<py::object, py::list> {
+        py::list result;
+        for (const auto& arg : args) {
+          result.append(atleast_2d(arg.cast<array>(), s));
+        }
+        return result.size() == 1 ? py::cast<py::object>(result[0]) : result;
+      },
       py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_2d(a: array, stream: Union[None, Stream, Device] = None) -> array
+        atleast_2d(*args: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
-        Convert array to have at least two dimensions.
+        Convert all arrays to have at least two dimensions.
 
-        args:
-            a (array): Input array
+        Args:
+            args (array or list(array)): Input array or list of input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
-            array: An array with at least two dimensions.
-
+            array or list(array): An array or list of arrays with at least two dimensions.
         )pbdoc");
+
   m.def(
       "atleast_3d",
-      &atleast_3d,
-      "a"_a,
+      [](const py::args& args,
+         StreamOrDevice s) -> std::variant<py::object, py::list> {
+        py::list result;
+        for (const auto& arg : args) {
+          result.append(atleast_3d(arg.cast<array>(), s));
+        }
+        return result.size() == 1 ? py::cast<py::object>(result[0]) : result;
+      },
       py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_3d(a: array, stream: Union[None, Stream, Device] = None) -> array
+        atleast_3d(*args: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
-        Convert array to have at least three dimensions.
+        Convert all arrays to have at least three dimensions.
 
-        args:
-            a (array): Input array
+        Args:
+            args (array or list(array)): Input array or list of input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
-            array: An array with at least three dimensions.
-
+            array or list(array): An array or list of arrays with at least three dimensions.
         )pbdoc");
 }
