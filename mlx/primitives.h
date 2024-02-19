@@ -559,13 +559,13 @@ class Pooling : public UnaryPrimitive {
   explicit Pooling(
       Stream stream,
       const std::vector<int>& kernel_size,
-      const std::vector<int>& strides,
+      const std::vector<int>& stride,
       const std::vector<int>& padding,
       const std::vector<int>& dilation,
       PoolType type)
       : UnaryPrimitive(stream),
         kernel_size_(kernel_size),
-        strides_(strides),
+        stride_(stride),
         padding_(padding),
         dilation_(dilation),
         type_(type){};
@@ -580,7 +580,7 @@ class Pooling : public UnaryPrimitive {
 
  private:
   std::vector<int> kernel_size_;
-  std::vector<int> strides_;
+  std::vector<int> stride_;
   std::vector<int> padding_;
   std::vector<int> dilation_;
   PoolType type_;

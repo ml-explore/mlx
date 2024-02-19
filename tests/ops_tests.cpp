@@ -2825,7 +2825,30 @@ TEST_CASE("avg_pool_1d") {
 
 TEST_CASE("max_pool_1d") {
   // TODO: Remove when GPU is added
-  StreamContext ctx(Device::cpu);
+  // StreamContext ctx(Device::cpu);
+  SUBCASE("2 dims") {
+    auto x = array(
+        {-0.3413, -1.4359, 0.7669,  -1.1818, 0.7512,  -1.1156, 0.6561,
+         -0.1908, -0.2969, 0.4658,  0.2387,  -0.0734, -1.1044, 0.8299,
+         0.7745,  2.1827,  -0.2245, 0.0699,  0.1540,  1.3947,  1.7697,
+         -0.2433, -0.1189, 0.0653,  -0.7445, 0.2194,  -0.3688, 0.4992,
+         1.5296,  1.0031,  -0.3956, -1.0237, -0.0963},
+        {3, 11, 1});
+    auto out = max_pool_1d(x, 3);
+    auto expected = array(
+        {0.7669,
+         0.7512,
+         0.6561,
+         0.8299,
+         2.1827,
+         1.3947,
+         0.0653,
+         0.4992,
+         1.5296},
+        {3, 3, 1});
+    CHECK(array_equal(out, expected).item<bool>());
+  }
+
   SUBCASE("1 stride, 1 padding") {
     // stride, padding test
     auto x = array(
@@ -2856,6 +2879,7 @@ TEST_CASE("max_pool_1d") {
         {1, 9, 2});
     CHECK(array_equal(out, expected).item<bool>());
   }
+
   SUBCASE("ceil_mode true") {
     // ceil mode test with null stride
     auto x = array(

@@ -20,6 +20,7 @@ set(
   "conv"
   "copy"
   "gemv"
+  "pooling"
   "quantized"
   "random"
   "reduce"

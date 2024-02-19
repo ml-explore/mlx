@@ -120,15 +120,13 @@ void max_pool_1d(
   }
 }
 
-void wrap_pool_1d(
+void pool_1d(
     const array& in,
     array& out,
     int kernel_size,
     int stride,
     int padding,
     Pooling::PoolType type) {
-  // TODO: extract this out into a template function based on dtype, for now its
-  // float32 only
   switch (in.dtype()) {
     case float32: {
       if (type == Pooling::PoolType::Max) {
@@ -218,8 +216,7 @@ void wrap_pool_1d(
 void Pooling::eval(const std::vector<array>& inputs, array& output) {
   output.set_data(allocator::malloc_or_wait(output.nbytes()));
   if (inputs[0].ndim() == 3) {
-    wrap_pool_1d(
-        inputs[0], output, kernel_size_[0], strides_[0], padding_[0], type_);
+    pool_1d(inputs[0], output, kernel_size_[0], stride_[0], padding_[0], type_);
     return;
   }
 
