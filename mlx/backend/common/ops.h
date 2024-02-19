@@ -13,6 +13,11 @@ typedef union {
 } IntOrFloat;
 
 inline float fast_exp(float x) {
+  if (x == -std::numeric_limits<float>::infinity()) {
+    return 0.0f;
+  } else if (x == std::numeric_limits<float>::infinity() || std::isnan(x)) {
+    return x;
+  }
   x *= 1.442695; // multiply with log_2(e)
   float ipart, fpart;
   IntOrFloat epart;
