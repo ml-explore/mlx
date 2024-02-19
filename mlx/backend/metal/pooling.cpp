@@ -21,7 +21,10 @@ void pool_1d(
   // TODO: add type support and AVG
   if (type == Pooling::PoolType::Max) {
     auto compute_encoder = d.get_command_encoder(s.index);
-    auto kernel = d.get_kernel("max_pool_1d_float");
+    std::ostringstream kname;
+    kname << (type == Pooling::PoolType::Max ? "max" : "avg") << "_pool_1d_"
+          << type_to_name(in);
+    auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
     auto in_height = in.shape(1);
     auto out_height = out.shape(1);
