@@ -160,8 +160,8 @@ void* compile(
   auto shared_lib_path = get_temp_file(shared_lib_name.str());
   bool lib_exists = false;
   {
-    std::ifstream f(shared_lib_path.c_str());
-    lib_exists = f.good();
+    //    std::ifstream f(shared_lib_path.c_str());
+    //    lib_exists = f.good();
   }
 
   if (!lib_exists) {
@@ -422,7 +422,7 @@ void Compiled::eval_cpu(
   // If it doesn't exist, compile it
   if (fn_ptr == nullptr) {
     std::ostringstream kernel;
-    kernel << preamble << std::endl;
+    kernel << get_kernel_preamble() << std::endl;
     kernel << "extern \"C\"  {" << std::endl;
     build_kernel(
         kernel,

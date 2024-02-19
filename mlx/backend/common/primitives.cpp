@@ -10,7 +10,7 @@
 #include "mlx/backend/common/arange.h"
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/copy.h"
-#include "mlx/backend/common/erf.h"
+#include "mlx/backend/common/ops.h"
 #include "mlx/backend/common/threefry.h"
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/common/utils.h"
@@ -26,7 +26,7 @@ void Abs::eval(const std::vector<array>& inputs, array& out) {
     // No-op for unsigned types
     out.copy_shared_buffer(in);
   } else {
-    unary(in, out, AbsOp());
+    unary(in, out, detail::Abs());
   }
 }
 
@@ -38,7 +38,7 @@ void ArcCos::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::acos(x); });
+    unary_fp(in, out, detail::ArcCos());
   } else {
     throw std::invalid_argument(
         "[arccos] Cannot compute inverse cosine of elements in array"
@@ -50,7 +50,7 @@ void ArcCosh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::acosh(x); });
+    unary_fp(in, out, detail::ArcCosh());
   } else {
     throw std::invalid_argument(
         "[arccosh] Cannot compute inverse hyperbolic cosine of elements in"
@@ -62,7 +62,7 @@ void ArcSin::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::asin(x); });
+    unary_fp(in, out, detail::ArcSin());
   } else {
     throw std::invalid_argument(
         "[arcsin] Cannot compute inverse sine of elements in array"
@@ -74,7 +74,7 @@ void ArcSinh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::asinh(x); });
+    unary_fp(in, out, detail::ArcSinh());
   } else {
     throw std::invalid_argument(
         "[arcsinh] Cannot compute inverse hyperbolic sine of elements in"
@@ -86,7 +86,7 @@ void ArcTan::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::atan(x); });
+    unary_fp(in, out, detail::ArcTan());
   } else {
     throw std::invalid_argument(
         "[arctan] Cannot compute inverse tangent of elements in array"
@@ -98,7 +98,7 @@ void ArcTanh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::atanh(x); });
+    unary_fp(in, out, detail::ArcTanh());
   } else {
     throw std::invalid_argument(
         "[arctanh] Cannot compute inverse hyperbolic tangent of elements in"
@@ -172,7 +172,7 @@ void Ceil::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   if (not is_integral(in.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::ceil(x); });
+    unary_fp(in, out, detail::Ceil());
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);
@@ -212,7 +212,7 @@ void Cos::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::cos(x); });
+    unary_fp(in, out, detail::Cos());
   } else {
     throw std::invalid_argument(
         "[cos] Cannot compute cosine of elements in array"
@@ -224,7 +224,7 @@ void Cosh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::cosh(x); });
+    unary_fp(in, out, detail::Cosh());
   } else {
     throw std::invalid_argument(
         "[cosh] Cannot compute hyperbolic cosine of elements in array"
@@ -256,17 +256,13 @@ void Erf::eval(const std::vector<array>& inputs, array& out) {
   const auto& in = inputs[0];
   switch (out.dtype()) {
     case float32:
-      unary_op<float>(in, out, [](auto x) { return std::erf(x); });
+      unary_op<float>(in, out, detail::Erf());
       break;
     case float16:
-      unary_op<float16_t>(in, out, [](auto x) {
-        return static_cast<float16_t>(std::erf(static_cast<float>(x)));
-      });
+      unary_op<float16_t>(in, out, detail::Erf());
       break;
     case bfloat16:
-      unary_op<bfloat16_t>(in, out, [](auto x) {
-        return static_cast<bfloat16_t>(std::erf(static_cast<float>(x)));
-      });
+      unary_op<bfloat16_t>(in, out, detail::Erf());
       break;
     default:
       throw std::invalid_argument(
@@ -280,17 +276,13 @@ void ErfInv::eval(const std::vector<array>& inputs, array& out) {
   const auto& in = inputs[0];
   switch (out.dtype()) {
     case float32:
-      unary_op<float>(in, out, [](auto x) { return erfinv(x); });
+      unary_op<float>(in, out, detail::ErfInv());
       break;
     case float16:
-      unary_op<float16_t>(in, out, [](auto x) {
-        return static_cast<float16_t>(erfinv(static_cast<float>(x)));
-      });
+      unary_op<float16_t>(in, out, detail::ErfInv());
       break;
     case bfloat16:
-      unary_op<bfloat16_t>(in, out, [](auto x) {
-        return static_cast<bfloat16_t>(erfinv(static_cast<float>(x)));
-      });
+      unary_op<bfloat16_t>(in, out, detail::ErfInv());
       break;
     default:
       throw std::invalid_argument(
@@ -302,9 +294,8 @@ void ErfInv::eval(const std::vector<array>& inputs, array& out) {
 void Exp::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::exp(x); });
+    unary_fp(in, out, detail::Exp());
   } else {
     throw std::invalid_argument(
         "[exp] Cannot exponentiate elements in array"
@@ -316,7 +307,7 @@ void Floor::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   if (not is_integral(in.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::floor(x); });
+    unary_fp(in, out, detail::Floor());
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);
@@ -344,13 +335,13 @@ void Log::eval(const std::vector<array>& inputs, array& out) {
   if (is_floating_point(out.dtype())) {
     switch (base_) {
       case Base::e:
-        unary_fp(in, out, [](auto x) { return std::log(x); });
+        unary_fp(in, out, detail::Log());
         break;
       case Base::two:
-        unary_fp(in, out, [](auto x) { return std::log2(x); });
+        unary_fp(in, out, detail::Log2());
         break;
       case Base::ten:
-        unary_fp(in, out, [](auto x) { return std::log10(x); });
+        unary_fp(in, out, detail::Log10());
         break;
     }
   } else {
@@ -364,7 +355,7 @@ void Log1p::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::log1p(x); });
+    unary_fp(in, out, detail::Log1p());
   } else {
     throw std::invalid_argument(
         "[log1p] Cannot compute log of elements in array with"
@@ -375,27 +366,27 @@ void Log1p::eval(const std::vector<array>& inputs, array& out) {
 void LogicalNot::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  unary(in, out, [](auto x) { return !x; });
+  unary(in, out, detail::LogicalNot());
 }
 
 void LogicalAnd::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2); // LogicalAnd requires two input arrays
   auto& in1 = inputs[0];
   auto& in2 = inputs[1];
-  binary(in1, in2, out, [](auto x, auto y) { return x && y; });
+  binary(in1, in2, out, detail::LogicalAnd());
 }
 
 void LogicalOr::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2); // LogicalOr requires two input arrays
   auto& in1 = inputs[0];
   auto& in2 = inputs[1];
-  binary(in1, in2, out, [](auto x, auto y) { return x || y; });
+  binary(in1, in2, out, detail::LogicalOr());
 }
 
 void Negative::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  unary(in, out, [](auto x) { return -x; });
+  unary(in, out, detail::Negative());
 }
 
 void Pad::eval(const std::vector<array>& inputs, array& out) {
@@ -498,7 +489,7 @@ void Round::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   if (not is_integral(in.dtype())) {
-    unary_fp(in, out, RoundOp());
+    unary_fp(in, out, detail::Round());
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);
@@ -509,11 +500,7 @@ void Sigmoid::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    auto sigmoid_op = [](auto x) {
-      auto one = static_cast<decltype(x)>(1.0);
-      return one / (one + std::exp(-x));
-    };
-    unary_fp(in, out, sigmoid_op);
+    unary_fp(in, out, detail::Sigmoid());
   } else {
     throw std::invalid_argument(
         "[sigmoid] Cannot sigmoid of elements in array with"
@@ -527,7 +514,7 @@ void Sign::eval(const std::vector<array>& inputs, array& out) {
   if (in.dtype() == bool_) {
     out.copy_shared_buffer(in);
   } else {
-    unary(in, out, SignOp());
+    unary(in, out, detail::Sign());
   }
 }
 
@@ -535,7 +522,7 @@ void Sin::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::sin(x); });
+    unary_fp(in, out, detail::Sin());
   } else {
     throw std::invalid_argument(
         "[sin] Cannot compute sine of elements in array"
@@ -547,7 +534,7 @@ void Sinh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::sinh(x); });
+    unary_fp(in, out, detail::Sinh());
   } else {
     throw std::invalid_argument(
         "[sinh] Cannot compute hyperbolic sine of elements in array"
@@ -656,18 +643,16 @@ void Split::eval(
 void Square::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  unary(in, out, [](auto x) { return x * x; });
+  unary(in, out, detail::Square());
 }
 
 void Sqrt::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   if (recip_) {
-    unary_fp(in, out, [](auto x) {
-      return static_cast<decltype(x)>(1.0) / sqrt(x);
-    });
+    unary_fp(in, out, detail::Rsqrt());
   } else {
-    unary_fp(in, out, [](auto x) { return sqrt(x); });
+    unary_fp(in, out, detail::Sqrt());
   }
 }
 
@@ -680,7 +665,7 @@ void Tan::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::tan(x); });
+    unary_fp(in, out, detail::Tan());
   } else {
     throw std::invalid_argument(
         "[tan] Cannot compute tangent of elements in array"
@@ -692,7 +677,7 @@ void Tanh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (is_floating_point(out.dtype())) {
-    unary_fp(in, out, [](auto x) { return std::tanh(x); });
+    unary_fp(in, out, detail::Tanh());
   } else {
     throw std::invalid_argument(
         "[tanh] Cannot compute hyperbolic tangent of elements in array"
