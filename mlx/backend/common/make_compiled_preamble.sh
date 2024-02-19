@@ -7,7 +7,7 @@
 
 
 OUTPUT_FILE=$1
-CC=$2
+GCC=$2
 SRCDIR=$3
 
 CONTENT=$($CC -I $SRCDIR -E $SRCDIR/mlx/backend/common/compiled_preamble.h 2>/dev/null)
@@ -15,14 +15,9 @@ CONTENT=$($CC -I $SRCDIR -E $SRCDIR/mlx/backend/common/compiled_preamble.h 2>/de
 echo $OUTPUT_FILE
 cat << EOF > "$OUTPUT_FILE"
 const char* get_kernel_preamble() {
-return R"(
-#include <algorithm>
-#include <cmath>
-#include <complex>
-#include <cstdint>
-#include <vector>
+return R"preamble(
 $CONTENT
 using namespace mlx::core::detail;
-)";
+)preamble";
 }
 EOF

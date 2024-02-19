@@ -1,9 +1,10 @@
+
 add_custom_command(
     OUTPUT  compiled_preamble.cpp
     COMMAND /bin/bash
               ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
               ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
-              ${CMAKE_C_COMPILER}
+              ${CMAKE_CXX_COMPILER}
               ${CMAKE_SOURCE_DIR}
     DEPENDS make_compiled_preamble.sh
             compiled_preamble.h
