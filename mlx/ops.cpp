@@ -3381,4 +3381,34 @@ std::vector<array> depends(
       shapes, dtypes, std::make_shared<Depends>(to_stream(s)), all_inputs);
 }
 
+array atleast_1d(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.ndim() == 0) {
+    return reshape(a, {1}, s);
+  }
+  return a;
+}
+
+array atleast_2d(const array& a, StreamOrDevice s /* = {} */) {
+  switch (a.ndim()) {
+    case 0:
+      return reshape(a, {1, 1}, s);
+    case 1:
+      return reshape(a, {1, static_cast<int>(a.size())}, s);
+    default:
+      return a;
+  }
+}
+
+array atleast_3d(const array& a, StreamOrDevice s /* = {} */) {
+  switch (a.ndim()) {
+    case 0:
+      return reshape(a, {1, 1, 1}, s);
+    case 1:
+      return reshape(a, {1, static_cast<int>(a.size()), 1}, s);
+    case 2:
+      return reshape(a, {a.shape(0), a.shape(1), 1}, s);
+    default:
+      return a;
+  }
+}
 } // namespace mlx::core
