@@ -1,4 +1,8 @@
 
+if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(CLANG TRUE)
+endif()
+
 add_custom_command(
     OUTPUT  compiled_preamble.cpp
     COMMAND /bin/bash
@@ -6,6 +10,8 @@ add_custom_command(
               ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
               ${CMAKE_CXX_COMPILER}
               ${CMAKE_SOURCE_DIR}
+              ${CLANG}
+
     DEPENDS make_compiled_preamble.sh
             compiled_preamble.h
             ${CMAKE_SOURCE_DIR}/mlx/types/half_types.h
