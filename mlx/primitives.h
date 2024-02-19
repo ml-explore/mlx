@@ -496,8 +496,6 @@ class Compiled : public Primitive {
 
   std::string kernel_lib_;
   std::string kernel_source_;
-
-  void eval(const std::vector<array>& inputs, std::vector<array>& out);
 };
 
 class Concatenate : public UnaryPrimitive {

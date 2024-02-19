@@ -691,7 +691,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   // organize into grid nkeys x elem_per_key
   MTL::Size grid_dims = MTL::Size(num_keys, half_size + odd, 1);
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  auto nthreads = std::min(num_keys * (half_size + odd), thread_group_size);
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);

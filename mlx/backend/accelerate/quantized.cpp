@@ -24,8 +24,6 @@ void _qmm_t_4_64(
   constexpr int bitmask = (1 << bits) - 1;
   constexpr int pack_factor = 32 / bits;
   constexpr int packs_in_group = group_size / pack_factor;
-  const int Kg = K / group_size;
-  const int Kw = K / pack_factor;
 
   for (int m = 0; m < M; m++) {
     const uint32_t* w_local = w;

@@ -1,6 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/fast.h"
+#include "mlx/fast_primitives.h"
+#include "mlx/ops.h"
 #include "mlx/transforms.h"
 
 namespace mlx::core::fast {

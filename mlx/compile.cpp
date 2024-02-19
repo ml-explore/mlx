@@ -319,6 +319,9 @@ void compile_simplify(
       case 1:
         v = *a.data<uint8_t>();
         break;
+      case 2:
+        v = *a.data<uint16_t>();
+        break;
       case 4:
         v = *a.data<uint32_t>();
         break;

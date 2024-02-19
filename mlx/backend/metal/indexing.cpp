@@ -167,10 +167,6 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& upd = inputs.back();
   size_t nthreads = upd.size();
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size > nthreads) {
-    thread_group_size = nthreads;
-  }
 
   compute_encoder->setComputePipelineState(kernel);
 

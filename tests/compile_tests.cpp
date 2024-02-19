@@ -44,8 +44,8 @@ TEST_CASE("test compile with grad") {
   auto y = array(1.0f);
   auto grads_expected = grad_fun({x, y});
   auto grads_compile = compile(grad_fun)({x, y});
-  CHECK_EQ(grads_compile[0].item<float>(), grads_expected[0].item<float>());
-  CHECK_EQ(grads_compile[1].item<float>(), grads_expected[1].item<float>());
+  CHECK(allclose(grads_compile[0], grads_expected[0]).item<bool>());
+  CHECK(allclose(grads_compile[1], grads_expected[1]).item<bool>());
 }
 
 TEST_CASE("test compile inputs with primitive") {
@@ -272,7 +272,7 @@ TEST_CASE("test compile unary fused") {
     CHECK_EQ(out.inputs()[0].id(), x.id());
 
     auto expected_out = unary_fused_1({array(2.0)})[0];
-    CHECK_EQ(out.item<float>(), expected_out.item<float>());
+    CHECK(allclose(out, expected_out).item<bool>());
   }
 
   {

@@ -2,6 +2,7 @@
 
 #include <sstream>
 
+#include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/compiled_preamble.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
@@ -10,125 +11,6 @@
 #include "mlx/utils.h"
 
 namespace mlx::core {
-
-inline bool is_static_cast(const Primitive& p) {
-  return (
-      typeid(p) == typeid(Broadcast) || typeid(p) == typeid(Copy) ||
-      typeid(p) == typeid(StopGradient) || typeid(p) == typeid(AsType));
-}
-
-inline auto get_type_string(Dtype d) {
-  switch (d) {
-    case float32:
-      return "float";
-    case float16:
-      return "half";
-    case bfloat16:
-      return "bfloat16_t";
-    case bool_:
-      return "bool";
-    case int8:
-      return "int8_t";
-    case int16:
-      return "int16_t";
-    case int32:
-      return "int32_t";
-    case int64:
-      return "int64_t";
-    case uint8:
-      return "uint8_t";
-    case uint16:
-      return "uint16_t";
-    case uint32:
-      return "uint32_t";
-    case uint64:
-      return "uint64_t";
-    default: {
-      std::ostringstream msg;
-      msg << "Unsupported compilation type " << d;
-      throw std::runtime_error(msg.str());
-    }
-  }
-}
-
-template <typename T>
-void print_float_constant(std::ostream& os, const array& x) {
-  auto old_precision = os.precision();
-  os << std::setprecision(std::numeric_limits<float>::digits10 + 1)
-     << x.item<T>() << std::setprecision(old_precision);
-}
-
-template <typename T>
-void print_int_constant(std::ostream& os, const array& x) {
-  os << x.item<T>();
-}
-
-void print_constant(std::ostream& os, const array& x) {
-  switch (x.dtype()) {
-    case float32:
-      return print_float_constant<float>(os, x);
-    case float16:
-      return print_float_constant<float16_t>(os, x);
-    case bfloat16:
-      return print_float_constant<bfloat16_t>(os, x);
-    case int8:
-      return print_int_constant<int8_t>(os, x);
-    case int16:
-      return print_int_constant<int16_t>(os, x);
-    case int32:
-      return print_int_constant<int32_t>(os, x);
-    case int64:
-      return print_int_constant<int64_t>(os, x);
-    case uint8:
-      return print_int_constant<uint8_t>(os, x);
-    case uint16:
-      return print_int_constant<uint16_t>(os, x);
-    case uint32:
-      return print_int_constant<uint32_t>(os, x);
-    case uint64:
-      return print_int_constant<uint64_t>(os, x);
-    case bool_:
-      os << std::boolalpha << x.item<bool>();
-      return;
-    default:
-      throw std::runtime_error("Unsupported constant type");
-  }
-}
-
-inline std::string build_lib_name(
-    const std::vector<array>& inputs,
-    const std::vector<array>& outputs,
-    const std::vector<array>& tape,
-    const std::unordered_set<uintptr_t>& constant_ids) {
-  std::ostringstream os;
-  std::ostringstream constant_hasher;
-
-  // The primitives describing the tape. For unary and binary primitives this
-  // must be enough to describe the full computation.
-  for (auto& a : tape) {
-    a.primitive().print(os);
-  }
-  os << "_";
-
-  for (auto& x : inputs) {
-    if (constant_ids.find(x.id()) != constant_ids.end()) {
-      os << "C";
-      print_constant(constant_hasher, x);
-    } else {
-      os << ((x.size() == 1) ? "S" : "V");
-    }
-  }
-  os << "_";
-  for (auto& x : inputs) {
-    if (constant_ids.find(x.id()) != constant_ids.end()) {
-      continue;
-    }
-    os << kindof(x.dtype()) << x.itemsize();
-  }
-  os << "_" << std::hash<std::string>{}(constant_hasher.str());
-
-  return os.str();
-}
 
 inline void build_kernel(
     std::ostream& os,
@@ -286,7 +168,7 @@ inline void build_kernel(
 
   if (cnt > 31) {
     std::ostringstream msg;
-    msg << "[compile] Too many inputs/outputs fused in the Metal Compile "
+    msg << "[compile] Too many inputs/outputs fused in the Metal Compiled "
         << "primitive which exhausted the available argument buffers for "
         << "the kernel. Please file an issue with the function that results "
         << "in this error. The name of the kernel is '" << kernel_name << "'";
@@ -346,11 +228,6 @@ void Compiled::eval_gpu(
 
     kernel_source_ = kernel.str();
     lib = d.get_library(kernel_lib_, kernel_source_);
-  }
-
-  // Allocate space for the outputs
-  for (auto& out : outputs) {
-    out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
 
   // Figure out which kernel we are using
@@ -440,6 +317,27 @@ void Compiled::eval_gpu(
           strides[stride_idx].size() * sizeof(size_t),
           cnt++);
       stride_idx++;
+    }
+  }
+
+  // Allocate space for the outputs possibly with input donation
+  {
+    int o = 0;
+    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
+      auto& in = inputs[i];
+      // Conditions for donation
+      // - Row contiguous
+      // - Donatable
+      // - Correct size
+      // - Not a constant
+      if (in.flags().row_contiguous && in.nbytes() == outputs[o].nbytes() &&
+          in.is_donatable() &&
+          constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
+        outputs[o++].move_shared_buffer(in);
+      }
+    }
+    for (; o < outputs.size(); ++o) {
+      outputs[o].set_data(allocator::malloc_or_wait(outputs[o].nbytes()));
     }
   }
 
