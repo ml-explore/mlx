@@ -35,6 +35,7 @@ def relu(x):
     return mx.maximum(x, 0)
 
 
+@partial(mx.compile, shapeless=True)
 def leaky_relu(x, negative_slope=0.01):
     r"""Applies the Leaky Rectified Linear Unit.
 
@@ -43,6 +44,7 @@ def leaky_relu(x, negative_slope=0.01):
     return mx.maximum(negative_slope * x, x)
 
 
+@partial(mx.compile, shapeless=True)
 def log_softmax(x, axis=-1):
     r"""Applies the Log Softmax function.
 
@@ -51,6 +53,7 @@ def log_softmax(x, axis=-1):
     return x - mx.logsumexp(x, axis=axis, keepdims=True)
 
 
+@partial(mx.compile, shapeless=True)
 def elu(x, alpha=1.0):
     r"""Applies the Exponential Linear Unit.
 
@@ -68,6 +71,7 @@ def relu6(x):
     return mx.minimum(mx.maximum(x, 0), 6.0)
 
 
+@partial(mx.compile, shapeless=True)
 def softmax(x, axis=-1):
     r"""Applies the Softmax function.
 
@@ -94,6 +98,7 @@ def softsign(x):
     return mx.divide(x, 1 + mx.abs(x))
 
 
+@partial(mx.compile, shapeless=True)
 def softshrink(x, lambd: float = 0.5):
     r"""Applies the Softshrink activation function.
 
@@ -107,6 +112,7 @@ def softshrink(x, lambd: float = 0.5):
     return mx.where(mx.abs(x) > lambd, x - mx.sign(x) * lambd, 0)
 
 
+@partial(mx.compile, shapeless=True)
 def celu(x, alpha=1.0):
     r"""Applies the Continuously Differentiable Exponential Linear Unit.
 
@@ -202,6 +208,7 @@ def glu(x: mx.array, axis: int = -1) -> mx.array:
     return a * mx.sigmoid(b)
 
 
+@partial(mx.compile, shapeless=True)
 def step(x: mx.array, threshold: float = 0.0):
     r"""Applies the Step Activation Function.
 

@@ -198,12 +198,16 @@ struct CompilerCache {
     std::vector<array> outputs;
     std::vector<array> tape;
     bool empty{true};
+    std::vector<uint64_t> constants;
   };
 
   // Returns a reference to a CacheEntry which can be updated
   // by the caller to avoid copying large tapes / inputs / outputs
-  CacheEntry&
-  find(size_t fun_id, const std::vector<array>& inputs, bool shapeless) {
+  CacheEntry& find(
+      size_t fun_id,
+      const std::vector<array>& inputs,
+      bool shapeless,
+      const std::vector<uint64_t>& constants) {
     // Try to find the entry
     auto [entry_it, inserted] = cache_.insert({fun_id, {}});
     auto& entries = entry_it->second;
@@ -233,7 +237,7 @@ struct CompilerCache {
     // more easily searchable structure.
     for (auto& entry : entries) {
       // Check the inputs match and return if so
-      if (is_match(inputs, entry.inputs)) {
+      if (is_match(inputs, entry.inputs) && constants == entry.constants) {
         return entry;
       }
     }
@@ -753,11 +757,13 @@ void compile_validate_shapeless(const std::vector<array>& tape) {
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     size_t fun_id,
-    bool shapeless /* = false */) {
+    bool shapeless /* = false */,
+    std::vector<uint64_t> constants /* = {} */) {
   if (compile_mode() == CompileMode::disabled) {
     return fun;
   }
-  return [fun, fun_id, shapeless](const std::vector<array>& inputs) {
+  return [fun, fun_id, shapeless, constants = std::move(constants)](
+             const std::vector<array>& inputs) {
     // If the inputs are tracers, trace the original graph
     if (std::any_of(inputs.begin(), inputs.end(), [](auto& in) {
           return in.is_tracer();
@@ -766,12 +772,14 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     }
 
     // Find a cache entry with the correct inputs
-    auto& entry = compiler_cache().find(fun_id, inputs, shapeless);
+    auto& entry = compiler_cache().find(fun_id, inputs, shapeless, constants);
 
     // No matching cache entry existed, so compile
     if (entry.empty) {
       // Mark the entry as not empty since we are about to fill it
       entry.empty = false;
+      // Set the constants
+      entry.constants = std::move(constants);
       // Trace to build the graph
       std::tie(entry.inputs, entry.outputs) = compile_trace(fun, inputs);
 

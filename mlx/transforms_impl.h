@@ -19,7 +19,8 @@ std::vector<array> vmap_replace(
 std::function<std::vector<array>(const std::vector<array>&)> compile(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     size_t fun_id,
-    bool shapeless = false);
+    bool shapeless = false,
+    std::vector<uint64_t> constants = {});
 
 // Erase cached compile functions
 void compile_erase(size_t fun_id);

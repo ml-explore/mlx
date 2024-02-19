@@ -635,8 +635,39 @@ struct PyCompiledFun {
           std::make_move_iterator(flat_in_captures.end()));
     }
 
+    // Collect the compilation constants
+    std::vector<uint64_t> constants;
+    auto value_hash = [](py::handle o) -> std::optional<uint64_t> {
+      // Consider expanding tuples to their contents including start and end
+      // ids
+      if (py::isinstance<py::tuple>(o) || py::isinstance<py::str>(o)) {
+        auto r = py::hash(o);
+        return *reinterpret_cast<uint64_t*>(&r);
+      } else if (py::isinstance<py::int_>(o)) {
+        auto r = o.cast<int64_t>();
+        return *reinterpret_cast<uint64_t*>(&r);
+      } else if (py::isinstance<py::float_>(o)) {
+        auto r = o.cast<double>();
+        return *reinterpret_cast<uint64_t*>(&r);
+      } else {
+        return std::nullopt;
+      }
+    };
+    for (int i = 0; i < args.size(); i++) {
+      if (auto h = value_hash(args[i]); h.has_value()) {
+        constants.push_back(*h);
+      }
+    }
+    for (auto& pair : kwargs) {
+      if (auto h = value_hash(pair.second); h.has_value()) {
+        constants.push_back(*value_hash(pair.first));
+        constants.push_back(*h);
+      }
+    }
+
     // Compile and call
-    auto outputs = detail::compile(compile_fun, fun_id, shapeless)(inputs);
+    auto outputs =
+        detail::compile(compile_fun, fun_id, shapeless, constants)(inputs);
     if (!py::isinstance<py::none>(captured_outputs)) {
       std::vector<array> captures(
           std::make_move_iterator(outputs.begin() + num_outputs),
