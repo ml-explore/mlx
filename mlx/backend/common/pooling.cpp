@@ -102,14 +102,15 @@ void max_pool_1d(
   auto in_stride_b = in_strides.at(0);
   auto in_stride_h = in_strides.at(1);
   auto in_stride_c = in_strides.at(2);
-
+  int start = 0;
+  int end = 0;
+  T val = -std::numeric_limits<T>::infinity();
   for (int b = 0; b < out_b; b++) {
     for (int c = 0; c < out_c; c++) {
       for (int h = 0; h < out_h; h++) {
-        int start = h * stride - padding;
-        int end = std::min(start + (kernel_size * dilation), in_h);
+        start = h * stride - padding;
+        end = std::min(start + (kernel_size * dilation), in_h);
         start = std::max(start, 0);
-        T val = 0;
         val = -std::numeric_limits<T>::infinity();
         for (int i = start; i < end; i += dilation) {
           val = std::max(
