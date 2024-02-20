@@ -13,6 +13,9 @@ MLX was developed with contributions from the following individuals:
 - Diogo Da Cruz: Added `tri`, `tril`, `triu`, `tensordot`, `inner`, `outer`, `tile` and safetensor support
 - Gabrijel Boduljak: Added `mlx.core.linalg`, implemented `norm` method and `InstanceNorm` layer.
 
+- Luca Arnaboldi: Added `Ceil` and `Floor` ops.
+  Implemented pickling, copy and deepcopy for Python arrays.
+
 <a href="https://github.com/ml-explore/mlx/graphs/contributors">
   <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
 </a>

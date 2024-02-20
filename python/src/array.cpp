@@ -774,6 +774,25 @@ void init_array(py::module_& m) {
             return a.shape(0);
           })
       .def("__iter__", [](const array& a) { return ArrayPythonIterator(a); })
+      .def(py::pickle(
+          [](array& a) { // __getstate__
+            return py::make_tuple(
+                dtype_to_array_protocol(a.dtype()), tolist(a));
+          },
+          [](py::tuple t) { // __setstate__
+            if (t.size() != 2 or !py::isinstance<py::str>(t[0]) or
+                !py::isinstance<py::list>(t[1]))
+              throw std::invalid_argument(
+                  "Invalide state for __setstate__. Expected a tuple of length 2 with a string and a list as elements.");
+
+            return array_from_list(
+                t[1], dtype_from_array_protocol(t[0].cast<std::string>()));
+          }))
+      .def("__copy__", [](const array& self) { return array(self); })
+      .def(
+          "__deepcopy__",
+          [](const array& self, py::dict) { return array(self); },
+          "memo"_a)
       .def(
           "__add__",
           [](const array& a, const ScalarOrArray v) {
