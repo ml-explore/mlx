@@ -2770,7 +2770,7 @@ TEST_CASE("test atleast_3d") {
   CHECK_EQ(out.shape(), std::vector<int>{3, 1, 1});
 }
 TEST_CASE("avg_pool_1d") {
-  StreamContext ctx(Device::cpu);
+  // StreamContext ctx(Device::cpu);
   SUBCASE("1 stride, 1 padding") {
     auto x = array(
         {-1.1258, 1.4437, -1.1524, 0.2660,  -0.2506, 1.3894,  -0.4339,
@@ -2799,6 +2799,7 @@ TEST_CASE("avg_pool_1d") {
          0.8294},
         {1, 9, 2});
     CHECK(allclose(out, expected, 1e-3, 1e-5).item<bool>());
+    // MESSAGE("out " << out);
   }
   // SUBCASE("padding 1") {
   //   auto x = array({}, {1, 10, 1});
@@ -2820,6 +2821,7 @@ TEST_CASE("avg_pool_1d") {
     auto out = avg_pool_1d(x, 3, {}, 0, true);
     auto expected = array({-0.3104, -0.6382, 0.1740, -0.4033}, {1, 4, 1});
     CHECK(allclose(out, expected, 1e-3, 1e-5).item<bool>());
+    // MESSAGE("out " << out);
   }
 }
 

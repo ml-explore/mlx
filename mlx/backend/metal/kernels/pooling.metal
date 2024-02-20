@@ -5,6 +5,35 @@
 
 using namespace metal;
 
+[[kernel]] void avg_pool_1d_float32(
+    device const float* in,
+    device float* out,
+    constant const int& kernel_size,
+    constant const int& stride,
+    constant const int& padding,
+    constant const int& in_height,
+    constant const uint& out_height,
+    constant const float& avg,
+    constant const float& last_avg,
+    constant const size_t in_strides[3],
+    constant const size_t out_strides[3],
+    uint3 pos [[thread_position_in_grid]]
+) {
+    if(pos.y >= out_height) return;
+    int start = pos.y * stride - padding;
+    int end = min(start + kernel_size, in_height);
+    start = max(0, start);
+    int bx = pos.x * in_strides[0];
+    float val = float(0);
+    for(int i = start; i < end; i++) {
+        val += in[bx + i * in_strides[1] + pos.z];
+    }
+
+    val *= pos.y == (out_height - 1) ? last_avg : avg;
+
+    out[pos.x * out_strides[0] + pos.y * out_strides[1] + pos.z] = val;
+}
+
 template <typename T>
 [[kernel]] void max_pool_1d(
     device const T* in,
