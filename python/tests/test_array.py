@@ -667,9 +667,9 @@ class TestArray(mlx_tests.MLXTestCase):
             mx.uint16,
             mx.uint32,
             mx.uint64,
-            # mx.float16,
+            mx.float16,
             mx.float32,
-            # mx.bfloat16,
+            mx.bfloat16,
             mx.complex64,
         ]
         import pickle
@@ -691,9 +691,9 @@ class TestArray(mlx_tests.MLXTestCase):
             mx.uint16,
             mx.uint32,
             mx.uint64,
-            # mx.float16,
+            mx.float16,
             mx.float32,
-            # mx.bfloat16,
+            mx.bfloat16,
             mx.complex64,
         ]
 
@@ -706,7 +706,6 @@ class TestArray(mlx_tests.MLXTestCase):
                 self.assertEqualArray(x, y)
 
                 y -= 1
-                print(x, y)
                 self.assertEqualArray(x - 1, y)
 
     def test_indexing(self):
