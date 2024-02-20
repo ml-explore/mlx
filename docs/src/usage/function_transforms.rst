@@ -5,9 +5,12 @@ Function Transforms
 
 .. currentmodule:: mlx.core
 
-MLX uses composable function transformations for automatic differentiation and
-vectorization. The key idea behind composable function transformations is that
-every transformation returns a function which can be further transformed. 
+MLX uses composable function transformations for automatic differentiation,
+vectorization, and compute graph optimizations. To see the complete list of
+function transformations check-out the :ref:`API documentation <transforms>`.
+
+The key idea behind composable function transformations is that every
+transformation returns a function which can be further transformed.
 
 Here is a simple example:
 
@@ -36,10 +39,10 @@ Using :func:`grad` on the output of :func:`grad` is always ok. You keep
 getting higher order derivatives.
 
 Any of the MLX function transformations can be composed in any order to any
-depth. To see the complete list of function transformations check-out the
-:ref:`API documentation <transforms>`. See the following sections for more
-information on :ref:`automatic differentiaion <auto diff>` and
-:ref:`automatic vectorization <vmap>`.
+depth. See the following sections for more information on :ref:`automatic
+differentiaion <auto diff>` and :ref:`automatic vectorization <vmap>`.
+For more information on :func:`compile` see the :ref:`compile documentation <compile>`.
+
 
 Automatic Differentiation
 -------------------------

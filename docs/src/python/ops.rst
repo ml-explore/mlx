@@ -25,6 +25,9 @@ Operations
    argpartition
    argsort
    array_equal
+   atleast_1d
+   atleast_2d
+   atleast_3d
    broadcast_to
    ceil
    clip

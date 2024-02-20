@@ -15,6 +15,14 @@ using namespace metal;
 
 MLX_MTL_CONST int SIMD_SIZE = 32;
 
+template <typename T> struct AccT {
+  typedef T acc_t;
+};
+
+template <> struct AccT<bfloat16_t> {
+  typedef float acc_t;
+};
+
 template <typename T, const int BM, const int BN, const int group_size, const int bits>
 [[kernel]] void qmv(
     const device uint32_t* w [[buffer(0)]],
@@ -31,21 +39,23 @@ template <typename T, const int BM, const int BN, const int group_size, const in
 
   static_assert(BN == SIMD_SIZE, "qmv expects BN to be equal to SIMD_SIZE");
 
+  (void)lid;
+
   constexpr int bitmask = (1 << bits) - 1;
   constexpr int el_per_thread = 32 / bits;
   constexpr int colgroup = BN * el_per_thread;
   constexpr int groups_per_block = colgroup / group_size;
-  constexpr int simdgroups_fetching_vec = colgroup / SIMD_SIZE;
 
-  threadgroup T scales_block[BM * groups_per_block];
-  threadgroup T biases_block[BM * groups_per_block];
-  threadgroup T x_block[colgroup];
+  typedef typename AccT<T>::acc_t U;
+  threadgroup U scales_block[BM * groups_per_block];
+  threadgroup U biases_block[BM * groups_per_block];
+  threadgroup U x_block[colgroup];
 
   thread uint32_t w_local;
-  thread T result = 0;
-  thread T scale = 1;
-  thread T bias = 0;
-  thread T x_thread[el_per_thread];
+  thread U result = 0;
+  thread U scale = 1;
+  thread U bias = 0;
+  thread U x_thread[el_per_thread];
 
   // Adjust positions
   const int in_vec_size_w = in_vec_size / el_per_thread;
@@ -57,12 +67,19 @@ template <typename T, const int BM, const int BN, const int group_size, const in
   x += tid.z * in_vec_size;
   y += tid.z * out_vec_size;
 
+  if (out_row >= out_vec_size) {
+    return;
+  }
+
   // Loop over in_vec in blocks of colgroup
   for (int i=0; i<in_vec_size; i+=colgroup) {
     // Load the vec to shared memory
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (simd_gid < simdgroups_fetching_vec) {
-      x_block[lid] = x[lid + i];
+    if (simd_gid == 0) {
+      #pragma clang loop unroll(full)
+      for (int j=0; j<el_per_thread; j++) {
+        x_block[simd_lid * el_per_thread + j] = x[i + simd_lid * el_per_thread + j];
+      }
     }
     if (simd_lid == 0) {
       #pragma clang loop unroll(full)
@@ -90,7 +107,7 @@ template <typename T, const int BM, const int BN, const int group_size, const in
     // Do all the work.
     #pragma clang loop unroll(full)
     for (int k=0; k<el_per_thread; k++) {
-      result += (scale * static_cast<T>(w_local & bitmask) + bias) * x_thread[k];
+      result += (scale * static_cast<U>(w_local & bitmask) + bias) * x_thread[k];
       w_local >>= bits;
     }
   }
@@ -100,7 +117,7 @@ template <typename T, const int BM, const int BN, const int group_size, const in
 
   // Store the result
   if (simd_lid == 0) {
-    y[out_row] = result;
+    y[out_row] = static_cast<T>(result);
   }
 }
 
@@ -129,15 +146,16 @@ template <typename T, const int BM, const int BN, const int group_size, const in
   constexpr int colgroup = BN * el_per_int;
   constexpr int groups_per_block = colgroup / group_size;
 
-  threadgroup T scales_block[BM * groups_per_block];
-  threadgroup T biases_block[BM * groups_per_block];
-  threadgroup T x_block[BM];
+  typedef typename AccT<T>::acc_t U;
+  threadgroup U scales_block[BM * groups_per_block];
+  threadgroup U biases_block[BM * groups_per_block];
+  threadgroup U x_block[BM];
 
   thread uint32_t w_local;
-  thread T result[el_per_int] = {0};
-  thread T scale = 1;
-  thread T bias = 0;
-  thread T x_local = 0;
+  thread U result[el_per_int] = {0};
+  thread U scale = 1;
+  thread U bias = 0;
+  thread U x_local = 0;
 
   // Adjust positions
   const int out_vec_size_w = out_vec_size / el_per_int;
@@ -186,7 +204,7 @@ template <typename T, const int BM, const int BN, const int group_size, const in
     // Do all the work.
     #pragma clang loop unroll(full)
     for (int k=0; k<el_per_int; k++) {
-      result[k] += (scale * static_cast<T>(w_local & bitmask) + bias) * x_local;
+      result[k] += (scale * static_cast<U>(w_local & bitmask) + bias) * x_local;
       w_local >>= bits;
     }
   }
@@ -201,7 +219,7 @@ template <typename T, const int BM, const int BN, const int group_size, const in
   if (simd_lid == 0) {
     #pragma clang loop unroll(full)
     for (int k=0; k<el_per_int; k++) {
-      y[k] = result[k];
+      y[k] = static_cast<T>(result[k]);
     }
   }
 }
@@ -239,7 +257,6 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   // Instantiate the appropriate BlockMMA and Loader
   using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK, BK>;
   using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE, 1, 4>;
-
 
   threadgroup T scales_block[BN * groups_per_block];
   threadgroup T biases_block[BN * groups_per_block];
@@ -303,7 +320,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
           const device uint32_t * w_local = w + offset_row * K_w + offset_col;
           threadgroup T * Ws_local = Ws + offset_row * BK + offset_col * el_per_int;
 
-          if (y_col + offset_col < N) {
+          if (y_row + offset_row < N) {
             uint32_t wi = *w_local;
             T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
             T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
@@ -418,8 +435,9 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   for (int k=0; k<K; k += BK) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
     // Load the x tile
-    if (num_els < BM) {
-        loader_x.load_safe(short2(BK, num_els));
+    short num_k = min(BK, K - k);
+    if (num_els < BM || num_k < BK) {
+        loader_x.load_safe(short2(num_k, num_els));
     } else {
         loader_x.load_unsafe();
     }
@@ -447,7 +465,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
     // Load the w tile
     {
-      if (k + BK >= K) {
+      if (num_k < BK) {
         for (int wo=0; wo<w_els_per_thread; wo++) {
           int offset = lid * w_els_per_thread + wo;
           int offset_row = offset / (BN / el_per_int);

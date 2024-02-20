@@ -7,6 +7,16 @@
 
 namespace mlx::core {
 
+Stream to_stream(StreamOrDevice s) {
+  if (std::holds_alternative<std::monostate>(s)) {
+    return default_stream(default_device());
+  } else if (std::holds_alternative<Device>(s)) {
+    return default_stream(std::get<Device>(s));
+  } else {
+    return std::get<Stream>(s);
+  }
+}
+
 void PrintFormatter::print(std::ostream& os, bool val) {
   if (capitalize_bool) {
     os << (val ? "True" : "False");

@@ -3,17 +3,13 @@
 #pragma once
 
 #include <optional>
-#include <variant>
 
 #include "mlx/array.h"
 #include "mlx/device.h"
 #include "mlx/stream.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
-
-using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
-
-Stream to_stream(StreamOrDevice s);
 
 /** Creation operations */
 
@@ -1124,5 +1120,10 @@ array diag(const array& a, int k = 0, StreamOrDevice s = {});
 std::vector<array> depends(
     const std::vector<array>& inputs,
     const std::vector<array>& dependencies);
+
+/** convert an array to an atleast ndim array */
+array atleast_1d(const array& a, StreamOrDevice s = {});
+array atleast_2d(const array& a, StreamOrDevice s = {});
+array atleast_3d(const array& a, StreamOrDevice s = {});
 
 } // namespace mlx::core

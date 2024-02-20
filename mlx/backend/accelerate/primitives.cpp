@@ -33,7 +33,6 @@ DEFAULT(ArgSort)
 DEFAULT(AsStrided)
 DEFAULT(Broadcast)
 DEFAULT(Ceil)
-DEFAULT_MULTI(Compiled)
 DEFAULT(Concatenate)
 DEFAULT(Copy)
 DEFAULT_MULTI(CustomVJP)
@@ -62,6 +61,7 @@ DEFAULT(Partition)
 DEFAULT_MULTI(QRF)
 DEFAULT(RandomBits)
 DEFAULT(Reshape)
+DEFAULT(Remainder)
 DEFAULT(Round)
 DEFAULT(Scatter)
 DEFAULT(Sigmoid)
@@ -81,11 +81,8 @@ void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   } else if (in.dtype() == int32 && in.flags().contiguous) {
     set_unary_output_data(in, out);
     vDSP_vabsi(in.data<int>(), 1, out.data<int>(), 1, in.data_size());
-  } else if (is_unsigned(in.dtype())) {
-    // No-op for unsigned types
-    out.copy_shared_buffer(in);
   } else {
-    unary(in, out, AbsOp());
+    eval(inputs, out);
   }
 }
 
@@ -289,45 +286,6 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
         });
   } else {
     binary(a, b, out, [](auto x, auto y) { return x / y; });
-  }
-}
-
-// TODO: Avoid code duplication with the common backend.
-struct RemainderFn {
-  template <typename T>
-  std::enable_if_t<!std::is_integral_v<T>, T> operator()(
-      T numerator,
-      T denominator) {
-    return std::fmod(numerator, denominator);
-  }
-
-  template <typename T>
-  std::enable_if_t<std::is_integral_v<T>, T> operator()(
-      T numerator,
-      T denominator) {
-    return numerator % denominator;
-  }
-};
-
-void Remainder::eval_cpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  auto& a = inputs[0];
-  auto& b = inputs[1];
-
-  if (a.dtype() == float32) {
-    binary(
-        a,
-        b,
-        out,
-        RemainderFn{},
-        UseDefaultBinaryOp(),
-        UseDefaultBinaryOp(),
-        [](const auto* a, const auto* b, auto* o, auto n) {
-          int num_el = n;
-          vvremainderf((float*)o, (const float*)a, (const float*)b, &num_el);
-        });
-  } else {
-    binary(a, b, out, RemainderFn{});
   }
 }
 

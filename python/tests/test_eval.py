@@ -24,6 +24,14 @@ class TestEval(mlx_tests.MLXTestCase):
         y = dfun_dx(mx.array(1.0))
         self.assertEqual(y.item(), 6.0)
 
+    def test_eval_mixed(self):
+        x = mx.array(1) + 1 + 1
+        y = 0
+        z = "hello"
+        state = [x, y, z]
+        mx.eval(state)
+        self.assertEqual(x.item(), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

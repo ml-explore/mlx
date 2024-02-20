@@ -12,10 +12,10 @@
 
 template <typename U>
 struct Limits {
-  static const constant U max;
-  static const constant U min;
-  static const constant U finite_max;
-  static const constant U finite_min;
+  static const constant U max = metal::numeric_limits<U>::max();
+  static const constant U min = metal::numeric_limits<U>::min();
+  static const constant U finite_max = metal::numeric_limits<U>::max();
+  static const constant U finite_min = metal::numeric_limits<U>::min();
 };
 
 #define instantiate_default_limit(type)                                      \
@@ -71,7 +71,7 @@ inline size_t elem_to_loc(
     device const size_t* strides,
     int ndim) {
   size_t loc = 0;
-  for (int i = ndim - 1; i >= 0; --i) {
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
     loc += (elem % shape[i]) * strides[i];
     elem /= shape[i];
   }
@@ -84,7 +84,7 @@ inline size_t elem_to_loc(
     constant const size_t* strides,
     int ndim) {
   size_t loc = 0;
-  for (int i = ndim - 1; i >= 0; --i) {
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
     loc += (elem % shape[i]) * strides[i];
     elem /= shape[i];
   }

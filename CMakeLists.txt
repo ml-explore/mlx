@@ -18,7 +18,7 @@ option(MLX_BUILD_METAL "Build metal backend" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.1.0)
+  set(MLX_VERSION 0.3.0)
 endif()
 
 # --------------------- Processor tests -------------------------
@@ -123,8 +123,8 @@ else()
     /usr/include
     /usr/local/include
     $ENV{BLAS_HOME}/include)
-  message(STATUS "Blas lib" ${BLAS_LIBRARIES})
-  message(STATUS "Blas include" ${BLAS_INCLUDE_DIRS})
+  message(STATUS "Blas lib " ${BLAS_LIBRARIES})
+  message(STATUS "Blas include " ${BLAS_INCLUDE_DIRS})
   target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
   target_link_libraries(mlx ${BLAS_LIBRARIES})
   find_package(LAPACK REQUIRED)
@@ -134,7 +134,7 @@ else()
   find_path(LAPACK_INCLUDE_DIRS lapacke.h
     /usr/include
     /usr/local/include)
-  message(STATUS "Lapack lib" ${LAPACK_LIBRARIES})
+  message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
   message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
   target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
   target_link_libraries(mlx ${LAPACK_LIBRARIES})

@@ -121,5 +121,11 @@ constexpr complex64_t operator/(complex64_t a, complex64_t b) {
 constexpr complex64_t operator%(complex64_t a, complex64_t b) {
   auto real = a.real - (b.real * static_cast<int64_t>(a.real / b.real));
   auto imag = a.imag - (b.imag * static_cast<int64_t>(a.imag / b.imag));
+  if (real != 0 && (real < 0 != b.real < 0)) {
+    real += b.real;
+  }
+  if (imag != 0 && (imag < 0 != b.imag < 0)) {
+    imag += b.imag;
+  }
   return {real, imag};
 }

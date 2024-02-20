@@ -71,6 +71,15 @@ std::pair<std::vector<array>, std::vector<int>> Primitive::vmap(
   throw std::invalid_argument("Primitive's vmap not implemented.");
 };
 
+std::vector<std::vector<int>> Primitive::output_shapes(
+    const std::vector<array>&) {
+  std::ostringstream msg;
+  msg << "[Primitive::output_shapes] ";
+  this->print(msg);
+  msg << " cannot infer output shapes.";
+  throw std::invalid_argument(msg.str());
+};
+
 std::vector<array> Abs::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -383,6 +392,13 @@ std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
   return {{argsort(inputs[0], axis_ + (axes[0] <= axis_), stream())}, axes};
 }
 
+std::vector<std::vector<int>> ArgReduce::output_shapes(
+    const std::vector<array>& inputs) {
+  auto out_shape = inputs[0].shape();
+  out_shape[axis_] = 1;
+  return {out_shape};
+}
+
 bool ArgSort::is_equivalent(const Primitive& other) const {
   const ArgSort& r_other = static_cast<const ArgSort&>(other);
   return axis_ == r_other.axis_;
@@ -628,7 +644,6 @@ std::vector<array> Convolution::vjp(
   auto& wt = primals[1];
   auto cotan = cotangents[0];
 
-  int N = in.shape(0);
   int O = wt.shape(0);
 
   // Resolve Padded input shapes and strides
@@ -2201,6 +2216,15 @@ std::pair<std::vector<array>, std::vector<int>> Reduce::vmap(
 bool Reduce::is_equivalent(const Primitive& other) const {
   const Reduce& r_other = static_cast<const Reduce&>(other);
   return reduce_type_ == r_other.reduce_type_ && axes_ == r_other.axes_;
+}
+
+std::vector<std::vector<int>> Reduce::output_shapes(
+    const std::vector<array>& inputs) {
+  std::vector<int> out_shape = inputs[0].shape();
+  for (auto i : axes_) {
+    out_shape[i] = 1;
+  }
+  return {out_shape};
 }
 
 std::vector<array> Round::vjp(

@@ -44,8 +44,8 @@ TEST_CASE("test compile with grad") {
   auto y = array(1.0f);
   auto grads_expected = grad_fun({x, y});
   auto grads_compile = compile(grad_fun)({x, y});
-  CHECK_EQ(grads_compile[0].item<float>(), grads_expected[0].item<float>());
-  CHECK_EQ(grads_compile[1].item<float>(), grads_expected[1].item<float>());
+  CHECK(allclose(grads_compile[0], grads_expected[0]).item<bool>());
+  CHECK(allclose(grads_compile[1], grads_expected[1]).item<bool>());
 }
 
 TEST_CASE("test compile inputs with primitive") {
@@ -272,7 +272,7 @@ TEST_CASE("test compile unary fused") {
     CHECK_EQ(out.inputs()[0].id(), x.id());
 
     auto expected_out = unary_fused_1({array(2.0)})[0];
-    CHECK_EQ(out.item<float>(), expected_out.item<float>());
+    CHECK(allclose(out, expected_out).item<bool>());
   }
 
   {
@@ -622,4 +622,84 @@ TEST_CASE("test transform compiled function") {
   CHECK_EQ(outs[0].siblings()[0].id(), outs[1].id());
   CHECK(!outs[0].inputs()[0].has_primitive());
   CHECK(!outs[0].inputs()[1].has_primitive());
+}
+
+TEST_CASE("test fusion kernel reuse") {
+  auto cfun = compile(gelu_1);
+  auto x = array({2.0f, -2.0f});
+  auto y = cfun({x})[0];
+  auto p = std::dynamic_pointer_cast<Compiled>(y.primitive_ptr());
+  eval(y);
+
+  std::string lib_name = p->lib_name();
+  CHECK(!lib_name.empty());
+
+  x = astype(reshape(arange(10), {2, 5}), float32);
+  auto z = cfun({x})[0];
+  auto pz = std::dynamic_pointer_cast<Compiled>(z.primitive_ptr());
+  eval(z);
+
+  std::string lib_name_z = pz->lib_name();
+  CHECK(!lib_name_z.empty());
+
+  CHECK_EQ(lib_name, lib_name_z);
+}
+
+auto add3(const std::vector<array>& xs) {
+  return std::vector<array>{xs[0] + xs[0] + xs[0]};
+}
+
+TEST_CASE("test fusion types") {
+  auto cfun = compile(add3);
+  auto x = array({2.0f, -2.0f});
+  auto y = cfun({x})[0];
+  auto p = std::dynamic_pointer_cast<Compiled>(y.primitive_ptr());
+  eval(y);
+
+  std::string lib_name = p->lib_name();
+  CHECK(!lib_name.empty());
+
+  x = array({2, -2}, int32);
+  auto z = cfun({x})[0];
+  auto pz = std::dynamic_pointer_cast<Compiled>(z.primitive_ptr());
+  eval(z);
+
+  std::string lib_name_z = pz->lib_name();
+  CHECK(!lib_name_z.empty());
+}
+
+auto compile_shapeless_not_ok(const std::vector<array>& inputs) {
+  auto x = reshape(inputs[0], {2, 2});
+  return std::vector<array>{x};
+}
+
+auto compile_shapeless_ok(const std::vector<array>& inputs) {
+  auto x = inputs[0] + array({2});
+  return std::vector<array>{x};
+}
+
+TEST_CASE("test shapeless compile") {
+  {
+    auto cfun = compile(compile_shapeless_not_ok, /* shapeless */ true);
+    CHECK_THROWS(cfun({array({1, 2, 3, 4})}));
+  }
+
+  {
+    auto cfun = compile(compile_shapeless_ok, /* shapeless */ true);
+    auto out = cfun({array({1, 2})})[0];
+    auto out2 = cfun({array({1, 2, 3, 4})})[0];
+
+    // Not making a new constant array since no recompile,
+    // hence the ids should be the same
+    CHECK_EQ(out.inputs()[1].id(), out2.inputs()[1].id());
+    CHECK(array_equal(out2, array({3, 4, 5, 6})).item<bool>());
+
+    // Recompile since type changes
+    out2 = cfun({array({1.0, 2.0})})[0];
+    CHECK_NE(out.inputs()[1].id(), out2.inputs()[1].id());
+
+    // Recompile since ndim changes
+    out2 = cfun({array({1.0, 2.0}, {1, 2})})[0];
+    CHECK_NE(out.inputs()[1].id(), out2.inputs()[1].id());
+  }
 }

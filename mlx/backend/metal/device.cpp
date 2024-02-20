@@ -215,15 +215,6 @@ MTL::ComputeCommandEncoder* Device::get_command_encoder(int index) {
   return eit->second;
 }
 
-MTL::ArgumentEncoder* Device::argument_encoder(
-    const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const {
-  // NB array here is already autoreleased but the returned argument
-  // encoder is owned by the caller and must be released/autoreleased
-  NS::Array* arg_desc_arr = NS::Array::array(
-      reinterpret_cast<NS::Object* const*>(arg_descs.data()), arg_descs.size());
-  return device_->newArgumentEncoder(arg_desc_arr);
-}
-
 void Device::register_library(
     const std::string& lib_name,
     const std::string& lib_path) {
@@ -412,6 +403,11 @@ MTL::ComputePipelineState* Device::get_kernel_(
   }
 
   return kernel;
+}
+
+MTL::Library* Device::get_library(const std::string& name) {
+  auto it = library_map_.find(name);
+  return (it != library_map_.end()) ? it->second : nullptr;
 }
 
 MTL::Library* Device::get_library(

@@ -95,13 +95,30 @@ inline array uniform(
 array normal(
     const std::vector<int>& shape,
     Dtype dtype,
+    const float loc,
+    const float scale,
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {});
 inline array normal(
     const std::vector<int>& shape,
+    const float loc,
+    const float scale,
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
-  return normal(shape, float32, key, s);
+  return normal(shape, float32, loc, scale, key, s);
+}
+inline array normal(
+    const std::vector<int>& shape,
+    const Dtype dtype,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {}) {
+  return normal(shape, dtype, 0.0, 1.0, key, s);
+}
+inline array normal(
+    const std::vector<int>& shape,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {}) {
+  return normal(shape, float32, 0.0, 1.0, key, s);
 }
 
 /** Generate integer samples uniformly at random */

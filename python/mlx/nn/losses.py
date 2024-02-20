@@ -117,6 +117,7 @@ def cross_entropy(
 def binary_cross_entropy(
     inputs: mx.array,
     targets: mx.array,
+    weights: mx.array = None,
     with_logits: bool = True,
     reduction: Reduction = "mean",
 ) -> mx.array:
@@ -128,6 +129,7 @@ def binary_cross_entropy(
             ``inputs`` are unnormalized logits. Otherwise, ``inputs`` are probabilities.
         targets (array): The binary target values in {0, 1}.
         with_logits (bool, optional): Whether ``inputs`` are logits. Default: ``True``.
+        weights (array, optional): Optional weights for each target. Default: ``None``.
         reduction (str, optional): Specifies the reduction to apply to the output:
           ``'none'`` | ``'mean'`` | ``'sum'``. Default: ``'mean'``.
 
@@ -158,6 +160,15 @@ def binary_cross_entropy(
         loss = mx.logaddexp(0.0, inputs) - inputs * targets
     else:
         loss = -(targets * mx.log(inputs) + (1 - targets) * mx.log(1 - inputs))
+
+    # Apply weights if provided
+    if weights is not None:
+        if weights.shape != loss.shape:
+            raise ValueError(
+                f"Weights with shape {weights.shape} is not the same as "
+                f"output loss with shape {loss.shape}."
+            )
+        loss *= weights
 
     return _reduce(loss, reduction)
 

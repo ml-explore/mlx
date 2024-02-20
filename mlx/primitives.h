@@ -36,6 +36,12 @@
     return true;                                              \
   }
 
+#define DEFINE_INPUT_OUTPUT_SHAPE()                \
+  std::vector<std::vector<int>> output_shapes(     \
+      const std::vector<array>& inputs) override { \
+    return {inputs[0].shape()};                    \
+  };
+
 namespace mlx::core {
 
 // Abstract base class
@@ -102,6 +108,11 @@ class Primitive {
     return false;
   }
 
+  /** Get the output shapes of the primitive. This is not required to be
+   * implemented by derived classes, in which case it will throw. */
+  virtual std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs);
+
   virtual ~Primitive() = default;
   Primitive(const Primitive& other) = delete;
   Primitive(Primitive&& other) = delete;
@@ -152,6 +163,7 @@ class Abs : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Abs)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -168,6 +180,7 @@ class Add : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Add)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -226,6 +239,7 @@ class ArcCos : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(ArcCos)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -242,6 +256,7 @@ class ArcCosh : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(ArcCosh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -258,6 +273,7 @@ class ArcSin : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(ArcSin)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -274,6 +290,7 @@ class ArcSinh : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(ArcSinh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -290,6 +307,7 @@ class ArcTan : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(ArcTan)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -306,6 +324,7 @@ class ArcTanh : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(ArcTanh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -321,6 +340,7 @@ class ArgPartition : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_PRINT(ArgPartition)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
@@ -346,6 +366,8 @@ class ArgReduce : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_PRINT(ArgReduce)
   bool is_equivalent(const Primitive& other) const override;
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override;
 
  private:
   ReduceType reduce_type_;
@@ -364,6 +386,7 @@ class ArgSort : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_PRINT(ArgSort)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
@@ -383,6 +406,7 @@ class AsType : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(AsType)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
@@ -448,6 +472,7 @@ class Ceil : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Ceil)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -473,16 +498,19 @@ class Compiled : public Primitive {
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
-
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override;
   void print(std::ostream& os) override;
-
   bool is_equivalent(const Primitive& other) const override;
+
+  std::string lib_name() const {
+    return kernel_lib_;
+  }
 
  private:
   const std::vector<array> inputs_;
@@ -490,7 +518,7 @@ class Compiled : public Primitive {
   const std::vector<array> tape_;
   const std::unordered_set<uintptr_t> constant_ids_;
 
-  void eval(const std::vector<array>& inputs, std::vector<array>& out);
+  std::string kernel_lib_;
 };
 
 class Concatenate : public UnaryPrimitive {
@@ -558,6 +586,7 @@ class Copy : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Copy)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -574,6 +603,7 @@ class Cos : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Cos)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -590,6 +620,7 @@ class Cosh : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Cosh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -660,6 +691,7 @@ class Divide : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Divide)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -678,6 +710,10 @@ class DivMod : public Primitive {
   DEFINE_GRADS()
   DEFINE_PRINT(DivMod)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override {
+    return std::vector{inputs[0].shape(), inputs[0].shape()};
+  };
 
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
@@ -694,6 +730,7 @@ class Remainder : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Remainder)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -709,8 +746,16 @@ class Equal : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Equal)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+  void print(std::ostream& os) override {
+    if (equal_nan_) {
+      os << "NanEqual";
+    } else {
+      os << "Equal";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -728,6 +773,7 @@ class Erf : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Erf)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -744,6 +790,7 @@ class ErfInv : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(ErfInv)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -760,6 +807,7 @@ class Exp : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Exp)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -802,6 +850,7 @@ class Floor : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Floor)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -856,6 +905,7 @@ class Greater : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Greater)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -872,6 +922,7 @@ class GreaterEqual : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(GreaterEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -888,6 +939,7 @@ class Less : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Less)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -904,6 +956,7 @@ class LessEqual : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(LessEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -945,8 +998,22 @@ class Log : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Log)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+  void print(std::ostream& os) override {
+    switch (base_) {
+      case e:
+        os << "Log";
+        break;
+      case two:
+        os << "Log2";
+        break;
+      case ten:
+        os << "Log10";
+        break;
+    }
+  }
 
  private:
   Base base_;
@@ -963,6 +1030,7 @@ class Log1p : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Log1p)
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -979,6 +1047,7 @@ class LogicalNot : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(LogicalNot)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -995,6 +1064,7 @@ class LogicalAnd : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(LogicalAnd)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1011,6 +1081,7 @@ class LogicalOr : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(LogicalOr)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1027,6 +1098,7 @@ class LogAddExp : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(LogAddExp)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1060,6 +1132,7 @@ class Maximum : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Maximum)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1076,6 +1149,7 @@ class Minimum : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Minimum)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1092,6 +1166,7 @@ class Multiply : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Multiply)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1108,6 +1183,7 @@ class Negative : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Negative)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1124,6 +1200,7 @@ class NotEqual : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(NotEqual)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1168,6 +1245,7 @@ class Partition : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Partition)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
@@ -1188,6 +1266,7 @@ class Power : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Power)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1280,6 +1359,9 @@ class Reduce : public UnaryPrimitive {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override;
+
   void print(std::ostream& os) override {
     switch (reduce_type_) {
       case And:
@@ -1322,6 +1404,7 @@ class Round : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Round)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1430,6 +1513,7 @@ class Sigmoid : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Sigmoid)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1446,6 +1530,7 @@ class Sign : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Sign)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1462,6 +1547,7 @@ class Sin : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Sin)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1478,6 +1564,7 @@ class Sinh : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Sinh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1522,6 +1609,7 @@ class Softmax : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Softmax)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1538,6 +1626,7 @@ class Sort : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Sort)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
 
  private:
@@ -1579,6 +1668,7 @@ class Square : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Square)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1594,8 +1684,16 @@ class Sqrt : public UnaryPrimitive {
 
   DEFINE_VMAP()
   DEFINE_GRADS()
-  DEFINE_PRINT(Sqrt)
+  DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
+
+  void print(std::ostream& os) override {
+    if (recip_) {
+      os << "Rsqrt";
+    } else {
+      os << "Sqrt";
+    }
+  }
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1612,6 +1710,7 @@ class StopGradient : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_PRINT(StopGradient)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1628,6 +1727,7 @@ class Subtract : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Subtract)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1644,6 +1744,7 @@ class Tan : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Tan)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
@@ -1660,6 +1761,7 @@ class Tanh : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Tanh)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);

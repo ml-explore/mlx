@@ -41,6 +41,9 @@ class array {
   /* Special case so empty lists default to float32. */
   array(std::initializer_list<float> data);
 
+  /* Special case so array({}, type) is an empty array. */
+  array(std::initializer_list<int> data, Dtype dtype);
+
   template <typename T>
   array(
       std::initializer_list<T> data,
@@ -120,6 +123,9 @@ class array {
   /** Get the value from a scalar array. */
   template <typename T>
   T item();
+
+  template <typename T>
+  T item() const;
 
   struct ArrayIterator {
     using iterator_category = std::random_access_iterator_tag;
@@ -451,6 +457,18 @@ T array::item() {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
   eval();
+  return *data<T>();
+}
+
+template <typename T>
+T array::item() const {
+  if (size() != 1) {
+    throw std::invalid_argument("item can only be called on arrays of size 1.");
+  }
+  if (!is_evaled()) {
+    throw std::invalid_argument(
+        "item() const can only be called on evaled arrays");
+  }
   return *data<T>();
 }
 

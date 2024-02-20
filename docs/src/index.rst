@@ -41,6 +41,7 @@ are the CPU and GPU.
    usage/indexing
    usage/saving_and_loading
    usage/function_transforms
+   usage/compile
    usage/numpy
    usage/using_streams
 

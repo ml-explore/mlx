@@ -82,6 +82,13 @@ array::array(std::initializer_list<float> data)
   init(data.begin());
 }
 
+array::array(std::initializer_list<int> data, Dtype dtype)
+    : array_desc_(std::make_shared<ArrayDesc>(
+          std::vector<int>{static_cast<int>(data.size())},
+          dtype)) {
+  init(data.begin());
+}
+
 /* Build an array from a shared buffer */
 array::array(
     allocator::Buffer data,

@@ -15,19 +15,17 @@ using namespace mlx::core;
 using LoadOutputTypes = std::variant<
     array,
     std::unordered_map<std::string, array>,
-    std::pair<
-        std::unordered_map<std::string, array>,
-        std::unordered_map<std::string, MetaData>>>;
+    SafetensorsLoad,
+    GGUFLoad>;
 
-std::unordered_map<std::string, array> mlx_load_safetensor_helper(
+SafetensorsLoad mlx_load_safetensor_helper(py::object file, StreamOrDevice s);
+void mlx_save_safetensor_helper(
     py::object file,
-    StreamOrDevice s);
-void mlx_save_safetensor_helper(py::object file, py::dict d);
+    py::dict d,
+    std::optional<py::dict> m);
 
-std::pair<
-    std::unordered_map<std::string, array>,
-    std::unordered_map<std::string, MetaData>>
-mlx_load_gguf_helper(py::object file, StreamOrDevice s);
+GGUFLoad mlx_load_gguf_helper(py::object file, StreamOrDevice s);
+
 void mlx_save_gguf_helper(
     py::object file,
     py::dict d,

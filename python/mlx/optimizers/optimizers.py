@@ -1,45 +1,21 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 import math
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
 from mlx.utils import tree_map
 
 
-class OptimizerState(dict):
-    """The optimizer state implements a recursively defined
-    :class:`collections.defaultdict`, namely a missing key in an optimizer
-    state is an :class:`OptimizerState`.
-
-    .. note::
-       :meth:`OptimizerState.get` in contrast to a normal dictionary also sets
-       the key to the ``default`` value if the ``key`` was not present in the
-       dictionary.
-    """
-
-    def __getitem__(self, key):
-        if key not in self:
-            self[key] = OptimizerState()
-        return super().__getitem__(key)
-
-    def get(self, key, default):
-        """If ``key`` doesn't exist set its value to ``default`` and then return it."""
-        if key not in self:
-            self[key] = default
-        return super().__getitem__(key)
-
-
 class Optimizer:
     """The base class for all optimizers. It allows us to implement an
     optimizer on a per-parameter basis and apply it to a parameter tree.
-
-    Attributes:
-        state (OptimizerState): It holds the optimizer's state dictionary.
     """
 
-    def __init__(self):
-        self.state = OptimizerState()
+    def __init__(self, schedulers=None):
+        self._initialized = False
+        self._state = {"step": mx.array(0, mx.uint64)}
+        self._schedulers = {k: v for k, v in (schedulers or {}).items()}
 
     def update(self, model: "mlx.nn.Module", gradients: dict):
         """Apply the gradients to the parameters of the model and update the
@@ -52,7 +28,40 @@ class Optimizer:
         """
         model.update(self.apply_gradients(gradients, model))
 
-    def apply_gradients(self, gradients: dict, model: dict):
+    def init(self, parameters: dict):
+        """Initialize the optimizer's state
+
+        This function can be used to initialize optimizers which have state
+        (like momentum in :class:`SGD`). Using this method is optional as the
+        optimizer will initialize itself if the state is not yet set. However,
+        there are some cases where explicit initialization is useful in order
+        to have access to the :attr:`Optimizer.state` before the first call to
+        :meth:`Optimizer.update`.
+
+        Args:
+            model (dict): A Python tree of parameters.
+
+        Example:
+            >>> optimizer = optim.SGD(learning_rate=1e-1, momentum=0.9)
+            >>> model = nn.Linear(2, 2)
+            >>> optimizer.init(model.trainable_parameters())
+            >>> optimizer.state.keys()
+            dict_keys(['step', 'learning_rate', 'weight', 'bias'])
+        """
+        self._state.update(tree_map(lambda x: {}, parameters))
+        tree_map(self.init_single, parameters, self._state)
+        self._initialized = True
+
+    def init_single(self, parameter: mx.array, state: dict):
+        """To be extended by the children classes to implement each optimizer's
+        state initialization.
+
+        Args:
+            parameter (mx.array): A single parameter that will be optimized.
+        """
+        raise NotImplementedError()
+
+    def apply_gradients(self, gradients: dict, parameters: dict):
         """Apply the gradients to the parameters and return the updated parameters.
 
         Can be used to update a model via
@@ -61,18 +70,66 @@ class Optimizer:
 
         Args:
             gradients (dict): A Python tree of gradients.
-            model (dict): A Python tree of parameters. It can be a superset of
-                          the gradients. In that case the returned python tree
-                          will be of the same structure as the gradients.
+            parameters (dict): A Python tree of parameters. It can be a
+              superset of the gradients. In that case the returned python
+              tree will be of the same structure as the gradients.
         """
-        return tree_map(self.apply_single, gradients, model, self.state)
+        if not self._initialized:
+            self.init(gradients)
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
-        """To be extended by the children classes to implement each optimizer's
-        update."""
+        # Update any scheduled variables
+        for param, scheduler in self._schedulers.items():
+            self.state[param] = scheduler(self.step)
+
+        # Increment the step
+        self.state["step"] = self.step + 1
+
+        # Apply the update
+        return tree_map(self.apply_single, gradients, parameters, self.state)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
+        """To be extended by derived classes to implement the optimizer's update.
+
+        Args:
+            gradient (mx.array): The ``parameter`` gradient.
+            parameter (mx.array): The ``parameter`` to update.
+            state (dict): The optimizer's state.
+        """
         raise NotImplementedError()
+
+    @property
+    def state(self):
+        """The optimizer's state dictionary."""
+        return self._state
+
+    @state.setter
+    def state(self, state: dict):
+        self._state = state
+
+    @property
+    def step(self):
+        return self.state["step"]
+
+    @property
+    def learning_rate(self):
+        return self.state["learning_rate"]
+
+    @learning_rate.setter
+    def learning_rate(self, learning_rate: Union[float, mx.array]):
+        self.state["learning_rate"] = mx.array(learning_rate)
+
+    def _maybe_schedule(
+        self, name: str, param: Union[float, Callable[[mx.array], mx.array]]
+    ):
+        """
+        To be used by derived classes to optionally put a parameter on a schedule.
+        """
+        if isinstance(param, Callable):
+            self._schedulers[name] = param
+            param = param(self.step)
+        else:
+            param = mx.array(param)
+        self.state[name] = param
 
 
 class SGD(Optimizer):
@@ -86,7 +143,7 @@ class SGD(Optimizer):
         w_{t+1} &= w_t - \lambda v_{t+1}
 
     Args:
-        learning_rate (float): The learning rate :math:`\lambda`.
+        learning_rate (float or callable): The learning rate :math:`\lambda`.
         momentum (float, optional): The momentum strength :math:`\mu`. Default: ``0``
         weight_decay (float, optional): The weight decay (L2 penalty). Default: ``0``
         dampening (float, optional): Dampening for momentum :math:`\tau`. Default: ``0``
@@ -95,7 +152,7 @@ class SGD(Optimizer):
 
     def __init__(
         self,
-        learning_rate: float,
+        learning_rate: Union[float, Callable[[mx.array], mx.array]],
         momentum: float = 0.0,
         weight_decay: float = 0.0,
         dampening: float = 0.0,
@@ -107,15 +164,17 @@ class SGD(Optimizer):
             )
         super().__init__()
 
-        self.learning_rate = learning_rate
+        self._maybe_schedule("learning_rate", learning_rate)
         self.momentum = momentum
         self.weight_decay = weight_decay
         self.dampening = dampening
         self.nesterov = nesterov
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the SGD parameter update and stores :math:`v` in the
         optimizer state."""
 
@@ -123,24 +182,21 @@ class SGD(Optimizer):
             gradient += self.weight_decay * parameter
 
         if self.momentum <= 0:
-            return parameter - self.learning_rate * gradient
+            return parameter - self.learning_rate.astype(gradient.dtype) * gradient
 
+        v = self.momentum * state.get("v")
         if self.dampening > 0:
-            v = (
-                state.get("v", (self.dampening / self.momentum) * gradient)
-                * self.momentum
-            )
             v += (1 - self.dampening) * gradient
         else:
-            v = state.get("v", mx.zeros_like(gradient)) * self.momentum
             v += gradient
 
         if self.nesterov:
             update = gradient + self.momentum * v
         else:
             update = v
+
         state["v"] = v
-        return parameter - self.learning_rate * update
+        return parameter - self.learning_rate.astype(gradient.dtype) * update
 
 
 class RMSprop(Optimizer):
@@ -164,7 +220,7 @@ class RMSprop(Optimizer):
     def __init__(self, learning_rate: float, alpha: float = 0.99, eps: float = 1e-8):
         super().__init__()
 
-        self.learning_rate = learning_rate
+        self._maybe_schedule("learning_rate", learning_rate)
         self.alpha = alpha
         self.eps = eps
 
@@ -177,15 +233,17 @@ class RMSprop(Optimizer):
                 f"RMSprop epsilon should be >0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
-        lr = self.learning_rate
+        lr = self.learning_rate.astype(gradient.dtype)
         alpha = self.alpha
         eps = self.eps
 
-        v = state.get("v", mx.zeros_like(gradient))
+        v = state["v"]
         v = alpha * v + (1 - alpha) * mx.square(gradient)
         state["v"] = v
 
@@ -214,7 +272,7 @@ class Adagrad(Optimizer):
     def __init__(self, learning_rate: float, eps: float = 1e-8):
         super().__init__()
 
-        self.learning_rate = learning_rate
+        self._maybe_schedule("learning_rate", learning_rate)
         self.eps = eps
 
         if self.eps < 0.0:
@@ -222,16 +280,17 @@ class Adagrad(Optimizer):
                 f"Adagrad epsilon should be >0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adagrad parameter update and stores :math:`v` in the
         optimizer state."""
-        lr = self.learning_rate
+        lr = self.learning_rate.astype(gradient.dtype)
         eps = self.eps
 
-        v = state.get("v", mx.zeros_like(gradient))
-        v = v + mx.square(gradient)
+        v = state["v"] + mx.square(gradient)
         state["v"] = v
 
         return parameter - lr * gradient / (mx.sqrt(v) + eps)
@@ -262,7 +321,7 @@ class AdaDelta(Optimizer):
     def __init__(self, learning_rate: float, rho: float = 0.9, eps: float = 1e-6):
         super().__init__()
 
-        self.learning_rate = learning_rate
+        self._maybe_schedule("learning_rate", learning_rate)
         self.rho = rho
         self.eps = eps
         if self.rho < 0.0:
@@ -274,17 +333,20 @@ class AdaDelta(Optimizer):
                 f"AdaDelta epsilon should be >0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["v"] = mx.zeros_like(parameter)
+        state["u"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the AdaDelta parameter update and stores :math:`v` and
         :math:`u` in the optimizer state."""
-        lr = self.learning_rate
+        lr = self.learning_rate.astype(gradient.dtype)
         rho = self.rho
         eps = self.eps
 
-        v = state.get("v", mx.zeros_like(gradient))
-        u = state.get("u", mx.zeros_like(gradient))
+        v = state["v"]
+        u = state["u"]
 
         v = rho * v + (1 - rho) * mx.square(gradient)
         d = mx.sqrt(u + eps) / mx.sqrt(v + eps) * gradient
@@ -325,21 +387,24 @@ class Adam(Optimizer):
     ):
         super().__init__()
 
-        self.learning_rate = learning_rate
+        self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.eps = eps
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["m"] = mx.zeros_like(parameter)
+        state["v"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adam parameter update and stores :math:`v` and
         :math:`m` in the optimizer state."""
-        lr = self.learning_rate
+        lr = self.learning_rate.astype(gradient.dtype)
         b1, b2 = self.betas
         eps = self.eps
 
-        m = state.get("m", gradient)
-        v = state.get("v", mx.square(gradient))
+        m = state["m"]
+        v = state["v"]
         m = b1 * m + (1 - b1) * gradient
         v = b2 * v + (1 - b2) * mx.square(gradient)
         state["m"] = m
@@ -385,15 +450,14 @@ class AdamW(Adam):
         super().__init__(learning_rate=learning_rate, betas=betas, eps=eps)
         self.weight_decay = weight_decay
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the AdamW parameter update by modifying the parameters
         passed into Adam.
         """
 
+        lr = self.learning_rate.astype(gradient.dtype)
         return super().apply_single(
-            gradient, parameter * (1 - self.learning_rate * self.weight_decay), state
+            gradient, parameter * (1 - lr * self.weight_decay), state
         )
 
 
@@ -430,17 +494,20 @@ class Adamax(Adam):
                 f"Epsilon value should be >=0, {self.eps} was provided instead"
             )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["m"] = mx.zeros_like(parameter)
+        state["v"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adamax parameter update and stores :math:`v` and
         :math:`m` in the optimizer state."""
-        lr = self.learning_rate
+        lr = self.learning_rate.astype(gradient.dtype)
         b1, b2 = self.betas
         eps = self.eps
 
-        m = state.get("m", mx.zeros_like(gradient))
-        v = state.get("v", mx.zeros_like(gradient))
+        m = state["m"]
+        v = state["v"]
 
         m = b1 * m + (1 - b1) * gradient
         v = mx.maximum(b2 * v, mx.abs(gradient))
@@ -485,20 +552,22 @@ class Lion(Optimizer):
     ):
         super().__init__()
 
-        self.learning_rate = learning_rate
+        self._maybe_schedule("learning_rate", learning_rate)
         self.betas = betas
         self.weight_decay = weight_decay
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        state["m"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Lion parameter update and stores :math:`m`
         in the optimizer state."""
-        lr = self.learning_rate
+        lr = self.learning_rate.astype(gradient.dtype)
         b1, b2 = self.betas
         weight_decay = self.weight_decay
 
-        m = state.get("m", gradient)
+        m = state["m"]
         c = b1 * m + (1 - b1) * gradient
         state["m"] = b2 * m + (1 - b2) * gradient
         if weight_decay > 0:
@@ -552,7 +621,8 @@ class Adafactor(Optimizer):
         warmup_init: bool = False,
     ):
         super().__init__()
-        self.learning_rate = learning_rate
+        if learning_rate is not None:
+            self._maybe_schedule("learning_rate", learning_rate)
         self.eps = eps
         self.clip_threshold = clip_threshold
         self.decay_rate = decay_rate
@@ -562,15 +632,30 @@ class Adafactor(Optimizer):
         self.relative_step = relative_step
         self.warmup_init = warmup_init
 
+    def init_single(self, parameter: mx.array, state: dict):
+        """Initialize optimizer state"""
+        if parameter.ndim >= 2:
+            shape = parameter.shape
+            dtype = parameter.dtype
+            state["exp_avg_sq_row"] = mx.zeros(shape[:-1], dtype=dtype)
+            state["exp_avg_sq_col"] = mx.zeros(shape[:-2] + shape[-1:], dtype=dtype)
+        else:
+            state["exp_avg_sq"] = mx.zeros_like(parameter)
+
+        if self.beta_1 is not None:
+            state["exp_avg"] = mx.zeros_like(parameter)
+
     def _compute_rms(self, inputs):
         return mx.sqrt(mx.mean(mx.square(inputs)))
 
     def _compute_learning_rate(self, step, parameter_rms):
-        relative_step_size = self.learning_rate
         if self.relative_step:
             min_step = 1e-6 * step if self.warmup_init else 1e-2
-            relative_step_size = min(min_step, 1 / math.sqrt(step))
+            relative_step_size = mx.minimum(min_step, mx.rsqrt(step))
+        else:
+            relative_step_size = self.learning_rate
 
+        relative_step_size = relative_step_size.astype(parameter_rms.dtype)
         parameter_scale = 1.0
         if self.scale_parameter:
             parameter_scale = mx.maximum(self.eps[1], parameter_rms)
@@ -585,31 +670,21 @@ class Adafactor(Optimizer):
             mx.expand_dims(r_factor, axis=-1), mx.expand_dims(c_factor, axis=0)
         )
 
-    def apply_single(
-        self, gradient: mx.array, parameter: mx.array, state: OptimizerState
-    ):
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the Adafactor parameter and state update."""
-        gradient_shape = gradient.shape
-        factored = len(gradient_shape) >= 2
-        step = state.get("step", 0) + 1
-        state["step"] = step
+        factored = gradient.ndim >= 2
+
+        step = self.step
         use_first_moment = self.beta_1 is not None
 
         parameter_rms = self._compute_rms(parameter)
         learning_rate = self._compute_learning_rate(step, parameter_rms)
-        beta_2 = 1.0 - math.pow(step, self.decay_rate)
+        beta_2 = 1.0 - (step**self.decay_rate).astype(parameter_rms.dtype)
         update = mx.square(gradient) + self.eps[0]
 
         if factored:
-            exp_avg_sq_row = state.get(
-                "exp_avg_sq_row", mx.zeros(gradient_shape[:-1], dtype=gradient.dtype)
-            )
-            exp_avg_sq_col = state.get(
-                "exp_avg_sq_col",
-                mx.zeros(
-                    gradient_shape[:-2] + gradient_shape[-1:], dtype=gradient.dtype
-                ),
-            )
+            exp_avg_sq_row = state["exp_avg_sq_row"]
+            exp_avg_sq_col = state["exp_avg_sq_col"]
             exp_avg_sq_row = (beta_2 * exp_avg_sq_row) + (
                 (1 - beta_2) * mx.mean(update, axis=-1)
             )
@@ -621,7 +696,7 @@ class Adafactor(Optimizer):
             update = self._approximate_exp_moving_avg(exp_avg_sq_row, exp_avg_sq_col)
             update = update * gradient
         else:
-            exp_avg_sq = state.get("exp_avg_sq", mx.zeros_like(gradient))
+            exp_avg_sq = state["exp_avg_sq"]
             exp_avg_sq = (beta_2 * exp_avg_sq) + ((1 - beta_2) * update)
             state["exp_avg_sq"] = exp_avg_sq
             update = mx.rsqrt(exp_avg_sq) * gradient
@@ -632,7 +707,7 @@ class Adafactor(Optimizer):
         update = learning_rate * update
 
         if use_first_moment:
-            exp_avg = state.get("exp_avg", mx.zeros_like(gradient))
+            exp_avg = state["exp_avg"]
             exp_avg = (self.beta_1 * exp_avg) + ((1 - self.beta_1) * update)
             state["exp_avg"] = exp_avg
             update = exp_avg

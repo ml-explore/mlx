@@ -1,6 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
+import os
 import unittest
 from itertools import permutations
 
@@ -273,6 +274,20 @@ class TestOps(mlx_tests.MLXTestCase):
             z = 1 % x
             self.assertEqual(z.dtype, dt)
             self.assertEqual(z.item(), 1)
+
+            z = -1 % x
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), 1)
+
+            z = -1 % -x
+            self.assertEqual(z.dtype, dt)
+            self.assertEqual(z.item(), -1)
+
+            x = mx.arange(10).astype(dt) - 5
+            y = x % 5
+            z = x % -5
+            self.assertEqual(y.tolist(), [0, 1, 2, 3, 4, 0, 1, 2, 3, 4])
+            self.assertEqual(z.tolist(), [0, -4, -3, -2, -1, 0, -4, -3, -2, -1])
 
     def test_comparisons(self):
         a = mx.array([0.0, 1.0, 5.0])
@@ -1012,6 +1027,9 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(y.tolist(), [[3, 4]])
         self.assertEqual(z.tolist(), [[5, 6]])
 
+        with self.assertRaises(ValueError):
+            mx.split(a, 3, axis=2)
+
         a = mx.arange(8)
         x, y, z = mx.split(a, [1, 5])
         self.assertEqual(x.tolist(), [0])
@@ -1318,9 +1336,7 @@ class TestOps(mlx_tests.MLXTestCase):
         for d in dims:
             anp = np.random.randint(-20, 20, (size**d,)).reshape([size] * d)
             for n_bsx in range(d):
-                bnp = np.random.randint(-20, 20, (size**n_bsx,)).reshape(
-                    [size] * n_bsx
-                )
+                bnp = np.random.randint(-20, 20, (size**n_bsx,)).reshape([size] * n_bsx)
                 for _ in range(trial_mul * d):
                     amlx = mx.array(anp)
                     bmlx = mx.array(bnp)
@@ -1370,6 +1386,11 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertFalse(np.any(np.isnan(a)))
             self.assertTrue((a[:-1] < 1e-9).all())
             self.assertEqual(a[-1], 1)
+
+        # Sliced inputs
+        y = mx.random.uniform(shape=(8, 4))
+        out = mx.softmax(y[:, 0:2], axis=-1)
+        self.assertAlmostEqual(out.sum().item(), 8.0)
 
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
@@ -1566,6 +1587,10 @@ class TestOps(mlx_tests.MLXTestCase):
                             d_np = np.take(b_mx, np.arange(kth), axis=axis)
                             self.assertTrue(np.all(d_np <= c_mx))
 
+    @unittest.skipIf(
+        os.getenv("LOW_MEMORY", None) is not None,
+        "This test requires a lot of memory",
+    )
     def test_large_binary(self):
         a = mx.ones([1000, 2147484], mx.int8)
         b = mx.ones([2147484], mx.int8)
@@ -1677,6 +1702,8 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_repeat(self):
         # Setup data for the tests
         data = mx.array([[[13, 3], [16, 6]], [[14, 4], [15, 5]], [[11, 1], [12, 2]]])
+        # Test repeat 0 times
+        self.assertCmpNumpy([data, 0], mx.repeat, np.repeat)
         # Test repeat along axis 0
         self.assertCmpNumpy([data, 2], mx.repeat, np.repeat, axis=0)
         # Test repeat along axis 1
@@ -1855,6 +1882,96 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.diag(x, k=-1)
         expected = mx.array(np.diag(x, k=-1))
         self.assertTrue(mx.array_equal(result, expected))
+
+    def test_atleast_1d(self):
+        def compare_nested_lists(x, y):
+            if isinstance(x, list) and isinstance(y, list):
+                if len(x) != len(y):
+                    return False
+                for i in range(len(x)):
+                    if not compare_nested_lists(x[i], y[i]):
+                        return False
+                return True
+            else:
+                return x == y
+
+        # Test 1D input
+        arrays = [
+            [1],
+            [1, 2, 3],
+            [1, 2, 3, 4],
+            [[1], [2], [3]],
+            [[1, 2], [3, 4]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[[[1]], [[2]], [[3]]]],
+        ]
+
+        for array in arrays:
+            mx_res = mx.atleast_1d(mx.array(array))
+            np_res = np.atleast_1d(np.array(array))
+            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
+            self.assertEqual(mx_res.shape, np_res.shape)
+            self.assertEqual(mx_res.ndim, np_res.ndim)
+
+    def test_atleast_2d(self):
+        def compare_nested_lists(x, y):
+            if isinstance(x, list) and isinstance(y, list):
+                if len(x) != len(y):
+                    return False
+                for i in range(len(x)):
+                    if not compare_nested_lists(x[i], y[i]):
+                        return False
+                return True
+            else:
+                return x == y
+
+        # Test 1D input
+        arrays = [
+            [1],
+            [1, 2, 3],
+            [1, 2, 3, 4],
+            [[1], [2], [3]],
+            [[1, 2], [3, 4]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[[[1]], [[2]], [[3]]]],
+        ]
+
+        for array in arrays:
+            mx_res = mx.atleast_2d(mx.array(array))
+            np_res = np.atleast_2d(np.array(array))
+            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
+            self.assertEqual(mx_res.shape, np_res.shape)
+            self.assertEqual(mx_res.ndim, np_res.ndim)
+
+    def test_atleast_3d(self):
+        def compare_nested_lists(x, y):
+            if isinstance(x, list) and isinstance(y, list):
+                if len(x) != len(y):
+                    return False
+                for i in range(len(x)):
+                    if not compare_nested_lists(x[i], y[i]):
+                        return False
+                return True
+            else:
+                return x == y
+
+        # Test 1D input
+        arrays = [
+            [1],
+            [1, 2, 3],
+            [1, 2, 3, 4],
+            [[1], [2], [3]],
+            [[1, 2], [3, 4]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[[[1]], [[2]], [[3]]]],
+        ]
+
+        for array in arrays:
+            mx_res = mx.atleast_3d(mx.array(array))
+            np_res = np.atleast_3d(np.array(array))
+            self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
+            self.assertEqual(mx_res.shape, np_res.shape)
+            self.assertEqual(mx_res.ndim, np_res.ndim)
 
 
 if __name__ == "__main__":

@@ -114,7 +114,6 @@ void gguf_load_quantized(
         << "has incompatible last dim shape: " << shape[shape.size() - 1];
     throw std::runtime_error(msg.str());
   }
-  const uint64_t num_blocks = tensor.num_weights / weights_per_block;
 
   std::vector<int> weights_shape = shape;
   weights_shape.back() /= (weights_per_byte * 4);

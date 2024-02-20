@@ -591,3 +591,21 @@ TEST_CASE("test array shared buffer") {
 
   eval(a + b);
 }
+
+TEST_CASE("test make empty array") {
+  auto a = array({});
+  CHECK_EQ(a.size(), 0);
+  CHECK_EQ(a.dtype(), float32);
+
+  a = array({}, int32);
+  CHECK_EQ(a.size(), 0);
+  CHECK_EQ(a.dtype(), int32);
+
+  a = array({}, float32);
+  CHECK_EQ(a.size(), 0);
+  CHECK_EQ(a.dtype(), float32);
+
+  a = array({}, bool_);
+  CHECK_EQ(a.size(), 0);
+  CHECK_EQ(a.dtype(), bool_);
+}

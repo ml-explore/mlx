@@ -1002,7 +1002,7 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_EQ(exp(x).item<float>(), 1.0);
 
     x = array(2.0);
-    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
+    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
 
     CHECK(array_equal(exp(array({})), array({})).item<bool>());
 
@@ -1012,7 +1012,7 @@ TEST_CASE("test arithmetic unary ops") {
     // Integer input type
     x = array(2);
     CHECK_EQ(x.dtype(), int32);
-    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
+    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
 
     // Input is irregularly strided
     x = broadcast_to(array(1.0f), {2, 2, 2});
@@ -1020,7 +1020,7 @@ TEST_CASE("test arithmetic unary ops") {
 
     x = split(array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2}), 2, 1)[0];
     auto expected = array({std::exp(0.0f), std::exp(2.0f)}, {2, 1});
-    CHECK(array_equal(exp(x), expected).item<bool>());
+    CHECK(allclose(exp(x), expected).item<bool>());
   }
 
   // Test sine
@@ -2715,4 +2715,55 @@ TEST_CASE("test diag") {
 
   out = diag(x, -1);
   CHECK(array_equal(out, array({3, 7}, {2})).item<bool>());
+}
+
+TEST_CASE("test atleast_1d") {
+  auto x = array(1);
+  auto out = atleast_1d(x);
+  CHECK_EQ(out.ndim(), 1);
+  CHECK_EQ(out.shape(), std::vector<int>{1});
+
+  x = array({1, 2, 3}, {3});
+  out = atleast_1d(x);
+  CHECK_EQ(out.ndim(), 1);
+  CHECK_EQ(out.shape(), std::vector<int>{3});
+
+  x = array({1, 2, 3}, {3, 1});
+  out = atleast_1d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{3, 1});
+}
+
+TEST_CASE("test atleast_2d") {
+  auto x = array(1);
+  auto out = atleast_2d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 1});
+
+  x = array({1, 2, 3}, {3});
+  out = atleast_2d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 3});
+
+  x = array({1, 2, 3}, {3, 1});
+  out = atleast_2d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{3, 1});
+}
+
+TEST_CASE("test atleast_3d") {
+  auto x = array(1);
+  auto out = atleast_3d(x);
+  CHECK_EQ(out.ndim(), 3);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 1, 1});
+
+  x = array({1, 2, 3}, {3});
+  out = atleast_3d(x);
+  CHECK_EQ(out.ndim(), 3);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 3, 1});
+
+  x = array({1, 2, 3}, {3, 1});
+  out = atleast_3d(x);
+  CHECK_EQ(out.ndim(), 3);
+  CHECK_EQ(out.shape(), std::vector<int>{3, 1, 1});
 }
