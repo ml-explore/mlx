@@ -478,6 +478,67 @@ class TestCompile(mlx_tests.MLXTestCase):
         mx.eval(cfun(x1))
         self.assertTrue(mx.array_equal(fun(x2), cfun(x2)))
 
+    def test_compile_with_constant(self):
+
+        # Test float
+        @partial(mx.compile)
+        def fun(x, y):
+            return x + y
+
+        z = fun(mx.array(1.0), 1.0)
+        self.assertEqual(z.item(), 2.0)
+
+        z = fun(mx.array(1.0), 2.0)
+        self.assertEqual(z.item(), 3.0)
+
+        z = fun(mx.array(1.0), y=1.0)
+        self.assertEqual(z.item(), 2.0)
+
+        z = fun(mx.array(1.0), y=3.0)
+        self.assertEqual(z.item(), 4.0)
+
+        # Test tuple
+        @partial(mx.compile)
+        def fun(x, y=(1, 2)):
+            return x + y[0] + y[1]
+
+        z = fun(mx.array(1))
+        self.assertEqual(z.item(), 4)
+
+        z = fun(mx.array(1), (2, 2))
+        self.assertEqual(z.item(), 5)
+
+        z = fun(mx.array(1), (2, 1))
+        self.assertEqual(z.item(), 4)
+
+        # Test bool
+        @partial(mx.compile)
+        def fun(x, y):
+            if y:
+                return x + 1
+            else:
+                return x + 2
+
+        z = fun(mx.array(1), True)
+        self.assertEqual(z.item(), 2)
+
+        z = fun(mx.array(1), False)
+        self.assertEqual(z.item(), 3)
+
+        # Test string
+        @partial(mx.compile)
+        def fun(x, y):
+            if y == "one":
+                return x + 1
+            else:
+                return x + 2
+
+        z = fun(mx.array(1), "one")
+        self.assertEqual(z.item(), 2)
+
+        z = fun(mx.array(1), "two")
+        self.assertEqual(z.item(), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
