@@ -2836,7 +2836,6 @@ TEST_CASE("max_pool_1d") {
     auto out = max_pool_1d(x, 2, {}, 0, 2);
     auto expected = array({0.7669, 0.7669, 0.7512, 0.6561}, {1, 4, 1});
     CHECK(array_equal(out, expected).item<bool>());
-    MESSAGE("out " << out);
   }
   SUBCASE("2 dims") {
     auto x = array(
