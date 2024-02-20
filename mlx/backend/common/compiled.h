@@ -49,4 +49,8 @@ void print_complex_constant(std::ostream& os, const array& x) {
 
 void print_constant(std::ostream& os, const array& x);
 
+inline bool is_scalar(const array& x) {
+  return x.ndim() == 0;
+}
+
 } // namespace mlx::core
