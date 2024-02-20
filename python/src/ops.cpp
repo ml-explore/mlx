@@ -3696,7 +3696,7 @@ void init_ops(py::module_& m) {
             array: An array with at least three dimensions.
 
         )pbdoc");
-    m.def(
+  m.def(
       "max_pool_1d",
       [](const array& a,
          int kernel_size,
@@ -3716,7 +3716,23 @@ void init_ops(py::module_& m) {
       "dilation"_a = 1,
       "ceil_mode"_a = false,
       py::kw_only(),
-      "stream"_a = none);
+      "stream"_a = none,
+      R"pbdoc(
+        max_pool_1d(a: array, kernel_size: int, /, stride: Optional[int] = None, padding: int = 0, dilation: int = 1, ceil_mode: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
+
+        1D max pooling over an input with several channels
+
+        Args:
+            a (array): input array of shape (``N``, ``H``, ``C_in``)
+            kernel_size (int): the size of the window to take a max over
+            stride (int, optional): the stride of the window. Default: ``None`` will use the kernel_size
+            padding (int, optional): implicit zero padding to be added on both sides. Default: ``0``
+            dilation (int, optional): the spacing between kernel elements. Default: ``1``
+            ceil_mode (bool, optional): when True, will use ceil instead of floor to compute the output shape. Default: ``False``
+
+        Returns:
+            array: The max pooled array.
+      )pbdoc");
   m.def(
       "avg_pool_1d",
       [](const array& a,
@@ -3734,5 +3750,20 @@ void init_ops(py::module_& m) {
       "padding"_a = 0,
       "ceil_mode"_a = false,
       py::kw_only(),
-      "stream"_a = none);
+      "stream"_a = none,
+      R"pbdoc(
+        avg_pool_1d(a: array, kernel_size: int, /, stride: Optional[int] = None, padding: int = 0, ceil_mode: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
+
+        1D average pooling over an input with several channels
+
+        Args:
+            a (array): input array of shape (``N``, ``H``, ``C_in``)
+            kernel_size (int): the size of the window to take a max over
+            stride (int, optional): the stride of the window. Default: ``None`` will use the kernel_size
+            padding (int, optional): implicit zero padding to be added on both sides. Default: ``0``
+            ceil_mode (bool, optional): when True, will use ceil instead of floor to compute the output shape. Default: ``False``
+
+        Returns:
+            array: The average pooled array.
+      )pbdoc");
 }
