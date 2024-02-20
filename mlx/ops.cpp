@@ -2871,11 +2871,14 @@ inline int pooling_shape(
     int kernel_size,
     int stride,
     bool ceil_mode) {
-  float out_h = (float(
-                     in_h + (padding + padding) - dilation * (kernel_size - 1) -
-                     1 + (ceil_mode ? stride - 1 : 0)) /
-                 stride) +
-      1.;
+  auto t = std::div(
+      in_h + (padding + padding) - dilation * (kernel_size - 1) - 1 +
+          (ceil_mode ? stride - 1 : 0),
+      stride);
+  if ((t.rem != 0) && ((t.rem < 0) != (t.quot < 0))) {
+    t.quot -= 1;
+  }
+  int out_h = t.quot + 1;
   if (ceil_mode) {
     if ((out_h - 1) * stride >= in_h + padding) {
       --out_h;
