@@ -282,7 +282,6 @@ def hardswish(x):
     return x * mx.minimum(max_x_3, 6) / 6
 
 
-@partial(mx.compile, shapeless=True)
 def tanh(x):
     """Applies the hyperbolic tangent function.
 
