@@ -28,6 +28,7 @@ Operations
    atleast_1d
    atleast_2d
    atleast_3d
+   avg_pool_1d
    broadcast_to
    ceil
    clip
@@ -76,6 +77,7 @@ Operations
    matmul
    max
    maximum
+   max_pool_1d
    mean
    min
    minimum
