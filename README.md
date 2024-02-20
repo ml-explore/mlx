@@ -60,10 +60,6 @@ variety of examples, including:
 - Generating images with [Stable Diffusion](https://github.com/ml-explore/mlx-examples/tree/main/stable_diffusion).
 - Speech recognition with [OpenAI's Whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper).
 
-## Additional APIs
-
-
-
 ## Quickstart
 
 See the [quick start
