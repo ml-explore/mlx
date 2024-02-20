@@ -42,6 +42,7 @@ template <typename T>
     constant const int& kernel_size,
     constant const int& stride,
     constant const int& padding,
+    constant const int& dilation,
     constant const int& in_height,
     constant const uint& out_height, 
     constant const size_t in_strides[3],
@@ -52,11 +53,11 @@ template <typename T>
     if(pos.y >= out_height) return;
 
     int start = pos.y * stride - padding;
-    int end = min(start + kernel_size, in_height);
+    int end = min(start + (kernel_size * dilation), in_height);
     start = max(0, start);
     int bx = pos.x * in_strides[0];
     T val = numeric_limits<T>::lowest();
-    for (int i = start; i < end; i++) {
+    for (int i = start; i < end; i += dilation) {
         val = max(val, in[bx + i * in_strides[1] + pos.z]);
     }
     out[pos.x * out_strides[0] + pos.y * out_strides[1] + pos.z] = val;
@@ -87,6 +88,7 @@ template <typename T>
         constant const int& kernel_size, \
         constant const int& stride, \
         constant const int& padding, \
+        constant const int& dilation, \
         constant const int& in_height, \
         constant const uint& out_height, \
         constant const size_t in_strides[3], \

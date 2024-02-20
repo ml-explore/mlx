@@ -2932,10 +2932,6 @@ array max_pool_1d(
     throw std::invalid_argument(
         "[max_pool_1d] Only floating point types are supported for now");
   }
-  if (dilation != 1) {
-    throw std::invalid_argument(
-        "[max_pool_1d] dilation != 1 is not supported yet");
-  }
   if (padding < 0 || padding > (kernel_size / 2)) {
     throw std::invalid_argument(
         "[max_pool_1d] padding must be >= 0 and <= kernel_size / 2");

@@ -87,7 +87,8 @@ void max_pool_1d(
     const std::vector<size_t>& out_strides,
     int kernel_size,
     int stride,
-    int padding) {
+    int padding,
+    int dilation) {
   auto out_b = out_shape.at(0);
   auto out_h = out_shape.at(1);
   auto out_c = out_shape.at(2);
@@ -106,11 +107,11 @@ void max_pool_1d(
     for (int c = 0; c < out_c; c++) {
       for (int h = 0; h < out_h; h++) {
         int start = h * stride - padding;
-        int end = std::min(start + kernel_size, in_h);
+        int end = std::min(start + (kernel_size * dilation), in_h);
         start = std::max(start, 0);
         T val = 0;
         val = -std::numeric_limits<T>::infinity();
-        for (int i = start; i < end; i++) {
+        for (int i = start; i < end; i += dilation) {
           val = std::max(
               val, data_p[b * in_stride_b + i * in_stride_h + c * in_stride_c]);
         }
@@ -126,6 +127,7 @@ void pool_1d(
     int kernel_size,
     int stride,
     int padding,
+    int dilation,
     Pooling::PoolType type) {
   switch (in.dtype()) {
     case float32: {
@@ -139,7 +141,8 @@ void pool_1d(
             out.strides(),
             kernel_size,
             stride,
-            padding);
+            padding,
+            dilation);
       } else {
         avg_pool_1d<float>(
             in.data<float>(),
@@ -165,7 +168,8 @@ void pool_1d(
             out.strides(),
             kernel_size,
             stride,
-            padding);
+            padding,
+            dilation);
       } else {
         avg_pool_1d<bfloat16_t>(
             in.data<bfloat16_t>(),
@@ -191,7 +195,8 @@ void pool_1d(
             out.strides(),
             kernel_size,
             stride,
-            padding);
+            padding,
+            dilation);
       } else {
         avg_pool_1d<float16_t>(
             in.data<float16_t>(),
@@ -216,7 +221,14 @@ void pool_1d(
 void Pooling::eval(const std::vector<array>& inputs, array& output) {
   output.set_data(allocator::malloc_or_wait(output.nbytes()));
   if (inputs[0].ndim() == 3) {
-    pool_1d(inputs[0], output, kernel_size_[0], stride_[0], padding_[0], type_);
+    pool_1d(
+        inputs[0],
+        output,
+        kernel_size_[0],
+        stride_[0],
+        padding_[0],
+        dilation_[0],
+        type_);
     return;
   }
 

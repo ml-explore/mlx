@@ -78,10 +78,11 @@ void pool_1d(
     compute_encoder->setBytes(&kernel_size, sizeof(int), 2);
     compute_encoder->setBytes(&stride, sizeof(int), 3);
     compute_encoder->setBytes(&padding, sizeof(int), 4);
-    compute_encoder->setBytes(&in_height, sizeof(int), 5);
-    compute_encoder->setBytes(&out_height, sizeof(int), 6);
-    compute_encoder->setBytes(in.strides().data(), 3 * sizeof(size_t), 7);
-    compute_encoder->setBytes(out.strides().data(), 3 * sizeof(size_t), 8);
+    compute_encoder->setBytes(&dilation, sizeof(int), 5);
+    compute_encoder->setBytes(&in_height, sizeof(int), 6);
+    compute_encoder->setBytes(&out_height, sizeof(int), 7);
+    compute_encoder->setBytes(in.strides().data(), 3 * sizeof(size_t), 8);
+    compute_encoder->setBytes(out.strides().data(), 3 * sizeof(size_t), 9);
 
     int dim0 = out.shape(0);
     int dim2 = out.shape(2);

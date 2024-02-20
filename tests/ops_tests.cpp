@@ -2820,6 +2820,24 @@ TEST_CASE("avg_pool_1d") {
 }
 
 TEST_CASE("max_pool_1d") {
+  SUBCASE("dilation") {
+    auto x = array(
+        {-0.3413,
+         -1.4359,
+         0.7669,
+         -1.1818,
+         0.7512,
+         -1.1156,
+         0.6561,
+         -0.1908,
+         -0.2969,
+         0.4658},
+        {1, 10, 1});
+    auto out = max_pool_1d(x, 2, {}, 0, 2);
+    auto expected = array({0.7669, 0.7669, 0.7512, 0.6561}, {1, 4, 1});
+    CHECK(array_equal(out, expected).item<bool>());
+    MESSAGE("out " << out);
+  }
   SUBCASE("2 dims") {
     auto x = array(
         {-0.3413, -1.4359, 0.7669,  -1.1818, 0.7512,  -1.1156, 0.6561,
