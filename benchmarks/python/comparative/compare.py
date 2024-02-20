@@ -220,6 +220,11 @@ if __name__ == "__main__":
     compare_filtered("prelu --size 32x16x1024")
     compare_filtered("prelu --size 32x16x1024 --cpu")
 
+    compare_filtered("max_pool_1d --size 32x1024x3 --cpu")
+    compare_filtered("max_pool_1d --size 32x1024x3")
+    compare_filtered("avg_pool_1d --size 32x1024x3 --cpu")
+    compare_filtered("avg_pool_1d --size 32x1024x3")
+
     compare_filtered("scalar_mul --size 32x16x1024")
     compare_filtered("scalar_mul --size 32x16x1024 --cpu")
     compare_filtered("cross_entropy --size 256x1024")

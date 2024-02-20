@@ -340,6 +340,14 @@ def selu(x):
     mx.eval(y)
 
 
+def max_pool_1d(x):
+    mx.eval([mx.max_pool_1d(x, 2) for _ in range(10)])
+
+
+def avg_pool_1d(x):
+    mx.eval([mx.avg_pool_1d(x, 2) for _ in range(10)])
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("benchmark", help="Choose the benchmark to run")
@@ -501,7 +509,10 @@ if __name__ == "__main__":
 
     elif args.benchmark == "step":
         print(bench(step_function, x))
-
+    elif args.benchmark == "max_pool_1d":
+        print(bench(max_pool_1d, x))
+    elif args.benchmark == "avg_pool_1d":
+        print(bench(avg_pool_1d, x))
     elif args.benchmark == "selu":
         print(bench(selu, x))
 

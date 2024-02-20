@@ -251,6 +251,22 @@ def rope(x):
 
 
 @torch.no_grad()
+def max_pool_1d(x):
+    ys = []
+    for i in range(10):
+        ys.append(torch.nn.functional.max_pool1d(x, 2))
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def avg_pool_1d(x):
+    ys = []
+    for i in range(10):
+        ys.append(torch.nn.functional.avg_pool1d(x, 2))
+    sync_if_needed(x)
+
+
+@torch.no_grad()
 def concatenate(axis, x, y):
     ys = []
     for i in range(10):
@@ -445,6 +461,10 @@ if __name__ == "__main__":
 
     elif args.benchmark == "topk":
         print(bench(topk, axis, x))
+    elif args.benchmark == "max_pool_1d":
+        print(bench(max_pool_1d, x))
+    elif args.benchmark == "avg_pool_1d":
+        print(bench(avg_pool_1d, x))
 
     else:
         raise ValueError("Unknown benchmark")
