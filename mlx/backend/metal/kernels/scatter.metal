@@ -20,6 +20,7 @@ METAL_FUNC void scatter_1d_index_impl(
   const constant int* out_shape [[buffer(3)]],
   const constant size_t* out_strides [[buffer(4)]],
   const constant size_t& upd_size [[buffer(5)]],
+  const constant bool& upd_col_contiguous [[buffer(6)]],
   const thread array<const device IdxT*, NIDX>& idx_buffers,
   uint2 gid [[thread_position_in_grid]]) {
 
@@ -32,7 +33,11 @@ METAL_FUNC void scatter_1d_index_impl(
     out_idx += idx_val * out_strides[i];
   }
 
-  op.atomic_update(out, updates[gid.y * upd_size + gid.x], out_idx + gid.x);
+  if (!upd_col_contiguous) {
+    op.atomic_update(out, updates[gid.y * upd_size + gid.x], out_idx + gid.x);
+  } else {
+    op.atomic_update(out, updates[gid.x * upd_size + gid.y], out_idx + gid.x);
+  }
 }
 
 #define make_scatter_1d_index(IDX_ARG, IDX_ARR) \
@@ -43,6 +48,7 @@ template <typename T, typename IdxT, typename Op, int NIDX> \
   const constant int* out_shape [[buffer(3)]], \
   const constant size_t* out_strides [[buffer(4)]], \
   const constant size_t& upd_size [[buffer(5)]], \
+  const constant bool& upd_col_contiguous [[buffer(6)]], \
   IDX_ARG(IdxT) \
   uint2 gid [[thread_position_in_grid]]) { \
   \
@@ -54,6 +60,7 @@ template <typename T, typename IdxT, typename Op, int NIDX> \
     out_shape, \
     out_strides, \
     upd_size, \
+    upd_col_contiguous, \
     idx_buffers, \
     gid); \
   \
@@ -91,10 +98,14 @@ METAL_FUNC void scatter_impl(
     out_idx += idx_val * out_strides[ax];
   }
 
-  auto out_offset = elem_to_loc(
-      ind_offset, upd_shape + indices.ndim, out_strides, out_ndim);
+  if (upd_size > 1) {
+    auto out_offset = elem_to_loc(
+        ind_offset, upd_shape + indices.ndim, out_strides, out_ndim);
+    out_idx += out_offset;
+  }
+
   auto upd_idx = elem_to_loc(gid.y * upd_size + gid.x, upd_shape, upd_strides, upd_ndim);
-  op.atomic_update(out, updates[upd_idx], out_idx + out_offset);
+  op.atomic_update(out, updates[upd_idx], out_idx);
 }
 
 #define make_scatter_impl(IDX_ARG, IDX_ARR) \
@@ -184,6 +195,7 @@ template [[host_name("scatter_1d_index" name "_" #nidx)]] \
   const constant int* out_shape [[buffer(3)]], \
   const constant size_t* out_strides [[buffer(4)]], \
   const constant size_t& upd_size [[buffer(5)]], \
+  const constant bool& upd_col_contiguous [[buffer(6)]], \
   IDX_ARG(idx_t) \
   uint2 gid [[thread_position_in_grid]]);
 

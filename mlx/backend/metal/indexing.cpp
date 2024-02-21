@@ -156,20 +156,10 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   }
 
-  auto check_for_broadcast_dims =
-      [](const std::vector<size_t>& strides) -> bool {
-    for (auto i = 0; i < strides.size(); i++) {
-      if (strides[i] == 0) {
-        return false;
-      }
-    }
-    return true;
-  };
-
   // Bail from fast path (1d index specialization) if any of the dims are
   // broadcasted, since we can't rely on linear indexing in that case.
   for (int i = 1; i < inputs.size() && index_nd1_specialization; i++) {
-    if (check_for_broadcast_dims(inputs[i].strides()) == false) {
+    if (inputs[i].flags().row_contiguous == false) {
       index_nd1_specialization = false;
       break;
     }
@@ -219,11 +209,13 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   if (index_nd1_specialization) {
+    bool upd_col_contiguous = upd.flags().col_contiguous;
     compute_encoder->setBytes(
         out.shape().data(), out.shape().size() * sizeof(int), 3);
     compute_encoder->setBytes(
         out.strides().data(), out.strides().size() * sizeof(size_t), 4);
     compute_encoder->setBytes(&upd_size, sizeof(size_t), 5);
+    compute_encoder->setBytes(&upd_col_contiguous, sizeof(bool), 6);
 
     // Set index buffers
     for (int i = 1; i < nidx + 1; ++i) {
