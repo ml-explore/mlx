@@ -12,6 +12,8 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
+#include <iostream>
+
 namespace mlx::core {
 
 namespace {
@@ -170,74 +172,114 @@ void slow_conv_2D(
   int init_h = (flip ? (wH - 1) * wt_dilation[0] : 0);
   int init_w = (flip ? (wW - 1) * wt_dilation[1] : 0);
 
-  auto pt_conv_all_checks =
-      [&](const T* in_ptr, const T* wt_ptr, T* out_ptr, int oh, int ow) {
-        out_ptr += oh * out_stride_H + ow * out_stride_W;
+  if (!is_idil_one) {
+    std::cout << "in_dilation[0]: " << in_dilation[0]
+              << ", in_dilation[1]: " << in_dilation[1] << "\n"
+              << "wt_dilation[0]: " << wt_dilation[0]
+              << ", wt_dilation[1]: " << wt_dilation[1] << "\n"
+              << "padding[0]: " << padding[0] << ", padding[1]: " << padding[1]
+              << "\n"
+              << "wt_strides[0]: " << wt_strides[0]
+              << ", wt_strides[1]: " << wt_strides[1] << "\n";
+  }
 
-        int ih_base = oh * wt_strides[0] - padding[0];
-        int iw_base = ow * wt_strides[1] - padding[1];
+  auto pt_conv_all_checks = [&](const T* in_ptr,
+                                const T* wt_ptr,
+                                T* out_ptr,
+                                int oh,
+                                int ow) {
+    out_ptr += oh * out_stride_H + ow * out_stride_W;
 
-        int wh_base = 0;
-        int ww_base = 0;
+    int ih_base = oh * wt_strides[0] - padding[0];
+    int iw_base = ow * wt_strides[1] - padding[1];
 
-        int ih_loop = ih_base + init_h;
-        int iw_loop = iw_base + init_w;
+    int wh_base = 0;
+    int ww_base = 0;
 
-        while (ih_loop < 0 || ((ih_loop % in_dilation[0]) != 0)) {
-          wh_base++;
-          ih_loop += jump_h;
-        }
+    int ih_loop = ih_base + init_h;
+    int iw_loop = iw_base + init_w;
 
-        while (iw_loop < 0 || ((iw_loop % in_dilation[1]) != 0)) {
-          ww_base++;
-          iw_loop += jump_w;
-        }
+    while (ih_loop < 0 || ((ih_loop % in_dilation[0]) != 0)) {
+      wh_base++;
+      ih_loop += jump_h;
+    }
 
-        for (int o = 0; o < O; ++o) {
-          float r = 0.;
+    while (iw_loop < 0 || ((iw_loop % in_dilation[1]) != 0)) {
+      ww_base++;
+      iw_loop += jump_w;
+    }
 
-          for (int wh = wh_base; wh < wH; wh += in_dilation[0]) {
-            for (int ww = ww_base; ww < wW; ww += in_dilation[1]) {
-              int wh_flip = flip ? wH - wh - 1 : wh;
-              int ww_flip = flip ? wW - ww - 1 : ww;
-              int ih = ih_base + wh_flip * wt_dilation[0];
-              int iw = iw_base + ww_flip * wt_dilation[1];
+    int a =
+        (in_dilation[1] *
+         ((ow * wt_strides[1] + in_dilation[1] - 1) / in_dilation[1]));
+    int b = a - ow * wt_strides[1];
+    int e = b;
+    int f = ow * wt_strides[1] % in_dilation[1];
+    int d = f == 0 ? 0 : in_dilation[1] - f;
 
-              int ih_dil = ih;
-              int iw_dil = iw;
-              bool idil_check = true;
+    if (flip) {
+      a = (in_dilation[1] * ((ow * wt_strides[1] + wW - 1) / in_dilation[1]));
+      b = (ow * wt_strides[1] + wW - 1) - a;
+      d = (ow * wt_strides[1] + wW - 1) % in_dilation[1];
+    }
 
-              if (!is_idil_one) {
-                auto ih_div = std::div(ih, in_dilation[0]);
-                auto iw_div = std::div(iw, in_dilation[1]);
+    int c = b + (in_dilation[1] - (padding[1] % in_dilation[1]));
+    c = c % in_dilation[1];
 
-                idil_check = (ih_div.rem == 0 && iw_div.rem == 0);
-                ih_dil = ih_div.quot;
-                iw_dil = iw_div.quot;
-              }
+    if (!is_idil_one) {
+      std::cout << "wh_base: " << wh_base << ", ww_base: " << ww_base << "\n"
+                << "ow: " << ow << ", iw_base: " << iw_base << "\n"
+                << "a: " << a << ", b: " << b << ", c: " << c << ", d: " << d
+                << ", e: " << e << "\n"
+                << std::endl;
+    }
 
-              if (idil_check && ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
-                const T* wt_ptr_pt =
-                    wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
-                const T* in_ptr_pt =
-                    in_ptr + ih_dil * in_stride_H + iw_dil * in_stride_W;
+    ww_base = c;
 
-                for (int c = 0; c < C; ++c) {
-                  r += static_cast<float>(in_ptr_pt[0]) *
-                      static_cast<float>(wt_ptr_pt[0]);
-                  in_ptr_pt += in_stride_C;
-                  wt_ptr_pt += wt_stride_C;
-                } // c
+    for (int o = 0; o < O; ++o) {
+      float r = 0.;
 
-              } // ih, iw check
-            } // ww
-          } // wh
+      for (int wh = wh_base; wh < wH; wh += in_dilation[0]) {
+        for (int ww = ww_base; ww < wW; ww += in_dilation[1]) {
+          int wh_flip = flip ? wH - wh - 1 : wh;
+          int ww_flip = flip ? wW - ww - 1 : ww;
+          int ih = ih_base + wh_flip * wt_dilation[0];
+          int iw = iw_base + ww_flip * wt_dilation[1];
 
-          out_ptr[0] = static_cast<T>(r);
-          out_ptr += out_stride_O;
-          wt_ptr += wt_stride_O;
-        } // o
-      };
+          int ih_dil = ih;
+          int iw_dil = iw;
+          bool idil_check = true;
+
+          if (!is_idil_one) {
+            auto ih_div = std::div(ih, in_dilation[0]);
+            auto iw_div = std::div(iw, in_dilation[1]);
+
+            idil_check = (ih_div.rem == 0 && iw_div.rem == 0);
+            ih_dil = ih_div.quot;
+            iw_dil = iw_div.quot;
+          }
+
+          if (idil_check && ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
+            const T* wt_ptr_pt = wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
+            const T* in_ptr_pt =
+                in_ptr + ih_dil * in_stride_H + iw_dil * in_stride_W;
+
+            for (int c = 0; c < C; ++c) {
+              r += static_cast<float>(in_ptr_pt[0]) *
+                  static_cast<float>(wt_ptr_pt[0]);
+              in_ptr_pt += in_stride_C;
+              wt_ptr_pt += wt_stride_C;
+            } // c
+
+          } // ih, iw check
+        } // ww
+      } // wh
+
+      out_ptr[0] = static_cast<T>(r);
+      out_ptr += out_stride_O;
+      wt_ptr += wt_stride_O;
+    } // o
+  };
 
   int oH_border_0 = 0;
   int oH_border_1 =
