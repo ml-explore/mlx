@@ -199,6 +199,43 @@ class SGD(Optimizer):
         return parameter - self.learning_rate.astype(gradient.dtype) * update
 
 
+class ASGD(SGD):
+    def __init__(
+        self,
+        learning_rate: Union[float, Callable[[mx.array], mx.array]],
+        momentum: float = 0.0,
+        weight_decay: float = 0.0,
+        dampening: float = 0.0,
+        nesterov: bool = False,
+        alpha: float = 0.75,
+        t0: float = 1000000.0,
+    ):
+        super().__init__(learning_rate, momentum, weight_decay, dampening, nesterov)
+        self.alpha = alpha
+        self.t0 = t0
+        self._state["average_params"] = {}
+
+    def init_single(self, parameter: mx.array, state: dict):
+        super().init_single(parameter, state)
+        state["average_params"] = mx.zeros_like(parameter)
+
+    def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
+        updated_parameter = super().apply_single(gradient, parameter, state)
+
+        if self.step >= self.t0:
+            eta = (self.step - self.t0) / (self.step - self.t0 + 1)
+            alpha_t = min(self.alpha, eta)
+
+            average_param = state["average_params"]
+            average_param += alpha_t * (updated_parameter - average_param)
+            state["average_params"] = average_param
+
+        return updated_parameter
+
+    def get_average_params(self):
+        return self._state["average_params"]
+
+
 class RMSprop(Optimizer):
     r"""The RMSprop optimizer [1].
 

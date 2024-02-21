@@ -89,6 +89,31 @@ class TestOptimizers(mlx_tests.MLXTestCase):
             tree_equal(lambda g, s: mx.array_equal(s["v"], g), grads, optim.state)
         )
 
+    def test_asgd(self):
+        params = {
+            "first": [mx.zeros((10,)), mx.zeros((1,))],
+            "second": mx.zeros((1,)),
+        }
+        grads = tree_map(lambda x: mx.ones_like(x), params)
+
+        # Explicit init
+        optim = opt.ASGD(learning_rate=1e-2, momentum=0.9)
+        optim.init(params)
+        self.assertTrue(
+            tree_equal(
+                lambda p, s: mx.array_equal(s["v"], mx.zeros_like(p)),
+                params,
+                optim.state,
+            )
+        )
+
+        # Implicit init
+        optim = opt.ASGD(learning_rate=1e-2, momentum=0.9)
+        optim.apply_gradients(grads, params)
+        self.assertTrue(
+            tree_equal(lambda g, s: mx.array_equal(s["v"], g), grads, optim.state)
+        )
+
     def test_rmsprop(self):
         params = {
             "first": [mx.zeros((10,)), mx.zeros((1,))],
