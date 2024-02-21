@@ -150,10 +150,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   // the outermost dims and contiguous since update access won't be raster
   // order.
   for (auto i = 0; i < axes_.size() && index_nd1_specialization; i++) {
-    if (axes_[i] != i) {
-      index_nd1_specialization = false;
-      break;
-    }
+    index_nd1_specialization &= (axes_[i] == i);
   }
 
   // Bail from fast path (1d index specialization) if any of the dims are
