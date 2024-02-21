@@ -3640,11 +3640,17 @@ void init_ops(py::module_& m) {
       "atleast_1d",
       [](const py::args& args,
          StreamOrDevice s) -> std::variant<py::object, py::list> {
-        py::list result;
-        for (const auto& arg : args) {
-          result.append(atleast_1d(arg.cast<array>(), s));
+        if (args.size() == 1) {
+          py::object result;
+          result = py::cast(atleast_1d(args[0].cast<array>(), s));
+          return result;
         }
-        return result.size() == 1 ? py::cast<py::object>(result[0]) : result;
+
+        std::vector<array> arrays = args.cast<std::vector<array>>();
+        std::vector<array> result = atleast_1d(arrays, s);
+        py::list py_result = py::cast(result);
+
+        return py_result;
       },
       py::pos_only(),
       py::kw_only(),
@@ -3665,11 +3671,17 @@ void init_ops(py::module_& m) {
       "atleast_2d",
       [](const py::args& args,
          StreamOrDevice s) -> std::variant<py::object, py::list> {
-        py::list result;
-        for (const auto& arg : args) {
-          result.append(atleast_2d(arg.cast<array>(), s));
+        if (args.size() == 1) {
+          py::object result;
+          result = py::cast(atleast_2d(args[0].cast<array>(), s));
+          return result;
         }
-        return result.size() == 1 ? py::cast<py::object>(result[0]) : result;
+
+        std::vector<array> arrays = args.cast<std::vector<array>>();
+        std::vector<array> result = atleast_2d(arrays, s);
+        py::list py_result = py::cast(result);
+
+        return py_result;
       },
       py::pos_only(),
       py::kw_only(),
@@ -3691,11 +3703,17 @@ void init_ops(py::module_& m) {
       "atleast_3d",
       [](const py::args& args,
          StreamOrDevice s) -> std::variant<py::object, py::list> {
-        py::list result;
-        for (const auto& arg : args) {
-          result.append(atleast_3d(arg.cast<array>(), s));
+        if (args.size() == 1) {
+          py::object result;
+          result = py::cast(atleast_3d(args[0].cast<array>(), s));
+          return result;
         }
-        return result.size() == 1 ? py::cast<py::object>(result[0]) : result;
+
+        std::vector<array> arrays = args.cast<std::vector<array>>();
+        std::vector<array> result = atleast_3d(arrays, s);
+        py::list py_result = py::cast(result);
+
+        return py_result;
       },
       py::pos_only(),
       py::kw_only(),

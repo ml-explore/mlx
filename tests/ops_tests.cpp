@@ -2734,6 +2734,19 @@ TEST_CASE("test atleast_1d") {
   CHECK_EQ(out.shape(), std::vector<int>{3, 1});
 }
 
+TEST_CASE("test atleast_1d vector") {
+  auto x = std::vector<array>{
+      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
+  auto out = atleast_1d(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK_EQ(out[0].ndim(), 1);
+  CHECK_EQ(out[0].shape(), std::vector<int>{1});
+  CHECK_EQ(out[1].ndim(), 1);
+  CHECK_EQ(out[1].shape(), std::vector<int>{3});
+  CHECK_EQ(out[2].ndim(), 2);
+  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1});
+}
+
 TEST_CASE("test atleast_2d") {
   auto x = array(1);
   auto out = atleast_2d(x);
@@ -2751,6 +2764,19 @@ TEST_CASE("test atleast_2d") {
   CHECK_EQ(out.shape(), std::vector<int>{3, 1});
 }
 
+TEST_CASE("test atleast_2d vector") {
+  auto x = std::vector<array>{
+      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
+  auto out = atleast_2d(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK_EQ(out[0].ndim(), 2);
+  CHECK_EQ(out[0].shape(), std::vector<int>{1, 1});
+  CHECK_EQ(out[1].ndim(), 2);
+  CHECK_EQ(out[1].shape(), std::vector<int>{1, 3});
+  CHECK_EQ(out[2].ndim(), 2);
+  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1});
+}
+
 TEST_CASE("test atleast_3d") {
   auto x = array(1);
   auto out = atleast_3d(x);
@@ -2766,4 +2792,17 @@ TEST_CASE("test atleast_3d") {
   out = atleast_3d(x);
   CHECK_EQ(out.ndim(), 3);
   CHECK_EQ(out.shape(), std::vector<int>{3, 1, 1});
+}
+
+TEST_CASE("test atleast_3d vector") {
+  auto x = std::vector<array>{
+      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
+  auto out = atleast_3d(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK_EQ(out[0].ndim(), 3);
+  CHECK_EQ(out[0].shape(), std::vector<int>{1, 1, 1});
+  CHECK_EQ(out[1].ndim(), 3);
+  CHECK_EQ(out[1].shape(), std::vector<int>{1, 3, 1});
+  CHECK_EQ(out[2].ndim(), 3);
+  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1, 1});
 }
