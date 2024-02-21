@@ -164,17 +164,40 @@ void slow_conv_2D(
         } // o
       };
 
+  int jump_h = flip ? -wt_dilation[0] : wt_dilation[0];
+  int jump_w = flip ? -wt_dilation[1] : wt_dilation[1];
+
+  int init_h = (flip ? (wH - 1) * wt_dilation[0] : 0);
+  int init_w = (flip ? (wW - 1) * wt_dilation[1] : 0);
+
   auto pt_conv_all_checks =
       [&](const T* in_ptr, const T* wt_ptr, T* out_ptr, int oh, int ow) {
         out_ptr += oh * out_stride_H + ow * out_stride_W;
+
         int ih_base = oh * wt_strides[0] - padding[0];
         int iw_base = ow * wt_strides[1] - padding[1];
+
+        int wh_base = 0;
+        int ww_base = 0;
+
+        int ih_loop = ih_base + init_h;
+        int iw_loop = iw_base + init_w;
+
+        while (ih_loop < 0 || ((ih_loop % in_dilation[0]) != 0)) {
+          wh_base++;
+          ih_loop += jump_h;
+        }
+
+        while (iw_loop < 0 || ((iw_loop % in_dilation[1]) != 0)) {
+          ww_base++;
+          iw_loop += jump_w;
+        }
 
         for (int o = 0; o < O; ++o) {
           float r = 0.;
 
-          for (int wh = 0; wh < wH; ++wh) {
-            for (int ww = 0; ww < wW; ++ww) {
+          for (int wh = wh_base; wh < wH; wh += in_dilation[0]) {
+            for (int ww = ww_base; ww < wW; ww += in_dilation[1]) {
               int wh_flip = flip ? wH - wh - 1 : wh;
               int ww_flip = flip ? wW - ww - 1 : ww;
               int ih = ih_base + wh_flip * wt_dilation[0];
