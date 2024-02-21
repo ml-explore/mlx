@@ -40,6 +40,13 @@ class RoPE(Module):
         self.base = base
         self.scale = scale
 
+    @classmethod
+    def create_ntk_aware_rope(
+        cls, dims, traditional=False, base=10000, scale=1.0, alpha=8
+    ):
+        adjusted_base = base * alpha ** (dims / (dims - 2))
+        return cls(dims, traditional, adjusted_base, scale)
+
     def _extra_repr(self):
         return f"{self.dims}, traditional={self.traditional}"
 
