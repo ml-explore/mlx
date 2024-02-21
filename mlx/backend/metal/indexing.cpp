@@ -159,10 +159,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Bail from fast path (1d index specialization) if any of the dims are
   // broadcasted, since we can't rely on linear indexing in that case.
   for (int i = 1; i < inputs.size() && index_nd1_specialization; i++) {
-    if (inputs[i].flags().row_contiguous == false) {
-      index_nd1_specialization = false;
-      break;
-    }
+    index_nd1_specialization &= inputs[i].flags().row_contiguous;
   }
 
   if (index_nd1_specialization) {
