@@ -99,16 +99,16 @@ class Upsample(Module):
     r"""Upsample the input signal spatially.
 
     The spatial dimensions are by convention dimensions ``1`` to ``x.ndim -
-    2``. The first is the sample dimension and the last is the feature
+    2``. The first is the batch dimension and the last is the feature
     dimension.
 
     For example, an audio signal would be 3D with 1 spatial dimension, an image
     4D with 2 and so on and so forth.
 
     There are two upsampling algorithms implemented nearest neighbor upsampling
-    and linear, bilinear, trilinear interpolation. The nearest neighbor
-    algorithm can be applied to any number of spatial dimensions and the linear
-    interpolation family are for 1, 2 and 3 spatial dimensions respectively.
+    and linear interpolation. Both can be applied to any number of spatial
+    dimensions and the linear interpolation will be bilinear, trilinear etc
+    when applied to more than one spatial dimension.
 
     .. note::
        When using one of the linear interpolation modes the ``align_corners``
@@ -121,12 +121,11 @@ class Upsample(Module):
             If a ``float`` is provided, it is the multiplier for all spatial dimensions.
             Otherwise, the number of scale factors provided must match the
             number of spatial dimensions.
-        mode (str, optional): The upsampling algorithm: one of ``"nearest"`` and
-            ``"linear"``, ``"bilinear"`` or ``"trilinear"``. Default: ``"nearest"``.
+        mode (str, optional): The upsampling algorithm, either ``"nearest"`` or
+            ``"linear"``. Default: ``"nearest"``.
         align_corners (bool, optional): Changes the way the corners are treated
-            during ``"linear"``, ``"bilinear"`` or ``"trilinear"`` upsampling.
-            See the note above and the examples below for more details.
-            Default: ``False``.
+            during ``"linear"`` upsampling.  See the note above and the
+            examples below for more details.  Default: ``False``.
 
     Examples:
         >>> import mlx.core as mx
@@ -143,13 +142,13 @@ class Upsample(Module):
                [1, 1, 2, 2],
                [3, 3, 4, 4],
                [3, 3, 4, 4]], dtype=int32)
-        >>> b = nn.Upsample(scale_factor=2, mode='bilinear')
+        >>> b = nn.Upsample(scale_factor=2, mode='linear')
         >>> b(x).squeeze()
         array([[1, 1.25, 1.75, 2],
                [1.5, 1.75, 2.25, 2.5],
                [2.5, 2.75, 3.25, 3.5],
                [3, 3.25, 3.75, 4]], dtype=float32)
-        >>> b = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        >>> b = nn.Upsample(scale_factor=2, mode='linear', align_corners=True)
         >>> b(x).squeeze()
         array([[1, 1.33333, 1.66667, 2],
                [1.66667, 2, 2.33333, 2.66667],
@@ -160,11 +159,11 @@ class Upsample(Module):
     def __init__(
         self,
         scale_factor: Union[float, Tuple],
-        mode: Literal["nearest", "linear", "bilinear", "trilinear"] = "nearest",
+        mode: Literal["nearest", "linear"] = "nearest",
         align_corners: bool = False,
     ):
         super().__init__()
-        if mode not in ["nearest", "linear", "bilinear", "trilinear"]:
+        if mode not in ["nearest", "linear"]:
             raise ValueError(f"[Upsample] Got unsupported upsampling algorithm: {mode}")
         if isinstance(scale_factor, (list, tuple)):
             self.scale_factor = tuple(map(float, scale_factor))
@@ -187,27 +186,6 @@ class Upsample(Module):
                 f"dimension which means it should be at least 3D but "
                 f"{x.ndim}D was provided"
             )
-
-        if self.mode == "linear":
-            if dims != 1:
-                raise ValueError(
-                    f"[Upsample] Linear mode requires 1 spatial "
-                    f"dimension but {dims} were provided."
-                )
-
-        if self.mode == "bilinear":
-            if dims != 2:
-                raise ValueError(
-                    f"[Upsample] Bilinear mode requires 2 spatial "
-                    f"dimensions but {dims} were provided."
-                )
-
-        if self.mode == "trilinear":
-            if dims != 3:
-                raise ValueError(
-                    f"[Upsample] Trilinear mode requires 3 spatial "
-                    f"dimensions but {dims} were provided."
-                )
 
         scale_factor = self.scale_factor
         if isinstance(scale_factor, tuple):

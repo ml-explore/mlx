@@ -912,13 +912,13 @@ class TestLayers(mlx_tests.MLXTestCase):
             scale_factor=scale_factor, mode="nearest", align_corners=True
         )
         upsample_bilinear = nn.Upsample(
-            scale_factor=scale_factor, mode="bilinear", align_corners=True
+            scale_factor=scale_factor, mode="linear", align_corners=True
         )
         upsample_nearest = nn.Upsample(
             scale_factor=scale_factor, mode="nearest", align_corners=True
         )
         upsample_bilinear_no_align_corners = nn.Upsample(
-            scale_factor=scale_factor, mode="bilinear", align_corners=False
+            scale_factor=scale_factor, mode="linear", align_corners=False
         )
         upsample_nearest_no_align_corners = nn.Upsample(
             scale_factor=scale_factor, mode="nearest", align_corners=False
@@ -982,7 +982,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             scale_factor=scale_factor, mode="nearest", align_corners=True
         )
         upsample_bilinear = nn.Upsample(
-            scale_factor=scale_factor, mode="bilinear", align_corners=True
+            scale_factor=scale_factor, mode="linear", align_corners=True
         )
 
         expected_nearest = mx.array(
@@ -1075,7 +1075,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             scale_factor=(2, 3), mode="nearest", align_corners=True
         )
         upsample_bilinear = nn.Upsample(
-            scale_factor=(2, 3), mode="bilinear", align_corners=True
+            scale_factor=(2, 3), mode="linear", align_corners=True
         )
 
         expected_nearest = mx.array(
