@@ -328,6 +328,20 @@ class TestSchedulers(unittest.TestCase):
         expected_lr = 0.1 * 0.5 * (1.0 + math.cos(math.pi * 4 / 10))
         self.assertAlmostEqual(lr, expected_lr, delta=1e-7)
 
+    def test_linear_warmup_with_cosine_decay(self):
+        cos_fn = opt.schedulers.cosine_decay(1e-5, 100)
+        cos_with_warmup = opt.schedulers.linear_warmup(cos_fn, 100, finish=1e-5)
+        self.assertEqual(cos_with_warmup(0), 0.0)
+        optimizer = opt.Adam(learning_rate=cos_with_warmup)
+        for _ in range(100):
+            optimizer.update({}, {})
+        self.assertAlmostEqual(optimizer.learning_rate.item(), 1e-5, delta=1e-1)
+        for _ in range(100):
+            optimizer.update({}, {})
+        decay = 0.5 * (1.0 + math.cos((math.pi * 10 / 100)))
+        lr = 1e-5 * decay
+        self.assertAlmostEqual(optimizer.learning_rate.item(), lr, delta=1e-1)
+
     def test_compile_with_schedule(self):
         lr_schedule = opt.exponential_decay(1e-1, 0.9)
         optimizer = opt.SGD(learning_rate=lr_schedule)
