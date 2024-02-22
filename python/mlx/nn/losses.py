@@ -27,8 +27,7 @@ def cross_entropy(
     label_smoothing: float = 0.0,
     reduction: Reduction = "none",
 ) -> mx.array:
-    """
-    Computes the cross entropy loss.
+    """Computes the cross entropy loss.
 
     Args:
         logits (array): The unnormalized logits.
@@ -121,8 +120,7 @@ def binary_cross_entropy(
     with_logits: bool = True,
     reduction: Reduction = "mean",
 ) -> mx.array:
-    """
-    Computes the binary cross entropy loss.
+    """Computes the binary cross entropy loss.
 
     Args:
         inputs (array): The predicted values. If ``with_logits`` is ``True``, then
@@ -176,8 +174,7 @@ def binary_cross_entropy(
 def l1_loss(
     predictions: mx.array, targets: mx.array, reduction: Reduction = "mean"
 ) -> mx.array:
-    """
-    Computes the L1 loss.
+    """Computes the L1 loss.
 
     Args:
         predictions (array): The predicted values.
@@ -201,8 +198,7 @@ def l1_loss(
 def mse_loss(
     predictions: mx.array, targets: mx.array, reduction: Reduction = "mean"
 ) -> mx.array:
-    """
-    Computes the mean squared error loss.
+    """Computes the mean squared error loss.
 
     Args:
         predictions (array): The predicted values.
@@ -226,8 +222,7 @@ def mse_loss(
 def nll_loss(
     inputs: mx.array, targets: mx.array, axis: int = -1, reduction: Reduction = "none"
 ) -> mx.array:
-    """
-    Computes the negative log likelihood loss.
+    """Computes the negative log likelihood loss.
 
     Args:
         inputs (array): The predicted distribution in log space.
@@ -252,8 +247,7 @@ def gaussian_nll_loss(
     eps: float = 1e-6,
     reduction: Reduction = "mean",
 ) -> mx.array:
-    r"""
-    Computes the negative log likelihood loss for a Gaussian distribution.
+    r"""Computes the negative log likelihood loss for a Gaussian distribution.
 
     The loss is given by:
 
@@ -302,8 +296,7 @@ def gaussian_nll_loss(
 def kl_div_loss(
     inputs: mx.array, targets: mx.array, axis: int = -1, reduction: Reduction = "none"
 ) -> mx.array:
-    """
-    Computes the Kullback-Leibler divergence loss.
+    """Computes the Kullback-Leibler divergence loss.
 
     Computes the following when ``reduction == 'none'``:
 
@@ -332,8 +325,7 @@ def smooth_l1_loss(
     beta: float = 1.0,
     reduction: Reduction = "mean",
 ) -> mx.array:
-    r"""
-    Computes the smooth L1 loss.
+    r"""Computes the smooth L1 loss.
 
     The smooth L1 loss is a variant of the L1 loss which replaces the absolute
     difference with a squared difference when the absolute difference is less
@@ -384,9 +376,8 @@ def triplet_loss(
     eps: float = 1e-6,
     reduction: Reduction = "none",
 ) -> mx.array:
-    r"""
-    Computes the triplet loss for a set of anchor, positive, and negative samples.
-    Margin is represented with alpha in the math section.
+    r"""Computes the triplet loss for a set of anchor, positive, and negative
+    samples. Margin is represented with alpha in the math section.
 
     .. math::
 
@@ -419,8 +410,7 @@ def triplet_loss(
 def hinge_loss(
     inputs: mx.array, targets: mx.array, reduction: Reduction = "none"
 ) -> mx.array:
-    r"""
-    Computes the hinge loss between inputs and targets.
+    r"""Computes the hinge loss between inputs and targets.
 
     .. math::
 
@@ -447,8 +437,7 @@ def huber_loss(
     delta: float = 1.0,
     reduction: Reduction = "none",
 ) -> mx.array:
-    r"""
-    Computes the Huber loss between inputs and targets.
+    r"""Computes the Huber loss between inputs and targets.
 
     .. math::
 
@@ -481,8 +470,7 @@ def huber_loss(
 def log_cosh_loss(
     inputs: mx.array, targets: mx.array, reduction: Reduction = "none"
 ) -> mx.array:
-    r"""
-    Computes the log cosh loss between inputs and targets.
+    r"""Computes the log cosh loss between inputs and targets.
 
     Logcosh acts like L2 loss for small errors, ensuring stable gradients,
     and like the L1 loss for large errors, reducing sensitivity to outliers. This
@@ -517,8 +505,7 @@ def cosine_similarity_loss(
     eps: float = 1e-8,
     reduction: Reduction = "none",
 ) -> mx.array:
-    r"""
-    Computes the cosine similarity between the two inputs.
+    r"""Computes the cosine similarity between the two inputs.
 
     The cosine similarity loss is given by
 
@@ -553,9 +540,8 @@ def margin_ranking_loss(
     margin: float = 0.0,
     reduction: Reduction = "none",
 ) -> mx.array:
-    r"""
-    Calculate the margin ranking loss that loss given inputs :math:`x_1`, :math:`x_2` and a label
-    :math:`y` (containing 1 or -1).
+    r"""Calculate the margin ranking loss that loss given inputs :math:`x_1`,
+    :math:`x_2` and a label :math:`y` (containing 1 or -1).
 
     The loss is given by:
 

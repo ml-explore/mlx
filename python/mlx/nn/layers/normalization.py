@@ -321,8 +321,7 @@ class BatchNorm(Module):
         )
 
     def _calc_stats(self, x: mx.array) -> Tuple[mx.array, mx.array]:
-        """
-        Calculate the mean and variance of the input tensor across the batch
+        """Calculate the mean and variance of the input tensor across the batch
         and spatial dimensions.
 
         Args:
@@ -339,8 +338,7 @@ class BatchNorm(Module):
         return mean, var
 
     def __call__(self, x: mx.array) -> mx.array:
-        """
-        Forward pass of BatchNorm.
+        """Forward pass of BatchNorm.
 
         Args:
             x (array): Input tensor.

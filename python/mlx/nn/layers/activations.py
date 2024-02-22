@@ -126,8 +126,8 @@ def celu(x, alpha=1.0):
 def silu(x):
     r"""Applies the Sigmoid Linear Unit. Also known as Swish.
 
-    Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
-    the logistic sigmoid.
+    Applies :math:`x \sigma(x)` element wise, where
+    :math:`\sigma(\cdot)` is the logistic sigmoid.
     """
     return x * mx.sigmoid(x)
 
@@ -328,14 +328,12 @@ class Mish(Module):
 
     .. math::
         \text{Mish}(x) = x * \text{Tanh}(\text{Softplus}(x))
-
     """
 
 
 @_make_activation_module(relu)
 class ReLU(Module):
-    r"""Applies the Rectified Linear Unit.
-        Simply ``mx.maximum(x, 0)``.
+    r"""Applies the Rectified Linear Unit. Simply ``mx.maximum(x, 0)``.
 
     See :func:`relu` for the functional equivalent.
     """
@@ -469,9 +467,8 @@ class LogSigmoid(Module):
 
 
 class PReLU(Module):
-    r"""Applies the element-wise parametric ReLU.
-        Applies :math:`\max(0, x) + a * \min(0, x)` element wise, where :math:`a`
-        is an array.
+    r"""Applies the element-wise parametric ReLU. Applies :math:`\max(0, x) + a
+    * \min(0, x)` element wise, where :math:`a` is an array.
 
     See :func:`prelu` for the functional equivalent.
 

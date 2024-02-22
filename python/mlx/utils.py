@@ -3,8 +3,8 @@ from collections import defaultdict
 
 
 def tree_map(fn, tree, *rest, is_leaf=None):
-    """Applies ``fn`` to the leaves of the python tree ``tree`` and
-    returns a new collection with the results.
+    """Applies ``fn`` to the leaves of the python tree ``tree`` and returns a
+    new collection with the results.
 
     If ``rest`` is provided, every item is assumed to be a superset of ``tree``
     and the corresponding leaves are provided as extra positional arguments to
