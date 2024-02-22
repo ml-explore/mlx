@@ -14,6 +14,8 @@ if (MLX_BUILD_METAL)
   )
 endif()
 
+include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
+
 target_sources(tests PRIVATE
   allocator_tests.cpp
   array_tests.cpp
@@ -37,4 +39,5 @@ target_sources(tests PRIVATE
 )
 
 target_link_libraries(tests PRIVATE mlx doctest)
+doctest_discover_tests(tests)
 add_test(NAME tests COMMAND tests)

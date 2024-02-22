@@ -26,6 +26,7 @@ extensions = [
 
 python_use_unqualified_type_names = True
 autosummary_generate = True
+autosummary_filename_map = {"mlx.core.Stream": "stream_class"}
 
 intersphinx_mapping = {
     "https://docs.python.org/3": None,
@@ -48,9 +49,11 @@ html_theme_options = {
     "repository_url": "https://github.com/ml-explore/mlx",
     "use_repository_button": True,
     "navigation_with_keys": False,
+    "logo": {
+        "image_light": "_static/mlx_logo.png",
+        "image_dark": "_static/mlx_logo_dark.png",
+    },
 }
-
-html_logo = "_static/mlx_logo.png"
 
 
 # -- Options for HTMLHelp output ---------------------------------------------

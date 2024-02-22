@@ -430,8 +430,6 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
     compute_encoder->setBytes(&axis_stride, sizeof(size_t), 6);
     compute_encoder->setBytes(&axis_size, sizeof(size_t), 7);
-    compute_encoder->setThreadgroupMemoryLength(
-        simd_size * (sizeof(uint32_t) + in.itemsize()), 0);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
 }
@@ -691,7 +689,6 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   // organize into grid nkeys x elem_per_key
   MTL::Size grid_dims = MTL::Size(num_keys, half_size + odd, 1);
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  auto nthreads = std::min(num_keys * (half_size + odd), thread_group_size);
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);

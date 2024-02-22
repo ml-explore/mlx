@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  apple: ml-explore/pr-approval@0.1.0
+
 parameters:
   nightly_build:
     type: boolean
@@ -94,8 +97,7 @@ jobs:
           command: |
             source env/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
-            # TODO: Reenable when Circle CI can run gpu jobs
-            # DEVICE=gpu python3.9 -m xmlrunner discover -v python/tests -o test-results/gpu
+            LOW_MEMORY=1 DEVICE=gpu python3.9 -m xmlrunner discover -v python/tests -o test-results/gpu
       # TODO: Reenable when extension api becomes stable
       # - run:
       #     name: Build example extension
@@ -110,8 +112,9 @@ jobs:
             mkdir -p build && cd build && cmake .. && make -j
       - run:
           name: Run CPP tests
-          #command: METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
-          command: DEVICE=cpu ./build/tests/tests
+          command: |
+            DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
+            DEVICE=cpu ./build/tests/tests
 
   build_release:
     parameters:
@@ -225,7 +228,9 @@ workflows:
   build_and_test:
     when:
       and:
-        - equal: [ main, << pipeline.git.branch >> ]
+        - matches:
+            pattern: "^(?!pull/)[-\\w]+$"
+            value: << pipeline.git.branch >>
         - not: << pipeline.parameters.nightly_build >>
         - not: << pipeline.parameters.weekly_build >>
         - not: << pipeline.parameters.test_release >>
@@ -251,6 +256,8 @@ workflows:
     jobs:
       - hold:
           type: approval
+      - apple/authenticate:
+          context: pr-approval
       - mac_build_and_test:
           requires: [ hold ]
       - linux_build_and_test:

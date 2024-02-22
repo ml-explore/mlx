@@ -1002,7 +1002,7 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_EQ(exp(x).item<float>(), 1.0);
 
     x = array(2.0);
-    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
+    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
 
     CHECK(array_equal(exp(array({})), array({})).item<bool>());
 
@@ -1012,7 +1012,7 @@ TEST_CASE("test arithmetic unary ops") {
     // Integer input type
     x = array(2);
     CHECK_EQ(x.dtype(), int32);
-    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
+    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
 
     // Input is irregularly strided
     x = broadcast_to(array(1.0f), {2, 2, 2});
@@ -1020,7 +1020,7 @@ TEST_CASE("test arithmetic unary ops") {
 
     x = split(array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2}), 2, 1)[0];
     auto expected = array({std::exp(0.0f), std::exp(2.0f)}, {2, 1});
-    CHECK(array_equal(exp(x), expected).item<bool>());
+    CHECK(allclose(exp(x), expected).item<bool>());
   }
 
   // Test sine
@@ -1858,6 +1858,14 @@ TEST_CASE("test scatter") {
   out = scatter(in, inds, updates, 0);
   CHECK(array_equal(out, reshape(arange(16, float32), {4, 4})).item<bool>());
 
+  // Array scatters with col contiguous updates
+  in = zeros({4, 4}, float32);
+  inds = array({0, 1, 2, 3});
+  updates = transpose(reshape(arange(16, float32), {4, 1, 4}));
+  out = scatter(in, inds, updates, 0);
+  CHECK(array_equal(out, transpose(reshape(arange(16, float32), {4, 4})))
+            .item<bool>());
+
   // Irregular strided index and reduce collision test
   in = zeros({10}, float32);
   inds = broadcast_to(array(3), {10});
@@ -1877,10 +1885,10 @@ TEST_CASE("test scatter") {
 
   // Irregularly strided updates test
   in = ones({3, 3});
-  updates = broadcast_to(array({0, 0, 0}), {1, 3, 3});
+  updates = broadcast_to(array({2, 2, 2}), {1, 3, 3});
   inds = array({0});
   out = scatter(in, inds, updates, 0);
-  CHECK(array_equal(out, zeros({3, 3})).item<bool>());
+  CHECK(array_equal(out, ones({3, 3}) * 2).item<bool>());
 
   // Along different axis
   in = zeros({2, 3});
@@ -2715,4 +2723,55 @@ TEST_CASE("test diag") {
 
   out = diag(x, -1);
   CHECK(array_equal(out, array({3, 7}, {2})).item<bool>());
+}
+
+TEST_CASE("test atleast_1d") {
+  auto x = array(1);
+  auto out = atleast_1d(x);
+  CHECK_EQ(out.ndim(), 1);
+  CHECK_EQ(out.shape(), std::vector<int>{1});
+
+  x = array({1, 2, 3}, {3});
+  out = atleast_1d(x);
+  CHECK_EQ(out.ndim(), 1);
+  CHECK_EQ(out.shape(), std::vector<int>{3});
+
+  x = array({1, 2, 3}, {3, 1});
+  out = atleast_1d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{3, 1});
+}
+
+TEST_CASE("test atleast_2d") {
+  auto x = array(1);
+  auto out = atleast_2d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 1});
+
+  x = array({1, 2, 3}, {3});
+  out = atleast_2d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 3});
+
+  x = array({1, 2, 3}, {3, 1});
+  out = atleast_2d(x);
+  CHECK_EQ(out.ndim(), 2);
+  CHECK_EQ(out.shape(), std::vector<int>{3, 1});
+}
+
+TEST_CASE("test atleast_3d") {
+  auto x = array(1);
+  auto out = atleast_3d(x);
+  CHECK_EQ(out.ndim(), 3);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 1, 1});
+
+  x = array({1, 2, 3}, {3});
+  out = atleast_3d(x);
+  CHECK_EQ(out.ndim(), 3);
+  CHECK_EQ(out.shape(), std::vector<int>{1, 3, 1});
+
+  x = array({1, 2, 3}, {3, 1});
+  out = atleast_3d(x);
+  CHECK_EQ(out.ndim(), 3);
+  CHECK_EQ(out.shape(), std::vector<int>{3, 1, 1});
 }

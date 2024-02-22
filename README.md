@@ -11,10 +11,12 @@ brought to you by Apple machine learning research.
 
 Some key features of MLX include:
 
- - **Familiar APIs**: MLX has a Python API that closely follows NumPy.
-   MLX also has a fully featured C++ API, which closely mirrors the Python API. 
-   MLX has higher-level packages like `mlx.nn` and `mlx.optimizers` with APIs
-   that closely follow PyTorch to simplify building more complex models.
+ - **Familiar APIs**: MLX has a Python API that closely follows NumPy.  MLX
+   also has fully featured C++, [C](https://github.com/ml-explore/mlx-c), and
+   [Swift](https://github.com/ml-explore/mlx-swift/) APIs, which closely mirror
+   the Python API.  MLX has higher-level packages like `mlx.nn` and
+   `mlx.optimizers` with APIs that closely follow PyTorch to simplify building
+   more complex models.
 
  - **Composable function transformations**: MLX supports composable function
    transformations for automatic differentiation, automatic vectorization,

@@ -33,7 +33,6 @@ DEFAULT(ArgSort)
 DEFAULT(AsStrided)
 DEFAULT(Broadcast)
 DEFAULT(Ceil)
-DEFAULT_MULTI(Compiled)
 DEFAULT(Concatenate)
 DEFAULT(Copy)
 DEFAULT_MULTI(CustomVJP)
@@ -82,11 +81,8 @@ void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   } else if (in.dtype() == int32 && in.flags().contiguous) {
     set_unary_output_data(in, out);
     vDSP_vabsi(in.data<int>(), 1, out.data<int>(), 1, in.data_size());
-  } else if (is_unsigned(in.dtype())) {
-    // No-op for unsigned types
-    out.copy_shared_buffer(in);
   } else {
-    unary(in, out, AbsOp());
+    eval(inputs, out);
   }
 }
 

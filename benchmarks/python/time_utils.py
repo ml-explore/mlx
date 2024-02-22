@@ -6,7 +6,11 @@ import mlx.core as mx
 
 
 def time_fn(fn, *args, **kwargs):
-    print(f"Timing {fn.__name__} ...", end=" ")
+    msg = kwargs.pop("msg", None)
+    if msg:
+        print(f"Timing {msg} ...", end=" ")
+    else:
+        print(f"Timing {fn.__name__} ...", end=" ")
 
     # warmup
     for _ in range(5):
