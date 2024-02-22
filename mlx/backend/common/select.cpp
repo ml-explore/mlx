@@ -1,11 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include <cassert>
-#include <cmath>
-#include <iostream>
-#include <sstream>
 
-#include "mlx/allocator.h"
 #include "mlx/backend/common/ternary.h"
 #include "mlx/primitives.h"
 

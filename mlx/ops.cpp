@@ -1153,10 +1153,7 @@ array where(
     const array& b,
     const array& c,
     StreamOrDevice s /* = {} */) {
-  auto condition = a;
-  if (a.dtype() != bool_) {
-    condition = not_equal(a, zeros_like(a), s);
-  }
+  auto condition = astype(a, bool_, s);
   Dtype out_dtype = promote_types(b.dtype(), c.dtype());
   auto inputs = broadcast_arrays(
       {condition, astype(b, out_dtype, s), astype(c, out_dtype, s)}, s);

@@ -9,6 +9,7 @@ namespace mlx::core {
 
 namespace {
 
+// TODO: Add support for more combinations of input types.
 enum class TernaryOpType {
   ScalarScalarScalar,
   General,

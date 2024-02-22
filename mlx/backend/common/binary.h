@@ -134,25 +134,14 @@ struct UseDefaultBinaryOp {
   }
 };
 
-template <typename T1, typename T2, typename U, typename Op>
-struct DefaultScalarScalar {
-  Op op;
-
-  DefaultScalarScalar(Op op_) : op(op_) {}
-
-  void operator()(const T1* a, const T2* b, U* dst) {
-    *dst = op(*a, *b);
-  }
-};
-
-template <typename T1, typename T2, typename U, typename Op>
+template <typename T, typename U, typename Op>
 struct DefaultVectorScalar {
   Op op;
 
   DefaultVectorScalar(Op op_) : op(op_) {}
 
-  void operator()(const T1* a, const T2* b, U* dst, int size) {
-    T2 scalar = *b;
+  void operator()(const T* a, const T* b, U* dst, int size) {
+    T scalar = *b;
     while (size-- > 0) {
       *dst = op(*a, scalar);
       dst++;
@@ -160,8 +149,8 @@ struct DefaultVectorScalar {
     }
   }
 
-  void operator()(const T1* a, const T2* b, U* dst_a, U* dst_b, int size) {
-    T2 scalar = *b;
+  void operator()(const T* a, const T* b, U* dst_a, U* dst_b, int size) {
+    T scalar = *b;
     while (size-- > 0) {
       auto dst = op(*a, scalar);
       *dst_a = dst.first;
@@ -173,14 +162,14 @@ struct DefaultVectorScalar {
   }
 };
 
-template <typename T1, typename T2, typename U, typename Op>
+template <typename T, typename U, typename Op>
 struct DefaultScalarVector {
   Op op;
 
   DefaultScalarVector(Op op_) : op(op_) {}
 
-  void operator()(const T1* a, const T2* b, U* dst, int size) {
-    T1 scalar = *a;
+  void operator()(const T* a, const T* b, U* dst, int size) {
+    T scalar = *a;
     while (size-- > 0) {
       *dst = op(scalar, *b);
       dst++;
@@ -188,8 +177,8 @@ struct DefaultScalarVector {
     }
   }
 
-  void operator()(const T1* a, const T2* b, U* dst_a, U* dst_b, int size) {
-    T1 scalar = *a;
+  void operator()(const T* a, const T* b, U* dst_a, U* dst_b, int size) {
+    T scalar = *a;
     while (size-- > 0) {
       auto dst = op(scalar, *b);
       *dst_a = dst.first;
@@ -201,13 +190,13 @@ struct DefaultScalarVector {
   }
 };
 
-template <typename T1, typename T2, typename U, typename Op>
+template <typename T, typename U, typename Op>
 struct DefaultVectorVector {
   Op op;
 
   DefaultVectorVector(Op op_) : op(op_) {}
 
-  void operator()(const T1* a, const T2* b, U* dst, int size) {
+  void operator()(const T* a, const T* b, U* dst, int size) {
     while (size-- > 0) {
       *dst = op(*a, *b);
       dst++;
@@ -216,7 +205,7 @@ struct DefaultVectorVector {
     }
   }
 
-  void operator()(const T1* a, const T2* b, U* dst_a, U* dst_b, int size) {
+  void operator()(const T* a, const T* b, U* dst_a, U* dst_b, int size) {
     while (size-- > 0) {
       auto dst = op(*a, *b);
       *dst_a = dst.first;
@@ -229,29 +218,29 @@ struct DefaultVectorVector {
   }
 };
 
-template <typename T1, typename T2, typename U, typename OpSS>
-void binary_op_dims1(const array& a, const array& b, array& out, OpSS op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+template <typename T, typename U, typename Op>
+void binary_op_dims1(const array& a, const array& b, array& out, Op op) {
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   size_t a_idx = 0;
   size_t b_idx = 0;
   for (size_t i = 0; i < out.size(); ++i) {
-    op(a_ptr + a_idx, b_ptr + b_idx, dst + i);
+    dst[i] = op(a_ptr[a_idx], b_ptr[b_idx]);
     a_idx += a.strides()[0];
     b_idx += b.strides()[0];
   }
 }
 
-template <typename T1, typename T2, typename U, typename Op>
+template <typename T, typename U, typename Op>
 void binary_op_dims1(
     const array& a,
     const array& b,
     array& out,
     Op op,
     int stride) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   size_t a_idx = 0;
   size_t b_idx = 0;
@@ -263,17 +252,17 @@ void binary_op_dims1(
   }
 }
 
-template <typename T1, typename T2, typename U, typename OpSS>
-void binary_op_dims2(const array& a, const array& b, array& out, OpSS op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+template <typename T, typename U, typename Op>
+void binary_op_dims2(const array& a, const array& b, array& out, Op op) {
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   size_t a_idx = 0;
   size_t b_idx = 0;
   size_t out_idx = 0;
   for (size_t i = 0; i < a.shape()[0]; ++i) {
     for (size_t j = 0; j < a.shape()[1]; ++j) {
-      op(a_ptr + a_idx, b_ptr + b_idx, dst + out_idx++);
+      dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx]);
       a_idx += a.strides()[1];
       b_idx += b.strides()[1];
     }
@@ -282,15 +271,15 @@ void binary_op_dims2(const array& a, const array& b, array& out, OpSS op) {
   }
 }
 
-template <typename T1, typename T2, typename U, typename Op>
+template <typename T, typename U, typename Op>
 void binary_op_dims2(
     const array& a,
     const array& b,
     array& out,
     Op op,
     int stride) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   size_t a_idx = 0;
   size_t b_idx = 0;
@@ -306,10 +295,10 @@ void binary_op_dims2(
   }
 }
 
-template <typename T1, typename T2, typename U, typename OpSS>
-void binary_op_dims3(const array& a, const array& b, array& out, OpSS op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+template <typename T, typename U, typename Op>
+void binary_op_dims3(const array& a, const array& b, array& out, Op op) {
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   size_t a_idx = 0;
   size_t b_idx = 0;
@@ -317,7 +306,7 @@ void binary_op_dims3(const array& a, const array& b, array& out, OpSS op) {
   for (size_t i = 0; i < a.shape()[0]; ++i) {
     for (size_t j = 0; j < a.shape()[1]; ++j) {
       for (size_t k = 0; k < a.shape()[2]; ++k) {
-        op(a_ptr + a_idx, b_ptr + b_idx, dst + out_idx++);
+        dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx]);
         a_idx += a.strides()[2];
         b_idx += b.strides()[2];
       }
@@ -329,10 +318,10 @@ void binary_op_dims3(const array& a, const array& b, array& out, OpSS op) {
   }
 }
 
-template <typename T1, typename T2, typename U, typename OpSS>
-void binary_op_dims4(const array& a, const array& b, array& out, OpSS op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+template <typename T, typename U, typename Op>
+void binary_op_dims4(const array& a, const array& b, array& out, Op op) {
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   size_t a_idx = 0;
   size_t b_idx = 0;
@@ -341,7 +330,7 @@ void binary_op_dims4(const array& a, const array& b, array& out, OpSS op) {
     for (size_t j = 0; j < a.shape()[1]; ++j) {
       for (size_t k = 0; k < a.shape()[2]; ++k) {
         for (size_t ii = 0; ii < a.shape()[3]; ++ii) {
-          op(a_ptr + a_idx, b_ptr + b_idx, dst + out_idx++);
+          dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx]);
           a_idx += a.strides()[3];
           b_idx += b.strides()[3];
         }
@@ -356,38 +345,38 @@ void binary_op_dims4(const array& a, const array& b, array& out, OpSS op) {
   }
 }
 
-template <typename T1, typename T2, typename U, typename OpSS>
+template <typename T, typename U, typename Op>
 void binary_op_dispatch_dims(
     const array& a,
     const array& b,
     array& out,
-    OpSS opss) {
+    Op op) {
   switch (out.ndim()) {
     case 1:
-      binary_op_dims1<T1, T2, U, OpSS>(a, b, out, opss);
+      binary_op_dims1<T, U, Op>(a, b, out, op);
       return;
     case 2:
-      binary_op_dims2<T1, T2, U, OpSS>(a, b, out, opss);
+      binary_op_dims2<T, U, Op>(a, b, out, op);
       return;
     case 3:
-      binary_op_dims3<T1, T2, U, OpSS>(a, b, out, opss);
+      binary_op_dims3<T, U, Op>(a, b, out, op);
       return;
     case 4:
-      binary_op_dims4<T1, T2, U, OpSS>(a, b, out, opss);
+      binary_op_dims4<T, U, Op>(a, b, out, op);
       return;
   }
 
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   for (size_t i = 0; i < out.size(); i++) {
     int a_idx = elem_to_loc(i, a.shape(), a.strides());
     int b_idx = elem_to_loc(i, b.shape(), b.strides());
-    opss(a_ptr + a_idx, b_ptr + b_idx, dst + i);
+    dst[i] = op(a_ptr[a_idx], b_ptr[b_idx]);
   }
 }
 
-template <typename T1, typename T2, typename U, typename Op>
+template <typename T, typename U, typename Op>
 void binary_op_dispatch_dims(
     const array& a,
     const array& b,
@@ -398,15 +387,15 @@ void binary_op_dispatch_dims(
   // Number of dimensions to loop over for vectorized ops
   switch (dim) {
     case 1:
-      binary_op_dims1<T1, T2, U, Op>(a, b, out, op, stride);
+      binary_op_dims1<T, U, Op>(a, b, out, op, stride);
       return;
     case 2:
-      binary_op_dims2<T1, T2, U, Op>(a, b, out, op, stride);
+      binary_op_dims2<T, U, Op>(a, b, out, op, stride);
       return;
   }
 
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
+  const T* a_ptr = a.data<T>();
+  const T* b_ptr = b.data<T>();
   U* dst = out.data<U>();
   for (size_t i = 0; i < out.size(); i += stride) {
     int a_idx = elem_to_loc(i, a.shape(), a.strides());
@@ -417,10 +406,9 @@ void binary_op_dispatch_dims(
 }
 
 template <
-    typename T1,
-    typename T2,
+    typename T,
     typename U,
-    typename OpSS,
+    typename Op,
     typename OpSV,
     typename OpVS,
     typename OpVV>
@@ -428,56 +416,34 @@ void binary_op(
     const array& a,
     const array& b,
     array& out,
-    OpSS opss,
+    Op op,
     OpSV opsv,
     OpVS opvs,
     OpVV opvv) {
-  BinaryOpType bopt = get_binary_op_type(a, b);
-  return binary_op<T1, T2, U>(a, b, out, bopt, opss, opsv, opvs, opvv);
-}
-
-template <
-    typename T1,
-    typename T2,
-    typename U,
-    typename OpSS,
-    typename OpSV,
-    typename OpVS,
-    typename OpVV>
-void binary_op(
-    const array& a,
-    const array& b,
-    array& out,
-    BinaryOpType bopt,
-    OpSS opss,
-    OpSV opsv,
-    OpVS opvs,
-    OpVV opvv) {
-  if (out.data_shared_ptr() == nullptr) {
-    set_binary_op_output_data(a, b, out, bopt);
-  }
+  auto bopt = get_binary_op_type(a, b);
+  set_binary_op_output_data(a, b, out, bopt);
 
   // The full computation is scalar scalar so call the base op once
   if (bopt == BinaryOpType::ScalarScalar) {
-    opss(a.data<T1>(), b.data<T2>(), out.data<U>());
+    *(out.data<U>()) = op(*a.data<T>(), *b.data<T>());
     return;
   }
 
   // The full computation is scalar vector so delegate to the op
   if (bopt == BinaryOpType::ScalarVector) {
-    opsv(a.data<T1>(), b.data<T2>(), out.data<U>(), b.data_size());
+    opsv(a.data<T>(), b.data<T>(), out.data<U>(), b.data_size());
     return;
   }
 
   // The full computation is vector scalar so delegate to the op
   if (bopt == BinaryOpType::VectorScalar) {
-    opvs(a.data<T1>(), b.data<T2>(), out.data<U>(), a.data_size());
+    opvs(a.data<T>(), b.data<T>(), out.data<U>(), a.data_size());
     return;
   }
 
   // The full computation is vector vector so delegate to the op
   if (bopt == BinaryOpType::VectorVector) {
-    opvv(a.data<T1>(), b.data<T2>(), out.data<U>(), out.size());
+    opvv(a.data<T>(), b.data<T>(), out.data<U>(), out.size());
     return;
   }
 
@@ -537,16 +503,16 @@ void binary_op(
 
   switch (bopt) {
     case BinaryOpType::VectorVector:
-      binary_op_dispatch_dims<T1, T2, U>(a, b, out, opvv, dim, stride);
+      binary_op_dispatch_dims<T, U>(a, b, out, opvv, dim, stride);
       break;
     case BinaryOpType::VectorScalar:
-      binary_op_dispatch_dims<T1, T2, U>(a, b, out, opvs, dim, stride);
+      binary_op_dispatch_dims<T, U>(a, b, out, opvs, dim, stride);
       break;
     case BinaryOpType::ScalarVector:
-      binary_op_dispatch_dims<T1, T2, U>(a, b, out, opsv, dim, stride);
+      binary_op_dispatch_dims<T, U>(a, b, out, opsv, dim, stride);
       break;
     default:
-      binary_op_dispatch_dims<T1, T2, U>(a, b, out, opss);
+      binary_op_dispatch_dims<T, U>(a, b, out, op);
       break;
   }
 }
@@ -567,91 +533,72 @@ void binary_op(
     if (std::is_same<decltype(opvs), UseDefaultBinaryOp>::value) {
       if (std::is_same<decltype(opvv), UseDefaultBinaryOp>::value) {
         // All ops are UseDefaultBinaryOp (why oh why would someone call that?)
-        binary_op<T, T, T>(
+        binary_op<T, T>(
             a,
             b,
             out,
-            DefaultScalarScalar<T, T, T, Op>(op),
-            DefaultScalarVector<T, T, T, Op>(op),
-            DefaultVectorScalar<T, T, T, Op>(op),
-            DefaultVectorVector<T, T, T, Op>(op));
+            op,
+            DefaultScalarVector<T, T, Op>(op),
+            DefaultVectorScalar<T, T, Op>(op),
+            DefaultVectorVector<T, T, Op>(op));
       } else {
         // opsv and opvs were UseDefaultBinaryOp
-        binary_op<T, T, T>(
+        binary_op<T, T>(
             a,
             b,
             out,
-            DefaultScalarScalar<T, T, T, Op>(op),
-            DefaultScalarVector<T, T, T, Op>(op),
-            DefaultVectorScalar<T, T, T, Op>(op),
+            op,
+            DefaultScalarVector<T, T, Op>(op),
+            DefaultVectorScalar<T, T, Op>(op),
             opvv);
       }
     } else if (std::is_same<decltype(opvv), UseDefaultBinaryOp>::value) {
       // opsv and opvv were UseDefaultBinaryOp
-      binary_op<T, T, T>(
+      binary_op<T, T>(
           a,
           b,
           out,
-          DefaultScalarScalar<T, T, T, Op>(op),
-          DefaultScalarVector<T, T, T, Op>(op),
+          op,
+          DefaultScalarVector<T, T, Op>(op),
           opvs,
-          DefaultVectorVector<T, T, T, Op>(op));
+          DefaultVectorVector<T, T, Op>(op));
     } else {
       // opsv was UseDefaultBinaryOp
-      binary_op<T, T, T>(
-          a,
-          b,
-          out,
-          DefaultScalarScalar<T, T, T, Op>(op),
-          DefaultScalarVector<T, T, T, Op>(op),
-          opvs,
-          opvv);
+      binary_op<T, T>(
+          a, b, out, op, DefaultScalarVector<T, T, Op>(op), opvs, opvv);
     }
   } else if (std::is_same<decltype(opvs), UseDefaultBinaryOp>::value) {
     if (std::is_same<decltype(opvv), UseDefaultBinaryOp>::value) {
       // opvs and opvv were UseDefaultBinaryOp
-      binary_op<T, T, T>(
+      binary_op<T, T>(
           a,
           b,
           out,
-          DefaultScalarScalar<T, T, T, Op>(op),
+          op,
           opsv,
-          DefaultVectorScalar<T, T, T, Op>(op),
-          DefaultVectorVector<T, T, T, Op>(op));
+          DefaultVectorScalar<T, T, Op>(op),
+          DefaultVectorVector<T, T, Op>(op));
     } else {
       // opvs was UseDefaultBinaryOp
-      binary_op<T, T, T>(
-          a,
-          b,
-          out,
-          DefaultScalarScalar<T, T, T, Op>(op),
-          opsv,
-          DefaultVectorScalar<T, T, T, Op>(op),
-          opvv);
+      binary_op<T, T>(
+          a, b, out, op, opsv, DefaultVectorScalar<T, T, Op>(op), opvv);
     }
   } else if (std::is_same<decltype(opvv), UseDefaultBinaryOp>::value) {
     // opvv was UseDefaultBinaryOp
-    binary_op<T, T, T>(
-        a,
-        b,
-        out,
-        DefaultScalarScalar<T, T, T, Op>(op),
-        opsv,
-        opvs,
-        DefaultVectorVector<T, T, T, Op>(op));
+    binary_op<T, T>(
+        a, b, out, op, opsv, opvs, DefaultVectorVector<T, T, Op>(op));
   } else {
     // All ops provided
-    binary_op<T, T, T>(
-        a, b, out, DefaultScalarScalar<T, T, T, Op>(op), opsv, opvs, opvv);
+    binary_op<T, T>(a, b, out, op, opsv, opvs, opvv);
   }
 }
+
 template <typename T, typename Op>
 void binary_op(const array& a, const array& b, array& out, Op op) {
-  DefaultScalarScalar<T, T, T, Op> opss(op);
-  DefaultScalarVector<T, T, T, Op> opsv(op);
-  DefaultVectorScalar<T, T, T, Op> opvs(op);
-  DefaultVectorVector<T, T, T, Op> opvv(op);
-  binary_op<T, T, T>(a, b, out, opss, opsv, opvs, opvv);
+  DefaultScalarVector<T, T, Op> opsv(op);
+  DefaultVectorScalar<T, T, Op> opvs(op);
+  DefaultVectorVector<T, T, Op> opvv(op);
+  binary_op<T, T>(a, b, out, op, opsv, opvs, opvv);
 }
 
 template <typename... Ops>

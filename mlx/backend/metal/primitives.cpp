@@ -238,8 +238,8 @@ void ternary_op(
   auto& strides_b = strides[1];
   auto& strides_c = strides[2];
   auto& strides_out = strides[3];
-  std::ostringstream kname;
 
+  std::ostringstream kname;
   kname << "g";
   kname << op << type_to_name(b);
   if (topt == TernaryOpType::General &&
@@ -249,7 +249,6 @@ void ternary_op(
 
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
-
   auto kernel = d.get_kernel(kname.str());
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
@@ -259,21 +258,20 @@ void ternary_op(
   set_array_buffer(compute_encoder, out, 3);
 
   auto ndim = shape.size();
-
   if (ndim > 3) {
     compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 4);
     compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 5);
     compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 6);
     compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 7);
+
+    if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
+      compute_encoder->setBytes(&ndim, sizeof(int), 8);
+    }
   } else {
     // The shape is implicit in the grid for <= 3D
     compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 4);
     compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 5);
     compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 6);
-  }
-
-  if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
-    compute_encoder->setBytes(&ndim, sizeof(int), 8);
   }
 
   // Launch up to 3D grid of threads
