@@ -213,7 +213,6 @@ class ASGD(SGD):
         super().__init__(learning_rate, momentum, weight_decay, dampening, nesterov)
         self.alpha = alpha
         self.t0 = t0
-        self._state["average_params"] = {}
 
     def init_single(self, parameter: mx.array, state: dict):
         super().init_single(parameter, state)
@@ -231,9 +230,6 @@ class ASGD(SGD):
             state["average_params"] = average_param
 
         return updated_parameter
-
-    def get_average_params(self):
-        return self._state["average_params"]
 
 
 class RMSprop(Optimizer):
