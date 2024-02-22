@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <numeric>
 #include <set>
@@ -87,8 +88,8 @@ array arange(
 
   double real_size = std::ceil((stop - start) / step);
 
-  if (real_size < INT_MIN || real_size > INT_MAX) {
-    throw std::invalid_argument("[arange] Cannot compute length.");
+  if (real_size > INT_MAX) {
+    throw std::invalid_argument("[arange] Maximum size exceeded.");
   }
 
   int size = std::max(static_cast<int>(real_size), 0);
