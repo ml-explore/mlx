@@ -18,3 +18,7 @@ repos:
     rev: v1.7.5
     hooks:
     -   id: docformatter
+-   repo: https://github.com/PyCQA/autoflake
+    rev: v2.3.0
+    hooks:
+    -   id: autoflake

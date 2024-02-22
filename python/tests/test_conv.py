@@ -13,7 +13,7 @@ try:
     import torch.nn.functional as F
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 

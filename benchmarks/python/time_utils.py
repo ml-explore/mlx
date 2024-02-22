@@ -19,7 +19,7 @@ def time_fn(fn, *args, **kwargs):
     num_iters = 100
     tic = time.perf_counter()
     for _ in range(num_iters):
-        x = mx.eval(fn(*args, **kwargs))
+        mx.eval(fn(*args, **kwargs))
     toc = time.perf_counter()
 
     msec = 1e3 * (toc - tic) / num_iters

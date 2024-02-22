@@ -1,6 +1,5 @@
 # Copyright © 2023 Apple Inc.
 
-import math
 import unittest
 from itertools import permutations
 
@@ -12,7 +11,7 @@ try:
     import torch
 
     has_torch = True
-except ImportError as e:
+except ImportError:
     has_torch = False
 
 

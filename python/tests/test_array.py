@@ -13,7 +13,7 @@ try:
     import tensorflow as tf
 
     has_tf = True
-except ImportError as e:
+except ImportError:
     has_tf = False
 
 
@@ -758,7 +758,7 @@ class TestArray(mlx_tests.MLXTestCase):
             idx_mlx = [
                 mx.array(idx) if isinstance(idx, np.ndarray) else idx for idx in idx_np
             ]
-            slice_mlx = arr_mlx[tuple(idx_mlx)]
+            arr_mlx[tuple(idx_mlx)]
             self.assertTrue(
                 np.array_equal(arr_np[tuple(idx_np)], arr_mlx[tuple(idx_mlx)])
             )
@@ -1251,10 +1251,9 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.arange(3)
         wr = weakref.ref(a)
         self.assertIsNotNone(wr())
-        mv = memoryview(a)
+        memoryview(a)
         a = None
         self.assertIsNotNone(wr())
-        mv = None
         self.assertIsNone(wr())
 
     def test_array_view_ref_counting(self):
@@ -1264,7 +1263,6 @@ class TestArray(mlx_tests.MLXTestCase):
         a_np = np.array(a, copy=False)
         a = None
         self.assertIsNotNone(wr())
-        a_np = None
         self.assertIsNone(wr())
 
     @unittest.skipIf(not has_tf, "requires TensorFlow")

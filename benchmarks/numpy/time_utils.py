@@ -13,7 +13,7 @@ def time_fn(fn, *args):
     num_iters = 100
     tic = time.perf_counter()
     for _ in range(num_iters):
-        x = fn(*args)
+        fn(*args)
     toc = time.perf_counter()
 
     msec = 1e3 * (toc - tic) / num_iters

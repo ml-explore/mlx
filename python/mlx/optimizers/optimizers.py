@@ -1,6 +1,5 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import math
 from typing import Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
