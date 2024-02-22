@@ -200,6 +200,32 @@ class SGD(Optimizer):
 
 
 class ASGD(SGD):
+    """
+    Implements Averaged Stochastic Gradient Descent (ASGD).
+
+    ASGD is a variant of SGD that leverages a mechanism to average the model parameters
+    over time.
+
+    The parameter update rule at time step :math:`t` is given by:
+
+    .. math::
+
+        \theta_{t+1} = \theta_t - \eta_t \nabla L(\theta_t),
+        a_{t+1} = \begin{cases}
+        \theta_{t+1}, & \text{if}\ t < t_0 \\
+        a_t + \alpha_t (\theta_{t+1} - a_t), & \text{otherwise}
+        \end{cases}
+
+    Args:
+        learning_rate (float or callable): The learning rate :math:`\lambda`.
+        momentum (float, optional): The momentum strength :math:`\mu`. Default: ``0``
+        weight_decay (float, optional): The weight decay (L2 penalty). Default: ``0``
+        dampening (float, optional): Dampening for momentum :math:`\tau`. Default: ``0``
+        nesterov (bool, optional): Enables Nesterov momentum. Default: ``False``
+        alpha (float, optional): Decay rate :math:`\alpha` for averaging. Default: ``0.75``
+        t0 (float, optional): Step threshold :math:`t_0` after which averaging starts. Default: ``1e6```
+    """
+
     def __init__(
         self,
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
@@ -208,7 +234,7 @@ class ASGD(SGD):
         dampening: float = 0.0,
         nesterov: bool = False,
         alpha: float = 0.75,
-        t0: float = 1000000.0,
+        t0: float = 1e6,
     ):
         super().__init__(learning_rate, momentum, weight_decay, dampening, nesterov)
         self.alpha = alpha
