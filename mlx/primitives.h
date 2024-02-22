@@ -730,6 +730,7 @@ class Select : public UnaryPrimitive {
   DEFINE_GRADS()
   DEFINE_PRINT(Select)
   DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
