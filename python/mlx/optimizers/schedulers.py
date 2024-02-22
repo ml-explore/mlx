@@ -88,10 +88,10 @@ def cosine_decay(init: float, decay_steps: int):
 
 
 def linear_warmup(
-    schedule_fn, length: int, init: float = 0.0, finish: float = 0.0
+    schedule_fn, length: int, finish: float, init: float = 0.00
 ) -> Callable:
     """
-    >>> lr_schedule = optim.cosine_with_warmup(100, finish_lr=1e-1)
+    >>> lr_schedule = optim.cosine_with_warmup(100, 1e-1)
     >>> optimizer = optim.Adam(learning_rate=lr_schedule)
     >>> optimizer.learning_rate
     array(0.0, dtype=float32)

@@ -330,7 +330,7 @@ class TestSchedulers(unittest.TestCase):
 
     def test_linear_warmup_with_cosine_decay(self):
         cos_fn = opt.schedulers.cosine_decay(1e-5, 100)
-        cos_with_warmup = opt.schedulers.linear_warmup(cos_fn, 100, finish=1e-5)
+        cos_with_warmup = opt.schedulers.linear_warmup(cos_fn, 100, 1e-5)
         self.assertEqual(cos_with_warmup(0), 0.0)
         optimizer = opt.Adam(learning_rate=cos_with_warmup)
         for _ in range(100):
