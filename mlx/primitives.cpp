@@ -48,6 +48,54 @@ std::tuple<array, array, int> vmap_binary_op(
   return {a, b, to_ax};
 }
 
+std::tuple<array, array, array, int> vmap_ternary_op(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes,
+    const Stream& stream) {
+  assert(inputs.size() == 3);
+  assert(axes.size() == 3);
+
+  auto a = inputs[0];
+  auto b = inputs[1];
+  auto c = inputs[2];
+  int ndim = std::max(
+      {a.ndim() + (axes[0] == -1),
+       b.ndim() + (axes[1] == -1),
+       c.ndim() + (axes[2] == -1)});
+
+  auto expand_dims = [stream, ndim](auto in) {
+    auto shape = in.shape();
+    shape.insert(shape.begin(), ndim - shape.size(), 1);
+    return reshape(in, shape, stream);
+  };
+
+  int to_ax = (ndim - a.ndim()) + axes[0];
+  int from_ax1 = (ndim - b.ndim()) + axes[1];
+  int from_ax2 = (ndim - c.ndim()) + axes[2];
+  a = expand_dims(a);
+  b = expand_dims(b);
+  c = expand_dims(c);
+
+  auto find_tdims = [](auto x, int to_ax, int from_ax) {
+    std::vector<int> tdims(x.ndim());
+    std::iota(tdims.begin(), tdims.end(), 0);
+    tdims.erase(tdims.begin() + from_ax);
+    tdims.insert(tdims.begin() + to_ax, from_ax);
+    return tdims;
+  };
+
+  if (to_ax != from_ax1) {
+    std::vector<int> tdims = find_tdims(b, to_ax, from_ax1);
+    b = transpose(b, tdims, stream);
+  }
+
+  if (to_ax != from_ax2) {
+    std::vector<int> tdims = find_tdims(c, to_ax, from_ax2);
+    c = transpose(c, tdims, stream);
+  }
+  return {a, b, c, to_ax};
+}
+
 } // namespace
 
 std::vector<array> Primitive::jvp(
@@ -1773,6 +1821,76 @@ std::pair<std::vector<array>, std::vector<int>> Multiply::vmap(
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
   return {{multiply(a, b, stream())}, {to_ax}};
+}
+
+std::vector<array> Select::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 3);
+  assert(tangents.size() == 3);
+
+  auto jvp_fun = [&](int i) {
+    int arg = argnums[i];
+
+    if (arg == 0) {
+      return zeros_like(primals[0], stream());
+    } else if (arg == 1) {
+      return multiply(
+          astype(primals[0], tangents[1].dtype(), stream()),
+          tangents[1],
+          stream());
+    } else {
+      return multiply(
+          astype(
+              logical_not(primals[0], stream()), tangents[2].dtype(), stream()),
+          tangents[2],
+          stream());
+    }
+  };
+
+  array jvp = jvp_fun(argnums[0]);
+  for (int i = 1; i < argnums.size(); i++) {
+    jvp = add(jvp, jvp_fun(argnums[i]));
+  }
+  return {jvp};
+}
+
+std::vector<array> Select::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 3);
+  assert(cotangents.size() == 1);
+
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      vjps.push_back(zeros_like(primals[0], stream()));
+    } else if (arg == 1) {
+      vjps.push_back(multiply(
+          astype(primals[0], cotangents[0].dtype(), stream()),
+          cotangents[0],
+          stream()));
+    } else if (arg == 2) {
+      vjps.push_back(multiply(
+          astype(
+              logical_not(primals[0], stream()),
+              cotangents[0].dtype(),
+              stream()),
+          cotangents[0],
+          stream()));
+    }
+  }
+  return vjps;
+}
+
+std::pair<std::vector<array>, std::vector<int>> Select::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, c, to_ax] = vmap_ternary_op(inputs, axes, stream());
+  return {{where(a, b, c, stream())}, {to_ax}};
 }
 
 std::vector<array> Negative::vjp(

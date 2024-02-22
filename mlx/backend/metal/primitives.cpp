@@ -6,6 +6,7 @@
 #include <sstream>
 
 #include "mlx/backend/common/binary.h"
+#include "mlx/backend/common/ternary.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
@@ -43,24 +44,25 @@ void binary_op(
 
   std::ostringstream kname;
   switch (bopt) {
-    case ScalarScalar:
+    case BinaryOpType::ScalarScalar:
       kname << "ss";
       break;
-    case ScalarVector:
+    case BinaryOpType::ScalarVector:
       kname << "sv";
       break;
-    case VectorScalar:
+    case BinaryOpType::VectorScalar:
       kname << "vs";
       break;
-    case VectorVector:
+    case BinaryOpType::VectorVector:
       kname << "vv";
       break;
-    case General:
+    case BinaryOpType::General:
       kname << "g";
       break;
   }
   kname << op << type_to_name(a);
-  if (bopt == General && shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
+  if (bopt == BinaryOpType::General &&
+      shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
     kname << "_" << shape.size();
   }
 
@@ -80,7 +82,7 @@ void binary_op(
   set_array_buffer(compute_encoder, outputs[0], 2);
   set_array_buffer(compute_encoder, outputs[1], 3);
 
-  if (bopt == General) {
+  if (bopt == BinaryOpType::General) {
     auto ndim = shape.size();
     if (ndim > 3) {
       compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 4);
@@ -141,24 +143,25 @@ void binary_op(
 
   std::ostringstream kname;
   switch (bopt) {
-    case ScalarScalar:
+    case BinaryOpType::ScalarScalar:
       kname << "ss";
       break;
-    case ScalarVector:
+    case BinaryOpType::ScalarVector:
       kname << "sv";
       break;
-    case VectorScalar:
+    case BinaryOpType::VectorScalar:
       kname << "vs";
       break;
-    case VectorVector:
+    case BinaryOpType::VectorVector:
       kname << "vv";
       break;
-    case General:
+    case BinaryOpType::General:
       kname << "g";
       break;
   }
   kname << op << type_to_name(a);
-  if (bopt == General && shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
+  if (bopt == BinaryOpType::General &&
+      shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
     kname << "_" << shape.size();
   }
 
@@ -173,7 +176,7 @@ void binary_op(
   set_array_buffer(compute_encoder, donate_b ? out : b, 1);
   set_array_buffer(compute_encoder, out, 2);
 
-  if (bopt == General) {
+  if (bopt == BinaryOpType::General) {
     auto ndim = shape.size();
     if (ndim > 3) {
       compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 3);
@@ -202,7 +205,8 @@ void binary_op(
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
-    size_t nthreads = bopt == General ? out.size() : out.data_size();
+    size_t nthreads =
+        bopt == BinaryOpType::General ? out.size() : out.data_size();
     MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
@@ -211,6 +215,86 @@ void binary_op(
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+}
+
+void ternary_op(
+    const std::vector<array>& inputs,
+    array& out,
+    const std::string op) {
+  assert(inputs.size() == 3);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto& c = inputs[2];
+  TernaryOpType topt = get_ternary_op_type(a, b, c);
+  set_ternary_op_output_data(a, b, c, out, topt, true /* donate_with_move */);
+
+  if (out.size() == 0) {
+    return;
+  }
+
+  // Try to collapse contiguous dims
+  auto [shape, strides] = collapse_contiguous_dims(a, b, c, out);
+  auto& strides_a = strides[0];
+  auto& strides_b = strides[1];
+  auto& strides_c = strides[2];
+  auto& strides_out = strides[3];
+
+  std::ostringstream kname;
+  kname << "g";
+  kname << op << type_to_name(b);
+  if (topt == TernaryOpType::General &&
+      shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
+    kname << "_" << shape.size();
+  }
+
+  auto& s = out.primitive().stream();
+  auto& d = metal::device(s.device);
+  auto kernel = d.get_kernel(kname.str());
+  auto compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder->setComputePipelineState(kernel);
+  set_array_buffer(compute_encoder, a, 0);
+  set_array_buffer(compute_encoder, b, 1);
+  set_array_buffer(compute_encoder, c, 2);
+  set_array_buffer(compute_encoder, out, 3);
+
+  auto ndim = shape.size();
+  if (ndim > 3) {
+    compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 4);
+    compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 5);
+    compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 6);
+    compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 7);
+
+    if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
+      compute_encoder->setBytes(&ndim, sizeof(int), 8);
+    }
+  } else if (ndim > 0) {
+    // The shape is implicit in the grid for <= 3D
+    compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 4);
+    compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 5);
+    compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 6);
+  } else {
+    // For 0-dim we still need to bind something to these buffers since the
+    // current ternary kernels always access the strides.
+    size_t dummy_stride = 0;
+    int dummy_shape = 0;
+    compute_encoder->setBytes(&dummy_shape, sizeof(int), 4);
+    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 5);
+    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 6);
+    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 7);
+    compute_encoder->setBytes(&ndim, sizeof(int), 8);
+  }
+
+  // Launch up to 3D grid of threads
+  size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+  size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
+  size_t rest = out.size() / (dim0 * dim1);
+  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  if (thread_group_size != 1024) {
+    throw std::runtime_error("[Metal::binary] Must use 1024 sized block");
+  }
+  MTL::Size group_dims = get_block_dims(dim0, dim1, rest);
+  MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
+  compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
 
 void unary_op(
@@ -617,6 +701,10 @@ void Ceil::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Multiply::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "mul");
+}
+
+void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
+  ternary_op(inputs, out, "select");
 }
 
 void Negative::eval_gpu(const std::vector<array>& inputs, array& out) {
