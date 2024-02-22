@@ -3105,6 +3105,92 @@ void init_ops(py::module_& m) {
             array: The convolved array.
       )pbdoc");
   m.def(
+      "convNd",
+      [](const array& input,
+         const array& weight,
+         const std::variant<int, std::vector<int>>& stride,
+         const std::variant<int, std::vector<int>>& padding,
+         const std::variant<int, std::vector<int>>& kernel_dilation,
+         const std::variant<int, std::vector<int>>& input_dilation,
+         int groups,
+         bool flip,
+         StreamOrDevice s) {
+        std::vector<int> stride_vec;
+        std::vector<int> padding_vec;
+        std::vector<int> kernel_dilation_vec;
+        std::vector<int> input_dilation_vec;
+
+        if (auto pv = std::get_if<int>(&stride); pv) {
+          stride_vec.push_back(*pv);
+        } else {
+          stride_vec = std::get<std::vector<int>>(stride);
+        }
+
+        if (auto pv = std::get_if<int>(&padding); pv) {
+          padding_vec.push_back(*pv);
+        } else {
+          padding_vec = std::get<std::vector<int>>(padding);
+        }
+
+        if (auto pv = std::get_if<int>(&kernel_dilation); pv) {
+          kernel_dilation_vec.push_back(*pv);
+        } else {
+          kernel_dilation_vec = std::get<std::vector<int>>(kernel_dilation);
+        }
+
+        if (auto pv = std::get_if<int>(&input_dilation); pv) {
+          input_dilation_vec.push_back(*pv);
+        } else {
+          input_dilation_vec = std::get<std::vector<int>>(input_dilation);
+        }
+
+        return convNd(
+            /* const array& input = */ input,
+            /* const array& weight = */ weight,
+            /* std::vector<int> stride = */ stride_vec,
+            /* std::vector<int> padding = */ padding_vec,
+            /* std::vector<int> kernel_dilation = */ kernel_dilation_vec,
+            /* std::vector<int> input_dilation = */ input_dilation_vec,
+            /* int groups = */ groups,
+            /* bool flip = */ flip,
+            s);
+      },
+      "input"_a,
+      "weight"_a,
+      py::pos_only(),
+      "stride"_a = 1,
+      "padding"_a = 0,
+      "kernel_dilation"_a = 1,
+      "input_dilation"_a = 1,
+      "groups"_a = 1,
+      "flip"_a = false,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        convNd(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, Tuple[int, int]] = 0, dilation: Union[int, Tuple[int, int]] = 1, groups: Union[int, Tuple[int, int]] = 1, *, stream: Union[None, Stream, Device] = None) -> array
+
+        2D convolution over an input with several channels
+
+        Note: Only the default ``groups=1`` is currently supported.
+
+        Args:
+            input (array): input array of shape ``(N, H, W, C_in)``
+            weight (array): weight array of shape ``(C_out, H, W, C_in)``
+            stride (int or list(int), optional): :obj:`tuple` of size 2 with
+                kernel strides. All spatial dimensions get the same stride if
+                only one number is specified. Default: ``1``.
+            padding (int or list(int), optional): :obj:`tuple` of size 2 with
+                symmetric input padding. All spatial dimensions get the same
+                padding if only one number is specified. Default: ``0``.
+            kernel_dilation (int or list(int), optional): :obj:`tuple` of size 2 with
+                kernel dilation. All spatial dimensions get the same dilation
+                if only one number is specified. Default: ``1``
+            groups (int, optional): input feature groups. Default: ``1``.
+
+        Returns:
+            array: The convolved array.
+      )pbdoc");
+  m.def(
       "save",
       &mlx_save_helper,
       "file"_a,
