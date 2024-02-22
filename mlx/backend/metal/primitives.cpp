@@ -430,8 +430,6 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
     compute_encoder->setBytes(&axis_stride, sizeof(size_t), 6);
     compute_encoder->setBytes(&axis_size, sizeof(size_t), 7);
-    compute_encoder->setThreadgroupMemoryLength(
-        simd_size * (sizeof(uint32_t) + in.itemsize()), 0);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
 }
