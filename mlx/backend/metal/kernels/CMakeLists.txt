@@ -25,6 +25,7 @@ set(
   "reduce"
   "rope"
   "scan"
+  "fast_inference_sdpa"
   "softmax"
   "sort"
   "unary"

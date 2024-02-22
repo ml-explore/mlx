@@ -846,6 +846,16 @@ inline array round(const array& a, StreamOrDevice s = {}) {
 /** Matrix-matrix multiplication. */
 array matmul(const array& a, const array& b, StreamOrDevice s = {});
 
+/** Computes: O = softmax(Q @ K.T) @ V; with parallelization across K-V sequence
+ * length **/
+array fast_inference_sdpa(
+    const array& queries,
+    const array& keys,
+    const array& values,
+    const float scale,
+    const std::optional<array>& mask = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Gather array entries given indices and slices */
 array gather(
     const array& a,

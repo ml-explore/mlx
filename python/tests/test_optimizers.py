@@ -9,8 +9,9 @@ import mlx.core as mx
 import mlx.nn as nn
 import mlx.optimizers as opt
 import mlx.utils
-import mlx_tests
 from mlx.utils import tree_flatten, tree_map
+
+import mlx_tests
 
 
 def get_all_optimizers():

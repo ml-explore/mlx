@@ -4,6 +4,7 @@ import unittest
 from itertools import product
 
 import mlx.core as mx
+
 import mlx_tests
 
 
