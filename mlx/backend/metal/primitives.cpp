@@ -267,11 +267,21 @@ void ternary_op(
     if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
       compute_encoder->setBytes(&ndim, sizeof(int), 8);
     }
-  } else {
+  } else if (ndim > 0) {
     // The shape is implicit in the grid for <= 3D
     compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 4);
     compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 5);
     compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 6);
+  } else {
+    // For 0-dim we still need to bind something to these buffers since the
+    // current ternary kernels always access the strides.
+    size_t dummy_stride = 0;
+    int dummy_shape = 0;
+    compute_encoder->setBytes(&dummy_shape, sizeof(int), 4);
+    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 5);
+    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 6);
+    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 7);
+    compute_encoder->setBytes(&ndim, sizeof(int), 8);
   }
 
   // Launch up to 3D grid of threads
