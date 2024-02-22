@@ -237,6 +237,14 @@ workflows:
     jobs:
       - mac_build_and_test
       - linux_build_and_test
+
+  build_pypi_release:
+    when:
+      and:
+        - not: << pipeline.parameters.nightly_build >>
+        - not: << pipeline.parameters.weekly_build >>
+        - not: << pipeline.parameters.test_release >>
+    jobs:
       - build_release:
           filters:
             tags:
