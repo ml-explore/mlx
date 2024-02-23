@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
-from typing import Callable
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import mlx.core as mx
 
@@ -87,31 +87,85 @@ def cosine_decay(init: float, decay_steps: int):
     return scheduler
 
 
-def linear_warmup(
-    schedule_fn, length: int, finish: float, init: float = 0.00
-) -> Callable:
-    """
-    >>> lr_schedule = optim.cosine_with_warmup(100, 1e-1)
-    >>> optimizer = optim.Adam(learning_rate=lr_schedule)
-    >>> optimizer.learning_rate
-    array(0.0, dtype=float32)
-    >>> for _ in range(100): optimizer.update({}, {})
-    ...
-    >>> optimizer.learning_rate
-    array(0.1, dtype=float32)
+class ScheduleJoiner:
+    r"""Make a schedule joiner
 
-    :param schedule_fn: other schedule function, such as cosine_decay,step_decay, etc.
-    :param length: warmup length
-    :param init: start value (0 by default)
-    :param finish: final value
-    :return: callable takes a step and returns the schedulable
+    Instanciated with a list of schedules and an increasing list of 0-based steps, each of which indicates
+    when the next schedule will be used.  The instanciated object is a callable schedule that is a
+    concatenation of the schedules at the given step boundaries
+
+    So, the first item in the schedule list will be used until the first boundary, then the next schedule
+    will be used until the next boundary, and so on.
+
+    Args:
+        schedules (list of schedules): The schedules to join
+        boundaries (list of integers): The list of steps that mark the use of the next schedule (in order)
+
+    Example:
+        >>> warmup_schedule = optim.linear_warmup(100, finish=1e-1)
+        >>> cosine_schedule = optim.cosine_decay(1e-1, 200)
+        >>> lr_schedule = ScheduleJoiner([warmup_schedule, cosine_schedule], [101])
+        >>> optimizer = optim.Adam(learning_rate=lr_schedule)
+        >>> optimizer.learning_rate
+        array(0.0, dtype=float32)
+        >>> for _ in range(101): optimizer.update({}, {})
+        ...
+        >>> optimizer.learning_rate
+        array(1e-5, dtype=float32)
+
     """
 
-    def schedule_step_fn(step):
-        if step <= length:
-            return step * ((finish - init) / length) + init
+    def __init__(self, schedules: List[Callable], boundaries: List[int]):
+        self.schedules = schedules
+        self.boundaries = boundaries
+
+    def __call__(self, step: int):
+        if step < self.boundaries[0] or not self.boundaries:
+            current_schedule = self.schedules[0]
+            updated_step = step
         else:
-            offset_idx = step.item() - length
-            return schedule_fn(offset_idx)
+            curr_sched_idx = -1
+            for idx, boundary in filter(
+                lambda i: step <= i[-1], enumerate(self.boundaries)
+            ):
+                if step == boundary:
+                    curr_sched_idx = idx + 1
+                    current_schedule = self.schedules[curr_sched_idx]
+                    updated_step = 0
+                    break
+                elif boundary > step:
+                    curr_sched_idx = idx
+                    current_schedule = self.schedules[curr_sched_idx]
+                    updated_step = boundary - step
+                    break
+            if curr_sched_idx == -1:
+                curr_sched_idx = len(self.boundaries)
+                current_schedule = self.schedules[curr_sched_idx]
+                updated_step = step - self.boundaries[-1]
+        return current_schedule(updated_step)
 
-    return schedule_step_fn
+
+def linear_warmup(length: int, finish: float, init: float = 0.0) -> Callable:
+    r"""Make a linear warmup scheduler.
+
+    Args:
+        length (int): Length of warmup.
+        finish (float): Value at the end of the warmup.
+        init (float): Initial value.
+
+    Example:
+
+        >>> lr_schedule = optim.linear_warmup(100, 1e-1)
+        >>> optimizer = optim.Adam(learning_rate=lr_schedule)
+        >>> optimizer.learning_rate
+        array(0.0, dtype=float32)
+        >>> for _ in range(100): optimizer.update({}, {})
+        ...
+        >>> optimizer.learning_rate
+        array(1e-5, dtype=float32)
+    """
+
+    def step_fn(step):
+        return step * ((finish - init) / length) + init
+
+    return step_fn

@@ -328,19 +328,35 @@ class TestSchedulers(unittest.TestCase):
         expected_lr = 0.1 * 0.5 * (1.0 + math.cos(math.pi * 4 / 10))
         self.assertAlmostEqual(lr, expected_lr, delta=1e-7)
 
+    def test_schedule_joiner(self):
+        sched_1 = []
+        sched_2 = []
+        sched_3 = []
+        joined_schedules = opt.schedulers.ScheduleJoiner(
+            [sched_1.append, sched_2.append, sched_3.append], [5, 7]
+        )
+        for i in range(10):
+            joined_schedules(i)
+        self.assertEqual(sched_1, [0, 1, 2, 3, 4])
+        self.assertEqual(sched_2, [0, 1])
+        self.assertEqual(sched_3, [0, 1, 2])
+
     def test_linear_warmup_with_cosine_decay(self):
-        cos_fn = opt.schedulers.cosine_decay(1e-5, 100)
-        cos_with_warmup = opt.schedulers.linear_warmup(cos_fn, 100, 1e-5)
+        warmup_schedule = opt.schedulers.linear_warmup(100, 1e-5)
+        cosine_schedule = opt.schedulers.cosine_decay(1e-5, 100)
+        cos_with_warmup = opt.schedulers.ScheduleJoiner(
+            [warmup_schedule, cosine_schedule], [101]
+        )
         self.assertEqual(cos_with_warmup(0), 0.0)
+        self.assertAlmostEqual(cos_with_warmup(101), 1e-5, delta=1e-1)
         optimizer = opt.Adam(learning_rate=cos_with_warmup)
         for _ in range(100):
             optimizer.update({}, {})
         self.assertAlmostEqual(optimizer.learning_rate.item(), 1e-5, delta=1e-1)
         for _ in range(100):
             optimizer.update({}, {})
-        decay = 0.5 * (1.0 + math.cos((math.pi * 10 / 100)))
-        lr = 1e-5 * decay
-        self.assertAlmostEqual(optimizer.learning_rate.item(), lr, delta=1e-1)
+        expected_lr = 1e-5 * 0.5 * (1.0 + math.cos(math.pi * 200 / 10))
+        self.assertAlmostEqual(optimizer.learning_rate.item(), expected_lr, delta=1e-1)
 
     def test_compile_with_schedule(self):
         lr_schedule = opt.exponential_decay(1e-1, 0.9)
