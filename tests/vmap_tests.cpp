@@ -138,6 +138,70 @@ TEST_CASE("test simple vmap") {
     CHECK(array_equal(out, x + y).item<bool>());
   }
 
+  // vmap where (ternary op)
+  {
+    auto fun = [](std::vector<array> inputs) {
+      auto out = where(inputs[0], inputs[1], inputs[2]);
+      return std::vector<array>{out};
+    };
+
+    auto vfun = vmap(fun);
+    array cond({true, false}, {2, 1});
+    array x({1.0, 2.0}, {2, 1});
+    array y({2.0, 4.0}, {2, 1});
+    auto out = vfun({cond, x, y})[0];
+    CHECK(array_equal(out, array({1.0, 4.0}, {2, 1})).item<bool>());
+
+    cond = array({true, true, false}, {1, 3});
+    x = ones({2, 1, 3});
+    y = zeros({3, 2});
+    vfun = vmap(fun, {1, 2, 0});
+    out = vfun({cond, x, y})[0];
+
+    CHECK(
+        array_equal(out, array({1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0}, {3, 2, 2}))
+            .item<bool>());
+
+    vfun = vmap(fun, {1, 2, 0}, {1});
+    out = vfun({cond, x, y})[0];
+    CHECK(
+        array_equal(out, array({1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0}, {2, 3, 2}))
+            .item<bool>());
+
+    cond = array({true, false});
+    x = array(2.);
+    y = ones({3, 2});
+    vfun = vmap(fun, {-1, -1, 0});
+    out = vfun({cond, x, y})[0];
+    CHECK(array_equal(out, array({2, 1, 2, 1, 2, 1}, {3, 2})).item<bool>());
+
+    cond = array({true, false});
+    x = ones({3, 2});
+    y = array(2.);
+    vfun = vmap(fun, {-1, 0, -1});
+    out = vfun({cond, x, y})[0];
+    CHECK(array_equal(out, array({1, 2, 1, 2, 1, 2}, {3, 2})).item<bool>());
+
+    CHECK_THROWS_AS(vmap(fun, {-1, -1, -1}, {0}), std::invalid_argument);
+    CHECK_THROWS_AS(vmap(fun, {-1, 0, -1}, {-1}), std::invalid_argument);
+    CHECK_THROWS_AS(vmap(fun, {-1, -1, 0}, {-1}), std::invalid_argument);
+    CHECK_THROWS_AS(vmap(fun, {0, -1, -1}, {-1}), std::invalid_argument);
+
+    cond = array({true, false});
+    x = array(1.);
+    y = array(2.);
+    vfun = vmap(fun, {-1, -1, -1}, {-1});
+    out = vfun({cond, x, y})[0];
+    CHECK(array_equal(out, array({1.0, 2.0})).item<bool>());
+
+    cond = array({1, 1, 1, 0, 0, 0}, {3, 2, 1});
+    x = ones({3, 2, 1});
+    y = full({3, 2, 1}, 2);
+    vfun = vmap(vmap(fun));
+    out = vfun({cond, x, y})[0];
+    CHECK(array_equal(out, array({1, 1, 1, 2, 2, 2}, {3, 2, 1})).item<bool>());
+  }
+
   // vmap with capturing closure
   {
     auto x = add(add(ones({2}), zeros({2})), zeros({2}));

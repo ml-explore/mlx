@@ -588,4 +588,11 @@ struct LogicalOr {
   };
 };
 
+struct Select {
+  template <typename T>
+  T operator()(bool condition, T x, T y) {
+    return condition ? x : y;
+  }
+};
+
 } // namespace mlx::core::detail

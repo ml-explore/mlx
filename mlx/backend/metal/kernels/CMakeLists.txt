@@ -27,6 +27,7 @@ set(
   "scan"
   "softmax"
   "sort"
+  "ternary"
   "unary"
   "gather"
   "scatter"
