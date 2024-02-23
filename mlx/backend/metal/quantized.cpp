@@ -54,7 +54,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
       int bo = 8;
       int bd = 32;
-      MTL::Size group_dims = MTL::Size(bd, bo, 1);
+      MTL::Size group_dims = MTL::Size(bd, 2, 1);
       MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
 
       set_array_buffer(compute_encoder, w, 0);
