@@ -67,3 +67,4 @@ from mlx.nn.layers.transformer import (
     TransformerEncoder,
     TransformerEncoderLayer,
 )
+from mlx.nn.layers.upsample import Upsample
