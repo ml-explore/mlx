@@ -332,7 +332,7 @@ class TestSchedulers(unittest.TestCase):
         sched_1 = []
         sched_2 = []
         sched_3 = []
-        joined_schedules = opt.schedulers.ScheduleJoiner(
+        joined_schedules = opt.schedulers.join_schedules(
             [sched_1.append, sched_2.append, sched_3.append], [5, 7]
         )
         for i in range(10):
@@ -344,7 +344,7 @@ class TestSchedulers(unittest.TestCase):
     def test_linear_warmup_with_cosine_decay(self):
         warmup_schedule = opt.schedulers.linear_warmup(100, 1e-5)
         cosine_schedule = opt.schedulers.cosine_decay(1e-5, 100)
-        cos_with_warmup = opt.schedulers.ScheduleJoiner(
+        cos_with_warmup = opt.schedulers.join_schedules(
             [warmup_schedule, cosine_schedule], [101]
         )
         self.assertEqual(cos_with_warmup(0), 0.0)

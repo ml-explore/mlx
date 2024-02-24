@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import math
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
+from typing import Callable, List
 
 import mlx.core as mx
 
@@ -87,24 +87,20 @@ def cosine_decay(init: float, decay_steps: int):
     return scheduler
 
 
-class ScheduleJoiner:
-    r"""Make a schedule joiner
-
-    Instanciated with a list of schedules and an increasing list of 0-based steps, each of which indicates
-    when the next schedule will be used.  The instanciated object is a callable schedule that is a
-    concatenation of the schedules at the given step boundaries
-
-    So, the first item in the schedule list will be used until the first boundary, then the next schedule
-    will be used until the next boundary, and so on.
+def join_schedules(schedules: List[Callable], boundaries: List[int]):
+    r"""Sequentially apply multiple schedules
+    (https://github.com/google-deepmind/optax/blob/main/optax/schedules/_join.py)
 
     Args:
-        schedules (list of schedules): The schedules to join
-        boundaries (list of integers): The list of steps that mark the use of the next schedule (in order)
+        schedules: A list of callables, each of which receives a step count
+        indicating the number of steps since the previous boundary transition.
+        boundaries: A list of integers (of length one less than schedules) that
+          indicate when to transition between schedules.
 
     Example:
         >>> warmup_schedule = optim.linear_warmup(100, finish=1e-1)
-        >>> cosine_schedule = optim.cosine_decay(1e-1, 200)
-        >>> lr_schedule = ScheduleJoiner([warmup_schedule, cosine_schedule], [101])
+        >>> cosine_schedule = optim.cosine_decay(1e-5, 200)
+        >>> lr_schedule = join_schedules([warmup_schedule, cosine_schedule], [101])
         >>> optimizer = optim.Adam(learning_rate=lr_schedule)
         >>> optimizer.learning_rate
         array(0.0, dtype=float32)
@@ -112,37 +108,14 @@ class ScheduleJoiner:
         ...
         >>> optimizer.learning_rate
         array(1e-5, dtype=float32)
-
     """
 
-    def __init__(self, schedules: List[Callable], boundaries: List[int]):
-        self.schedules = schedules
-        self.boundaries = boundaries
-
-    def __call__(self, step: int):
-        if step < self.boundaries[0] or not self.boundaries:
-            current_schedule = self.schedules[0]
-            updated_step = step
-        else:
-            curr_sched_idx = -1
-            for idx, boundary in filter(
-                lambda i: step <= i[-1], enumerate(self.boundaries)
-            ):
-                if step == boundary:
-                    curr_sched_idx = idx + 1
-                    current_schedule = self.schedules[curr_sched_idx]
-                    updated_step = 0
-                    break
-                elif boundary > step:
-                    curr_sched_idx = idx
-                    current_schedule = self.schedules[curr_sched_idx]
-                    updated_step = boundary - step
-                    break
-            if curr_sched_idx == -1:
-                curr_sched_idx = len(self.boundaries)
-                current_schedule = self.schedules[curr_sched_idx]
-                updated_step = step - self.boundaries[-1]
-        return current_schedule(updated_step)
+    def schedule(step):
+        output = schedules[0](step)
+        for boundary, schedule in zip(boundaries, schedules[1:]):
+            output = output if step < boundary else  schedule(step - boundary)
+        return output
+    return schedule
 
 
 def linear_warmup(length: int, finish: float, init: float = 0.0) -> Callable:
@@ -167,5 +140,4 @@ def linear_warmup(length: int, finish: float, init: float = 0.0) -> Callable:
 
     def step_fn(step):
         return step * ((finish - init) / length) + init
-
     return step_fn
