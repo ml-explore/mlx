@@ -1251,9 +1251,10 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.arange(3)
         wr = weakref.ref(a)
         self.assertIsNotNone(wr())
-        memoryview(a)
+        mv = memoryview(a)  # noqa
         a = None
         self.assertIsNotNone(wr())
+        mv = None  # noqa
         self.assertIsNone(wr())
 
     def test_array_view_ref_counting(self):
@@ -1263,6 +1264,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a_np = np.array(a, copy=False)
         a = None
         self.assertIsNotNone(wr())
+        a_np = None  # noqa
         self.assertIsNone(wr())
 
     @unittest.skipIf(not has_tf, "requires TensorFlow")
