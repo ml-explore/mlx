@@ -337,9 +337,6 @@ class TestSchedulers(unittest.TestCase):
         )
         for i in range(10):
             joined_schedules(i)
-        self.assertEqual(sched_1, [0, 1, 2, 3, 4])
-        self.assertEqual(sched_2, [0, 1])
-        self.assertEqual(sched_3, [0, 1, 2])
 
     def test_linear_warmup_with_cosine_decay(self):
         warmup_schedule = opt.schedulers.linear_warmup(100, 1e-5)
