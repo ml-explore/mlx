@@ -113,8 +113,9 @@ def join_schedules(schedules: List[Callable], boundaries: List[int]):
     def schedule(step):
         output = schedules[0](step)
         for boundary, schedule in zip(boundaries, schedules[1:]):
-            output = output if step < boundary else  schedule(step - boundary)
+            output = output if step < boundary else schedule(step - boundary)
         return output
+
     return schedule
 
 
@@ -140,4 +141,5 @@ def linear_warmup(length: int, finish: float, init: float = 0.0) -> Callable:
 
     def step_fn(step):
         return step * ((finish - init) / length) + init
+
     return step_fn
