@@ -3,8 +3,9 @@
 #include "mlx/backend/metal/kernels/utils.h"
 
 static constexpr constant uint32_t rotations[2][4] = {
-    {13, 15, 26, 6},
-    {17, 29, 16, 24}};
+  {13, 15, 26, 6},
+  {17, 29, 16, 24}
+};
 
 union rbits {
   uint2 val;
@@ -12,6 +13,7 @@ union rbits {
 };
 
 rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
+
   uint4 ks = {key.x, key.y, key.x ^ key.y ^ 0x1BD11BDA};
 
   rbits v;
@@ -49,7 +51,7 @@ rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
     out[4 * count.x + i] = bits.bytes[0][i];
   }
   if (!drop_last) {
-    if ((index.y + 1) == half_size && (bytes_per_key % 4) > 0) {
+    if ((index.y + 1) ==  half_size && (bytes_per_key % 4) > 0) {
       int edge_bytes = (bytes_per_key % 4);
       for (int i = 0; i < edge_bytes; ++i) {
         out[4 * count.y + i] = bits.bytes[1][i];
@@ -85,7 +87,7 @@ rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
     out[4 * count.x + i] = bits.bytes[0][i];
   }
   if (!drop_last) {
-    if ((index.y + 1) == half_size && (bytes_per_key % 4) > 0) {
+    if ((index.y + 1) ==  half_size && (bytes_per_key % 4) > 0) {
       int edge_bytes = (bytes_per_key % 4);
       for (int i = 0; i < edge_bytes; ++i) {
         out[4 * count.y + i] = bits.bytes[1][i];

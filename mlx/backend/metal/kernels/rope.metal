@@ -7,8 +7,8 @@
 
 template <typename T, bool traditional>
 [[kernel]] void rope(
-    const device T* in [[buffer(0)]],
-    device T* out [[buffer(1)]],
+    const device T *in [[buffer(0)]],
+    device T * out [[buffer(1)]],
     constant const size_t strides[3],
     constant const int& offset,
     constant const float& base,
@@ -21,11 +21,10 @@ template <typename T, bool traditional>
   if (traditional) {
     out_index_1 = 2 * (pos.x + grid.x * (pos.y + grid.y * pos.z));
     out_index_2 = out_index_1 + 1;
-    in_index_1 =
-        2 * pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
+    in_index_1 = 2 * pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
     in_index_2 = in_index_1 + strides[2];
   } else {
-    out_index_1 = pos.x + 2 * (grid.x * (pos.y + grid.y * pos.z));
+    out_index_1 = pos.x + 2*(grid.x * (pos.y + grid.y * pos.z));
     out_index_2 = out_index_1 + grid.x;
     in_index_1 = pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
     in_index_2 = in_index_1 + grid.x * strides[2];
@@ -49,21 +48,21 @@ template <typename T, bool traditional>
   out[out_index_2] = static_cast<T>(rx2);
 }
 
-#define instantiate_rope(name, type, traditional)       \
-  template [[host_name("rope_" #name)]] [[kernel]] void \
-  rope<type, traditional>(                              \
-      const device type* in [[buffer(0)]],              \
-      device type* out [[buffer(1)]],                   \
-      constant const size_t strides[3],                 \
-      constant const int& offset,                       \
-      constant const float& base,                       \
-      constant const float& scale,                      \
-      uint3 pos [[thread_position_in_grid]],            \
-      uint3 grid [[threads_per_grid]]);
+#define instantiate_rope(name, type, traditional) \
+  template [[host_name("rope_" #name)]] \
+  [[kernel]] void rope<type, traditional>( \
+      const device type* in [[buffer(0)]], \
+      device type* out [[buffer(1)]], \
+    constant const size_t strides[3], \
+    constant const int& offset, \
+    constant const float& base, \
+    constant const float& scale, \
+    uint3 pos [[thread_position_in_grid]], \
+    uint3 grid [[threads_per_grid]]);
 
 instantiate_rope(traditional_float16, half, true)
-    instantiate_rope(traditional_bfloat16, bfloat16_t, true)
-        instantiate_rope(traditional_float32, float, true)
-            instantiate_rope(float16, half, false)
-                instantiate_rope(bfloat16, bfloat16_t, false)
-                    instantiate_rope(float32, float, false)
+instantiate_rope(traditional_bfloat16, bfloat16_t, true)
+instantiate_rope(traditional_float32, float, true)
+instantiate_rope(float16, half, false)
+instantiate_rope(bfloat16, bfloat16_t, false)
+instantiate_rope(float32, float, false)
