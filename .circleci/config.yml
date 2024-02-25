@@ -25,7 +25,8 @@ jobs:
           name: Run style checks
           command: |
             pip install pre-commit
-            pre-commit run --all
+            sudo apt install clang-format
+            pre-commit run --all-files
             if ! git diff --quiet; then echo 'Style checks failed, please install pre-commit and run pre-commit run --all and push the change'; exit 1; fi
       - run:
           name: Install dependencies
