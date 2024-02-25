@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -11,14 +11,7 @@
 
 namespace mlx::core::metal {
 
-constexpr bool is_available() {
-#ifdef _METAL_
-  return true;
-#else
-  return false;
-#endif
-}
-
+bool is_available();
 bool cache_enabled(void);
 void set_cache_enabled(bool enabled);
 
