@@ -8,6 +8,16 @@
 #include "mlx/backend/metal/kernels/ternary.h"
 
 template <typename T, typename Op>
+[[kernel]] void ternary_op_v(
+    device const bool* a,
+    device const T* b,
+    device const T* c,
+    device T* d,
+    uint index [[thread_position_in_grid]]) {
+  d[index] = Op()(a[index], b[index], c[index]);
+}
+
+template <typename T, typename Op>
 [[kernel]] void ternary_op_g_nd1(
     device const bool* a,
     device const T* b,
@@ -94,6 +104,15 @@ template <typename T, typename Op>
   d[out_idx] = Op()(a[idx.x], b[idx.y], c[idx.z]);
 }
 
+#define instantiate_ternary_v(name, type, op) \
+  template [[host_name(name)]] \
+  [[kernel]] void ternary_op_v<type, op>( \
+      device const bool* a, \
+      device const type* b, \
+      device const type* c, \
+      device type* d, \
+      uint index [[thread_position_in_grid]]); \
+
 #define instantiate_ternary_g(name, type, op) \
   template [[host_name(name)]] \
   [[kernel]] void ternary_op_g<type, op>( \
@@ -160,13 +179,9 @@ template <typename T, typename Op>
   instantiate_ternary_g_dim(name, type, op, 5) \
 
 #define instantiate_ternary_all(name, tname, type, op) \
+  instantiate_ternary_v("v" #name #tname, type, op) \
   instantiate_ternary_g("g" #name #tname, type, op) \
   instantiate_ternary_g_nd("g" #name #tname, type, op) \
-
-#define instantiate_ternary_float(name, op) \
-  instantiate_ternary_all(name, float16, half, op) \
-  instantiate_ternary_all(name, float32, float, op) \
-  instantiate_ternary_all(name, bfloat16, bfloat16_t, op)
 
 #define instantiate_ternary_types(name, op) \
   instantiate_ternary_all(name, bool_, bool, op) \
@@ -178,7 +193,9 @@ template <typename T, typename Op>
   instantiate_ternary_all(name, int16, int16_t, op) \
   instantiate_ternary_all(name, int32, int32_t, op) \
   instantiate_ternary_all(name, int64, int64_t, op) \
+  instantiate_ternary_all(name, float16, half, op) \
+  instantiate_ternary_all(name, float32, float, op) \
+  instantiate_ternary_all(name, bfloat16, bfloat16_t, op) \
   instantiate_ternary_all(name, complex64, complex64_t, op) \
-  instantiate_ternary_float(name, op)
 
 instantiate_ternary_types(select, Select)

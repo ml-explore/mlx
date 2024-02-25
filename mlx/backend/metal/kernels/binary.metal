@@ -3,16 +3,6 @@
 #include "mlx/backend/metal/kernels/binary.h"
 
 template <typename T, typename U, typename Op>
-[[kernel]] void binary_op_s2s(
-    device const T* a,
-    device const T* b,
-    device U* c,
-    uint index [[thread_position_in_grid]]) {
-  c[index] = Op()(a[0], b[0]);
-}
-
-
-template <typename T, typename U, typename Op>
 [[kernel]] void binary_op_ss(
     device const T* a,
     device const T* b,
