@@ -7,6 +7,10 @@
 
 namespace mlx::core::detail {
 
+namespace {
+constexpr float inf = std::numeric_limits<float>::infinity();
+} // namespace
+
 typedef union {
   int i;
   float f;

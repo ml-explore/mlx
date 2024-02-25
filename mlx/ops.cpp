@@ -1755,7 +1755,11 @@ array logsumexp(
     StreamOrDevice s /* = {}*/) {
   auto maxval = stop_gradient(max(a, axes, true, s));
   auto out = log(sum(exp(subtract(a, maxval, s), s), axes, keepdims, s), s);
-  return add(out, reshape(maxval, out.shape(), s), s);
+  out = add(out, reshape(maxval, out.shape(), s), s);
+  if (!keepdims) {
+    maxval = squeeze(maxval, axes, s);
+  }
+  return where(isinf(maxval, s), maxval, out, s);
 }
 
 array logsumexp(

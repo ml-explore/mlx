@@ -539,6 +539,15 @@ class TestCompile(mlx_tests.MLXTestCase):
         z = fun(mx.array(1), "two")
         self.assertEqual(z.item(), 3)
 
+    def test_compile_inf(self):
+
+        @mx.compile
+        def fun(x):
+            return mx.isinf(x + 2)
+
+        out = fun(mx.array([0.0]))
+        self.assertEqual(out.item(), False)
+
 
 if __name__ == "__main__":
     unittest.main()

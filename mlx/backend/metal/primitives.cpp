@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <algorithm>
 #include <cassert>
 #include <numeric>
@@ -240,11 +239,15 @@ void ternary_op(
   auto& strides_out = strides[3];
 
   std::ostringstream kname;
-  kname << "g";
-  kname << op << type_to_name(b);
-  if (topt == TernaryOpType::General &&
-      shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
-    kname << "_" << shape.size();
+  if (topt == TernaryOpType::General) {
+    kname << "g";
+    kname << op << type_to_name(b);
+    if (shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
+      kname << "_" << shape.size();
+    }
+  } else {
+    kname << "v";
+    kname << op << type_to_name(b);
   }
 
   auto& s = out.primitive().stream();
@@ -257,44 +260,46 @@ void ternary_op(
   set_array_buffer(compute_encoder, c, 2);
   set_array_buffer(compute_encoder, out, 3);
 
-  auto ndim = shape.size();
-  if (ndim > 3) {
-    compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 4);
-    compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 5);
-    compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 6);
-    compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 7);
+  if (topt == TernaryOpType::General) {
+    auto ndim = shape.size();
+    if (ndim > 3) {
+      compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 4);
+      compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 5);
+      compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 6);
+      compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 7);
 
-    if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
-      compute_encoder->setBytes(&ndim, sizeof(int), 8);
+      if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
+        compute_encoder->setBytes(&ndim, sizeof(int), 8);
+      }
+    } else {
+      // The shape is implicit in the grid for <= 3D
+      compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 4);
+      compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 5);
+      compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 6);
     }
-  } else if (ndim > 0) {
-    // The shape is implicit in the grid for <= 3D
-    compute_encoder->setBytes(strides_a.data(), ndim * sizeof(size_t), 4);
-    compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 5);
-    compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 6);
-  } else {
-    // For 0-dim we still need to bind something to these buffers since the
-    // current ternary kernels always access the strides.
-    size_t dummy_stride = 0;
-    int dummy_shape = 0;
-    compute_encoder->setBytes(&dummy_shape, sizeof(int), 4);
-    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 5);
-    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 6);
-    compute_encoder->setBytes(&dummy_stride, sizeof(size_t), 7);
-    compute_encoder->setBytes(&ndim, sizeof(int), 8);
-  }
 
-  // Launch up to 3D grid of threads
-  size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
-  size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
-  size_t rest = out.size() / (dim0 * dim1);
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size != 1024) {
-    throw std::runtime_error("[Metal::binary] Must use 1024 sized block");
+    // Launch up to 3D grid of threads
+    size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+    size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
+    size_t rest = out.size() / (dim0 * dim1);
+    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+    if (thread_group_size != 1024) {
+      throw std::runtime_error("[Metal::binary] Must use 1024 sized block");
+    }
+    MTL::Size group_dims = get_block_dims(dim0, dim1, rest);
+    MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
+  } else {
+    // Launch a 1D grid of threads
+    size_t nthreads = out.data_size();
+    MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+    if (thread_group_size > nthreads) {
+      thread_group_size = nthreads;
+    }
+    MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
-  MTL::Size group_dims = get_block_dims(dim0, dim1, rest);
-  MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
 
 void unary_op(
