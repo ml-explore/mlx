@@ -415,6 +415,14 @@ class TestAutograd(mlx_tests.MLXTestCase):
         _, vjps = mx.vjp(func, (arr,), (cotan,))
         self.assertEqual(vjps[0].item(), 8.0)
 
+    def test_power_grad(self):
+        def fun(x, y):
+            res = x - y
+            return res**x
+
+        grad = mx.grad(fun)(mx.array(1.0), mx.array(1.0))
+        self.assertEqual(grad.item(), 1.0)
+
 
 if __name__ == "__main__":
     unittest.main()

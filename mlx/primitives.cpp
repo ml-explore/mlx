@@ -2043,7 +2043,10 @@ std::vector<array> Power::vjp(
           primals[1],
           stream()));
     } else {
-      vjps.push_back(multiply(log(primals[0], stream()), outputs[0], stream()));
+      auto& exp = outputs[0];
+      auto exp_vjp = multiply(log(primals[0], stream()), outputs[0], stream());
+      // 0 * log 0 -> 0
+      vjps.push_back(where(exp, exp_vjp, array(0.0f, exp.dtype()), stream()));
     }
     vjps.back() = multiply(cotangents[0], vjps.back(), stream());
   }
