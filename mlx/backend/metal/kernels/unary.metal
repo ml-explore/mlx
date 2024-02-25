@@ -22,42 +22,43 @@ template <typename T, typename Op>
   out[index] = Op()(in[idx]);
 }
 
-#define instantiate_unary_v(name, type, op) \
-  template [[host_name(name)]] \
-  [[kernel]] void unary_op_v<type, op>( \
-      device const type* in, \
-      device type* out, \
+#define instantiate_unary_v(name, type, op)                          \
+  template [[host_name(name)]] [[kernel]] void unary_op_v<type, op>( \
+      device const type* in,                                         \
+      device type* out,                                              \
       uint index [[thread_position_in_grid]]);
 
-#define instantiate_unary_g(name, type, op) \
-  template [[host_name(name)]] \
-  [[kernel]] void unary_op_g<type, op>( \
-      device const type* in, \
-      device type* out, \
-      device const int* in_shape, \
-      device const size_t* in_strides, \
-      device const int& ndim, \
+#define instantiate_unary_g(name, type, op)                          \
+  template [[host_name(name)]] [[kernel]] void unary_op_g<type, op>( \
+      device const type* in,                                         \
+      device type* out,                                              \
+      device const int* in_shape,                                    \
+      device const size_t* in_strides,                               \
+      device const int& ndim,                                        \
       uint index [[thread_position_in_grid]]);
 
+// clang-format off
 #define instantiate_unary_all(name, tname, type, op) \
-  instantiate_unary_v("v" #name #tname, type, op) \
-  instantiate_unary_g("g" #name #tname, type, op)
+  instantiate_unary_v("v" #name #tname, type, op)    \
+  instantiate_unary_g("g" #name #tname, type, op) // clang-format on
 
-#define instantiate_unary_float(name, op) \
-  instantiate_unary_all(name, float16, half, op) \
+// clang-format off
+#define instantiate_unary_float(name, op)         \
+  instantiate_unary_all(name, float16, half, op)  \
   instantiate_unary_all(name, float32, float, op) \
-  instantiate_unary_all(name, bfloat16, bfloat16_t, op) \
+  instantiate_unary_all(name, bfloat16, bfloat16_t, op) // clang-format on
 
-#define instantiate_unary_types(name, op) \
-  instantiate_unary_all(name, bool_, bool, op) \
-  instantiate_unary_all(name, uint8, uint8_t, op) \
+// clang-format off
+#define instantiate_unary_types(name, op)           \
+  instantiate_unary_all(name, bool_, bool, op)      \
+  instantiate_unary_all(name, uint8, uint8_t, op)   \
   instantiate_unary_all(name, uint16, uint16_t, op) \
   instantiate_unary_all(name, uint32, uint32_t, op) \
   instantiate_unary_all(name, uint64, uint64_t, op) \
-  instantiate_unary_all(name, int8, int8_t, op) \
-  instantiate_unary_all(name, int16, int16_t, op) \
-  instantiate_unary_all(name, int32, int32_t, op) \
-  instantiate_unary_all(name, int64, int64_t, op) \
+  instantiate_unary_all(name, int8, int8_t, op)     \
+  instantiate_unary_all(name, int16, int16_t, op)   \
+  instantiate_unary_all(name, int32, int32_t, op)   \
+  instantiate_unary_all(name, int64, int64_t, op)   \
   instantiate_unary_float(name, op)
 
 instantiate_unary_types(abs, Abs)
@@ -101,4 +102,4 @@ instantiate_unary_all(tan, complex64, complex64_t, Tan)
 instantiate_unary_all(tanh, complex64, complex64_t, Tanh)
 instantiate_unary_all(round, complex64, complex64_t, Round)
 
-instantiate_unary_all(lnot, bool_, bool, LogicalNot)
+instantiate_unary_all(lnot, bool_, bool, LogicalNot) // clang-format on
