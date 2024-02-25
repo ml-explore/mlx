@@ -791,13 +791,13 @@ TEST_CASE("test reduction ops") {
     constexpr float inf = std::numeric_limits<float>::infinity();
 
     x = array({-inf, -inf});
-    WARN_EQ(logsumexp(x).item<float>(), -inf);
+    CHECK_EQ(logsumexp(x).item<float>(), -inf);
 
     x = array({0.0f, -inf});
     CHECK_EQ(logsumexp(x).item<float>(), 0.0f);
 
     x = array({0.0f, inf});
-    WARN_EQ(logsumexp(x).item<float>(), inf);
+    CHECK_EQ(logsumexp(x).item<float>(), inf);
 
     x = reshape(arange(6, float32), {2, 3});
 

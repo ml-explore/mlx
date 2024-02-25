@@ -66,13 +66,15 @@ class TestLoad(mlx_tests.MLXTestCase):
     def test_save_and_load_safetensors(self):
         if not os.path.isdir(self.test_dir):
             os.mkdir(self.test_dir)
+
+        test_file = os.path.join(self.test_dir, "test.safetensors")
         with self.assertRaises(Exception):
-            mx.save_safetensors("test", {"a": mx.ones((4, 4))}, {"testing": 0})
+            mx.save_safetensors(test_file, {"a": mx.ones((4, 4))}, {"testing": 0})
 
         mx.save_safetensors(
-            "test", {"test": mx.ones((2, 2))}, {"testing": "test", "format": "mlx"}
+            test_file, {"test": mx.ones((2, 2))}, {"testing": "test", "format": "mlx"}
         )
-        res = mx.load("test.safetensors", return_metadata=True)
+        res = mx.load(test_file, return_metadata=True)
         self.assertEqual(len(res), 2)
         self.assertEqual(res[1], {"testing": "test", "format": "mlx"})
 
