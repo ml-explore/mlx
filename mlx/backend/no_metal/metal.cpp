@@ -1,10 +1,14 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <stdexcept>
 
 #include "mlx/backend/metal/metal.h"
 
 namespace mlx::core::metal {
+
+bool is_available() {
+  return false;
+}
 
 void new_stream(Stream) {}
 std::shared_ptr<void> new_scoped_memory_pool() {

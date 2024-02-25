@@ -67,8 +67,6 @@ if (MLX_BUILD_METAL AND NOT METAL_LIB)
   set(MLX_BUILD_METAL OFF)
 elseif (MLX_BUILD_METAL)
   message(STATUS "Building METAL sources")
-  add_compile_definitions(_METAL_)
-
   # Throw an error if xcrun not found
   execute_process(COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
                   OUTPUT_VARIABLE MACOS_VERSION
