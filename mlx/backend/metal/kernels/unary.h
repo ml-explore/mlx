@@ -9,6 +9,10 @@
 #include "mlx/backend/metal/kernels/erf.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
+namespace {
+constant float inf = metal::numeric_limits<float>::infinity();
+}
+
 struct Abs {
   template <typename T>
   T operator()(T x) {
