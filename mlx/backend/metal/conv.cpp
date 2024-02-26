@@ -165,7 +165,7 @@ void implicit_gemm_conv_2D_gpu(
   // Determine block and warp tiles
   int wm = 2, wn = 2;
 
-  int bm = implicit_M >= 4096 && conv_params.C >= 64 ? 64 : 32;
+  int bm = implicit_M >= 8192 && conv_params.C >= 64 ? 64 : 32;
   int bn = (bm == 64 || implicit_N >= 64) ? 64 : 32;
   int bk = 16;
 
