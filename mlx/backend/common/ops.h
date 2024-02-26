@@ -7,6 +7,10 @@
 
 namespace mlx::core::detail {
 
+namespace {
+constexpr float inf = std::numeric_limits<float>::infinity();
+} // namespace
+
 typedef union {
   int i;
   float f;
@@ -586,6 +590,13 @@ struct LogicalOr {
   T operator()(T x, T y) {
     return x || y;
   };
+};
+
+struct Select {
+  template <typename T>
+  T operator()(bool condition, T x, T y) {
+    return condition ? x : y;
+  }
 };
 
 } // namespace mlx::core::detail

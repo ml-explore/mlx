@@ -37,7 +37,7 @@ std::string build_lib_name(
       os << "C";
       print_constant(constant_hasher, x);
     } else {
-      os << ((x.size() == 1) ? "S" : "V");
+      os << (is_scalar(x) ? "S" : "V");
     }
   }
   os << "_";
@@ -121,10 +121,6 @@ std::string get_type_string(Dtype d) {
     }
   }
 }
-
-inline bool is_scalar(const array& x) {
-  return x.size() == 1;
-};
 
 // Return a pointer to a compiled function
 void* compile(
@@ -358,7 +354,7 @@ void Compiled::eval_cpu(
     bool all_col_contig = true;
     int non_scalar_inputs = 0;
     for (auto& x : inputs) {
-      if (x.size() == 1) {
+      if (is_scalar(x)) {
         continue;
       }
       non_scalar_inputs++;
@@ -385,7 +381,7 @@ void Compiled::eval_cpu(
     auto& x = inputs[i];
     args.push_back((void*)x.data<void>());
 
-    if (contiguous || x.size() <= 1) {
+    if (contiguous || is_scalar(x)) {
       continue;
     }
 
@@ -458,7 +454,7 @@ void Compiled::eval_cpu(
       // - Donatable
       // - Correct size
       // - Not a constant
-      if (in.flags().contiguous && in.size() > 1 && in.is_donatable() &&
+      if (in.flags().contiguous && !is_scalar(in) && in.is_donatable() &&
           constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
         outputs[o++].copy_shared_buffer(in);
       }

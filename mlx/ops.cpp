@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <numeric>
 #include <set>
@@ -73,10 +74,24 @@ array arange(
   if (std::isnan(start) || std::isnan(step) || std::isnan(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
-  double real_size = std::ceil((stop - start) / step);
-  if (std::isnan(real_size)) {
+
+  if (std::isinf(start) || std::isinf(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
+
+  // Check if start and stop specify a valid range because if not, we have to
+  // return an empty array
+  if (std::isinf(step) &&
+      (step > 0 && start < stop || step < 0 && start > stop)) {
+    return array({start}, dtype);
+  }
+
+  double real_size = std::ceil((stop - start) / step);
+
+  if (real_size > INT_MAX) {
+    throw std::invalid_argument("[arange] Maximum size exceeded.");
+  }
+
   int size = std::max(static_cast<int>(real_size), 0);
   return array(
       {size},
@@ -1149,13 +1164,20 @@ array isneginf(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array where(
-    const array& condition,
-    const array& x,
-    const array& y,
+    const array& a,
+    const array& b,
+    const array& c,
     StreamOrDevice s /* = {} */) {
-  // TODO, fix this to handle the NaN case when x has infs
-  auto mask = astype(condition, bool_, s);
-  return add(multiply(x, mask, s), multiply(y, logical_not(mask, s), s), s);
+  auto condition = astype(a, bool_, s);
+  Dtype out_dtype = promote_types(b.dtype(), c.dtype());
+  auto inputs = broadcast_arrays(
+      {condition, astype(b, out_dtype, s), astype(c, out_dtype, s)}, s);
+
+  return array(
+      inputs[0].shape(),
+      out_dtype,
+      std::make_unique<Select>(to_stream(s)),
+      inputs);
 }
 
 array allclose(
@@ -1733,7 +1755,11 @@ array logsumexp(
     StreamOrDevice s /* = {}*/) {
   auto maxval = stop_gradient(max(a, axes, true, s));
   auto out = log(sum(exp(subtract(a, maxval, s), s), axes, keepdims, s), s);
-  return add(out, reshape(maxval, out.shape(), s), s);
+  out = add(out, reshape(maxval, out.shape(), s), s);
+  if (!keepdims) {
+    maxval = squeeze(maxval, axes, s);
+  }
+  return where(isinf(maxval, s), maxval, out, s);
 }
 
 array logsumexp(

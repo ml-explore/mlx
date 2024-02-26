@@ -1075,6 +1075,37 @@ TEST_CASE("test jvp from vjp") {
     CHECK(compute_derivs(subtract));
     CHECK(compute_derivs(power));
   }
+
+  // Conditional selection element-wise op
+  {
+    auto condition = random::randint(0, 2, {5, 10});
+    auto x = random::uniform({5, 10});
+    auto y = random::uniform({5, 10});
+    eval(condition, x, y);
+
+    auto compute_derivs = [&condition, &x, &y](auto fn) {
+      auto fn_wrap = [&fn](std::vector<array> inputs) {
+        return std::vector<array>{
+            fn(inputs[0], inputs[1], inputs[2], default_device())};
+      };
+
+      // Compute vjp and add results
+      auto vjps = vjp(fn_wrap, {condition, x, y}, {ones(x.shape())}).second;
+      auto vjp_out = add(add(vjps[0], vjps[1]), vjps[2]);
+
+      // Compute jvp
+      array jvp_out =
+          jvp(fn_wrap,
+              {condition, x, y},
+              {ones(condition.shape()), ones(y.shape()), ones(x.shape())})
+              .second[0];
+
+      array result = array_equal(vjp_out, jvp_out);
+      return result.item<bool>();
+    };
+
+    CHECK(compute_derivs(where));
+  }
 }
 
 TEST_CASE("test complex gradients") {

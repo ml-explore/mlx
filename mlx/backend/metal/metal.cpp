@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cstdlib>
 #include <future>
@@ -9,6 +9,10 @@
 #include "mlx/scheduler.h"
 
 namespace mlx::core::metal {
+
+bool is_available() {
+  return true;
+}
 
 int max_ops_per_buffer() {
   auto get_val = []() {

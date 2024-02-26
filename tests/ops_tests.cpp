@@ -791,13 +791,13 @@ TEST_CASE("test reduction ops") {
     constexpr float inf = std::numeric_limits<float>::infinity();
 
     x = array({-inf, -inf});
-    WARN_EQ(logsumexp(x).item<float>(), -inf);
+    CHECK_EQ(logsumexp(x).item<float>(), -inf);
 
     x = array({0.0f, -inf});
     CHECK_EQ(logsumexp(x).item<float>(), 0.0f);
 
     x = array({0.0f, inf});
-    WARN_EQ(logsumexp(x).item<float>(), inf);
+    CHECK_EQ(logsumexp(x).item<float>(), inf);
 
     x = reshape(arange(6, float32), {2, 3});
 
@@ -1858,6 +1858,14 @@ TEST_CASE("test scatter") {
   out = scatter(in, inds, updates, 0);
   CHECK(array_equal(out, reshape(arange(16, float32), {4, 4})).item<bool>());
 
+  // Array scatters with col contiguous updates
+  in = zeros({4, 4}, float32);
+  inds = array({0, 1, 2, 3});
+  updates = transpose(reshape(arange(16, float32), {4, 1, 4}));
+  out = scatter(in, inds, updates, 0);
+  CHECK(array_equal(out, transpose(reshape(arange(16, float32), {4, 4})))
+            .item<bool>());
+
   // Irregular strided index and reduce collision test
   in = zeros({10}, float32);
   inds = broadcast_to(array(3), {10});
@@ -1877,10 +1885,10 @@ TEST_CASE("test scatter") {
 
   // Irregularly strided updates test
   in = ones({3, 3});
-  updates = broadcast_to(array({0, 0, 0}), {1, 3, 3});
+  updates = broadcast_to(array({2, 2, 2}), {1, 3, 3});
   inds = array({0});
   out = scatter(in, inds, updates, 0);
-  CHECK(array_equal(out, zeros({3, 3})).item<bool>());
+  CHECK(array_equal(out, ones({3, 3}) * 2).item<bool>());
 
   // Along different axis
   in = zeros({2, 3});
@@ -2185,6 +2193,8 @@ TEST_CASE("test power") {
 }
 
 TEST_CASE("test where") {
+  const float inf = std::numeric_limits<float>::infinity();
+
   array condition(true);
   array x(1.0f);
   array y(0.0f);
@@ -2216,6 +2226,49 @@ TEST_CASE("test where") {
   out = where(condition, x, y);
   expected = array({1, 2, 2, 1}, {2, 2});
   CHECK(array_equal(where(condition, x, y), expected).item<bool>());
+
+  condition = array(true);
+  x = array({1, 2, 3});
+  y = array({3, 6, 13});
+  CHECK(array_equal(where(condition, x, y), array({1, 2, 3})).item<bool>());
+
+  condition = array(false);
+  x = array({1, 2, 3});
+  y = array({3, 6, 13});
+  CHECK(array_equal(where(condition, x, y), array({3, 6, 13})).item<bool>());
+
+  condition = array({1, 1, 0});
+  x = array({1, 2, 3});
+  y = array({11, 12, 13});
+  CHECK(array_equal(where(condition, x, y), array({1, 2, 13})).item<bool>());
+
+  condition = array({true, false}, {2, 1, 1});
+  x = array({1, 2, 3, 4}, {2, 1, 2});
+  y = array({11, 22, 33, 44}, {2, 2, 1});
+  expected = array({1, 2, 1, 2, 33, 33, 44, 44}, {2, 2, 2});
+  CHECK(array_equal(where(condition, x, y), expected).item<bool>());
+
+  condition = array({true, false, false});
+  x = array({inf, 2.0, 3.0});
+  y = array({10.0, 20.0, -inf});
+  CHECK(array_equal(where(condition, x, y), array({inf, 20.0, -inf}))
+            .item<bool>());
+
+  // 4-dim optimized case.
+  condition = array({false});
+  x = array({1, 2}, {2, 1, 1, 1});
+  y = array({3, 4}, {1, 1, 2, 1});
+  CHECK(array_equal(where(condition, x, y), array({3, 4, 3, 4}, {2, 1, 2, 1}))
+            .item<bool>());
+
+  // 5-dim optimized case.
+  condition = array({true, false}, {2, 1, 1, 1, 1});
+  x = array({1, 2, 3, 4}, {2, 1, 1, 1, 2});
+  y = array({11, 22}, {1, 1, 2, 1, 1});
+  CHECK(array_equal(
+            where(condition, x, y),
+            array({1, 2, 1, 2, 11, 11, 22, 22}, {2, 1, 2, 1, 2}))
+            .item<bool>());
 }
 
 TEST_CASE("test stack") {
