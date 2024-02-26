@@ -1123,7 +1123,16 @@ std::vector<array> depends(
 
 /** convert an array to an atleast ndim array */
 array atleast_1d(const array& a, StreamOrDevice s = {});
+std::vector<array> atleast_1d(
+    const std::vector<array>& a,
+    StreamOrDevice s = {});
 array atleast_2d(const array& a, StreamOrDevice s = {});
+std::vector<array> atleast_2d(
+    const std::vector<array>& a,
+    StreamOrDevice s = {});
 array atleast_3d(const array& a, StreamOrDevice s = {});
+std::vector<array> atleast_3d(
+    const std::vector<array>& a,
+    StreamOrDevice s = {});
 
 } // namespace mlx::core

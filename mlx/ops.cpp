@@ -3414,6 +3414,17 @@ array atleast_1d(const array& a, StreamOrDevice s /* = {} */) {
   return a;
 }
 
+std::vector<array> atleast_1d(
+    const std::vector<array>& arrays,
+    StreamOrDevice s /* = {} */) {
+  std::vector<array> out;
+  out.reserve(arrays.size());
+  for (const auto& a : arrays) {
+    out.push_back(atleast_1d(a, s));
+  }
+  return out;
+}
+
 array atleast_2d(const array& a, StreamOrDevice s /* = {} */) {
   switch (a.ndim()) {
     case 0:
@@ -3423,6 +3434,17 @@ array atleast_2d(const array& a, StreamOrDevice s /* = {} */) {
     default:
       return a;
   }
+}
+
+std::vector<array> atleast_2d(
+    const std::vector<array>& arrays,
+    StreamOrDevice s /* = {} */) {
+  std::vector<array> out;
+  out.reserve(arrays.size());
+  for (const auto& a : arrays) {
+    out.push_back(atleast_2d(a, s));
+  }
+  return out;
 }
 
 array atleast_3d(const array& a, StreamOrDevice s /* = {} */) {
@@ -3437,4 +3459,16 @@ array atleast_3d(const array& a, StreamOrDevice s /* = {} */) {
       return a;
   }
 }
+
+std::vector<array> atleast_3d(
+    const std::vector<array>& arrays,
+    StreamOrDevice s /* = {} */) {
+  std::vector<array> out;
+  out.reserve(arrays.size());
+  for (const auto& a : arrays) {
+    out.push_back(atleast_3d(a, s));
+  }
+  return out;
+}
+
 } // namespace mlx::core
