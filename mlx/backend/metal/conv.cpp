@@ -157,10 +157,12 @@ void implicit_gemm_conv_2D_gpu(
     const array& wt,
     array out,
     const MLXConvParams<2>& conv_params) {
+  // Deduce implicit gemm size
   int implicit_M = conv_params.N * conv_params.oS[0] * conv_params.oS[1];
   int implicit_N = conv_params.O;
   int implicit_K = conv_params.wS[0] * conv_params.wS[1] * conv_params.C;
 
+  // Determine block and warp tiles
   int wm = 2, wn = 2;
 
   int bm = implicit_M >= 4096 * 4 && conv_params.C >= 64 ? 64 : 32;
@@ -173,6 +175,11 @@ void implicit_gemm_conv_2D_gpu(
     wn = 1;
   }
 
+  int tn = (implicit_N + bn - 1) / bn;
+  int tm = (implicit_M + bm - 1) / bm;
+  int swizzle_log = 0;
+
+  // Fix small channel specialization
   int n_channel_specialization = 0;
   int channel_k_iters = ((conv_params.C + bk - 1) / bk);
   int gemm_k_iters = conv_params.wS[0] * conv_params.wS[1] * channel_k_iters;
@@ -188,6 +195,7 @@ void implicit_gemm_conv_2D_gpu(
   bool small_filter = (!n_channel_specialization) &&
       (conv_params.wS[0] <= 16 && conv_params.wS[1] <= 16);
 
+  // Fix host side helper params
   int sign = (conv_params.flip ? -1 : 1);
   int ijw = conv_params.in_strides[2] * conv_params.kdil[1];
   int ijh = conv_params.in_strides[1] * conv_params.kdil[0];
@@ -197,10 +205,7 @@ void implicit_gemm_conv_2D_gpu(
   int inp_jump_c = bk - sign * (conv_params.wS[0] - 1) * ijh -
       sign * (conv_params.wS[1] - 1) * ijw;
 
-  int tn = (implicit_N + bn - 1) / bn;
-  int tm = (implicit_M + bm - 1) / bm;
-  int swizzle_log = 0;
-
+  // Build implicit gemm params
   ImplicitGemmConv2DParams gemm_params{
       /* const int M = */ implicit_M,
       /* const int N = */ implicit_N,
@@ -212,10 +217,11 @@ void implicit_gemm_conv_2D_gpu(
       /* const int inp_jump_h = */ inp_jump_h,
       /* const int inp_jump_c = */ inp_jump_c,
 
-      tn,
-      tm,
-      swizzle_log};
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const int swizzle_log = */ swizzle_log};
 
+  // Determine kernel
   std::ostringstream kname;
   kname << "implicit_gemm_conv_2d_" << type_to_name(out) << "_bm" << bm << "_bn"
         << bn << "_bk" << bk << "_wm" << wm << "_wn" << wn << "_channel_"
@@ -228,6 +234,7 @@ void implicit_gemm_conv_2D_gpu(
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
+  // Deduce grid launch dimensions
   int tile = 1 << swizzle_log;
   size_t grid_dim_y = (tm + tile - 1) / tile;
   size_t grid_dim_x = tn * tile;
@@ -235,12 +242,16 @@ void implicit_gemm_conv_2D_gpu(
   MTL::Size group_dims = MTL::Size(32, wn, wm);
   MTL::Size grid_dims = MTL::Size(grid_dim_x, grid_dim_y, 1);
 
+  // Encode arrays
   set_array_buffer(compute_encoder, in, 0);
   set_array_buffer(compute_encoder, wt, 1);
   set_array_buffer(compute_encoder, out, 2);
 
+  // Encode params
   compute_encoder->setBytes(&conv_params, sizeof(MLXConvParams<2>), 3);
   compute_encoder->setBytes(&gemm_params, sizeof(ImplicitGemmConv2DParams), 4);
+
+  // Launch kernel
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 }
 
