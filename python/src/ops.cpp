@@ -3638,8 +3638,7 @@ void init_ops(py::module_& m) {
         )pbdoc");
   m.def(
       "atleast_1d",
-      [](const py::args& arys,
-         StreamOrDevice s) -> py::object {
+      [](const py::args& arys, StreamOrDevice s) -> py::object {
         if (arys.size() == 1) {
           return py::cast(atleast_1d(arys[0].cast<array>(), s));
         }
@@ -3662,8 +3661,7 @@ void init_ops(py::module_& m) {
         )pbdoc");
   m.def(
       "atleast_2d",
-      [](const py::args& arys,
-         StreamOrDevice s) -> py::object{
+      [](const py::args& arys, StreamOrDevice s) -> py::object {
         if (arys.size() == 1) {
           return py::cast(atleast_2d(arys[0].cast<array>(), s));
         }
@@ -3687,8 +3685,7 @@ void init_ops(py::module_& m) {
 
   m.def(
       "atleast_3d",
-      [](const py::args& arys,
-         StreamOrDevice s) -> py::object {
+      [](const py::args& arys, StreamOrDevice s) -> py::object {
         if (arys.size() == 1) {
           return py::cast(atleast_3d(arys[0].cast<array>(), s));
         }
