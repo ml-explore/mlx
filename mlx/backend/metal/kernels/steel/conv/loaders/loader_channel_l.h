@@ -403,7 +403,7 @@ struct Conv2DWeightBlockLoader {
         params(params_),
         weight_hw(0),
         read_n(offsets.y + bi),
-        do_read(read_n + n_rows <= gemm_params_->N) {}
+        do_read(read_n + n_rows * TROWS <= gemm_params_->N) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void load_unsafe() const {
@@ -416,7 +416,7 @@ struct Conv2DWeightBlockLoader {
         }
       }
     } else {
-      for (short i = 0; i < n_rows; i++) {
+      for (short i = 0; i < BN; i += TROWS) {
         if ((read_n + i) < params->O) {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < vec_size; j++) {
