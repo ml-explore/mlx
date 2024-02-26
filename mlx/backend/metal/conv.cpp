@@ -195,8 +195,6 @@ void implicit_gemm_conv_2D_gpu(
   bool small_filter = (!n_channel_specialization) &&
       (conv_params.wS[0] <= 16 && conv_params.wS[1] <= 16);
 
-  small_filter = false;
-
   // Fix host side helper params
   int sign = (conv_params.flip ? -1 : 1);
   int ijw = conv_params.in_strides[2] * conv_params.kdil[1];
