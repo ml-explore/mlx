@@ -49,7 +49,7 @@ void explicit_gemm_conv_ND_gpu(
   compute_encoder->setBytes(&conv_params, sizeof(conv_params), 2);
 
   // Launch unfolding kernel
-  int tgp_x = std::max(conv_params.C, 64);
+  int tgp_x = std::min(conv_params.C, 64);
   tgp_x = 32 * ((tgp_x + 32 - 1) / 32);
   int tgp_y = 256 / tgp_x;
 
@@ -194,6 +194,8 @@ void implicit_gemm_conv_2D_gpu(
 
   bool small_filter = (!n_channel_specialization) &&
       (conv_params.wS[0] <= 16 && conv_params.wS[1] <= 16);
+
+  small_filter = false;
 
   // Fix host side helper params
   int sign = (conv_params.flip ? -1 : 1);
@@ -551,16 +553,17 @@ void conv_2D_gpu(
   bool is_idil_one = conv_params.idil[0] == 1 && conv_params.idil[1] == 1;
 
   // Direct to winograd conv
-  if (!flip && conv_params.C % 32 == 0 && conv_params.O % 32 == 0 &&
-      conv_params.C >= 64 && conv_params.O >= 64 && conv_params.wS[0] == 3 &&
-      conv_params.wS[1] == 3 && is_stride_one && is_kdil_one && is_idil_one) {
+  if (!flip && is_stride_one && is_kdil_one && is_idil_one &&
+      conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
+      conv_params.C % 32 == 0 && conv_params.O % 32 == 0 &&
+      conv_params.C >= 64 && conv_params.O >= 64) {
     return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 
   // Direct to implicit gemm conv
   else if (
-      (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
-      (conv_params.O <= 16 || conv_params.O % 16 == 0) && is_idil_one) {
+      is_idil_one && (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
+      (conv_params.O <= 16 || conv_params.O % 16 == 0)) {
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
 

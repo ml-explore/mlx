@@ -13,7 +13,7 @@ device_name = device_name.decode("utf-8").strip("\n")
 
 N_warmup = 10
 N_iter_bench = 100
-N_iter_func = 10
+N_iter_func = 4
 
 
 def bench(f, a, b):
