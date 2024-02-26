@@ -176,7 +176,7 @@ def gelu_approx(x):
 
 @partial(mx.compile, shapeless=True)
 def gelu_fast_approx(x):
-    r"""A fast approximation to Gaussian Error Linear Unit. 
+    r"""A fast approximation to Gaussian Error Linear Unit.
 
     See :func:`gelu` for the exact computation.
 
@@ -189,7 +189,9 @@ def gelu_fast_approx(x):
 
     where :math:`\sigma(\cdot)` is the logistic sigmoid.
 
-    Reference: https://github.com/hendrycks/GELUs & https://arxiv.org/pdf/1606.08415.pdf
+    References: 
+    - https://github.com/hendrycks/GELUs
+    - https://arxiv.org/pdf/1606.08415.pdf
     """
     return x * mx.sigmoid(1.702 * x)
 
