@@ -86,16 +86,13 @@ struct Conv2DInputBlockLoaderLargeFilter {
       int ih = oh * params->str[0] - params->pad[0];
       int iw = ow * params->str[1] - params->pad[1];
 
-      read_n[i] = n;
-      read_ih[i] = ih;
-      read_iw[i] = iw;
-
-      ih += params->flip ? (params->wS[0] - 1) * params->kdil[0] : 0;
-      iw += params->flip ? (params->wS[1] - 1) * params->kdil[1] : 0;
-
       // Read from input if in bounds
       src[i] = src_ + n * params->in_strides[0] + ih * params->in_strides[1] +
           iw * params->in_strides[2] + bj;
+
+      read_n[i] = n;
+      read_ih[i] = ih;
+      read_iw[i] = iw;
     }
   }
 
@@ -103,13 +100,10 @@ struct Conv2DInputBlockLoaderLargeFilter {
   METAL_FUNC void load_unsafe() const {
     STEEL_PRAGMA_UNROLL
     for (short i = 0, is = 0; i < n_rows; ++i, is += TROWS) {
-      int flip_h = params->flip ? params->wS[0] - weight_h - 1 : weight_h;
-      int flip_w = params->flip ? params->wS[1] - weight_w - 1 : weight_w;
-
       // Find bounds
       int n = read_n[i];
-      int ih = read_ih[i] + flip_h * params->kdil[0];
-      int iw = read_iw[i] + flip_w * params->kdil[1];
+      int ih = read_ih[i] + weight_h * params->kdil[0];
+      int iw = read_iw[i] + weight_w * params->kdil[1];
 
       // Read from input if in bounds
       if ((n < params->N) && (ih >= 0 && ih < params->iS[0]) &&
@@ -239,16 +233,13 @@ struct Conv2DInputBlockLoaderSmallFilter {
       int ih = oh * params->str[0] - params->pad[0];
       int iw = ow * params->str[1] - params->pad[1];
 
-      read_n[i] = n;
-      read_ih[i] = ih;
-      read_iw[i] = iw;
-
-      ih += params->flip ? (params->wS[0] - 1) * params->kdil[0] : 0;
-      iw += params->flip ? (params->wS[1] - 1) * params->kdil[1] : 0;
-
       // Read from input if in bounds
       src[i] = src_ + n * params->in_strides[0] + ih * params->in_strides[1] +
           iw * params->in_strides[2] + bj;
+
+      read_n[i] = n;
+      read_ih[i] = ih;
+      read_iw[i] = iw;
     }
 
     STEEL_PRAGMA_UNROLL
@@ -258,11 +249,10 @@ struct Conv2DInputBlockLoaderSmallFilter {
     }
 
     for (short kh = 0; kh < params->wS[0]; kh++) {
-      int flip_h = params->flip ? params->wS[0] - kh - 1 : kh;
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; ++i) {
         int n = read_n[i];
-        int ih = read_ih[i] + flip_h * params->kdil[0];
+        int ih = read_ih[i] + kh * params->kdil[0];
 
         bool in_bounds = n < params->N && ih >= 0 && ih < params->iS[0];
 
@@ -271,10 +261,9 @@ struct Conv2DInputBlockLoaderSmallFilter {
     }
 
     for (short kw = 0; kw < params->wS[1]; kw++) {
-      int flip_w = params->flip ? params->wS[1] - kw - 1 : kw;
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; ++i) {
-        int iw = read_iw[i] + flip_w * params->kdil[1];
+        int iw = read_iw[i] + kw * params->kdil[1];
 
         bool in_bounds = iw >= 0 && iw < params->iS[1];
 
@@ -377,8 +366,7 @@ struct Conv2DWeightBlockLoader {
 
   const constant MLXConvParams<2>* params;
 
-  int weight_h;
-  int weight_w;
+  int weight_hw;
 
   const int read_n;
   const bool do_read;
@@ -394,27 +382,23 @@ struct Conv2DWeightBlockLoader {
       uint simd_lane_id [[thread_index_in_simdgroup]])
       : src_ld(params_->wt_strides[0]),
         thread_idx(simd_group_id * 32 + simd_lane_id),
-        bi(n_rows * (thread_idx / TCOLS)),
+        bi(thread_idx / TCOLS),
         bj(vec_size * (thread_idx % TCOLS)),
         dst(dst_ + bi * dst_ld + bj),
         src(src_ + bi * src_ld + bj),
         params(params_),
-        weight_h(0),
-        weight_w(0),
+        weight_hw(0),
         read_n(offsets.y + bi),
         do_read(read_n + n_rows <= gemm_params_->N) {}
 
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void load_unsafe() const {
-    const device T* curr_src = src + weight_h * params->wt_strides[1] +
-        weight_w * params->wt_strides[2];
-
     if (BN != 8 || do_read) {
       STEEL_PRAGMA_UNROLL
-      for (short i = 0; i < n_rows; i++) {
+      for (short i = 0; i < BN; i += TROWS) {
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < vec_size; j++) {
-          dst[i * dst_ld + j] = curr_src[i * src_ld + j];
+          dst[i * dst_ld + j] = src[i * src_ld + j];
         }
       }
     } else {
@@ -422,7 +406,7 @@ struct Conv2DWeightBlockLoader {
         if ((read_n + i) < params->O) {
           STEEL_PRAGMA_UNROLL
           for (short j = 0; j < vec_size; j++) {
-            dst[i * dst_ld + j] = curr_src[i * src_ld + j];
+            dst[i * dst_ld + j] = src[i * src_ld + j];
           }
         } else {
           STEEL_PRAGMA_UNROLL
@@ -436,19 +420,14 @@ struct Conv2DWeightBlockLoader {
 
   /* Iteration helper */
   METAL_FUNC void next() {
-    if (++weight_w < params->wS[1]) {
+    if (++weight_hw < (params->wS[1] * params->wS[0])) {
+      src += params->wt_strides[2];
       return;
     }
 
-    weight_w = 0;
+    weight_hw = 0;
 
-    if (++weight_h < params->wS[0]) {
-      return;
-    }
-
-    weight_h = 0;
-
-    src += BK;
+    src += BK - (params->wS[1] * params->wS[0] - 1) * params->wt_strides[2];
   }
 };
 
