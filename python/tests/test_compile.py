@@ -539,6 +539,20 @@ class TestCompile(mlx_tests.MLXTestCase):
         z = fun(mx.array(1), "two")
         self.assertEqual(z.item(), 3)
 
+        # Test nested constant
+        @partial(mx.compile)
+        def fun(x, y):
+            if y[0][0] == 1:
+                return x + 1
+            else:
+                return x + 2
+
+        z = fun(mx.array(1), [[1]])
+        self.assertEqual(z.item(), 2)
+
+        z = fun(mx.array(1), [[0]])
+        self.assertEqual(z.item(), 3)
+
     def test_compile_inf(self):
 
         @mx.compile
@@ -547,6 +561,21 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         out = fun(mx.array([0.0]))
         self.assertEqual(out.item(), False)
+
+    def test_unsupported_input_types(self):
+
+        class MyClass:
+            value = 1
+
+        @mx.compile
+        def fun(x, y):
+            return x + y.value
+
+        with self.assertRaises(ValueError):
+            out = fun(mx.array(0.0), MyClass())
+
+        with self.assertRaises(ValueError):
+            out = fun(mx.array(0.0), y=MyClass())
 
 
 if __name__ == "__main__":

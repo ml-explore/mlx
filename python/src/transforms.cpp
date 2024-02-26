@@ -343,9 +343,39 @@ struct PyCompiledFun {
   };
 
   py::object operator()(const py::args& args, const py::kwargs& kwargs) {
-    auto inputs = tree_flatten(args, false);
+    // Flat array inputs
+    std::vector<array> inputs;
 
-    auto compile_fun = [this, &args, &kwargs, num_args = inputs.size()](
+    // Compilation constants
+    std::vector<uint64_t> constants;
+
+    auto flatten_with_constants = [&](py::object tree) {
+      tree_visit(tree, [&](py::handle obj) {
+        if (py::isinstance<array>(obj)) {
+          inputs.push_back(py::cast<array>(obj));
+        } else if (py::isinstance<py::str>(obj)) {
+          auto r = py::hash(obj);
+          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+        } else if (py::isinstance<py::int_>(obj)) {
+          auto r = obj.cast<int64_t>();
+          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+        } else if (py::isinstance<py::float_>(obj)) {
+          auto r = obj.cast<double>();
+          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+        } else {
+          std::ostringstream msg;
+          msg << "[compile] Function arguments must be trees of arrays "
+              << "or constants (floats, ints, or strings), but received "
+              << "type " << obj.get_type() << ".";
+          throw std::invalid_argument(msg.str());
+        }
+      });
+    };
+    flatten_with_constants(args);
+    int num_args = inputs.size();
+    flatten_with_constants(kwargs);
+
+    auto compile_fun = [this, &args, &kwargs, num_args](
                            const std::vector<array>& a) {
       // Put tracers into captured inputs
       std::vector<array> flat_in_captures;
@@ -380,50 +410,12 @@ struct PyCompiledFun {
       return outputs;
     };
 
-    {
-      auto flat_kwargs = tree_flatten(kwargs, false);
-      inputs.insert(
-          inputs.end(),
-          std::make_move_iterator(flat_kwargs.begin()),
-          std::make_move_iterator(flat_kwargs.end()));
-    }
-
     if (!py::isinstance<py::none>(captured_inputs)) {
       auto flat_in_captures = tree_flatten(captured_inputs, false);
       inputs.insert(
           inputs.end(),
           std::make_move_iterator(flat_in_captures.begin()),
           std::make_move_iterator(flat_in_captures.end()));
-    }
-
-    // Collect the compilation constants
-    std::vector<uint64_t> constants;
-    auto value_hash = [](py::handle o) -> std::optional<uint64_t> {
-      // Consider expanding tuples to their contents including start and end
-      // ids
-      if (py::isinstance<py::tuple>(o) || py::isinstance<py::str>(o)) {
-        auto r = py::hash(o);
-        return *reinterpret_cast<uint64_t*>(&r);
-      } else if (py::isinstance<py::int_>(o)) {
-        auto r = o.cast<int64_t>();
-        return *reinterpret_cast<uint64_t*>(&r);
-      } else if (py::isinstance<py::float_>(o)) {
-        auto r = o.cast<double>();
-        return *reinterpret_cast<uint64_t*>(&r);
-      } else {
-        return std::nullopt;
-      }
-    };
-    for (int i = 0; i < args.size(); i++) {
-      if (auto h = value_hash(args[i]); h.has_value()) {
-        constants.push_back(*h);
-      }
-    }
-    for (auto& pair : kwargs) {
-      if (auto h = value_hash(pair.second); h.has_value()) {
-        constants.push_back(*value_hash(pair.first));
-        constants.push_back(*h);
-      }
     }
 
     // Compile and call
