@@ -3644,7 +3644,6 @@ void init_ops(py::module_& m) {
         }
         return py::cast(atleast_1d(arys.cast<std::vector<array>>(), s));
       },
-      py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -3667,7 +3666,6 @@ void init_ops(py::module_& m) {
         }
         return py::cast(atleast_2d(arys.cast<std::vector<array>>(), s));
       },
-      py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
@@ -3691,7 +3689,6 @@ void init_ops(py::module_& m) {
         }
         return py::cast(atleast_3d(arys.cast<std::vector<array>>(), s));
       },
-      py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
