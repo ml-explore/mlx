@@ -189,7 +189,7 @@ def gelu_fast_approx(x):
 
     where :math:`\sigma(\cdot)` is the logistic sigmoid.
 
-    References: 
+    References:
     - https://github.com/hendrycks/GELUs
     - https://arxiv.org/pdf/1606.08415.pdf
     """
