@@ -191,7 +191,7 @@ def gelu_fast_approx(x):
 
     References:
     - https://github.com/hendrycks/GELUs
-    - https://arxiv.org/pdf/1606.08415.pdf
+    - https://arxiv.org/abs/1606.08415
     """
     return x * mx.sigmoid(1.702 * x)
 
