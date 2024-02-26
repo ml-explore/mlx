@@ -692,50 +692,6 @@ std::vector<array> Convolution::vjp(
   auto& wt = primals[1];
   auto cotan = cotangents[0];
 
-  int O = wt.shape(0);
-
-  // Resolve Padded input shapes and strides
-  std::vector<int> padding_starts(in.ndim(), 0);
-  std::vector<int> padding_ends = in.shape();
-  std::vector<int> in_padded_shape = in.shape();
-
-  // padded shape
-  for (int i = 1; i < in.ndim() - 1; i++) {
-    in_padded_shape[i] += 2 * padding_[i - 1];
-    padding_ends[i] += padding_[i - 1];
-    padding_starts[i] += padding_[i - 1];
-  }
-
-  // padded strides (contiguous)
-  std::vector<size_t> in_padded_strides(in.ndim(), 1);
-  for (int i = in.ndim() - 2; i >= 0; --i) {
-    in_padded_strides[i] = in_padded_strides[i + 1] * in_padded_shape[i + 1];
-  }
-
-  // Resolve strided patches
-
-  // patches are shaped as
-  // (batch_dim, out_spatial_dims, weight_spatial_dims, in_channels)
-  std::vector<int> patches_shape{
-      cotan.shape().begin(), cotan.shape().end() - 1};
-  patches_shape.insert(
-      patches_shape.end(), wt.shape().begin() + 1, wt.shape().end());
-
-  // Resolve patch strides
-  int n_spatial_dim = in.ndim() - 2;
-  std::vector<size_t> patches_strides(patches_shape.size(), 1);
-  patches_strides[0] = in_padded_strides[0];
-  for (int i = 1; i < n_spatial_dim + 1; i++) {
-    patches_strides[i] = in_padded_strides[i] * kernel_strides_[i - 1];
-  }
-  for (int i = 1; i < in.ndim(); i++) {
-    patches_strides[n_spatial_dim + i] = in_padded_strides[i];
-  }
-
-  // Reshape cotangents and weights for gemm
-  cotan = reshape(cotangents[0], {-1, O}, stream());
-  auto weight_reshaped = reshape(wt, {O, -1}, stream());
-
   for (int a : argnums) {
     // Grads for input
     if (a == 0) {
@@ -745,53 +701,25 @@ std::vector<array> Convolution::vjp(
         padding[i] = primals[1].shape(1 + i) - padding_[i] - 1;
       }
 
-      auto wt_trans = swapaxes(primals[1], 0, -1, stream());
+      auto wt_trans = swapaxes(wt, 0, -1, stream());
 
       auto grad = convNd(
-          /* const array& input = */ cotangents[0],
+          /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
           /* std::vector<int> stride = */ input_dilation_,
           /* std::vector<int> padding = */ padding,
           /* std::vector<int> kernel_dilation = */ kernel_dilation_,
           /* std::vector<int> input_dilation = */ kernel_strides_,
           /* int groups = */ 1,
-          /* bool flip = */ true,
+          /* bool flip = */ !flip_,
           stream());
 
       grads.push_back(grad);
-
-      // // Gemm with cotangents to get patches
-      // auto grad_patches = matmul(cotan, weight_reshaped, stream());
-
-      // // Prepare base grad array to accumulate on
-      // int in_padded_size = in_padded_strides[0] * in_padded_shape[0];
-      // auto grad = zeros(
-      //     {
-      //         in_padded_size,
-      //     },
-      //     in.dtype(),
-      //     stream());
-
-      // // Create index map
-      // int patches_size = grad_patches.size();
-      // auto idx = arange(in_padded_size, stream());
-      // idx = as_strided(idx, patches_shape, patches_strides, 0, stream());
-      // idx = reshape(idx, {patches_size}, stream());
-
-      // // Flatten patches and scatter
-      // auto flat_patches = reshape(grad_patches, {patches_size, 1}, stream());
-      // grad = scatter_add(grad, idx, flat_patches, 0, stream());
-
-      // // Reshape and slice away padding
-      // grad = reshape(grad, in_padded_shape, stream());
-      // grad = slice(grad, padding_starts, padding_ends, stream());
-
-      // grads.push_back(grad);
     }
     // Grads for weight
     else if (a == 1) {
-      auto in_trans = swapaxes(primals[0], 0, -1, stream());
-      auto cotan_trans = swapaxes(cotangents[0], 0, -1, stream());
+      auto in_trans = swapaxes(in, 0, -1, stream());
+      auto cotan_trans = swapaxes(cotan, 0, -1, stream());
       auto grad_trans = convNd(
           /* const array& input = */ in_trans,
           /* const array& weight = */ cotan_trans,
@@ -800,7 +728,7 @@ std::vector<array> Convolution::vjp(
           /* std::vector<int> kernel_dilation = */ kernel_strides_,
           /* std::vector<int> input_dilation = */ input_dilation_,
           /* int groups = */ 1,
-          /* bool flip = */ false,
+          /* bool flip = */ flip_,
           stream());
       auto grad = swapaxes(grad_trans, 0, -1, stream());
       grads.push_back(grad);

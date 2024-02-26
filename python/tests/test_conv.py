@@ -571,10 +571,10 @@ class TestConv(mlx_tests.MLXTestCase):
 
         in_shape = (2, 32, 32, 16)
         wt_shape = (32, 5, 5, 16)
-        stride = (1, 1)
-        padding = (2, 2)
-        kernel_dilation = (1, 1)
-        input_dilation = (2, 2)
+        stride = (2, 3)
+        padding = (0, 0)
+        kernel_dilation = (3, 1)
+        input_dilation = (2, 5)
         flip = False
 
         self.__convNd_test(

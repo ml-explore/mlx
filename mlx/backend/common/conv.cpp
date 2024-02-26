@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
+#include <numeric>
 
 #ifdef ACCELERATE_NEW_LAPACK
 #include <Accelerate/Accelerate.h>
@@ -11,8 +12,6 @@
 #include "mlx/backend/common/copy.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
-
-#include <iostream>
 
 namespace mlx::core {
 
@@ -172,16 +171,8 @@ void slow_conv_2D(
   int init_h = (flip ? (wH - 1) * wt_dilation[0] : 0);
   int init_w = (flip ? (wW - 1) * wt_dilation[1] : 0);
 
-  if (!is_idil_one) {
-    std::cout << "in_dilation[0]: " << in_dilation[0]
-              << ", in_dilation[1]: " << in_dilation[1] << "\n"
-              << "wt_dilation[0]: " << wt_dilation[0]
-              << ", wt_dilation[1]: " << wt_dilation[1] << "\n"
-              << "padding[0]: " << padding[0] << ", padding[1]: " << padding[1]
-              << "\n"
-              << "wt_strides[0]: " << wt_strides[0]
-              << ", wt_strides[1]: " << wt_strides[1] << "\n";
-  }
+  int jh = std::lcm(in_dilation[0], wt_dilation[0]) / wt_dilation[0];
+  int jw = std::lcm(in_dilation[1], wt_dilation[1]) / wt_dilation[1];
 
   auto pt_conv_all_checks = [&](const T* in_ptr,
                                 const T* wt_ptr,
@@ -199,68 +190,34 @@ void slow_conv_2D(
     int ih_loop = ih_base + init_h;
     int iw_loop = iw_base + init_w;
 
-    while (ih_loop < 0 || ((ih_loop % in_dilation[0]) != 0)) {
+    while (wh_base < wH &&
+           !(ih_loop >= 0 && ih_loop < iH && (ih_loop % in_dilation[0] == 0))) {
       wh_base++;
       ih_loop += jump_h;
     }
 
-    while (iw_loop < 0 || ((iw_loop % in_dilation[1]) != 0)) {
+    while (ww_base < wW &&
+           !(iw_loop >= 0 && iw_loop < iW && (iw_loop % in_dilation[1] == 0))) {
       ww_base++;
       iw_loop += jump_w;
     }
 
-    int a =
-        (in_dilation[1] *
-         ((ow * wt_strides[1] + in_dilation[1] - 1) / in_dilation[1]));
-    int b = a - ow * wt_strides[1];
-    int e = b;
-    int f = ow * wt_strides[1] % in_dilation[1];
-    int d = f == 0 ? 0 : in_dilation[1] - f;
-
-    if (flip) {
-      a = (in_dilation[1] * ((ow * wt_strides[1] + wW - 1) / in_dilation[1]));
-      b = (ow * wt_strides[1] + wW - 1) - a;
-      d = (ow * wt_strides[1] + wW - 1) % in_dilation[1];
-    }
-
-    int c = b + (in_dilation[1] - (padding[1] % in_dilation[1]));
-    c = c % in_dilation[1];
-
-    if (!is_idil_one) {
-      std::cout << "wh_base: " << wh_base << ", ww_base: " << ww_base << "\n"
-                << "ow: " << ow << ", iw_base: " << iw_base << "\n"
-                << "a: " << a << ", b: " << b << ", c: " << c << ", d: " << d
-                << ", e: " << e << "\n"
-                << std::endl;
-    }
-
-    ww_base = c;
-
     for (int o = 0; o < O; ++o) {
       float r = 0.;
 
-      for (int wh = wh_base; wh < wH; wh += in_dilation[0]) {
-        for (int ww = ww_base; ww < wW; ww += in_dilation[1]) {
+      for (int wh = wh_base; wh < wH; wh += jh) {
+        for (int ww = ww_base; ww < wW; ww += jw) {
           int wh_flip = flip ? wH - wh - 1 : wh;
           int ww_flip = flip ? wW - ww - 1 : ww;
           int ih = ih_base + wh_flip * wt_dilation[0];
           int iw = iw_base + ww_flip * wt_dilation[1];
 
-          int ih_dil = ih;
-          int iw_dil = iw;
-          bool idil_check = true;
-
-          if (!is_idil_one) {
-            auto ih_div = std::div(ih, in_dilation[0]);
-            auto iw_div = std::div(iw, in_dilation[1]);
-
-            idil_check = (ih_div.rem == 0 && iw_div.rem == 0);
-            ih_dil = ih_div.quot;
-            iw_dil = iw_div.quot;
-          }
-
-          if (idil_check && ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
+          if (ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
             const T* wt_ptr_pt = wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
+
+            int ih_dil = !is_idil_one ? (ih / in_dilation[0]) : ih;
+            int iw_dil = !is_idil_one ? (iw / in_dilation[1]) : iw;
+
             const T* in_ptr_pt =
                 in_ptr + ih_dil * in_stride_H + iw_dil * in_stride_W;
 
