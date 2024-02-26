@@ -36,6 +36,10 @@ struct ImplicitGemmConv2DParams {
   const int inp_jump_w;
   const int inp_jump_h;
   const int inp_jump_c;
+
+  const int tiles_n;
+  const int tiles_m;
+  const int swizzle_log;
 };
 
 } // namespace steel

@@ -103,8 +103,16 @@ template <typename T,
   threadgroup T As[tgp_mem_size_a];
   threadgroup T Bs[tgp_mem_size_b];
 
-  const int c_row = tid.y * BM;
-  const int c_col = tid.x * BN;
+  const int tid_y = ((tid.y) << gemm_params->swizzle_log) +
+    ((tid.x) & ((1 << gemm_params->swizzle_log) - 1));
+  const int tid_x = (tid.x) >> gemm_params->swizzle_log;
+
+  if (gemm_params->tiles_n <= tid_x || gemm_params->tiles_m <= tid_y) {
+    return;
+  }
+
+  const int c_row = tid_y * BM;
+  const int c_col = tid_x * BN;
   const int K = gemm_params->K;
   const int N = gemm_params->N;
 

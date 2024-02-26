@@ -197,6 +197,10 @@ void implicit_gemm_conv_2D_gpu(
   int inp_jump_c = bk - sign * (conv_params.wS[0] - 1) * ijh -
       sign * (conv_params.wS[1] - 1) * ijw;
 
+  int tn = (implicit_N + bn - 1) / bn;
+  int tm = (implicit_M + bm - 1) / bm;
+  int swizzle_log = 0;
+
   ImplicitGemmConv2DParams gemm_params{
       /* const int M = */ implicit_M,
       /* const int N = */ implicit_N,
@@ -207,7 +211,10 @@ void implicit_gemm_conv_2D_gpu(
       /* const int inp_jump_w = */ inp_jump_w,
       /* const int inp_jump_h = */ inp_jump_h,
       /* const int inp_jump_c = */ inp_jump_c,
-  };
+
+      tn,
+      tm,
+      swizzle_log};
 
   std::ostringstream kname;
   kname << "implicit_gemm_conv_2d_" << type_to_name(out) << "_bm" << bm << "_bn"
@@ -221,8 +228,9 @@ void implicit_gemm_conv_2D_gpu(
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
-  size_t grid_dim_x = (implicit_N + bn - 1) / bn;
-  size_t grid_dim_y = (implicit_M + bm - 1) / bm;
+  int tile = 1 << swizzle_log;
+  size_t grid_dim_y = (tm + tile - 1) / tile;
+  size_t grid_dim_x = tn * tile;
 
   MTL::Size group_dims = MTL::Size(32, wn, wm);
   MTL::Size grid_dims = MTL::Size(grid_dim_x, grid_dim_y, 1);
