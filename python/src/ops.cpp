@@ -3638,30 +3638,23 @@ void init_ops(py::module_& m) {
         )pbdoc");
   m.def(
       "atleast_1d",
-      [](const py::args& args,
-         StreamOrDevice s) -> std::variant<py::object, py::list> {
-        if (args.size() == 1) {
-          py::object result;
-          result = py::cast(atleast_1d(args[0].cast<array>(), s));
-          return result;
+      [](const py::args& arys,
+         StreamOrDevice s) -> py::object {
+        if (arys.size() == 1) {
+          return py::cast(atleast_1d(arys[0].cast<array>(), s));
         }
-
-        std::vector<array> arrays = args.cast<std::vector<array>>();
-        std::vector<array> result = atleast_1d(arrays, s);
-        py::list py_result = py::cast(result);
-
-        return py_result;
+        return py::cast(atleast_1d(arys.cast<std::vector<array>>(), s));
       },
       py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_1d(*args: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
+        atleast_1d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
         Convert all arrays to have at least one dimension.
 
         Args:
-            args (array or list(array)): Input array or list of input arrays.
+            *arys: Input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
@@ -3669,30 +3662,23 @@ void init_ops(py::module_& m) {
         )pbdoc");
   m.def(
       "atleast_2d",
-      [](const py::args& args,
-         StreamOrDevice s) -> std::variant<py::object, py::list> {
-        if (args.size() == 1) {
-          py::object result;
-          result = py::cast(atleast_2d(args[0].cast<array>(), s));
-          return result;
+      [](const py::args& arys,
+         StreamOrDevice s) -> py::object{
+        if (arys.size() == 1) {
+          return py::cast(atleast_2d(arys[0].cast<array>(), s));
         }
-
-        std::vector<array> arrays = args.cast<std::vector<array>>();
-        std::vector<array> result = atleast_2d(arrays, s);
-        py::list py_result = py::cast(result);
-
-        return py_result;
+        return py::cast(atleast_2d(arys.cast<std::vector<array>>(), s));
       },
       py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_2d(*args: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
+        atleast_2d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
         Convert all arrays to have at least two dimensions.
 
         Args:
-            args (array or list(array)): Input array or list of input arrays.
+            *arys: Input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
@@ -3701,30 +3687,23 @@ void init_ops(py::module_& m) {
 
   m.def(
       "atleast_3d",
-      [](const py::args& args,
-         StreamOrDevice s) -> std::variant<py::object, py::list> {
-        if (args.size() == 1) {
-          py::object result;
-          result = py::cast(atleast_3d(args[0].cast<array>(), s));
-          return result;
+      [](const py::args& arys,
+         StreamOrDevice s) -> py::object {
+        if (arys.size() == 1) {
+          return py::cast(atleast_3d(arys[0].cast<array>(), s));
         }
-
-        std::vector<array> arrays = args.cast<std::vector<array>>();
-        std::vector<array> result = atleast_3d(arrays, s);
-        py::list py_result = py::cast(result);
-
-        return py_result;
+        return py::cast(atleast_3d(arys.cast<std::vector<array>>(), s));
       },
       py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_3d(*args: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
+        atleast_3d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
         Convert all arrays to have at least three dimensions.
 
         Args:
-            args (array or list(array)): Input array or list of input arrays.
+            *arys: Input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:

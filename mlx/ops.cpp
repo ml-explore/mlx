@@ -3390,7 +3390,7 @@ array atleast_1d(const array& a, StreamOrDevice s /* = {} */) {
 
 std::vector<array> atleast_1d(
     const std::vector<array>& arrays,
-    StreamOrDevice s) {
+    StreamOrDevice s /* = {} */) {
   std::vector<array> out;
   out.reserve(arrays.size());
   for (const auto& a : arrays) {
@@ -3412,7 +3412,7 @@ array atleast_2d(const array& a, StreamOrDevice s /* = {} */) {
 
 std::vector<array> atleast_2d(
     const std::vector<array>& arrays,
-    StreamOrDevice s) {
+    StreamOrDevice s /* = {} */) {
   std::vector<array> out;
   out.reserve(arrays.size());
   for (const auto& a : arrays) {
@@ -3436,7 +3436,7 @@ array atleast_3d(const array& a, StreamOrDevice s /* = {} */) {
 
 std::vector<array> atleast_3d(
     const std::vector<array>& arrays,
-    StreamOrDevice s) {
+    StreamOrDevice s /* = {} */) {
   std::vector<array> out;
   out.reserve(arrays.size());
   for (const auto& a : arrays) {
