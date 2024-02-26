@@ -143,8 +143,14 @@ struct Conv2DInputBlockLoaderSmallChannels {
       return;
     }
 
-    int weight_h = (weight_hw / params->wS[1]) * params->kdil[0];
-    int weight_w = (weight_hw % params->wS[1]) * params->kdil[1];
+    int wh = (weight_hw / params->wS[1]);
+    int ww = (weight_hw % params->wS[1]);
+
+    int flip_h = params->flip ? params->wS[0] - wh - 1 : wh;
+    int flip_w = params->flip ? params->wS[1] - ww - 1 : ww;
+
+    int weight_h = flip_h * params->kdil[0];
+    int weight_w = flip_w * params->kdil[1];
 
     STEEL_PRAGMA_UNROLL
     for (short i = 0, is = 0; i < n_rows; ++i, is += TROWS) {

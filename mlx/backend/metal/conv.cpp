@@ -188,13 +188,14 @@ void implicit_gemm_conv_2D_gpu(
   bool small_filter = (!n_channel_specialization) &&
       (conv_params.wS[0] <= 16 && conv_params.wS[1] <= 16);
 
+  int sign = (conv_params.flip ? -1 : 1);
   int ijw = conv_params.in_strides[2] * conv_params.kdil[1];
   int ijh = conv_params.in_strides[1] * conv_params.kdil[0];
 
-  int inp_jump_w = ijw;
-  int inp_jump_h = ijh - (conv_params.wS[1] - 1) * ijw;
-  int inp_jump_c =
-      bk - (conv_params.wS[0] - 1) * ijh - (conv_params.wS[1] - 1) * ijw;
+  int inp_jump_w = sign * ijw;
+  int inp_jump_h = sign * (ijh - (conv_params.wS[1] - 1) * ijw);
+  int inp_jump_c = bk - sign * (conv_params.wS[0] - 1) * ijh -
+      sign * (conv_params.wS[1] - 1) * ijw;
 
   ImplicitGemmConv2DParams gemm_params{
       /* const int M = */ implicit_M,
@@ -539,7 +540,7 @@ void conv_2D_gpu(
 
   // Direct to implicit gemm conv
   else if (
-      !flip && (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
+      (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
       (conv_params.O <= 16 || conv_params.O % 16 == 0) && is_idil_one) {
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
