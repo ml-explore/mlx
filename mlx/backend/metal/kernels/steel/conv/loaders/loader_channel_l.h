@@ -86,13 +86,19 @@ struct Conv2DInputBlockLoaderLargeFilter {
       int ih = oh * params->str[0] - params->pad[0];
       int iw = ow * params->str[1] - params->pad[1];
 
-      // Read from input if in bounds
-      src[i] = src_ + n * params->in_strides[0] + ih * params->in_strides[1] +
-          iw * params->in_strides[2] + bj;
-
       read_n[i] = n;
       read_ih[i] = ih;
       read_iw[i] = iw;
+
+      // Adjust for flip
+      if (params->flip) {
+        ih += (params->wS[0] - 1) * params->kdil[0];
+        iw += (params->wS[1] - 1) * params->kdil[1];
+      }
+
+      // Read from input if in bounds
+      src[i] = src_ + n * params->in_strides[0] + ih * params->in_strides[1] +
+          iw * params->in_strides[2] + bj;
     }
   }
 
@@ -233,13 +239,19 @@ struct Conv2DInputBlockLoaderSmallFilter {
       int ih = oh * params->str[0] - params->pad[0];
       int iw = ow * params->str[1] - params->pad[1];
 
-      // Read from input if in bounds
-      src[i] = src_ + n * params->in_strides[0] + ih * params->in_strides[1] +
-          iw * params->in_strides[2] + bj;
-
       read_n[i] = n;
       read_ih[i] = ih;
       read_iw[i] = iw;
+
+      // Adjust for flip
+      if (params->flip) {
+        ih += (params->wS[0] - 1) * params->kdil[0];
+        iw += (params->wS[1] - 1) * params->kdil[1];
+      }
+
+      // Read from input if in bounds
+      src[i] = src_ + n * params->in_strides[0] + ih * params->in_strides[1] +
+          iw * params->in_strides[2] + bj;
     }
 
     STEEL_PRAGMA_UNROLL
@@ -249,10 +261,11 @@ struct Conv2DInputBlockLoaderSmallFilter {
     }
 
     for (short kh = 0; kh < params->wS[0]; kh++) {
+      short flip_h = params->flip ? params->wS[0] - kh - 1 : kh;
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; ++i) {
         int n = read_n[i];
-        int ih = read_ih[i] + kh * params->kdil[0];
+        int ih = read_ih[i] + flip_h * params->kdil[0];
 
         bool in_bounds = n < params->N && ih >= 0 && ih < params->iS[0];
 
@@ -261,9 +274,10 @@ struct Conv2DInputBlockLoaderSmallFilter {
     }
 
     for (short kw = 0; kw < params->wS[1]; kw++) {
+      short flip_w = params->flip ? params->wS[1] - kw - 1 : kw;
       STEEL_PRAGMA_UNROLL
       for (short i = 0; i < n_rows; ++i) {
-        int iw = read_iw[i] + kw * params->kdil[1];
+        int iw = read_iw[i] + flip_w * params->kdil[1];
 
         bool in_bounds = iw >= 0 && iw < params->iS[1];
 

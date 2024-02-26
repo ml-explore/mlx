@@ -272,11 +272,7 @@ struct Conv2DWeightBlockLoaderSmallChannels {
       return;
     }
 
-    int weight_h = weight_hw / params->wS[1];
-    int weight_w = weight_hw % params->wS[1];
-
-    const device T* curr_src = src + weight_h * params->wt_strides[1] +
-        weight_w * params->wt_strides[2];
+    const device T* curr_src = src + weight_hw * params->wt_strides[2];
 
     if (BN != 8 || do_read) {
       STEEL_PRAGMA_UNROLL
