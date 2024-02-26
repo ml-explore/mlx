@@ -6,7 +6,7 @@ from typing import Callable, List
 import mlx.core as mx
 
 
-def exponential_decay(init: float, decay_rate: float):
+def exponential_decay(init: float, decay_rate: float) -> Callable:
     r"""Make an exponential decay scheduler.
 
     Args:
@@ -31,7 +31,7 @@ def exponential_decay(init: float, decay_rate: float):
     return schedule
 
 
-def step_decay(init: float, decay_rate: float, step_size: int):
+def step_decay(init: float, decay_rate: float, step_size: int) -> Callable:
     r"""Make a step decay scheduler.
 
     Args:
@@ -58,7 +58,7 @@ def step_decay(init: float, decay_rate: float, step_size: int):
     return schedule
 
 
-def cosine_decay(init: float, decay_steps: int):
+def cosine_decay(init: float, decay_steps: int) -> Callable:
     r"""Make a cosine decay scheduler.
 
     Args:
@@ -87,59 +87,71 @@ def cosine_decay(init: float, decay_steps: int):
     return scheduler
 
 
-def join_schedules(schedules: List[Callable], boundaries: List[int]):
-    r"""Sequentially apply multiple schedules
-    (https://github.com/google-deepmind/optax/blob/main/optax/schedules/_join.py)
+def join_schedules(schedules: List[Callable], boundaries: List[int]) -> Callable:
+    r"""Join multiple schedules to create a new schedule.
 
     Args:
-        schedules: A list of callables, each of which receives a step count
-        indicating the number of steps since the previous boundary transition.
-        boundaries: A list of integers (of length one less than schedules) that
-          indicate when to transition between schedules.
+        schedules (list(Callable)): A list of schedules. Schedule :math:`i+1`
+          receives a step count indicating the number of steps since
+          the :math:`i`-th boundary.
+        boundaries (list(int)): A list of integers of length ``len(schedules) - 1``
+          that indicates when to transition between schedules.
 
     Example:
-        >>> warmup_schedule = optim.linear_warmup(100, finish=1e-1)
-        >>> cosine_schedule = optim.cosine_decay(1e-5, 200)
-        >>> lr_schedule = join_schedules([warmup_schedule, cosine_schedule], [101])
+        >>> warmup = optim.linear_schedule(0, 1e-1, steps=10)
+        >>> cosine = optim.cosine_decay(1e-1, 200)
+        >>> lr_schedule = optim.join_schedules([warmup, cosine], [10])
         >>> optimizer = optim.Adam(learning_rate=lr_schedule)
         >>> optimizer.learning_rate
         array(0.0, dtype=float32)
-        >>> for _ in range(101): optimizer.update({}, {})
+        >>> for _ in range(12): optimizer.update({}, {})
         ...
         >>> optimizer.learning_rate
-        array(1e-5, dtype=float32)
+        array(0.0999938, dtype=float32)
     """
+    if len(schedules) == 0:
+        raise ValueError("Must provide at least 1 schedule to join.")
+
+    if len(schedules) != len(boundaries) + 1:
+        raise ValueError(
+            f"Received {len(boundaries)} boundaries but "
+            f"expected {len(schedules) - 1}."
+        )
 
     def schedule(step):
         output = schedules[0](step)
         for boundary, schedule in zip(boundaries, schedules[1:]):
-            output = output if step < boundary else schedule(step - boundary)
+            output = mx.where(step < boundary, output, schedule(step - boundary))
         return output
 
     return schedule
 
 
-def linear_warmup(length: int, finish: float, init: float = 0.0) -> Callable:
-    r"""Make a linear warmup scheduler.
+def linear_schedule(init: float, end: float, steps: int) -> Callable:
+    r"""Make a linear scheduler.
 
     Args:
-        length (int): Length of warmup.
-        finish (float): Value at the end of the warmup.
         init (float): Initial value.
+        end (float): Final value.
+        steps (int): Number of steps to apply the schedule over. The value is
+          ``end`` for any steps beyond ``steps``.
 
     Example:
 
-        >>> lr_schedule = optim.linear_warmup(100, 1e-1)
-        >>> optimizer = optim.Adam(learning_rate=lr_schedule)
+        >>> warmup = optim.linear_schedule(0, 1e-1, 100)
+        >>> optimizer = optim.Adam(learning_rate=warmup)
         >>> optimizer.learning_rate
         array(0.0, dtype=float32)
-        >>> for _ in range(100): optimizer.update({}, {})
+        >>> for _ in range(101): optimizer.update({}, {})
         ...
         >>> optimizer.learning_rate
-        array(1e-5, dtype=float32)
+        array(0.1, dtype=float32)
     """
+    if steps < 1:
+        raise ValueError(f"steps must be greater than 0, but got {steps}.")
 
     def step_fn(step):
-        return step * ((finish - init) / length) + init
+        step = mx.minimum(step, steps)
+        return step * ((end - init) / steps) + init
 
     return step_fn
