@@ -553,6 +553,19 @@ class TestCompile(mlx_tests.MLXTestCase):
         z = fun(mx.array(1), [[0]])
         self.assertEqual(z.item(), 3)
 
+        @partial(mx.compile)
+        def fun(x, a, b):
+            for ai in a:
+                for bi in b:
+                    x = bi * x + ai
+            return x
+
+        z = fun(mx.array(1), [1, 1], [2])
+        self.assertEqual(z.item(), 7)
+
+        z = fun(mx.array(1), [1], [1, 2])
+        self.assertEqual(z.item(), 5)
+
     def test_compile_inf(self):
 
         @mx.compile
