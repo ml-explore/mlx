@@ -177,6 +177,15 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
 
     threadgroup T* smemV = (threadgroup T*)threadgroup_block;
 
+    threadgroup T4* smemFlush = (threadgroup T4*)threadgroup_block;
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    #pragma clang unroll(full)
+    for(uint i = 0; i < 8; i++) {
+        smemFlush[simd_lane_id + simd_group_id * THREADS_PER_SIMDGROUP + i * NSIMDGROUPS * THREADS_PER_SIMDGROUP] = T4(0.f);
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
     const size_t v_batch_offset = tid.z * params.N_KV_HEADS * L * DK;
     const size_t v_head_offset = kv_head_offset_factor * L * DK;
 
