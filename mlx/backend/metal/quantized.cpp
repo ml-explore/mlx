@@ -42,7 +42,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int O = out.shape(-1);
   if (transpose_) {
     // Route to the specialized qmv kernel
-    if (B < 6 && group_size_ == 32 && bits_ == 4 && O % 32 == 0) {
+    if (B < 6 && group_size_ == 32 && bits_ == 4 && O % 32 == 0 && D >= 512) {
       std::ostringstream kname;
       kname << "qmv_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
             << bits_ << "_fast";
