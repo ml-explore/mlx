@@ -185,11 +185,15 @@ def gelu_fast_approx(x):
 
     .. math::
 
-        x = x \sigma\left(1.773 x\right)
+        x = x \sigma\left(1.702 x\right)
 
     where :math:`\sigma(\cdot)` is the logistic sigmoid.
+
+    References:
+    - https://github.com/hendrycks/GELUs
+    - https://arxiv.org/abs/1606.08415
     """
-    return x * mx.sigmoid(1.773 * x)
+    return x * mx.sigmoid(1.702 * x)
 
 
 def glu(x: mx.array, axis: int = -1) -> mx.array:

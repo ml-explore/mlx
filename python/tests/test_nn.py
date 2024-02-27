@@ -665,7 +665,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         y_hat1 = nn.gelu_approx(x)
         y_hat2 = nn.gelu_fast_approx(x)
         self.assertLess(mx.abs(y - y_hat1).max(), 0.0003)
-        self.assertLess(mx.abs(y - y_hat2).max(), 0.02)
+        self.assertLess(mx.abs(y - y_hat2).max(), 0.025)
 
     def test_sin_pe(self):
         m = nn.SinusoidalPositionalEncoding(16, min_freq=0.01)
