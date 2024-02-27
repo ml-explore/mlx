@@ -13,7 +13,7 @@ device_name = device_name.decode("utf-8").strip("\n")
 
 N_warmup = 10
 N_iter_bench = 100
-N_iter_func = 4
+N_iter_func = 5
 
 
 def bench(f, a, b):
@@ -54,7 +54,6 @@ def make_pt_conv_2D(strides=(1, 1), padding=(0, 0)):
 
 
 def bench_shape(N, H, W, C, kH, kW, O, strides, padding, np_dtype):
-    # padding = (0, 0)
 
     scale = 1.0 / math.sqrt(kH * kH * C)
     a_np = np.random.uniform(0, 0.5, (N, H, W, C)).astype(np_dtype)
@@ -71,7 +70,6 @@ def bench_shape(N, H, W, C, kH, kW, O, strides, padding, np_dtype):
     f_mx = make_mx_conv_2D(strides, padding)
     f_pt = make_pt_conv_2D(strides, padding)
 
-    # input(f"PID: {os.getpid()}")
     time_torch = bench(f_pt, a_pt, b_pt)
     time_mlx = bench(f_mx, a_mx, b_mx)
 
@@ -93,7 +91,7 @@ def bench_shape(N, H, W, C, kH, kW, O, strides, padding, np_dtype):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run gemm benchmarks")
+    parser = argparse.ArgumentParser(description="Run conv benchmarks")
 
     dtypes = ("float32",)
     shapes = (
@@ -109,19 +107,20 @@ if __name__ == "__main__":
         (4, 128, 128, 32, 5, 5, 32, (1, 1), (2, 2)),
         (4, 128, 128, 64, 5, 5, 64, (1, 1), (2, 2)),
         (4, 128, 128, 128, 5, 5, 128, (1, 1), (2, 2)),
+        (4, 256, 256, 32, 5, 5, 3, (1, 1), (2, 2)),
+        (4, 256, 256, 3, 5, 5, 32, (1, 1), (2, 2)),
+        (4, 128, 128, 64, 5, 5, 3, (1, 1), (2, 2)),
+        (4, 128, 128, 3, 5, 5, 64, (1, 1), (2, 2)),
     )
 
     for dtype in dtypes:
+        print("(N,   H,   W,   C), (  O, kH, kW,   C),   dtype, stride,   pads,  diff%")
         for N, H, W, C, kH, kW, O, strides, padding in shapes:
             np_dtype = getattr(np, dtype)
             time_mlx, time_torch = bench_shape(
                 N, H, W, C, kH, kW, O, strides, padding, np_dtype
             )
             diff = time_torch / time_mlx - 1.0
-
-            print(
-                "(N,   H,   W,   C), (  O, kH, kW,   C),   dtype, stride,   pads,  diff%"
-            )
 
             print(
                 f"({N}, {H:3d}, {W:3d}, {C:3d}), ({O:3d}, {kH:2d}, {kW:2d}, {C:3d}), {dtype}, {strides}, {padding}, {100. * diff:+5.2f}%"
