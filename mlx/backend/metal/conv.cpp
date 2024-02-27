@@ -255,13 +255,18 @@ void implicit_gemm_conv_2D_gpu(
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 }
 
+<<<<<<< HEAD
 void explicit_gemm_conv_2D_gpu(
+=======
+void implicit_gemm_conv_2D_general_gpu(
+>>>>>>> bf1441c7 (Add skip tranpose conv impl)
     const Stream& s,
     metal::Device& d,
     const array& in,
     const array& wt,
     array out,
     const MLXConvParams<2>& conv_params) {
+<<<<<<< HEAD
   // Pad input
   std::vector<int> padded_shape = {
       conv_params.N,
@@ -333,6 +338,159 @@ void explicit_gemm_conv_2D_gpu(
       /*a_transposed = */ false,
       /*b_transposed = */ true,
       /*copies = */ copies);
+=======
+  // Deduce implicit gemm size
+  int implicit_M = conv_params.N * conv_params.oS[0] * conv_params.oS[1];
+  int implicit_N = conv_params.O;
+  int implicit_K = conv_params.wS[0] * conv_params.wS[1] * conv_params.C;
+
+  // Determine block and warp tiles
+  int wm = 2, wn = 2;
+
+  // Make jump params
+  int f_wgt_jump_h =
+      std::lcm(conv_params.idil[0], conv_params.kdil[0]) / conv_params.kdil[0];
+  int f_wgt_jump_w =
+      std::lcm(conv_params.idil[1], conv_params.kdil[1]) / conv_params.kdil[1];
+
+  int f_out_jump_h =
+      std::lcm(conv_params.idil[0], conv_params.str[0]) / conv_params.str[0];
+  int f_out_jump_w =
+      std::lcm(conv_params.idil[1], conv_params.str[1]) / conv_params.str[1];
+
+  int adj_out_h = (conv_params.oS[0] + f_out_jump_h - 1) / f_out_jump_h;
+  int adj_out_w = (conv_params.oS[1] + f_out_jump_w - 1) / f_out_jump_w;
+  int adj_out_hw = adj_out_h * adj_out_w;
+  int adj_implicit_m = conv_params.N * adj_out_hw;
+
+  Conv2DGeneralJumpParams jump_params{
+      /* const int f_wgt_jump_h = */ f_wgt_jump_h,
+      /* const int f_wgt_jump_w = */ f_wgt_jump_w,
+
+      /* const int f_out_jump_h = */ f_out_jump_h,
+      /* const int f_out_jump_w = */ f_out_jump_w,
+
+      /* const int adj_out_h = */ adj_out_h,
+      /* const int adj_out_w = */ adj_out_w,
+      /* const int adj_out_hw = */ adj_out_hw,
+      /* const int adj_implicit_m = */ adj_implicit_m};
+
+  // Make base info
+  std::vector<Conv2DGeneralBaseInfo> base_h(f_out_jump_h);
+  std::vector<Conv2DGeneralBaseInfo> base_w(f_out_jump_w);
+
+  int jump_h = conv_params.flip ? -conv_params.kdil[0] : conv_params.kdil[0];
+  int jump_w = conv_params.flip ? -conv_params.kdil[1] : conv_params.kdil[1];
+
+  int init_h =
+      (conv_params.flip ? (conv_params.wS[0] - 1) * conv_params.kdil[0] : 0);
+  int init_w =
+      (conv_params.flip ? (conv_params.wS[1] - 1) * conv_params.kdil[1] : 0);
+
+  for (int i = 0; i < f_out_jump_h; ++i) {
+    int ih_loop = i * conv_params.str[0] - conv_params.pad[0] + init_h;
+
+    int wh_base = 0;
+    while (wh_base < conv_params.wS[0] && ih_loop % conv_params.idil[0] != 0) {
+      wh_base++;
+      ih_loop += jump_h;
+    }
+
+    int wh_size =
+        ((conv_params.wS[0] - wh_base) + f_wgt_jump_h - 1) / f_wgt_jump_h;
+    base_h[i] = {wh_base, wh_size};
+  }
+
+  for (int j = 0; j < f_out_jump_w; ++j) {
+    int iw_loop = j * conv_params.str[1] - conv_params.pad[1] + init_w;
+
+    int ww_base = 0;
+    while (ww_base < conv_params.wS[1] && iw_loop % conv_params.idil[1] != 0) {
+      ww_base++;
+      iw_loop += jump_w;
+    }
+
+    int ww_size =
+        ((conv_params.wS[1] - ww_base) + f_wgt_jump_w - 1) / f_wgt_jump_w;
+    base_w[j] = {ww_base, ww_size};
+  }
+
+  // Collect block sizes
+  int bm = adj_implicit_m >= 8192 && conv_params.C >= 64 ? 64 : 32;
+  int bn = (bm == 64 && implicit_N >= 64) ? 64 : 32;
+  int bk = 16;
+
+  int tn = (implicit_N + bn - 1) / bn;
+  int tm = (adj_implicit_m + bm - 1) / bm;
+  int swizzle_log = 0;
+
+  // Get channel iteration info
+  int channel_k_iters = ((conv_params.C + bk - 1) / bk);
+  int gemm_k_iters = channel_k_iters;
+
+  // Fix host side helper params
+  int sign = (conv_params.flip ? -1 : 1);
+  int ijw = conv_params.in_strides[2] * conv_params.kdil[1];
+  int ijh = conv_params.in_strides[1] * conv_params.kdil[0];
+
+  int inp_jump_w = sign * ijw;
+  int inp_jump_h = sign * (ijh - (conv_params.wS[1] - 1) * ijw);
+  int inp_jump_c = bk - sign * (conv_params.wS[0] - 1) * ijh -
+      sign * (conv_params.wS[1] - 1) * ijw;
+
+  // Build implicit gemm params
+  ImplicitGemmConv2DParams gemm_params{
+      /* const int M = */ implicit_M,
+      /* const int N = */ implicit_N,
+      /* const int K = */ implicit_K,
+
+      /* const int gemm_k_iterations = */ gemm_k_iters,
+
+      /* const int inp_jump_w = */ inp_jump_w,
+      /* const int inp_jump_h = */ inp_jump_h,
+      /* const int inp_jump_c = */ inp_jump_c,
+
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const int swizzle_log = */ swizzle_log};
+
+  // Determine kernel
+  std::ostringstream kname;
+  kname << "implicit_gemm_conv_2d_general_" << type_to_name(out) << "_bm" << bm
+        << "_bn" << bn << "_bk" << bk << "_wm" << wm << "_wn" << wn;
+
+  // Encode and dispatch kernel
+  auto compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Deduce grid launch dimensions
+  int tile = 1 << swizzle_log;
+  size_t grid_dim_y = (tm + tile - 1) / tile;
+  size_t grid_dim_x = tn * tile;
+  size_t grid_dim_z = f_out_jump_h * f_out_jump_w;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(grid_dim_x, grid_dim_y, grid_dim_z);
+
+  // Encode arrays
+  set_array_buffer(compute_encoder, in, 0);
+  set_array_buffer(compute_encoder, wt, 1);
+  set_array_buffer(compute_encoder, out, 2);
+
+  // Encode params
+  compute_encoder->setBytes(&conv_params, sizeof(MLXConvParams<2>), 3);
+  compute_encoder->setBytes(&gemm_params, sizeof(ImplicitGemmConv2DParams), 4);
+  compute_encoder->setBytes(&jump_params, sizeof(Conv2DGeneralJumpParams), 5);
+
+  compute_encoder->setBytes(
+      base_h.data(), sizeof(Conv2DGeneralBaseInfo) * base_h.size(), 6);
+  compute_encoder->setBytes(
+      base_w.data(), sizeof(Conv2DGeneralBaseInfo) * base_w.size(), 7);
+
+  // Launch kernel
+  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+>>>>>>> bf1441c7 (Add skip tranpose conv impl)
 }
 
 void winograd_conv_2D_gpu(
@@ -563,6 +721,10 @@ void conv_2D_gpu(
       is_idil_one && (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
       (conv_params.O <= 16 || conv_params.O % 16 == 0)) {
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
+  }
+
+  else if (conv_params.C % 16 == 0 && conv_params.O % 16 == 0) {
+    return implicit_gemm_conv_2D_general_gpu(s, d, in, wt, out, conv_params);
   }
 
   // Direct to explicit gemm conv

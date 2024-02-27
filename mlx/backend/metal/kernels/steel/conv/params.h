@@ -42,5 +42,23 @@ struct ImplicitGemmConv2DParams {
   const int swizzle_log;
 };
 
+struct Conv2DGeneralJumpParams {
+  const int f_wgt_jump_h;
+  const int f_wgt_jump_w;
+
+  const int f_out_jump_h;
+  const int f_out_jump_w;
+
+  const int adj_out_h;
+  const int adj_out_w;
+  const int adj_out_hw;
+  const int adj_implicit_m;
+};
+
+struct Conv2DGeneralBaseInfo {
+  int weight_base;
+  int weight_size;
+};
+
 } // namespace steel
 } // namespace mlx

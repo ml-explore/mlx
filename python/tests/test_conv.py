@@ -512,7 +512,7 @@ class TestConv(mlx_tests.MLXTestCase):
                 convt_f = torch_convt_list[ndim - 1]
 
                 if flip:
-                    wt = torch.flip(wt, np.arange(2, wt.ndim()))
+                    wt = torch.flip(wt, tuple(np.arange(2, wt.ndim)))
 
                 if not np.all(input_dilation == 1):
                     ones = torch.ones(
@@ -570,12 +570,66 @@ class TestConv(mlx_tests.MLXTestCase):
         )
 
         in_shape = (2, 32, 32, 16)
+        wt_shape = (32, 5, 10, 16)
+        stride = (2, 3)
+        padding = (0, 0)
+        kernel_dilation = (3, 2)
+        input_dilation = (2, 4)
+        flip = False
+
+        self.__convNd_test(
+            in_shape,
+            wt_shape,
+            stride,
+            padding,
+            kernel_dilation,
+            input_dilation,
+            flip=flip,
+        )
+
+        in_shape = (2, 32, 32, 16)
+        wt_shape = (32, 5, 10, 16)
+        stride = (2, 2)
+        padding = (3, 2)
+        kernel_dilation = (3, 2)
+        input_dilation = (2, 4)
+        flip = False
+
+        self.__convNd_test(
+            in_shape,
+            wt_shape,
+            stride,
+            padding,
+            kernel_dilation,
+            input_dilation,
+            flip=flip,
+        )
+
+        in_shape = (2, 32, 32, 16)
+        wt_shape = (32, 5, 10, 16)
+        stride = (2, 3)
+        padding = (3, 2)
+        kernel_dilation = (3, 2)
+        input_dilation = (2, 5)
+        flip = False
+
+        self.__convNd_test(
+            in_shape,
+            wt_shape,
+            stride,
+            padding,
+            kernel_dilation,
+            input_dilation,
+            flip=flip,
+        )
+
+        in_shape = (2, 32, 32, 16)
         wt_shape = (32, 5, 5, 16)
         stride = (2, 3)
         padding = (0, 0)
         kernel_dilation = (3, 1)
         input_dilation = (2, 5)
-        flip = False
+        flip = True
 
         self.__convNd_test(
             in_shape,
