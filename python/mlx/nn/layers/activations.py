@@ -18,8 +18,7 @@ def _make_activation_module(f):
 
 @partial(mx.compile, shapeless=True)
 def sigmoid(x):
-    r"""
-    Applies the sigmoid function.
+    r"""Applies the sigmoid function.
 
     .. math::
         \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}
@@ -29,8 +28,7 @@ def sigmoid(x):
 
 @partial(mx.compile, shapeless=True)
 def relu(x):
-    r"""
-    Applies the Rectified Linear Unit.
+    r"""Applies the Rectified Linear Unit.
 
     Simply ``mx.maximum(x, 0)``.
     """
@@ -39,8 +37,7 @@ def relu(x):
 
 @partial(mx.compile, shapeless=True)
 def leaky_relu(x, negative_slope=0.01):
-    r"""
-    Applies the Leaky Rectified Linear Unit.
+    r"""Applies the Leaky Rectified Linear Unit.
 
     Simply ``mx.maximum(negative_slope * x, x)``.
     """
@@ -49,8 +46,7 @@ def leaky_relu(x, negative_slope=0.01):
 
 @partial(mx.compile, shapeless=True)
 def log_softmax(x, axis=-1):
-    r"""
-    Applies the Log Softmax function.
+    r"""Applies the Log Softmax function.
 
     Applies :math:`x + \log \sum_i e^{x_i}` element wise.
     """
@@ -59,8 +55,7 @@ def log_softmax(x, axis=-1):
 
 @partial(mx.compile, shapeless=True)
 def elu(x, alpha=1.0):
-    r"""
-    Applies the Exponential Linear Unit.
+    r"""Applies the Exponential Linear Unit.
 
     Simply ``mx.where(x > 0, x, alpha * (mx.exp(x) - 1))``.
     """
@@ -69,8 +64,7 @@ def elu(x, alpha=1.0):
 
 @partial(mx.compile, shapeless=True)
 def relu6(x):
-    r"""
-    Applies the Rectified Linear Unit 6.
+    r"""Applies the Rectified Linear Unit 6.
 
     Applies :math:`\min(\max(x, 0), 6)` element wise.
     """
@@ -79,8 +73,7 @@ def relu6(x):
 
 @partial(mx.compile, shapeless=True)
 def softmax(x, axis=-1):
-    r"""
-    Applies the Softmax function.
+    r"""Applies the Softmax function.
 
     Applies :math:`\frac{e^{x_i}}{\sum_j e^{x_j}}` element wise.
     """
@@ -89,8 +82,7 @@ def softmax(x, axis=-1):
 
 @partial(mx.compile, shapeless=True)
 def softplus(x):
-    r"""
-    Applies the Softplus function.
+    r"""Applies the Softplus function.
 
     Applies :math:`\log(1 + \exp(x))` element wise.
     """
@@ -99,8 +91,7 @@ def softplus(x):
 
 @partial(mx.compile, shapeless=True)
 def softsign(x):
-    r"""
-    Applies the Softsign function.
+    r"""Applies the Softsign function.
 
     Applies :math:`\frac{x}{1 + |x|}` element wise.
     """
@@ -109,8 +100,7 @@ def softsign(x):
 
 @partial(mx.compile, shapeless=True)
 def softshrink(x, lambd: float = 0.5):
-    r"""
-    Applies the Softshrink activation function.
+    r"""Applies the Softshrink activation function.
 
     .. math::
         \text{softshrink}(x) = \begin{cases}
@@ -124,8 +114,7 @@ def softshrink(x, lambd: float = 0.5):
 
 @partial(mx.compile, shapeless=True)
 def celu(x, alpha=1.0):
-    r"""
-    Applies the Continuously Differentiable Exponential Linear Unit.
+    r"""Applies the Continuously Differentiable Exponential Linear Unit.
 
     Applies :math:`\max(0, x) + \min(0, \alpha * (\exp(x / \alpha) - 1))`
     element wise.
@@ -135,8 +124,7 @@ def celu(x, alpha=1.0):
 
 @partial(mx.compile, shapeless=True)
 def silu(x):
-    r"""
-    Applies the Sigmoid Linear Unit. Also known as Swish.
+    r"""Applies the Sigmoid Linear Unit. Also known as Swish.
 
     Applies :math:`x \sigma(x)` element wise, where :math:`\sigma(\cdot)` is
     the logistic sigmoid.
@@ -146,8 +134,7 @@ def silu(x):
 
 @partial(mx.compile, shapeless=True)
 def log_sigmoid(x):
-    r"""
-    Applies the Log Sigmoid function.
+    r"""Applies the Log Sigmoid function.
 
     Applies :math:`\log(\sigma(x)) = -\log(1 + e^{-x})` element wise.
     """
@@ -156,8 +143,7 @@ def log_sigmoid(x):
 
 @partial(mx.compile, shapeless=True)
 def gelu(x) -> mx.array:
-    r"""
-    Applies the Gaussian Error Linear Units function.
+    r"""Applies the Gaussian Error Linear Units function.
 
     .. math::
         \textrm{GELU}(x) = x * \Phi(x)
@@ -172,8 +158,7 @@ def gelu(x) -> mx.array:
 
 @partial(mx.compile, shapeless=True)
 def gelu_approx(x):
-    r"""
-    An approximation to Gaussian Error Linear Unit.
+    r"""An approximation to Gaussian Error Linear Unit.
 
     See :func:`gelu` for the exact computation.
 
@@ -191,8 +176,7 @@ def gelu_approx(x):
 
 @partial(mx.compile, shapeless=True)
 def gelu_fast_approx(x):
-    r"""
-    A fast approximation to Gaussian Error Linear Unit.
+    r"""A fast approximation to Gaussian Error Linear Unit.
 
     See :func:`gelu` for the exact computation.
 
@@ -213,14 +197,13 @@ def gelu_fast_approx(x):
 
 
 def glu(x: mx.array, axis: int = -1) -> mx.array:
-    r"""
-    Applies the gated linear unit function.
+    r"""Applies the gated linear unit function.
 
     This function splits the ``axis`` dimension of the input into two halves
     (:math:`a` and :math:`b`) and applies :math:`a * \sigma(b)`.
 
     .. math::
-        textrm{GLU}(x) = a * \sigma(b)
+        \textrm{GLU}(x) = a * \sigma(b)
 
     Args:
         axis (int): The dimension to split along. Default: ``-1``
@@ -231,8 +214,7 @@ def glu(x: mx.array, axis: int = -1) -> mx.array:
 
 @partial(mx.compile, shapeless=True)
 def step(x: mx.array, threshold: float = 0.0):
-    r"""
-    Applies the Step Activation Function.
+    r"""Applies the Step Activation Function.
 
     This function implements a binary step activation, where the output is set
     to 1 if the input is greater than a specified threshold, and 0 otherwise.
@@ -252,8 +234,7 @@ def step(x: mx.array, threshold: float = 0.0):
 
 @partial(mx.compile, shapeless=True)
 def selu(x):
-    r"""
-    Applies the Scaled Exponential Linear Unit.
+    r"""Applies the Scaled Exponential Linear Unit.
 
     .. math::
         \text{selu}(x) = \begin{cases}
@@ -270,8 +251,7 @@ def selu(x):
 
 @partial(mx.compile, shapeless=True)
 def prelu(x: mx.array, alpha: mx.array) -> mx.array:
-    r"""
-    Applies the element-wise parametric ReLU.
+    r"""Applies the element-wise parametric ReLU.
 
     .. math::
         \text{PReLU}(x) = \max(0,x) + a * \min(0,x)
@@ -283,8 +263,7 @@ def prelu(x: mx.array, alpha: mx.array) -> mx.array:
 
 @partial(mx.compile, shapeless=True)
 def mish(x: mx.array) -> mx.array:
-    r"""
-    Applies the Mish function, element-wise.
+    r"""Applies the Mish function, element-wise.
 
     Mish: A Self Regularized Non-Monotonic Neural Activation Function.
 
@@ -299,8 +278,7 @@ def mish(x: mx.array) -> mx.array:
 
 @partial(mx.compile, shapeless=True)
 def hardswish(x):
-    r"""
-    Applies the hardswish function, element-wise.
+    r"""Applies the hardswish function, element-wise.
 
     .. math::
         \text{Hardswish}(x) = x * \min(\max(x + 3, 0), 6) / 6
@@ -310,8 +288,7 @@ def hardswish(x):
 
 
 def tanh(x):
-    """
-    Applies the hyperbolic tangent function.
+    """Applies the hyperbolic tangent function.
 
     Simply ``mx.tanh(x)``.
     """
@@ -325,7 +302,7 @@ class GLU(Module):
     (:math:`a` and :math:`b`) and applies :math:`a * \sigma(b)`.
 
     .. math::
-        textrm{GLU}(x) = a * \sigma(b)
+        \textrm{GLU}(x) = a * \sigma(b)
 
     Args:
         axis (int): The dimension to split along. Default: ``-1``

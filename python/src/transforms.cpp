@@ -817,7 +817,15 @@ void init_transforms(py::module_& m) {
 
         // Try to get the doc string
         if (auto d = fun.attr("__doc__"); py::isinstance<py::str>(d)) {
-          doc << "\n\n" << d.cast<std::string>();
+          doc << "\n\n";
+          auto dstr = d.cast<std::string>();
+          // Add spaces to match first line indentation with remainder of
+          // docstring
+          int i = 0;
+          for (int i = dstr.size() - 1; i >= 0 && dstr[i] == ' '; i--) {
+            doc << ' ';
+          }
+          doc << dstr;
         }
         auto doc_str = doc.str();
         return py::cpp_function(
