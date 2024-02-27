@@ -18,7 +18,7 @@ def _make_activation_module(f):
 
 @partial(mx.compile, shapeless=True)
 def sigmoid(x):
-    r"""Applies the element-wise function:
+    r"""Applies the sigmoid function.
 
     .. math::
         \text{Sigmoid}(x) = \sigma(x) = \frac{1}{1 + \exp(-x)}

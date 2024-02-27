@@ -37,6 +37,7 @@ from mlx.nn.layers.activations import (
     relu,
     relu6,
     selu,
+    sigmoid,
     silu,
     softmax,
     softplus,
