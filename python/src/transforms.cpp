@@ -800,7 +800,30 @@ void init_transforms(py::module_& m) {
          const py::object& inputs,
          const py::object& outputs,
          bool shapeless) {
-        return py::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless});
+        py::options options;
+        options.disable_function_signatures();
+
+        std::ostringstream doc;
+        auto name = fun.attr("__name__").cast<std::string>();
+        doc << name;
+
+        // Try to get the signature
+        auto inspect = py::module::import("inspect");
+        if (!inspect.attr("isbuiltin")(fun).cast<bool>()) {
+          doc << inspect.attr("signature")(fun)
+                     .attr("__str__")()
+                     .cast<std::string>();
+        }
+
+        // Try to get the doc string
+        if (auto d = fun.attr("__doc__"); py::isinstance<py::str>(d)) {
+          doc << "\n\n" << d.cast<std::string>();
+        }
+        auto doc_str = doc.str();
+        return py::cpp_function(
+            PyCompiledFun{fun, inputs, outputs, shapeless},
+            py::name(name.c_str()),
+            py::doc(doc_str.c_str()));
       },
       "fun"_a,
       "inputs"_a = std::nullopt,
