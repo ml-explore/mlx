@@ -1,6 +1,9 @@
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(COMPILER ${CMAKE_C_COMPILER})
   set(CLANG TRUE)
+else()
+  set(COMPILER ${CMAKE_CXX_COMPILER})
 endif()
 
 add_custom_command(
@@ -8,7 +11,7 @@ add_custom_command(
     COMMAND /bin/bash
               ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
               ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
-              ${CMAKE_CXX_COMPILER}
+              ${COMPILER}
               ${PROJECT_SOURCE_DIR}
               ${CLANG}
 
