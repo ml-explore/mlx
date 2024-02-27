@@ -349,31 +349,59 @@ struct PyCompiledFun {
     // Compilation constants
     std::vector<uint64_t> constants;
 
-    auto flatten_with_constants = [&](py::object tree) {
-      tree_visit(tree, [&](py::handle obj) {
-        if (py::isinstance<array>(obj)) {
-          inputs.push_back(py::cast<array>(obj));
-        } else if (py::isinstance<py::str>(obj)) {
-          auto r = py::hash(obj);
-          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
-        } else if (py::isinstance<py::int_>(obj)) {
-          auto r = obj.cast<int64_t>();
-          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
-        } else if (py::isinstance<py::float_>(obj)) {
-          auto r = obj.cast<double>();
-          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
-        } else {
-          std::ostringstream msg;
-          msg << "[compile] Function arguments must be trees of arrays "
-              << "or constants (floats, ints, or strings), but received "
-              << "type " << obj.get_type() << ".";
-          throw std::invalid_argument(msg.str());
+    // Hashed tree structure
+    std::vector<uint64_t> structure;
+
+    // Flatten the tree with hashed constants and structure
+    std::function<void(py::handle)> recurse;
+    recurse = [&](py::handle obj) {
+      if (py::isinstance<py::list>(obj)) {
+        auto l = py::cast<py::list>(obj);
+        structure.push_back(l.size());
+        for (int i = 0; i < l.size(); ++i) {
+          recurse(l[i]);
         }
-      });
+      } else if (py::isinstance<py::tuple>(obj)) {
+        auto l = py::cast<py::tuple>(obj);
+        structure.push_back(l.size());
+        for (auto item : obj) {
+          recurse(item);
+        }
+      } else if (py::isinstance<py::dict>(obj)) {
+        auto d = py::cast<py::dict>(obj);
+        structure.push_back(d.size());
+        for (auto item : d) {
+          auto r = py::hash(item.first);
+          structure.push_back(*reinterpret_cast<uint64_t*>(&r));
+          recurse(item.second);
+        }
+      } else if (py::isinstance<array>(obj)) {
+        inputs.push_back(py::cast<array>(obj));
+      } else if (py::isinstance<py::str>(obj)) {
+        auto r = py::hash(obj);
+        constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+      } else if (py::isinstance<py::int_>(obj)) {
+        auto r = obj.cast<int64_t>();
+        constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+      } else if (py::isinstance<py::float_>(obj)) {
+        auto r = obj.cast<double>();
+        constants.push_back(*reinterpret_cast<uint64_t*>(&r));
+      } else {
+        std::ostringstream msg;
+        msg << "[compile] Function arguments must be trees of arrays "
+            << "or constants (floats, ints, or strings), but received "
+            << "type " << obj.get_type() << ".";
+        throw std::invalid_argument(msg.str());
+      }
     };
-    flatten_with_constants(args);
+
+    recurse(args);
     int num_args = inputs.size();
-    flatten_with_constants(kwargs);
+    recurse(kwargs);
+    constants.insert(
+        constants.end(),
+        std::make_move_iterator(structure.begin()),
+        std::make_move_iterator(structure.end()));
 
     auto compile_fun = [this, &args, &kwargs, num_args](
                            const std::vector<array>& a) {
