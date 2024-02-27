@@ -566,6 +566,21 @@ class TestCompile(mlx_tests.MLXTestCase):
         z = fun(mx.array(1), [1], [1, 2])
         self.assertEqual(z.item(), 5)
 
+        counter = [0]
+
+        @partial(mx.compile)
+        def fun(x, y):
+            counter[0] += 1
+            return x + y
+
+        z = fun(mx.array(1), 1)
+        self.assertEqual(z.item(), 2)
+
+        z = fun(1, mx.array(1))
+        self.assertEqual(z.item(), 2)
+
+        self.assertEqual(counter[0], 2)
+
     def test_compile_inf(self):
 
         @mx.compile

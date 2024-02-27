@@ -346,37 +346,43 @@ struct PyCompiledFun {
     // Flat array inputs
     std::vector<array> inputs;
 
-    // Compilation constants
+    // Compilation constants which includes the tree structure of the arguments
     std::vector<uint64_t> constants;
 
-    // Hashed tree structure
-    std::vector<uint64_t> structure;
+    // Reserve some large primes to signify the presence of an array, a list or
+    // a dict in order to encode the structure of the pytree. We choose primes
+    // to reduce slightly the chances of these numbers occuring by a
+    // multiplication as values in the constants list.
+    constexpr uint64_t array_identifier = 18446744073709551557UL;
+    constexpr uint64_t list_identifier = 18446744073709551533UL;
+    constexpr uint64_t dict_identifier = 18446744073709551521UL;
 
     // Flatten the tree with hashed constants and structure
     std::function<void(py::handle)> recurse;
     recurse = [&](py::handle obj) {
       if (py::isinstance<py::list>(obj)) {
         auto l = py::cast<py::list>(obj);
-        structure.push_back(l.size());
+        constants.push_back(list_identifier);
         for (int i = 0; i < l.size(); ++i) {
           recurse(l[i]);
         }
       } else if (py::isinstance<py::tuple>(obj)) {
         auto l = py::cast<py::tuple>(obj);
-        structure.push_back(l.size());
+        constants.push_back(list_identifier);
         for (auto item : obj) {
           recurse(item);
         }
       } else if (py::isinstance<py::dict>(obj)) {
         auto d = py::cast<py::dict>(obj);
-        structure.push_back(d.size());
+        constants.push_back(dict_identifier);
         for (auto item : d) {
           auto r = py::hash(item.first);
-          structure.push_back(*reinterpret_cast<uint64_t*>(&r));
+          constants.push_back(*reinterpret_cast<uint64_t*>(&r));
           recurse(item.second);
         }
       } else if (py::isinstance<array>(obj)) {
         inputs.push_back(py::cast<array>(obj));
+        constants.push_back(array_identifier);
       } else if (py::isinstance<py::str>(obj)) {
         auto r = py::hash(obj);
         constants.push_back(*reinterpret_cast<uint64_t*>(&r));
@@ -398,10 +404,6 @@ struct PyCompiledFun {
     recurse(args);
     int num_args = inputs.size();
     recurse(kwargs);
-    constants.insert(
-        constants.end(),
-        std::make_move_iterator(structure.begin()),
-        std::make_move_iterator(structure.end()));
 
     auto compile_fun = [this, &args, &kwargs, num_args](
                            const std::vector<array>& a) {
