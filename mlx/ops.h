@@ -1047,7 +1047,7 @@ array conv2d(
     StreamOrDevice s = {});
 
 /** General convolution with a filter */
-array convNd(
+array conv_general(
     const array& input,
     const array& weight,
     std::vector<int> stride = {},
@@ -1060,7 +1060,7 @@ array convNd(
     StreamOrDevice s = {});
 
 /** General convolution with a filter */
-inline array convNd(
+inline array conv_general(
     const array& input,
     const array& weight,
     std::vector<int> stride = {},
@@ -1070,7 +1070,7 @@ inline array convNd(
     int groups = 1,
     bool flip = false,
     StreamOrDevice s = {}) {
-  return convNd(
+  return conv_general(
       /* const array& input = */ input,
       /* const array& weight = */ weight,
       /* std::vector<int> stride = */ stride,

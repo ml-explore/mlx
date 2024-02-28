@@ -3105,7 +3105,7 @@ void init_ops(py::module_& m) {
             array: The convolved array.
       )pbdoc");
   m.def(
-      "convNd",
+      "conv_general",
       [](const array& input,
          const array& weight,
          const std::variant<int, std::vector<int>>& stride,
@@ -3144,7 +3144,7 @@ void init_ops(py::module_& m) {
           input_dilation_vec = std::get<std::vector<int>>(input_dilation);
         }
 
-        return convNd(
+        return conv_general(
             /* const array& input = */ input,
             /* const array& weight = */ weight,
             /* std::vector<int> stride = */ stride_vec,
@@ -3167,9 +3167,10 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        convNd(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array
+        conv_general(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array
 
-        ND convolution over an input with several channels
+        General convolution over an input with several channels 
+        Only 1d and 2d convolutions are supported at the moment
 
         Note: Only the default ``groups=1`` is currently supported.
 

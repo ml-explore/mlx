@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "mlx/backend/metal/kernels/steel/host.h"
-
 template <int NDIM>
 struct MLXConvParams {
   const int N; // Batch size

@@ -12,8 +12,6 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-#include <iostream>
-
 namespace mlx::core {
 
 namespace {
@@ -775,7 +773,7 @@ std::vector<array> Convolution::vjp(
 
       auto wt_trans = swapaxes(wt, 0, -1, stream());
 
-      auto grad = convNd(
+      auto grad = conv_general(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
           /* std::vector<int> stride = */ input_dilation_,
@@ -814,7 +812,7 @@ std::vector<array> Convolution::vjp(
 
         auto in_trans = swapaxes(in, 0, -1, stream());
         auto cotan_trans = swapaxes(cotan, 0, -1, stream());
-        auto grad_trans = convNd(
+        auto grad_trans = conv_general(
             /* const array& input = */ in_trans,
             /* const array& weight = */ cotan_trans,
             /* std::vector<int> stride = */ kernel_dilation_,

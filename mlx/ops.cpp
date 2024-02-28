@@ -2844,7 +2844,7 @@ array conv1d(
     int dilation /* = 1 */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
-  return convNd(
+  return conv_general(
       /* const array& input = */ in_,
       /* const array& weight = */ wt_,
       /* std::vector<int> stride = */ {stride},
@@ -2865,7 +2865,7 @@ array conv2d(
     const std::pair<int, int>& dilation /* = {1, 1} */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
-  return convNd(
+  return conv_general(
       /* const array& input = */ in_,
       /* const array& weight = */ wt_,
       /* std::vector<int> stride = */ {stride.first, stride.second},
@@ -2879,7 +2879,7 @@ array conv2d(
 }
 
 /** General convolution with a filter */
-array convNd(
+array conv_general(
     const array& in_,
     const array& wt_,
     std::vector<int> stride /* = {} */,

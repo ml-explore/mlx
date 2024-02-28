@@ -437,7 +437,7 @@ class TestConv(mlx_tests.MLXTestCase):
                 ):
                     run_conv2D_grad(N, C, O, idim, kdim, stride, padding, dtype=dtype)
 
-    def __convNd_test(
+    def __conv_general_test(
         self,
         in_shape,
         wt_shape,
@@ -474,7 +474,7 @@ class TestConv(mlx_tests.MLXTestCase):
                 (in_np, wt_np),
             )
 
-            out_mx = mx.convNd(
+            out_mx = mx.conv_general(
                 in_mx,
                 wt_mx,
                 stride=stride,
@@ -485,7 +485,7 @@ class TestConv(mlx_tests.MLXTestCase):
                 flip=flip,
             )
 
-            def convNd_pt(
+            def conv_general_pt(
                 inp, wt, stride, padding, kernel_dilation, input_dilation, groups, flip
             ):
 
@@ -529,7 +529,7 @@ class TestConv(mlx_tests.MLXTestCase):
                     groups=groups,
                 )
 
-            out_pt = convNd_pt(
+            out_pt = conv_general_pt(
                 in_pt,
                 wt_pt,
                 stride=stride,
@@ -546,16 +546,16 @@ class TestConv(mlx_tests.MLXTestCase):
             self.assertTrue(np.allclose(out_mx, out_pt, atol=atol))
 
     @unittest.skipIf(not has_torch, "requires Torch")
-    def test_torch_conv_Nd(self):
+    def test_torch_conv_general(self):
         in_shape = (2, 32, 32, 16)
         wt_shape = (32, 5, 5, 16)
         stride = (1, 1)
         padding = (2, 2)
-        kernel_dilation = (1, 1)
+        kernel_dilation = (2, 3)
         input_dilation = (1, 1)
         flip = False
 
-        self.__convNd_test(
+        self.__conv_general_test(
             in_shape,
             wt_shape,
             stride,
@@ -573,7 +573,7 @@ class TestConv(mlx_tests.MLXTestCase):
         input_dilation = (2, 4)
         flip = False
 
-        self.__convNd_test(
+        self.__conv_general_test(
             in_shape,
             wt_shape,
             stride,
@@ -591,7 +591,7 @@ class TestConv(mlx_tests.MLXTestCase):
         input_dilation = (2, 4)
         flip = False
 
-        self.__convNd_test(
+        self.__conv_general_test(
             in_shape,
             wt_shape,
             stride,
@@ -609,7 +609,7 @@ class TestConv(mlx_tests.MLXTestCase):
         input_dilation = (2, 5)
         flip = False
 
-        self.__convNd_test(
+        self.__conv_general_test(
             in_shape,
             wt_shape,
             stride,
@@ -627,7 +627,7 @@ class TestConv(mlx_tests.MLXTestCase):
         input_dilation = (2, 5)
         flip = True
 
-        self.__convNd_test(
+        self.__conv_general_test(
             in_shape,
             wt_shape,
             stride,
