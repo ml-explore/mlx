@@ -2788,8 +2788,9 @@ inline std::vector<int> conv_out_shape(
       std::ostringstream msg;
       msg << "[conv] Spatial dimensions of input after padding "
           << " cannot be smaller than weight spatial dimensions."
-          << " Got input with shape " << in_shape << " and padding " << pads_lo
-          << " for weight of shape " << wt_shape << ".";
+          << " Got error at axis " << i << " for input with shape " << in_shape
+          << ", padding low " << pads_lo << ", padding high " << pads_hi
+          << ", and weight of shape " << wt_shape << ".";
       throw std::invalid_argument(msg.str());
     }
   }
@@ -2880,8 +2881,8 @@ array conv2d(
 
 /** General convolution with a filter */
 array conv_general(
-    const array& in_,
-    const array& wt_,
+    array in,
+    array wt,
     std::vector<int> stride /* = {} */,
     std::vector<int> padding_lo /* = {} */,
     std::vector<int> padding_hi /* = {} */,
@@ -2895,7 +2896,7 @@ array conv_general(
     throw std::invalid_argument("[conv] Cannot handle groups != 1 yet");
   }
 
-  int spatial_dims = in_.ndim() - 2;
+  int spatial_dims = in.ndim() - 2;
 
   if (spatial_dims < 1 || spatial_dims > 2) {
     throw std::invalid_argument(
@@ -2904,34 +2905,34 @@ array conv_general(
   }
 
   // Run checks
-  run_conv_checks(in_, wt_, spatial_dims);
+  run_conv_checks(in, wt, spatial_dims);
 
   // Type promotion
-  auto out_type = promote_types(in_.dtype(), wt_.dtype());
-  auto in = astype(in_, out_type, s);
-  auto wt = astype(wt_, out_type, s);
+  auto out_type = promote_types(in.dtype(), wt.dtype());
+  in = astype(in, out_type, s);
+  wt = astype(wt, out_type, s);
 
-  if (stride.size() == 1 || stride.size() == 0) {
+  if (stride.size() <= 1) {
     int stride_int = stride.size() ? stride[0] : 1;
     stride = std::vector<int>(spatial_dims, stride_int);
   }
 
-  if (padding_lo.size() == 1 || padding_lo.size() == 0) {
+  if (padding_lo.size() <= 1) {
     int padding_int = padding_lo.size() ? padding_lo[0] : 0;
     padding_lo = std::vector<int>(spatial_dims, padding_int);
   }
 
-  if (padding_hi.size() == 1 || padding_hi.size() == 0) {
+  if (padding_hi.size() <= 1) {
     int padding_int = padding_hi.size() ? padding_hi[0] : 0;
     padding_hi = std::vector<int>(spatial_dims, padding_int);
   }
 
-  if (kernel_dilation.size() == 1 || kernel_dilation.size() == 0) {
+  if (kernel_dilation.size() <= 1) {
     int kernel_dilation_int = kernel_dilation.size() ? kernel_dilation[0] : 1;
     kernel_dilation = std::vector<int>(spatial_dims, kernel_dilation_int);
   }
 
-  if (input_dilation.size() == 1 || input_dilation.size() == 0) {
+  if (input_dilation.size() <= 1) {
     int input_dilation_int = input_dilation.size() ? input_dilation[0] : 1;
     input_dilation = std::vector<int>(spatial_dims, input_dilation_int);
   }

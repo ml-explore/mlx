@@ -1048,8 +1048,8 @@ array conv2d(
 
 /** General convolution with a filter */
 array conv_general(
-    const array& input,
-    const array& weight,
+    array input,
+    array weight,
     std::vector<int> stride = {},
     std::vector<int> padding_lo = {},
     std::vector<int> padding_hi = {},
