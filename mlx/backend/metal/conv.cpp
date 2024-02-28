@@ -60,7 +60,7 @@ void explicit_gemm_conv_ND_gpu(
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 
   // Perform gemm
-  std::vector<array> copies = {in_padded, in_strided};
+  std::vector<array> copies;
   return steel_matmul(
       s,
       d,
@@ -255,90 +255,13 @@ void implicit_gemm_conv_2D_gpu(
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 }
 
-<<<<<<< HEAD
-void explicit_gemm_conv_2D_gpu(
-=======
 void implicit_gemm_conv_2D_general_gpu(
->>>>>>> bf1441c7 (Add skip tranpose conv impl)
     const Stream& s,
     metal::Device& d,
     const array& in,
     const array& wt,
     array out,
     const MLXConvParams<2>& conv_params) {
-<<<<<<< HEAD
-  // Pad input
-  std::vector<int> padded_shape = {
-      conv_params.N,
-      conv_params.iS[0] + 2 * conv_params.pad[0],
-      conv_params.iS[1] + 2 * conv_params.pad[1],
-      conv_params.C};
-  array in_padded(padded_shape, in.dtype(), nullptr, {});
-
-  // Fill with zeros
-  copy_gpu(array(0, in.dtype()), in_padded, CopyType::Scalar, s);
-
-  // Pick input slice from padded
-  size_t data_offset = conv_params.pad[0] * in_padded.strides()[1] +
-      conv_params.pad[1] * in_padded.strides()[2];
-  array in_padded_slice(in.shape(), in_padded.dtype(), nullptr, {});
-  in_padded_slice.copy_shared_buffer(
-      in_padded,
-      in_padded.strides(),
-      in_padded.flags(),
-      in_padded_slice.size(),
-      data_offset);
-
-  // Copy input values into the slice
-  copy_gpu_inplace(in, in_padded_slice, CopyType::GeneralGeneral, s);
-
-  // Make strided view
-  std::vector<int> strided_shape = {
-      conv_params.N,
-      conv_params.oS[0],
-      conv_params.oS[1],
-      conv_params.wS[0],
-      conv_params.wS[1],
-      conv_params.C};
-
-  std::vector<size_t> strided_strides = {
-      in_padded.strides()[0],
-      in_padded.strides()[1] * conv_params.str[0],
-      in_padded.strides()[2] * conv_params.str[1],
-      in_padded.strides()[1],
-      in_padded.strides()[2],
-      in_padded.strides()[3]};
-  auto flags = in_padded.flags();
-
-  array in_strided_view(strided_shape, in_padded.dtype(), nullptr, {});
-  in_strided_view.copy_shared_buffer(
-      in_padded, strided_strides, flags, in_strided_view.size(), 0);
-
-  // Materialize strided view
-  std::vector<int> strided_reshape = {
-      conv_params.N * conv_params.oS[0] * conv_params.oS[1],
-      conv_params.wS[0] * conv_params.wS[1] * conv_params.C};
-  array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
-  copy_gpu(in_strided_view, in_strided, CopyType::General, s);
-
-  // Perform gemm
-  std::vector<array> copies = {in_padded, in_strided};
-  return steel_matmul(
-      s,
-      d,
-      /*a = */ in_strided,
-      /*b = */ wt,
-      /*c = */ out,
-      /*M = */ strided_reshape[0],
-      /*N = */ conv_params.O,
-      /*K = */ strided_reshape[1],
-      /*batch_size_out = */ 1,
-      /*a_cols = */ strided_reshape[1],
-      /*b_cols = */ strided_reshape[1],
-      /*a_transposed = */ false,
-      /*b_transposed = */ true,
-      /*copies = */ copies);
-=======
   // Deduce implicit gemm size
   int implicit_M = conv_params.N * conv_params.oS[0] * conv_params.oS[1];
   int implicit_N = conv_params.O;
@@ -490,7 +413,6 @@ void implicit_gemm_conv_2D_general_gpu(
 
   // Launch kernel
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
->>>>>>> bf1441c7 (Add skip tranpose conv impl)
 }
 
 void winograd_conv_2D_gpu(
@@ -515,6 +437,7 @@ void winograd_conv_2D_gpu(
   // Fill with zeros
   array zero_arr = array(0, in.dtype());
   copy_gpu(zero_arr, in_padded, CopyType::Scalar, s);
+  copies_w.push_back(zero_arr);
 
   // Pick input slice from padded
   size_t data_offset = conv_params.pad[0] * in_padded.strides()[1] +
@@ -731,28 +654,6 @@ void conv_2D_gpu(
   else {
     return explicit_gemm_conv_ND_gpu(s, d, in, wt, out, conv_params);
   }
-}
-
-inline std::vector<size_t> get_CSN_strides(const std::vector<int>& nsc_shape) {
-  std::vector<size_t> csn_strides(nsc_shape.size(), 1);
-
-  // Since we place N as the contiguous dim, stride[0] = 1
-  csn_strides[0] = 1;
-
-  // Last spatial dim follows N as the contiguous dim
-  int N = nsc_shape[0];
-  csn_strides[csn_strides.size() - 2] = N;
-
-  // Spatial dims are handled the same
-  size_t n_pixels = 1;
-  for (int i = csn_strides.size() - 3; i >= 1; --i) {
-    csn_strides[i] = csn_strides[i + 1] * nsc_shape[i + 1];
-  }
-
-  // Channels dim has the largest stride
-  csn_strides[csn_strides.size() - 1] = csn_strides[1] * nsc_shape[1];
-
-  return csn_strides;
 }
 
 } // namespace
