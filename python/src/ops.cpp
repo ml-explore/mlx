@@ -3109,14 +3109,18 @@ void init_ops(py::module_& m) {
       [](const array& input,
          const array& weight,
          const std::variant<int, std::vector<int>>& stride,
-         const std::variant<int, std::vector<int>>& padding,
+         const std::variant<
+             int,
+             std::vector<int>,
+             std::pair<std::vector<int>, std::vector<int>>>& padding,
          const std::variant<int, std::vector<int>>& kernel_dilation,
          const std::variant<int, std::vector<int>>& input_dilation,
          int groups,
          bool flip,
          StreamOrDevice s) {
         std::vector<int> stride_vec;
-        std::vector<int> padding_vec;
+        std::vector<int> padding_lo_vec;
+        std::vector<int> padding_hi_vec;
         std::vector<int> kernel_dilation_vec;
         std::vector<int> input_dilation_vec;
 
@@ -3127,9 +3131,16 @@ void init_ops(py::module_& m) {
         }
 
         if (auto pv = std::get_if<int>(&padding); pv) {
-          padding_vec.push_back(*pv);
+          padding_lo_vec.push_back(*pv);
+          padding_hi_vec.push_back(*pv);
+        } else if (auto pv = std::get_if<std::vector<int>>(&padding); pv) {
+          padding_lo_vec = *pv;
+          padding_hi_vec = *pv;
         } else {
-          padding_vec = std::get<std::vector<int>>(padding);
+          auto [pl, ph] =
+              std::get<std::pair<std::vector<int>, std::vector<int>>>(padding);
+          padding_lo_vec = pl;
+          padding_hi_vec = ph;
         }
 
         if (auto pv = std::get_if<int>(&kernel_dilation); pv) {
@@ -3148,7 +3159,8 @@ void init_ops(py::module_& m) {
             /* const array& input = */ input,
             /* const array& weight = */ weight,
             /* std::vector<int> stride = */ stride_vec,
-            /* std::vector<int> padding = */ padding_vec,
+            /* std::vector<int> padding_lo = */ padding_lo_vec,
+            /* std::vector<int> padding_hi = */ padding_lo_vec,
             /* std::vector<int> kernel_dilation = */ kernel_dilation_vec,
             /* std::vector<int> input_dilation = */ input_dilation_vec,
             /* int groups = */ groups,
@@ -3167,7 +3179,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        conv_general(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array
+        conv_general(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int], Tuple[List[int], List[int]]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array
 
         General convolution over an input with several channels 
         Only 1d and 2d convolutions are supported at the moment
@@ -3180,8 +3192,8 @@ void init_ops(py::module_& m) {
             stride (int or list(int), optional): :obj:`list` with kernel strides. 
                 All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
-            padding (int or list(int), optional): :obj:`list` with symmetric input 
-                padding. All spatial dimensions get the same
+            padding (int, list(int), or tuple(list(int), list(int)), optional): 
+                :obj:`list` with input padding. All spatial dimensions get the same
                 padding if only one number is specified. Default: ``0``.
             kernel_dilation (int or list(int), optional): :obj:`list` with
                 kernel dilation. All spatial dimensions get the same dilation
