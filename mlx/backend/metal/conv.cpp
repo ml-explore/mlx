@@ -631,17 +631,20 @@ void conv_2D_gpu(
   bool is_kdil_one = conv_params.kdil[0] == 1 && conv_params.kdil[1] == 1;
   bool is_idil_one = conv_params.idil[0] == 1 && conv_params.idil[1] == 1;
 
+  bool inp_large = (conv_params.in_strides[0] >= 1ul << 18);
+  bool channels_large = (conv_params.C + conv_params.O) >= 512;
+  bool channels_med = (conv_params.C + conv_params.O) >= 256;
+
   // Direct to winograd conv
   if (!flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 &&
-      conv_params.C >= 64 && conv_params.O >= 64) {
+      (channels_large || (channels_med && inp_large))) {
     return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 
   // Direct to implicit gemm conv
-  else if (
-      is_idil_one && (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
+  if ((conv_params.C <= 4 || conv_params.C % 16 == 0) &&
       (conv_params.O <= 16 || conv_params.O % 16 == 0)) {
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
