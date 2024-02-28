@@ -12,6 +12,8 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
+#include <iostream>
+
 namespace mlx::core {
 
 namespace {
@@ -690,15 +692,21 @@ std::vector<array> Convolution::vjp(
   // Collect info
   auto& in = primals[0];
   auto& wt = primals[1];
-  auto cotan = cotangents[0];
+  auto& cotan = cotangents[0];
 
   for (int a : argnums) {
     // Grads for input
     if (a == 0) {
       std::vector<int> padding = padding_;
+      std::vector<int> padding_high = padding_;
 
       for (int i = 0; i < padding.size(); ++i) {
-        padding[i] = primals[1].shape(1 + i) - padding_[i] - 1;
+        int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
+        padding[i] = wt_size - padding_[i] - 1;
+
+        int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
+        int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
+        padding_high[i] = in_size - out_size + padding_[i];
       }
 
       auto wt_trans = swapaxes(wt, 0, -1, stream());

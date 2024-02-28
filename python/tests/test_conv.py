@@ -428,16 +428,12 @@ class TestConv(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(pt_grad_wt, mx_grad_wt, atol=atol))
 
         for dtype in ("float32",):
-            for N, C, O in (
-                (1, 1, 1),
-                (1, 6, 1),
-                (1, 1, 6),
-                (4, 32, 64),
-            ):
+            for N, C, O in ((1, 1, 1), (1, 6, 1), (1, 1, 6), (4, 32, 64), (4, 16, 32)):
                 for idim, kdim, stride, padding in (
                     ((1, 1), (1, 1), (1, 1), (0, 0)),
                     ((3, 3), (3, 1), (1, 1), (0, 0)),
                     ((31, 31), (5, 5), (5, 5), (2, 2)),
+                    ((32, 32), (3, 3), (2, 2), (1, 1)),
                 ):
                     run_conv2D_grad(N, C, O, idim, kdim, stride, padding, dtype=dtype)
 
