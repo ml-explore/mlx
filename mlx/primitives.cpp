@@ -697,16 +697,16 @@ std::vector<array> Convolution::vjp(
   for (int a : argnums) {
     // Grads for input
     if (a == 0) {
-      std::vector<int> padding = padding_;
-      std::vector<int> padding_high = padding_;
+      std::vector<int> padding_lo = padding_;
+      std::vector<int> padding_hi = padding_;
 
-      for (int i = 0; i < padding.size(); ++i) {
+      for (int i = 0; i < padding_lo.size(); ++i) {
         int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
-        padding[i] = wt_size - padding_[i] - 1;
+        padding_lo[i] = wt_size - padding_[i] - 1;
 
         int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
         int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
-        padding_high[i] = in_size - out_size + padding_[i];
+        padding_hi[i] = in_size - out_size + padding_[i];
       }
 
       auto wt_trans = swapaxes(wt, 0, -1, stream());
@@ -715,7 +715,8 @@ std::vector<array> Convolution::vjp(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
           /* std::vector<int> stride = */ input_dilation_,
-          /* std::vector<int> padding = */ padding,
+          /* std::vector<int> padding_lo = */ padding_lo,
+          /* std::vector<int> padding_hi = */ padding_hi,
           /* std::vector<int> kernel_dilation = */ kernel_dilation_,
           /* std::vector<int> input_dilation = */ kernel_strides_,
           /* int groups = */ 1,
@@ -726,13 +727,24 @@ std::vector<array> Convolution::vjp(
     }
     // Grads for weight
     else if (a == 1) {
+      std::vector<int> padding_lo = padding_;
+      std::vector<int> padding_hi = padding_;
+
+      for (int i = 0; i < padding_hi.size(); ++i) {
+        int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
+        int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
+        int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
+        padding_hi[i] = out_size - in_size + wt_size - padding_[i] - 1;
+      }
+
       auto in_trans = swapaxes(in, 0, -1, stream());
       auto cotan_trans = swapaxes(cotan, 0, -1, stream());
       auto grad_trans = convNd(
           /* const array& input = */ in_trans,
           /* const array& weight = */ cotan_trans,
           /* std::vector<int> stride = */ kernel_dilation_,
-          /* std::vector<int> padding = */ padding_,
+          /* std::vector<int> padding_lo = */ padding_lo,
+          /* std::vector<int> padding_hi = */ padding_hi,
           /* std::vector<int> kernel_dilation = */ kernel_strides_,
           /* std::vector<int> input_dilation = */ input_dilation_,
           /* int groups = */ 1,

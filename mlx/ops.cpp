@@ -2697,7 +2697,7 @@ namespace {
 
 // Conv helpers
 inline int conv_out_axis_size(int in_dim, int wt_dim, int stride, int padding) {
-  return ((in_dim + 2 * padding - wt_dim) / stride) + 1;
+  return ((in_dim + padding - wt_dim) / stride) + 1;
 }
 
 // Conv helpers
@@ -2709,7 +2709,8 @@ inline std::vector<int> conv_out_shape(
     const std::vector<int>& in_shape,
     const std::vector<int>& wt_shape,
     const std::vector<int>& strides,
-    const std::vector<int>& pads,
+    const std::vector<int>& pads_lo,
+    const std::vector<int>& pads_hi,
     const std::vector<int>& kernel_dilation,
     const std::vector<int>& input_dilation) {
   int N = in_shape[0];
@@ -2727,10 +2728,10 @@ inline std::vector<int> conv_out_shape(
     throw std::invalid_argument(msg.str());
   }
 
-  if (pads.size() != spatial_dims) {
+  if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
     std::ostringstream msg;
-    msg << "[conv] Invalid pading " << pads << "for " << spatial_dims
-        << "D convolution.";
+    msg << "[conv] Invalid pading " << pads_lo << " | " << pads_hi << "for "
+        << spatial_dims << "D convolution.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -2763,10 +2764,10 @@ inline std::vector<int> conv_out_shape(
       throw std::invalid_argument(msg.str());
     }
 
-    if (pads[i - 1] < 0) {
+    if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
       msg << "[conv] Padding sizes must be non-negative."
-          << " Got padding " << pads << ".";
+          << " Got padding " << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -2780,13 +2781,14 @@ inline std::vector<int> conv_out_shape(
     int kd = dilate_size(wt_shape[i], kernel_dilation[i - 1]);
     int id = dilate_size(in_shape[i], input_dilation[i - 1]);
 
-    out_shape[i] = conv_out_axis_size(id, kd, strides[i - 1], pads[i - 1]);
+    out_shape[i] = conv_out_axis_size(
+        id, kd, strides[i - 1], pads_lo[i - 1] + pads_hi[i - 1]);
 
     if (out_shape[i] <= 0) {
       std::ostringstream msg;
       msg << "[conv] Spatial dimensions of input after padding "
           << " cannot be smaller than weight spatial dimensions."
-          << " Got input with shape " << in_shape << " and padding " << pads
+          << " Got input with shape " << in_shape << " and padding " << pads_lo
           << " for weight of shape " << wt_shape << ".";
       throw std::invalid_argument(msg.str());
     }
@@ -2881,7 +2883,8 @@ array convNd(
     const array& in_,
     const array& wt_,
     std::vector<int> stride /* = {} */,
-    std::vector<int> padding /* = {} */,
+    std::vector<int> padding_lo /* = {} */,
+    std::vector<int> padding_hi /* = {} */,
     std::vector<int> kernel_dilation /* = {} */,
     std::vector<int> input_dilation /* = {} */,
     int groups /* = 1 */,
@@ -2913,9 +2916,14 @@ array convNd(
     stride = std::vector<int>(spatial_dims, stride_int);
   }
 
-  if (padding.size() == 1 || padding.size() == 0) {
-    int padding_int = padding.size() ? padding[0] : 0;
-    padding = std::vector<int>(spatial_dims, padding_int);
+  if (padding_lo.size() == 1 || padding_lo.size() == 0) {
+    int padding_int = padding_lo.size() ? padding_lo[0] : 0;
+    padding_lo = std::vector<int>(spatial_dims, padding_int);
+  }
+
+  if (padding_hi.size() == 1 || padding_hi.size() == 0) {
+    int padding_int = padding_hi.size() ? padding_hi[0] : 0;
+    padding_hi = std::vector<int>(spatial_dims, padding_int);
   }
 
   if (kernel_dilation.size() == 1 || kernel_dilation.size() == 0) {
@@ -2930,7 +2938,13 @@ array convNd(
 
   // Get output shapes
   std::vector<int> out_shape = conv_out_shape(
-      in.shape(), wt.shape(), stride, padding, kernel_dilation, input_dilation);
+      in.shape(),
+      wt.shape(),
+      stride,
+      padding_lo,
+      padding_hi,
+      kernel_dilation,
+      input_dilation);
 
   return array(
       out_shape,
@@ -2938,7 +2952,7 @@ array convNd(
       std::make_unique<Convolution>(
           to_stream(s),
           stride,
-          padding,
+          padding_lo,
           kernel_dilation,
           input_dilation,
           groups,
