@@ -388,13 +388,8 @@ class TestConv(mlx_tests.MLXTestCase):
 
                 _, outs_mx = mx.vjp(
                     f,
-                    [
-                        in_mx,
-                        wt_mx,
-                    ],
-                    [
-                        ct_mx,
-                    ],
+                    [in_mx, wt_mx],
+                    [ct_mx],
                 )
                 pt_grad_in = F.grad.conv1d_input(
                     in_pt.shape,
@@ -429,13 +424,17 @@ class TestConv(mlx_tests.MLXTestCase):
 
         for dtype in ("float32",):
             for N, C, O in ((1, 1, 1), (1, 6, 1), (1, 1, 6), (4, 32, 64), (4, 16, 32)):
-                for idim, kdim, stride, padding in (
-                    ((1, 1), (1, 1), (1, 1), (0, 0)),
-                    ((3, 3), (3, 1), (1, 1), (0, 0)),
-                    ((31, 31), (5, 5), (5, 5), (2, 2)),
-                    ((32, 32), (3, 3), (2, 2), (1, 1)),
+                for idim, kdim, stride, padding, dilation in (
+                    ((1, 1), (1, 1), (1, 1), (0, 0), (1, 1)),
+                    ((3, 3), (3, 1), (1, 1), (0, 0), (1, 1)),
+                    ((31, 31), (5, 5), (5, 5), (2, 2), (1, 1)),
+                    ((32, 32), (3, 3), (2, 2), (1, 1), (1, 1)),
+                    ((31, 31), (5, 5), (5, 5), (2, 2), (3, 2)),
+                    ((32, 32), (3, 3), (2, 2), (1, 1), (3, 2)),
                 ):
-                    run_conv2D_grad(N, C, O, idim, kdim, stride, padding, dtype=dtype)
+                    run_conv2D_grad(
+                        N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
+                    )
 
     def __conv_general_test(
         self,

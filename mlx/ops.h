@@ -1026,26 +1026,6 @@ array cummin(
 
 /** Convolution operations */
 
-/** 1D convolution with a filter */
-array conv1d(
-    const array& input,
-    const array& weight,
-    int stride = 1,
-    int padding = 0,
-    int dilation = 1,
-    int groups = 1,
-    StreamOrDevice s = {});
-
-/** 2D convolution with a filter */
-array conv2d(
-    const array& input,
-    const array& weight,
-    const std::pair<int, int>& stride = {1, 1},
-    const std::pair<int, int>& padding = {0, 0},
-    const std::pair<int, int>& dilation = {1, 1},
-    int groups = 1,
-    StreamOrDevice s = {});
-
 /** General convolution with a filter */
 array conv_general(
     array input,
@@ -1082,6 +1062,26 @@ inline array conv_general(
       /* bool flip = */ flip,
       /* StreamOrDevice s = */ s);
 }
+
+/** 1D convolution with a filter */
+array conv1d(
+    const array& input,
+    const array& weight,
+    int stride = 1,
+    int padding = 0,
+    int dilation = 1,
+    int groups = 1,
+    StreamOrDevice s = {});
+
+/** 2D convolution with a filter */
+array conv2d(
+    const array& input,
+    const array& weight,
+    const std::pair<int, int>& stride = {1, 1},
+    const std::pair<int, int>& padding = {0, 0},
+    const std::pair<int, int>& dilation = {1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
 
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
