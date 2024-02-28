@@ -733,6 +733,28 @@ void conv_2D_gpu(
   }
 }
 
+inline std::vector<size_t> get_CSN_strides(const std::vector<int>& nsc_shape) {
+  std::vector<size_t> csn_strides(nsc_shape.size(), 1);
+
+  // Since we place N as the contiguous dim, stride[0] = 1
+  csn_strides[0] = 1;
+
+  // Last spatial dim follows N as the contiguous dim
+  int N = nsc_shape[0];
+  csn_strides[csn_strides.size() - 2] = N;
+
+  // Spatial dims are handled the same
+  size_t n_pixels = 1;
+  for (int i = csn_strides.size() - 3; i >= 1; --i) {
+    csn_strides[i] = csn_strides[i + 1] * nsc_shape[i + 1];
+  }
+
+  // Channels dim has the largest stride
+  csn_strides[csn_strides.size() - 1] = csn_strides[1] * nsc_shape[1];
+
+  return csn_strides;
+}
+
 } // namespace
 
 void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
