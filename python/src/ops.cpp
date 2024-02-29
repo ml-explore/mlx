@@ -3181,18 +3181,20 @@ void init_ops(py::module_& m) {
       R"pbdoc(
         conv_general(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int], Tuple[List[int], List[int]]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array
 
-        General convolution over an input with several channels 
-        Only 1d and 2d convolutions are supported at the moment
+        General convolution over an input with several channels
 
-        Note: Only the default ``groups=1`` is currently supported.
+        .. note::
+
+           * Only 1d and 2d convolutions are supported at the moment
+           * the default ``groups=1`` is currently supported.
 
         Args:
-            input (array): input array of shape ``(N, ..., C_in)``
-            weight (array): weight array of shape ``(C_out, ..., C_in)``
-            stride (int or list(int), optional): :obj:`list` with kernel strides. 
+            input (array): Input array of shape ``(N, ..., C_in)``
+            weight (array): Weight array of shape ``(C_out, ..., C_in)``
+            stride (int or list(int), optional): :obj:`list` with kernel strides.
                 All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
-            padding (int, list(int), or tuple(list(int), list(int)), optional): 
+            padding (int, list(int), or tuple(list(int), list(int)), optional):
                 :obj:`list` with input padding. All spatial dimensions get the same
                 padding if only one number is specified. Default: ``0``.
             kernel_dilation (int or list(int), optional): :obj:`list` with
@@ -3201,10 +3203,11 @@ void init_ops(py::module_& m) {
             input_dilation (int or list(int), optional): :obj:`list` with
                 input dilation. All spatial dimensions get the same dilation
                 if only one number is specified. Default: ``1``
-            groups (int, optional): input feature groups. Default: ``1``.
+            groups (int, optional): Input feature groups. Default: ``1``.
             flip (bool, optional): Flip the order in which the spatial dimensions of
-                the weights are processed. Performs the cross-correlation operator when 
-                ``flip=false`` and the convolution operator otherwise. Default: ``false``.
+                the weights are processed. Performs the cross-correlation operator when
+                ``flip`` is ``False`` and the convolution operator otherwise.
+                Default: ``False``.
 
         Returns:
             array: The convolved array.
