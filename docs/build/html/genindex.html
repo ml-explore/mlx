@@ -8,7 +8,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; MLX 0.3.0 documentation</title>
+    <title>Index &#8212; MLX 0.5.0 documentation</title>
   
   
   
@@ -131,8 +131,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.3.0 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo.png" class="logo__image only-dark" alt="MLX 0.3.0 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.5.0 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.5.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -230,6 +230,9 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.argpartition.html">mlx.core.argpartition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.argsort.html">mlx.core.argsort</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.array_equal.html">mlx.core.array_equal</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.atleast_1d.html">mlx.core.atleast_1d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.atleast_2d.html">mlx.core.atleast_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.atleast_3d.html">mlx.core.atleast_3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.broadcast_to.html">mlx.core.broadcast_to</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.ceil.html">mlx.core.ceil</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.clip.html">mlx.core.clip</a></li>
@@ -237,6 +240,7 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.convolve.html">mlx.core.convolve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv1d.html">mlx.core.conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv2d.html">mlx.core.conv2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv_general.html">mlx.core.conv_general</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.cos.html">mlx.core.cos</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.cosh.html">mlx.core.cosh</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.dequantize.html">mlx.core.dequantize</a></li>
@@ -433,19 +437,31 @@
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Softshrink.html">mlx.nn.Softshrink</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Transformer.html">mlx.nn.Transformer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Upsample.html">mlx.nn.Upsample</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="python/nn/functions.html">Functions</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-11"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.elu.html">mlx.nn.elu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.gelu.html">mlx.nn.gelu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.glu.html">mlx.nn.glu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.hardswish.html">mlx.nn.hardswish</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.leaky_relu.html">mlx.nn.leaky_relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.log_sigmoid.html">mlx.nn.log_sigmoid</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.log_softmax.html">mlx.nn.log_softmax</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.mish.html">mlx.nn.mish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.prelu.html">mlx.nn.prelu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.relu.html">mlx.nn.relu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.relu6.html">mlx.nn.relu6</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.selu.html">mlx.nn.selu</a></li>
-<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softshrink.html">mlx.nn.softshrink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.sigmoid.html">mlx.nn.sigmoid</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softmax.html">mlx.nn.softmax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softplus.html">mlx.nn.softplus</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softshrink.html">mlx.nn.softshrink</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.tanh.html">mlx.nn.tanh</a></li>
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="python/nn/losses.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-12"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -499,9 +515,11 @@
 </ul>
 </li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="python/optimizers/schedulers.html">Schedulers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-17"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l3"><a class="reference internal" href="python/optimizers/_autosummary/mlx.optimizers.step_decay.html">mlx.optimizers.step_decay</a></li>
-<li class="toctree-l3"><a class="reference internal" href="python/optimizers/_autosummary/mlx.optimizers.exponential_decay.html">mlx.optimizers.exponential_decay</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/optimizers/_autosummary/mlx.optimizers.cosine_decay.html">mlx.optimizers.cosine_decay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/optimizers/_autosummary/mlx.optimizers.exponential_decay.html">mlx.optimizers.exponential_decay</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/optimizers/_autosummary/mlx.optimizers.join_schedules.html">mlx.optimizers.join_schedules</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/optimizers/_autosummary/mlx.optimizers.linear_schedule.html">mlx.optimizers.linear_schedule</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/optimizers/_autosummary/mlx.optimizers.step_decay.html">mlx.optimizers.step_decay</a></li>
 </ul>
 </li>
 </ul>
@@ -729,10 +747,10 @@ document.write(`
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.Module.apply_to_modules.html#mlx.nn.Module.apply_to_modules">apply_to_modules() (mlx.nn.Module method)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.arange.html#mlx.core.arange">arange() (in module mlx.core)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.arccos.html#mlx.core.arccos">arccos() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.arccosh.html#mlx.core.arccosh">arccosh() (in module mlx.core)</a>
@@ -766,6 +784,12 @@ document.write(`
       <li><a href="python/_autosummary/mlx.core.array_equal.html#mlx.core.array_equal">array_equal() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.array.astype.html#mlx.core.array.astype">astype() (mlx.core.array method)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.atleast_1d.html#mlx.core.atleast_1d">atleast_1d() (in module mlx.core)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.atleast_2d.html#mlx.core.atleast_2d">atleast_2d() (in module mlx.core)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.atleast_3d.html#mlx.core.atleast_3d">atleast_3d() (in module mlx.core)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.AvgPool1d.html#mlx.nn.AvgPool1d">AvgPool1d (class in mlx.nn)</a>
 </li>
@@ -816,6 +840,8 @@ document.write(`
       <li><a href="python/nn/_autosummary/mlx.nn.Conv2d.html#mlx.nn.Conv2d">Conv2d (class in mlx.nn)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.conv2d.html#mlx.core.conv2d">conv2d() (in module mlx.core)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.conv_general.html#mlx.core.conv_general">conv_general() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.convolve.html#mlx.core.convolve">convolve() (in module mlx.core)</a>
 </li>
@@ -875,6 +901,8 @@ document.write(`
 <h2 id="E">E</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.elu.html#mlx.nn.elu">elu() (in module mlx.nn)</a>
+</li>
       <li><a href="python/nn/_autosummary/mlx.nn.Embedding.html#mlx.nn.Embedding">Embedding (class in mlx.nn)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.enable_compile.html#mlx.core.enable_compile">enable_compile() (in module mlx.core)</a>
@@ -885,14 +913,14 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.erfinv.html#mlx.core.erfinv">erfinv() (in module mlx.core)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.eval.html#mlx.core.eval">eval() (in module mlx.core)</a>
 
       <ul>
         <li><a href="python/nn/_autosummary/mlx.nn.Module.eval.html#mlx.nn.Module.eval">(mlx.nn.Module method)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.exp.html#mlx.core.exp">exp() (in module mlx.core)</a>
 
       <ul>
@@ -953,6 +981,8 @@ document.write(`
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/nn/_autosummary/mlx.nn.init.glorot_uniform.html#mlx.nn.init.glorot_uniform">glorot_uniform() (in module mlx.nn.init)</a>
 </li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.glu.html#mlx.nn.glu">glu() (in module mlx.nn)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.grad.html#mlx.core.grad">grad() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.greater.html#mlx.core.greater">greater() (in module mlx.core)</a>
@@ -969,12 +999,14 @@ document.write(`
 <h2 id="H">H</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="python/nn/_autosummary/mlx.nn.init.he_normal.html#mlx.nn.init.he_normal">he_normal() (in module mlx.nn.init)</a>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.hardswish.html#mlx.nn.hardswish">hardswish() (in module mlx.nn)</a>
 </li>
-      <li><a href="python/nn/_autosummary/mlx.nn.init.he_uniform.html#mlx.nn.init.he_uniform">he_uniform() (in module mlx.nn.init)</a>
+      <li><a href="python/nn/_autosummary/mlx.nn.init.he_normal.html#mlx.nn.init.he_normal">he_normal() (in module mlx.nn.init)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/nn/_autosummary/mlx.nn.init.he_uniform.html#mlx.nn.init.he_uniform">he_uniform() (in module mlx.nn.init)</a>
+</li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.losses.hinge_loss.html#mlx.nn.losses.hinge_loss">hinge_loss() (in module mlx.nn.losses)</a>
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.losses.huber_loss.html#mlx.nn.losses.huber_loss">huber_loss() (in module mlx.nn.losses)</a>
@@ -1027,6 +1059,10 @@ document.write(`
 <h2 id="J">J</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/optimizers/_autosummary/mlx.optimizers.join_schedules.html#mlx.optimizers.join_schedules">join_schedules() (in module mlx.optimizers)</a>
+</li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.jvp.html#mlx.core.jvp">jvp() (in module mlx.core)</a>
 </li>
   </ul></td>
@@ -1053,11 +1089,15 @@ document.write(`
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.Module.leaf_modules.html#mlx.nn.Module.leaf_modules">leaf_modules() (mlx.nn.Module method)</a>
 </li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.leaky_relu.html#mlx.nn.leaky_relu">leaky_relu() (in module mlx.nn)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.less.html#mlx.core.less">less() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.less_equal.html#mlx.core.less_equal">less_equal() (in module mlx.core)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.Linear.html#mlx.nn.Linear">Linear (class in mlx.nn)</a>
+</li>
+      <li><a href="python/optimizers/_autosummary/mlx.optimizers.linear_schedule.html#mlx.optimizers.linear_schedule">linear_schedule() (in module mlx.optimizers)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.linspace.html#mlx.core.linspace">linspace() (in module mlx.core)</a>
 </li>
@@ -1086,6 +1126,10 @@ document.write(`
       <li><a href="python/_autosummary/mlx.core.log2.html#mlx.core.log2">log2() (in module mlx.core)</a>
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.losses.log_cosh_loss.html#mlx.nn.losses.log_cosh_loss">log_cosh_loss() (in module mlx.nn.losses)</a>
+</li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.log_sigmoid.html#mlx.nn.log_sigmoid">log_sigmoid() (in module mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.log_softmax.html#mlx.nn.log_softmax">log_softmax() (in module mlx.nn)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.logaddexp.html#mlx.core.logaddexp">logaddexp() (in module mlx.core)</a>
 </li>
@@ -1255,6 +1299,8 @@ document.write(`
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.relu.html#mlx.nn.relu">relu() (in module mlx.nn)</a>
 </li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.relu6.html#mlx.nn.relu6">relu6() (in module mlx.nn)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.repeat.html#mlx.core.repeat">repeat() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.reshape.html#mlx.core.reshape">reshape() (in module mlx.core)</a>
@@ -1263,10 +1309,10 @@ document.write(`
         <li><a href="python/_autosummary/mlx.core.array.reshape.html#mlx.core.array.reshape">(mlx.core.array method)</a>
 </li>
       </ul></li>
-      <li><a href="python/_autosummary/mlx.core.fft.rfft.html#mlx.core.fft.rfft">rfft() (in module mlx.core.fft)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/_autosummary/mlx.core.fft.rfft.html#mlx.core.fft.rfft">rfft() (in module mlx.core.fft)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.fft.rfft2.html#mlx.core.fft.rfft2">rfft2() (in module mlx.core.fft)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.fft.rfftn.html#mlx.core.fft.rfftn">rfftn() (in module mlx.core.fft)</a>
@@ -1324,7 +1370,11 @@ document.write(`
       <li><a href="python/_autosummary/mlx.core.array.shape.html#mlx.core.array.shape">shape (mlx.core.array property)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.sigmoid.html#mlx.core.sigmoid">sigmoid() (in module mlx.core)</a>
+
+      <ul>
+        <li><a href="python/nn/_autosummary_functions/mlx.nn.sigmoid.html#mlx.nn.sigmoid">(in module mlx.nn)</a>
 </li>
+      </ul></li>
       <li><a href="python/_autosummary/mlx.core.sign.html#mlx.core.sign">sign() (in module mlx.core)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.SiLU.html#mlx.nn.SiLU">SiLU (class in mlx.nn)</a>
@@ -1345,9 +1395,15 @@ document.write(`
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.losses.smooth_l1_loss.html#mlx.nn.losses.smooth_l1_loss">smooth_l1_loss() (in module mlx.nn.losses)</a>
 </li>
+      <li><a href="python/_autosummary/mlx.core.softmax.html#mlx.core.softmax">softmax() (in module mlx.core)</a>
+
+      <ul>
+        <li><a href="python/nn/_autosummary_functions/mlx.nn.softmax.html#mlx.nn.softmax">(in module mlx.nn)</a>
+</li>
+      </ul></li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="python/_autosummary/mlx.core.softmax.html#mlx.core.softmax">softmax() (in module mlx.core)</a>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.softplus.html#mlx.nn.softplus">softplus() (in module mlx.nn)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.Softshrink.html#mlx.nn.Softshrink">Softshrink (class in mlx.nn)</a>
 </li>
@@ -1422,7 +1478,11 @@ document.write(`
       <li><a href="python/_autosummary/mlx.core.tan.html#mlx.core.tan">tan() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.tanh.html#mlx.core.tanh">tanh() (in module mlx.core)</a>
+
+      <ul>
+        <li><a href="python/nn/_autosummary_functions/mlx.nn.tanh.html#mlx.nn.tanh">(in module mlx.nn)</a>
 </li>
+      </ul></li>
       <li><a href="python/_autosummary/mlx.core.tensordot.html#mlx.core.tensordot">tensordot() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.array.tolist.html#mlx.core.array.tolist">tolist() (mlx.core.array method)</a>
@@ -1482,6 +1542,8 @@ document.write(`
 </li>
       </ul></li>
       <li><a href="python/nn/_autosummary/mlx.nn.Module.update_modules.html#mlx.nn.Module.update_modules">update_modules() (mlx.nn.Module method)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Upsample.html#mlx.nn.Upsample">Upsample (class in mlx.nn)</a>
 </li>
   </ul></td>
 </tr></table>
