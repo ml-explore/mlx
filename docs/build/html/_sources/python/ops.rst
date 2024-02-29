@@ -25,6 +25,9 @@ Operations
    argpartition
    argsort
    array_equal
+   atleast_1d
+   atleast_2d
+   atleast_3d
    broadcast_to
    ceil
    clip
@@ -32,6 +35,7 @@ Operations
    convolve
    conv1d
    conv2d
+   conv_general
    cos
    cosh
    dequantize
