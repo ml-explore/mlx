@@ -644,7 +644,7 @@ void conv_2D_gpu(
   }
 
   // Direct to implicit gemm conv
-  if ((conv_params.C <= 4 || conv_params.C % 16 == 0) &&
+  if (is_idil_one && (conv_params.C <= 4 || conv_params.C % 16 == 0) &&
       (conv_params.O <= 16 || conv_params.O % 16 == 0)) {
     return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
   }
