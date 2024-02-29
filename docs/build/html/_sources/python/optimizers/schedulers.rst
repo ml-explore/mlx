@@ -8,6 +8,8 @@ Schedulers
 .. autosummary::
    :toctree: _autosummary
 
-   step_decay    
-   exponential_decay    
    cosine_decay    
+   exponential_decay    
+   join_schedules
+   linear_schedule
+   step_decay    
