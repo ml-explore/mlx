@@ -57,6 +57,7 @@ Operations
    greater_equal
    identity
    inner
+   isclose
    isnan
    isposinf
    isneginf
@@ -121,6 +122,7 @@ Operations
    tan
    tanh
    tensordot
+   tile
    transpose
    tri
    tril

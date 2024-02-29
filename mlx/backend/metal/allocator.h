@@ -24,6 +24,9 @@ class BufferCache {
   MTL::Buffer* reuse_from_cache(size_t size);
   void recycle_to_cache(MTL::Buffer* buf);
   void release_cached_buffers(size_t min_bytes_to_free);
+  size_t pool_size() {
+    return pool_size_;
+  }
 
  private:
   struct BufferHolder {
@@ -54,6 +57,14 @@ class MetalAllocator : public allocator::Allocator {
  public:
   virtual Buffer malloc(size_t size, bool allow_swap = false) override;
   virtual void free(Buffer buffer) override;
+  size_t get_active_memory() {
+    return active_memory_;
+  };
+  size_t get_peak_memory() {
+    return peak_memory_;
+  };
+  size_t set_gc_limit(size_t limit);
+  size_t set_memory_limit(size_t limit, bool relaxed);
 
  private:
   MTL::Device* device_;
@@ -64,9 +75,11 @@ class MetalAllocator : public allocator::Allocator {
   BufferCache buffer_cache_;
 
   // Allocation stats
-  size_t peak_allocated_size_;
   size_t block_limit_;
   size_t gc_limit_;
+  size_t active_memory_{0};
+  size_t peak_memory_{0};
+  bool relaxed_{true};
 };
 
 MetalAllocator& allocator();

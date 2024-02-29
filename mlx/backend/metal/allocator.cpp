@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include "mlx/backend/metal/allocator.h"
+#include <iostream> // TODO
 #include "mlx/backend/metal/metal.h"
 
 #include <mach/vm_page_size.h>
@@ -22,16 +23,6 @@ void* Buffer::raw_ptr() {
 } // namespace allocator
 
 namespace metal {
-
-static bool cache_enabled_ = true;
-
-bool cache_enabled() {
-  return cache_enabled_;
-}
-
-void set_cache_enabled(bool enabled) {
-  cache_enabled_ = enabled;
-}
 
 namespace {
 
@@ -158,9 +149,19 @@ void BufferCache::remove_from_list(BufferCache::BufferHolder* to_remove) {
 MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
       buffer_cache_(device_),
-      peak_allocated_size_(0),
       block_limit_(1.5 * device_->recommendedMaxWorkingSetSize()),
       gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()) {}
+
+size_t MetalAllocator::set_gc_limit(size_t limit) {
+  std::swap(limit, gc_limit_);
+  return limit;
+};
+
+size_t MetalAllocator::set_memory_limit(size_t limit, bool relaxed) {
+  std::swap(limit, block_limit_);
+  relaxed_ = relaxed;
+  return limit;
+};
 
 Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   // Metal doesn't like empty buffers
@@ -178,7 +179,8 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
   if (!buf) {
     // If there is too much memory pressure, fail (likely causes a wait).
-    if (!allow_swap && device_->currentAllocatedSize() + size >= block_limit_) {
+    if (!(allow_swap & relaxed_) &&
+        device_->currentAllocatedSize() + size >= block_limit_) {
       return Buffer{nullptr};
     }
 
@@ -198,15 +200,16 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     buf = device_->newBuffer(size, res_opt);
   }
 
-  peak_allocated_size_ =
-      std::max(peak_allocated_size_, device_->currentAllocatedSize());
+  active_memory_ += buf->length();
+  peak_memory_ = std::max(peak_memory_, active_memory_);
 
   return Buffer{static_cast<void*>(buf)};
 }
 
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
-  if (cache_enabled()) {
+  active_memory_ -= buf->length();
+  if (gc_limit_ > 0) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
     buf->release();
@@ -216,6 +219,22 @@ void MetalAllocator::free(Buffer buffer) {
 MetalAllocator& allocator() {
   static MetalAllocator allocator_;
   return allocator_;
+}
+
+size_t set_gc_limit(size_t limit) {
+  return allocator().set_gc_limit(limit);
+}
+
+size_t set_memory_limit(size_t limit, bool relaxed /* = true */) {
+  return allocator().set_memory_limit(limit, relaxed);
+}
+
+size_t get_active_memory() {
+  return allocator().get_active_memory();
+}
+
+size_t get_peak_memory() {
+  return allocator().get_peak_memory();
 }
 
 } // namespace metal
