@@ -2281,38 +2281,6 @@ void init_ops(py::module_& m) {
             list(array): A list of split arrays.
       )pbdoc");
   m.def(
-      "fast_inference_sdpa",
-      &fast_inference_sdpa,
-      "q"_a,
-      "k"_a,
-      "v"_a,
-      "scale"_a,
-      "mask"_a = none,
-      py::kw_only(),
-      "stream"_a = none,
-      R"pbdoc(
-          fast_inference_sdpa(q: array, k: array, v: array,  /, *, stream: Union[None, Stream, Device] = None) -> array
-
-          A parallelized implementation of multi-head attention: O = softmax(Q @ K.T, dim=-1) @ V,
-          with a split along the KV sequence length.  Supports MHA, GQA, and MQA.
-
-          Perform the (possibly batched) matrix multiplication of two arrays. This function is an inference-only
-          kernel optimized specifically for KV-cached transformer decoder inference (query sequence length = 1) and
-          large KV-cached sequences.  It handles prompt encoding via MLX primitives, optimized metal kernel
-          is for decoding only.
-
-          Args:
-              q (array): Input query vector.
-              k (array): Input keys matrix from KV cache.
-              v (array): Input values matrix from KV cache.
-              scale (float): Scale for queries (typically 1 / sqrt(d_k))
-              mask (array, optional): Mask for prompt encoding
-
-          Returns:
-              array: o (array), the output attention score
-
-        )pbdoc");
-  m.def(
       "argmin",
       [](const array& a,
          std::optional<int> axis,

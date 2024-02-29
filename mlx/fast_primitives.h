@@ -65,4 +65,39 @@ class RoPE : public Custom {
   int offset_;
 };
 
+class ScaledDotProductAttention : public Custom {
+ public:
+  explicit ScaledDotProductAttention(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      const float scale,
+      const bool needs_mask)
+      : Custom(stream, fallback), scale_(scale), needs_mask_(needs_mask){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    return eval_cpu(inputs, outputs[0]);
+  };
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    return eval_gpu(inputs, outputs[0]);
+  };
+
+  void eval_cpu(const std::vector<array>& inputs, array& out_array) {
+    out_array = fallback_(inputs)[0];
+  };
+
+  void eval_gpu(const std::vector<array>& inputs, array& out);
+  bool is_equivalent(const Primitive& other) const override;
+
+  DEFINE_PRINT(ScaledDotProductAttention)
+
+ private:
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+  float scale_;
+  bool needs_mask_;
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 } // namespace mlx::core::fast

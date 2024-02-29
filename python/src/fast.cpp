@@ -56,4 +56,45 @@ void init_extensions(py::module_& parent_module) {
         Returns:
             array: The output array.
       )pbdoc");
+
+  m.def(
+      "scaled_dot_product_attention",
+      [](const array& q,
+         const array& k,
+         const array& v,
+         const float scale,
+         const std::optional<array>& mask,
+         const StreamOrDevice& s) {
+        return fast::scaled_dot_product_attention(q, k, v, scale, mask, s);
+      },
+      "q"_a,
+      "k"_a,
+      "v"_a,
+      py::kw_only(),
+      "scale"_a,
+      "mask"_a = none,
+      "stream"_a = none,
+      R"pbdoc(
+                  scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float, /,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array
+
+            A parallelized implementation of multi-head attention: O = softmax(Q @ K.T, dim=-1) @ V.
+            Supports Multi-Head Attention (see https://arxiv.org/abs/1706.03762),
+            Grouped Query Attention (https://arxiv.org/abs/2305.13245),
+            and Multi-Query Attention (https://arxiv.org/pdf/1911.02150.pdf).
+
+            This function is an inference-focused kernel optimized specifically for KV-cached transformer
+            decoder inference (query sequence length = 1) and large KV-cached sequences.
+            It handles prompt encoding via MLX primitives.  The optimized metal kernel is for decoding only.
+
+            Args:
+                q (array): Input query array.
+                k (array): Input keys array.
+                v (array): Input values array.
+                scale (float): Scale for queries (typically 1.0 / sqrt(q.shape(-1))
+                mask (array, optional): Mask for prompt encoding
+
+            Returns:
+                array: The output array.
+
+          )pbdoc");
 }

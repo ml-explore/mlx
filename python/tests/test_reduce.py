@@ -4,9 +4,8 @@ import unittest
 from itertools import combinations, permutations
 
 import mlx.core as mx
-import numpy as np
-
 import mlx_tests
+import numpy as np
 
 
 class TestReduce(mlx_tests.MLXTestCase):

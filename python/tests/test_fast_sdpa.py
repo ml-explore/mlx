@@ -1,19 +1,9 @@
-# Created by Brian Keene, 2024
-
 import math
 import unittest
-from itertools import permutations
 
 import mlx.core as mx
-import numpy as np
-
 import mlx_tests
-
-
-def relerr(truth, other):
-    a = truth.flatten()
-    b = other.flatten()
-    return np.linalg.norm(a - b) / np.linalg.norm(a)
+import numpy as np
 
 
 # SDPA for MHA (n_heads == n_kv_heads)
@@ -51,9 +41,6 @@ class TestFastInferenceSDPA(mlx_tests.MLXTestCase):
 
         # Not yet supported:
         # * K pre-transposed in kernel, V pre-transposed in kernel
-        # * Custom metal shader is exercised only for query sequence length == 1
-        if not mx.metal.is_available():
-            return
         np.random.seed(0)
         L = 43
         R = 1
@@ -69,12 +56,12 @@ class TestFastInferenceSDPA(mlx_tests.MLXTestCase):
 
         reference = mlx_primitives_sdpa(q_mlx, k_mlx, v_mlx, scale)
 
-        o_mlx = mx.fast_inference_sdpa(q_mlx, k_mlx, v_mlx, scale, None)
-
-        mx.eval()
+        o_mlx = mx.fast.scaled_dot_product_attention(
+            q_mlx, k_mlx, v_mlx, scale=scale, mask=None
+        )
 
         self.assertListEqual(list(reference.shape), list(o_mlx.shape))
-        self.assertTrue(np.allclose(o_mlx, reference, atol=1e-4))
+        self.assertTrue(mx.allclose(o_mlx, reference, atol=1e-4))
 
         B = 1
         H = 32
@@ -95,7 +82,9 @@ class TestFastInferenceSDPA(mlx_tests.MLXTestCase):
                     v_mlx = mx.array(v_npy)
 
                     reference = mlx_primitives_sdpa_with_gqa(q_mlx, k_mlx, v_mlx, scale)
-                    o_mlx = mx.fast_inference_sdpa(q_mlx, k_mlx, v_mlx, scale, None)
+                    o_mlx = mx.fast.scaled_dot_product_attention(
+                        q_mlx, k_mlx, v_mlx, scale=scale
+                    )
 
                     self.assertListEqual(list(reference.shape), list(o_mlx.shape))
                     rtol = 1e-5
@@ -107,7 +96,7 @@ class TestFastInferenceSDPA(mlx_tests.MLXTestCase):
                     if DTYPE == np.half:
                         rtol = 1e-2
 
-                    self.assertTrue(np.allclose(o_mlx, reference, rtol=rtol, atol=atol))
+                    self.assertTrue(mx.allclose(o_mlx, reference, rtol=rtol, atol=atol))
 
 
 if __name__ == "__main__":

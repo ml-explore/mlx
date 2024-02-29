@@ -49,7 +49,6 @@ NO_GPU(Erf)
 NO_GPU(ErfInv)
 NO_GPU(Exp)
 NO_GPU(FFT)
-NO_GPU(FastInferenceSDPA)
 NO_GPU(Floor)
 NO_GPU(Full)
 NO_GPU(Gather)
@@ -99,6 +98,7 @@ NO_GPU(Transpose)
 
 namespace fast {
 NO_GPU_MULTI(RoPE)
+NO_GPU(ScaledDotProductAttention)
 } // namespace fast
 
 } // namespace mlx::core

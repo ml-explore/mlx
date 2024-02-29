@@ -1189,32 +1189,6 @@ std::vector<array> FFT::jvp(
   }
 }
 
-std::vector<array> FastInferenceSDPA::vjp(
-    const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
-    const std::vector<array>&) {
-  throw std::runtime_error("FastInferenceSDPA::vjp: inference only kernel");
-}
-
-std::vector<array> FastInferenceSDPA::jvp(
-    const std::vector<array>& primals,
-    const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
-  throw std::runtime_error("FastInferenceSDPA::vjp inference only kernel");
-}
-bool FastInferenceSDPA::is_equivalent(const Primitive& other) const {
-  const FastInferenceSDPA& d_other =
-      static_cast<const FastInferenceSDPA&>(other);
-  return scale_ == d_other.scale_ && needs_mask == d_other.needs_mask;
-}
-
-std::pair<std::vector<array>, std::vector<int>> FastInferenceSDPA::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
-  throw std::runtime_error("FastInferenceSDPA::vmap NYI");
-}
-
 std::vector<array> Floor::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

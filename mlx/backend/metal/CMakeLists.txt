@@ -29,7 +29,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/fast_inference_sdpa.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/metal.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cpp

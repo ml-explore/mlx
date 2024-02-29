@@ -1,9 +1,6 @@
 //
-//  fast_inference_sdpa.cpp
+//  scaled_dot_product_attention.cpp
 //  mlx
-//
-//  Copyright (C) 2024 Argmax, Inc.
-//
 
 #include <algorithm>
 #include <cassert>
@@ -12,17 +9,18 @@
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/fast_inference_sdpa_params.h"
+#include "mlx/backend/metal/kernels/scaled_dot_product_attention_params.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-namespace mlx::core {
+namespace mlx::core::fast {
 
 namespace {
 
-void fast_inference_sdpa_metal(
+void sdpa_metal(
     const Stream& s,
     metal::Device& d,
     const array& q,
@@ -60,7 +58,7 @@ void fast_inference_sdpa_metal(
     kname_reduce << "half";
   } else {
     throw std::runtime_error(
-        "[fast_inference_sdpa]: unexpected dtype found for queries: expected either float32 or float16.");
+        "[scaled_dot_product_attention::eval_gpu]: unexpected dtype found for queries: expected either float32 or float16.");
   }
 
   std::string kname_suffix_tile_size = std::to_string(tile_size) + delimiter;
@@ -82,18 +80,19 @@ void fast_inference_sdpa_metal(
   MTL::Size group_dims = MTL::Size(32, nsimd, 1);
 
   const uint64_t KV_sequence_length = k.shape(-2);
-
+  const uint query_sequence_length = q.shape(-2);
   const uint n_q_heads = q.shape(1);
   const uint n_kv_heads = k.shape(1);
 
-  MLXFastInferenceSDPAParams params{
-      batch, 1, n_q_heads, n_kv_heads, false, false, false, n_tiles, alpha};
+  MLXScaledDotProductAttentionParams params{
+      query_sequence_length, n_q_heads, n_kv_heads, n_tiles, alpha};
 
   set_array_buffer(compute_encoder, q, 0);
   set_array_buffer(compute_encoder, k, 1);
   set_array_buffer(compute_encoder, v, 2);
   compute_encoder->setBytes(&KV_sequence_length, sizeof(KV_sequence_length), 3);
-  compute_encoder->setBytes(&params, sizeof(MLXFastInferenceSDPAParams), 4);
+  compute_encoder->setBytes(
+      &params, sizeof(MLXScaledDotProductAttentionParams), 4);
   set_array_buffer(compute_encoder, o_partial, 5);
   set_array_buffer(compute_encoder, p_lse, 6);
   set_array_buffer(compute_encoder, p_rowmaxes, 7);
@@ -108,7 +107,8 @@ void fast_inference_sdpa_metal(
     set_array_buffer(compute_encoder, o_partial, 0);
     set_array_buffer(compute_encoder, p_lse, 1);
     set_array_buffer(compute_encoder, p_rowmaxes, 2);
-    compute_encoder->setBytes(&params, sizeof(MLXFastInferenceSDPAParams), 3);
+    compute_encoder->setBytes(
+        &params, sizeof(MLXScaledDotProductAttentionParams), 3);
     set_array_buffer(compute_encoder, out, 4);
 
     MTL::Size grid_dims_reduce = MTL::Size(heads, 1, batch);
@@ -117,13 +117,15 @@ void fast_inference_sdpa_metal(
     compute_encoder->dispatchThreadgroups(grid_dims_reduce, group_dims_reduce);
 
     d.get_command_buffer(s.index)->addCompletedHandler(
-        [&, temporaries](MTL::CommandBuffer*) mutable { temporaries.clear(); });
+        [temporaries](MTL::CommandBuffer*) mutable { temporaries.clear(); });
     return;
   }
 }
 } // namespace
 
-void FastInferenceSDPA::eval_gpu(const std::vector<array>& inputs, array& out) {
+void ScaledDotProductAttention::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
   assert(inputs.size() >= 3);
   if (!is_floating_point(out.dtype())) {
     throw std::runtime_error(
@@ -154,34 +156,19 @@ void FastInferenceSDPA::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
     if (stx == arr.shape(-1) && sty == 1) {
-      return std::make_tuple(false, stx, arr);
-    } else if (stx == 1 && sty == arr.shape(-2)) {
-      return std::make_tuple(true, sty, arr);
+      return arr;
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
       copy_gpu(arr, arr_copy, CopyType::General, s);
       temporaries.push_back(arr_copy);
       size_t stx = arr.shape(-1);
-      return std::make_tuple(false, stx, arr_copy);
+      return arr_copy;
     }
   };
 
-  auto [q_transposed, q_cols, q] = check_transpose(q_pre);
-  auto [k_transposed, k_cols, k] = check_transpose(k_pre);
-  auto [v_transposed, v_cols, v] = check_transpose(v_pre);
-
-  if (q_transposed) {
-    throw std::runtime_error(
-        "[fast_inference_sdpa] q_transposed NYI for Metal backend.");
-  }
-  if (k_transposed) {
-    throw std::runtime_error(
-        "[fast_inference_sdpa] k_transposed NYI for Metal backend.");
-  }
-  if (v_transposed) {
-    throw std::runtime_error(
-        "[fast_inference_sdpa] v_transposed NYI for Metal backend.");
-  }
+  auto q = check_transpose(q_pre);
+  auto k = check_transpose(k_pre);
+  auto v = check_transpose(v_pre);
 
   const int heads = q.shape(-3);
   int tile_size = 64;
@@ -216,7 +203,7 @@ void FastInferenceSDPA::eval_gpu(const std::vector<array>& inputs, array& out) {
   temporaries.push_back(p_rowmaxes);
   temporaries.push_back(o_partials);
 
-  return fast_inference_sdpa_metal(
+  return sdpa_metal(
       s,
       d,
       q,
@@ -233,4 +220,4 @@ void FastInferenceSDPA::eval_gpu(const std::vector<array>& inputs, array& out) {
       temporaries);
 }
 
-} // namespace mlx::core
+} // namespace mlx::core::fast

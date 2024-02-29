@@ -1,10 +1,7 @@
-//  Copyright (C) 2024 Argmax, Inc.
-//
-
 #include <metal_stdlib>
 #include <metal_simdgroup>
 
-#include "mlx/backend/metal/kernels/fast_inference_sdpa_params.h"
+#include "mlx/backend/metal/kernels/scaled_dot_product_attention_params.h"
 using namespace metal;
 
 template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_t NSIMDGROUPS>
@@ -12,7 +9,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
                               const device T *K [[buffer(1)]],
                               const device T *V [[buffer(2)]],
                               const device uint64_t& L [[buffer(3)]],
-                              const device MLXFastInferenceSDPAParams& params [[buffer(4)]],
+                              const device MLXScaledDotProductAttentionParams& params [[buffer(4)]],
                               device float* O_partials [[buffer(5)]],
                               device float* p_lse [[buffer(6)]],
                               device float* p_maxes [[buffer(7)]],
@@ -180,7 +177,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
     threadgroup T4* smemFlush = (threadgroup T4*)threadgroup_block;
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    #pragma clang unroll(full)
+    #pragma clang loop unroll(full)
     for(uint i = 0; i < 8; i++) {
         smemFlush[simd_lane_id + simd_group_id * THREADS_PER_SIMDGROUP + i * NSIMDGROUPS * THREADS_PER_SIMDGROUP] = T4(0.f);
     }
@@ -342,22 +339,12 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    if (TILE_SIZE_CONST == 64 && 0) {
-        if(simd_lane_id == 0) {
-            for(size_t i = 0; i < DK / NSIMDGROUPS; i++) {
-                float val = localOpartials[i];
-                device float* oPartialGmem = O_partials + tid.x * DK * params.KV_TILES + tid.y * DK;
-                oPartialGmem[i * NSIMDGROUPS + simd_group_id] = val;
-            }
-        }
-    } else {
-        if(simd_group_id == 0) {
-            threadgroup float4* oPartialVec4 = (threadgroup float4*)smemOpartial;
-            float4 vals = *(oPartialVec4 + simd_lane_id);
-            device float* oPartialGmem = O_partials + tid.x * DK * params.KV_TILES + tid.y * DK;
-            device float4* oPartialGmemVec4 = (device float4*)oPartialGmem;
-            oPartialGmemVec4[simd_lane_id] = vals;
-        }
+    if(simd_group_id == 0) {
+        threadgroup float4* oPartialVec4 = (threadgroup float4*)smemOpartial;
+        float4 vals = *(oPartialVec4 + simd_lane_id);
+        device float* oPartialGmem = O_partials + tid.x * DK * params.KV_TILES + tid.y * DK;
+        device float4* oPartialGmemVec4 = (device float4*)oPartialGmem;
+        oPartialGmemVec4[simd_lane_id] = vals;
     }
 
     if(simd_group_id == 0 && simd_lane_id == 0) {
@@ -375,7 +362,7 @@ template [[host_name("fast_inference_sdpa_compute_partials_" #itype "_" #tile_si
     const device itype *K [[buffer(1)]], \
     const device itype *V [[buffer(2)]], \
     const device uint64_t& L [[buffer(3)]], \
-    const device MLXFastInferenceSDPAParams& params [[buffer(4)]], \
+    const device MLXScaledDotProductAttentionParams& params [[buffer(4)]], \
     device float* O_partials [[buffer(5)]], \
     device float* p_lse [[buffer(6)]], \
     device float* p_maxes [[buffer(7)]], \
@@ -408,7 +395,7 @@ void fast_inference_sdpa_reduce_tiles_template(
     const device float *O_partials [[buffer(0)]],
     const device float *p_lse[[buffer(1)]],
     const device float *p_maxes [[buffer(2)]],
-    const device MLXFastInferenceSDPAParams& params [[buffer(3)]],
+    const device MLXScaledDotProductAttentionParams& params [[buffer(3)]],
     device T* O [[buffer(4)]],
     threadgroup T *threadgroup_block [[threadgroup(0)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
@@ -459,7 +446,7 @@ kernel void fast_inference_sdpa_reduce_tiles_float(
     const device float *O_partials [[buffer(0)]],
     const device float *p_lse[[buffer(1)]],
     const device float *p_maxes [[buffer(2)]],
-    const device MLXFastInferenceSDPAParams& params [[buffer(3)]],
+    const device MLXScaledDotProductAttentionParams& params [[buffer(3)]],
     device float* O [[buffer(4)]],
     threadgroup float *threadgroup_block [[threadgroup(0)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
@@ -479,7 +466,7 @@ kernel void fast_inference_sdpa_reduce_tiles_half(
     const device float *O_partials [[buffer(0)]],
     const device float *p_lse[[buffer(1)]],
     const device float *p_maxes [[buffer(2)]],
-    const device MLXFastInferenceSDPAParams& params [[buffer(3)]],
+    const device MLXScaledDotProductAttentionParams& params [[buffer(3)]],
     device half* O [[buffer(4)]],
     threadgroup half* threadgroup_block [[threadgroup(0)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],

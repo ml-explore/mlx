@@ -856,30 +856,6 @@ class Floor : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class FastInferenceSDPA : public UnaryPrimitive {
- public:
-  explicit FastInferenceSDPA(
-      Stream stream,
-      const float scale,
-      const bool needs_mask)
-      : UnaryPrimitive(stream), scale_(scale){};
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override {
-    throw std::runtime_error("FastInferenceSDPA: CPU NYI");
-  };
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-  bool is_equivalent(const Primitive& other) const override;
-
-  DEFINE_GRADS()
-  DEFINE_VMAP()
-  DEFINE_PRINT(FastInferenceSDPA)
-
- private:
-  float scale_;
-  bool needs_mask;
-  void eval(const std::vector<array>& inputs, array& out);
-};
-
 class Full : public UnaryPrimitive {
  public:
   explicit Full(Stream stream) : UnaryPrimitive(stream){};
