@@ -2696,33 +2696,78 @@ array cummin(
 namespace {
 
 // Conv helpers
-inline int conv_out_axis_size(
-    int in_dim,
-    int wt_dim,
-    int stride,
-    int padding,
-    int dilation) {
-  int ker = dilation * (wt_dim - 1);
-  return ((in_dim + 2 * padding - ker - 1) / stride) + 1;
+inline int conv_out_axis_size(int in_dim, int wt_dim, int stride, int padding) {
+  return ((in_dim + padding - wt_dim) / stride) + 1;
+}
+
+// Conv helpers
+inline int dilate_size(int dim, int dil) {
+  return 1 + dil * (dim - 1);
 }
 
 inline std::vector<int> conv_out_shape(
     const std::vector<int>& in_shape,
     const std::vector<int>& wt_shape,
     const std::vector<int>& strides,
-    const std::vector<int>& pads,
-    const std::vector<int>& dilation) {
+    const std::vector<int>& pads_lo,
+    const std::vector<int>& pads_hi,
+    const std::vector<int>& kernel_dilation,
+    const std::vector<int>& input_dilation) {
   int N = in_shape[0];
   int O = wt_shape[0];
   std::vector<int> out_shape(in_shape.size());
   int i = 0;
   out_shape[i++] = N;
 
+  int spatial_dims = in_shape.size() - 2;
+
+  if (strides.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid strides " << strides << "for " << spatial_dims
+        << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid pading " << pads_lo << " | " << pads_hi << "for "
+        << spatial_dims << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (kernel_dilation.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid kernel dilation " << kernel_dilation << "for "
+        << spatial_dims << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (input_dilation.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid input dilation " << input_dilation << "for "
+        << spatial_dims << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
   for (; i < in_shape.size() - 1; i++) {
-    if (pads[i - 1] < 0) {
+    if (kernel_dilation[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Kernel dilation sizes must be positive."
+          << " Got kernel dilation " << kernel_dilation << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (input_dilation[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Input dilation sizes must be positive."
+          << " Got input dilation " << input_dilation << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
       msg << "[conv] Padding sizes must be non-negative."
-          << " Got padding " << pads << ".";
+          << " Got padding " << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -2733,22 +2778,19 @@ inline std::vector<int> conv_out_shape(
       throw std::invalid_argument(msg.str());
     }
 
-    if (dilation[i - 1] <= 0) {
-      std::ostringstream msg;
-      msg << "[conv] Dilation sizes must be positive."
-          << " Got dilation " << dilation << ".";
-      throw std::invalid_argument(msg.str());
-    }
+    int kd = dilate_size(wt_shape[i], kernel_dilation[i - 1]);
+    int id = dilate_size(in_shape[i], input_dilation[i - 1]);
 
     out_shape[i] = conv_out_axis_size(
-        in_shape[i], wt_shape[i], strides[i - 1], pads[i - 1], dilation[i - 1]);
+        id, kd, strides[i - 1], pads_lo[i - 1] + pads_hi[i - 1]);
 
     if (out_shape[i] <= 0) {
       std::ostringstream msg;
       msg << "[conv] Spatial dimensions of input after padding "
           << " cannot be smaller than weight spatial dimensions."
-          << " Got input with shape " << in_shape << " and padding " << pads
-          << " for weight of shape " << wt_shape << ".";
+          << " Got error at axis " << i << " for input with shape " << in_shape
+          << ", padding low " << pads_lo << ", padding high " << pads_hi
+          << ", and weight of shape " << wt_shape << ".";
       throw std::invalid_argument(msg.str());
     }
   }
@@ -2803,43 +2845,16 @@ array conv1d(
     int dilation /* = 1 */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
-  // Run checks
-  if (groups != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle groups != 1 yet");
-  }
-  if (dilation != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle dilation != 1 yet");
-  }
-
-  // Run checks
-  run_conv_checks(in_, wt_, 1);
-
-  auto in = in_;
-  auto wt = wt_;
-
-  // Type promotion
-  auto out_type = promote_types(in.dtype(), wt.dtype());
-  in = astype(in, out_type, s);
-  wt = astype(wt, out_type, s);
-
-  std::vector<int> strides_vec = {stride};
-  std::vector<int> padding_vec = {padding};
-  std::vector<int> dilation_vec = {dilation};
-
-  // Get output shapes
-  std::vector<int> out_shape = conv_out_shape(
-      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
-
-  return array(
-      out_shape,
-      in.dtype(),
-      std::make_unique<Convolution>(
-          to_stream(s),
-          padding_vec,
-          strides_vec,
-          dilation_vec,
-          std::vector<int>(1, 1)),
-      {in, wt});
+  return conv_general(
+      /* const array& input = */ in_,
+      /* const array& weight = */ wt_,
+      /* std::vector<int> stride = */ {stride},
+      /* std::vector<int> padding = */ {padding},
+      /* std::vector<int> kernel_dilation = */ {dilation},
+      /* std::vector<int> input_dilation = */ {1},
+      /* int groups = */ groups,
+      /* bool flip = */ false,
+      s);
 }
 
 /** 2D convolution with a filter */
@@ -2851,42 +2866,98 @@ array conv2d(
     const std::pair<int, int>& dilation /* = {1, 1} */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
+  return conv_general(
+      /* const array& input = */ in_,
+      /* const array& weight = */ wt_,
+      /* std::vector<int> stride = */ {stride.first, stride.second},
+      /* std::vector<int> padding = */ {padding.first, padding.second},
+      /* std::vector<int> kernel_dilation = */
+      {dilation.first, dilation.second},
+      /* std::vector<int> input_dilation = */ {1, 1},
+      /* int groups = */ groups,
+      /* bool flip = */ false,
+      s);
+}
+
+/** General convolution with a filter */
+array conv_general(
+    array in,
+    array wt,
+    std::vector<int> stride /* = {} */,
+    std::vector<int> padding_lo /* = {} */,
+    std::vector<int> padding_hi /* = {} */,
+    std::vector<int> kernel_dilation /* = {} */,
+    std::vector<int> input_dilation /* = {} */,
+    int groups /* = 1 */,
+    bool flip /* = false */,
+    StreamOrDevice s /* = {} */) {
   // Run checks
   if (groups != 1) {
-    throw std::invalid_argument("[conv2d] Cannot handle groups != 1 yet");
+    throw std::invalid_argument("[conv] Cannot handle groups != 1 yet");
   }
-  if (dilation.first != 1 || dilation.second != 1) {
-    throw std::invalid_argument("[conv2d] Cannot handle dilation != 1 yet");
+
+  int spatial_dims = in.ndim() - 2;
+
+  if (spatial_dims < 1 || spatial_dims > 2) {
+    throw std::invalid_argument(
+        "[conv] Can only work with inputs that have 1 or 2 spatial dimensions."
+        " The inputs must be in the format [N, ..., C_in]");
   }
 
   // Run checks
-  run_conv_checks(in_, wt_, 2);
-
-  auto in = in_;
-  auto wt = wt_;
+  run_conv_checks(in, wt, spatial_dims);
 
   // Type promotion
   auto out_type = promote_types(in.dtype(), wt.dtype());
   in = astype(in, out_type, s);
   wt = astype(wt, out_type, s);
 
-  std::vector<int> strides_vec = {stride.first, stride.second};
-  std::vector<int> padding_vec = {padding.first, padding.second};
-  std::vector<int> dilation_vec = {dilation.first, dilation.second};
+  if (stride.size() <= 1) {
+    int stride_int = stride.size() ? stride[0] : 1;
+    stride = std::vector<int>(spatial_dims, stride_int);
+  }
+
+  if (padding_lo.size() <= 1) {
+    int padding_int = padding_lo.size() ? padding_lo[0] : 0;
+    padding_lo = std::vector<int>(spatial_dims, padding_int);
+  }
+
+  if (padding_hi.size() <= 1) {
+    int padding_int = padding_hi.size() ? padding_hi[0] : 0;
+    padding_hi = std::vector<int>(spatial_dims, padding_int);
+  }
+
+  if (kernel_dilation.size() <= 1) {
+    int kernel_dilation_int = kernel_dilation.size() ? kernel_dilation[0] : 1;
+    kernel_dilation = std::vector<int>(spatial_dims, kernel_dilation_int);
+  }
+
+  if (input_dilation.size() <= 1) {
+    int input_dilation_int = input_dilation.size() ? input_dilation[0] : 1;
+    input_dilation = std::vector<int>(spatial_dims, input_dilation_int);
+  }
 
   // Get output shapes
   std::vector<int> out_shape = conv_out_shape(
-      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
+      in.shape(),
+      wt.shape(),
+      stride,
+      padding_lo,
+      padding_hi,
+      kernel_dilation,
+      input_dilation);
 
   return array(
       out_shape,
       in.dtype(),
       std::make_unique<Convolution>(
           to_stream(s),
-          padding_vec,
-          strides_vec,
-          dilation_vec,
-          std::vector<int>(2, 1)),
+          stride,
+          padding_lo,
+          kernel_dilation,
+          input_dilation,
+          groups,
+          flip),
       {in, wt});
 }
 

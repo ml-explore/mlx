@@ -1026,6 +1026,43 @@ array cummin(
 
 /** Convolution operations */
 
+/** General convolution with a filter */
+array conv_general(
+    array input,
+    array weight,
+    std::vector<int> stride = {},
+    std::vector<int> padding_lo = {},
+    std::vector<int> padding_hi = {},
+    std::vector<int> kernel_dilation = {},
+    std::vector<int> input_dilation = {},
+    int groups = 1,
+    bool flip = false,
+    StreamOrDevice s = {});
+
+/** General convolution with a filter */
+inline array conv_general(
+    const array& input,
+    const array& weight,
+    std::vector<int> stride = {},
+    std::vector<int> padding = {},
+    std::vector<int> kernel_dilation = {},
+    std::vector<int> input_dilation = {},
+    int groups = 1,
+    bool flip = false,
+    StreamOrDevice s = {}) {
+  return conv_general(
+      /* const array& input = */ input,
+      /* const array& weight = */ weight,
+      /* std::vector<int> stride = */ stride,
+      /* std::vector<int> padding_lo = */ padding,
+      /* std::vector<int> padding_hi = */ padding,
+      /* std::vector<int> kernel_dilation = */ kernel_dilation,
+      /* std::vector<int> input_dilation = */ input_dilation,
+      /* int groups = */ groups,
+      /* bool flip = */ flip,
+      /* StreamOrDevice s = */ s);
+}
+
 /** 1D convolution with a filter */
 array conv1d(
     const array& input,

@@ -35,6 +35,7 @@ Operations
    convolve
    conv1d
    conv2d
+   conv_general
    cos
    cosh
    dequantize
