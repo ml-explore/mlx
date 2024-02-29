@@ -129,13 +129,12 @@ void ScaledDotProductAttention::eval_gpu(
   assert(inputs.size() >= 3);
   if (!is_floating_point(out.dtype())) {
     throw std::runtime_error(
-        "[FastInferenceSDPA] Does not yet support non-floating point types.");
+        "[ScaledDotProductAttention] Does not yet support non-floating point types.");
   }
 
   if (inputs.size() == 4) {
-    printf("Received 4 inputs\n");
-    throw std::runtime_error(
-        "[FastInferenceSDPA] Mask expected to be null at FastInferenceSDPA::eval_gpu.");
+    out = fallback_(inputs)[0];
+    return;
   }
 
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
