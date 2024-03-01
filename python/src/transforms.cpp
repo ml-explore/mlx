@@ -351,7 +351,7 @@ struct PyCompiledFun {
 
     // Reserve some large primes to signify the presence of an array, a list or
     // a dict in order to encode the structure of the pytree. We choose primes
-    // to reduce slightly the chances of these numbers occuring by a
+    // to reduce slightly the chances of these numbers occurring by a
     // multiplication as values in the constants list.
     constexpr uint64_t array_identifier = 18446744073709551557UL;
     constexpr uint64_t list_identifier = 18446744073709551533UL;
