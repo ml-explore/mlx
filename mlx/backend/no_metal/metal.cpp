@@ -36,7 +36,7 @@ size_t get_cache_memory() {
 size_t set_memory_limit(size_t, bool) {
   return 0;
 }
-size_t set_gc_limit(size_t) {
+size_t set_cache_limit(size_t) {
   return 0;
 }
 

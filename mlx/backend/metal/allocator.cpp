@@ -179,8 +179,8 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
   // Try the cache
   MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
+  size_t pool_size = get_cache_memory();
   if (!buf) {
-    size_t pool_size = get_cache_memory();
     size_t mem_required = get_active_memory() + pool_size + size;
 
     // If there is too much memory pressure, fail (likely causes a wait).
@@ -192,22 +192,20 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
     // If we have a lot of memory pressure, check if we can reclaim some memory
     // from the cache
-    size_t min_bytes_to_free = 0;
     if (mem_required >= gc_limit_) {
-      min_bytes_to_free = mem_required - gc_limit_;
-    }
-    if (pool_size >= max_pool_size_) {
-      min_bytes_to_free =
-          std::max(min_bytes_to_free, pool_size - max_pool_size_);
-    }
-    if (min_bytes_to_free > 0) {
-      buffer_cache_.release_cached_buffers(min_bytes_to_free);
+      buffer_cache_.release_cached_buffers(mem_required - gc_limit_);
     }
 
     // Allocate new buffer if needed
     size_t res_opt = MTL::ResourceStorageModeShared;
     res_opt |= MTL::ResourceHazardTrackingModeTracked;
     buf = device_->newBuffer(size, res_opt);
+  }
+
+  // Maintain the cache below the requested limit
+  if (pool_size >= max_pool_size_) {
+    auto thread_pool = metal::new_scoped_memory_pool();
+    buffer_cache_.release_cached_buffers(pool_size - max_pool_size_);
   }
 
   active_memory_ += buf->length();
