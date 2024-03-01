@@ -586,6 +586,13 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (N, (L - ks + 1) // 2, C_out))
         self.assertTrue("bias" in c.parameters())
 
+        dil = 2
+        c = nn.Conv1d(
+            in_channels=C_in, out_channels=C_out, kernel_size=ks, dilation=dil
+        )
+        y = c(x)
+        self.assertEqual(y.shape, (N, L - (ks - 1) * dil, C_out))
+
         c = nn.Conv1d(in_channels=C_in, out_channels=C_out, kernel_size=ks, bias=False)
         self.assertTrue("bias" not in c.parameters())
 
