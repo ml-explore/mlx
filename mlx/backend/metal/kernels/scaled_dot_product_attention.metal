@@ -16,10 +16,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
                               threadgroup T* threadgroup_block [[threadgroup(0)]],
                               uint simd_lane_id [[thread_index_in_simdgroup]],
                               uint simd_group_id [[simdgroup_index_in_threadgroup]],
-                              uint3 tid [[threadgroup_position_in_grid]],
-                              uint3 lid [[thread_position_in_threadgroup]],
-                              uint3 group_size [[threads_per_threadgroup]],
-                              uint simd_size [[threads_per_simdgroup]]) {
+                              uint3 tid [[threadgroup_position_in_grid]]) {
     constexpr const size_t DK = 128;
     constexpr const ulong SIMDGROUP_MATRIX_LOAD_FACTOR = 8;
     constexpr const size_t THREADS_PER_SIMDGROUP = 32;
@@ -126,7 +123,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
         pvals[accum_array_iter] = float4(-INFINITY);
     }
 
-    if constexpr (TILE_SIZE_CONST == 64) {
+    if (TILE_SIZE_CONST == 64) {
         threadgroup float2* smemPtrFlt2 = (threadgroup float2*)threadgroup_block;
         float2 vals = smemPtrFlt2[simd_lane_id];
         vals *= params.INV_ALPHA;
@@ -148,7 +145,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
     constexpr const bool TILE_SIZE_LARGER_THAN_64 = TILE_SIZE_CONST > 64;
     constexpr const int TILE_SIZE_ITERS_128 = (TILE_SIZE_CONST + 1) / 128;
 
-    if constexpr (TILE_SIZE_LARGER_THAN_64) {
+    if (TILE_SIZE_LARGER_THAN_64) {
         float maxval = -INFINITY;
         threadgroup float4* smemPtrFlt4 = (threadgroup float4*)threadgroup_block;
         #pragma clang loop unroll(full)
@@ -189,7 +186,6 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
 
     threadgroup float* smemOpartial = (threadgroup float*)(smemV + totalSmemV);
 
-    float localOpartials[DK / NSIMDGROUPS];
     if (!LAST_TILE || LAST_TILE_ALIGNED) {
         #pragma clang loop unroll(full)
         for(size_t col = 0; col < MATRIX_COLS; col++) {
@@ -209,7 +205,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
             
             threadgroup_barrier(mem_flags::mem_threadgroup);
             
-            if constexpr (TILE_SIZE_CONST == 64) {
+            if (TILE_SIZE_CONST == 64) {
                 T2 local_p_hat = T2(pvals[0].x, pvals[0].y);
                 uint loop_iter = 0;
                 threadgroup float* oPartialSmem = smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
@@ -229,7 +225,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
                 }
             }
             
-            if constexpr (TILE_SIZE_CONST > 64) {
+            if (TILE_SIZE_CONST > 64) {
                 constexpr const size_t TILE_SIZE_CONST_DIV_128 = (TILE_SIZE_CONST + 1) / 128;
                 threadgroup float* oPartialSmem = smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
                 uint loop_iter = 0;
@@ -270,7 +266,6 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
                 smem_col_index += NSIMDGROUPS * SIMDGROUP_MATRIX_LOAD_FACTOR;
             };
 
-
             tile_start = ((L / SIMDGROUP_MATRIX_LOAD_FACTOR) * SIMDGROUP_MATRIX_LOAD_FACTOR);
 
             const int32_t INT_L = int32_t(L);
@@ -294,8 +289,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
 
             threadgroup_barrier(mem_flags::mem_threadgroup);
 
-
-            if constexpr (TILE_SIZE_CONST == 64) {
+            if (TILE_SIZE_CONST == 64) {
                 T2 local_p_hat = T2(pvals[0].x, pvals[0].y);
                 threadgroup float* oPartialSmem = smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
                 for(size_t smem_row_index = simd_group_id;
@@ -310,14 +304,13 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
                 }
             }
 
-            if constexpr (TILE_SIZE_CONST > 64) {
+            if (TILE_SIZE_CONST > 64) {
                 threadgroup float* oPartialSmem = smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
                 uint loop_count = 0;
                 for(size_t row_index = simd_group_id;
                     row_index < ROWS_PER_ITER; row_index += NSIMDGROUPS) {
                     T row_sum = 0.f;
                     for(size_t tile_iters = 0; tile_iters < TILE_SIZE_ITERS_128; tile_iters++) {
-                        const size_t smem_row_index = simd_group_id + loop_count * NSIMDGROUPS;
                         threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * row_index);
                         threadgroup T4* smemV2 = (threadgroup T4*)smemV_row;
                         T4 v_local = *(smemV2 + simd_lane_id + tile_iters * THREADS_PER_SIMDGROUP);
@@ -366,10 +359,7 @@ template [[host_name("fast_inference_sdpa_compute_partials_" #itype "_" #tile_si
     threadgroup itype *threadgroup_block [[threadgroup(0)]], \
     uint simd_lane_id [[thread_index_in_simdgroup]], \
     uint simd_group_id [[simdgroup_index_in_threadgroup]], \
-    uint3 tid [[threadgroup_position_in_grid]], \
-    uint3 lid [[thread_position_in_threadgroup]], \
-    uint3 group_size [[threads_per_threadgroup]], \
-    uint simd_size [[threads_per_simdgroup]]);
+    uint3 tid [[threadgroup_position_in_grid]]);
 
 
 #define instantiate_fast_inference_sdpa_to_partials_shapes_helper(itype, itype2, itype4, tile_size) \
@@ -394,13 +384,8 @@ void fast_inference_sdpa_reduce_tiles_template(
     const device float *p_maxes [[buffer(2)]],
     const device MLXScaledDotProductAttentionParams& params [[buffer(3)]],
     device T* O [[buffer(4)]],
-    threadgroup T *threadgroup_block [[threadgroup(0)]],
-    uint simd_lane_id [[thread_index_in_simdgroup]],
-    uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint3 group_size [[threads_per_threadgroup]],
-    uint simd_size [[threads_per_simdgroup]]) {
+    uint3 lid [[thread_position_in_threadgroup]]) {
 
     constexpr const int DK = 128;
     const ulong offset_rows = tid.z * params.KV_TILES * params.N_Q_HEADS + tid.x * params.KV_TILES;
@@ -445,18 +430,11 @@ kernel void fast_inference_sdpa_reduce_tiles_float(
     const device float *p_maxes [[buffer(2)]],
     const device MLXScaledDotProductAttentionParams& params [[buffer(3)]],
     device float* O [[buffer(4)]],
-    threadgroup float *threadgroup_block [[threadgroup(0)]],
-    uint simd_lane_id [[thread_index_in_simdgroup]],
-    uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint3 group_size [[threads_per_threadgroup]],
-    uint simd_size [[threads_per_simdgroup]])
+    uint3 lid [[thread_position_in_threadgroup]])
 {
     fast_inference_sdpa_reduce_tiles_template<float>(O_partials, p_lse, p_maxes, params,
-                                     O, threadgroup_block,
-                                     simd_lane_id, simd_group_id,
-                                     tid, lid, group_size, simd_size);
+                                     O, tid, lid);
 }
 
 kernel void fast_inference_sdpa_reduce_tiles_half(
@@ -465,16 +443,9 @@ kernel void fast_inference_sdpa_reduce_tiles_half(
     const device float *p_maxes [[buffer(2)]],
     const device MLXScaledDotProductAttentionParams& params [[buffer(3)]],
     device half* O [[buffer(4)]],
-    threadgroup half* threadgroup_block [[threadgroup(0)]],
-    uint simd_lane_id [[thread_index_in_simdgroup]],
-    uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint3 group_size [[threads_per_threadgroup]],
-    uint simd_size [[threads_per_simdgroup]])
+    uint3 lid [[thread_position_in_threadgroup]])
 {
     fast_inference_sdpa_reduce_tiles_template<half>(O_partials, p_lse, p_maxes, params,
-                                     O, threadgroup_block,
-                                     simd_lane_id, simd_group_id,
-                                     tid, lid, group_size, simd_size);
+                                     O, tid, lid);
 }
