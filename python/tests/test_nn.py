@@ -639,6 +639,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (4, 3, 3, 8))
         self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
 
+        c = nn.Conv2d(3, 8, 3, dilation=2)
+        y = c(x)
+        self.assertEqual(y.shape, (4, 4, 4, 8))
+        self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
+
     def test_sequential(self):
         x = mx.ones((10, 2))
         m = nn.Sequential(nn.Linear(2, 10), nn.ReLU(), nn.Linear(10, 1))
