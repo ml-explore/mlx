@@ -57,7 +57,7 @@ class Conv1d(Module):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1]}, stride={self.stride}, "
-            f"padding={self.padding}, dilation={self.dilation},"
+            f"padding={self.padding}, dilation={self.dilation}, "
             f"bias={'bias' in self}"
         )
 
