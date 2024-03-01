@@ -4,7 +4,7 @@
 
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/indexing.h"
-#include "mlx/backend/metal/kernels/reduce.h"
+#include "mlx/backend/metal/kernels/reduction/ops.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 using namespace metal;
