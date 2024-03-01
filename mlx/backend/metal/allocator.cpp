@@ -184,7 +184,7 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     size_t mem_required = get_active_memory() + pool_size + size;
 
     // If there is too much memory pressure, fail (likely causes a wait).
-    if (!(allow_swap & relaxed_) && mem_required >= block_limit_) {
+    if (!(allow_swap && relaxed_) && mem_required >= block_limit_) {
       return Buffer{nullptr};
     }
 

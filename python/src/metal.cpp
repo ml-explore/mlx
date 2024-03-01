@@ -49,7 +49,7 @@ void init_metal(py::module_& m) {
       &metal::set_memory_limit,
       "limit"_a,
       py::kw_only(),
-      "relaxed"_a = false,
+      "relaxed"_a = true,
       R"pbdoc(
       Set the memory limit.
 
