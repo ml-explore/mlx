@@ -1700,7 +1700,7 @@ array argpartition(
   int kth_ = kth < 0 ? kth + a.shape(axis) : kth;
   if (kth_ < 0 || kth_ >= a.shape(axis_)) {
     std::ostringstream msg;
-    msg << "[argpartition] Received invalid kth " << kth << "along axis "
+    msg << "[argpartition] Received invalid kth " << kth << " along axis "
         << axis << " for array with shape: " << a.shape();
     throw std::invalid_argument(msg.str());
   }
