@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <array>
 #include "doctest/doctest.h"
@@ -474,11 +474,16 @@ TEST_CASE("test metal validation") {
 }
 
 TEST_CASE("test metal memory info") {
-  // Test gc limits
+  // Test cache limits
   {
-    auto old_limit = metal::set_gc_limit(0);
-    CHECK_EQ(metal::set_gc_limit(old_limit), 0);
-    CHECK_EQ(metal::set_gc_limit(old_limit), old_limit);
+    auto old_limit = metal::set_cache_limit(0);
+    {
+      auto a = zeros({4096});
+      eval(a);
+    }
+    CHECK_EQ(metal::get_cache_memory(), 0);
+    CHECK_EQ(metal::set_cache_limit(old_limit), 0);
+    CHECK_EQ(metal::set_cache_limit(old_limit), old_limit);
   }
 
   // Test memory limits
@@ -502,5 +507,8 @@ TEST_CASE("test metal memory info") {
     CHECK_EQ(new_active_mem, active_mem);
     auto peak_mem = metal::get_peak_memory();
     CHECK(peak_mem >= 4096 * 8);
+
+    auto cache_mem = metal::get_cache_memory();
+    CHECK(cache_mem >= 4096 * 4);
   }
 }

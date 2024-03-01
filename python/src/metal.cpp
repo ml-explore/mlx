@@ -36,6 +36,15 @@ void init_metal(py::module_& m) {
       execution.
       )pbdoc");
   metal.def(
+      "get_cache_memory",
+      &metal::get_cache_memory,
+      R"pbdoc(
+      Get the cache size in bytes.
+
+      The cache includes memory not currently used that has not been returned
+      to the system allocator.
+      )pbdoc");
+  metal.def(
       "set_memory_limit",
       &metal::set_memory_limit,
       "limit"_a,
@@ -61,23 +70,23 @@ void init_metal(py::module_& m) {
         int: The previous memory limit in bytes.
       )pbdoc");
   metal.def(
-      "set_gc_limit",
-      &metal::set_gc_limit,
+      "set_cache_limit",
+      &metal::set_cache_limit,
       "limit"_a,
       R"pbdoc(
-      Set the garbage collection limit.
+      Set the free cache limit.
 
       If using more than the given limit, free memory will be reclaimed
-      from the garbage collector on allocation. To disable the garbage collector,
-      set the limit to ``0``.
+      from the cache on the next allocation. To disable the cache, set
+      the limit to ``0``.
 
-      The gc limit defaults to .95 times the maximum recommended working set
-      size reported by the device.
+      The cache limit defaults to the memory limit. See
+      :func:`set_memory_limit` for more details.
 
       Args:
-        limit (int): Garbage collection limit in bytes.
+        limit (int): The cache limit in bytes.
 
       Returns:
-        int: The previous garbage collection limit in bytes.
+        int: The previous cache limit in bytes.
       )pbdoc");
 }

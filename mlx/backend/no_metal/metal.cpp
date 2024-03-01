@@ -30,6 +30,9 @@ size_t get_active_memory() {
 size_t get_peak_memory() {
   return 0;
 }
+size_t get_cache_memory() {
+  return 0;
+}
 size_t set_memory_limit(size_t, bool) {
   return 0;
 }

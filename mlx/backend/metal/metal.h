@@ -27,6 +27,13 @@ size_t get_active_memory();
  * */
 size_t get_peak_memory();
 
+/* Get the cache size in bytes.
+ *
+ * The cache includes memory not currently used that has not been returned
+ * to the system allocator.
+ * */
+size_t get_cache_memory();
+
 /* Set the memory limit.
  * Calls to malloc will wait on scheduled tasks if the limit is exceeded.  If
  * there are no more scheduled tasks an error will be raised if relaxed
@@ -40,17 +47,16 @@ size_t get_peak_memory();
  * */
 size_t set_memory_limit(size_t limit, bool relaxed = true);
 
-/* Set the garbage collection limit.
+/* Set the free cache limit.
  * If using more than the given limit, free memory will be reclaimed
- * from the garbage collector on allocation. To disable the garbage collector,
+ * from the cache on the next allocation. To disable the cache,
  * set the limit to 0.
  *
- * The gc limit defaults to .95 times the maximum recommended working set
- * size reported by the device.
+ * The cache limit defaults to the memory limit.
  *
- * Returns the previous gc limit.
+ * Returns the previous cache limit.
  * */
-size_t set_gc_limit(size_t limit);
+size_t set_cache_limit(size_t limit);
 
 void new_stream(Stream stream);
 std::shared_ptr<void> new_scoped_memory_pool();

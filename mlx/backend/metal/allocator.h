@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -63,7 +63,10 @@ class MetalAllocator : public allocator::Allocator {
   size_t get_peak_memory() {
     return peak_memory_;
   };
-  size_t set_gc_limit(size_t limit);
+  size_t get_cache_memory() {
+    return buffer_cache_.pool_size();
+  };
+  size_t set_cache_limit(size_t limit);
   size_t set_memory_limit(size_t limit, bool relaxed);
 
  private:
@@ -79,6 +82,7 @@ class MetalAllocator : public allocator::Allocator {
   size_t gc_limit_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
+  size_t max_pool_size_;
   bool relaxed_{true};
 };
 
