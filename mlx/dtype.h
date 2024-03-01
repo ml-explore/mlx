@@ -46,10 +46,6 @@ struct Dtype {
   };
 };
 
-inline bool is_available(const Dtype& dtype) {
-  return true;
-}
-
 static constexpr Dtype bool_{Dtype::Val::bool_, sizeof(bool)};
 
 static constexpr Dtype uint8{Dtype::Val::uint8, sizeof(uint8_t)};
