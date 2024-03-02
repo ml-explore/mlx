@@ -2859,3 +2859,22 @@ TEST_CASE("test atleast_3d vector") {
   CHECK_EQ(out[2].ndim(), 3);
   CHECK_EQ(out[2].shape(), std::vector<int>{3, 1, 1});
 }
+
+TEST_CASE("test topk") {
+  auto x = reshape(arange(10), {2, 5});
+
+  {
+    auto y = topk(x, 1, 1);
+    CHECK(array_equal(y, array({4, 9}, {2, 1})).item<bool>());
+  }
+
+  {
+    auto y = topk(x, 2, 0);
+    CHECK(array_equal(y, x).item<bool>());
+  }
+
+  {
+    auto y = topk(x, 1, 0);
+    CHECK(array_equal(y, array({5, 6, 7, 8, 9}, {1, 5})).item<bool>());
+  }
+}
