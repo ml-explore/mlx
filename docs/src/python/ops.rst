@@ -63,8 +63,7 @@ Operations
    isneginf
    isinf
    less
-   less_equal
-   linspace
+   less_equal linspace
    load
    log
    log2
@@ -123,6 +122,7 @@ Operations
    tanh
    tensordot
    tile
+   topk
    transpose
    tri
    tril
