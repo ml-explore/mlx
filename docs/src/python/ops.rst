@@ -123,6 +123,7 @@ Operations
    tanh
    tensordot
    tile
+   topk
    transpose
    tri
    tril

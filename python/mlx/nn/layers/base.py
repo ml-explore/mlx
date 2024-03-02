@@ -134,7 +134,7 @@ class Module(dict):
         if key in self:
             return self[key]
         else:
-            super(Module, self).__getattr__(key, val)
+            super(Module, self).__getattribute__(key)
 
     def __setattr__(self, key: str, val: Any):
         if isinstance(val, (mx.array, dict, list, tuple)):
