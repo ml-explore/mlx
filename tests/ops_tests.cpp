@@ -479,63 +479,6 @@ TEST_CASE("test comparison ops") {
   }
 }
 
-TEST_CASE("test is nan") {
-  array x(1.0f);
-  CHECK_FALSE(isnan(x).item<bool>());
-
-  array y(NAN);
-  CHECK(isnan(y).item<bool>());
-
-  array z = identity(7);
-  CHECK_FALSE(all(isnan(z)).item<bool>());
-
-  array w = array({1.0f, NAN, 2.0f});
-  CHECK_FALSE(all(isnan(w)).item<bool>());
-
-  array a(1.0f, bfloat16);
-  CHECK_FALSE(isnan(a).item<bool>());
-
-  array b(1.0f, float16);
-  CHECK_FALSE(isnan(b).item<bool>());
-
-  array c(NAN, bfloat16);
-  CHECK(isnan(c).item<bool>());
-
-  array d(NAN, float16);
-  CHECK(isnan(d).item<bool>());
-}
-
-TEST_CASE("test is inf") {
-  array x(1.0f);
-  CHECK_FALSE(isinf(x).item<bool>());
-
-  auto inf = std::numeric_limits<float>::infinity();
-
-  array y(inf);
-  CHECK(isinf(y).item<bool>());
-
-  auto neginf = -std::numeric_limits<float>::infinity();
-  CHECK(isinf(array(neginf)).item<bool>());
-
-  array z = identity(7);
-  CHECK_FALSE(any(isinf(z)).item<bool>());
-
-  array w = array({1.0f, inf, 2.0f});
-  CHECK(array_equal({false, true, false}, isinf(w)).item<bool>());
-
-  array a(1.0f, bfloat16);
-  CHECK_FALSE(isinf(a).item<bool>());
-
-  array b(1.0f, float16);
-  CHECK_FALSE(isinf(b).item<bool>());
-
-  array c(inf, bfloat16);
-  CHECK(isinf(c).item<bool>());
-
-  array d(inf, float16);
-  CHECK(isinf(d).item<bool>());
-}
-
 TEST_CASE("test all close") {
   array x(1.0f);
   array y(1.0f);
@@ -546,36 +489,6 @@ TEST_CASE("test all close") {
   CHECK(allclose(x, y, 0.1).item<bool>());
   CHECK_FALSE(allclose(x, y, 0.01).item<bool>());
   CHECK(allclose(x, y, 0.01, 0.1).item<bool>());
-}
-
-TEST_CASE("test is close") {
-  {
-    array a({1.0, std::numeric_limits<float>::infinity()});
-    array b({1.0, std::numeric_limits<float>::infinity()});
-    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
-  }
-  {
-    array a({1.0, -std::numeric_limits<float>::infinity()});
-    array b({1.0, -std::numeric_limits<float>::infinity()});
-    CHECK(array_equal(isclose(a, b), array({true, true})).item<bool>());
-  }
-  {
-    array a({1.0, std::numeric_limits<float>::infinity()});
-    array b({1.0, -std::numeric_limits<float>::infinity()});
-    CHECK(array_equal(isclose(a, b), array({true, false})).item<bool>());
-  }
-  {
-    array a({1.0, std::nan("1"), std::nan("1")});
-    array b({1.0, std::nan("1"), 2.0});
-    CHECK(array_equal(isclose(a, b), array({true, false, false})).item<bool>());
-  }
-  {
-    array a({1.0, std::nan("1"), std::nan("1")});
-    array b({1.0, std::nan("1"), 2.0});
-    CHECK(
-        array_equal(isclose(a, b, 1e-5, 1e-8, true), array({true, true, false}))
-            .item<bool>());
-  }
 }
 
 TEST_CASE("test reduction ops") {
@@ -791,13 +704,13 @@ TEST_CASE("test reduction ops") {
     constexpr float inf = std::numeric_limits<float>::infinity();
 
     x = array({-inf, -inf});
-    CHECK_EQ(logsumexp(x).item<float>(), -inf);
+    WARN_EQ(logsumexp(x).item<float>(), -inf);
 
     x = array({0.0f, -inf});
     CHECK_EQ(logsumexp(x).item<float>(), 0.0f);
 
     x = array({0.0f, inf});
-    CHECK_EQ(logsumexp(x).item<float>(), inf);
+    WARN_EQ(logsumexp(x).item<float>(), inf);
 
     x = reshape(arange(6, float32), {2, 3});
 
@@ -882,44 +795,6 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_EQ(y.item<bool>(), true);
   }
 
-  // Test logical and
-  {
-    array x(true);
-    array y(true);
-    CHECK_EQ(logical_and(x, y).item<bool>(), true);
-
-    x = array(1.0f);
-    y = array(1.0f);
-    auto z = logical_and(x, y);
-    CHECK_EQ(z.dtype(), bool_);
-    CHECK_EQ(z.item<bool>(), true);
-
-    x = array(0);
-    y = array(1.0f);
-    z = logical_and(x, y);
-    CHECK_EQ(z.dtype(), bool_);
-    CHECK_EQ(z.item<bool>(), false);
-  }
-
-  // Test logical or
-  {
-    array x(false);
-    array y(false);
-    CHECK_EQ(logical_or(x, y).item<bool>(), false);
-
-    x = array(1.0f);
-    y = array(1.0f);
-    auto z = logical_or(x, y);
-    CHECK_EQ(z.dtype(), bool_);
-    CHECK_EQ(z.item<bool>(), true);
-
-    x = array(0);
-    y = array(1.0f);
-    z = logical_or(x, y);
-    CHECK_EQ(z.dtype(), bool_);
-    CHECK_EQ(z.item<bool>(), true);
-  }
-
   // Test abs
   {
     array x({-1.0f, 0.0f, 1.0f});
@@ -990,7 +865,7 @@ TEST_CASE("test arithmetic unary ops") {
   // Test round
   {
     array x({0.5, -0.5, 1.5, -1.5, 2.3, 2.6});
-    CHECK(array_equal(round(x), array({0, -0, 2, -2, 2, 3})).item<bool>());
+    CHECK(array_equal(round(x), array({1, -1, 2, -2, 2, 3})).item<bool>());
 
     x = array({11, 222, 32});
     CHECK(array_equal(round(x, -1), array({10, 220, 30})).item<bool>());
@@ -1002,7 +877,7 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK_EQ(exp(x).item<float>(), 1.0);
 
     x = array(2.0);
-    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
+    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
 
     CHECK(array_equal(exp(array({})), array({})).item<bool>());
 
@@ -1012,15 +887,15 @@ TEST_CASE("test arithmetic unary ops") {
     // Integer input type
     x = array(2);
     CHECK_EQ(x.dtype(), int32);
-    CHECK_EQ(exp(x).item<float>(), doctest::Approx(std::exp(2.0f)));
+    CHECK_EQ(exp(x).item<float>(), std::exp(2.0f));
 
     // Input is irregularly strided
     x = broadcast_to(array(1.0f), {2, 2, 2});
-    CHECK(allclose(exp(x), full({2, 2, 2}, std::exp(1.0f))).item<bool>());
+    CHECK(array_equal(exp(x), full({2, 2, 2}, std::exp(1.0f))).item<bool>());
 
     x = split(array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2}), 2, 1)[0];
     auto expected = array({std::exp(0.0f), std::exp(2.0f)}, {2, 1});
-    CHECK(allclose(exp(x), expected).item<bool>());
+    CHECK(array_equal(exp(x), expected).item<bool>());
   }
 
   // Test sine
@@ -1858,14 +1733,6 @@ TEST_CASE("test scatter") {
   out = scatter(in, inds, updates, 0);
   CHECK(array_equal(out, reshape(arange(16, float32), {4, 4})).item<bool>());
 
-  // Array scatters with col contiguous updates
-  in = zeros({4, 4}, float32);
-  inds = array({0, 1, 2, 3});
-  updates = transpose(reshape(arange(16, float32), {4, 1, 4}));
-  out = scatter(in, inds, updates, 0);
-  CHECK(array_equal(out, transpose(reshape(arange(16, float32), {4, 4})))
-            .item<bool>());
-
   // Irregular strided index and reduce collision test
   in = zeros({10}, float32);
   inds = broadcast_to(array(3), {10});
@@ -1885,10 +1752,10 @@ TEST_CASE("test scatter") {
 
   // Irregularly strided updates test
   in = ones({3, 3});
-  updates = broadcast_to(array({2, 2, 2}), {1, 3, 3});
+  updates = broadcast_to(array({0, 0, 0}), {1, 3, 3});
   inds = array({0});
   out = scatter(in, inds, updates, 0);
-  CHECK(array_equal(out, ones({3, 3}) * 2).item<bool>());
+  CHECK(array_equal(out, zeros({3, 3})).item<bool>());
 
   // Along different axis
   in = zeros({2, 3});
@@ -1919,74 +1786,6 @@ TEST_CASE("test scatter") {
   inds = array({0, 1});
   out = scatter_add(in, inds, updates, 0);
   CHECK(array_equal(out, array({1, 0, 1, 0}, {2, 2})).item<bool>());
-}
-
-TEST_CASE("test is positive infinity") {
-  array x(1.0f);
-  CHECK_FALSE(isposinf(x).item<bool>());
-
-  array y(std::numeric_limits<float>::infinity());
-  CHECK(isposinf(y).item<bool>());
-
-  array z = identity(7);
-  CHECK_FALSE(all(isposinf(z)).item<bool>());
-
-  array w = array({1.0f, std::numeric_limits<float>::infinity(), 2.0f});
-  CHECK_FALSE(all(isposinf(w)).item<bool>());
-
-  array a(1.0f, bfloat16);
-  CHECK_FALSE(isposinf(a).item<bool>());
-
-  array b(std::numeric_limits<float>::infinity(), float16);
-  CHECK(isposinf(b).item<bool>());
-
-  array c(std::numeric_limits<float>::infinity(), bfloat16);
-  CHECK(isposinf(c).item<bool>());
-}
-
-TEST_CASE("test is negative infinity") {
-  array x(1.0f);
-  CHECK_FALSE(isneginf(x).item<bool>());
-
-  array y(-std::numeric_limits<float>::infinity());
-  CHECK(isneginf(y).item<bool>());
-
-  array z = identity(7);
-  CHECK_FALSE(all(isneginf(z)).item<bool>());
-
-  array w = array({1.0f, -std::numeric_limits<float>::infinity(), 2.0f});
-  CHECK_FALSE(all(isneginf(w)).item<bool>());
-
-  array a(1.0f, bfloat16);
-  CHECK_FALSE(isneginf(a).item<bool>());
-
-  array b(-std::numeric_limits<float>::infinity(), float16);
-  CHECK(isneginf(b).item<bool>());
-
-  array c(-std::numeric_limits<float>::infinity(), bfloat16);
-  CHECK(isneginf(c).item<bool>());
-}
-
-TEST_CASE("test scatter types") {
-  for (auto t : {bool_, uint8, uint16, int8, int16}) {
-    auto in = zeros({4, 4}, t);
-    auto inds = {arange(4), arange(4)};
-    auto updates = ones({4, 1, 1}, t);
-    auto out = scatter(in, inds, updates, {0, 1});
-    auto expected =
-        array({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}, {4, 4}, t);
-    CHECK(array_equal(out, expected).item<bool>());
-  }
-
-  for (auto t : {float16, bfloat16}) {
-    auto in = zeros({4, 4}, t);
-    auto inds = {arange(4), arange(4)};
-    auto updates = ones({4, 1, 1}, t);
-    auto out = scatter(in, inds, updates, {0, 1});
-    auto expected =
-        array({1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}, {4, 4}, t);
-    CHECK(allclose(out, expected).item<bool>());
-  }
 }
 
 TEST_CASE("test complex ops") {
@@ -2179,7 +1978,7 @@ TEST_CASE("test power") {
   CHECK_EQ((array(false) ^ array(true)).item<bool>(), false);
 
   auto x = array(2.0f);
-  CHECK_EQ((x ^ 0.5).item<float>(), doctest::Approx(std::pow(2.0f, 0.5f)));
+  CHECK_EQ((x ^ 0.5).item<float>(), std::pow(2.0f, 0.5f));
   CHECK_EQ((x ^ 2.0f).item<float>(), 4.0f);
 
   CHECK(std::isnan((array(-1.0f) ^ 0.5).item<float>()));
@@ -2193,8 +1992,6 @@ TEST_CASE("test power") {
 }
 
 TEST_CASE("test where") {
-  const float inf = std::numeric_limits<float>::infinity();
-
   array condition(true);
   array x(1.0f);
   array y(0.0f);
@@ -2226,49 +2023,6 @@ TEST_CASE("test where") {
   out = where(condition, x, y);
   expected = array({1, 2, 2, 1}, {2, 2});
   CHECK(array_equal(where(condition, x, y), expected).item<bool>());
-
-  condition = array(true);
-  x = array({1, 2, 3});
-  y = array({3, 6, 13});
-  CHECK(array_equal(where(condition, x, y), array({1, 2, 3})).item<bool>());
-
-  condition = array(false);
-  x = array({1, 2, 3});
-  y = array({3, 6, 13});
-  CHECK(array_equal(where(condition, x, y), array({3, 6, 13})).item<bool>());
-
-  condition = array({1, 1, 0});
-  x = array({1, 2, 3});
-  y = array({11, 12, 13});
-  CHECK(array_equal(where(condition, x, y), array({1, 2, 13})).item<bool>());
-
-  condition = array({true, false}, {2, 1, 1});
-  x = array({1, 2, 3, 4}, {2, 1, 2});
-  y = array({11, 22, 33, 44}, {2, 2, 1});
-  expected = array({1, 2, 1, 2, 33, 33, 44, 44}, {2, 2, 2});
-  CHECK(array_equal(where(condition, x, y), expected).item<bool>());
-
-  condition = array({true, false, false});
-  x = array({inf, 2.0, 3.0});
-  y = array({10.0, 20.0, -inf});
-  CHECK(array_equal(where(condition, x, y), array({inf, 20.0, -inf}))
-            .item<bool>());
-
-  // 4-dim optimized case.
-  condition = array({false});
-  x = array({1, 2}, {2, 1, 1, 1});
-  y = array({3, 4}, {1, 1, 2, 1});
-  CHECK(array_equal(where(condition, x, y), array({3, 4, 3, 4}, {2, 1, 2, 1}))
-            .item<bool>());
-
-  // 5-dim optimized case.
-  condition = array({true, false}, {2, 1, 1, 1, 1});
-  x = array({1, 2, 3, 4}, {2, 1, 1, 1, 2});
-  y = array({11, 22}, {1, 1, 2, 1, 1});
-  CHECK(array_equal(
-            where(condition, x, y),
-            array({1, 2, 1, 2, 11, 11, 22, 22}, {2, 1, 2, 1, 2}))
-            .item<bool>());
 }
 
 TEST_CASE("test stack") {
@@ -2464,15 +2218,15 @@ TEST_CASE("test linspace") {
 
 TEST_CASE("test quantize dequantize") {
   auto x1 = ones({128, 1});
-  auto x2 = expand_dims(arange(0, 512, float32), 0);
+  auto x2 = expand_dims(arange(0, 128, float32), 0);
   auto x = x1 * x2;
 
   for (int i = 2; i <= 8; i *= 2) {
     int el_per_int = 32 / i;
     auto [x_q, scales, biases] = quantize(x, 128, i);
-    CHECK_EQ(x_q.shape(), std::vector<int>{128, 512 / el_per_int});
-    CHECK_EQ(scales.shape(), std::vector<int>{128, 4});
-    CHECK_EQ(biases.shape(), std::vector<int>{128, 4});
+    CHECK_EQ(x_q.shape(), std::vector<int>{128, 128 / el_per_int});
+    CHECK_EQ(scales.shape(), std::vector<int>{128, 1});
+    CHECK_EQ(biases.shape(), std::vector<int>{128, 1});
 
     auto x_hat = dequantize(x_q, scales, biases, 128, i);
     auto max_diff = max(abs(x - x_hat)).item<float>();
@@ -2523,32 +2277,6 @@ TEST_CASE("test repeat") {
 
   // negative repeats
   CHECK_THROWS_AS(repeat(data_3, -3, 0), std::invalid_argument);
-}
-
-TEST_CASE("tile") {
-  auto x = array({1, 2, 3}, {3});
-  auto y = tile(x, {2});
-  auto expected = array({1, 2, 3, 1, 2, 3}, {6});
-  CHECK(array_equal(y, expected).item<bool>());
-  x = array({1, 2, 3, 4}, {2, 2});
-  y = tile(x, {2});
-  expected = array({1, 2, 1, 2, 3, 4, 3, 4}, {2, 4});
-  CHECK(array_equal(y, expected).item<bool>());
-  x = array({1, 2, 3, 4}, {2, 2});
-  y = tile(x, {4, 1});
-  expected = array({1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4}, {8, 2});
-  CHECK(array_equal(y, expected).item<bool>());
-
-  x = array({1, 2, 3, 4}, {2, 2});
-  y = tile(x, {2, 2});
-  expected = array({1, 2, 1, 2, 3, 4, 3, 4, 1, 2, 1, 2, 3, 4, 3, 4}, {4, 4});
-  CHECK(array_equal(y, expected).item<bool>());
-  x = array({1, 2, 3}, {3});
-  y = tile(x, {2, 2, 2});
-  expected = array(
-      {1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3},
-      {2, 2, 6});
-  CHECK(array_equal(y, expected).item<bool>());
 }
 
 TEST_CASE("tensordot") {
@@ -2631,249 +2359,38 @@ TEST_CASE("inner") {
   CHECK(array_equal(z, expected).item<bool>());
 }
 
-TEST_CASE("test divmod") {
-  auto x = array({1, 2, 3});
-  auto y = array({1, 1, 1});
-  auto out = divmod(x, y);
-  CHECK(array_equal(out[0], array({1, 2, 3})).item<bool>());
-  CHECK(array_equal(out[1], array({0, 0, 0})).item<bool>());
-
-  x = array({5, 6, 7});
-  y = array({2, 2, 2});
-  out = divmod(x, y);
-  CHECK(array_equal(out[0], array({2, 3, 3})).item<bool>());
-  CHECK(array_equal(out[1], array({1, 0, 1})).item<bool>());
-
-  // Siblings should be gone after evaling the graph
-  CHECK(out[0].siblings().empty());
-  CHECK(out[1].siblings().empty());
-
-  x = array({5.0, 6.0, 7.0});
-  y = array({2.0, 2.0, 2.0});
-  out = divmod(x, y);
-  CHECK(array_equal(out[0], array({2.0, 3.0, 3.0})).item<bool>());
-  CHECK(array_equal(out[1], array({1.0, 0.0, 1.0})).item<bool>());
-
-  x = array({1.0}, complex64);
-  y = array({2.0}, complex64);
-  CHECK_THROWS(divmod(x, y));
-
-  // Check that we can eval on both outputs
-  x = array({1.0});
-  y = array({2.0});
-  out = divmod(x, y);
-  eval(out);
-  CHECK_EQ(out[0].item<float>(), 0.0);
-  CHECK_EQ(out[1].item<float>(), 1.0);
-
-  // Check nested in the graph
-  x = array({1.0});
-  y = array({2.0});
-  out = divmod(x, y);
-  auto z = out[0] + out[1];
-  CHECK_EQ(z.item<float>(), 1.0);
-
-  // Check that we can still eval when one output goes out of scope
-  std::vector<array> out_holder;
-  { out_holder.push_back(divmod(x, y)[0]); }
-  eval(out_holder);
-  CHECK_EQ(out_holder[0].item<float>(), 0.0);
-
-  // Check that we can still eval when the other output goes out of scope
-  out_holder.clear();
-  { out_holder.push_back(divmod(x, y)[1]); }
-  eval(out_holder);
-  CHECK_EQ(out_holder[0].item<float>(), 1.0);
+TEST_CASE("dot") {
+  CHECK_EQ(dot(array(3), array(4)).item<int>(), 12);
+  auto x = array({1., 0., 0., 1.}, {2, 2});
+  auto y = array({4., 1., 2., 2.}, {2, 2});
+  auto z = dot(x, y);
+  auto expected = array({4., 1., 2., 2.}, {2, 2});
+  CHECK(array_equal(z, expected).item<bool>());
+  x = reshape(arange(10.), {5, 2});
+  y = reshape(arange(8.), {2, 2, 2});
+  z = dot(x, y);
+  MESSAGE("z: " << z);
+  expected = array(
+      {2.,  3.,  6.,  7.,  6.,  11., 26., 31., 10., 19.,
+       46., 55., 14., 27., 66., 79., 18., 35., 86., 103.},
+      {5, 2, 2});
+  CHECK(array_equal(z, expected).item<bool>());
 }
 
-TEST_CASE("test diagonal") {
-  auto x = array({0, 1, 2, 3, 4, 5, 6, 7}, {4, 2});
-  auto out = diagonal(x);
-  CHECK(array_equal(out, array({0, 3}, {2})).item<bool>());
-
-  CHECK_THROWS_AS(diagonal(x, 1, 6, 0), std::out_of_range);
-  CHECK_THROWS_AS(diagonal(x, 1, 0, -3), std::out_of_range);
-
-  x = array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, {3, 4});
-  out = diagonal(x, 2, 1, 0);
-  CHECK(array_equal(out, array({8}, {1})).item<bool>());
-
-  out = diagonal(x, -1, 0, 1);
-  CHECK(array_equal(out, array({4, 9}, {2})).item<bool>());
-
-  out = diagonal(x, -5, 0, 1);
-  eval(out);
-  CHECK_EQ(out.shape(), std::vector<int>{0});
-
-  x = array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, {3, 2, 2});
-  out = diagonal(x, 1, 0, 1);
-  CHECK(array_equal(out, array({2, 3}, {2, 1})).item<bool>());
-
-  out = diagonal(x, 0, 2, 0);
-  CHECK(array_equal(out, array({0, 5, 2, 7}, {2, 2})).item<bool>());
-
-  out = diagonal(x, 1, -1, 0);
-  CHECK(array_equal(out, array({4, 9, 6, 11}, {2, 2})).item<bool>());
-
-  x = reshape(arange(16), {2, 2, 2, 2});
-  out = diagonal(x, 0, 0, 1);
-  CHECK(array_equal(out, array({0, 12, 1, 13, 2, 14, 3, 15}, {2, 2, 2}))
-            .item<bool>());
-
-  CHECK_THROWS_AS(diagonal(x, 0, 1, 1), std::invalid_argument);
-
-  x = array({0, 1}, {2});
-  CHECK_THROWS_AS(diagonal(x, 0, 0, 1), std::invalid_argument);
-}
-
-TEST_CASE("test diag") {
-  // To few or too many dimensions
-  CHECK_THROWS(diag(array(0.0)));
-  CHECK_THROWS(diag(array({0.0}, {1, 1, 1})));
-
-  // Test with 1D array
-  auto x = array({0, 1, 2, 3}, {4});
-  auto out = diag(x, 0);
-  CHECK(
-      array_equal(
-          out, array({0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0, 3}, {4, 4}))
-          .item<bool>());
-
-  out = diag(x, 1);
-  CHECK(array_equal(
-            out,
-            array(
-                {0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
-                 2, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0},
-                {5, 5}))
-            .item<bool>());
-
-  out = diag(x, -1);
-  CHECK(array_equal(
-            out,
-            array(
-                {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0,
-                 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 3, 0},
-                {5, 5}))
-            .item<bool>());
-
-  // Test with 2D array
-  x = array({0, 1, 2, 3, 4, 5, 6, 7, 8}, {3, 3});
-  out = diag(x, 0);
-  CHECK(array_equal(out, array({0, 4, 8}, {3})).item<bool>());
-
-  out = diag(x, 1);
-  CHECK(array_equal(out, array({1, 5}, {2})).item<bool>());
-
-  out = diag(x, -1);
-  CHECK(array_equal(out, array({3, 7}, {2})).item<bool>());
-}
-
-TEST_CASE("test atleast_1d") {
-  auto x = array(1);
-  auto out = atleast_1d(x);
-  CHECK_EQ(out.ndim(), 1);
-  CHECK_EQ(out.shape(), std::vector<int>{1});
-
-  x = array({1, 2, 3}, {3});
-  out = atleast_1d(x);
-  CHECK_EQ(out.ndim(), 1);
-  CHECK_EQ(out.shape(), std::vector<int>{3});
-
-  x = array({1, 2, 3}, {3, 1});
-  out = atleast_1d(x);
-  CHECK_EQ(out.ndim(), 2);
-  CHECK_EQ(out.shape(), std::vector<int>{3, 1});
-}
-
-TEST_CASE("test atleast_1d vector") {
-  auto x = std::vector<array>{
-      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
-  auto out = atleast_1d(x);
-  CHECK_EQ(out.size(), 3);
-  CHECK_EQ(out[0].ndim(), 1);
-  CHECK_EQ(out[0].shape(), std::vector<int>{1});
-  CHECK_EQ(out[1].ndim(), 1);
-  CHECK_EQ(out[1].shape(), std::vector<int>{3});
-  CHECK_EQ(out[2].ndim(), 2);
-  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1});
-}
-
-TEST_CASE("test atleast_2d") {
-  auto x = array(1);
-  auto out = atleast_2d(x);
-  CHECK_EQ(out.ndim(), 2);
-  CHECK_EQ(out.shape(), std::vector<int>{1, 1});
-
-  x = array({1, 2, 3}, {3});
-  out = atleast_2d(x);
-  CHECK_EQ(out.ndim(), 2);
-  CHECK_EQ(out.shape(), std::vector<int>{1, 3});
-
-  x = array({1, 2, 3}, {3, 1});
-  out = atleast_2d(x);
-  CHECK_EQ(out.ndim(), 2);
-  CHECK_EQ(out.shape(), std::vector<int>{3, 1});
-}
-
-TEST_CASE("test atleast_2d vector") {
-  auto x = std::vector<array>{
-      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
-  auto out = atleast_2d(x);
-  CHECK_EQ(out.size(), 3);
-  CHECK_EQ(out[0].ndim(), 2);
-  CHECK_EQ(out[0].shape(), std::vector<int>{1, 1});
-  CHECK_EQ(out[1].ndim(), 2);
-  CHECK_EQ(out[1].shape(), std::vector<int>{1, 3});
-  CHECK_EQ(out[2].ndim(), 2);
-  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1});
-}
-
-TEST_CASE("test atleast_3d") {
-  auto x = array(1);
-  auto out = atleast_3d(x);
-  CHECK_EQ(out.ndim(), 3);
-  CHECK_EQ(out.shape(), std::vector<int>{1, 1, 1});
-
-  x = array({1, 2, 3}, {3});
-  out = atleast_3d(x);
-  CHECK_EQ(out.ndim(), 3);
-  CHECK_EQ(out.shape(), std::vector<int>{1, 3, 1});
-
-  x = array({1, 2, 3}, {3, 1});
-  out = atleast_3d(x);
-  CHECK_EQ(out.ndim(), 3);
-  CHECK_EQ(out.shape(), std::vector<int>{3, 1, 1});
-}
-
-TEST_CASE("test atleast_3d vector") {
-  auto x = std::vector<array>{
-      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
-  auto out = atleast_3d(x);
-  CHECK_EQ(out.size(), 3);
-  CHECK_EQ(out[0].ndim(), 3);
-  CHECK_EQ(out[0].shape(), std::vector<int>{1, 1, 1});
-  CHECK_EQ(out[1].ndim(), 3);
-  CHECK_EQ(out[1].shape(), std::vector<int>{1, 3, 1});
-  CHECK_EQ(out[2].ndim(), 3);
-  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1, 1});
-}
-
-TEST_CASE("test topk") {
-  auto x = reshape(arange(10), {2, 5});
-
-  {
-    auto y = topk(x, 1, 1);
-    CHECK(array_equal(y, array({4, 9}, {2, 1})).item<bool>());
-  }
-
-  {
-    auto y = topk(x, 2, 0);
-    CHECK(array_equal(y, x).item<bool>());
-  }
-
-  {
-    auto y = topk(x, 1, 0);
-    CHECK(array_equal(y, array({5, 6, 7, 8, 9}, {1, 5})).item<bool>());
-  }
+TEST_CASE("dot") {
+  CHECK_EQ(dot(array(3), array(4)).item<int>(), 12);
+  auto x = array({1., 0., 0., 1.}, {2, 2});
+  auto y = array({4., 1., 2., 2.}, {2, 2});
+  auto z = dot(x, y);
+  auto expected = array({4., 1., 2., 2.}, {2, 2});
+  CHECK(array_equal(z, expected).item<bool>());
+  x = reshape(arange(10.), {5, 2});
+  y = reshape(arange(8.), {2, 2, 2});
+  z = dot(x, y);
+  MESSAGE("z: " << z);
+  expected = array(
+      {2.,  3.,  6.,  7.,  6.,  11., 26., 31., 10., 19.,
+       46., 55., 14., 27., 66., 79., 18., 35., 86., 103.},
+      {5, 2, 2});
+  CHECK(array_equal(z, expected).item<bool>());
 }

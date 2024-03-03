@@ -2014,6 +2014,12 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(mx_res.ndim, np_res.ndim)
             self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
 
+    def test_dot(self):
+        self.assertCmpNumpy([mx.array(3.0), mx.array(4.0)], mx.dot, np.dot)
+        self.assertCmpNumpy([(2, 3), (3,)], mx.dot, np.dot)
+        self.assertCmpNumpy([(2, 2), (2, 2)], mx.dot, np.dot)
+        self.assertCmpNumpy([(3, 4, 5, 6), (5, 4, 6, 3)], mx.dot, np.dot)
+
 
 if __name__ == "__main__":
     unittest.main()

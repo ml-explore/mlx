@@ -3811,4 +3811,25 @@ void init_ops(py::module_& m) {
         Returns:
             array or list(array): An array or list of arrays with at least three dimensions.
         )pbdoc");
+
+  m.def(
+      "dot",
+      &dot,
+      "a"_a,
+      "b"_a,
+      py::pos_only(),
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+      dot(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+
+      Dot product of two arrays.
+
+      Args:
+        a (array): Input array
+        b (array): Input array
+
+      Returns:
+        result (array): The dot product.
+    )pbdoc");
 }
