@@ -1124,6 +1124,8 @@ array tensordot(
     const std::vector<int>& axes_b,
     StreamOrDevice s = {});
 
+array dot(const array& a, const array& b, StreamOrDevice s = {});
+
 /** Compute the outer product of two vectors. */
 array outer(const array& a, const array& b, StreamOrDevice s = {});
 

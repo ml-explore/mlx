@@ -3290,6 +3290,26 @@ array tensordot(
   return reshape(matmul(x, y, s), rshape, s);
 }
 
+array dot(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    return multiply(a, b, s);
+  }
+  if (a.ndim() == 1 && b.ndim() == 1) {
+    return inner(a, b, s);
+  }
+  if (a.ndim() == 2 && b.ndim() == 2) {
+    return matmul(a, b, s);
+  }
+  if (b.ndim() == 1) {
+    return tensordot(a, b, {{-1}, {-1}}, s);
+  }
+  if (a.shape(-1) != b.shape(-2)) {
+    throw std::invalid_argument(
+        "[dot] the last dimension of a must match the second to last dimension of b.");
+  }
+  return tensordot(a, b, {{-1}, {-2}}, s);
+}
+
 array outer(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   return multiply(
       reshape(a, {static_cast<int>(a.size()), 1}, s), flatten(b, s), s);
