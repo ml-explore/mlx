@@ -43,6 +43,7 @@ Operations
    diagonal
    divide
    divmod
+   dot
    equal
    erf
    erfinv
