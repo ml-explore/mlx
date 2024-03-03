@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/metal.h"
 
@@ -34,7 +33,6 @@ BufferCache::~BufferCache() {
 }
 
 void BufferCache::clear() {
-  std::lock_guard<std::mutex> lk(cache_mutex_);
   for (auto& [size, holder] : buffer_pool_) {
     if (holder->buf)
       holder->buf->release();
@@ -47,12 +45,9 @@ void BufferCache::clear() {
 }
 
 MTL::Buffer* BufferCache::reuse_from_cache(size_t size) {
-  std::lock_guard<std::mutex> lk(cache_mutex_);
-
   // Find the closest buffer in pool
   MTL::Buffer* pbuf = nullptr;
 
-  // Make sure we use most of the available memory
   auto it = buffer_pool_.lower_bound(size);
 
   // Make sure we use most of the available memory
@@ -75,8 +70,6 @@ MTL::Buffer* BufferCache::reuse_from_cache(size_t size) {
 }
 
 void BufferCache::recycle_to_cache(MTL::Buffer* buf) {
-  std::lock_guard<std::mutex> lk(cache_mutex_);
-
   // Add to cache
   if (buf) {
     BufferHolder* bh = new BufferHolder(buf);
@@ -90,7 +83,6 @@ void BufferCache::release_cached_buffers(size_t min_bytes_to_free) {
   if (min_bytes_to_free >= 0.9 * pool_size_) {
     clear();
   } else {
-    std::lock_guard<std::mutex> lk(cache_mutex_);
     size_t total_bytes_freed = 0;
 
     while (tail_ && (total_bytes_freed < min_bytes_to_free)) {
@@ -178,10 +170,10 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   }
 
   // Try the cache
+  std::lock_guard<std::mutex> lk(mutex_);
   MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
-  size_t pool_size = get_cache_memory();
   if (!buf) {
-    size_t mem_required = get_active_memory() + pool_size + size;
+    size_t mem_required = get_active_memory() + get_cache_memory() + size;
 
     // If there is too much memory pressure, fail (likely causes a wait).
     if (!(allow_swap && relaxed_) && mem_required >= block_limit_) {
@@ -202,10 +194,11 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     buf = device_->newBuffer(size, res_opt);
   }
 
-  // Maintain the cache below the requested limit
-  if (pool_size >= max_pool_size_) {
+  // Maintain the cache below the requested limit, call this
+  // after recylcing to the cache to get a fifo policy
+  if (get_cache_memory() >= max_pool_size_) {
     auto thread_pool = metal::new_scoped_memory_pool();
-    buffer_cache_.release_cached_buffers(pool_size - max_pool_size_);
+    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
   }
 
   active_memory_ += buf->length();
@@ -216,8 +209,9 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
+  std::lock_guard<std::mutex> lk(mutex_);
   active_memory_ -= buf->length();
-  if (max_pool_size_ > 0) {
+  if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
     buf->release();
