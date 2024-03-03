@@ -23,6 +23,10 @@ template <> struct AccT<bfloat16_t> {
   typedef float acc_t;
 };
 
+template <> struct AccT<half> {
+  typedef float acc_t;
+};
+
 template <typename T>
 [[kernel]] void qmv_4_32(
     const device uint32_t* w [[buffer(0)]],
@@ -37,119 +41,58 @@ template <typename T>
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
 
-  constexpr int BM = 8;
-  constexpr int BN = 32;
-  constexpr int bits = 4;
-  constexpr int group_size = 32;
-  constexpr int bitmask = (1 << bits) - 1;
-  constexpr int el_per_thread = 32 / bits;
-  constexpr int colgroup = BN * el_per_thread;
-  constexpr int groups_per_block = colgroup / group_size;
-  static_assert(BM == el_per_thread, "BM should match the pack factor");
-
   typedef typename AccT<T>::acc_t U;
-  threadgroup U scales_block[8 * 16];
-  threadgroup U biases_block[8 * 16];
-  threadgroup uint32_t w_block[8 * 64];
-  threadgroup U x_block[512];
 
-  thread uint32_t w_local[4];
-  thread U result[4] = {0, 0, 0, 0};
-  thread U scale[4] = {1, 1, 1, 1};
-  thread U bias[4] = {0, 0, 0, 0};
-  thread U x_thread[8];
+  thread U x_thread[16];
+  thread U result[4] = {0};
 
   // Adjust positions
   const int in_vec_size_w = in_vec_size / 8;
   const int in_vec_size_g = in_vec_size / 32;
-  const int out_row = tid.y * 8;
-  w += out_row * in_vec_size_w;
-  scales += out_row * in_vec_size_g;
-  biases += out_row * in_vec_size_g;
-  x += tid.z * in_vec_size;
+  const int out_row = tid.y * 8 + simd_gid * 4;
+  w += out_row * in_vec_size_w + simd_lid * 2;
+  scales += out_row * in_vec_size_g + simd_lid / 2;
+  biases += out_row * in_vec_size_g + simd_lid / 2;
+  x += tid.z * in_vec_size + simd_lid * 16;
   y += tid.z * out_vec_size + out_row;
 
-  // Compute the loading offsets
-  const int lidy = lid / 8;
-  const int lidx = lid % 8;
-  const int x_offset = lid * 8;
-  const int scale_src_offset = lidy * in_vec_size_g + lidx * 2;
-  const int weight_src_offset = lidy * in_vec_size_w + lidx * 8;
-  const int weight_dst_offset = lidy * 64 + lidx * 8;
+  for (int k = 0; k < in_vec_size; k += 512) {
+    U sum = 0;
+    for (int i = 0; i < 16; i += 4) {
+      sum += x[i] + x[i+1];
+      x_thread[i] = x[i];
+      x_thread[i+1] = x[i+1] / 16.0f;
 
-  if (out_row >= out_vec_size) {
-    return;
-  }
-
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  for (int i=0; i<in_vec_size; i+=512) {
-    // Load everything in shared memory
-    #pragma clang loop unroll(full)
-    for (int i=0; i<8; i++) {
-      x_block[x_offset + i] = x[x_offset + i];
-    }
-    scales_block[2 * lid] = scales[scale_src_offset];
-    scales_block[2 * lid + 1] = scales[scale_src_offset + 1];
-    biases_block[2 * lid] = biases[scale_src_offset];
-    biases_block[2 * lid + 1] = biases[scale_src_offset + 1];
-    #pragma clang loop unroll(full)
-    for (int i=0; i<8; i++) {
-      w_block[weight_dst_offset + i] = w[weight_src_offset + i];
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Load in registers
-    #pragma clang loop unroll(full)
-    for (int k=0; k<2; k++) {
-      #pragma clang loop unroll(full)
-      for (int i=0; i<8; i++) {
-        x_thread[i] = x_block[simd_lid * 16 + k * 8 + i];
-      }
-      #pragma clang loop unroll(full)
-      for (int i=0; i<4; i++) {
-        scale[i] = scales_block[(simd_gid * 4 + i) * 16 + (2 * simd_lid + k) / 4];
-        bias[i] = biases_block[(simd_gid * 4 + i) * 16 + (2 * simd_lid + k) / 4];
-        w_local[i] = w_block[(simd_gid * 4 + i) * 64 + 2 * simd_lid + k];
-      }
-
-      // Perform the computation
-      #pragma clang loop unroll(full)
-      for (int i=0; i<4; i++) {
-        uchar4 wi = as_type<uchar4>(w_local[i]);
-        U si1 = scale[i];
-        U si2 = si1 / 16;
-        U bi = bias[i];
-
-        result[i] += (si1 * static_cast<U>(wi.x & 0x0f) + bi) * x_thread[0];
-        result[i] += (si2 * static_cast<U>(wi.x & 0xf0) + bi) * x_thread[1];
-        result[i] += (si1 * static_cast<U>(wi.y & 0x0f) + bi) * x_thread[2];
-        result[i] += (si2 * static_cast<U>(wi.y & 0xf0) + bi) * x_thread[3];
-        result[i] += (si1 * static_cast<U>(wi.z & 0x0f) + bi) * x_thread[4];
-        result[i] += (si2 * static_cast<U>(wi.z & 0xf0) + bi) * x_thread[5];
-        result[i] += (si1 * static_cast<U>(wi.w & 0x0f) + bi) * x_thread[6];
-        result[i] += (si2 * static_cast<U>(wi.w & 0xf0) + bi) * x_thread[7];
-      }
+      sum += x[i+2] + x[i+3];
+      x_thread[i+2] = x[i+2];
+      x_thread[i+3] = x[i+3] / 16.0f;
     }
 
-    // Advance the pointers
+    for (int row = 0; row < 4; row++) {
+      const device uint8_t* wl = (const device uint8_t *)(w + row * in_vec_size_w);
+      const device T* sl = scales + row * in_vec_size_g;
+      const device T* bl = biases + row * in_vec_size_g;
+
+      U s = sl[0];
+      U b = bl[0];
+      U acc[2] = {0};
+      for (int i = 0; i < 16; i += 4) {
+        acc[0] += x_thread[i] * (wl[i/2] & 0x0f) + x_thread[i+1] * (wl[i/2] & 0xf0);
+        acc[1] += x_thread[i+2] * (wl[i/2+1] & 0x0f) + x_thread[i+3] * (wl[i/2+1] & 0xf0);
+      }
+      result[row] += s * (acc[0] + acc[1]) + sum * b;
+    }
+
+    w += 512 / 8;
+    scales += 512 / 32;
+    biases += 512 / 32;
     x += 512;
-    w += 64;
-    scales += 16;
-    biases += 16;
-    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
-  // Accumulate in the simdgroup
-  #pragma clang loop unroll(full)
-  for (int i=0; i<4; i++) {
-    result[i] = simd_sum(result[i]);
-  }
-
-  // Store the result
-  if (simd_lid == 0) {
-    #pragma clang loop unroll(full)
-    for (int i=0; i<4; i++) {
-      y[simd_gid * 4 + i] = static_cast<T>(result[i]);
+  for (int row = 0; row < 4; row++) {
+    result[row] = simd_sum(result[row]);
+    if (simd_lid == 0) {
+      y[row] = static_cast<T>(result[row]);
     }
   }
 }
