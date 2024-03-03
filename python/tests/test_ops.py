@@ -2017,6 +2017,7 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_dot(self):
         self.assertCmpNumpy([mx.array(3.0), mx.array(4.0)], mx.dot, np.dot)
         self.assertCmpNumpy([(2, 3), (3,)], mx.dot, np.dot)
+        self.assertCmpNumpy([(3,), (3,)], mx.dot, np.dot)
         self.assertCmpNumpy([(2, 2), (2, 2)], mx.dot, np.dot)
         self.assertCmpNumpy([(3, 4, 5, 6), (5, 4, 6, 3)], mx.dot, np.dot)
 
