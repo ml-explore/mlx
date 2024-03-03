@@ -170,7 +170,7 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   }
 
   // Try the cache
-  std::lock_guard<std::mutex> lk(mutex_);
+  std::unique_lock lk(mutex_);
   MTL::Buffer* buf = buffer_cache_.reuse_from_cache(size);
   if (!buf) {
     size_t mem_required = get_active_memory() + get_cache_memory() + size;
@@ -182,8 +182,8 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
     auto thread_pool = metal::new_scoped_memory_pool();
 
-    // If we have a lot of memory pressure, check if we can reclaim some memory
-    // from the cache
+    // If we have a lot of memory pressure or are over the maximum cache size,
+    // try to reclaim memory from the cache
     if (mem_required >= gc_limit_) {
       buffer_cache_.release_cached_buffers(mem_required - gc_limit_);
     }
@@ -191,29 +191,32 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     // Allocate new buffer if needed
     size_t res_opt = MTL::ResourceStorageModeShared;
     res_opt |= MTL::ResourceHazardTrackingModeTracked;
+    lk.unlock();
     buf = device_->newBuffer(size, res_opt);
-  }
-
-  // Maintain the cache below the requested limit, call this
-  // after recylcing to the cache to get a fifo policy
-  if (get_cache_memory() >= max_pool_size_) {
-    auto thread_pool = metal::new_scoped_memory_pool();
-    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
+    lk.lock();
   }
 
   active_memory_ += buf->length();
   peak_memory_ = std::max(peak_memory_, active_memory_);
+
+  // Maintain the cache below the requested limit
+  if (get_cache_memory() >= max_pool_size_) {
+    auto thread_pool = metal::new_scoped_memory_pool();
+    buffer_cache_.release_cached_buffers(get_cache_memory() - max_pool_size_);
+  }
 
   return Buffer{static_cast<void*>(buf)};
 }
 
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
-  std::lock_guard<std::mutex> lk(mutex_);
+  std::unique_lock lk(mutex_);
   active_memory_ -= buf->length();
   if (get_cache_memory() < max_pool_size_) {
     buffer_cache_.recycle_to_cache(buf);
   } else {
+    lk.unlock();
+    auto thread_pool = metal::new_scoped_memory_pool();
     buf->release();
   }
 }
