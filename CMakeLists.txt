@@ -18,7 +18,7 @@ option(MLX_BUILD_METAL "Build metal backend" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.3.0)
+  set(MLX_VERSION 0.5.0)
 endif()
 
 # --------------------- Processor tests -------------------------
@@ -67,8 +67,6 @@ if (MLX_BUILD_METAL AND NOT METAL_LIB)
   set(MLX_BUILD_METAL OFF)
 elseif (MLX_BUILD_METAL)
   message(STATUS "Building METAL sources")
-  add_compile_definitions(_METAL_)
-
   # Throw an error if xcrun not found
   execute_process(COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
                   OUTPUT_VARIABLE MACOS_VERSION

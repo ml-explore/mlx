@@ -48,6 +48,54 @@ std::tuple<array, array, int> vmap_binary_op(
   return {a, b, to_ax};
 }
 
+std::tuple<array, array, array, int> vmap_ternary_op(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes,
+    const Stream& stream) {
+  assert(inputs.size() == 3);
+  assert(axes.size() == 3);
+
+  auto a = inputs[0];
+  auto b = inputs[1];
+  auto c = inputs[2];
+  int ndim = std::max(
+      {a.ndim() + (axes[0] == -1),
+       b.ndim() + (axes[1] == -1),
+       c.ndim() + (axes[2] == -1)});
+
+  auto expand_dims = [stream, ndim](auto in) {
+    auto shape = in.shape();
+    shape.insert(shape.begin(), ndim - shape.size(), 1);
+    return reshape(in, shape, stream);
+  };
+
+  int to_ax = (ndim - a.ndim()) + axes[0];
+  int from_ax1 = (ndim - b.ndim()) + axes[1];
+  int from_ax2 = (ndim - c.ndim()) + axes[2];
+  a = expand_dims(a);
+  b = expand_dims(b);
+  c = expand_dims(c);
+
+  auto find_tdims = [](auto x, int to_ax, int from_ax) {
+    std::vector<int> tdims(x.ndim());
+    std::iota(tdims.begin(), tdims.end(), 0);
+    tdims.erase(tdims.begin() + from_ax);
+    tdims.insert(tdims.begin() + to_ax, from_ax);
+    return tdims;
+  };
+
+  if (to_ax != from_ax1) {
+    std::vector<int> tdims = find_tdims(b, to_ax, from_ax1);
+    b = transpose(b, tdims, stream);
+  }
+
+  if (to_ax != from_ax2) {
+    std::vector<int> tdims = find_tdims(c, to_ax, from_ax2);
+    c = transpose(c, tdims, stream);
+  }
+  return {a, b, c, to_ax};
+}
+
 } // namespace
 
 std::vector<array> Primitive::jvp(
@@ -631,21 +679,13 @@ bool Concatenate::is_equivalent(const Primitive& other) const {
   return axis_ == c_other.axis_;
 }
 
-std::vector<array> Convolution::vjp(
-    const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
-    const std::vector<array>&) {
-  assert(primals.size() == 2);
-  std::vector<array> grads;
-
-  // Collect info
-  auto& in = primals[0];
-  auto& wt = primals[1];
-  auto cotan = cotangents[0];
-
-  int O = wt.shape(0);
-
+array conv_weight_backward_patches(
+    const array& in,
+    const array& wt,
+    const array& cotan,
+    const std::vector<int>& kernel_strides,
+    const std::vector<int>& padding,
+    StreamOrDevice s) {
   // Resolve Padded input shapes and strides
   std::vector<int> padding_starts(in.ndim(), 0);
   std::vector<int> padding_ends = in.shape();
@@ -653,9 +693,9 @@ std::vector<array> Convolution::vjp(
 
   // padded shape
   for (int i = 1; i < in.ndim() - 1; i++) {
-    in_padded_shape[i] += 2 * padding_[i - 1];
-    padding_ends[i] += padding_[i - 1];
-    padding_starts[i] += padding_[i - 1];
+    in_padded_shape[i] += 2 * padding[i - 1];
+    padding_ends[i] += padding[i - 1];
+    padding_starts[i] += padding[i - 1];
   }
 
   // padded strides (contiguous)
@@ -663,6 +703,12 @@ std::vector<array> Convolution::vjp(
   for (int i = in.ndim() - 2; i >= 0; --i) {
     in_padded_strides[i] = in_padded_strides[i + 1] * in_padded_shape[i + 1];
   }
+
+  // Pad input
+  std::vector<int> padded_axes(in.ndim() - 2, 0);
+  std::iota(padded_axes.begin(), padded_axes.end(), 1);
+  auto in_padded =
+      pad(in, padded_axes, padding, padding, array(0, in.dtype()), s);
 
   // Resolve strided patches
 
@@ -678,62 +724,108 @@ std::vector<array> Convolution::vjp(
   std::vector<size_t> patches_strides(patches_shape.size(), 1);
   patches_strides[0] = in_padded_strides[0];
   for (int i = 1; i < n_spatial_dim + 1; i++) {
-    patches_strides[i] = in_padded_strides[i] * kernel_strides_[i - 1];
+    patches_strides[i] = in_padded_strides[i] * kernel_strides[i - 1];
   }
   for (int i = 1; i < in.ndim(); i++) {
     patches_strides[n_spatial_dim + i] = in_padded_strides[i];
   }
 
-  // Reshape cotangents and weights for gemm
-  cotan = reshape(cotangents[0], {-1, O}, stream());
-  auto weight_reshaped = reshape(wt, {O, -1}, stream());
+  // Make patches from in
+  auto in_patches = as_strided(in_padded, patches_shape, patches_strides, 0, s);
+
+  // Prepare for matmul
+  int O = wt.shape(0);
+  auto cotan_mat = reshape(cotan, {-1, O}, s);
+  in_patches = reshape(in_patches, {cotan_mat.shape(0), -1}, s);
+
+  auto grad = matmul(transpose(cotan_mat, {1, 0}, s), in_patches, s);
+  grad = reshape(grad, wt.shape(), s);
+  return grad;
+}
+
+std::vector<array> Convolution::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 2);
+  std::vector<array> grads;
+
+  // Collect info
+  auto& in = primals[0];
+  auto& wt = primals[1];
+  auto& cotan = cotangents[0];
 
   for (int a : argnums) {
     // Grads for input
     if (a == 0) {
-      // Gemm with cotangents to get patches
-      auto grad_patches = matmul(cotan, weight_reshaped, stream());
+      std::vector<int> padding_lo = padding_;
+      std::vector<int> padding_hi = padding_;
 
-      // Prepare base grad array to accumulate on
-      int in_padded_size = in_padded_strides[0] * in_padded_shape[0];
-      auto grad = zeros(
-          {
-              in_padded_size,
-          },
-          in.dtype(),
+      for (int i = 0; i < padding_lo.size(); ++i) {
+        int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
+        padding_lo[i] = wt_size - padding_[i] - 1;
+
+        int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
+        int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
+        padding_hi[i] = in_size - out_size + padding_[i];
+      }
+
+      auto wt_trans = swapaxes(wt, 0, -1, stream());
+
+      auto grad = conv_general(
+          /* const array& input = */ cotan,
+          /* const array& weight = */ wt_trans,
+          /* std::vector<int> stride = */ input_dilation_,
+          /* std::vector<int> padding_lo = */ padding_lo,
+          /* std::vector<int> padding_hi = */ padding_hi,
+          /* std::vector<int> kernel_dilation = */ kernel_dilation_,
+          /* std::vector<int> input_dilation = */ kernel_strides_,
+          /* int groups = */ 1,
+          /* bool flip = */ !flip_,
           stream());
-
-      // Create index map
-      int patches_size = grad_patches.size();
-      auto idx = arange(in_padded_size, stream());
-      idx = as_strided(idx, patches_shape, patches_strides, 0, stream());
-      idx = reshape(idx, {patches_size}, stream());
-
-      // Flatten patches and scatter
-      auto flat_patches = reshape(grad_patches, {patches_size, 1}, stream());
-      grad = scatter_add(grad, idx, flat_patches, 0, stream());
-
-      // Reshape and slice away padding
-      grad = reshape(grad, in_padded_shape, stream());
-      grad = slice(grad, padding_starts, padding_ends, stream());
 
       grads.push_back(grad);
     }
     // Grads for weight
     else if (a == 1) {
-      // Make patches from in
-      std::vector<int> padded_axes(in.ndim() - 2, 0);
-      std::iota(padded_axes.begin(), padded_axes.end(), 1);
-      auto in_padded = pad(
-          in, padded_axes, padding_, padding_, array(0, in.dtype()), stream());
-      auto in_patches =
-          as_strided(in_padded, patches_shape, patches_strides, 0, stream());
-      in_patches = reshape(in_patches, {cotan.shape(0), -1}, stream());
+      bool no_dilation = true;
 
-      auto grad =
-          matmul(transpose(cotan, {1, 0}, stream()), in_patches, stream());
-      grad = reshape(grad, wt.shape(), stream());
-      grads.push_back(grad);
+      for (int i = 0; i < input_dilation_.size(); i++) {
+        no_dilation &= (input_dilation_[i] == 1) && (kernel_dilation_[i] == 1);
+      }
+
+      if (no_dilation) {
+        auto grad = conv_weight_backward_patches(
+            in, wt, cotan, kernel_strides_, padding_, stream());
+        grads.push_back(grad);
+      } else {
+        std::vector<int> padding_lo = padding_;
+        std::vector<int> padding_hi = padding_;
+
+        for (int i = 0; i < padding_hi.size(); ++i) {
+          int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
+          int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
+          int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
+          padding_hi[i] = out_size - in_size + wt_size - padding_[i] - 1;
+        }
+
+        auto in_trans = swapaxes(in, 0, -1, stream());
+        auto cotan_trans = swapaxes(cotan, 0, -1, stream());
+        auto grad_trans = conv_general(
+            /* const array& input = */ in_trans,
+            /* const array& weight = */ cotan_trans,
+            /* std::vector<int> stride = */ kernel_dilation_,
+            /* std::vector<int> padding_lo = */ padding_lo,
+            /* std::vector<int> padding_hi = */ padding_hi,
+            /* std::vector<int> kernel_dilation = */ kernel_strides_,
+            /* std::vector<int> input_dilation = */ input_dilation_,
+            /* int groups = */ 1,
+            /* bool flip = */ flip_,
+            stream());
+        auto grad = swapaxes(grad_trans, 0, -1, stream());
+        grads.push_back(grad);
+      }
     }
   }
 
@@ -745,7 +837,8 @@ bool Convolution::is_equivalent(const Primitive& other) const {
   return padding_ == c_other.padding_ &&
       kernel_strides_ == c_other.kernel_strides_ &&
       kernel_dilation_ == c_other.kernel_dilation_ &&
-      input_dilation_ == c_other.input_dilation_;
+      input_dilation_ == c_other.input_dilation_ &&
+      groups_ == c_other.groups_ && flip_ == c_other.flip_;
 }
 
 std::vector<array> Copy::vjp(
@@ -1775,6 +1868,76 @@ std::pair<std::vector<array>, std::vector<int>> Multiply::vmap(
   return {{multiply(a, b, stream())}, {to_ax}};
 }
 
+std::vector<array> Select::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 3);
+  assert(tangents.size() == 3);
+
+  auto jvp_fun = [&](int i) {
+    int arg = argnums[i];
+
+    if (arg == 0) {
+      return zeros_like(primals[0], stream());
+    } else if (arg == 1) {
+      return multiply(
+          astype(primals[0], tangents[1].dtype(), stream()),
+          tangents[1],
+          stream());
+    } else {
+      return multiply(
+          astype(
+              logical_not(primals[0], stream()), tangents[2].dtype(), stream()),
+          tangents[2],
+          stream());
+    }
+  };
+
+  array jvp = jvp_fun(argnums[0]);
+  for (int i = 1; i < argnums.size(); i++) {
+    jvp = add(jvp, jvp_fun(argnums[i]));
+  }
+  return {jvp};
+}
+
+std::vector<array> Select::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 3);
+  assert(cotangents.size() == 1);
+
+  std::vector<array> vjps;
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      vjps.push_back(zeros_like(primals[0], stream()));
+    } else if (arg == 1) {
+      vjps.push_back(multiply(
+          astype(primals[0], cotangents[0].dtype(), stream()),
+          cotangents[0],
+          stream()));
+    } else if (arg == 2) {
+      vjps.push_back(multiply(
+          astype(
+              logical_not(primals[0], stream()),
+              cotangents[0].dtype(),
+              stream()),
+          cotangents[0],
+          stream()));
+    }
+  }
+  return vjps;
+}
+
+std::pair<std::vector<array>, std::vector<int>> Select::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, c, to_ax] = vmap_ternary_op(inputs, axes, stream());
+  return {{where(a, b, c, stream())}, {to_ax}};
+}
+
 std::vector<array> Negative::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
@@ -1925,7 +2088,10 @@ std::vector<array> Power::vjp(
           primals[1],
           stream()));
     } else {
-      vjps.push_back(multiply(log(primals[0], stream()), outputs[0], stream()));
+      auto& exp = outputs[0];
+      auto exp_vjp = multiply(log(primals[0], stream()), outputs[0], stream());
+      // 0 * log 0 -> 0
+      vjps.push_back(where(exp, exp_vjp, array(0.0f, exp.dtype()), stream()));
     }
     vjps.back() = multiply(cotangents[0], vjps.back(), stream());
   }

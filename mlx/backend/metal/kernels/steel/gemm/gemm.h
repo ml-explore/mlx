@@ -4,6 +4,7 @@
 
 #include "mlx/backend/metal/kernels/steel/gemm/loader.h"
 #include "mlx/backend/metal/kernels/steel/gemm/mma.h"
+#include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils.h"
 

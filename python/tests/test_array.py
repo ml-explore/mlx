@@ -1,6 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import operator
+import pickle
 import unittest
 import weakref
 from itertools import permutations
@@ -1439,6 +1440,15 @@ class TestArray(mlx_tests.MLXTestCase):
         b = a
         b @= a
         self.assertTrue(mx.array_equal(a, b))
+
+    def test_load_from_pickled_np(self):
+        a = np.array([1, 2, 3], dtype=np.int32)
+        b = pickle.loads(pickle.dumps(a))
+        self.assertTrue(mx.array_equal(mx.array(a), mx.array(b)))
+
+        a = np.array([1.0, 2.0, 3.0], dtype=np.float16)
+        b = pickle.loads(pickle.dumps(a))
+        self.assertTrue(mx.array_equal(mx.array(a), mx.array(b)))
 
 
 if __name__ == "__main__":

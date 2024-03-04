@@ -3,11 +3,13 @@ set(
   ${CMAKE_CURRENT_SOURCE_DIR}/atomic.h
   ${CMAKE_CURRENT_SOURCE_DIR}/bf16.h
   ${CMAKE_CURRENT_SOURCE_DIR}/bf16_math.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/binary.h
   ${CMAKE_CURRENT_SOURCE_DIR}/complex.h
   ${CMAKE_CURRENT_SOURCE_DIR}/defines.h
   ${CMAKE_CURRENT_SOURCE_DIR}/erf.h
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.h
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/unary.h
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
 )
 
@@ -27,6 +29,7 @@ set(
   "scan"
   "softmax"
   "sort"
+  "ternary"
   "unary"
   "gather"
   "scatter"
@@ -48,11 +51,7 @@ endfunction(build_kernel_base)
 
 function(build_kernel KERNEL)
   set(SRCFILE ${CMAKE_CURRENT_SOURCE_DIR}/${KERNEL}.metal)
-  set(HEADERS_PADDED ${HEADERS})
-  if(${KERNEL} STREQUAL "conv")
-    set(HEADERS_PADDED ${HEADERS_PADDED} ${CMAKE_CURRENT_SOURCE_DIR}/conv.h)
-  endif()
-  build_kernel_base(${KERNEL} ${SRCFILE} "${HEADERS_PADDED}")
+  build_kernel_base(${KERNEL} ${SRCFILE} "${HEADERS}")
 endfunction(build_kernel)
 
 foreach(KERNEL ${KERNELS})
