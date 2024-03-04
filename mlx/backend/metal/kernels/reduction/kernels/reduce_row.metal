@@ -99,7 +99,102 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
   }
 }
 
+template <typename T, typename U, typename Op>
+[[kernel]] void row_reduce_general_small(
+    const device T *in [[buffer(0)]],
+    device U *out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& out_size [[buffer(3)]],
+    const constant int* shape [[buffer(4)]],
+    const constant size_t* strides [[buffer(5)]],
+    const constant int& ndim [[buffer(6)]],
+    uint lid [[thread_position_in_grid]]) {
+
+  Op op;
+  
+  uint out_idx = lid;
+
+  if(out_idx >= out_size) {
+    return;
+  }
+
+  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  in += in_idx;
+
+  U total_val = Op::init;
+  
+  for(short i = 0; i < short(reduction_size); i++) {
+    total_val = op(static_cast<U>(in[i]), total_val);
+  }
+
+  out[out_idx] = total_val;
+}
+
+template <typename T, typename U, typename Op>
+[[kernel]] void row_reduce_general_med(
+    const device T *in [[buffer(0)]],
+    device U *out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& out_size [[buffer(3)]],
+    const constant int* shape [[buffer(4)]],
+    const constant size_t* strides [[buffer(5)]],
+    const constant int& ndim [[buffer(6)]],
+    uint tid [[threadgroup_position_in_grid]],
+    uint simd_lane_id [[thread_index_in_simdgroup]],
+    uint simd_per_group [[dispatch_simdgroups_per_threadgroup]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
+
+  Op op;
+  
+  uint out_idx = simd_per_group * tid + simd_group_id;
+
+  if(out_idx >= out_size) {
+    return;
+  }
+
+  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  in += in_idx;
+
+  U total_val = Op::init;
+
+  for(short i = simd_lane_id; i < short(reduction_size); i+=32) {
+    total_val = op(static_cast<U>(in[i]), total_val);
+  }
+
+  total_val = op.simd_reduce(total_val);
+
+  if(simd_lane_id == 0) {
+    out[out_idx] = total_val;
+  }
+}
+
+#define instantiate_row_reduce_small(name, itype, otype, op) \
+  template[[host_name("row_reduce_general_small_" #name)]] \
+  [[kernel]] void row_reduce_general_small<itype, otype, op>( \
+      const device itype *in [[buffer(0)]], \
+      device otype *out [[buffer(1)]], \
+      const constant size_t& reduction_size [[buffer(2)]], \
+      const constant size_t& out_size [[buffer(3)]], \
+      const constant int* shape [[buffer(4)]], \
+      const constant size_t* strides [[buffer(5)]], \
+      const constant int& ndim [[buffer(6)]], \
+      uint lid [[thread_position_in_grid]]); \
+  template[[host_name("row_reduce_general_med_" #name)]] \
+  [[kernel]] void row_reduce_general_med<itype, otype, op>( \
+      const device itype *in [[buffer(0)]], \
+      device otype *out [[buffer(1)]], \
+      const constant size_t& reduction_size [[buffer(2)]], \
+      const constant size_t& out_size [[buffer(3)]], \
+      const constant int* shape [[buffer(4)]], \
+      const constant size_t* strides [[buffer(5)]], \
+      const constant int& ndim [[buffer(6)]], \
+      uint tid [[threadgroup_position_in_grid]], \
+      uint simd_lane_id [[thread_index_in_simdgroup]], \
+      uint simd_per_group [[dispatch_simdgroups_per_threadgroup]], \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
+
 #define instantiate_row_reduce_general(name, itype, otype, op) \
+  instantiate_row_reduce_small(name, itype, otype, op) \
   template [[host_name("row_reduce_general_" #name)]] \
   [[kernel]] void row_reduce_general<itype, otype, op>( \
       const device itype *in [[buffer(0)]],  \
@@ -117,6 +212,7 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
 #define instantiate_row_reduce_general_no_atomics(name, itype, otype, op) \
+  instantiate_row_reduce_small(name, itype, otype, op) \
   template [[host_name("row_reduce_general_no_atomics_" #name)]] \
   [[kernel]] void row_reduce_general_no_atomics<itype, otype, op>( \
       const device itype *in [[buffer(0)]],  \

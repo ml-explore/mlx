@@ -10,6 +10,9 @@ using namespace metal;
 // Row atomics
 ///////////////////////////////////////////////////////////////////////////////
 
+// template<typename T, typename U, typename Op>
+// struct RowReduceKernel<>;
+
 template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
 inline U per_thread_row_reduce(
     const device T* in,

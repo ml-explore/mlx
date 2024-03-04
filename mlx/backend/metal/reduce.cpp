@@ -4,6 +4,8 @@
 #include <cassert>
 #include <sstream>
 
+#include <iostream>
+
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -130,15 +132,8 @@ void row_reduce_general_dispatch(
     const Stream& s) {
   Dtype out_dtype = out.dtype();
   bool is_out_64b_int = is_64b_int(out_dtype);
-  auto kernel = (is_out_64b_int)
-      ? d.get_kernel(
-            "row_reduce_general_no_atomics_" + op_name + type_to_name(in))
-      : d.get_kernel("row_reduce_general_" + op_name + type_to_name(in));
-
-  compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
-  int n_reads = REDUCE_N_READS;
   size_t reduction_size = plan.shape.back();
   auto shape = plan.shape;
   auto strides = plan.strides;
@@ -160,7 +155,28 @@ void row_reduce_general_dispatch(
   }
   int ndim = shape.size();
 
+  std::ostringstream kname;
+
+  bool is_small = non_row_reductions == 1 && reduction_size <= 16;
+  bool is_med = non_row_reductions == 1 && reduction_size <= 256;
+  is_out_64b_int &= !is_small && !is_med;
+
+  std::string small_desc = "_";
+  if (is_med) {
+    small_desc = "_med_";
+  } else if (is_small) {
+    small_desc = "_small_";
+  }
+
+  small_desc = is_out_64b_int ? "_no_atomics_" : small_desc;
+
+  kname << "row_reduce_general" << small_desc << op_name << type_to_name(in);
+
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder->setComputePipelineState(kernel);
+
   // Each thread group is responsible for 1 output
+  int n_reads = REDUCE_N_READS;
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   thread_group_size =
       std::min((reduction_size + n_reads - 1) / n_reads, thread_group_size);
@@ -176,7 +192,15 @@ void row_reduce_general_dispatch(
   MTL::Size grid_dims = MTL::Size(n_threads, non_row_reductions, 1);
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
 
-  if (is_out_64b_int == false || non_row_reductions == 1) {
+  if (!is_out_64b_int || non_row_reductions == 1) {
+    if (is_med) {
+      grid_dims = MTL::Size(out.size() * 32, 1, 1);
+      group_dims = MTL::Size(std::min(32ul, out.size()) * 32, 1, 1);
+    } else if (is_small) {
+      grid_dims = MTL::Size(out.size(), 1, 1);
+      group_dims = MTL::Size(std::min(1024ul, out.size()), 1, 1);
+    }
+
     // Set the arguments for the kernel
     set_array_buffer(compute_encoder, in, 0);
     set_array_buffer(compute_encoder, out, 1);

@@ -6,6 +6,7 @@
 #include <metal_simdgroup>
 
 #include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/kernels/steel/utils.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 #include "mlx/backend/metal/kernels/reduction/ops.h"
