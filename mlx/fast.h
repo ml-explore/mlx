@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "mlx/utils.h"
 
 namespace mlx::core::fast {

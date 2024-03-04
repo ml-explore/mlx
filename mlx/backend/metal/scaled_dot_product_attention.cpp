@@ -46,7 +46,7 @@ void sdpa_metal(
   for (const auto& arr : {k, v, out}) {
     if (arr.dtype() != q.dtype()) {
       throw std::runtime_error(
-          "[fast_inference_sdpa]: expected matching dtypes for q,k,v,o");
+          "[ScaledDotProductAttention::eval_gpu]: expected matching dtypes for q,k,v,o");
     }
   }
 
@@ -58,7 +58,7 @@ void sdpa_metal(
     kname_reduce << "half";
   } else {
     throw std::runtime_error(
-        "[scaled_dot_product_attention::eval_gpu]: unexpected dtype found for queries: expected either float32 or float16.");
+        "[ScaledDotProductAttention::eval_gpu]: unexpected dtype found for queries: expected either float32 or float16.");
   }
 
   std::string kname_suffix_tile_size = std::to_string(tile_size) + delimiter;

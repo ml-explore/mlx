@@ -76,12 +76,12 @@ class ScaledDotProductAttention : public Custom {
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    return eval_cpu(inputs, outputs[0]);
+    outputs[0] = fallback_(inputs)[0];
   };
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    return eval_gpu(inputs, outputs[0]);
+    eval_gpu(inputs, outputs[0]);
   };
 
   void eval_cpu(const std::vector<array>& inputs, array& out_array) {
@@ -97,7 +97,6 @@ class ScaledDotProductAttention : public Custom {
   std::function<std::vector<array>(std::vector<array>)> fallback_;
   float scale_;
   bool needs_mask_;
-  void eval(const std::vector<array>& inputs, array& out);
 };
 
 } // namespace mlx::core::fast

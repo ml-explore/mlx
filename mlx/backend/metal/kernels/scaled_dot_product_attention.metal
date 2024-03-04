@@ -143,7 +143,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
         smemPtrFlt2[simd_lane_id] = float2(0.f);
     }
     constexpr const bool TILE_SIZE_LARGER_THAN_64 = TILE_SIZE_CONST > 64;
-    constexpr const int TILE_SIZE_ITERS_128 = (TILE_SIZE_CONST + 1) / 128;
+    constexpr const int TILE_SIZE_ITERS_128 = TILE_SIZE_CONST / 128;
 
     if (TILE_SIZE_LARGER_THAN_64) {
         float maxval = -INFINITY;

@@ -144,13 +144,8 @@ array scaled_dot_product_attention(
     }
   }
 
-  size_t batch_dim = queries.shape(0);
-  if (batch_dim != 1) {
-    std::ostringstream msg;
-    msg << "[scaled_dot_product_attention] Expected batch dimension of 1. ";
-    throw std::invalid_argument(msg.str());
-  }
-  for (const auto& tensor : {queries, keys, values}) {
+  const size_t batch_dim = queries.shape(0);
+  for (const auto& tensor : {keys, values}) {
     if (tensor.shape(0) != batch_dim) {
       std::ostringstream msg;
       msg << "[scaled_dot_product_attention] mismatching batch dimension for input with shape "
@@ -164,15 +159,6 @@ array scaled_dot_product_attention(
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] query, keys expected to have matching last dimension; found query shape "
         << queries.shape() << " for keys shape " << keys.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  // head_dim must be 128.
-  constexpr const int supported_head_dim = 128;
-  if (queries.shape(-1) != supported_head_dim) {
-    std::ostringstream msg;
-    msg << "[scaled_dot_product_attention] query head dim must be 128 ; found "
-        << queries.shape(-1) << " .";
     throw std::invalid_argument(msg.str());
   }
 
@@ -196,14 +182,6 @@ array scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  // q_seq_len == 1 for now in decoding (no mask) implementation
-  if (queries.shape(-2) > 1 && !mask.has_value()) {
-    std::ostringstream msg;
-    msg << "[scaled_dot_product_attention] query sequence length must be 1 at decode time, found  "
-        << queries.shape(-2) << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
   auto final_type = result_type({queries, keys, values});
 
   auto q = astype(queries, final_type, s);
@@ -221,53 +199,54 @@ array scaled_dot_product_attention(
    * * non-null mask
    */
   bool needs_mask = mask.has_value();
-  auto fallback =
-      [scale, needs_mask, final_type, &s](const std::vector<array>& inputs) {
-        auto& q_tensor = inputs[0];
-        auto& k_tensor = inputs[1];
-        auto& v_tensor = inputs[2];
-        auto q_scaled = multiply(array(scale, q_tensor.dtype()), q_tensor, s);
-        int n_q_heads = q_tensor.shape()[1];
-        int n_kv_heads = k_tensor.shape()[1];
+  auto fallback = [scale, needs_mask, final_type, n_q_heads, n_kv_heads, &s](
+                      const std::vector<array>& inputs) {
+    auto& q_tensor = inputs[0];
+    auto& k_tensor = inputs[1];
+    auto& v_tensor = inputs[2];
+    auto q_scaled = multiply(array(scale, q_tensor.dtype()), q_tensor, s);
 
-        auto tile_if_needs_repeat = [](const array& arr,
-                                       int query_heads,
-                                       int kv_heads,
-                                       StreamOrDevice& s) -> array {
-          if (query_heads == kv_heads)
-            return arr;
-          int n_repeats = query_heads / kv_heads;
-          constexpr const int heads_axis =
-              1; // heads axis, assumes tensors arranged  as [0, 1, 2, 3] ->
-                 // [Batch, Heads, Sequence, Hidden]
-          auto ret = repeat(arr, n_repeats, heads_axis, s);
-          return ret;
-        };
-        auto k_tensor_tiled =
-            tile_if_needs_repeat(k_tensor, n_q_heads, n_kv_heads, s);
-        auto v_tensor_tiled =
-            tile_if_needs_repeat(v_tensor, n_q_heads, n_kv_heads, s);
+    auto tile_if_needs_repeat =
+        [n_q_heads, n_kv_heads](const array& arr, StreamOrDevice& s) -> array {
+      if (n_q_heads == n_kv_heads)
+        return arr;
+      int n_repeats = n_q_heads / n_kv_heads;
+      constexpr const int heads_axis =
+          1; // heads axis, assumes tensors arranged  as [0, 1, 2, 3] ->
+             // [Batch, Heads, Sequence, Hidden]
+      auto ret = repeat(arr, n_repeats, heads_axis, s);
+      return ret;
+    };
+    auto k_tensor_tiled = tile_if_needs_repeat(k_tensor, s);
+    auto v_tensor_tiled = tile_if_needs_repeat(v_tensor, s);
 
-        // dim check on k, v; repeat if untiled, since naive matmul will have
-        // dim mismatch for GQA (MQA could make use of broadcast)
-        auto k_transposed = transpose(k_tensor_tiled, {0, 1, 3, 2}, s);
-        auto s_tensor = matmul(q_scaled, k_transposed, s);
-        if (needs_mask) {
-          auto mask_tensor = inputs[3];
-          s_tensor = add(s_tensor, mask_tensor, s);
-        }
-        auto p = softmax(s_tensor, std::vector<int>({-1}), s);
-        auto out_tensor = matmul(p, v_tensor_tiled, s);
-        out_tensor = astype(out_tensor, final_type, s);
-        return std::vector<array>{out_tensor};
-      };
+    // dim check on k, v; repeat if untiled, since naive matmul will have
+    // dim mismatch for GQA (MQA could make use of broadcast)
+    auto k_transposed = transpose(k_tensor_tiled, {0, 1, 3, 2}, s);
+    auto s_tensor = matmul(q_scaled, k_transposed, s);
+    if (needs_mask) {
+      auto mask_tensor = inputs[3];
+      s_tensor = add(s_tensor, mask_tensor, s);
+    }
+    auto p = astype(
+        softmax(astype(s_tensor, float32, s), std::vector<int>{-1}, s),
+        final_type,
+        s);
+    auto out_tensor = matmul(p, v_tensor_tiled, s);
+    return std::vector<array>{out_tensor};
+  };
 
   auto stream = to_stream(s);
 
   // current implementation use case: batch size 1, query sequence length 1, no
-  // mask.
-  bool implementation_supports_use_case =
-      q.shape(0) == 1 && q.shape(2) == 1 && !mask.has_value();
+  // mask.  Likewise, requires head_dim == 128
+  constexpr const int supported_head_dim = 128;
+  const size_t query_head_dim = q.shape(-1);
+  const size_t query_sequence_length = q.shape(2);
+  bool implementation_supports_use_case = batch_dim == 1 &&
+      query_sequence_length == 1 && !mask.has_value() &&
+      query_head_dim == supported_head_dim;
+
   if (stream.device == Device::gpu && implementation_supports_use_case) {
     auto out = array(
         out_shape,
