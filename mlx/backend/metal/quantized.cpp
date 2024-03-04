@@ -41,8 +41,8 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int B = x.size() / D;
   int O = out.shape(-1);
   if (transpose_) {
-    // Route to the specialized qmv kernel
-    if (B < 6 && group_size_ == 32 && bits_ == 4 && O % 32 == 0 && D >= 512) {
+    // Route to the fast qmv kernel
+    if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
       std::ostringstream kname;
       kname << "qmv_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
             << bits_ << "_fast";
@@ -55,7 +55,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       int bo = 8;
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, 2, 1);
-      MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
+      MTL::Size grid_dims = MTL::Size(1, O / bo, B);
 
       set_array_buffer(compute_encoder, w, 0);
       set_array_buffer(compute_encoder, scales, 1);
@@ -79,9 +79,9 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
-      int bo = std::min(32, O);
+      int bo = 8;
       int bd = 32;
-      MTL::Size group_dims = MTL::Size(bd, bo, 1);
+      MTL::Size group_dims = MTL::Size(bd, 2, 1);
       MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
 
       set_array_buffer(compute_encoder, w, 0);

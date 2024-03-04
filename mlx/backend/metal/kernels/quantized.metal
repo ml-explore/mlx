@@ -23,12 +23,77 @@ template <> struct AccT<bfloat16_t> {
   typedef float acc_t;
 };
 
-template <> struct AccT<half> {
-  typedef float acc_t;
-};
 
-template <typename T>
-[[kernel]] void qmv_4_32(
+template <typename T, typename U, int values_per_thread, int bits>
+inline U load_vector(const device T *x, thread U *x_thread) {
+  static_assert(bits == 2 || bits == 4 || bits == 8, "Template undefined for bits not in {2, 4, 8}");
+
+  U sum = 0;
+
+  if (bits == 2) {
+    for (int i = 0; i < values_per_thread; i += 4) {
+      sum += x[i] + x[i+1] + x[i+2] + x[i+3];
+      x_thread[i] = x[i];
+      x_thread[i+1] = x[i+1] / 4.0f;
+      x_thread[i+2] = x[i+2] / 16.0f;
+      x_thread[i+3] = x[i+3] / 64.0f;
+    }
+  }
+
+  else if (bits == 4) {
+    for (int i = 0; i < values_per_thread; i += 2) {
+      sum += x[i] + x[i+1];
+      x_thread[i] = x[i];
+      x_thread[i+1] = x[i+1] / 16.0f;
+    }
+  }
+
+  else if (bits == 8) {
+    for (int i = 0; i < values_per_thread; i++) {
+      sum += x[i];
+      x_thread[i] = x[i];
+    }
+  }
+
+  return sum;
+}
+
+template <typename U, int values_per_thread, int bits>
+inline U qdot(const device uint8_t* w, const thread U *x_thread, U scale, U bias, U sum) {
+  static_assert(bits == 2 || bits == 4 || bits == 8, "Template undefined for bits not in {2, 4, 8}");
+
+  U accum = 0;
+
+  if (bits == 2) {
+    for (int i = 0; i < (values_per_thread / 4); i++) {
+      accum += (
+          x_thread[4*i] * (w[i] & 0x03)
+          + x_thread[4*i+1] * (w[i] & 0x0c)
+          + x_thread[4*i+2] * (w[i] & 0x30)
+          + x_thread[4*i+3] * (w[i] & 0xc0));
+    }
+  }
+
+  else if (bits == 4) {
+    for (int i = 0; i < (values_per_thread / 2); i++) {
+      accum += (
+          x_thread[2*i] * (w[i] & 0x0f)
+          + x_thread[2*i+1] * (w[i] & 0xf0));
+    }
+  }
+
+  else if (bits == 8) {
+    for (int i = 0; i < values_per_thread; i++) {
+      accum += x_thread[i] * w[i];
+    }
+  }
+
+  return scale * accum + sum * bias;
+}
+
+
+template <typename T, int group_size, int bits, int packs_per_thread>
+[[kernel]] void qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
@@ -37,59 +102,51 @@ template <typename T>
     const constant int& in_vec_size [[buffer(5)]],
     const constant int& out_vec_size [[buffer(6)]],
     uint3 tid [[threadgroup_position_in_grid]],
-    uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
 
-  typedef typename AccT<T>::acc_t U;
+  constexpr int num_simdgroups = 2;
+  constexpr int results_per_simdgroup = 4;
+  constexpr int pack_factor = 32 / bits;
+  constexpr int values_per_thread = pack_factor * packs_per_thread;
+  constexpr int block_size = values_per_thread * SIMD_SIZE;
+  constexpr int scale_step_per_thread = group_size / values_per_thread;
 
-  thread U x_thread[16];
-  thread U result[4] = {0};
+  typedef float U;
+
+  thread U x_thread[values_per_thread];
+  thread U result[results_per_simdgroup] = {0};
 
   // Adjust positions
-  const int in_vec_size_w = in_vec_size / 8;
-  const int in_vec_size_g = in_vec_size / 32;
-  const int out_row = tid.y * 8 + simd_gid * 4;
-  w += out_row * in_vec_size_w + simd_lid * 2;
-  scales += out_row * in_vec_size_g + simd_lid / 2;
-  biases += out_row * in_vec_size_g + simd_lid / 2;
-  x += tid.z * in_vec_size + simd_lid * 16;
+  const int in_vec_size_w = in_vec_size / pack_factor;
+  const int in_vec_size_g = in_vec_size / group_size;
+  const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) + simd_gid * results_per_simdgroup;
+  w += out_row * in_vec_size_w + simd_lid * packs_per_thread;
+  scales += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
+  biases += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
+  x += tid.z * in_vec_size + simd_lid * values_per_thread;
   y += tid.z * out_vec_size + out_row;
 
-  for (int k = 0; k < in_vec_size; k += 512) {
-    U sum = 0;
-    for (int i = 0; i < 16; i += 4) {
-      sum += x[i] + x[i+1];
-      x_thread[i] = x[i];
-      x_thread[i+1] = x[i+1] / 16.0f;
+  for (int k = 0; k < in_vec_size; k += block_size) {
+    U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
 
-      sum += x[i+2] + x[i+3];
-      x_thread[i+2] = x[i+2];
-      x_thread[i+3] = x[i+3] / 16.0f;
-    }
-
-    for (int row = 0; row < 4; row++) {
+    for (int row = 0; row < results_per_simdgroup; row++) {
       const device uint8_t* wl = (const device uint8_t *)(w + row * in_vec_size_w);
       const device T* sl = scales + row * in_vec_size_g;
       const device T* bl = biases + row * in_vec_size_g;
 
       U s = sl[0];
       U b = bl[0];
-      U acc[2] = {0};
-      for (int i = 0; i < 16; i += 4) {
-        acc[0] += x_thread[i] * (wl[i/2] & 0x0f) + x_thread[i+1] * (wl[i/2] & 0xf0);
-        acc[1] += x_thread[i+2] * (wl[i/2+1] & 0x0f) + x_thread[i+3] * (wl[i/2+1] & 0xf0);
-      }
-      result[row] += s * (acc[0] + acc[1]) + sum * b;
+      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s, b, sum);
     }
 
-    w += 512 / 8;
-    scales += 512 / 32;
-    biases += 512 / 32;
-    x += 512;
+    w += block_size / pack_factor;
+    scales += block_size / group_size;
+    biases += block_size / group_size;
+    x += block_size;
   }
 
-  for (int row = 0; row < 4; row++) {
+  for (int row = 0; row < results_per_simdgroup; row++) {
     result[row] = simd_sum(result[row]);
     if (simd_lid == 0) {
       y[row] = static_cast<T>(result[row]);
@@ -112,87 +169,69 @@ template <typename T, const int BM, const int BN, const int group_size, const in
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
 
-  static_assert(BN == SIMD_SIZE, "qmv expects BN to be equal to SIMD_SIZE");
+  constexpr int num_simdgroups = 2;
+  constexpr int results_per_simdgroup = 4;
+  constexpr int packs_per_thread = 1;
+  constexpr int pack_factor = 8;
+  constexpr int values_per_thread = pack_factor * packs_per_thread;
+  constexpr int block_size = values_per_thread * SIMD_SIZE;
+  constexpr int scale_step_per_thread = group_size / values_per_thread;
 
   (void)lid;
 
-  constexpr int bitmask = (1 << bits) - 1;
-  constexpr int el_per_thread = 32 / bits;
-  constexpr int colgroup = BN * el_per_thread;
-  constexpr int groups_per_block = colgroup / group_size;
+  typedef float U;
 
-  typedef typename AccT<T>::acc_t U;
-  threadgroup U scales_block[BM * groups_per_block];
-  threadgroup U biases_block[BM * groups_per_block];
-  threadgroup U x_block[colgroup];
-
-  thread uint32_t w_local;
-  thread U result = 0;
-  thread U scale = 1;
-  thread U bias = 0;
-  thread U x_thread[el_per_thread];
+  thread U x_thread[values_per_thread];
+  thread U result[results_per_simdgroup] = {0};
 
   // Adjust positions
-  const int in_vec_size_w = in_vec_size / el_per_thread;
+  const int in_vec_size_w = in_vec_size / pack_factor;
   const int in_vec_size_g = in_vec_size / group_size;
-  int out_row = tid.y * BM + simd_gid;
-  w += out_row * in_vec_size_w;
-  scales += out_row * in_vec_size_g;
-  biases += out_row * in_vec_size_g;
-  x += tid.z * in_vec_size;
-  y += tid.z * out_vec_size;
+  const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) + simd_gid * results_per_simdgroup;
+  const int used_out_row = min(out_vec_size - results_per_simdgroup, out_row);
+  w += used_out_row * in_vec_size_w + simd_lid * packs_per_thread;
+  scales += used_out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
+  biases += used_out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
+  x += tid.z * in_vec_size + simd_lid * values_per_thread;
+  y += tid.z * out_vec_size + used_out_row;
 
   if (out_row >= out_vec_size) {
     return;
   }
 
-  // Loop over in_vec in blocks of colgroup
-  for (int i=0; i<in_vec_size; i+=colgroup) {
-    // Load the vec to shared memory
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-    if (simd_gid == 0) {
-      #pragma clang loop unroll(full)
-      for (int j=0; j<el_per_thread; j++) {
-        x_block[simd_lid * el_per_thread + j] = x[i + simd_lid * el_per_thread + j];
-      }
+  for (int k = 0; k < in_vec_size; k += block_size) {
+    U sum = 0;
+    for (int i = 0; i < values_per_thread; i += 2) {
+      sum += x[i] + x[i+1];
+      x_thread[i] = x[i];
+      x_thread[i+1] = x[i+1] / 16.0f;
     }
-    if (simd_lid == 0) {
-      #pragma clang loop unroll(full)
-      for (int j=0; j<groups_per_block; j++) {
-        scales_block[simd_gid * groups_per_block + j] = scales[i / group_size + j];
-      }
-      #pragma clang loop unroll(full)
-      for (int j=0; j<groups_per_block; j++) {
-        biases_block[simd_gid * groups_per_block + j] = biases[i / group_size + j];
-      }
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // Load in_vec, scale, bias to registers
-    #pragma clang loop unroll(full)
-    for (int j=0; j<el_per_thread; j++) {
-      x_thread[j] = x_block[simd_lid*el_per_thread + j];
-    }
-    scale = scales_block[simd_gid * groups_per_block + simd_lid * el_per_thread / group_size];
-    bias = biases_block[simd_gid * groups_per_block + simd_lid * el_per_thread / group_size];
+    for (int row = 0; row < results_per_simdgroup; row++) {
+      const device uint8_t* wl = (const device uint8_t *)(w + row * in_vec_size_w);
+      const device T* sl = scales + row * in_vec_size_g;
+      const device T* bl = biases + row * in_vec_size_g;
 
-    // Load the matrix elements
-    w_local = w[i / el_per_thread + simd_lid];
-
-    // Do all the work.
-    #pragma clang loop unroll(full)
-    for (int k=0; k<el_per_thread; k++) {
-      result += (scale * static_cast<U>(w_local & bitmask) + bias) * x_thread[k];
-      w_local >>= bits;
+      U s = sl[0];
+      U b = bl[0];
+      U accum = 0;
+      for (int i = 0; i < (values_per_thread / 2); i++) {
+        accum += x_thread[2*i] * (wl[i] & 0x0f) + x_thread[2*i+1] * (wl[i] & 0xf0);
+      }
+      result[row] += s * accum + sum * b;
     }
+
+    w += block_size / pack_factor;
+    scales += block_size / group_size;
+    biases += block_size / group_size;
+    x += block_size;
   }
 
-  // Accumulate in the simdgroup
-  result = simd_sum(result);
-
-  // Store the result
-  if (simd_lid == 0) {
-    y[out_row] = static_cast<T>(result);
+  for (int row = 0; row < results_per_simdgroup; row++) {
+    result[row] = simd_sum(result[row]);
+    if (simd_lid == 0) {
+      y[row] = static_cast<T>(result[row]);
+    }
   }
 }
 
@@ -607,9 +646,9 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 }
 
 
-#define instantiate_qmv_4_32(name, itype) \
-  template [[host_name("qmv_" #name "_gs_32_b_4_fast")]] \
-  [[kernel]] void qmv_4_32<itype>( \
+#define instantiate_qmv_fast(name, itype, group_size, bits, packs_per_thread) \
+  template [[host_name("qmv_" #name "_gs_" #group_size "_b_" #bits "_fast")]] \
+  [[kernel]] void qmv_fast<itype, group_size, bits, packs_per_thread>( \
     const device uint32_t* w [[buffer(0)]], \
     const device itype* scales [[buffer(1)]], \
     const device itype* biases [[buffer(2)]], \
@@ -618,13 +657,23 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
     const constant int& in_vec_size [[buffer(5)]], \
     const constant int& out_vec_size [[buffer(6)]], \
     uint3 tid [[threadgroup_position_in_grid]], \
-    uint lid [[thread_index_in_threadgroup]], \
     uint simd_gid [[simdgroup_index_in_threadgroup]], \
     uint simd_lid [[thread_index_in_simdgroup]]);
 
-instantiate_qmv_4_32(float32, float)
-instantiate_qmv_4_32(float16, half)
-instantiate_qmv_4_32(bfloat16, bfloat16_t)
+#define instantiate_qmv_fast_types(group_size, bits, packs_per_thread) \
+  instantiate_qmv_fast(float32, float, group_size, bits, packs_per_thread) \
+  instantiate_qmv_fast(float16, half, group_size, bits, packs_per_thread) \
+  instantiate_qmv_fast(bfloat16, bfloat16_t, group_size, bits, packs_per_thread)
+
+instantiate_qmv_fast_types(128, 2, 1)
+instantiate_qmv_fast_types(128, 4, 2)
+instantiate_qmv_fast_types(128, 8, 2)
+instantiate_qmv_fast_types( 64, 2, 1)
+instantiate_qmv_fast_types( 64, 4, 2)
+instantiate_qmv_fast_types( 64, 8, 2)
+instantiate_qmv_fast_types( 32, 2, 1)
+instantiate_qmv_fast_types( 32, 4, 2)
+instantiate_qmv_fast_types( 32, 8, 2)
 
 #define instantiate_qmv(name, itype, group_size, bits) \
   template [[host_name("qmv_" #name "_gs_" #group_size "_b_" #bits)]] \
