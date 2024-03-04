@@ -586,6 +586,13 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(y.shape, (N, (L - ks + 1) // 2, C_out))
         self.assertTrue("bias" in c.parameters())
 
+        dil = 2
+        c = nn.Conv1d(
+            in_channels=C_in, out_channels=C_out, kernel_size=ks, dilation=dil
+        )
+        y = c(x)
+        self.assertEqual(y.shape, (N, L - (ks - 1) * dil, C_out))
+
         c = nn.Conv1d(in_channels=C_in, out_channels=C_out, kernel_size=ks, bias=False)
         self.assertTrue("bias" not in c.parameters())
 
@@ -630,6 +637,11 @@ class TestLayers(mlx_tests.MLXTestCase):
         c = nn.Conv2d(3, 8, 3, padding=0, stride=2)
         y = c(x)
         self.assertEqual(y.shape, (4, 3, 3, 8))
+        self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
+
+        c = nn.Conv2d(3, 8, 3, dilation=2)
+        y = c(x)
+        self.assertEqual(y.shape, (4, 4, 4, 8))
         self.assertLess(mx.abs(y - c.weight.sum((1, 2, 3))).max(), 1e-4)
 
     def test_sequential(self):
