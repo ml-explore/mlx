@@ -2,14 +2,168 @@
 
 #include "mlx/backend/metal/kernels/reduction/utils.h"
 #include "mlx/backend/metal/kernels/reduction/ops.h"
-#include "mlx/backend/metal/kernels/reduction/reduce_row.h"
 #include "mlx/backend/metal/kernels/reduction/reduce_inst.h"
 
 using namespace metal;
 
 ///////////////////////////////////////////////////////////////////////////////
-// Row atomics
+// Small row reductions
 ///////////////////////////////////////////////////////////////////////////////
+
+// Each thread reduces for one output
+template <typename T, typename U, typename Op>
+[[kernel]] void row_reduce_general_small(
+    const device T *in [[buffer(0)]],
+    device U *out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& out_size [[buffer(3)]],
+    const constant int* shape [[buffer(4)]],
+    const constant size_t* strides [[buffer(5)]],
+    const constant int& ndim [[buffer(6)]],
+    uint lid [[thread_position_in_grid]]) {
+
+  Op op;
+  
+  uint out_idx = lid;
+
+  if(out_idx >= out_size) {
+    return;
+  }
+
+  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  in += in_idx;
+
+  U total_val = Op::init;
+  
+  for(short i = 0; i < short(reduction_size); i++) {
+    total_val = op(static_cast<U>(in[i]), total_val);
+  }
+
+  out[out_idx] = total_val;
+}
+
+// Each simdgroup reduces for one output
+template <typename T, typename U, typename Op>
+[[kernel]] void row_reduce_general_med(
+    const device T *in [[buffer(0)]],
+    device U *out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& out_size [[buffer(3)]],
+    const constant int* shape [[buffer(4)]],
+    const constant size_t* strides [[buffer(5)]],
+    const constant int& ndim [[buffer(6)]],
+    uint tid [[threadgroup_position_in_grid]],
+    uint simd_lane_id [[thread_index_in_simdgroup]],
+    uint simd_per_group [[dispatch_simdgroups_per_threadgroup]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
+
+  Op op;
+  
+  uint out_idx = simd_per_group * tid + simd_group_id;
+
+  if(out_idx >= out_size) {
+    return;
+  }
+
+  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+  in += in_idx;
+
+  U total_val = Op::init;
+
+  for(short i = simd_lane_id; i < short(reduction_size); i+=32) {
+    total_val = op(static_cast<U>(in[i]), total_val);
+  }
+
+  total_val = op.simd_reduce(total_val);
+
+  if(simd_lane_id == 0) {
+    out[out_idx] = total_val;
+  }
+}
+
+#define instantiate_row_reduce_small(name, itype, otype, op) \
+  template[[host_name("row_reduce_general_small_" #name)]] \
+  [[kernel]] void row_reduce_general_small<itype, otype, op>( \
+      const device itype *in [[buffer(0)]], \
+      device otype *out [[buffer(1)]], \
+      const constant size_t& reduction_size [[buffer(2)]], \
+      const constant size_t& out_size [[buffer(3)]], \
+      const constant int* shape [[buffer(4)]], \
+      const constant size_t* strides [[buffer(5)]], \
+      const constant int& ndim [[buffer(6)]], \
+      uint lid [[thread_position_in_grid]]); \
+  template[[host_name("row_reduce_general_med_" #name)]] \
+  [[kernel]] void row_reduce_general_med<itype, otype, op>( \
+      const device itype *in [[buffer(0)]], \
+      device otype *out [[buffer(1)]], \
+      const constant size_t& reduction_size [[buffer(2)]], \
+      const constant size_t& out_size [[buffer(3)]], \
+      const constant int* shape [[buffer(4)]], \
+      const constant size_t* strides [[buffer(5)]], \
+      const constant int& ndim [[buffer(6)]], \
+      uint tid [[threadgroup_position_in_grid]], \
+      uint simd_lane_id [[thread_index_in_simdgroup]], \
+      uint simd_per_group [[dispatch_simdgroups_per_threadgroup]], \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
+
+///////////////////////////////////////////////////////////////////////////////
+// Large row reductions
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
+METAL_FUNC U per_thread_row_reduce(
+    const device T* in,
+    const constant size_t& reduction_size,
+    const constant size_t& out_size,
+    const constant int* shape,
+    const constant size_t* strides,
+    const constant int& ndim,
+    uint lsize_x,
+    uint lid_x,
+    uint2 tid) {
+  Op op;
+
+  // Each threadgroup handles 1 reduction
+  // TODO: Specializing elem_to_loc would be slightly faster
+  int idx = tid.y * out_size + tid.x;
+  int extra_offset = elem_to_loc(idx, shape, strides, ndim);
+  in += extra_offset + lid_x * N_READS;
+
+  // The reduction is accumulated here
+  U total_val = Op::init;
+
+  // Loop over the reduction size within thread group
+  int r = 0;
+  for (; r < (int)ceildiv(reduction_size, N_READS * lsize_x) - 1; r++) {
+    T vals[N_READS];
+    for (int i = 0; i < N_READS; i++) {
+      vals[i] = in[i];
+    }
+    for (int i = 0; i < N_READS; i++) {
+      total_val = op(static_cast<U>(vals[i]), total_val);
+    }
+
+    in += lsize_x * N_READS;
+  }
+
+  // Separate case for the last set as we close the reduction size
+  size_t reduction_index = (lid_x + (size_t)lsize_x * r) * N_READS;
+  if (reduction_index < reduction_size) {
+    int max_reads = reduction_size - reduction_index;
+
+    T vals[N_READS];
+    for (int i = 0; i < N_READS; i++) {
+      int idx = min(i, max_reads - 1);
+      vals[i] = static_cast<U>(in[idx]);
+    }
+    for (int i = 0; i < N_READS; i++) {
+      T val = i < max_reads ? vals[i] : Op::init;
+      total_val = op(static_cast<U>(val), total_val);
+    }
+  }
+
+  return total_val;
+}
 
 template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
 [[kernel]] void row_reduce_general(
@@ -99,100 +253,6 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
   }
 }
 
-template <typename T, typename U, typename Op>
-[[kernel]] void row_reduce_general_small(
-    const device T *in [[buffer(0)]],
-    device U *out [[buffer(1)]],
-    const constant size_t& reduction_size [[buffer(2)]],
-    const constant size_t& out_size [[buffer(3)]],
-    const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
-    const constant int& ndim [[buffer(6)]],
-    uint lid [[thread_position_in_grid]]) {
-
-  Op op;
-  
-  uint out_idx = lid;
-
-  if(out_idx >= out_size) {
-    return;
-  }
-
-  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
-  in += in_idx;
-
-  U total_val = Op::init;
-  
-  for(short i = 0; i < short(reduction_size); i++) {
-    total_val = op(static_cast<U>(in[i]), total_val);
-  }
-
-  out[out_idx] = total_val;
-}
-
-template <typename T, typename U, typename Op>
-[[kernel]] void row_reduce_general_med(
-    const device T *in [[buffer(0)]],
-    device U *out [[buffer(1)]],
-    const constant size_t& reduction_size [[buffer(2)]],
-    const constant size_t& out_size [[buffer(3)]],
-    const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
-    const constant int& ndim [[buffer(6)]],
-    uint tid [[threadgroup_position_in_grid]],
-    uint simd_lane_id [[thread_index_in_simdgroup]],
-    uint simd_per_group [[dispatch_simdgroups_per_threadgroup]],
-    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
-
-  Op op;
-  
-  uint out_idx = simd_per_group * tid + simd_group_id;
-
-  if(out_idx >= out_size) {
-    return;
-  }
-
-  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
-  in += in_idx;
-
-  U total_val = Op::init;
-
-  for(short i = simd_lane_id; i < short(reduction_size); i+=32) {
-    total_val = op(static_cast<U>(in[i]), total_val);
-  }
-
-  total_val = op.simd_reduce(total_val);
-
-  if(simd_lane_id == 0) {
-    out[out_idx] = total_val;
-  }
-}
-
-#define instantiate_row_reduce_small(name, itype, otype, op) \
-  template[[host_name("row_reduce_general_small_" #name)]] \
-  [[kernel]] void row_reduce_general_small<itype, otype, op>( \
-      const device itype *in [[buffer(0)]], \
-      device otype *out [[buffer(1)]], \
-      const constant size_t& reduction_size [[buffer(2)]], \
-      const constant size_t& out_size [[buffer(3)]], \
-      const constant int* shape [[buffer(4)]], \
-      const constant size_t* strides [[buffer(5)]], \
-      const constant int& ndim [[buffer(6)]], \
-      uint lid [[thread_position_in_grid]]); \
-  template[[host_name("row_reduce_general_med_" #name)]] \
-  [[kernel]] void row_reduce_general_med<itype, otype, op>( \
-      const device itype *in [[buffer(0)]], \
-      device otype *out [[buffer(1)]], \
-      const constant size_t& reduction_size [[buffer(2)]], \
-      const constant size_t& out_size [[buffer(3)]], \
-      const constant int* shape [[buffer(4)]], \
-      const constant size_t* strides [[buffer(5)]], \
-      const constant int& ndim [[buffer(6)]], \
-      uint tid [[threadgroup_position_in_grid]], \
-      uint simd_lane_id [[thread_index_in_simdgroup]], \
-      uint simd_per_group [[dispatch_simdgroups_per_threadgroup]], \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
 #define instantiate_row_reduce_general(name, itype, otype, op) \
   instantiate_row_reduce_small(name, itype, otype, op) \
   template [[host_name("row_reduce_general_" #name)]] \
@@ -230,6 +290,10 @@ template <typename T, typename U, typename Op>
       uint simd_per_group [[simdgroups_per_threadgroup]],  \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
+
+///////////////////////////////////////////////////////////////////////////////
+// Instantiations
+///////////////////////////////////////////////////////////////////////////////
 
 #define instantiate_same_row_reduce_helper(name, tname, type, op) \
   instantiate_row_reduce_general(name ##tname, type, type, op<type>)

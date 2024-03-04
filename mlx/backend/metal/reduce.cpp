@@ -1,10 +1,8 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
 #include <cassert>
 #include <sstream>
-
-#include <iostream>
 
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/metal/copy.h"
@@ -155,6 +153,7 @@ void row_reduce_general_dispatch(
   }
   int ndim = shape.size();
 
+  // Determine dispatch kernel
   std::ostringstream kname;
 
   bool is_small = non_row_reductions == 1 && reduction_size <= 16;
@@ -175,32 +174,41 @@ void row_reduce_general_dispatch(
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
-  // Each thread group is responsible for 1 output
-  int n_reads = REDUCE_N_READS;
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  thread_group_size =
-      std::min((reduction_size + n_reads - 1) / n_reads, thread_group_size);
+  // Get dispatch grid dims
+  MTL::Size grid_dims;
+  MTL::Size group_dims;
 
-  // Align thread group size with simd_size
-  uint simd_size = kernel->threadExecutionWidth();
-  thread_group_size =
-      (thread_group_size + simd_size - 1) / simd_size * simd_size;
-  assert(thread_group_size <= kernel->maxTotalThreadsPerThreadgroup());
+  // Each simdgroup handles one output
+  if (is_med) {
+    grid_dims = MTL::Size(out.size() * 32, 1, 1);
+    group_dims = MTL::Size(std::min(32ul, out.size()) * 32, 1, 1);
+  }
+  // Each thread handles one output
+  else if (is_small) {
+    grid_dims = MTL::Size(out.size(), 1, 1);
+    group_dims = MTL::Size(std::min(1024ul, out.size()), 1, 1);
+  }
+  // Each theadgroup handles one output
+  else {
+    int n_reads = REDUCE_N_READS;
+    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+    thread_group_size =
+        std::min((reduction_size + n_reads - 1) / n_reads, thread_group_size);
 
-  // Launch enough thread groups for each output
-  size_t n_threads = out.size() * thread_group_size;
-  MTL::Size grid_dims = MTL::Size(n_threads, non_row_reductions, 1);
-  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+    // Align thread group size with simd_size
+    uint simd_size = kernel->threadExecutionWidth();
+    thread_group_size =
+        (thread_group_size + simd_size - 1) / simd_size * simd_size;
+    assert(thread_group_size <= kernel->maxTotalThreadsPerThreadgroup());
 
+    // Launch enough thread groups for each output
+    size_t n_threads = out.size() * thread_group_size;
+    grid_dims = MTL::Size(n_threads, non_row_reductions, 1);
+    group_dims = MTL::Size(thread_group_size, 1, 1);
+  }
+
+  // Dispatch kernel
   if (!is_out_64b_int || non_row_reductions == 1) {
-    if (is_med) {
-      grid_dims = MTL::Size(out.size() * 32, 1, 1);
-      group_dims = MTL::Size(std::min(32ul, out.size()) * 32, 1, 1);
-    } else if (is_small) {
-      grid_dims = MTL::Size(out.size(), 1, 1);
-      group_dims = MTL::Size(std::min(1024ul, out.size()), 1, 1);
-    }
-
     // Set the arguments for the kernel
     set_array_buffer(compute_encoder, in, 0);
     set_array_buffer(compute_encoder, out, 1);
@@ -261,17 +269,19 @@ void row_reduce_general_dispatch(
     compute_encoder->setBytes(&ndim, sizeof(int), 6);
 
     // Each thread group is responsible for 1 output
-    thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+    int n_reads = REDUCE_N_READS;
+    size_t thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     thread_group_size =
         std::min((reduction_size + n_reads - 1) / n_reads, thread_group_size);
 
     // Align thread group size with simd_size
+    uint simd_size = kernel->threadExecutionWidth();
     thread_group_size =
         (thread_group_size + simd_size - 1) / simd_size * simd_size;
     assert(thread_group_size <= kernel->maxTotalThreadsPerThreadgroup());
 
     // Launch enough thread groups for each output
-    n_threads = thread_group_size;
+    size_t n_threads = thread_group_size;
     grid_dims = MTL::Size(n_threads, out.size(), 1);
     group_dims = MTL::Size(thread_group_size, 1, 1);
 
