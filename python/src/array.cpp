@@ -458,6 +458,21 @@ std::vector<size_t> buffer_strides(const array& a) {
   return py_strides;
 }
 
+py::buffer_info buffer_info(array& a) {
+  // Eval if not already evaled
+  if (!a.is_evaled()) {
+    py::gil_scoped_release nogil;
+    a.eval();
+  }
+  return pybind11::buffer_info(
+      a.data<void>(),
+      a.itemsize(),
+      buffer_format(a).value_or("B"), // we use "B" because pybind uses a
+                                      // std::string which can't be null
+      a.ndim(),
+      a.shape(),
+      buffer_strides(a));
+}
 ///////////////////////////////////////////////////////////////////////////////
 // Module
 ///////////////////////////////////////////////////////////////////////////////
@@ -647,21 +662,7 @@ void init_array(py::module_& m) {
       .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
 
   array_class
-      .def_buffer([](array& a) {
-        // Eval if not already evaled
-        if (!a.is_evaled()) {
-          py::gil_scoped_release nogil;
-          a.eval();
-        }
-        return pybind11::buffer_info(
-            a.data<void>(),
-            a.itemsize(),
-            buffer_format(a).value_or("B"), // we use "B" because pybind uses a
-                                            // std::string which can't be null
-            a.ndim(),
-            a.shape(),
-            buffer_strides(a));
-      })
+      .def_buffer([](array& a) -> py::buffer_info { return buffer_info(a); })
       .def_property_readonly(
           "size", &array::size, R"pbdoc(Number of elements in the array.)pbdoc")
       .def_property_readonly(
@@ -775,17 +776,13 @@ void init_array(py::module_& m) {
       .def("__iter__", [](const array& a) { return ArrayPythonIterator(a); })
       .def(py::pickle(
           [](array& a) { // __getstate__
-            return py::make_tuple(
-                dtype_to_array_protocol(a.dtype()), tolist(a));
+            return py::array(buffer_info(a));
           },
-          [](py::tuple t) { // __setstate__
-            if (t.size() != 2 or !py::isinstance<py::str>(t[0]) or
-                !py::isinstance<py::list>(t[1]))
-              throw std::invalid_argument(
-                  "Invalide state for __setstate__. Expected a tuple of length 2 with a string and a list as elements.");
-
-            return array_from_list(
-                t[1], dtype_from_array_protocol(t[0].cast<std::string>()));
+          [](py::array npa) { // __setstate__
+            if (not py::isinstance<py::array>(npa)) {
+              throw std::runtime_error("Invalid state!");
+            }
+            return np_array_to_mlx(npa, std::nullopt);
           }))
       .def("__copy__", [](const array& self) { return array(self); })
       .def(
