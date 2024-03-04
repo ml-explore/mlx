@@ -84,10 +84,6 @@ class ScaledDotProductAttention : public Custom {
     eval_gpu(inputs, outputs[0]);
   };
 
-  void eval_cpu(const std::vector<array>& inputs, array& out_array) {
-    out_array = fallback_(inputs)[0];
-  };
-
   void eval_gpu(const std::vector<array>& inputs, array& out);
   bool is_equivalent(const Primitive& other) const override;
 
