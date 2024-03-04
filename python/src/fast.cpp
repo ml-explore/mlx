@@ -82,9 +82,8 @@ void init_extensions(py::module_& parent_module) {
             Grouped Query Attention (https://arxiv.org/abs/2305.13245),
             and Multi-Query Attention (https://arxiv.org/pdf/1911.02150.pdf).
 
-            This function is an inference-focused kernel optimized specifically for KV-cached transformer
-            decoder inference (query sequence length = 1) and large KV-cached sequences.
-            It handles prompt encoding via MLX primitives.  The optimized metal kernel is for decoding only.
+            This function will dispatch to an optimized kernel when the query sequence length is 1.
+            It handles other cases with regular MLX operations.
 
             Args:
                 q (array): Input query array.
