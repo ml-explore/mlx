@@ -90,7 +90,7 @@ void init_extensions(py::module_& parent_module) {
                 k (array): Input keys array.
                 v (array): Input values array.
                 scale (float): Scale for queries (typically 1.0 / sqrt(q.shape(-1))
-                mask (array, optional): Mask for prompt encoding
+                mask (array, optional): An additive mask to apply to the query-key scores.
 
             Returns:
                 array: The output array.
