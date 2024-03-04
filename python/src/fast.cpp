@@ -75,7 +75,7 @@ void init_extensions(py::module_& parent_module) {
       "mask"_a = none,
       "stream"_a = none,
       R"pbdoc(
-                  scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float, /,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array
+                  scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array
 
             A parallelized implementation of multi-head attention: O = softmax(Q @ K.T, dim=-1) @ V.
             Supports Multi-Head Attention (see https://arxiv.org/abs/1706.03762),
