@@ -17,3 +17,4 @@ Transforms
    jvp
    vjp
    vmap
+   checkpoint

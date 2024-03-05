@@ -1487,9 +1487,21 @@ class TestNNUtils(mlx_tests.MLXTestCase):
         lin = nn.Linear(2, 2)
         x = mx.array([0.1, 0.2])
 
+        lin.my_attr = "hello"
+
         expected_y = lin(x)
-        y = nn.utils.checkpoint(lin)(x)
+        clin = nn.utils.checkpoint(lin)
+        y = clin(x)
         self.assertTrue(mx.allclose(expected_y, y))
+
+        # Check get/set attribute
+        self.assertEqual(clin.my_attr, "hello")
+
+        clin.my_attr = "bye"
+        self.assertEqual(clin.my_attr, "bye")
+
+        self.assertTrue(isinstance(clin, nn.Linear))
+        self.assertEqual(repr(clin), repr(lin))
 
 
 if __name__ == "__main__":

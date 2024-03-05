@@ -888,7 +888,24 @@ void init_transforms(py::module_& m) {
   m.def(
       "checkpoint",
       [](py::function fun) { return py::cpp_function(PyCheckpointedFun{fun}); },
-      "fun"_a);
+      "fun"_a,
+      R"pbdoc(
+        checkpoint(fun: function) -> function
+
+        Returns a gradient checkpointed function.
+
+        The checkpointed function produces the same output as the input
+        ``fun`` but recomputes all intermediate states during the gradient
+        computation (vjp) rather than storing them.
+
+        Use the checkpoint transformation to reduce memory consumption at the
+        cost of increased computation.
+
+        Args:
+            fun (function): A function which takes a variable number of
+              :class:`array` or trees of :class:`array` and returns
+              a variable number of :class:`array` or trees of :class:`array`.
+      )pbdoc");
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = py::module_::import("atexit");

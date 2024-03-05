@@ -15,7 +15,7 @@ def value_and_grad(model: Module, fn: Callable):
 
     Args:
         model (mlx.nn.Module): The model whose trainable parameters to compute
-                               gradients for
+          gradients for
         fn (Callable): The scalar function to compute gradients for
 
     Returns:
@@ -38,15 +38,14 @@ def value_and_grad(model: Module, fn: Callable):
 
 
 def checkpoint(module: Module):
-    """Transform the passed module to one that performs gradient
-    checkpointing.
+    """Transform the passed module to one that performs gradient checkpointing.
 
     The checkpointing is with respect to the module's trainable parameters and
     inputs of the module's ``__call__`` function.
 
     Args:
-        module (mlx.nn.Module): The module for whose parameters we will be
-            performing gradient checkpointing.
+        module (mlx.nn.Module): The module for which we will perform gradient
+          checkpointing.
 
     Returns:
         The module that saves the inputs and outputs during the forward pass
