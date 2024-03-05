@@ -276,7 +276,7 @@ class Adagrad(Optimizer):
 
     def __init__(
         self,
-        learning_rate: Union[float, Callable[[mx.array], mx.array]],
+        learning_rate: Union[float, Callable[[mx.array], mx.array]] = None,
         eps: float = 1e-8,
     ):
         super().__init__()
