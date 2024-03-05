@@ -4,6 +4,7 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/device.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -578,6 +579,72 @@ TEST_CASE("test is close") {
   }
 }
 
+TEST_CASE("test max and min reduction") {
+  // Workaround for missing value-parameterized tests in doctest, see
+  // https://github.com/doctest/doctest/blob/master/doc/markdown/parameterized-tests.md
+  auto device = Device::cpu;
+  SUBCASE("cpu") {}
+  SUBCASE("gpu") {
+    device = Device::gpu;
+  }
+
+  CAPTURE(device);
+
+  static constexpr bool keep_dims = false;
+
+  auto x = array({});
+  CHECK_THROWS(max(x, device));
+  CHECK_THROWS(min(x, device));
+
+  x = array({1.0f, 2.0f, 3.0f});
+  CHECK_EQ(max(x, device).item<float>(), 3.0f);
+  CHECK_EQ(min(x, device).item<float>(), 1.0f);
+
+  x = array({-2.0f, -1.0f});
+  CHECK_EQ(max(x, device).item<float>(), -1.0f);
+  CHECK_EQ(min(x, device).item<float>(), -2.0f);
+
+  constexpr float inf = std::numeric_limits<float>::infinity();
+  x = array({inf});
+  CHECK_EQ(min(x, device).item<float>(), inf);
+
+  x = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3});
+  CHECK(array_equal(max(x, 0, keep_dims, device), array({4.0f, 5.0f, 6.0f}))
+            .item<bool>());
+  CHECK(array_equal(max(x, 1, keep_dims, device), array({3.0f, 6.0f}))
+            .item<bool>());
+  CHECK(array_equal(min(x, 0, keep_dims, device), array({1.0f, 2.0f, 3.0f}))
+            .item<bool>());
+  CHECK(array_equal(min(x, 1, keep_dims, device), array({1.0f, 4.0f}))
+            .item<bool>());
+
+  x = array({1u, 2u, 3u});
+  CHECK_EQ(max(x, device).item<uint32_t>(), 3u);
+  CHECK_EQ(min(x, device).item<uint32_t>(), 1u);
+
+  x = array({1u, 2u, 3u, 4u, 5u, 6u}, {2, 3});
+  CHECK(array_equal(max(x, 0, keep_dims, device), array({4u, 5u, 6u}))
+            .item<bool>());
+  CHECK(
+      array_equal(max(x, 1, keep_dims, device), array({3u, 6u})).item<bool>());
+  CHECK(array_equal(min(x, 0, keep_dims, device), array({1u, 2u, 3u}))
+            .item<bool>());
+  CHECK(
+      array_equal(min(x, 1, keep_dims, device), array({1u, 4u})).item<bool>());
+
+  x = array({true, false, true, false, false, false}, {2, 3});
+  CHECK(array_equal(max(x, 1, keep_dims, device), array({true, false}))
+            .item<bool>());
+  CHECK(array_equal(max(x, 0, keep_dims, device), array({true, false, true}))
+            .item<bool>());
+
+  x = array({true, true, true, false, true, false}, {2, 3});
+  CHECK(array_equal(min(x, 1, keep_dims, device), array({true, false}))
+            .item<bool>());
+  CHECK(array_equal(min(x, 0, keep_dims, device), array({false, true, false}))
+            .item<bool>());
+}
+
 TEST_CASE("test reduction ops") {
   // Check shapes and throws correctly
   {
@@ -738,49 +805,6 @@ TEST_CASE("test reduction ops") {
     x = array({true, false, true, false, false, false}, {2, 3});
     CHECK(array_equal(any(x, 1), array({true, false})).item<bool>());
     CHECK(array_equal(any(x, 0), array({true, false, true})).item<bool>());
-  }
-
-  // Test max and min
-  {
-    auto x = array({});
-    CHECK_THROWS(max(x));
-    CHECK_THROWS(min(x));
-
-    x = array({1.0f, 2.0f, 3.0f});
-    CHECK_EQ(max(x).item<float>(), 3.0f);
-    CHECK_EQ(min(x).item<float>(), 1.0f);
-
-    x = array({-2.0f, -1.0f});
-    CHECK_EQ(max(x).item<float>(), -1.0f);
-    CHECK_EQ(min(x).item<float>(), -2.0f);
-
-    constexpr float inf = std::numeric_limits<float>::infinity();
-    x = array({inf});
-    CHECK_EQ(min(x).item<float>(), inf);
-
-    x = array({1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}, {2, 3});
-    CHECK(array_equal(max(x, 0), array({4.0f, 5.0f, 6.0f})).item<bool>());
-    CHECK(array_equal(max(x, 1), array({3.0f, 6.0f})).item<bool>());
-    CHECK(array_equal(min(x, 0), array({1.0f, 2.0f, 3.0f})).item<bool>());
-    CHECK(array_equal(min(x, 1), array({1.0f, 4.0f})).item<bool>());
-
-    x = array({1u, 2u, 3u});
-    CHECK_EQ(max(x).item<uint32_t>(), 3u);
-    CHECK_EQ(min(x).item<uint32_t>(), 1u);
-
-    x = array({1u, 2u, 3u, 4u, 5u, 6u}, {2, 3});
-    CHECK(array_equal(max(x, 0), array({4u, 5u, 6u})).item<bool>());
-    CHECK(array_equal(max(x, 1), array({3u, 6u})).item<bool>());
-    CHECK(array_equal(min(x, 0), array({1u, 2u, 3u})).item<bool>());
-    CHECK(array_equal(min(x, 1), array({1u, 4u})).item<bool>());
-
-    x = array({true, false, true, false, false, false}, {2, 3});
-    CHECK(array_equal(max(x, 1), array({true, false})).item<bool>());
-    CHECK(array_equal(max(x, 0), array({true, false, true})).item<bool>());
-
-    x = array({true, true, true, false, true, false}, {2, 3});
-    CHECK(array_equal(min(x, 1), array({true, false})).item<bool>());
-    CHECK(array_equal(min(x, 0), array({false, true, false})).item<bool>());
   }
 
   // Test logsumexp
