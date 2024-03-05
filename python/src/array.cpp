@@ -783,7 +783,7 @@ void init_array(py::module_& m) {
           },
           [](py::array npa) { // __setstate__
             if (not py::isinstance<py::array>(npa)) {
-              throw std::runtime_error("Invalid state!");
+              throw std::runtime_error("[array.__setstate__] Received invalid state.");
             }
             return np_array_to_mlx(npa, std::nullopt);
           }))
