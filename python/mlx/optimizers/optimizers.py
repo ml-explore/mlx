@@ -276,7 +276,7 @@ class Adagrad(Optimizer):
 
     def __init__(
         self,
-        learning_rate: Union[float, Callable[[mx.array], mx.array]] = None,
+        learning_rate: Union[float, Callable[[mx.array], mx.array]],
         eps: float = 1e-8,
     ):
         super().__init__()
@@ -631,7 +631,7 @@ class Adafactor(Optimizer):
 
     def __init__(
         self,
-        learning_rate: Union[float, Callable[[mx.array], mx.array], None],
+        learning_rate: Union[float, Callable[[mx.array], mx.array], None] = None,
         eps: Tuple[float, float] = (1e-30, 1e-3),
         clip_threshold: float = 1.0,
         decay_rate: float = -0.8,
