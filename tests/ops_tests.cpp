@@ -2888,7 +2888,6 @@ TEST_CASE("dot") {
   x = reshape(arange(10.), {5, 2});
   y = reshape(arange(8.), {2, 2, 2});
   z = dot(x, y);
-  MESSAGE("z: " << z);
   expected = array(
       {2.,  3.,  6.,  7.,  6.,  11., 26., 31., 10., 19.,
        46., 55., 14., 27., 66., 79., 18., 35., 86., 103.},

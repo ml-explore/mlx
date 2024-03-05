@@ -3817,11 +3817,10 @@ void init_ops(py::module_& m) {
       &dot,
       "a"_a,
       "b"_a,
-      py::pos_only(),
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-      dot(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
+      dot(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array
 
       Dot product of two arrays.
 

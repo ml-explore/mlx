@@ -3294,10 +3294,7 @@ array dot(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   if (a.ndim() == 0 || b.ndim() == 0) {
     return multiply(a, b, s);
   }
-  if (a.ndim() == 1 && b.ndim() == 1) {
-    return inner(a, b, s);
-  }
-  if (a.ndim() == 2 && b.ndim() == 2) {
+  if (a.ndim() <= 2 && b.ndim() <= 2) {
     return matmul(a, b, s);
   }
   if (b.ndim() == 1) {
