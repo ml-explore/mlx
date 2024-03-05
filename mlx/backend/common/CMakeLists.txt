@@ -55,3 +55,17 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/qrf.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
 )
+
+if (IOS)
+  target_sources(
+    mlx
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/compiled_nocpu.cpp
+  )
+else()
+  target_sources(
+    mlx
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/compiled_cpu.cpp
+  )
+endif()
