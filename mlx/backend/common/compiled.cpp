@@ -1,17 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
-// Cpu compile enabled for unix and macos
-#ifdef __unix__
-#define CPU_COMPILE
-#else
-#include <TargetConditionals.h>
-#if !(TARGET_OS_IOS)
-#define CPU_COMPILE
-#endif
-#endif
-
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
+#include "mlx/compile.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -122,15 +113,16 @@ std::string build_lib_name(
 
   return os.str();
 }
+
 } // namespace mlx::core
 
+#if CPU_COMPILE
 #include <dlfcn.h>
 #include <filesystem>
 #include <list>
 #include "mlx/backend/common/compiled_preamble.h"
 
 namespace mlx::core {
-
 std::string get_temp_file(const std::string& name) {
   return std::filesystem::temp_directory_path().append(name);
 }
@@ -212,7 +204,6 @@ void* compile(
   return fun;
 }
 
-#ifdef CPU_COMPILE
 inline void build_kernel(
     std::ostream& os,
     const std::string& kernel_name,
@@ -518,16 +509,12 @@ void Compiled::eval_cpu(
   fun(args.data());
 }
 
-} // namespace mlx::core
-
 #else
-namespace mlx::core {
-
 void Compiled::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   throw std::runtime_error(
       "[Compiled::eval_cpu] CPU compialtion not supported on platform.");
 }
-} // namespace mlx::core
 #endif
+} // namespace mlx::core

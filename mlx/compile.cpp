@@ -765,7 +765,8 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     size_t fun_id,
     bool shapeless /* = false */,
     std::vector<uint64_t> constants /* = {} */) {
-  if (compile_mode() == CompileMode::disabled) {
+  if (compile_mode() == CompileMode::disabled ||
+      (default_device() == Device::cpu && !CPU_COMPILE)) {
     return fun;
   }
   return [fun, fun_id, shapeless, constants = std::move(constants)](

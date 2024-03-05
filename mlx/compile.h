@@ -2,6 +2,14 @@
 
 #pragma once
 
+// Cpu compile enabled for unix and macos
+#ifdef __unix__
+#define CPU_COMPILE 1
+#else
+#include <TargetConditionals.h>
+#define CPU_COMPILE !(TARGET_OS_IOS)
+#endif
+
 #include "mlx/array.h"
 
 namespace mlx::core {
