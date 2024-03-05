@@ -1,56 +1,22 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <dlfcn.h>
-#include <filesystem>
-#include <list>
+// Cpu compile enabled for unix and macos
+#ifdef __unix__
+#define CPU_COMPILE
+#else
+#include <TargetConditionals.h>
+#if !(TARGET_OS_IOS)
+#define CPU_COMPILE
+#endif
+#endif
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/common/compiled_preamble.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
-
-std::string get_temp_file(const std::string& name) {
-  return std::filesystem::temp_directory_path().append(name);
-}
-
-std::string build_lib_name(
-    const std::vector<array>& inputs,
-    const std::vector<array>& outputs,
-    const std::vector<array>& tape,
-    const std::unordered_set<uintptr_t>& constant_ids) {
-  std::ostringstream os;
-  std::ostringstream constant_hasher;
-
-  // The primitives describing the tape. For unary and binary primitives this
-  // must be enough to describe the full computation.
-  for (auto& a : tape) {
-    a.primitive().print(os);
-  }
-  os << "_";
-
-  for (auto& x : inputs) {
-    if (constant_ids.find(x.id()) != constant_ids.end()) {
-      os << "C";
-      print_constant(constant_hasher, x);
-    } else {
-      os << (is_scalar(x) ? "S" : "V");
-    }
-  }
-  os << "_";
-  for (auto& x : inputs) {
-    if (constant_ids.find(x.id()) != constant_ids.end()) {
-      continue;
-    }
-    os << kindof(x.dtype()) << x.itemsize();
-  }
-  os << "_" << std::hash<std::string>{}(constant_hasher.str());
-
-  return os.str();
-}
 
 void print_constant(std::ostream& os, const array& x) {
   switch (x.dtype()) {
@@ -120,6 +86,53 @@ std::string get_type_string(Dtype d) {
       throw std::runtime_error(msg.str());
     }
   }
+}
+
+std::string build_lib_name(
+    const std::vector<array>& inputs,
+    const std::vector<array>& outputs,
+    const std::vector<array>& tape,
+    const std::unordered_set<uintptr_t>& constant_ids) {
+  std::ostringstream os;
+  std::ostringstream constant_hasher;
+
+  // The primitives describing the tape. For unary and binary primitives this
+  // must be enough to describe the full computation.
+  for (auto& a : tape) {
+    a.primitive().print(os);
+  }
+  os << "_";
+
+  for (auto& x : inputs) {
+    if (constant_ids.find(x.id()) != constant_ids.end()) {
+      os << "C";
+      print_constant(constant_hasher, x);
+    } else {
+      os << (is_scalar(x) ? "S" : "V");
+    }
+  }
+  os << "_";
+  for (auto& x : inputs) {
+    if (constant_ids.find(x.id()) != constant_ids.end()) {
+      continue;
+    }
+    os << kindof(x.dtype()) << x.itemsize();
+  }
+  os << "_" << std::hash<std::string>{}(constant_hasher.str());
+
+  return os.str();
+}
+} // namespace mlx::core
+
+#include <dlfcn.h>
+#include <filesystem>
+#include <list>
+#include "mlx/backend/common/compiled_preamble.h"
+
+namespace mlx::core {
+
+std::string get_temp_file(const std::string& name) {
+  return std::filesystem::temp_directory_path().append(name);
 }
 
 // Return a pointer to a compiled function
@@ -199,6 +212,7 @@ void* compile(
   return fun;
 }
 
+#ifdef CPU_COMPILE
 inline void build_kernel(
     std::ostream& os,
     const std::string& kernel_name,
@@ -505,3 +519,15 @@ void Compiled::eval_cpu(
 }
 
 } // namespace mlx::core
+
+#else
+namespace mlx::core {
+
+void Compiled::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error(
+      "[Compiled::eval_cpu] CPU compialtion not supported on platform.");
+}
+} // namespace mlx::core
+#endif
