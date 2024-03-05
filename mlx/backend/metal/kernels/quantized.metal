@@ -41,10 +41,12 @@ inline U load_vector(const device T *x, thread U *x_thread) {
   }
 
   else if (bits == 4) {
-    for (int i = 0; i < values_per_thread; i += 2) {
-      sum += x[i] + x[i+1];
+    for (int i = 0; i < values_per_thread; i += 4) {
+      sum += x[i] + x[i+1] + x[i+2] + x[i+3];
       x_thread[i] = x[i];
       x_thread[i+1] = x[i+1] / 16.0f;
+      x_thread[i+2] = x[i+2] / 256.0f;
+      x_thread[i+3] = x[i+3] / 4096.0f;
     }
   }
 
@@ -75,10 +77,13 @@ inline U qdot(const device uint8_t* w, const thread U *x_thread, U scale, U bias
   }
 
   else if (bits == 4) {
-    for (int i = 0; i < (values_per_thread / 2); i++) {
+    const device uint16_t* ws = (const device uint16_t*)w;
+    for (int i = 0; i < (values_per_thread / 4); i++) {
       accum += (
-          x_thread[2*i] * (w[i] & 0x0f)
-          + x_thread[2*i+1] * (w[i] & 0xf0));
+          x_thread[4*i] * (ws[i] & 0x000f)
+          + x_thread[4*i+1] * (ws[i] & 0x00f0)
+          + x_thread[4*i+2] * (ws[i] & 0x0f00)
+          + x_thread[4*i+3] * (ws[i] & 0xf000));
     }
   }
 
