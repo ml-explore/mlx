@@ -777,7 +777,7 @@ void init_array(py::module_& m) {
       .def(py::pickle(
           [](array& a) { // __getstate__
             if (a.dtype() == bfloat16) {
-              throw std::runtime_error("Pickle not supported for bfloat16.");
+              throw std::runtime_error("[array.__getstate__] Not supported for bfloat16.");
             }
             return py::array(buffer_info(a));
           },
