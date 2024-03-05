@@ -1,4 +1,4 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/backend/metal/kernels/reduction/utils.h"
 #include "mlx/backend/metal/kernels/reduction/ops.h"
