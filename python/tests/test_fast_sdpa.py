@@ -63,7 +63,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         H = 32
         dtypes = [np.float32]
         if not self.is_linux:
-            dytypes.append(np.half)
+            dtypes.append(np.half)
 
         for SEQUENCE_LENGTH in [1, 7, 9, 32, 63, 67, 129, 400, 2000]:
             for DO_GQA in [0, 1]:
