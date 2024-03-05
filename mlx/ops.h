@@ -1026,6 +1026,43 @@ array cummin(
 
 /** Convolution operations */
 
+/** General convolution with a filter */
+array conv_general(
+    array input,
+    array weight,
+    std::vector<int> stride = {},
+    std::vector<int> padding_lo = {},
+    std::vector<int> padding_hi = {},
+    std::vector<int> kernel_dilation = {},
+    std::vector<int> input_dilation = {},
+    int groups = 1,
+    bool flip = false,
+    StreamOrDevice s = {});
+
+/** General convolution with a filter */
+inline array conv_general(
+    const array& input,
+    const array& weight,
+    std::vector<int> stride = {},
+    std::vector<int> padding = {},
+    std::vector<int> kernel_dilation = {},
+    std::vector<int> input_dilation = {},
+    int groups = 1,
+    bool flip = false,
+    StreamOrDevice s = {}) {
+  return conv_general(
+      /* const array& input = */ input,
+      /* const array& weight = */ weight,
+      /* std::vector<int> stride = */ stride,
+      /* std::vector<int> padding_lo = */ padding,
+      /* std::vector<int> padding_hi = */ padding,
+      /* std::vector<int> kernel_dilation = */ kernel_dilation,
+      /* std::vector<int> input_dilation = */ input_dilation,
+      /* int groups = */ groups,
+      /* bool flip = */ flip,
+      /* StreamOrDevice s = */ s);
+}
+
 /** 1D convolution with a filter */
 array conv1d(
     const array& input,
@@ -1073,17 +1110,18 @@ array dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-/** TensorDot returns a contraction of a and b over multiple dimensions. */
+/** Returns a contraction of a and b over multiple dimensions. */
 array tensordot(
     const array& a,
     const array& b,
-    const int dims = 2,
+    const int axis = 2,
     StreamOrDevice s = {});
 
 array tensordot(
     const array& a,
     const array& b,
-    const std::pair<std::vector<int>, std::vector<int>>& dims,
+    const std::vector<int>& axes_a,
+    const std::vector<int>& axes_b,
     StreamOrDevice s = {});
 
 /** Compute the outer product of two vectors. */
@@ -1123,7 +1161,16 @@ std::vector<array> depends(
 
 /** convert an array to an atleast ndim array */
 array atleast_1d(const array& a, StreamOrDevice s = {});
+std::vector<array> atleast_1d(
+    const std::vector<array>& a,
+    StreamOrDevice s = {});
 array atleast_2d(const array& a, StreamOrDevice s = {});
+std::vector<array> atleast_2d(
+    const std::vector<array>& a,
+    StreamOrDevice s = {});
 array atleast_3d(const array& a, StreamOrDevice s = {});
+std::vector<array> atleast_3d(
+    const std::vector<array>& a,
+    StreamOrDevice s = {});
 
 } // namespace mlx::core

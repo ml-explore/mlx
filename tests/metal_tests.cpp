@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <array>
 #include "doctest/doctest.h"
@@ -473,41 +473,42 @@ TEST_CASE("test metal validation") {
   eval(scatter_max(array(1), {}, array(2), std::vector<int>{}));
 }
 
-TEST_CASE("test metal enable/disable cache") {
-  // Test enable metal cache
+TEST_CASE("test metal memory info") {
+  // Test cache limits
   {
-    metal::set_cache_enabled(true);
-    CHECK(metal::cache_enabled());
-
-    auto& a = metal::allocator();
-    auto size = 100;
-    auto buf = a.malloc(size, false);
-
-    // Release a
-    a.free(buf);
-
-    // Check size should equals to size
-    CHECK_EQ(static_cast<MTL::Buffer*>(buf.ptr())->length(), size);
+    auto old_limit = metal::set_cache_limit(0);
+    {
+      auto a = zeros({4096});
+      eval(a);
+    }
+    CHECK_EQ(metal::get_cache_memory(), 0);
+    CHECK_EQ(metal::set_cache_limit(old_limit), 0);
+    CHECK_EQ(metal::set_cache_limit(old_limit), old_limit);
   }
 
-  // Test disable metal cache
+  // Test memory limits
   {
-    metal::set_cache_enabled(false);
-    CHECK(!metal::cache_enabled());
+    auto old_limit = metal::set_memory_limit(10);
+    CHECK_EQ(metal::set_memory_limit(old_limit), 10);
+    CHECK_EQ(metal::set_memory_limit(old_limit), old_limit);
+  }
 
-    auto& a = metal::allocator();
-    auto size = 100;
-    auto buf = a.malloc(size, false);
-    auto buf_ptr = static_cast<MTL::Buffer*>(buf.ptr());
-    unsigned char first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
+  // Query active and peak memory
+  {
+    auto a = zeros({4096});
+    eval(a);
+    auto active_mem = metal::get_active_memory();
+    CHECK(active_mem >= 4096 * 4);
+    {
+      auto b = zeros({4096});
+      eval(b);
+    }
+    auto new_active_mem = metal::get_active_memory();
+    CHECK_EQ(new_active_mem, active_mem);
+    auto peak_mem = metal::get_peak_memory();
+    CHECK(peak_mem >= 4096 * 8);
 
-    // Release a
-    a.free(buf);
-
-    // If release successfully, the first byte should be different from the
-    // first byte before release
-    unsigned char new_first_byte = *reinterpret_cast<unsigned char*>(buf_ptr);
-
-    CHECK_NE(new_first_byte, first_byte);
+    auto cache_mem = metal::get_cache_memory();
+    CHECK(cache_mem >= 4096 * 4);
   }
 }

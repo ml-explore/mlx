@@ -3081,7 +3081,7 @@ void init_ops(py::module_& m) {
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        conv2d(input: array, weight: array, /, stride: Union[int, Tuple[int, int]] = 1, padding: Union[int, Tuple[int, int]] = 0, dilation: Union[int, Tuple[int, int]] = 1, groups: Union[int, Tuple[int, int]] = 1, *, stream: Union[None, Stream, Device] = None) -> array
+        conv2d(input: array, weight: array, /, stride: Union[int, Tuple[int, int]] = 1, padding: Union[int, Tuple[int, int]] = 0, dilation: Union[int, Tuple[int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array
 
         2D convolution over an input with several channels
 
@@ -3100,6 +3100,114 @@ void init_ops(py::module_& m) {
                 kernel dilation. All spatial dimensions get the same dilation
                 if only one number is specified. Default: ``1``
             groups (int, optional): input feature groups. Default: ``1``.
+
+        Returns:
+            array: The convolved array.
+      )pbdoc");
+  m.def(
+      "conv_general",
+      [](const array& input,
+         const array& weight,
+         const std::variant<int, std::vector<int>>& stride,
+         const std::variant<
+             int,
+             std::vector<int>,
+             std::pair<std::vector<int>, std::vector<int>>>& padding,
+         const std::variant<int, std::vector<int>>& kernel_dilation,
+         const std::variant<int, std::vector<int>>& input_dilation,
+         int groups,
+         bool flip,
+         StreamOrDevice s) {
+        std::vector<int> stride_vec;
+        std::vector<int> padding_lo_vec;
+        std::vector<int> padding_hi_vec;
+        std::vector<int> kernel_dilation_vec;
+        std::vector<int> input_dilation_vec;
+
+        if (auto pv = std::get_if<int>(&stride); pv) {
+          stride_vec.push_back(*pv);
+        } else {
+          stride_vec = std::get<std::vector<int>>(stride);
+        }
+
+        if (auto pv = std::get_if<int>(&padding); pv) {
+          padding_lo_vec.push_back(*pv);
+          padding_hi_vec.push_back(*pv);
+        } else if (auto pv = std::get_if<std::vector<int>>(&padding); pv) {
+          padding_lo_vec = *pv;
+          padding_hi_vec = *pv;
+        } else {
+          auto [pl, ph] =
+              std::get<std::pair<std::vector<int>, std::vector<int>>>(padding);
+          padding_lo_vec = pl;
+          padding_hi_vec = ph;
+        }
+
+        if (auto pv = std::get_if<int>(&kernel_dilation); pv) {
+          kernel_dilation_vec.push_back(*pv);
+        } else {
+          kernel_dilation_vec = std::get<std::vector<int>>(kernel_dilation);
+        }
+
+        if (auto pv = std::get_if<int>(&input_dilation); pv) {
+          input_dilation_vec.push_back(*pv);
+        } else {
+          input_dilation_vec = std::get<std::vector<int>>(input_dilation);
+        }
+
+        return conv_general(
+            /* const array& input = */ input,
+            /* const array& weight = */ weight,
+            /* std::vector<int> stride = */ stride_vec,
+            /* std::vector<int> padding_lo = */ padding_lo_vec,
+            /* std::vector<int> padding_hi = */ padding_lo_vec,
+            /* std::vector<int> kernel_dilation = */ kernel_dilation_vec,
+            /* std::vector<int> input_dilation = */ input_dilation_vec,
+            /* int groups = */ groups,
+            /* bool flip = */ flip,
+            s);
+      },
+      "input"_a,
+      "weight"_a,
+      py::pos_only(),
+      "stride"_a = 1,
+      "padding"_a = 0,
+      "kernel_dilation"_a = 1,
+      "input_dilation"_a = 1,
+      "groups"_a = 1,
+      "flip"_a = false,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        conv_general(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int], Tuple[List[int], List[int]]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array
+
+        General convolution over an input with several channels
+
+        .. note::
+
+           * Only 1d and 2d convolutions are supported at the moment
+           * the default ``groups=1`` is currently supported.
+
+        Args:
+            input (array): Input array of shape ``(N, ..., C_in)``
+            weight (array): Weight array of shape ``(C_out, ..., C_in)``
+            stride (int or list(int), optional): :obj:`list` with kernel strides.
+                All spatial dimensions get the same stride if
+                only one number is specified. Default: ``1``.
+            padding (int, list(int), or tuple(list(int), list(int)), optional):
+                :obj:`list` with input padding. All spatial dimensions get the same
+                padding if only one number is specified. Default: ``0``.
+            kernel_dilation (int or list(int), optional): :obj:`list` with
+                kernel dilation. All spatial dimensions get the same dilation
+                if only one number is specified. Default: ``1``
+            input_dilation (int or list(int), optional): :obj:`list` with
+                input dilation. All spatial dimensions get the same dilation
+                if only one number is specified. Default: ``1``
+            groups (int, optional): Input feature groups. Default: ``1``.
+            flip (bool, optional): Flip the order in which the spatial dimensions of
+                the weights are processed. Performs the cross-correlation operator when
+                ``flip`` is ``False`` and the convolution operator otherwise.
+                Default: ``False``.
 
         Returns:
             array: The convolved array.
@@ -3447,17 +3555,17 @@ void init_ops(py::module_& m) {
       "tensordot",
       [](const array& a,
          const array& b,
-         const std::variant<int, std::vector<std::vector<int>>>& dims,
+         const std::variant<int, std::vector<std::vector<int>>>& axes,
          StreamOrDevice s) {
-        if (auto pv = std::get_if<int>(&dims); pv) {
+        if (auto pv = std::get_if<int>(&axes); pv) {
           return tensordot(a, b, *pv, s);
         } else {
-          auto x = std::get<std::vector<std::vector<int>>>(dims);
+          auto& x = std::get<std::vector<std::vector<int>>>(axes);
           if (x.size() != 2) {
             throw std::invalid_argument(
-                "[tensordot] dims must be a list of two lists.");
+                "[tensordot] axes must be a list of two lists.");
           }
-          return tensordot(a, b, {x[0], x[1]}, s);
+          return tensordot(a, b, x[0], x[1], s);
         }
       },
       "a"_a,
@@ -3638,62 +3746,69 @@ void init_ops(py::module_& m) {
         )pbdoc");
   m.def(
       "atleast_1d",
-      &atleast_1d,
-      "a"_a,
-      py::pos_only(),
+      [](const py::args& arys, StreamOrDevice s) -> py::object {
+        if (arys.size() == 1) {
+          return py::cast(atleast_1d(arys[0].cast<array>(), s));
+        }
+        return py::cast(atleast_1d(arys.cast<std::vector<array>>(), s));
+      },
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_1d(a: array, stream: Union[None, Stream, Device] = None) -> array
+        atleast_1d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
-        Convert array to have at least one dimension.
+        Convert all arrays to have at least one dimension.
 
-        args:
-            a (array): Input array
+        Args:
+            *arys: Input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
-            array: An array with at least one dimension.
-
+            array or list(array): An array or list of arrays with at least one dimension.
         )pbdoc");
   m.def(
       "atleast_2d",
-      &atleast_2d,
-      "a"_a,
-      py::pos_only(),
+      [](const py::args& arys, StreamOrDevice s) -> py::object {
+        if (arys.size() == 1) {
+          return py::cast(atleast_2d(arys[0].cast<array>(), s));
+        }
+        return py::cast(atleast_2d(arys.cast<std::vector<array>>(), s));
+      },
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_2d(a: array, stream: Union[None, Stream, Device] = None) -> array
+        atleast_2d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
-        Convert array to have at least two dimensions.
+        Convert all arrays to have at least two dimensions.
 
-        args:
-            a (array): Input array
+        Args:
+            *arys: Input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
-            array: An array with at least two dimensions.
-
+            array or list(array): An array or list of arrays with at least two dimensions.
         )pbdoc");
+
   m.def(
       "atleast_3d",
-      &atleast_3d,
-      "a"_a,
-      py::pos_only(),
+      [](const py::args& arys, StreamOrDevice s) -> py::object {
+        if (arys.size() == 1) {
+          return py::cast(atleast_3d(arys[0].cast<array>(), s));
+        }
+        return py::cast(atleast_3d(arys.cast<std::vector<array>>(), s));
+      },
       py::kw_only(),
       "stream"_a = none,
       R"pbdoc(
-        atleast_3d(a: array, stream: Union[None, Stream, Device] = None) -> array
+        atleast_3d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
 
-        Convert array to have at least three dimensions.
+        Convert all arrays to have at least three dimensions.
 
-        args:
-            a (array): Input array
+        Args:
+            *arys: Input arrays.
             stream (Union[None, Stream, Device], optional): The stream to execute the operation on.
 
         Returns:
-            array: An array with at least three dimensions.
-
+            array or list(array): An array or list of arrays with at least three dimensions.
         )pbdoc");
 }

@@ -2,8 +2,14 @@
 
 #pragma once
 
+#include <metal_simdgroup>
+#include <metal_simdgroup_matrix>
+#include <metal_stdlib>
+
 #include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils.h"
+
+using namespace metal;
 
 ///////////////////////////////////////////////////////////////////////////////
 // MMA helper
@@ -167,6 +173,9 @@ struct BlockMMA {
     C += (sm + tm) * ldc + (tn + sn);
     dst_tile_dims -= short2(tn + sn, sm + tm);
 
+    if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+      return;
+
     STEEL_PRAGMA_UNROLL
     for (int i = 0; i < TM; i++) {
       if (i * TM_stride < dst_tile_dims.y) {
@@ -235,6 +244,9 @@ struct BlockMMA {
     C += (sm + tm) * ldc + (tn + sn) * fdc;
     D += (sm + tm) * ldd + tn + sn;
     dst_tile_dims -= short2(tn + sn, sm + tm);
+
+    if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+      return;
 
     STEEL_PRAGMA_UNROLL
     for (int i = 0; i < TM; i++) {

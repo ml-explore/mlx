@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
 #include <numeric>
 #include <set>
@@ -73,10 +74,24 @@ array arange(
   if (std::isnan(start) || std::isnan(step) || std::isnan(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
-  double real_size = std::ceil((stop - start) / step);
-  if (std::isnan(real_size)) {
+
+  if (std::isinf(start) || std::isinf(stop)) {
     throw std::invalid_argument("[arange] Cannot compute length.");
   }
+
+  // Check if start and stop specify a valid range because if not, we have to
+  // return an empty array
+  if (std::isinf(step) &&
+      (step > 0 && start < stop || step < 0 && start > stop)) {
+    return array({start}, dtype);
+  }
+
+  double real_size = std::ceil((stop - start) / step);
+
+  if (real_size > INT_MAX) {
+    throw std::invalid_argument("[arange] Maximum size exceeded.");
+  }
+
   int size = std::max(static_cast<int>(real_size), 0);
   return array(
       {size},
@@ -1149,13 +1164,20 @@ array isneginf(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array where(
-    const array& condition,
-    const array& x,
-    const array& y,
+    const array& a,
+    const array& b,
+    const array& c,
     StreamOrDevice s /* = {} */) {
-  // TODO, fix this to handle the NaN case when x has infs
-  auto mask = astype(condition, bool_, s);
-  return add(multiply(x, mask, s), multiply(y, logical_not(mask, s), s), s);
+  auto condition = astype(a, bool_, s);
+  Dtype out_dtype = promote_types(b.dtype(), c.dtype());
+  auto inputs = broadcast_arrays(
+      {condition, astype(b, out_dtype, s), astype(c, out_dtype, s)}, s);
+
+  return array(
+      inputs[0].shape(),
+      out_dtype,
+      std::make_unique<Select>(to_stream(s)),
+      inputs);
 }
 
 array allclose(
@@ -1678,7 +1700,7 @@ array argpartition(
   int kth_ = kth < 0 ? kth + a.shape(axis) : kth;
   if (kth_ < 0 || kth_ >= a.shape(axis_)) {
     std::ostringstream msg;
-    msg << "[argpartition] Received invalid kth " << kth << "along axis "
+    msg << "[argpartition] Received invalid kth " << kth << " along axis "
         << axis << " for array with shape: " << a.shape();
     throw std::invalid_argument(msg.str());
   }
@@ -1699,24 +1721,28 @@ array topk(const array& a, int k, StreamOrDevice s /* = {}*/) {
 array topk(const array& a, int k, int axis, StreamOrDevice s /* = {}*/) {
   // Check for valid axis
   int axis_ = axis < 0 ? axis + a.ndim() : axis;
-  int kth_ = k < 0 ? k + a.shape(axis) : k;
   if (axis_ < 0 || axis_ >= static_cast<int>(a.ndim())) {
     std::ostringstream msg;
     msg << "[topk] Received invalid axis " << axis << " for array with "
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (kth_ < 0 || kth_ >= a.shape(axis_)) {
+  if (k < 0 || k > a.shape(axis_)) {
     std::ostringstream msg;
-    msg << "[topk] Received invalid k " << k << "along axis " << axis
+    msg << "[topk] Received invalid k=" << k << " along axis " << axis
         << " for array with shape: " << a.shape();
     throw std::invalid_argument(msg.str());
   }
 
-  array a_partitioned = partition(a, kth_, axis_, s);
+  // Return early if the whole input was requested.
+  if (k == a.shape(axis_)) {
+    return a;
+  }
+
+  array a_partitioned = partition(a, -k, axis_, s);
   std::vector<int> slice_starts(a.ndim(), 0);
   std::vector<int> slice_ends = a.shape();
-  slice_starts[axis_] = kth_;
+  slice_starts[axis_] = a.shape(axis_) - k;
   return slice(a_partitioned, slice_starts, slice_ends, s);
 }
 
@@ -1733,7 +1759,11 @@ array logsumexp(
     StreamOrDevice s /* = {}*/) {
   auto maxval = stop_gradient(max(a, axes, true, s));
   auto out = log(sum(exp(subtract(a, maxval, s), s), axes, keepdims, s), s);
-  return add(out, reshape(maxval, out.shape(), s), s);
+  out = add(out, reshape(maxval, out.shape(), s), s);
+  if (!keepdims) {
+    maxval = squeeze(maxval, axes, s);
+  }
+  return where(isinf(maxval, s), maxval, out, s);
 }
 
 array logsumexp(
@@ -2670,33 +2700,78 @@ array cummin(
 namespace {
 
 // Conv helpers
-inline int conv_out_axis_size(
-    int in_dim,
-    int wt_dim,
-    int stride,
-    int padding,
-    int dilation) {
-  int ker = dilation * (wt_dim - 1);
-  return ((in_dim + 2 * padding - ker - 1) / stride) + 1;
+inline int conv_out_axis_size(int in_dim, int wt_dim, int stride, int padding) {
+  return ((in_dim + padding - wt_dim) / stride) + 1;
+}
+
+// Conv helpers
+inline int dilate_size(int dim, int dil) {
+  return 1 + dil * (dim - 1);
 }
 
 inline std::vector<int> conv_out_shape(
     const std::vector<int>& in_shape,
     const std::vector<int>& wt_shape,
     const std::vector<int>& strides,
-    const std::vector<int>& pads,
-    const std::vector<int>& dilation) {
+    const std::vector<int>& pads_lo,
+    const std::vector<int>& pads_hi,
+    const std::vector<int>& kernel_dilation,
+    const std::vector<int>& input_dilation) {
   int N = in_shape[0];
   int O = wt_shape[0];
   std::vector<int> out_shape(in_shape.size());
   int i = 0;
   out_shape[i++] = N;
 
+  int spatial_dims = in_shape.size() - 2;
+
+  if (strides.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid strides " << strides << "for " << spatial_dims
+        << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (pads_lo.size() != spatial_dims || pads_hi.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid pading " << pads_lo << " | " << pads_hi << "for "
+        << spatial_dims << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (kernel_dilation.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid kernel dilation " << kernel_dilation << "for "
+        << spatial_dims << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (input_dilation.size() != spatial_dims) {
+    std::ostringstream msg;
+    msg << "[conv] Invalid input dilation " << input_dilation << "for "
+        << spatial_dims << "D convolution.";
+    throw std::invalid_argument(msg.str());
+  }
+
   for (; i < in_shape.size() - 1; i++) {
-    if (pads[i - 1] < 0) {
+    if (kernel_dilation[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Kernel dilation sizes must be positive."
+          << " Got kernel dilation " << kernel_dilation << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (input_dilation[i - 1] <= 0) {
+      std::ostringstream msg;
+      msg << "[conv] Input dilation sizes must be positive."
+          << " Got input dilation " << input_dilation << ".";
+      throw std::invalid_argument(msg.str());
+    }
+
+    if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
       msg << "[conv] Padding sizes must be non-negative."
-          << " Got padding " << pads << ".";
+          << " Got padding " << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -2707,22 +2782,19 @@ inline std::vector<int> conv_out_shape(
       throw std::invalid_argument(msg.str());
     }
 
-    if (dilation[i - 1] <= 0) {
-      std::ostringstream msg;
-      msg << "[conv] Dilation sizes must be positive."
-          << " Got dilation " << dilation << ".";
-      throw std::invalid_argument(msg.str());
-    }
+    int kd = dilate_size(wt_shape[i], kernel_dilation[i - 1]);
+    int id = dilate_size(in_shape[i], input_dilation[i - 1]);
 
     out_shape[i] = conv_out_axis_size(
-        in_shape[i], wt_shape[i], strides[i - 1], pads[i - 1], dilation[i - 1]);
+        id, kd, strides[i - 1], pads_lo[i - 1] + pads_hi[i - 1]);
 
     if (out_shape[i] <= 0) {
       std::ostringstream msg;
       msg << "[conv] Spatial dimensions of input after padding "
           << " cannot be smaller than weight spatial dimensions."
-          << " Got input with shape " << in_shape << " and padding " << pads
-          << " for weight of shape " << wt_shape << ".";
+          << " Got error at axis " << i << " for input with shape " << in_shape
+          << ", padding low " << pads_lo << ", padding high " << pads_hi
+          << ", and weight of shape " << wt_shape << ".";
       throw std::invalid_argument(msg.str());
     }
   }
@@ -2777,43 +2849,16 @@ array conv1d(
     int dilation /* = 1 */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
-  // Run checks
-  if (groups != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle groups != 1 yet");
-  }
-  if (dilation != 1) {
-    throw std::invalid_argument("[conv1d] Cannot handle dilation != 1 yet");
-  }
-
-  // Run checks
-  run_conv_checks(in_, wt_, 1);
-
-  auto in = in_;
-  auto wt = wt_;
-
-  // Type promotion
-  auto out_type = promote_types(in.dtype(), wt.dtype());
-  in = astype(in, out_type, s);
-  wt = astype(wt, out_type, s);
-
-  std::vector<int> strides_vec = {stride};
-  std::vector<int> padding_vec = {padding};
-  std::vector<int> dilation_vec = {dilation};
-
-  // Get output shapes
-  std::vector<int> out_shape = conv_out_shape(
-      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
-
-  return array(
-      out_shape,
-      in.dtype(),
-      std::make_unique<Convolution>(
-          to_stream(s),
-          padding_vec,
-          strides_vec,
-          dilation_vec,
-          std::vector<int>(1, 1)),
-      {in, wt});
+  return conv_general(
+      /* const array& input = */ in_,
+      /* const array& weight = */ wt_,
+      /* std::vector<int> stride = */ {stride},
+      /* std::vector<int> padding = */ {padding},
+      /* std::vector<int> kernel_dilation = */ {dilation},
+      /* std::vector<int> input_dilation = */ {1},
+      /* int groups = */ groups,
+      /* bool flip = */ false,
+      s);
 }
 
 /** 2D convolution with a filter */
@@ -2825,42 +2870,98 @@ array conv2d(
     const std::pair<int, int>& dilation /* = {1, 1} */,
     int groups /* = 1 */,
     StreamOrDevice s /* = {} */) {
+  return conv_general(
+      /* const array& input = */ in_,
+      /* const array& weight = */ wt_,
+      /* std::vector<int> stride = */ {stride.first, stride.second},
+      /* std::vector<int> padding = */ {padding.first, padding.second},
+      /* std::vector<int> kernel_dilation = */
+      {dilation.first, dilation.second},
+      /* std::vector<int> input_dilation = */ {1, 1},
+      /* int groups = */ groups,
+      /* bool flip = */ false,
+      s);
+}
+
+/** General convolution with a filter */
+array conv_general(
+    array in,
+    array wt,
+    std::vector<int> stride /* = {} */,
+    std::vector<int> padding_lo /* = {} */,
+    std::vector<int> padding_hi /* = {} */,
+    std::vector<int> kernel_dilation /* = {} */,
+    std::vector<int> input_dilation /* = {} */,
+    int groups /* = 1 */,
+    bool flip /* = false */,
+    StreamOrDevice s /* = {} */) {
   // Run checks
   if (groups != 1) {
-    throw std::invalid_argument("[conv2d] Cannot handle groups != 1 yet");
+    throw std::invalid_argument("[conv] Cannot handle groups != 1 yet");
   }
-  if (dilation.first != 1 || dilation.second != 1) {
-    throw std::invalid_argument("[conv2d] Cannot handle dilation != 1 yet");
+
+  int spatial_dims = in.ndim() - 2;
+
+  if (spatial_dims < 1 || spatial_dims > 2) {
+    throw std::invalid_argument(
+        "[conv] Can only work with inputs that have 1 or 2 spatial dimensions."
+        " The inputs must be in the format [N, ..., C_in]");
   }
 
   // Run checks
-  run_conv_checks(in_, wt_, 2);
-
-  auto in = in_;
-  auto wt = wt_;
+  run_conv_checks(in, wt, spatial_dims);
 
   // Type promotion
   auto out_type = promote_types(in.dtype(), wt.dtype());
   in = astype(in, out_type, s);
   wt = astype(wt, out_type, s);
 
-  std::vector<int> strides_vec = {stride.first, stride.second};
-  std::vector<int> padding_vec = {padding.first, padding.second};
-  std::vector<int> dilation_vec = {dilation.first, dilation.second};
+  if (stride.size() <= 1) {
+    int stride_int = stride.size() ? stride[0] : 1;
+    stride = std::vector<int>(spatial_dims, stride_int);
+  }
+
+  if (padding_lo.size() <= 1) {
+    int padding_int = padding_lo.size() ? padding_lo[0] : 0;
+    padding_lo = std::vector<int>(spatial_dims, padding_int);
+  }
+
+  if (padding_hi.size() <= 1) {
+    int padding_int = padding_hi.size() ? padding_hi[0] : 0;
+    padding_hi = std::vector<int>(spatial_dims, padding_int);
+  }
+
+  if (kernel_dilation.size() <= 1) {
+    int kernel_dilation_int = kernel_dilation.size() ? kernel_dilation[0] : 1;
+    kernel_dilation = std::vector<int>(spatial_dims, kernel_dilation_int);
+  }
+
+  if (input_dilation.size() <= 1) {
+    int input_dilation_int = input_dilation.size() ? input_dilation[0] : 1;
+    input_dilation = std::vector<int>(spatial_dims, input_dilation_int);
+  }
 
   // Get output shapes
   std::vector<int> out_shape = conv_out_shape(
-      in.shape(), wt.shape(), strides_vec, padding_vec, dilation_vec);
+      in.shape(),
+      wt.shape(),
+      stride,
+      padding_lo,
+      padding_hi,
+      kernel_dilation,
+      input_dilation);
 
   return array(
       out_shape,
       in.dtype(),
       std::make_unique<Convolution>(
           to_stream(s),
-          padding_vec,
-          strides_vec,
-          dilation_vec,
-          std::vector<int>(2, 1)),
+          stride,
+          padding_lo,
+          kernel_dilation,
+          input_dilation,
+          groups,
+          flip),
       {in, wt});
 }
 
@@ -3089,42 +3190,41 @@ array dequantize(
 array tensordot(
     const array& a,
     const array& b,
-    const int dims /* = 2 */,
+    const int axis /* = 2 */,
     StreamOrDevice s /* = {} */
 ) {
-  if (dims < 0) {
+  if (axis < 0) {
     throw std::invalid_argument(
-        "[tensordot] dims must be greater or equal to 0.");
+        "[tensordot] axis must be greater or equal to 0.");
   }
-  if (dims > std::min(a.ndim(), b.ndim())) {
+  if (axis > std::min(a.ndim(), b.ndim())) {
     throw std::invalid_argument(
-        "[tensordot] dims must be less than the number of dimensions of a and b.");
+        "[tensordot] axis must be less than the number of dimensions of a and b.");
   }
   std::vector<int> adims;
   std::vector<int> bdims;
-  for (int i = 0; i < dims; i++) {
+  for (int i = 0; i < axis; i++) {
     bdims.emplace_back(i);
-    adims.emplace_back(-dims + i);
+    adims.emplace_back(i - axis);
   }
-  return tensordot(a, b, {adims, bdims}, s);
+  return tensordot(a, b, {adims}, {bdims}, s);
 }
 
 array tensordot(
     const array& a,
     const array& b,
-    const std::pair<std::vector<int>, std::vector<int>>& dims,
-    StreamOrDevice s /* = {} */
-) {
-  if (dims.first.size() != dims.second.size()) {
-    throw std::invalid_argument(
-        "[tensordot] dims[0] and dims[1] must have the same number of dimensions.");
+    const std::vector<int>& axes_a,
+    const std::vector<int>& axes_b,
+    StreamOrDevice s /* = {} */) {
+  if (axes_a.size() != axes_b.size()) {
+    throw std::invalid_argument("[tensordot] axes must have the same size.");
   }
   int csize = 1;
   auto x = a;
   auto y = b;
-  for (int i = 0; i < dims.first.size(); i++) {
-    if (x.shape(dims.first.at(i)) == y.shape(dims.second.at(i))) {
-      csize *= x.shape(dims.first.at(i));
+  for (int i = 0; i < axes_a.size(); i++) {
+    if (x.shape(axes_a.at(i)) == y.shape(axes_b.at(i))) {
+      csize *= x.shape(axes_a.at(i));
     } else {
       throw std::invalid_argument(
           "[tensordot] a and b must have the same shape on the contracted axes.");
@@ -3133,11 +3233,11 @@ array tensordot(
 
   std::vector<bool> cdims1(x.ndim(), false);
   std::vector<bool> cdims2(y.ndim(), false);
-  for (const auto n : dims.first) {
+  for (const auto n : axes_a) {
     int n_ = (n < 0) ? n + x.ndim() : n;
     cdims1[n_] = true;
   }
-  for (const auto n : dims.second) {
+  for (const auto n : axes_b) {
     int n_ = (n < 0) ? n + y.ndim() : n;
     cdims2[n_] = true;
   }
@@ -3154,10 +3254,10 @@ array tensordot(
       rshape.emplace_back(a.shape(i));
     }
   }
-  for (const auto x : dims.first) {
+  for (const auto x : axes_a) {
     t1.emplace_back(x);
   }
-  for (const auto x : dims.second) {
+  for (const auto x : axes_b) {
     t2.emplace_back(x);
   }
   for (int i = 0; i < b.ndim(); i++) {
@@ -3186,7 +3286,7 @@ array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
         "[inner] a and b must have the same last dimension.");
   }
 
-  return tensordot(a, b, {{-1}, {-1}}, s);
+  return tensordot(a, b, {-1}, {-1}, s);
 }
 
 /** Compute D = beta * C + alpha * (A @ B) */
@@ -3388,6 +3488,17 @@ array atleast_1d(const array& a, StreamOrDevice s /* = {} */) {
   return a;
 }
 
+std::vector<array> atleast_1d(
+    const std::vector<array>& arrays,
+    StreamOrDevice s /* = {} */) {
+  std::vector<array> out;
+  out.reserve(arrays.size());
+  for (const auto& a : arrays) {
+    out.push_back(atleast_1d(a, s));
+  }
+  return out;
+}
+
 array atleast_2d(const array& a, StreamOrDevice s /* = {} */) {
   switch (a.ndim()) {
     case 0:
@@ -3397,6 +3508,17 @@ array atleast_2d(const array& a, StreamOrDevice s /* = {} */) {
     default:
       return a;
   }
+}
+
+std::vector<array> atleast_2d(
+    const std::vector<array>& arrays,
+    StreamOrDevice s /* = {} */) {
+  std::vector<array> out;
+  out.reserve(arrays.size());
+  for (const auto& a : arrays) {
+    out.push_back(atleast_2d(a, s));
+  }
+  return out;
 }
 
 array atleast_3d(const array& a, StreamOrDevice s /* = {} */) {
@@ -3411,4 +3533,16 @@ array atleast_3d(const array& a, StreamOrDevice s /* = {} */) {
       return a;
   }
 }
+
+std::vector<array> atleast_3d(
+    const std::vector<array>& arrays,
+    StreamOrDevice s /* = {} */) {
+  std::vector<array> out;
+  out.reserve(arrays.size());
+  for (const auto& a : arrays) {
+    out.push_back(atleast_3d(a, s));
+  }
+  return out;
+}
+
 } // namespace mlx::core

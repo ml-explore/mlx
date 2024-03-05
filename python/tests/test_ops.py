@@ -1047,6 +1047,11 @@ class TestOps(mlx_tests.MLXTestCase):
             a = mx.arange(0, float("inf"), float("inf"))
         with self.assertRaises(ValueError):
             a = mx.arange(float("inf"), 1, float("inf"))
+        with self.assertRaises(ValueError):
+            a = mx.arange(float("inf"), 1, 5)
+        with self.assertRaises(ValueError):
+            INT_MAX = 2147483647
+            a = mx.arange(0, INT_MAX + 1, 1)
 
         a = mx.arange(5)
         expected = [0, 1, 2, 3, 4]
@@ -1131,6 +1136,27 @@ class TestOps(mlx_tests.MLXTestCase):
         ]
         self.assertListEqual(a.tolist(), expected)
         self.assertEqual(a.dtype, mx.int32)
+
+        a = mx.arange(0, 10, 100)
+        expected = [0]
+        self.assertListEqual(a.tolist(), expected)
+        self.assertEqual(a.dtype, mx.int32)
+
+        a = mx.arange(10, 0, 1)
+        expected = []
+        self.assertListEqual(a.tolist(), expected)
+
+        a = mx.arange(10, 0, float("inf"))
+        expected = []
+        self.assertListEqual(a.tolist(), expected)
+
+        a = mx.arange(0, 10, float("inf"))
+        expected = [0]
+        self.assertListEqual(a.tolist(), expected)
+
+        a = mx.arange(0, -10, float("-inf"))
+        expected = [0]
+        self.assertListEqual(a.tolist(), expected)
 
     def test_unary_ops(self):
         def test_ops(npop, mlxop, x, y, atol):
@@ -1563,7 +1589,7 @@ class TestOps(mlx_tests.MLXTestCase):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
             for axis in (None, 0, 1, 2):
-                for kth in (-2, 2):
+                for kth in (-2, 0, 2):
                     with self.subTest(dtype=dtype, axis=axis, kth=kth):
                         np.random.seed(0)
                         np_dtype = getattr(np, dtype)
@@ -1579,13 +1605,16 @@ class TestOps(mlx_tests.MLXTestCase):
                         self.assertTrue(np.array_equal(c_np, c_mx))
                         self.assertEqual(b_mx.dtype, a_mx.dtype)
 
-                        top_k_mx = mx.topk(a_mx, kth, axis=axis)
-                        self.assertTrue(np.all(c_np <= top_k_mx))
-                        self.assertEqual(top_k_mx.dtype, a_mx.dtype)
-
                         if kth >= 0:
-                            d_np = np.take(b_mx, np.arange(kth), axis=axis)
-                            self.assertTrue(np.all(d_np <= c_mx))
+                            top_k_mx = mx.topk(a_mx, kth, axis=axis)
+                            top_k_np = np.take(
+                                np.partition(a_np, -kth, axis=axis), (-kth,), axis=axis
+                            )
+                            self.assertTrue(np.all(top_k_np <= top_k_mx))
+                            self.assertEqual(top_k_mx.dtype, a_mx.dtype)
+                            N = a_mx.shape[axis] if axis is not None else a_mx.size
+                            M = top_k_mx.shape[axis or 0]
+                            self.assertEqual(M, (kth + N) % N)
 
     @unittest.skipIf(
         os.getenv("LOW_MEMORY", None) is not None,
@@ -1906,12 +1935,16 @@ class TestOps(mlx_tests.MLXTestCase):
             [[[[1]], [[2]], [[3]]]],
         ]
 
-        for array in arrays:
+        mx_arrays = [mx.atleast_1d(mx.array(x)) for x in arrays]
+        atleast_arrays = mx.atleast_1d(*mx_arrays)
+
+        for i, array in enumerate(arrays):
             mx_res = mx.atleast_1d(mx.array(array))
             np_res = np.atleast_1d(np.array(array))
             self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
+            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
 
     def test_atleast_2d(self):
         def compare_nested_lists(x, y):
@@ -1936,12 +1969,16 @@ class TestOps(mlx_tests.MLXTestCase):
             [[[[1]], [[2]], [[3]]]],
         ]
 
-        for array in arrays:
+        mx_arrays = [mx.atleast_2d(mx.array(x)) for x in arrays]
+        atleast_arrays = mx.atleast_2d(*mx_arrays)
+
+        for i, array in enumerate(arrays):
             mx_res = mx.atleast_2d(mx.array(array))
             np_res = np.atleast_2d(np.array(array))
             self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
+            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
 
     def test_atleast_3d(self):
         def compare_nested_lists(x, y):
@@ -1966,12 +2003,16 @@ class TestOps(mlx_tests.MLXTestCase):
             [[[[1]], [[2]], [[3]]]],
         ]
 
-        for array in arrays:
+        mx_arrays = [mx.atleast_3d(mx.array(x)) for x in arrays]
+        atleast_arrays = mx.atleast_3d(*mx_arrays)
+
+        for i, array in enumerate(arrays):
             mx_res = mx.atleast_3d(mx.array(array))
             np_res = np.atleast_3d(np.array(array))
             self.assertTrue(compare_nested_lists(mx_res.tolist(), np_res.tolist()))
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
+            self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
-#include "mlx/backend/metal/kernels/steel/host.h"
+#include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/matmul.h"
 #include "mlx/backend/metal/mps/gemm.h"
 #include "mlx/backend/metal/utils.h"

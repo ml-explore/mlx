@@ -4,7 +4,7 @@ add_custom_command(
               ${CMAKE_CURRENT_SOURCE_DIR}/make_compiled_preamble.sh
               ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
               ${CMAKE_C_COMPILER}
-              ${CMAKE_SOURCE_DIR}
+              ${PROJECT_SOURCE_DIR}
     DEPENDS make_compiled_preamble.sh
             kernels/compiled_preamble.h
             kernels/unary.h

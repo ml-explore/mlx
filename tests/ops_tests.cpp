@@ -791,13 +791,13 @@ TEST_CASE("test reduction ops") {
     constexpr float inf = std::numeric_limits<float>::infinity();
 
     x = array({-inf, -inf});
-    WARN_EQ(logsumexp(x).item<float>(), -inf);
+    CHECK_EQ(logsumexp(x).item<float>(), -inf);
 
     x = array({0.0f, -inf});
     CHECK_EQ(logsumexp(x).item<float>(), 0.0f);
 
     x = array({0.0f, inf});
-    WARN_EQ(logsumexp(x).item<float>(), inf);
+    CHECK_EQ(logsumexp(x).item<float>(), inf);
 
     x = reshape(arange(6, float32), {2, 3});
 
@@ -2193,6 +2193,8 @@ TEST_CASE("test power") {
 }
 
 TEST_CASE("test where") {
+  const float inf = std::numeric_limits<float>::infinity();
+
   array condition(true);
   array x(1.0f);
   array y(0.0f);
@@ -2224,6 +2226,49 @@ TEST_CASE("test where") {
   out = where(condition, x, y);
   expected = array({1, 2, 2, 1}, {2, 2});
   CHECK(array_equal(where(condition, x, y), expected).item<bool>());
+
+  condition = array(true);
+  x = array({1, 2, 3});
+  y = array({3, 6, 13});
+  CHECK(array_equal(where(condition, x, y), array({1, 2, 3})).item<bool>());
+
+  condition = array(false);
+  x = array({1, 2, 3});
+  y = array({3, 6, 13});
+  CHECK(array_equal(where(condition, x, y), array({3, 6, 13})).item<bool>());
+
+  condition = array({1, 1, 0});
+  x = array({1, 2, 3});
+  y = array({11, 12, 13});
+  CHECK(array_equal(where(condition, x, y), array({1, 2, 13})).item<bool>());
+
+  condition = array({true, false}, {2, 1, 1});
+  x = array({1, 2, 3, 4}, {2, 1, 2});
+  y = array({11, 22, 33, 44}, {2, 2, 1});
+  expected = array({1, 2, 1, 2, 33, 33, 44, 44}, {2, 2, 2});
+  CHECK(array_equal(where(condition, x, y), expected).item<bool>());
+
+  condition = array({true, false, false});
+  x = array({inf, 2.0, 3.0});
+  y = array({10.0, 20.0, -inf});
+  CHECK(array_equal(where(condition, x, y), array({inf, 20.0, -inf}))
+            .item<bool>());
+
+  // 4-dim optimized case.
+  condition = array({false});
+  x = array({1, 2}, {2, 1, 1, 1});
+  y = array({3, 4}, {1, 1, 2, 1});
+  CHECK(array_equal(where(condition, x, y), array({3, 4, 3, 4}, {2, 1, 2, 1}))
+            .item<bool>());
+
+  // 5-dim optimized case.
+  condition = array({true, false}, {2, 1, 1, 1, 1});
+  x = array({1, 2, 3, 4}, {2, 1, 1, 1, 2});
+  y = array({11, 22}, {1, 1, 2, 1, 1});
+  CHECK(array_equal(
+            where(condition, x, y),
+            array({1, 2, 1, 2, 11, 11, 22, 22}, {2, 1, 2, 1, 2}))
+            .item<bool>());
 }
 
 TEST_CASE("test stack") {
@@ -2509,14 +2554,13 @@ TEST_CASE("tile") {
 TEST_CASE("tensordot") {
   auto x = reshape(arange(60.), {3, 4, 5});
   auto y = reshape(arange(24.), {4, 3, 2});
-  auto z = tensordot(x, y, {{1, 0}, {0, 1}});
+  auto z = tensordot(x, y, {1, 0}, {0, 1});
   auto expected = array(
       {4400, 4730, 4532, 4874, 4664, 5018, 4796, 5162, 4928, 5306}, {5, 2});
   CHECK(array_equal(z, expected).item<bool>());
   x = reshape(arange(360.), {3, 4, 5, 6});
   y = reshape(arange(360.), {6, 4, 5, 3});
-  CHECK_THROWS_AS(
-      tensordot(x, y, {{2, 1, 3}, {1, 2, 0}}), std::invalid_argument);
+  CHECK_THROWS_AS(tensordot(x, y, {2, 1, 3}, {1, 2, 0}), std::invalid_argument);
   x = reshape(arange(60.), {3, 4, 5});
   y = reshape(arange(120.), {4, 5, 6});
   z = tensordot(x, y, 2);
@@ -2742,6 +2786,19 @@ TEST_CASE("test atleast_1d") {
   CHECK_EQ(out.shape(), std::vector<int>{3, 1});
 }
 
+TEST_CASE("test atleast_1d vector") {
+  auto x = std::vector<array>{
+      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
+  auto out = atleast_1d(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK_EQ(out[0].ndim(), 1);
+  CHECK_EQ(out[0].shape(), std::vector<int>{1});
+  CHECK_EQ(out[1].ndim(), 1);
+  CHECK_EQ(out[1].shape(), std::vector<int>{3});
+  CHECK_EQ(out[2].ndim(), 2);
+  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1});
+}
+
 TEST_CASE("test atleast_2d") {
   auto x = array(1);
   auto out = atleast_2d(x);
@@ -2759,6 +2816,19 @@ TEST_CASE("test atleast_2d") {
   CHECK_EQ(out.shape(), std::vector<int>{3, 1});
 }
 
+TEST_CASE("test atleast_2d vector") {
+  auto x = std::vector<array>{
+      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
+  auto out = atleast_2d(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK_EQ(out[0].ndim(), 2);
+  CHECK_EQ(out[0].shape(), std::vector<int>{1, 1});
+  CHECK_EQ(out[1].ndim(), 2);
+  CHECK_EQ(out[1].shape(), std::vector<int>{1, 3});
+  CHECK_EQ(out[2].ndim(), 2);
+  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1});
+}
+
 TEST_CASE("test atleast_3d") {
   auto x = array(1);
   auto out = atleast_3d(x);
@@ -2774,4 +2844,36 @@ TEST_CASE("test atleast_3d") {
   out = atleast_3d(x);
   CHECK_EQ(out.ndim(), 3);
   CHECK_EQ(out.shape(), std::vector<int>{3, 1, 1});
+}
+
+TEST_CASE("test atleast_3d vector") {
+  auto x = std::vector<array>{
+      array(1), array({1, 2, 3}, {3}), array({1, 2, 3}, {3, 1})};
+  auto out = atleast_3d(x);
+  CHECK_EQ(out.size(), 3);
+  CHECK_EQ(out[0].ndim(), 3);
+  CHECK_EQ(out[0].shape(), std::vector<int>{1, 1, 1});
+  CHECK_EQ(out[1].ndim(), 3);
+  CHECK_EQ(out[1].shape(), std::vector<int>{1, 3, 1});
+  CHECK_EQ(out[2].ndim(), 3);
+  CHECK_EQ(out[2].shape(), std::vector<int>{3, 1, 1});
+}
+
+TEST_CASE("test topk") {
+  auto x = reshape(arange(10), {2, 5});
+
+  {
+    auto y = topk(x, 1, 1);
+    CHECK(array_equal(y, array({4, 9}, {2, 1})).item<bool>());
+  }
+
+  {
+    auto y = topk(x, 2, 0);
+    CHECK(array_equal(y, x).item<bool>());
+  }
+
+  {
+    auto y = topk(x, 1, 0);
+    CHECK(array_equal(y, array({5, 6, 7, 8, 9}, {1, 5})).item<bool>());
+  }
 }

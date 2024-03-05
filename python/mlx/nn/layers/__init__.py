@@ -37,6 +37,7 @@ from mlx.nn.layers.activations import (
     relu,
     relu6,
     selu,
+    sigmoid,
     silu,
     softmax,
     softplus,
@@ -67,3 +68,4 @@ from mlx.nn.layers.transformer import (
     TransformerEncoder,
     TransformerEncoderLayer,
 )
+from mlx.nn.layers.upsample import Upsample
