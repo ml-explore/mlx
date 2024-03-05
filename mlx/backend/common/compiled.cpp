@@ -509,8 +509,9 @@ void Compiled::eval_cpu(
   auto fun = (void (*)(void**))fn_ptr;
   fun(args.data());
 }
-
+} // namespace mlx::core
 #else
+namespace mlx::core {
 void Compiled::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
