@@ -156,15 +156,15 @@ void row_reduce_general_dispatch(
   // Determine dispatch kernel
   std::ostringstream kname;
 
-  bool is_small = non_row_reductions == 1 && reduction_size <= 16;
-  bool is_med = non_row_reductions == 1 && reduction_size <= 256;
+  bool is_small = non_row_reductions * reduction_size < 32;
+  bool is_med = non_row_reductions * reduction_size <= 256;
   is_out_64b_int &= !is_small && !is_med;
 
   std::string small_desc = "_";
-  if (is_med) {
-    small_desc = "_med_";
-  } else if (is_small) {
+  if (is_small) {
     small_desc = "_small_";
+  } else if (is_med) {
+    small_desc = "_med_";
   }
 
   small_desc = is_out_64b_int ? "_no_atomics_" : small_desc;
@@ -178,15 +178,15 @@ void row_reduce_general_dispatch(
   MTL::Size grid_dims;
   MTL::Size group_dims;
 
-  // Each simdgroup handles one output
-  if (is_med) {
-    grid_dims = MTL::Size(out.size() * 32, 1, 1);
-    group_dims = MTL::Size(std::min(32ul, out.size()) * 32, 1, 1);
-  }
   // Each thread handles one output
-  else if (is_small) {
+  if (is_small) {
     grid_dims = MTL::Size(out.size(), 1, 1);
     group_dims = MTL::Size(std::min(1024ul, out.size()), 1, 1);
+  }
+  // Each simdgroup handles one output
+  else if (is_med) {
+    grid_dims = MTL::Size(out.size() * 32, 1, 1);
+    group_dims = MTL::Size(std::min(32ul, out.size()) * 32, 1, 1);
   }
   // Each theadgroup handles one output
   else {
@@ -214,10 +214,11 @@ void row_reduce_general_dispatch(
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
-    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+    compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 4);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 5);
     compute_encoder->setBytes(
-        strides.data(), strides.size() * sizeof(size_t), 5);
-    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+        strides.data(), strides.size() * sizeof(size_t), 6);
+    compute_encoder->setBytes(&ndim, sizeof(int), 7);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
 
   } else {
@@ -235,10 +236,11 @@ void row_reduce_general_dispatch(
     set_array_buffer(compute_encoder, intermediate, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
-    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+    compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 4);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 5);
     compute_encoder->setBytes(
-        strides.data(), strides.size() * sizeof(size_t), 5);
-    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+        strides.data(), strides.size() * sizeof(size_t), 6);
+    compute_encoder->setBytes(&ndim, sizeof(int), 7);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
 
     // Set up second dispatch
@@ -262,11 +264,12 @@ void row_reduce_general_dispatch(
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
+    compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 4);
     compute_encoder->setBytes(
-        new_shape.data(), new_shape.size() * sizeof(int), 4);
+        new_shape.data(), new_shape.size() * sizeof(int), 5);
     compute_encoder->setBytes(
-        new_strides.data(), new_strides.size() * sizeof(size_t), 5);
-    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+        new_strides.data(), new_strides.size() * sizeof(size_t), 6);
+    compute_encoder->setBytes(&ndim, sizeof(int), 7);
 
     // Each thread group is responsible for 1 output
     int n_reads = REDUCE_N_READS;
@@ -451,11 +454,12 @@ void strided_reduce_general_dispatch(
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
+    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 4);
     compute_encoder->setBytes(
-        new_shape.data(), new_shape.size() * sizeof(int), 4);
+        new_shape.data(), new_shape.size() * sizeof(int), 5);
     compute_encoder->setBytes(
-        new_strides.data(), new_strides.size() * sizeof(size_t), 5);
-    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+        new_strides.data(), new_strides.size() * sizeof(size_t), 6);
+    compute_encoder->setBytes(&ndim, sizeof(int), 7);
 
     // Each thread group is responsible for 1 output
     size_t n_reads = REDUCE_N_READS;

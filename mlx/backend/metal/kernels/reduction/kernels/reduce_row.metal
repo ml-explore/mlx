@@ -17,9 +17,10 @@ template <typename T, typename U, typename Op>
     device U *out [[buffer(1)]],
     const constant size_t& reduction_size [[buffer(2)]],
     const constant size_t& out_size [[buffer(3)]],
-    const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
-    const constant int& ndim [[buffer(6)]],
+    const constant size_t& non_row_reductions [[buffer(4)]],
+    const constant int* shape [[buffer(5)]],
+    const constant size_t* strides [[buffer(6)]],
+    const constant int& ndim [[buffer(7)]],
     uint lid [[thread_position_in_grid]]) {
 
   Op op;
@@ -30,13 +31,15 @@ template <typename T, typename U, typename Op>
     return;
   }
 
-  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
-  in += in_idx;
-
   U total_val = Op::init;
-  
-  for(short i = 0; i < short(reduction_size); i++) {
-    total_val = op(static_cast<U>(in[i]), total_val);
+
+  for(short r = 0; r < short(non_row_reductions); r++) {
+    uint in_idx = elem_to_loc(out_idx + r * out_size, shape, strides, ndim);
+    const device T * in_row = in + in_idx;
+    
+    for(short i = 0; i < short(reduction_size); i++) {
+      total_val = op(static_cast<U>(in_row[i]), total_val);
+    }
   }
 
   out[out_idx] = total_val;
@@ -49,9 +52,10 @@ template <typename T, typename U, typename Op>
     device U *out [[buffer(1)]],
     const constant size_t& reduction_size [[buffer(2)]],
     const constant size_t& out_size [[buffer(3)]],
-    const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
-    const constant int& ndim [[buffer(6)]],
+    const constant size_t& non_row_reductions [[buffer(4)]],
+    const constant int* shape [[buffer(5)]],
+    const constant size_t* strides [[buffer(6)]],
+    const constant int& ndim [[buffer(7)]],
     uint tid [[threadgroup_position_in_grid]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_per_group [[dispatch_simdgroups_per_threadgroup]],
@@ -65,14 +69,58 @@ template <typename T, typename U, typename Op>
     return;
   }
 
-  uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
-  in += in_idx;
-
   U total_val = Op::init;
 
-  for(short i = simd_lane_id; i < short(reduction_size); i+=32) {
-    total_val = op(static_cast<U>(in[i]), total_val);
+  if(short(non_row_reductions) == 1) {
+    uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+    const device T * in_row = in + in_idx;
+
+    for(short i = simd_lane_id; i < short(reduction_size); i += 32) {
+      total_val = op(static_cast<U>(in_row[i]), total_val);
+    }
   }
+
+  else if (short(non_row_reductions) >= 32) {
+
+    for(short r = simd_lane_id; r < short(non_row_reductions); r+=32) {
+
+      uint in_idx = elem_to_loc(out_idx + r * out_size, shape, strides, ndim);
+      const device T * in_row = in + in_idx;
+
+      for(short i = 0; i < short(reduction_size); i++) {
+        total_val = op(static_cast<U>(in_row[i]), total_val);
+      }
+
+    }
+
+  }
+
+  else {
+
+    const short n_reductions = short(reduction_size) * short(non_row_reductions);
+    const short reductions_per_thread = (n_reductions + simd_size - 1) / simd_size;
+
+    const short r_st = simd_lane_id / reductions_per_thread;
+    const short r_ed = short(non_row_reductions);
+    const short r_jump = simd_size / reductions_per_thread;
+
+    const short i_st = simd_lane_id % reductions_per_thread;
+    const short i_ed = short(reduction_size);
+    const short i_jump = reductions_per_thread;
+
+    for(short r = r_st; r < r_ed; r += r_jump) {
+
+      uint in_idx = elem_to_loc(out_idx + r * out_size, shape, strides, ndim);;
+      const device T * in_row = in + in_idx;
+
+      for(short i = i_st; i < i_ed; i += i_jump) {
+        total_val = op(static_cast<U>(in_row[i]), total_val);
+      }
+
+    }
+
+  }
+
 
   total_val = op.simd_reduce(total_val);
 
@@ -88,9 +136,10 @@ template <typename T, typename U, typename Op>
       device otype *out [[buffer(1)]], \
       const constant size_t& reduction_size [[buffer(2)]], \
       const constant size_t& out_size [[buffer(3)]], \
-      const constant int* shape [[buffer(4)]], \
-      const constant size_t* strides [[buffer(5)]], \
-      const constant int& ndim [[buffer(6)]], \
+      const constant size_t& non_row_reductions [[buffer(4)]], \
+      const constant int* shape [[buffer(5)]], \
+      const constant size_t* strides [[buffer(6)]], \
+      const constant int& ndim [[buffer(7)]], \
       uint lid [[thread_position_in_grid]]); \
   template[[host_name("row_reduce_general_med_" #name)]] \
   [[kernel]] void row_reduce_general_med<itype, otype, op>( \
@@ -98,9 +147,10 @@ template <typename T, typename U, typename Op>
       device otype *out [[buffer(1)]], \
       const constant size_t& reduction_size [[buffer(2)]], \
       const constant size_t& out_size [[buffer(3)]], \
-      const constant int* shape [[buffer(4)]], \
-      const constant size_t* strides [[buffer(5)]], \
-      const constant int& ndim [[buffer(6)]], \
+      const constant size_t& non_row_reductions [[buffer(4)]], \
+      const constant int* shape [[buffer(5)]], \
+      const constant size_t* strides [[buffer(6)]], \
+      const constant int& ndim [[buffer(7)]], \
       uint tid [[threadgroup_position_in_grid]], \
       uint simd_lane_id [[thread_index_in_simdgroup]], \
       uint simd_per_group [[dispatch_simdgroups_per_threadgroup]], \
@@ -171,15 +221,18 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
     device mlx_atomic<U> *out [[buffer(1)]],
     const constant size_t& reduction_size [[buffer(2)]],
     const constant size_t& out_size [[buffer(3)]],
-    const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
-    const constant int& ndim [[buffer(6)]],
+    const constant size_t& non_row_reductions [[buffer(4)]],
+    const constant int* shape [[buffer(5)]],
+    const constant size_t* strides [[buffer(6)]],
+    const constant int& ndim [[buffer(7)]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint3 lsize [[threads_per_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_per_group [[simdgroups_per_threadgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
+
+  (void)non_row_reductions;
 
   Op op;
   threadgroup U local_vals[simd_size];
@@ -212,9 +265,10 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
     device U *out [[buffer(1)]],
     const constant size_t& reduction_size [[buffer(2)]],
     const constant size_t& out_size [[buffer(3)]],
-    const constant int* shape [[buffer(4)]],
-    const constant size_t* strides [[buffer(5)]],
-    const constant int& ndim [[buffer(6)]],
+    const constant size_t& non_row_reductions [[buffer(4)]],
+    const constant int* shape [[buffer(5)]],
+    const constant size_t* strides [[buffer(6)]],
+    const constant int& ndim [[buffer(7)]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint3 lsize [[threads_per_threadgroup]],
     uint3 gsize [[threads_per_grid]],
@@ -222,6 +276,8 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_per_group [[simdgroups_per_threadgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
+
+  (void)non_row_reductions;
 
   Op op;
 
@@ -261,9 +317,10 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
       device mlx_atomic<otype> *out [[buffer(1)]],  \
       const constant size_t& reduction_size [[buffer(2)]],  \
       const constant size_t& out_size [[buffer(3)]],  \
-      const constant int* shape [[buffer(4)]],  \
-      const constant size_t* strides [[buffer(5)]],  \
-      const constant int& ndim [[buffer(6)]],  \
+      const constant size_t& non_row_reductions [[buffer(4)]], \
+      const constant int* shape [[buffer(5)]], \
+      const constant size_t* strides [[buffer(6)]], \
+      const constant int& ndim [[buffer(7)]], \
       uint3 lid [[thread_position_in_threadgroup]],  \
       uint3 lsize [[threads_per_threadgroup]],  \
       uint3 tid [[threadgroup_position_in_grid]],  \
@@ -279,9 +336,10 @@ template <typename T, typename U, typename Op, int N_READS=REDUCE_N_READS>
       device otype *out [[buffer(1)]],  \
       const constant size_t& reduction_size [[buffer(2)]],  \
       const constant size_t& out_size [[buffer(3)]],  \
-      const constant int* shape [[buffer(4)]],  \
-      const constant size_t* strides [[buffer(5)]],  \
-      const constant int& ndim [[buffer(6)]],  \
+      const constant size_t& non_row_reductions [[buffer(4)]], \
+      const constant int* shape [[buffer(5)]], \
+      const constant size_t* strides [[buffer(6)]], \
+      const constant int& ndim [[buffer(7)]], \
       uint3 lid [[thread_position_in_threadgroup]],  \
       uint3 lsize [[threads_per_threadgroup]],  \
       uint3 gsize [[threads_per_grid]], \
