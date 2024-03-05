@@ -99,6 +99,7 @@ NO_GPU(Transpose)
 
 namespace fast {
 NO_GPU_MULTI(RoPE)
+NO_GPU(ScaledDotProductAttention)
 } // namespace fast
 
 } // namespace mlx::core

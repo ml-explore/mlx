@@ -25,6 +25,7 @@ set(
   "random"
   "rope"
   "scan"
+  "scaled_dot_product_attention"
   "softmax"
   "sort"
   "ternary"
