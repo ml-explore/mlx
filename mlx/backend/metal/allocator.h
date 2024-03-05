@@ -19,12 +19,11 @@ class BufferCache {
  public:
   BufferCache(MTL::Device* device);
   ~BufferCache();
-  void clear();
 
   MTL::Buffer* reuse_from_cache(size_t size);
   void recycle_to_cache(MTL::Buffer* buf);
   void release_cached_buffers(size_t min_bytes_to_free);
-  size_t pool_size() {
+  size_t cache_size() {
     return pool_size_;
   }
 
@@ -38,11 +37,11 @@ class BufferCache {
     MTL::Buffer* buf;
   };
 
+  void clear();
   void add_at_head(BufferHolder* to_add);
   void remove_from_list(BufferHolder* to_remove);
 
   MTL::Device* device_;
-  std::mutex cache_mutex_;
 
   std::multimap<size_t, BufferHolder*> buffer_pool_;
   BufferHolder* head_;
@@ -64,7 +63,7 @@ class MetalAllocator : public allocator::Allocator {
     return peak_memory_;
   };
   size_t get_cache_memory() {
-    return buffer_cache_.pool_size();
+    return buffer_cache_.cache_size();
   };
   size_t set_cache_limit(size_t limit);
   size_t set_memory_limit(size_t limit, bool relaxed);
@@ -84,6 +83,8 @@ class MetalAllocator : public allocator::Allocator {
   size_t peak_memory_{0};
   size_t max_pool_size_;
   bool relaxed_{true};
+
+  std::mutex mutex_;
 };
 
 MetalAllocator& allocator();
