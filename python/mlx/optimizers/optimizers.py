@@ -217,9 +217,12 @@ class RMSprop(Optimizer):
           to improve numerical stability. Default: ``1e-8``
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
-         alpha: float = 0.99, eps: float = 1e-8):
+        alpha: float = 0.99,
+        eps: float = 1e-8,
+    ):
         super().__init__()
 
         self._maybe_schedule("learning_rate", learning_rate)
@@ -271,9 +274,11 @@ class Adagrad(Optimizer):
           denominator to improve numerical stability. Default: ``1e-8``
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
-        eps: float = 1e-8):
+        eps: float = 1e-8,
+    ):
         super().__init__()
 
         self._maybe_schedule("learning_rate", learning_rate)
@@ -322,9 +327,12 @@ class AdaDelta(Optimizer):
           numerical stability. Default: `1e-8`
     """
 
-    def __init__(self,
+    def __init__(
+        self,
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
-         rho: float = 0.9, eps: float = 1e-6):
+        rho: float = 0.9,
+        eps: float = 1e-6,
+    ):
         super().__init__()
 
         self._maybe_schedule("learning_rate", learning_rate)
@@ -391,7 +399,8 @@ class Adam(Optimizer):
     def __init__(
         self,
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
-        betas: List[float] = [0.9, 0.999], eps: float = 1e-8
+        betas: List[float] = [0.9, 0.999],
+        eps: float = 1e-8,
     ):
         super().__init__()
 
@@ -496,7 +505,8 @@ class Adamax(Adam):
     def __init__(
         self,
         learning_rate: Union[float, Callable[[mx.array], mx.array]],
-        betas: List[float] = [0.9, 0.999], eps: float = 1e-8
+        betas: List[float] = [0.9, 0.999],
+        eps: float = 1e-8,
     ):
         super().__init__(learning_rate, betas, eps)
         if not 0.0 <= eps:
