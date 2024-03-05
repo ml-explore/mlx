@@ -41,7 +41,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int B = x.size() / D;
   int O = out.shape(-1);
   if (transpose_) {
-    // Route to the fast qmv kernel
+    // Route to the fast qmv kernel that has no bounds checking
     if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
       std::ostringstream kname;
       kname << "qmv_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
