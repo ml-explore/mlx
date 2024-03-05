@@ -331,10 +331,6 @@ if __name__ == "__main__":
     if len(args.axis) > 1:
         args.axis.pop(0)
 
-    if args.print_pid:
-        print(os.getpid())
-        input("Press enter to run")
-
     torch.set_num_threads(1)
     device = "cpu" if args.cpu else "mps"
 
@@ -353,6 +349,10 @@ if __name__ == "__main__":
         xs[i] = xs[i].permute(*t)
     x = xs[0]
     axis = args.axis[0]
+
+    if args.print_pid:
+        print(os.getpid())
+        input("Press enter to run")
 
     if args.benchmark == "matmul_square":
         print(bench(matmul_square, x))

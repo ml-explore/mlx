@@ -380,10 +380,6 @@ if __name__ == "__main__":
     if len(args.axis) > 1:
         args.axis.pop(0)
 
-    if args.print_pid:
-        print(os.getpid())
-        input("Press enter to run")
-
     if args.cpu:
         mx.set_default_device(mx.cpu)
     else:
@@ -405,6 +401,10 @@ if __name__ == "__main__":
     mx.eval(xs)
     x = xs[0]
     axis = args.axis[0]
+
+    if args.print_pid:
+        print(os.getpid())
+        input("Press enter to run")
 
     if args.benchmark == "matmul_square":
         print(bench(matmul_square, x))

@@ -56,4 +56,44 @@ void init_extensions(py::module_& parent_module) {
         Returns:
             array: The output array.
       )pbdoc");
+
+  m.def(
+      "scaled_dot_product_attention",
+      [](const array& q,
+         const array& k,
+         const array& v,
+         const float scale,
+         const std::optional<array>& mask,
+         const StreamOrDevice& s) {
+        return fast::scaled_dot_product_attention(q, k, v, scale, mask, s);
+      },
+      "q"_a,
+      "k"_a,
+      "v"_a,
+      py::kw_only(),
+      "scale"_a,
+      "mask"_a = none,
+      "stream"_a = none,
+      R"pbdoc(
+                  scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array
+
+            A fast implementation of multi-head attention: O = softmax(Q @ K.T, dim=-1) @ V.
+            Supports [Multi-Head Attention](https://arxiv.org/abs/1706.03762), [Grouped Query Attention](https://arxiv.org/abs/2305.13245), and [Multi-Query Attention](https://arxiv.org/abs/1911.02150).
+
+            This function will dispatch to an optimized Metal kernel when the query sequence length is 1. It handles other cases with regular MLX operations.
+
+            Note: The softmax operation is performed in float32 precision regardless of input precision (float16 or float32).
+            Note: For Grouped Query Attention and Multi-Query Attention, the input arrays for `key` and `value` should not be pre-tiled to match the `query` array.
+
+            Args:
+                q (array): Input query array.
+                k (array): Input keys array.
+                v (array): Input values array.
+                scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
+                mask (array, optional): An additive mask to apply to the query-key scores.
+
+            Returns:
+                array: The output array.
+
+          )pbdoc");
 }

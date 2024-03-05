@@ -8,7 +8,6 @@ set(
   ${CMAKE_CURRENT_SOURCE_DIR}/defines.h
   ${CMAKE_CURRENT_SOURCE_DIR}/erf.h
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/reduce.h
   ${CMAKE_CURRENT_SOURCE_DIR}/unary.h
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
 )
@@ -24,9 +23,9 @@ set(
   "gemv"
   "quantized"
   "random"
-  "reduce"
   "rope"
   "scan"
+  "scaled_dot_product_attention"
   "softmax"
   "sort"
   "ternary"
@@ -65,6 +64,15 @@ file(GLOB_RECURSE STEEL_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/steel/*.h)
 foreach(KERNEL ${STEEL_KERNELS})
   cmake_path(GET KERNEL STEM TARGET)
   build_kernel_base(${TARGET} ${KERNEL} "${STEEL_HEADERS}")
+  set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
+endforeach()
+
+file(GLOB_RECURSE REDUCE_KERNELS ${CMAKE_CURRENT_SOURCE_DIR}/reduction/*.metal)
+file(GLOB_RECURSE REDUCE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/reduction/*.h)
+
+foreach(KERNEL ${REDUCE_KERNELS})
+  cmake_path(GET KERNEL STEM TARGET)
+  build_kernel_base(${TARGET} ${KERNEL} "${REDUCE_HEADERS}")
   set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
 endforeach()
 

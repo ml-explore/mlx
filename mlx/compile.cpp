@@ -7,6 +7,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/compile.h"
+#include "mlx/compile_impl.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
@@ -765,7 +766,8 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
     size_t fun_id,
     bool shapeless /* = false */,
     std::vector<uint64_t> constants /* = {} */) {
-  if (compile_mode() == CompileMode::disabled) {
+  if (compile_mode() == CompileMode::disabled ||
+      !(compile_available_for_device(default_device()))) {
     return fun;
   }
   return [fun, fun_id, shapeless, constants = std::move(constants)](

@@ -18,7 +18,7 @@ option(MLX_BUILD_METAL "Build metal backend" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.5.0)
+  set(MLX_VERSION 0.5.1)
 endif()
 
 # --------------------- Processor tests -------------------------
@@ -28,7 +28,6 @@ message(STATUS "Building MLX for ${CMAKE_HOST_SYSTEM_PROCESSOR} processor on ${C
 set(MLX_BUILD_ARM OFF)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-
   if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64" AND ${CMAKE_HOST_APPLE})
     message(FATAL_ERROR
       "Building for x86_64 on macOS is not supported."

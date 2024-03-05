@@ -1,5 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#pragma once
+
 namespace mlx::core::detail {
 
 std::pair<std::vector<array>, std::vector<array>> vmap_trace(

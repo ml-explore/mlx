@@ -1110,17 +1110,18 @@ array dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-/** TensorDot returns a contraction of a and b over multiple dimensions. */
+/** Returns a contraction of a and b over multiple dimensions. */
 array tensordot(
     const array& a,
     const array& b,
-    const int dims = 2,
+    const int axis = 2,
     StreamOrDevice s = {});
 
 array tensordot(
     const array& a,
     const array& b,
-    const std::pair<std::vector<int>, std::vector<int>>& dims,
+    const std::vector<int>& axes_a,
+    const std::vector<int>& axes_b,
     StreamOrDevice s = {});
 
 /** Compute the outer product of two vectors. */
