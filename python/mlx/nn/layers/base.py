@@ -137,7 +137,10 @@ class Module(dict):
             super(Module, self).__getattribute__(key)
 
     def __setattr__(self, key: str, val: Any):
-        if isinstance(val, (mx.array, dict, list, tuple)):
+        # Allow setter properties to pass through to base class
+        prop = vars(self.__class__).get(key, None)
+        is_prop = isinstance(prop, property) and prop.fset is not None
+        if not is_prop and isinstance(val, (mx.array, dict, list, tuple)):
             self[key] = val
         else:
             super(Module, self).__setattr__(key, val)

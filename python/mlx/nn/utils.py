@@ -66,8 +66,8 @@ def checkpoint(module: Module):
         return checkpointed_fn(module.trainable_parameters(), *args, **kwargs)
 
     class _(type(module)):
-        def __call__(self, *arg, **kwarg):
-            return wrapped_checkpointed_fn(*arg, **kwarg)
+        def __call__(self, *args, **kwargs):
+            return wrapped_checkpointed_fn(*args, **kwargs)
 
     module.__class__ = _
     return module
