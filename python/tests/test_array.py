@@ -683,7 +683,7 @@ class TestArray(mlx_tests.MLXTestCase):
         # check if it throws an error when dtype is not supported (bfloat16)
         x = mx.array([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], dtype=mx.bfloat16)
         with self.assertRaises(RuntimeError):
-            state = pickle.dumps(x)
+            pickle.dumps(x)
 
     def test_array_copy(self):
         dtypes = [
