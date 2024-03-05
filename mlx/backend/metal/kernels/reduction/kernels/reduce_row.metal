@@ -110,7 +110,7 @@ template <typename T, typename U, typename Op>
 
     for(short r = r_st; r < r_ed; r += r_jump) {
 
-      uint in_idx = elem_to_loc(out_idx + r * out_size, shape, strides, ndim);;
+      uint in_idx = elem_to_loc(out_idx + r * out_size, shape, strides, ndim);
       const device T * in_row = in + in_idx;
 
       for(short i = i_st; i < i_ed; i += i_jump) {

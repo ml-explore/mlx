@@ -186,7 +186,7 @@ void row_reduce_general_dispatch(
   // Each simdgroup handles one output
   else if (is_med) {
     grid_dims = MTL::Size(out.size() * 32, 1, 1);
-    group_dims = MTL::Size(std::min(32ul, out.size()) * 32, 1, 1);
+    group_dims = MTL::Size(std::min(8ul, out.size()) * 32, 1, 1);
   }
   // Each theadgroup handles one output
   else {
