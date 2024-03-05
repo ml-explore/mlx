@@ -776,25 +776,13 @@ void init_array(py::module_& m) {
       .def("__iter__", [](const array& a) { return ArrayPythonIterator(a); })
       .def(py::pickle(
           [](array& a) { // __getstate__
-            auto dtype = a.dtype();
-            if (dtype == bfloat16) {
-              array b = astype(a, float32);
-              return py::make_tuple(
-                  dtype_to_array_protocol(dtype), py::array(buffer_info(b)));
-            } else {
-              return py::make_tuple(
-                  dtype_to_array_protocol(dtype), py::array(buffer_info(a)));
-            }
-
+            return py::array(buffer_info(a));
           },
-          [](py::tuple t) { // __setstate__
-            if (t.size() != 2 or not py::isinstance<py::array>(t[1]) or
-                not py::isinstance<py::str>(t[0])) {
-              throw std::runtime_error("Invalid state passed to __setstate__!");
+          [](py::array npa) { // __setstate__
+            if (not py::isinstance<py::array>(npa)) {
+              throw std::runtime_error("Invalid state!");
             }
-            return np_array_to_mlx(
-                t[1].cast<py::array>(),
-                dtype_from_array_protocol(t[0].cast<std::string>()));
+            return np_array_to_mlx(npa, std::nullopt);
           }))
       .def("__copy__", [](const array& self) { return array(self); })
       .def(

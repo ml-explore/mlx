@@ -671,7 +671,7 @@ class TestArray(mlx_tests.MLXTestCase):
             mx.uint64,
             mx.float16,
             mx.float32,
-            mx.bfloat16,
+            # mx.bfloat16,
             mx.complex64,
         ]
 
