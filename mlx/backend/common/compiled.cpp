@@ -123,6 +123,7 @@ std::string build_lib_name(
 #include "mlx/backend/common/compiled_preamble.h"
 
 namespace mlx::core {
+
 std::string get_temp_file(const std::string& name) {
   return std::filesystem::temp_directory_path().append(name);
 }
@@ -516,5 +517,5 @@ void Compiled::eval_cpu(
   throw std::runtime_error(
       "[Compiled::eval_cpu] CPU compialtion not supported on platform.");
 }
-#endif
 } // namespace mlx::core
+#endif
