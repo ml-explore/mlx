@@ -17,6 +17,9 @@
 
 namespace mlx::core {
 
+// Maximum allowed graph depth for eval
+constexpr uint32_t max_graph_depth = 100'000;
+
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
 class Synchronizer : public Primitive {
@@ -116,6 +119,11 @@ void eval(const std::vector<array>& outputs) {
     }
   };
 
+  if (synchronizer.graph_depth() > max_graph_depth) {
+    throw std::runtime_error(
+        "[eval] Graph depth exceeded maximum allowed limit."
+        " Try evaluating the graph more frequently.");
+  }
   recurse(synchronizer, false);
   uintptr_t synch_id = synchronizer.primitive_id();
   deps.insert({synch_id, std::shared_future<void>{}});
