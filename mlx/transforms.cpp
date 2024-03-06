@@ -18,7 +18,7 @@
 namespace mlx::core {
 
 // Maximum allowed graph depth for eval
-constexpr max_graph_depth = 100_000;
+constexpr uint32_t max_graph_depth = 100'000;
 
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
