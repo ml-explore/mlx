@@ -293,7 +293,8 @@ array reshape(
   for (int i = 0; i < shape.size(); ++i) {
     if (shape[i] == -1) {
       if (infer_idx >= 0) {
-        throw std::invalid_argument("Reshape can only infer one dimension.");
+        throw std::invalid_argument(
+            "[reshape] Reshape can only infer one dimension.");
       }
       infer_idx = i;
     } else {
@@ -309,15 +310,15 @@ array reshape(
       size *= q_and_r.quot;
     }
   } else if (infer_idx >= 0) {
-    std::ostringstream msg;
-    throw std::invalid_argument("Cannot infer the shape of an empty array");
+    throw std::invalid_argument(
+        "[reshape] Cannot infer the shape of an empty array");
   }
 
   // Check the the reshaping is valid
   if (a.size() != size) {
     std::ostringstream msg;
-    msg << "Cannot reshape array of size " << a.size() << " into shape "
-        << shape << ".";
+    msg << "[reshape] Cannot reshape array of size " << a.size()
+        << " into shape " << shape << ".";
     throw std::invalid_argument(msg.str());
   }
 
