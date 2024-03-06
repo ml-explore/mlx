@@ -31,12 +31,16 @@ inline U load_vector(const device T *x, thread U *x_thread) {
   U sum = 0;
 
   if (bits == 2) {
-    for (int i = 0; i < values_per_thread; i += 4) {
-      sum += x[i] + x[i+1] + x[i+2] + x[i+3];
+    for (int i = 0; i < values_per_thread; i += 8) {
+      sum += x[i] + x[i+1] + x[i+2] + x[i+3] + x[i+4] + x[i+5] + x[i+6] + x[i+7];
       x_thread[i] = x[i];
       x_thread[i+1] = x[i+1] / 4.0f;
       x_thread[i+2] = x[i+2] / 16.0f;
       x_thread[i+3] = x[i+3] / 64.0f;
+      x_thread[i+4] = x[i+4] / 256.0f;
+      x_thread[i+5] = x[i+5] / 1024.0f;
+      x_thread[i+6] = x[i+6] / 4096.0f;
+      x_thread[i+7] = x[i+7] / 16384.0f;
     }
   }
 
@@ -51,50 +55,100 @@ inline U load_vector(const device T *x, thread U *x_thread) {
   }
 
   else if (bits == 8) {
-    for (int i = 0; i < values_per_thread; i++) {
-      sum += x[i];
+    for (int i = 0; i < values_per_thread; i += 2) {
+      sum += x[i] + x [i+1];
       x_thread[i] = x[i];
+      x_thread[i+1] = x[i+1] / 256.0f;
     }
   }
 
   return sum;
 }
 
+
+// Template undefined for bits not in {2, 4, 8}
+template <typename U, int IDX, int BITS>
+struct qdot_unroll {
+  static inline U compute(const device uint16_t* w, const thread U *x_thread) {
+    static_assert(BITS == 2 || BITS == 4 || BITS == 8, "Template undefined for bits not in {2, 4, 8}");
+  }
+};
+
+
+// Base case for 2bit
+template <typename U>
+struct qdot_unroll<U, -1, 2> {
+  static inline U compute(const device uint16_t* w, const thread U *x_thread) {
+      return 0;
+  }
+};
+
+
+// Base case for 4bit
+template <typename U>
+struct qdot_unroll<U, -1, 4> {
+  static inline U compute(const device uint16_t* w, const thread U *x_thread) {
+      return 0;
+  }
+};
+
+
+// Base case for 8bit
+template <typename U>
+struct qdot_unroll<U, -1, 8> {
+  static inline U compute(const device uint16_t* w, const thread U *x_thread) {
+      return 0;
+  }
+};
+
+
+// Recursive case for 2bit
+template <typename U, int IDX>
+struct qdot_unroll<U, IDX, 2> {
+  static inline U compute(const device uint16_t* w, const thread U *x_thread) {
+    return qdot_unroll<U, IDX - 1, 2>::compute(w, x_thread) +
+      x_thread[8*IDX  ] * (w[IDX] & 0x0003) +
+      x_thread[8*IDX+1] * (w[IDX] & 0x000c) +
+      x_thread[8*IDX+2] * (w[IDX] & 0x0030) +
+      x_thread[8*IDX+3] * (w[IDX] & 0x00c0) +
+      x_thread[8*IDX+4] * (w[IDX] & 0x0300) +
+      x_thread[8*IDX+5] * (w[IDX] & 0x0c00) +
+      x_thread[8*IDX+6] * (w[IDX] & 0x3000) +
+      x_thread[8*IDX+7] * (w[IDX] & 0xc000);
+    }
+};
+
+
+// Recursive case for 4bit
+template <typename U, int IDX>
+struct qdot_unroll<U, IDX, 4> {
+  static inline U compute(const device uint16_t* w, const thread U *x_thread) {
+    return qdot_unroll<U, IDX - 1, 4>::compute(w, x_thread) +
+      x_thread[4*IDX  ] * (w[IDX] & 0x000f) +
+      x_thread[4*IDX+1] * (w[IDX] & 0x00f0) +
+      x_thread[4*IDX+2] * (w[IDX] & 0x0f00) +
+      x_thread[4*IDX+3] * (w[IDX] & 0xf000);
+  }
+};
+
+
+// Recursive case for 8bit
+template <typename U, int IDX>
+struct qdot_unroll<U, IDX, 8> {
+  static inline U compute(const device uint16_t* w, const thread U *x_thread) {
+    return qdot_unroll<U, IDX - 1, 8>::compute(w, x_thread) +
+      x_thread[2*IDX  ] * (w[IDX] & 0x00ff) +
+      x_thread[2*IDX+1] * (w[IDX] & 0xff00);
+  }
+};
+
+
 template <typename U, int values_per_thread, int bits>
-inline U qdot(const device uint8_t* w, const thread U *x_thread, U scale, U bias, U sum) {
-  static_assert(bits == 2 || bits == 4 || bits == 8, "Template undefined for bits not in {2, 4, 8}");
-
-  U accum = 0;
-
-  if (bits == 2) {
-    for (int i = 0; i < (values_per_thread / 4); i++) {
-      accum += (
-          x_thread[4*i] * (w[i] & 0x03)
-          + x_thread[4*i+1] * (w[i] & 0x0c)
-          + x_thread[4*i+2] * (w[i] & 0x30)
-          + x_thread[4*i+3] * (w[i] & 0xc0));
-    }
-  }
-
-  else if (bits == 4) {
-    const device uint16_t* ws = (const device uint16_t*)w;
-    for (int i = 0; i < (values_per_thread / 4); i++) {
-      accum += (
-          x_thread[4*i] * (ws[i] & 0x000f)
-          + x_thread[4*i+1] * (ws[i] & 0x00f0)
-          + x_thread[4*i+2] * (ws[i] & 0x0f00)
-          + x_thread[4*i+3] * (ws[i] & 0xf000));
-    }
-  }
-
-  else if (bits == 8) {
-    for (int i = 0; i < values_per_thread; i++) {
-      accum += x_thread[i] * w[i];
-    }
-  }
-
-  return scale * accum + sum * bias;
+inline U qdot(const device uint8_t* w, const thread U* x_thread, U scale, U bias, U sum) {
+  return scale * qdot_unroll<U, bits * values_per_thread / 16 - 1, bits>::compute((const device uint16_t*)w, x_thread) + sum * bias;
 }
+
+
 
 template <typename T, int group_size, int bits, int packs_per_thread>
 [[kernel]] void qmv_fast(
