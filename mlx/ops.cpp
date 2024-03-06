@@ -3032,6 +3032,15 @@ array quantized_matmul(
   }
 
   auto dtype = result_type({x, scales, biases});
+  if (!is_floating_point(dtype) || is_complex(dtype)) {
+    std::ostringstream msg;
+    msg << "[quantized_matmul] Only real floating types are supported but "
+        << "the passed types where x.dtype() == " << x.dtype()
+        << ", scales.dtype() == " << scales.dtype()
+        << " and biases.dtype() == " << biases.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+
   auto out = array(
       {x.shape(0), w_outer_dims},
       dtype,
