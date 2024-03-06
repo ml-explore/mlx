@@ -55,7 +55,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
 
     #pragma clang loop unroll(full)
     for(size_t threadAccumIndex = 0; threadAccumIndex < ACCUM_PER_GROUP; threadAccumIndex++) {
-        threadAccum[threadAccumIndex] = -INFINITY;
+        threadAccum[threadAccumIndex] = -metal::numeric_limits<float>::infinity();
     }
 
     uint KROW_ACCUM_INDEX = 0;
@@ -120,7 +120,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
 
     #pragma clang loop unroll(full)
     for(uint accum_array_iter = 0; accum_array_iter < ACCUM_ARRAY_LENGTH; accum_array_iter++) {
-        pvals[accum_array_iter] = float4(-INFINITY);
+        pvals[accum_array_iter] = float4(-metal::numeric_limits<float>::infinity());
     }
 
     if (TILE_SIZE_CONST == 64) {
@@ -146,7 +146,7 @@ template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_
     constexpr const int TILE_SIZE_ITERS_128 = TILE_SIZE_CONST / 128;
 
     if (TILE_SIZE_LARGER_THAN_64) {
-        float maxval = -INFINITY;
+        float maxval = -metal::numeric_limits<float>::infinity();
         threadgroup float4* smemPtrFlt4 = (threadgroup float4*)threadgroup_block;
         #pragma clang loop unroll(full)
         for(int i = 0; i < TILE_SIZE_ITERS_128; i++) {
@@ -397,7 +397,7 @@ void fast_inference_sdpa_reduce_tiles_template(
     float p_rowmax_regs[reserve];
     float weights[reserve];
 
-    float true_max = -INFINITY;
+    float true_max = -metal::numeric_limits<float>::infinity();
     for(size_t i = 0; i < params.KV_TILES; i++) {
         p_lse_regs[i] = float(*(p_lse_row + i));
         p_rowmax_regs[i] = float(*(p_rowmax_row + i));
