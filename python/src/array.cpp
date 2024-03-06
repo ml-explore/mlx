@@ -777,13 +777,15 @@ void init_array(py::module_& m) {
       .def(py::pickle(
           [](array& a) { // __getstate__
             if (a.dtype() == bfloat16) {
-              throw std::runtime_error("[array.__getstate__] Not supported for bfloat16.");
+              throw std::runtime_error(
+                  "[array.__getstate__] Not supported for bfloat16.");
             }
             return py::array(buffer_info(a));
           },
           [](py::array npa) { // __setstate__
             if (not py::isinstance<py::array>(npa)) {
-              throw std::runtime_error("[array.__setstate__] Received invalid state.");
+              throw std::runtime_error(
+                  "[array.__setstate__] Received invalid state.");
             }
             return np_array_to_mlx(npa, std::nullopt);
           }))
