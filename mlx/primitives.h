@@ -725,23 +725,6 @@ class DivMod : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
-class Select : public UnaryPrimitive {
- public:
-  explicit Select(Stream stream) : UnaryPrimitive(stream){};
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  DEFINE_VMAP()
-  DEFINE_GRADS()
-  DEFINE_PRINT(Select)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
-  DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
-  void eval(const std::vector<array>& inputs, array& out);
-};
-
 class Remainder : public UnaryPrimitive {
  public:
   explicit Remainder(Stream stream) : UnaryPrimitive(stream){};
@@ -1222,6 +1205,46 @@ class NotEqual : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(NotEqual)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class NumberOfElements : public UnaryPrimitive {
+ public:
+  explicit NumberOfElements(Stream stream, std::vector<int> axes, bool inverted)
+      : UnaryPrimitive(stream), axes_(axes), inverted_(inverted) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(NumberOfElements)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override {
+    return {{1}};
+  }
+
+ private:
+  std::vector<int> axes_;
+  bool inverted_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Select : public UnaryPrimitive {
+ public:
+  explicit Select(Stream stream) : UnaryPrimitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Select)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
 

@@ -3107,4 +3107,15 @@ bool Transpose::is_equivalent(const Primitive& other) const {
   return axes_ == t_other.axes_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> NumberOfElements::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  throw std::runtime_error("[dynamic_shape] vmap not yet implemented");
+}
+
+bool NumberOfElements::is_equivalent(const Primitive& other) const {
+  const NumberOfElements& n_other = static_cast<const NumberOfElements&>(other);
+  return axes_ == n_other.axes_ && inverted_ == n_other.inverted_;
+}
+
 } // namespace mlx::core

@@ -1356,9 +1356,9 @@ array mean(
       throw std::invalid_argument(msg.str());
     }
   }
-  auto nelements = compute_number_of_elements(a, axes);
   auto dtype = at_least_float(a.dtype());
-  return multiply(sum(a, axes, keepdims, s), array(1.0 / nelements, dtype), s);
+  auto normalizer = number_of_elements(a, axes, true, dtype, s);
+  return multiply(sum(a, axes, keepdims, s), normalizer, s);
 }
 
 array mean(
@@ -1391,9 +1391,12 @@ array var(
   auto v = subtract(a2, mu2, s);
 
   if (ddof != 0) {
-    auto nelements = compute_number_of_elements(a, axes);
-    auto factor = nelements / static_cast<float>(std::max(nelements - ddof, 0));
-    v = multiply(v, array(factor, dtype), s);
+    auto nelements = number_of_elements(a, axes, false, dtype, s);
+    auto factor = divide(
+        nelements,
+        maximum(subtract(nelements, array(ddof, dtype), s), array(0, dtype), s),
+        s);
+    v = multiply(v, factor, s);
   }
 
   return v;
@@ -3598,6 +3601,28 @@ std::vector<array> atleast_3d(
     out.push_back(atleast_3d(a, s));
   }
   return out;
+}
+
+array number_of_elements(
+    const array& a,
+    std::vector<int> axes,
+    bool inverted,
+    Dtype dtype /* = int32 */,
+    StreamOrDevice s /* = {} */) {
+  for (auto ax : axes) {
+    if ((ax + a.ndim()) % a.ndim() >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[number_of_elements] Can't get the shape for axis " << ax
+          << " from an array with " << a.ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+  }
+
+  return stop_gradient(array(
+      std::vector<int>{},
+      dtype,
+      std::make_unique<NumberOfElements>(to_stream(s), axes, inverted),
+      {a}));
 }
 
 } // namespace mlx::core
