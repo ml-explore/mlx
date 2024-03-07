@@ -397,12 +397,12 @@ class TestBlas(mlx_tests.MLXTestCase):
         # Multi-query style attention check
         for dtype in self.dtypes:
             # fmt: off
-            for (B,  D, n_kv_heads, factor, qsl, ksl) in (
-                (1, 16,          8,      4,   1, 256),
-                (1, 16,          8,      4,  32, 256),
-                (1, 16,          8,      4, 256,   1),
-                (4, 16,          8,      4,   1, 256),
-                (4, 16,          8,      4, 256,   1),
+            for (B,  D, n_kv_heads, factor,  qsl,  ksl) in (
+                (1, 16,          8,      4,    1,  256),
+                (1, 16,          8,      4,   32,  256),
+                (1, 16,          8,      4,  256,    1),
+                (4, 16,          8,      4,    1,  256),
+                (4, 16,          8,      4,  256,    1),
             ):
             # fmt: on
                 with self.subTest(
@@ -440,6 +440,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                     # Do attn style matmul
                     s_np = q_np_reshape @ k_np_reshape
                     o_np = s_np @ v_np_reshape 
+                    o_np = o_np.transpose(0, 3, 1, 2, 4).reshape(B, qsl, -1)
 
                     # Test mlx 
                     q_mx = mx.array(q_np)
@@ -453,7 +454,8 @@ class TestBlas(mlx_tests.MLXTestCase):
 
                     # Do attn style matmul
                     s_mx = q_mx_reshape @ k_mx_reshape
-                    o_mx = s_mx @ v_mx_reshape 
+                    o_mx = (s_mx @ v_mx_reshape)
+                    o_mx = o_mx.transpose(0, 3, 1, 2, 4).reshape(B, qsl, -1)
 
                     # Check against np
                     self.assertListEqual(list(s_np.shape), list(s_mx.shape))
