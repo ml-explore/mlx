@@ -18,7 +18,7 @@ To install from PyPI you must meet the following requirements:
 - macOS >= 13.5
 
 .. note::
-    MLX is only available on devices running macOS >= 13.3 
+    MLX is only available on devices running macOS >= 13.5
     It is highly recommended to use macOS 14 (Sonoma)
 
 
@@ -54,7 +54,7 @@ Build Requirements
 
 - A C++ compiler with C++17 support (e.g. Clang >= 5.0)
 - `cmake <https://cmake.org/>`_ -- version 3.24 or later, and ``make``
-- Xcode >= 15.0 and macOS >= 13.5
+- Xcode >= 15.0 and macOS SDK >= 14.0
 
 .. note::
    Ensure your shell environment is native ``arm``, not ``x86`` via Rosetta. If
