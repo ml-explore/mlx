@@ -1442,6 +1442,21 @@ class TestArray(mlx_tests.MLXTestCase):
         b @= a
         self.assertTrue(mx.array_equal(a, b))
 
+    def test_inplace_preserves_ids(self):
+        a = mx.array([1.0])
+        orig_id = id(a)
+        a += mx.array(2.0)
+        self.assertEqual(id(a), orig_id)
+
+        a[0] = 2.0
+        self.assertEqual(id(a), orig_id)
+
+        a -= mx.array(3.0)
+        self.assertEqual(id(a), orig_id)
+
+        a *= mx.array(3.0)
+        self.assertEqual(id(a), orig_id)
+
     def test_load_from_pickled_np(self):
         a = np.array([1, 2, 3], dtype=np.int32)
         b = pickle.loads(pickle.dumps(a))
