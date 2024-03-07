@@ -393,6 +393,75 @@ class TestBlas(mlx_tests.MLXTestCase):
                         mlx_vec_f=lambda vec_mlx: mx.broadcast_to(vec_mlx, shape_vec),
                     )
 
+    def test_matrix_vector_attn(self):
+        # Multi-query style attention check
+        for dtype in self.dtypes:
+            # fmt: off
+            for (B,  D, n_kv_heads, factor, qsl, ksl) in (
+                (1, 16,          8,      4,   1, 256),
+                (1, 16,          8,      4,  32, 256),
+                (1, 16,          8,      4, 256,   1),
+                (4, 16,          8,      4,   1, 256),
+                (4, 16,          8,      4, 256,   1),
+            ):
+            # fmt: on
+                with self.subTest(
+                        B=B, # Batch size
+                        D=D, # Dimension of mm
+                        n_kv_heads=n_kv_heads, # key-value heads 
+                        factor=factor, # factor to get query heads 
+                        qsl=qsl, # Query sequence length 
+                        ksl=ksl, # Key sequence length
+                        dtype=dtype # Data type
+                    ):
+
+                    np_dtype = getattr(np, dtype)
+
+                    # Fix shapes for kqv
+                    n_q_heads = n_kv_heads * factor
+                    Dk = D * n_kv_heads
+                    Dq = D * n_q_heads
+                    scale = 1. / math.sqrt(Dk)
+
+                    shape_queries = (B, qsl, Dq)
+                    shape_keys = (B, ksl, Dk)
+                    shape_values = (B, ksl, Dk)
+
+                    # Prepare numpy arrays
+                    q_np = np.random.uniform(-scale, scale, size=shape_queries).astype(np_dtype)
+                    k_np = np.random.uniform(-scale, scale, size=shape_keys).astype(np_dtype)
+                    v_np = np.random.uniform(-scale, scale, size=shape_values).astype(np_dtype)
+
+                    # Rearrange to move heads up 
+                    q_np_reshape = q_np.reshape(B, qsl, n_kv_heads, factor, -1).transpose(0, 2, 3, 1, 4)
+                    k_np_reshape = k_np.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 4, 1)
+                    v_np_reshape = v_np.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 1, 4)
+
+                    # Do attn style matmul
+                    s_np = q_np_reshape @ k_np_reshape
+                    o_np = s_np @ v_np_reshape 
+
+                    # Test mlx 
+                    q_mx = mx.array(q_np)
+                    k_mx = mx.array(k_np)
+                    v_mx = mx.array(v_np)
+
+                    # Rearrange to move heads up 
+                    q_mx_reshape = q_mx.reshape(B, qsl, n_kv_heads, factor, -1).transpose(0, 2, 3, 1, 4)
+                    k_mx_reshape = k_mx.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 4, 1)
+                    v_mx_reshape = v_mx.reshape(B, ksl, n_kv_heads, 1, -1).transpose(0, 2, 3, 1, 4)
+
+                    # Do attn style matmul
+                    s_mx = q_mx_reshape @ k_mx_reshape
+                    o_mx = s_mx @ v_mx_reshape 
+
+                    # Check against np
+                    self.assertListEqual(list(s_np.shape), list(s_mx.shape))
+                    self.assertTrue(np.allclose(s_np, s_mx, atol=1e-4))
+
+                    self.assertListEqual(list(o_np.shape), list(o_mx.shape))
+                    self.assertTrue(np.allclose(o_np, o_mx, atol=1e-4))
+
     def test_matrix_vector_edgecases(self):
         for dtype in self.dtypes:
             with self.subTest(dtype=dtype):
