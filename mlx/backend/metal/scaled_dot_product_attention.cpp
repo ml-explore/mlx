@@ -96,9 +96,7 @@ void sdpa_metal(
   set_array_buffer(compute_encoder, o_partial, 5);
   set_array_buffer(compute_encoder, p_lse, 6);
   set_array_buffer(compute_encoder, p_rowmaxes, 7);
-
-  constexpr const uint tgroupMemorySize = 32768;
-  compute_encoder->setThreadgroupMemoryLength(tgroupMemorySize, 0);
+  
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 
   {
