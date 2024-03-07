@@ -27,6 +27,8 @@ struct GEMMParams {
 
   const int swizzle_log;
   const int gemm_k_iterations_aligned;
+
+  const int batch_ndim;
 };
 
 struct GEMMSpiltKParams {

@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/backend/metal/kernels/bf16.h"
+#include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
 
 using namespace metal;
@@ -25,6 +26,8 @@ template <typename T,
     const device T *B [[buffer(1)]],
     device T *C [[buffer(2)]],
     const constant GEMMParams* params [[buffer(3)]],
+    const constant int* batch_shape [[buffer(4)]],
+    const constant size_t* batch_strides [[buffer(5)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -36,8 +39,21 @@ template <typename T,
     threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
 
     // Adjust for batch
-    A += params->batch_stride_a * tid.z;
-    B += params->batch_stride_b * tid.z;
+    if(params->batch_ndim > 1) {
+      const constant size_t* A_bstrides = batch_strides;
+      const constant size_t* B_bstrides = batch_strides + params->batch_ndim;
+
+      ulong2 batch_offsets = elem_to_loc_broadcast(
+          tid.z, batch_shape, A_bstrides, B_bstrides, params->batch_ndim);
+
+      A += batch_offsets.x;
+      B += batch_offsets.y;
+      
+    } else {
+      A += params->batch_stride_a * tid.z;
+      B += params->batch_stride_b * tid.z;
+    }
+    
     C += params->batch_stride_c * tid.z;
 
     gemm_kernel::run( 
@@ -59,6 +75,8 @@ template <typename T,
       const device itype *B [[buffer(1)]], \
       device itype *C [[buffer(2)]], \
       const constant GEMMParams* params [[buffer(3)]], \
+      const constant int* batch_shape [[buffer(4)]], \
+      const constant size_t* batch_strides [[buffer(5)]], \
       uint simd_lane_id [[thread_index_in_simdgroup]], \
       uint simd_group_id [[simdgroup_index_in_threadgroup]], \
       uint3 tid [[threadgroup_position_in_grid]], \
