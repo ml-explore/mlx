@@ -417,7 +417,7 @@ void steel_matmul(
       /* const int batch_stride_c = */ matrix_stride_out,
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
-      /* const int batch_ndim = */ 1};
+      /* const int batch_ndim = */ int(batch_shape.size())};
 
   // Prepare launch grid params
   int tile = 1 << swizzle_log;
@@ -431,45 +431,21 @@ void steel_matmul(
   batch_strides.insert(
       batch_strides.end(), B_batch_stride.begin(), B_batch_stride.end());
 
-  // Launch only 1 kernel in the case of simple batching / broadcasting
-  if (batch_shape.size() == 1) {
-    set_array_buffer(compute_encoder, a, 0);
-    set_array_buffer(compute_encoder, b, 1);
-    set_array_buffer(compute_encoder, out, 2);
+  // Launch kernel
+  set_array_buffer(compute_encoder, a, 0);
+  set_array_buffer(compute_encoder, b, 1);
+  set_array_buffer(compute_encoder, out, 2);
 
-    compute_encoder->setBytes(&params, sizeof(GEMMParams), 3);
+  compute_encoder->setBytes(&params, sizeof(GEMMParams), 3);
 
-    compute_encoder->setBytes(
-        batch_shape.data(), sizeof(int) * batch_shape.size(), 4);
-    compute_encoder->setBytes(
-        batch_strides.data(), sizeof(size_t) * batch_strides.size(), 5);
+  compute_encoder->setBytes(
+      batch_shape.data(), sizeof(int) * batch_shape.size(), 4);
+  compute_encoder->setBytes(
+      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 5);
 
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
-  } else { // Otherwise launch kernels with set offsets
+  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 
-    MTL::Size grid_dims_single = MTL::Size(tn, tm, 1);
-
-    for (int i = 0; i < batch_size_out; ++i) {
-      auto a_off = elem_to_loc(M * K * i, a.shape(), a.strides());
-      auto b_off = elem_to_loc(K * N * i, b.shape(), b.strides());
-
-      auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-      auto b_buf = static_cast<const MTL::Buffer*>(b.buffer().ptr());
-      auto out_buf = static_cast<const MTL::Buffer*>(out.buffer().ptr());
-
-      compute_encoder->setBuffer(a_buf, a_off * a.itemsize(), 0);
-      compute_encoder->setBuffer(b_buf, b_off * b.itemsize(), 1);
-      compute_encoder->setBuffer(out_buf, i * M * N * out.itemsize(), 2);
-
-      compute_encoder->setBytes(&params, sizeof(GEMMParams), 3);
-      compute_encoder->setBytes(
-          batch_shape.data(), sizeof(int) * batch_shape.size(), 4);
-      compute_encoder->setBytes(
-          batch_strides.data(), sizeof(size_t) * batch_strides.size(), 5);
-      compute_encoder->dispatchThreadgroups(grid_dims_single, group_dims);
-    }
-  }
-
+  // Clear copies
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
   return;
@@ -506,9 +482,9 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto check_transpose = [&copies, &s](const array& arr) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
-    if (stx == arr.shape(-1) && sty == 1) {
+    if (sty == 1) {
       return std::make_tuple(false, stx, arr);
-    } else if (stx == 1 && sty == arr.shape(-2)) {
+    } else if (stx == 1) {
       return std::make_tuple(true, sty, arr);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
