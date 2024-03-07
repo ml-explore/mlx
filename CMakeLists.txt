@@ -77,8 +77,10 @@ elseif (MLX_BUILD_METAL)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
   elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14_iOS17-beta.zip)
+  elseif (${MACOS_VERSION} GREATER_EQUAL 13.3)
+    set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS13.3_iOS16.4.zip)
   else ()
-    message(FATAL_ERROR "MLX requires macOS >= 13.5 to be built with MLX_BUILD_METAL=ON")
+    message(FATAL_ERROR "MLX requires macOS >= 13.3 to be built with MLX_BUILD_METAL=ON")
   endif()
 
   FetchContent_Declare(
