@@ -715,9 +715,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto check_transpose = [&copies, &s](const array& arr) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
-    if (stx == arr.shape(-1) && sty == 1) {
+    if (sty == 1) {
       return std::make_tuple(false, stx, arr);
-    } else if (stx == 1 && sty == arr.shape(-2)) {
+    } else if (stx == 1) {
       return std::make_tuple(true, sty, arr);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
