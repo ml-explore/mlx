@@ -63,16 +63,20 @@ jobs:
           command: ./build/tests/tests
 
   mac_build_and_test:
+    parameters:
+      xcode_version:
+        type: string
+        default: "15.2.0"
     macos:
-      xcode: "15.2.0"
+      xcode: << parameters.xcode_version >>
     resource_class: macos.m1.large.gen1
     steps:
       - checkout
       - run:
           name: Install dependencies
           command: |
-            brew install python@3.9
-            python3.9 -m venv env
+            brew install python@3.8
+            python3.8 -m venv env
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
@@ -97,7 +101,7 @@ jobs:
           command: |
             source env/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
-            LOW_MEMORY=1 DEVICE=gpu python3.9 -m xmlrunner discover -v python/tests -o test-results/gpu
+            LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu
       # TODO: Reenable when extension api becomes stable
       # - run:
       #     name: Build example extension
@@ -235,7 +239,10 @@ workflows:
         - not: << pipeline.parameters.weekly_build >>
         - not: << pipeline.parameters.test_release >>
     jobs:
-      - mac_build_and_test
+      - mac_build_and_test:
+          matrix:
+            parameters:
+              xcode_version: ["15.0.0", "15.2.0"]
       - linux_build_and_test
 
   build_pypi_release:
@@ -254,7 +261,7 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              xcode_version: ["14.3.1", "15.2.0"]
+              xcode_version: ["15.0.0", "15.2.0"]
               build_env: ["PYPI_RELEASE=1"]
   prb:
     when:
@@ -280,7 +287,7 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              xcode_version: ["14.3.1", "15.2.0"]
+              xcode_version: ["15.0.0", "15.2.0"]
   weekly_build:
     when:
       and:
@@ -291,7 +298,7 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              xcode_version: ["14.3.1", "15.2.0"]
+              xcode_version: ["15.0.0", "15.2.0"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
     when:
