@@ -101,7 +101,7 @@ jobs:
           command: |
             source env/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
-            LOW_MEMORY=1 DEVICE=gpu python3.9 -m xmlrunner discover -v python/tests -o test-results/gpu
+            LOW_MEMORY=1 DEVICE=gpu python -m xmlrunner discover -v python/tests -o test-results/gpu
       # TODO: Reenable when extension api becomes stable
       # - run:
       #     name: Build example extension
