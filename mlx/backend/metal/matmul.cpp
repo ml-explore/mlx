@@ -537,6 +537,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     int mat_cols = transpose_mat ? out_vector_len : in_vector_len;
     int mat_rows = transpose_mat ? in_vector_len : out_vector_len;
+    int mat_ld = is_b_matrix ? b_cols : a_cols;
 
     auto batch_strides_mat = is_b_matrix ? B_batch_stride : A_batch_stride;
     auto batch_strides_vec = is_b_matrix ? A_batch_stride : B_batch_stride;
@@ -547,7 +548,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Determine if inputs have simple batching / broadcasting
     bool contiguous_kernel = (batch_shape.size() == 1);
 
-    int nc_dim = batch_shape.size();
+    int batch_ndim = batch_shape.size();
 
     // Determine dispatch kernel
     int tm = 4, tn = 4;
@@ -583,10 +584,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
 
     kname << "_bm" << bm << "_bn" << bn << "_tm" << tm << "_tn" << tn;
-
-    if (!contiguous_kernel) {
-      kname << "_nc";
-    }
+    kname << "_nc" << !contiguous_kernel << "_axpby0";
 
     // Encode and dispatch kernel
     auto compute_encoder = d.get_command_encoder(s.index);
@@ -599,25 +597,18 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     set_array_buffer(compute_encoder, mat, 0);
     set_array_buffer(compute_encoder, vec, 1);
-    set_array_buffer(compute_encoder, out, 2);
+    set_array_buffer(compute_encoder, out, 3);
 
-    compute_encoder->setBytes(&in_vector_len, sizeof(int), 3);
-    compute_encoder->setBytes(&out_vector_len, sizeof(int), 4);
+    compute_encoder->setBytes(&in_vector_len, sizeof(int), 4);
+    compute_encoder->setBytes(&out_vector_len, sizeof(int), 5);
+    compute_encoder->setBytes(&mat_ld, sizeof(int), 6);
 
-    if (contiguous_kernel) {
-      compute_encoder->setBytes(&stride_vec, sizeof(int), 5);
-      compute_encoder->setBytes(&stride_mat, sizeof(int), 6);
-    } else {
-      // In case of complex broadcasting, we consider the shape[:-2] and
-      // strides [:-2] to determine the location of a batch
-      // nc_dim = out.ndim() - 2
-      compute_encoder->setBytes(&nc_dim, sizeof(int), 5);
-      compute_encoder->setBytes(batch_shape.data(), nc_dim * sizeof(int), 6);
-      compute_encoder->setBytes(
-          batch_strides_vec.data(), nc_dim * sizeof(size_t), 7);
-      compute_encoder->setBytes(
-          batch_strides_mat.data(), nc_dim * sizeof(size_t), 8);
-    }
+    compute_encoder->setBytes(&batch_ndim, sizeof(int), 9);
+    compute_encoder->setBytes(batch_shape.data(), batch_ndim * sizeof(int), 10);
+    compute_encoder->setBytes(
+        batch_strides_vec.data(), batch_ndim * sizeof(size_t), 11);
+    compute_encoder->setBytes(
+        batch_strides_mat.data(), batch_ndim * sizeof(size_t), 12);
 
     compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 
@@ -663,9 +654,9 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* bool transpose_a = */ a_transposed,
       /* bool transpose_b = */ b_transposed,
       /* std::vector<array>& = */ copies,
-      batch_shape,
-      A_batch_stride,
-      B_batch_stride);
+      /* std::vector<int> batch_shape = */ batch_shape,
+      /* std::vector<size_t> A_batch_stride = */ A_batch_stride,
+      /* std::vector<size_t> B_batch_stride = */ B_batch_stride);
 }
 
 void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
