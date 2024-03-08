@@ -3110,7 +3110,7 @@ bool Transpose::is_equivalent(const Primitive& other) const {
 std::pair<std::vector<array>, std::vector<int>> NumberOfElements::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("[dynamic_shape] vmap not yet implemented");
+  throw std::runtime_error("[number_of_elements] vmap not yet implemented");
 }
 
 bool NumberOfElements::is_equivalent(const Primitive& other) const {

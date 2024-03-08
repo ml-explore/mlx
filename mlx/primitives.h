@@ -1225,7 +1225,7 @@ class NumberOfElements : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
   std::vector<std::vector<int>> output_shapes(
       const std::vector<array>& inputs) override {
-    return {{1}};
+    return {{}};
   }
 
  private:
