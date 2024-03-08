@@ -104,13 +104,11 @@ void array::detach() {
     s.array_desc_->inputs.clear();
     s.array_desc_->siblings.clear();
     s.array_desc_->position = 0;
-    s.array_desc_->depth = 0;
     s.array_desc_->primitive = nullptr;
   }
   array_desc_->inputs.clear();
   array_desc_->siblings.clear();
   array_desc_->position = 0;
-  array_desc_->depth = 0;
   array_desc_->primitive = nullptr;
 }
 
@@ -189,9 +187,7 @@ array::ArrayDesc::ArrayDesc(
   std::tie(size, strides) = cum_prod(this->shape);
   for (auto& in : this->inputs) {
     is_tracer |= in.is_tracer();
-    depth = std::max(in.graph_depth(), depth);
   }
-  depth++;
 }
 
 array::ArrayDesc::ArrayDesc(
@@ -206,9 +202,7 @@ array::ArrayDesc::ArrayDesc(
   std::tie(size, strides) = cum_prod(this->shape);
   for (auto& in : this->inputs) {
     is_tracer |= in.is_tracer();
-    depth = std::max(in.graph_depth(), depth);
   }
-  depth++;
 }
 
 array::ArrayIterator::ArrayIterator(const array& arr, int idx)
