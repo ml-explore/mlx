@@ -4,19 +4,6 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-def _weight_init(input_size: int, hidden_size: int):
-    scale = 1.0 / math.sqrt(hidden_size)
-    return mx.random.uniform(low=-scale, high=scale, shape=(input_size, hidden_size))
-
-
-def _bias_init(hidden_size: int, use_bias: bool):
-    if not use_bias:
-        return None
-
-    scale = 1.0 / math.sqrt(hidden_size)
-    return mx.random.uniform(low=-scale, high=scale, shape=(hidden_size,))
-
-
 class RNN(Module):
     r"""Apply one Elman recurrent units to a sequence of
     shape ``NLD`` or ``LD``, where:
@@ -56,27 +43,38 @@ class RNN(Module):
                 f"Nonlinearity must be callable. Current value: {nonlinearity}"
             )
 
-        self.Wxh = _weight_init(input_size, hidden_size)
-        self.Whh = _weight_init(hidden_size, hidden_size)
-        self.bh = _bias_init(hidden_size, bias)
+        scale = 1.0 / math.sqrt(hidden_size)
+        self.hidden_size = hidden_size
+        self.Wxh = mx.random.uniform(
+            low=-scale, high=scale, shape=(input_size, hidden_size)
+        )
+        self.Whh = mx.random.uniform(
+            low=-scale, high=scale, shape=(hidden_size, hidden_size)
+        )
+        self.bh = (
+            mx.random.uniform(low=-scale, high=scale, shape=(hidden_size,))
+            if bias
+            else None
+        )
         self.nonlinearity = nonlinearity
 
     def _extra_repr(self):
-        return f"input_dims={self.Wxh.shape[0]}, hidden_size={self.Wxh.shape[-1]}, nonlinearity={self.nonlinearity}, bias={self.bh is not None}"
+        return f"input_dims={self.Wxh.shape[0]}, hidden_size={self.hidden_size}, nonlinearity={self.nonlinearity}, bias={self.bh is not None}"
 
-    def __call__(self, x):
+    def __call__(self, x, hidden=None):
         x_proj = x @ self.Wxh
 
         if self.bh is not None:
             x_proj += x_proj
 
-        curr_hidden = mx.zeros(shape=(self.Whh.shape[-1],))
+        if hidden is None:
+            hidden = mx.zeros(shape=(self.hidden_size,))
         all_hidden = []
 
         for idx in range(x.shape[-2]):
-            curr_hidden = x_proj[..., idx, :] + curr_hidden @ self.Whh
-            curr_hidden = self.nonlinearity(curr_hidden)
-            all_hidden.append(curr_hidden)
+            hidden = x_proj[..., idx, :] + hidden @ self.Whh
+            hidden = self.nonlinearity(hidden)
+            all_hidden.append(hidden)
 
         return mx.stack(all_hidden, axis=-2)
 
@@ -114,55 +112,64 @@ class GRU(Module):
         bias: bool = True,
     ):
         super().__init__()
-        self.bias = bias
-        # r
-        self.Wxr = _weight_init(input_size, hidden_size)
-        self.Whr = _weight_init(hidden_size, hidden_size)
-        self.br = _bias_init(hidden_size, bias)
-        # n
-        self.Wxn = _weight_init(input_size, hidden_size)
-        self.Whn = _weight_init(hidden_size, hidden_size)
-        self.bn = _bias_init(hidden_size, bias)
-        self.bhn = _bias_init(hidden_size, bias)
-        # z
-        self.Wxz = _weight_init(input_size, hidden_size)
-        self.Whz = _weight_init(hidden_size, hidden_size)
-        self.bz = _bias_init(hidden_size, bias)
+
+        self.hidden_size = hidden_size
+        scale = 1.0 / math.sqrt(hidden_size)
+        self.Wx = mx.random.uniform(
+            low=-scale, high=scale, shape=(input_size, 3 * hidden_size)
+        )
+        self.Wh = mx.random.uniform(
+            low=-scale, high=scale, shape=(hidden_size, 3 * hidden_size)
+        )
+        self.b = (
+            mx.random.uniform(low=-scale, high=scale, shape=(3 * hidden_size,))
+            if bias
+            else None
+        )
+        self.bhn = (
+            mx.random.uniform(low=-scale, high=scale, shape=(hidden_size,))
+            if bias
+            else None
+        )
 
     def _extra_repr(self):
-        return f"input_dims={self.Wxr.shape[0]}, hidden_size={self.Wxr.shape[-1]}, bias={self.bias}"
+        return f"input_dims={self.Wx.shape[0]}, hidden_size={self.hidden_size}, bias={self.b is not None}"
 
-    def __call__(self, x):
-        x_proj_r = x @ self.Wxr
-        x_proj_n = x @ self.Wxn
-        x_proj_z = x @ self.Wxz
+    def __call__(self, x, hidden=None):
+        x_proj = x @ self.Wx
 
-        if self.bias:
-            x_proj_r += self.br
-            x_proj_n += self.bn
-            x_proj_z += self.bz
+        if self.b is not None:
+            x_proj += self.b
+
+        x_proj_rz = x_proj[..., : -self.hidden_size]
+        x_proj_n = x_proj[..., -self.hidden_size :]
 
         all_hidden = []
-        curr_hidden = mx.zeros(shape=(self.Whr.shape[0],))
+
+        if hidden is None:
+            hidden = mx.zeros(shape=(self.hidden_size,))
 
         for idx in range(x.shape[-2]):
-            r = x_proj_r[..., idx, :] + curr_hidden @ self.Whr
-            r = mx.sigmoid(r)
+            h_proj = hidden @ self.Wh
+            h_proj_rz = h_proj[..., : -self.hidden_size]
+            h_proj_n = h_proj[..., -self.hidden_size :]
 
-            z = x_proj_z[..., idx, :] + curr_hidden @ self.Whz
-            z = mx.sigmoid(z)
+            if self.bhn is not None:
+                h_proj_n += self.bhn
+
+            # Note bias in r, z, n is added through x already
+            rz = x_proj_rz[..., idx, :] + h_proj_rz
+            rz = mx.sigmoid(rz)
+
+            r, z = mx.split(rz, 2, axis=-1)
 
             n_x = x_proj_n[..., idx, :]
 
-            n_h = curr_hidden @ self.Whn
-            if self.bias:
-                n_h += self.bhn
-
-            n = n_x + r * n_h
+            n = n_x + r * h_proj_n
             n = mx.tanh(n)
 
-            curr_hidden = (1 - z) * n + z * curr_hidden
-            all_hidden.append(curr_hidden)
+            hidden = (1 - z) * n + z * hidden
+            all_hidden.append(hidden)
 
         return mx.stack(all_hidden, axis=-2)
 
@@ -202,61 +209,54 @@ class LSTM(Module):
         bias: bool = True,
     ):
         super().__init__()
-        self.bias = bias
-        # i
-        self.Wxi = _weight_init(input_size, hidden_size)
-        self.Whi = _weight_init(hidden_size, hidden_size)
-        self.bi = _bias_init(hidden_size, bias)
-        # f
-        self.Wxf = _weight_init(input_size, hidden_size)
-        self.Whf = _weight_init(hidden_size, hidden_size)
-        self.bf = _bias_init(hidden_size, bias)
-        # g
-        self.Wxg = _weight_init(input_size, hidden_size)
-        self.Whg = _weight_init(hidden_size, hidden_size)
-        self.bg = _bias_init(hidden_size, bias)
-        # o
-        self.Wxo = _weight_init(input_size, hidden_size)
-        self.Who = _weight_init(hidden_size, hidden_size)
-        self.bo = _bias_init(hidden_size, bias)
+
+        self.hidden_size = hidden_size
+        scale = 1.0 / math.sqrt(hidden_size)
+        self.Wx = mx.random.uniform(
+            low=-scale, high=scale, shape=(input_size, 4 * hidden_size)
+        )
+        self.Wh = mx.random.uniform(
+            low=-scale, high=scale, shape=(hidden_size, 4 * hidden_size)
+        )
+        self.b = (
+            mx.random.uniform(low=-scale, high=scale, shape=(4 * hidden_size,))
+            if bias
+            else None
+        )
 
     def _extra_repr(self):
-        return f"input_dims={self.Wxi.shape[0]}, hidden_size={self.Whi.shape[0]}, bias={self.bias}"
+        return f"input_dims={self.Wx.shape[0]}, hidden_size={self.hidden_size}, bias={self.b is not None}"
 
-    def __call__(self, x):
-        x_proj_i = x @ self.Wxi
-        x_proj_f = x @ self.Wxf
-        x_proj_g = x @ self.Wxg
-        x_proj_o = x @ self.Wxo
+    def __call__(self, x, hidden=None, cell=None):
+        x_proj = x @ self.Wx
 
-        if self.bias:
-            x_proj_i += self.bi
-            x_proj_f += self.bf
-            x_proj_g += self.bg
-            x_proj_o += self.bo
+        if self.b is not None:
+            x_proj += self.b
+
+        if hidden is None:
+            hidden = mx.zeros(shape=(self.hidden_size,))
+
+        if cell is None:
+            cell = mx.zeros(shape=(self.hidden_size,))
 
         all_hidden = []
         all_cell = []
-        curr_hidden = mx.zeros(shape=(self.Whi.shape[0],))
-        curr_cell = mx.zeros(shape=(self.Whi.shape[0],))
 
         for idx in range(x.shape[-2]):
-            i = x_proj_i[..., idx, :] + curr_hidden @ self.Whi
+            h_proj = hidden @ self.Wh
+
+            ifgo = x_proj[..., idx, :] + h_proj
+            i, f, g, o = mx.split(ifgo, 4, axis=-1)
+
             i = mx.sigmoid(i)
-
-            f = x_proj_f[..., idx, :] + curr_hidden @ self.Whf
             f = mx.sigmoid(f)
-
-            g = x_proj_g[..., idx, :] + curr_hidden @ self.Whg
             g = mx.tanh(g)
-
-            o = x_proj_o[..., idx, :] + curr_hidden @ self.Who
             o = mx.sigmoid(o)
 
-            curr_cell = f * curr_cell + i * g
-            curr_hidden = o * mx.tanh(curr_cell)
+            cell = f * cell + i * g
+            hidden = o * mx.tanh(cell)
 
-            all_cell.append(curr_cell)
-            all_hidden.append(curr_hidden)
+            all_cell.append(cell)
+            all_hidden.append(hidden)
 
         return mx.stack(all_hidden, axis=-2), mx.stack(all_cell, axis=-2)
