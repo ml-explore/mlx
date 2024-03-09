@@ -136,6 +136,20 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 mx.allclose(U[:, : len(S)] @ mx.diag(S) @ Vt, M, rtol=1e-5, atol=1e-7)
             )
 
+    def test_inverse(self):
+        A = mx.array([[1, 2, 3], [6, -5, 4], [-9, 8, 7]], dtype=mx.float32)
+        A_inv = mx.linalg.inv(A, stream=mx.cpu)
+        self.assertTrue(mx.allclose(A @ A_inv, mx.eye(A.shape[0]), rtol=0, atol=1e-6))
+
+        # Multiple matrices
+        B = A - 100
+        AB = mx.stack([A, B])
+        invs = mx.linalg.inv(AB, stream=mx.cpu)
+        for M, M_inv in zip(AB, invs):
+            self.assertTrue(
+                mx.allclose(M @ M_inv, mx.eye(M.shape[0]), rtol=0, atol=1e-5)
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

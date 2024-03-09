@@ -241,4 +241,27 @@ void init_linalg(py::module_& parent_module) {
             tuple(array, array, array): The ``U``, ``S``, and ``Vt`` matrices, such that
               ``A = U @ diag(S) @ Vt``
       )pbdoc");
+  m.def(
+      "inv",
+      &inv,
+      "a"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        inv(a: array, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Compute the inverse of a square matrix.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the inverse is computed for each matrix
+        in the last two dimensions of ``a``.
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: ``ainv`` such that ``dot(a, ainv) = dot(ainv, a) = eye(a.shape[0])``
+      )pbdoc");
 }

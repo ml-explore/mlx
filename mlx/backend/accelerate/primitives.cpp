@@ -73,6 +73,7 @@ DEFAULT(Sort)
 DEFAULT(StopGradient)
 DEFAULT_MULTI(SVD)
 DEFAULT(Transpose)
+DEFAULT(Inverse)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);

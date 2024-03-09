@@ -896,4 +896,8 @@ void SVD::eval_gpu(
   throw std::runtime_error("[SVD::eval_gpu] Metal SVD NYI.");
 }
 
+void Inverse::eval_gpu(const std::vector<array>& inputs, array& output) {
+  throw std::runtime_error("[Inverse::eval_gpu] Metal inversion NYI.");
+}
+
 } // namespace mlx::core
