@@ -275,6 +275,9 @@ workflows:
           context: pr-approval
       - mac_build_and_test:
           requires: [ hold ]
+          matrix:
+            parameters:
+              xcode_version: ["15.0.0", "15.2.0"]
       - linux_build_and_test:
           requires: [ hold ]
   nightly_build:
