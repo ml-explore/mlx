@@ -69,10 +69,9 @@ void eval(const std::vector<array>& outputs) {
     }
 
     // Recurse to the largest or smallest branch first.
+    depth_counter++;
     for (auto& in : a.inputs()) {
-      depth_counter++;
       recurse(in);
-      depth_counter--;
       if (!in.is_evaled()) {
         // If the input is being computed on a different stream, we need to
         // manage the dependency.
@@ -81,6 +80,7 @@ void eval(const std::vector<array>& outputs) {
         }
       }
     }
+    depth_counter--;
 
     cache.insert(id);
     for (auto& s : a.siblings()) {
