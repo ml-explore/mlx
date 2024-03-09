@@ -1504,6 +1504,9 @@ class TestLayers(mlx_tests.MLXTestCase):
         h_out = layer(inp)
         self.assertEqual(h_out.shape, (44, 12))
 
+        h_out = layer(inp, hidden=h_out[-1, :])
+        self.assertEqual(h_out.shape, (44, 12))
+
     def test_gru(self):
         layer = nn.GRU(5, 12, bias=True)
         inp = mx.random.normal((2, 25, 5))
@@ -1511,8 +1514,14 @@ class TestLayers(mlx_tests.MLXTestCase):
         h_out = layer(inp)
         self.assertEqual(h_out.shape, (2, 25, 12))
 
+        h_out = layer(inp, hidden=h_out[:, -1, :])
+        self.assertEqual(h_out.shape, (2, 25, 12))
+
         inp = mx.random.normal((44, 5))
         h_out = layer(inp)
+        self.assertEqual(h_out.shape, (44, 12))
+
+        h_out = layer(inp, h_out[-1, :])
         self.assertEqual(h_out.shape, (44, 12))
 
     def test_lstm(self):
@@ -1523,8 +1532,17 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(h_out.shape, (2, 25, 12))
         self.assertEqual(c_out.shape, (2, 25, 12))
 
+        h_out, c_out = layer(inp, hidden=h_out[:, -1, :], cell=c_out[:, -1, :])
+        self.assertEqual(h_out.shape, (2, 25, 12))
+        self.assertEqual(c_out.shape, (2, 25, 12))
+
         inp = mx.random.normal((44, 5))
         h_out, c_out = layer(inp)
+        self.assertEqual(h_out.shape, (44, 12))
+        self.assertEqual(c_out.shape, (44, 12))
+
+        inp = mx.random.normal((44, 5))
+        h_out, c_out = layer(inp, hidden=h_out[-1, :], cell=c_out[-1, :])
         self.assertEqual(h_out.shape, (44, 12))
         self.assertEqual(c_out.shape, (44, 12))
 

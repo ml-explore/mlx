@@ -1,3 +1,5 @@
+# Copyright © 2024 Apple Inc.
+
 import math
 from typing import Callable, Optional
 
@@ -162,29 +164,31 @@ class GRU(Module):
 
         all_hidden = []
 
-        if hidden is None:
-            hidden = mx.zeros(shape=(self.hidden_size,))
-
         for idx in range(x.shape[-2]):
-            h_proj = hidden @ self.Wh
-            h_proj_rz = h_proj[..., : -self.hidden_size]
-            h_proj_n = h_proj[..., -self.hidden_size :]
+            rz = x_rz[..., idx, :]
+            if hidden is not None:
+                h_proj = hidden @ self.Wh
+                h_proj_rz = h_proj[..., : -self.hidden_size]
+                h_proj_n = h_proj[..., -self.hidden_size :]
 
-            if self.bhn is not None:
-                h_proj_n += self.bhn
+                if self.bhn is not None:
+                    h_proj_n += self.bhn
 
-            # Note bias in r, z, n is added through x already
-            rz = x_rz[..., idx, :] + h_proj_rz
+                rz = rz + h_proj_rz
+
             rz = mx.sigmoid(rz)
 
             r, z = mx.split(rz, 2, axis=-1)
 
-            n_x = x_n[..., idx, :]
+            n = x_n[..., idx, :]
 
-            n = n_x + r * h_proj_n
+            if hidden is not None:
+                n = n + r * h_proj_n
             n = mx.tanh(n)
 
-            hidden = (1 - z) * n + z * hidden
+            hidden = (1 - z) * n
+            if hidden is not None:
+                hidden = hidden + z * hidden
             all_hidden.append(hidden)
 
         return mx.stack(all_hidden, axis=-2)
@@ -257,19 +261,13 @@ class LSTM(Module):
         else:
             x = x @ self.Wx
 
-        if hidden is None:
-            hidden = mx.zeros(shape=(self.hidden_size,))
-
-        if cell is None:
-            cell = mx.zeros(shape=(self.hidden_size,))
-
         all_hidden = []
         all_cell = []
 
         for idx in range(x.shape[-2]):
-            h_proj = hidden @ self.Wh
-
-            ifgo = x[..., idx, :] + h_proj
+            ifgo = x[..., idx, :]
+            if hidden is not None:
+                ifgo = ifgo + hidden @ self.Wh
             i, f, g, o = mx.split(ifgo, 4, axis=-1)
 
             i = mx.sigmoid(i)
@@ -277,7 +275,10 @@ class LSTM(Module):
             g = mx.tanh(g)
             o = mx.sigmoid(o)
 
-            cell = f * cell + i * g
+            if cell is not None:
+                cell = f * cell + i * g
+            else:
+                cell = i * g
             hidden = o * mx.tanh(cell)
 
             all_cell.append(cell)
