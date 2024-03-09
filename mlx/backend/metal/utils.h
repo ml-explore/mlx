@@ -4,6 +4,7 @@
 
 #include "mlx/array.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 
@@ -121,6 +122,29 @@ MTL::Size get_block_dims(int dim0, int dim1, int dim2) {
     }
   }
   return MTL::Size{1ul << pows[0], 1ul << pows[1], 1ul << pows[2]};
+}
+
+inline NS::String* make_string(std::ostringstream& os) {
+  std::string string = os.str();
+  return NS::String::string(string.c_str(), NS::UTF8StringEncoding);
+}
+
+inline void debug_set_stream_queue_label(MTL::CommandQueue* queue, int index) {
+#ifdef MLX_METAL_DEBUG
+  std::ostringstream label;
+  label << "Stream " << index;
+  queue->setLabel(make_string(label));
+#endif
+}
+
+inline void debug_set_primitive_buffer_label(
+    MTL::CommandBuffer* command_buffer,
+    Primitive& primitive) {
+#ifdef MLX_METAL_DEBUG
+  std::ostringstream label;
+  primitive.print(label);
+  command_buffer->setLabel(make_string(label));
+#endif
 }
 
 } // namespace
