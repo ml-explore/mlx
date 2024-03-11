@@ -605,6 +605,14 @@ class TestCompile(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             out = fun(mx.array(0.0), y=MyClass())
 
+    def test_compile_create_list(self):
+        @mx.compile
+        def fun():
+            return [0.1 * mx.zeros((2,)), 0.1 * mx.zeros((2,))]
+
+        out = fun()
+        mx.eval(out)
+
 
 if __name__ == "__main__":
     unittest.main()
