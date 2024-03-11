@@ -613,6 +613,24 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = fun()
         mx.eval(out)
 
+    def test_compile_vjp(self):
+        def fun(w):
+            w1 = w + w
+            w2 = w + w
+            return w @ w1 + w2 @ w2
+
+        def step(w):
+            out, grad = mx.vjp(fun, (w,), (mx.array([[1.0, 1.0], [1.0, 1.0]]),))
+            return out[0], grad[0]
+
+        w = mx.zeros((2, 2))
+        mx.eval(w)
+
+        expected = step(w)
+        out = mx.compile(step)(w)
+        self.assertTrue(mx.allclose(expected[0], out[0]))
+        self.assertTrue(mx.allclose(expected[1], out[1]))
+
 
 if __name__ == "__main__":
     unittest.main()
