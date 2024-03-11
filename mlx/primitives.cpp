@@ -3110,12 +3110,26 @@ bool Transpose::is_equivalent(const Primitive& other) const {
 std::pair<std::vector<array>, std::vector<int>> NumberOfElements::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("[number_of_elements] vmap not yet implemented");
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+
+  auto vdim = axes[0];
+  std::vector<int> new_axes = axes_;
+  for (auto& dim : new_axes) {
+    if (dim >= vdim) {
+      dim++;
+    }
+  }
+
+  return {
+      {number_of_elements(inputs[0], new_axes, inverted_, dtype_, stream())},
+      {-1}};
 }
 
 bool NumberOfElements::is_equivalent(const Primitive& other) const {
   const NumberOfElements& n_other = static_cast<const NumberOfElements&>(other);
-  return axes_ == n_other.axes_ && inverted_ == n_other.inverted_;
+  return axes_ == n_other.axes_ && inverted_ == n_other.inverted_ &&
+      dtype_ == n_other.dtype_;
 }
 
 } // namespace mlx::core

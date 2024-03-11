@@ -1214,8 +1214,15 @@ class NotEqual : public UnaryPrimitive {
 
 class NumberOfElements : public UnaryPrimitive {
  public:
-  explicit NumberOfElements(Stream stream, std::vector<int> axes, bool inverted)
-      : UnaryPrimitive(stream), axes_(axes), inverted_(inverted) {}
+  explicit NumberOfElements(
+      Stream stream,
+      std::vector<int> axes,
+      bool inverted,
+      Dtype dtype)
+      : UnaryPrimitive(stream),
+        axes_(axes),
+        inverted_(inverted),
+        dtype_(dtype) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1231,6 +1238,7 @@ class NumberOfElements : public UnaryPrimitive {
  private:
   std::vector<int> axes_;
   bool inverted_;
+  Dtype dtype_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };

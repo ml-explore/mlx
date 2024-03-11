@@ -3601,19 +3601,21 @@ array number_of_elements(
     bool inverted,
     Dtype dtype /* = int32 */,
     StreamOrDevice s /* = {} */) {
-  for (auto ax : axes) {
-    if ((ax + a.ndim()) % a.ndim() >= a.ndim()) {
+  for (auto& ax : axes) {
+    int normal_axis = (ax + a.ndim()) % a.ndim();
+    if (normal_axis >= a.ndim() || normal_axis < 0) {
       std::ostringstream msg;
       msg << "[number_of_elements] Can't get the shape for axis " << ax
           << " from an array with " << a.ndim() << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
+    ax = normal_axis;
   }
 
   return stop_gradient(array(
       std::vector<int>{},
       dtype,
-      std::make_unique<NumberOfElements>(to_stream(s), axes, inverted),
+      std::make_unique<NumberOfElements>(to_stream(s), axes, inverted, dtype),
       {a}));
 }
 
