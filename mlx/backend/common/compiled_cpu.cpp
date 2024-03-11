@@ -385,7 +385,9 @@ void Compiled::eval_cpu(
       if (in.flags().row_contiguous && in.nbytes() == outputs[o].nbytes() &&
           in.is_donatable() &&
           constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
-        outputs[o++].copy_shared_buffer(in);
+        outputs[o].copy_shared_buffer(
+            in, outputs[o].strides(), in.flags(), in.data_size());
+        o++;
       }
     }
     for (; o < outputs.size(); ++o) {
