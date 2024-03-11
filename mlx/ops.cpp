@@ -46,14 +46,6 @@ std::pair<std::vector<int>, std::vector<int>> compute_reduce_shape(
   return {out_shape, sorted_axes};
 }
 
-int compute_number_of_elements(const array& a, const std::vector<int>& axes) {
-  int nelements = 1;
-  for (auto axis : axes) {
-    nelements *= a.shape(axis);
-  }
-  return nelements;
-}
-
 Dtype at_least_float(const Dtype& d) {
   return is_floating_point(d) ? d : promote_types(d, float32);
 }
