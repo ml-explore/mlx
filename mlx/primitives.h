@@ -725,6 +725,23 @@ class DivMod : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
+class Select : public UnaryPrimitive {
+ public:
+  explicit Select(Stream stream) : UnaryPrimitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Select)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Remainder : public UnaryPrimitive {
  public:
   explicit Remainder(Stream stream) : UnaryPrimitive(stream){};
@@ -1240,23 +1257,6 @@ class NumberOfElements : public UnaryPrimitive {
   bool inverted_;
   Dtype dtype_;
 
-  void eval(const std::vector<array>& inputs, array& out);
-};
-
-class Select : public UnaryPrimitive {
- public:
-  explicit Select(Stream stream) : UnaryPrimitive(stream){};
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  DEFINE_VMAP()
-  DEFINE_GRADS()
-  DEFINE_PRINT(Select)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
-  DEFINE_INPUT_OUTPUT_SHAPE()
-
- private:
   void eval(const std::vector<array>& inputs, array& out);
 };
 
