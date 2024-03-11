@@ -81,15 +81,11 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
           out,
           axes_,
           0,
-          [](const auto* x, auto* accum, int size, size_t stride) {
-            StridedReduce<
-                float,
-                simd_float16,
-                16,
-                SumReduction<float, simd_float16>>
-                op;
-            op((const float*)x, (float*)accum, size, stride);
-          },
+          StridedReduce<
+              float,
+              simd_float16,
+              16,
+              SumReduction<float, simd_float16>>(),
           [](const auto* x, auto* accum, int size) {
             float acc;
             vDSP_sve((const float*)x, 1, &acc, size);
@@ -103,15 +99,11 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
           out,
           axes_,
           -std::numeric_limits<float>::infinity(),
-          [](const auto* x, auto* accum, int size, size_t stride) {
-            StridedReduce<
-                float,
-                simd_float16,
-                16,
-                MaxReduction<float, simd_float16>>
-                op;
-            op((const float*)x, (float*)accum, size, stride);
-          },
+          StridedReduce<
+              float,
+              simd_float16,
+              16,
+              MaxReduction<float, simd_float16>>(),
           [](const auto* x, auto* accum, int size) {
             float max;
             vDSP_maxv((const float*)x, 1, &max, size);
@@ -125,15 +117,11 @@ void Reduce::eval_cpu(const std::vector<array>& inputs, array& out) {
           out,
           axes_,
           std::numeric_limits<float>::infinity(),
-          [](const auto* x, auto* accum, int size, size_t stride) {
-            StridedReduce<
-                float,
-                simd_float16,
-                16,
-                MinReduction<float, simd_float16>>
-                op;
-            op((const float*)x, (float*)accum, size, stride);
-          },
+          StridedReduce<
+              float,
+              simd_float16,
+              16,
+              MinReduction<float, simd_float16>>(),
           [](const auto* x, auto* accum, int size) {
             float min;
             vDSP_minv((const float*)x, 1, &min, size);
