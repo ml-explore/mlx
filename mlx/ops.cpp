@@ -3315,22 +3315,22 @@ array addmm(
     const float& alpha /* = 1.f */,
     const float& beta /* = 1.f */,
     StreamOrDevice s /* = {} */) {
-  // Divert in the case of vector-matrix multiplication
-  // TODO: Add the needed specializtion
-  if (a.ndim() == 1 || b.ndim() == 1) {
-    array X = matmul(a, b, s);
-    array alpha_arr = array(alpha, X.dtype());
-    array aX = multiply(alpha_arr, X, s);
-
-    array beta_arr = array(beta, c.dtype());
-    array bY = multiply(beta_arr, c, s);
-    return add(aX, bY, s);
-  }
+  int in_a_ndim = a.ndim();
+  int in_b_ndim = b.ndim();
 
   if (a.ndim() == 0 || b.ndim() == 0) {
     throw std::invalid_argument(
         "[addmm] Got 0 dimension input. Inputs must "
         "have at least one dimension.");
+  }
+
+  if (a.ndim() == 1) {
+    // Insert a singleton dim in the beginning
+    a = reshape(a, {1, -1}, s);
+  }
+  if (b.ndim() == 1) {
+    // Insert a singleton dim at the end
+    b = reshape(b, {-1, 1}, s);
   }
 
   if (a.shape(-1) != b.shape(-2)) {
@@ -3361,7 +3361,13 @@ array addmm(
     std::vector<int> out_shape = a.shape();
     a = reshape(a, {-1, out_shape.back()}, s);
     out_shape.back() = b.shape(-1);
+
+    if (in_b_ndim == 1) {
+      out_shape.pop_back();
+    }
+
     c = broadcast_to(c, {a.shape(0), b.shape(1)}, s);
+
     auto out = array(
         {a.shape(0), b.shape(1)},
         out_type,
@@ -3389,14 +3395,41 @@ array addmm(
   auto out_shape = a.shape();
   out_shape.back() = b.shape(-1);
 
-  auto c_broadcast_shape = broadcast_shapes(c.shape(), out_shape);
+  auto out_shape_adjusted = out_shape;
+
+  if (in_a_ndim == 1 || in_b_ndim == 1) {
+    out_shape_adjusted.erase(
+        out_shape_adjusted.end() - ((in_a_ndim == 1) ? 2 : 1),
+        out_shape_adjusted.end() - ((in_b_ndim == 1) ? 0 : 1));
+  }
+
+  auto c_broadcast_shape = broadcast_shapes(c.shape(), out_shape_adjusted);
   c = broadcast_to(c, c_broadcast_shape, s);
+
+  if (out_shape.size() != c.ndim()) {
+    auto c_reshape = c.shape();
+    if (in_b_ndim == 1 && c_reshape[c.ndim() - 1] != 1) {
+      c_reshape.push_back(1);
+    }
+
+    if (in_a_ndim == 1 && c_reshape[c_reshape.size() - 2] != 1) {
+      c_reshape.push_back(c_reshape.back());
+      c_reshape[c_reshape.size() - 2] = 1;
+    }
+
+    c = reshape(c, c_reshape, s);
+  }
 
   auto out = array(
       out_shape,
       out_type,
       std::make_unique<AddMM>(to_stream(s), alpha, beta),
       {a, b, c});
+
+  // Remove the possibly inserted singleton dimensions
+  if (in_a_ndim == 1 || in_b_ndim == 1) {
+    out = reshape(out, out_shape_adjusted, s);
+  }
 
   return out;
 }

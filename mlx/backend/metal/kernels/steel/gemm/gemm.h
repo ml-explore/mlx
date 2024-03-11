@@ -140,7 +140,7 @@ struct GEMMKernel {
   static METAL_FUNC void run(
       const device T* A [[buffer(0)]],
       const device T* B [[buffer(1)]],
-      device U* C [[buffer(2)]],
+      device U* D [[buffer(2)]],
       const constant GEMMParams* params [[buffer(3)]],
       threadgroup T* As [[threadgroup(0)]],
       threadgroup T* Bs [[threadgroup(1)]],
@@ -167,7 +167,7 @@ struct GEMMKernel {
 
     A += transpose_a ? c_row : c_row * params->lda;
     B += transpose_b ? c_col * params->ldb : c_col;
-    C += c_row * params->ldc + c_col;
+    D += c_row * params->ldd + c_col;
 
     // Prepare threadgroup loading operations
     thread loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
@@ -214,7 +214,7 @@ struct GEMMKernel {
       }
 
       // Store results to device memory
-      mma_op.store_result(C, params->ldc);
+      mma_op.store_result(D, params->ldd);
       return;
 
     }
@@ -237,7 +237,7 @@ struct GEMMKernel {
             tgp_bn,
             leftover_bk);
 
-        mma_op.store_result(C, params->ldc);
+        mma_op.store_result(D, params->ldd);
         return;
 
       } else if (tgp_bn == BN) {
@@ -252,7 +252,7 @@ struct GEMMKernel {
             tgp_bn,
             leftover_bk);
 
-        mma_op.store_result_safe(C, params->ldc, short2(tgp_bn, tgp_bm));
+        mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
         return;
 
       } else if (tgp_bm == BM) {
@@ -267,7 +267,7 @@ struct GEMMKernel {
             tgp_bn,
             leftover_bk);
 
-        mma_op.store_result_safe(C, params->ldc, short2(tgp_bn, tgp_bm));
+        mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
         return;
 
       } else {
@@ -282,7 +282,7 @@ struct GEMMKernel {
             tgp_bn,
             leftover_bk);
 
-        mma_op.store_result_safe(C, params->ldc, short2(tgp_bn, tgp_bm));
+        mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
         return;
       }
     }

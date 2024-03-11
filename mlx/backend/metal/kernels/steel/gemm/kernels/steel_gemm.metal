@@ -24,10 +24,10 @@ template <typename T,
 [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void gemm(
     const device T *A [[buffer(0)]],
     const device T *B [[buffer(1)]],
-    device T *C [[buffer(2)]],
-    const constant GEMMParams* params [[buffer(3)]],
-    const constant int* batch_shape [[buffer(4)]],
-    const constant size_t* batch_strides [[buffer(5)]],
+    device T *D [[buffer(3)]],
+    const constant GEMMParams* params [[buffer(4)]],
+    const constant int* batch_shape [[buffer(6)]],
+    const constant size_t* batch_strides [[buffer(7)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -54,10 +54,10 @@ template <typename T,
       B += params->batch_stride_b * tid.z;
     }
     
-    C += params->batch_stride_c * tid.z;
+    D += params->batch_stride_d * tid.z;
 
     gemm_kernel::run( 
-      A, B, C, 
+      A, B, D, 
       params,
       As, Bs,
       simd_lane_id, simd_group_id, tid, lid
@@ -73,10 +73,10 @@ template <typename T,
   [[kernel]] void gemm<itype, bm, bn, bk, wm, wn, trans_a, trans_b, mn_aligned, k_aligned>( \
       const device itype *A [[buffer(0)]], \
       const device itype *B [[buffer(1)]], \
-      device itype *C [[buffer(2)]], \
-      const constant GEMMParams* params [[buffer(3)]], \
-      const constant int* batch_shape [[buffer(4)]], \
-      const constant size_t* batch_strides [[buffer(5)]], \
+      device itype *D [[buffer(3)]], \
+      const constant GEMMParams* params [[buffer(4)]], \
+      const constant int* batch_shape [[buffer(6)]], \
+      const constant size_t* batch_strides [[buffer(7)]], \
       uint simd_lane_id [[thread_index_in_simdgroup]], \
       uint simd_group_id [[simdgroup_index_in_threadgroup]], \
       uint3 tid [[threadgroup_position_in_grid]], \

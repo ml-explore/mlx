@@ -16,14 +16,14 @@ struct GEMMParams {
 
   const int lda;
   const int ldb;
-  const int ldc;
+  const int ldd;
 
   const int tiles_n;
   const int tiles_m;
 
   const int batch_stride_a;
   const int batch_stride_b;
-  const int batch_stride_c;
+  const int batch_stride_d;
 
   const int swizzle_log;
   const int gemm_k_iterations_aligned;
@@ -51,30 +51,13 @@ struct GEMMSpiltKParams {
 };
 
 struct GEMMAddMMParams {
-  const int M;
-  const int N;
-  const int K;
-
-  const int lda;
-  const int ldb;
   const int ldc;
-  const int ldd;
+  const int fdc;
 
-  const int tiles_n;
-  const int tiles_m;
-
-  const int batch_stride_a;
-  const int batch_stride_b;
   const int batch_stride_c;
-  const int batch_stride_d;
-
-  const int swizzle_log;
-  const int gemm_k_iterations_aligned;
 
   const float alpha;
   const float beta;
-
-  const int fdc;
 };
 
 } // namespace steel

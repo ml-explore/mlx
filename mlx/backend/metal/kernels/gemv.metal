@@ -58,6 +58,7 @@ struct GEMVKernel {
       const constant int& marix_ld [[buffer(6)]],
       const constant float& alpha [[buffer(7)]],
       const constant float& beta [[buffer(8)]],
+      const constant int& bias_stride [[buffer(14)]],
       threadgroup T* tgp_memory [[threadgroup(0)]],
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]],
@@ -162,7 +163,7 @@ struct GEMVKernel {
         if(kDoAxpby) {
           out_vec[out_row + tm] = 
               static_cast<T>(alpha) * result[tm] + 
-              static_cast<T>(beta) * bias[out_row + tm];
+              static_cast<T>(beta) * bias[(out_row + tm) * bias_stride];
         } else {
           out_vec[out_row + tm] = result[tm];
         }
@@ -218,6 +219,7 @@ struct GEMVTKernel {
       const constant int& marix_ld [[buffer(6)]],
       const constant float& alpha [[buffer(7)]],
       const constant float& beta [[buffer(8)]],
+      const constant int& bias_stride [[buffer(14)]],
       threadgroup T* tgp_memory [[threadgroup(0)]],
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]],
@@ -312,7 +314,7 @@ struct GEMVTKernel {
         if(kDoAxpby) {
           out_vec[out_col + j] = 
               static_cast<T>(alpha) * result[j] + 
-              static_cast<T>(beta) * bias[out_col + j];
+              static_cast<T>(beta) * bias[(out_col + j) * bias_stride];
         } else {
           out_vec[out_col + j] = result[j];
         }
@@ -348,6 +350,7 @@ template <
     const constant size_t* vector_batch_stride [[buffer(11)]],
     const constant size_t* matrix_batch_stride [[buffer(12)]],
     const constant size_t* bias_batch_stride [[buffer(13)]],
+    const constant int& bias_stride [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -386,6 +389,7 @@ template <
     marix_ld,
     alpha,
     beta,
+    bias_stride,
     tgp_memory,
     tid,
     lid,
@@ -413,6 +417,7 @@ template <
     const constant size_t* vector_batch_stride [[buffer(11)]], \
     const constant size_t* matrix_batch_stride [[buffer(12)]], \
     const constant size_t* bias_batch_stride [[buffer(13)]], \
+    const constant int& bias_stride [[buffer(14)]], \
     uint3 tid [[threadgroup_position_in_grid]], \
     uint3 lid [[thread_position_in_threadgroup]], \
     uint simd_gid [[simdgroup_index_in_threadgroup]], \
@@ -460,6 +465,7 @@ template <
     const constant size_t* vector_batch_stride [[buffer(11)]],
     const constant size_t* matrix_batch_stride [[buffer(12)]],
     const constant size_t* bias_batch_stride [[buffer(13)]],
+    const constant int& bias_stride [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -498,6 +504,7 @@ template <
     marix_ld,
     alpha,
     beta,
+    bias_stride,
     tgp_memory,
     tid,
     lid,
@@ -524,6 +531,7 @@ template <
     const constant size_t* vector_batch_stride [[buffer(11)]], \
     const constant size_t* matrix_batch_stride [[buffer(12)]], \
     const constant size_t* bias_batch_stride [[buffer(13)]], \
+    const constant int& bias_stride [[buffer(14)]], \
     uint3 tid [[threadgroup_position_in_grid]], \
     uint3 lid [[thread_position_in_threadgroup]], \
     uint simd_gid [[simdgroup_index_in_threadgroup]], \
