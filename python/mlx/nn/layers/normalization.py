@@ -1,21 +1,9 @@
-# Copyright © 2023-2024 Apple Inc.
+# Copyright © 2023 Apple Inc.
 
-from functools import partial
 from typing import Tuple
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
-
-
-@partial(mx.compile, shapeless=True)
-def instance_norm(x, eps, reduction_axes, weight=None, bias=None):
-    t = x.dtype
-    x = x.astype(mx.float32)
-    mean = mx.mean(x, axis=reduction_axes, keepdims=True)
-    var = mx.var(x, axis=reduction_axes, keepdims=True)
-    x = (x - mean) * mx.rsqrt(var + eps)
-    x = x.astype(t)
-    return (weight * x + bias) if weight is not None else x
 
 
 class InstanceNorm(Module):
@@ -69,21 +57,13 @@ class InstanceNorm(Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         reduction_axes = tuple(range(1, x.ndim - 1))
-        if "weight" in self:
-            return instance_norm(x, self.eps, reduction_axes, self.weight, self.bias)
-        else:
-            return instance_norm(x, self.eps, reduction_axes)
-
-
-@partial(mx.compile, shapeless=True)
-def layer_norm(x, eps, weight=None, bias=None):
-    t = x.dtype
-    x = x.astype(mx.float32)
-    mean = mx.mean(x, axis=-1, keepdims=True)
-    var = mx.var(x, axis=-1, keepdims=True)
-    x = (x - mean) * mx.rsqrt(var + eps)
-    x = x.astype(t)
-    return (weight * x + bias) if weight is not None else x
+        # Compute stats
+        mean = mx.mean(x, axis=reduction_axes, keepdims=True)
+        var = mx.var(x, axis=reduction_axes, keepdims=True)
+        # Normalize
+        x = (x - mean) * mx.rsqrt(var + self.eps)
+        # Scale and shift if necessary
+        return (self.weight * x + self.bias) if "weight" in self else x
 
 
 class LayerNorm(Module):
@@ -119,17 +99,10 @@ class LayerNorm(Module):
         return f"{self.dims}, eps={self.eps}, affine={'weight' in self}"
 
     def __call__(self, x):
-        if "weight" in self:
-            return layer_norm(x, self.eps, self.weight, self.bias)
-        else:
-            return layer_norm(x, self.eps)
-
-
-@partial(mx.compile, shapeless=True)
-def rms_norm(x, weight, eps):
-    x = x.astype(mx.float32)
-    x = x * mx.rsqrt(x.square().mean(-1, keepdims=True) + eps)
-    return weight * x.astype(weight.dtype)
+        means = mx.mean(x, axis=-1, keepdims=True)
+        var = mx.var(x, axis=-1, keepdims=True)
+        x = (x - means) * mx.rsqrt(var + self.eps)
+        return (self.weight * x + self.bias) if "weight" in self else x
 
 
 class RMSNorm(Module):
@@ -160,23 +133,18 @@ class RMSNorm(Module):
         return f"{self.weight.shape[0]}, eps={self.eps}"
 
     def __call__(self, x):
-        return rms_norm(x, self.weight, self.eps)
+        # S is 1/sqrt(N) where N is the size of the features of x and is used
+        # to compute a numerically more stable RMS of x by multiplying with S
+        # first and summing.
+        #
+        # This way we prefer underflow over overflow which is controlled with
+        # the parameter epsilon anyway.
+        S = 1 / x.shape[-1] ** 0.5
 
+        n = (x * S).square().sum(axis=-1, keepdims=True)
+        n = mx.rsqrt(n + self.eps)
 
-@partial(mx.compile, shapeless=True)
-def _group_norm(x, eps):
-    t = x.dtype
-    x = x.astype(mx.float32)
-    mean = mx.mean(x, axis=1, keepdims=True)
-    var = mx.var(x, axis=1, keepdims=True)
-    x = (x - mean) * mx.rsqrt(var + eps)
-    x = x.astype(t)
-    return x
-
-
-@partial(mx.compile, shapeless=True)
-def _affine(x, weight, bias):
-    return x * weight + bias
+        return self.weight * x * n
 
 
 class GroupNorm(Module):
@@ -241,9 +209,9 @@ class GroupNorm(Module):
         x = x.transpose(0, 1, 3, 2).reshape(batch, -1, num_groups)
 
         # Normalize
-        y = x
-        mx.eval(x)
-        x = _group_norm(x, self.eps)
+        means = mx.mean(x, axis=1, keepdims=True)
+        var = mx.var(x, axis=1, keepdims=True)
+        x = (x - means) * mx.rsqrt(var + self.eps)
         x = x.reshape(batch, -1, dims // num_groups, num_groups)
         x = x.transpose(0, 1, 3, 2).reshape(batch, *rest, dims)
 
@@ -257,7 +225,9 @@ class GroupNorm(Module):
         x = x.reshape(batch, -1, num_groups)
 
         # Normalize
-        x = _group_norm(x, self.eps)
+        means = mx.mean(x, axis=1, keepdims=True)
+        var = mx.var(x, axis=1, keepdims=True)
+        x = (x - means) * mx.rsqrt(var + self.eps)
         x = x.reshape(batch, *rest, dims)
 
         return x
@@ -269,7 +239,7 @@ class GroupNorm(Module):
             else self._group_norm
         )
         x = group_norm(x)
-        return _affine(x, self.weight, self.bias) if "weight" in self else x
+        return (self.weight * x + self.bias) if "weight" in self else x
 
 
 class BatchNorm(Module):
