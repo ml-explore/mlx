@@ -471,6 +471,11 @@ void RandomBits::eval(const std::vector<array>& inputs, array& out) {
 std::pair<bool, std::vector<size_t>> Reshape::prepare_reshape(
     const array& in,
     const array& out) {
+  // Special case for empty arrays
+  if (in.size() == 0) {
+    return {false, out.strides()};
+  }
+
   // Special case for scalars
   if (in.ndim() == 0) {
     std::vector<size_t> out_strides(out.ndim(), 0);
@@ -488,10 +493,13 @@ std::pair<bool, std::vector<size_t>> Reshape::prepare_reshape(
   int j = 0;
   for (int i = 0; i < out.ndim(); i++) {
     int N = out.shape(i);
-    if (shape[j] % N == 0 && shape[j] >= N) {
+    if (j < shape.size() && shape[j] % N == 0) {
       shape[j] /= N;
       out_strides.push_back(shape[j] * strides[j]);
       j += (shape[j] == 1);
+    } else if (N == 1) {
+      // i > 0 because otherwise j < shape.size() && shape[j] % 1 == 0
+      out_strides.push_back(out_strides.back());
     } else {
       copy_necessary = true;
       break;
