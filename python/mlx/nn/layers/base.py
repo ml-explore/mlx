@@ -20,7 +20,7 @@ def _unwrap(model, value_key, value, filter_fn, map_fn, is_leaf_fn):
 
     elif isinstance(value, dict):
         nd = {}
-        for k, v in v.items():
+        for k, v in value.items():
             tk = f"{value_key}.{k}"
             nd[k] = (
                 _unwrap(model, tk, v, filter_fn, map_fn, is_leaf_fn)
