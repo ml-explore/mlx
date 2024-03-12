@@ -7,6 +7,60 @@
 using namespace metal;
 
 ///////////////////////////////////////////////////////////////////////////////
+// Small column reduce kernel
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename U, typename Op>
+[[kernel]] void col_reduce_small(
+    const device T *in [[buffer(0)]],
+    device U *out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& reduction_stride [[buffer(3)]],
+    const constant size_t& out_size [[buffer(4)]],
+    const constant int* shape [[buffer(5)]],
+    const constant size_t* strides [[buffer(6)]],
+    const constant int& ndim [[buffer(7)]],
+    const constant size_t& non_col_reductions [[buffer(8)]],
+    uint tid [[thread_position_in_grid]]) {
+
+  Op op;
+  U total_val = Op::init;
+
+  auto out_idx = tid;
+  uint non_col_offset = 0; 
+
+  for(uint i = 0; i < non_col_reductions; i++, non_col_offset += out_size) {
+    uint in_idx = elem_to_loc(
+      out_idx + non_col_offset,
+      shape,
+      strides,
+      ndim
+    );
+
+    for(uint j = 0; j < reduction_size; j++, in_idx += reduction_stride) {
+      U val = static_cast<U>(in[in_idx]);
+      total_val = op(total_val, val);
+    }
+  }
+
+  out[out_idx] = total_val;
+}
+
+#define instantiate_col_reduce_small(name, itype, otype, op) \
+  template [[host_name("col_reduce_small_" #name)]] \
+  [[kernel]] void col_reduce_small<itype, otype, op>( \
+      const device itype *in [[buffer(0)]], \
+      device otype *out [[buffer(1)]], \
+      const constant size_t& reduction_size [[buffer(2)]], \
+      const constant size_t& reduction_stride [[buffer(3)]], \
+      const constant size_t& out_size [[buffer(4)]], \
+      const constant int* shape [[buffer(5)]],  \
+      const constant size_t* strides [[buffer(6)]],  \
+      const constant int& ndim [[buffer(7)]],  \
+      const constant size_t& non_col_reductions [[buffer(8)]], \
+      uint tid [[thread_position_in_grid]]);
+
+///////////////////////////////////////////////////////////////////////////////
 // Column reduce helper
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -171,9 +225,11 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
 ///////////////////////////////////////////////////////////////////////////////
 
 #define instantiate_same_col_reduce_helper(name, tname, type, op) \
+  instantiate_col_reduce_small(name ##tname, type, type, op<type>) \
   instantiate_col_reduce_general(name ##tname, type, type, op<type>)
 
 #define instantiate_same_col_reduce_na_helper(name, tname, type, op) \
+  instantiate_col_reduce_small(name ##tname, type, type, op<type>) \
   instantiate_col_reduce_general_no_atomics(name ##tname, type, type, op<type>)
 
 instantiate_reduce_ops(instantiate_same_col_reduce_helper, instantiate_reduce_helper_types)

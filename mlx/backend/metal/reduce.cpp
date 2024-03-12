@@ -336,6 +336,30 @@ void strided_reduce_general_dispatch(
   }
   int ndim = shape.size();
 
+  // Specialize for small dims
+  if (reduction_size * non_col_reductions < 16) {
+    // Select block dims
+    MTL::Size grid_dims = MTL::Size(out_size, 1, 1);
+    MTL::Size group_dims = MTL::Size(std::max(256ul, out_size), 1, 1);
+
+    // Encode arrays
+    set_array_buffer(compute_encoder, in, 0);
+    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+    compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
+    compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 5);
+    compute_encoder->setBytes(
+        strides.data(), strides.size() * sizeof(size_t), 6);
+    compute_encoder->setBytes(&ndim, sizeof(int), 7);
+    compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 8);
+
+    // Dispatch threads
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
+
+    return;
+  }
+
   // Select block dimensions
   // Each thread reads 16 inputs to give it more work
   uint n_inputs_per_thread = REDUCE_N_READS;
