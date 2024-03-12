@@ -3822,7 +3822,24 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       dot(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array
 
-      Dot product of two arrays.
+      Computes the dot product of the two arrays.
+
+      Even though this function follows the numpy API and is defined for
+      multidimensional arrays ``a`` and ``b``, we discourage using it except
+      with 1-dimensional arrays (namely vectors) where it computes their inner
+      product ie the dot-product.
+
+      Depending on the shapes of the inputs this function implements the
+      following operations:
+
+      * If both arrays are one-dimensional then the inner product is computed.
+      * If both arrays are 2-dimensional then this corresponds to calling :func:`matmul`.
+      * If both arrays are scalars then this corresponds to :func:`multiply`.
+      * If ``a`` is N-dimensional and ``b`` is one-dimensional then this again
+        corresponds to :func:`matmul`.
+      * If ``a`` is N-dimensional and ``b`` is M-dimensional then this
+        corresponds to calling :func:`tensordot` with the axes for ``a`` being
+        ``-1`` and for ``b`` being ``-2``.
 
       Args:
         a (array): Input array

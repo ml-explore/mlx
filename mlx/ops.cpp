@@ -3294,11 +3294,8 @@ array dot(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   if (a.ndim() == 0 || b.ndim() == 0) {
     return multiply(a, b, s);
   }
-  if (a.ndim() <= 2 && b.ndim() <= 2) {
+  if (a.ndim() <= 2 && b.ndim() <= 2 || b.ndim() == 1) {
     return matmul(a, b, s);
-  }
-  if (b.ndim() == 1) {
-    return tensordot(a, b, {-1}, {-1}, s);
   }
   if (a.shape(-1) != b.shape(-2)) {
     throw std::invalid_argument(
