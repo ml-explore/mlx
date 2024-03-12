@@ -890,4 +890,10 @@ void QRF::eval_gpu(
   throw std::runtime_error("[QRF::eval_gpu] Metal QR factorization NYI.");
 }
 
+void SVD::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[SVD::eval_gpu] Metal SVD NYI.");
+}
+
 } // namespace mlx::core

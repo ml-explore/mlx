@@ -71,6 +71,7 @@ DEFAULT(Slice)
 DEFAULT_MULTI(Split)
 DEFAULT(Sort)
 DEFAULT(StopGradient)
+DEFAULT_MULTI(SVD)
 DEFAULT(Transpose)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {

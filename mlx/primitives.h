@@ -1840,4 +1840,20 @@ class QRF : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
+/* SVD primitive. */
+class SVD : public Primitive {
+ public:
+  explicit SVD(Stream stream) : Primitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(SVD)
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+};
+
 } // namespace mlx::core
