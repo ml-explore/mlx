@@ -125,7 +125,7 @@ void init_ops(py::module_& m) {
         Args:
             a (array): Input array.
             axis (int or tuple(int), optional): Axes to remove. Defaults
-            to ``None`` in which case all size one axes are removed.
+              to ``None`` in which case all size one axes are removed.
 
         Returns:
             array: The output array with size one axes removed.
@@ -1324,7 +1324,7 @@ void init_ops(py::module_& m) {
           stop (scalar): Stopping value.
           num (int, optional): Number of samples, defaults to ``50``.
           dtype (Dtype, optional): Specifies the data type of the output,
-          default to ``float32``.
+            default to ``float32``.
 
       Returns:
           array: The range of values.
@@ -1622,15 +1622,15 @@ void init_ops(py::module_& m) {
       R"pbdoc(
       tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
 
-        Zeros the array above the given diagonal.
+      Zeros the array above the given diagonal.
 
-        Args:
-          x (array): input array.
-          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
-          stream (Stream, optional): Stream or device. Defaults to ``None``.
+      Args:
+        x (array): input array.
+        k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+        stream (Stream, optional): Stream or device. Defaults to ``None``.
 
-        Returns:
-          array: Array zeroed above the given diagonal
+      Returns:
+        array: Array zeroed above the given diagonal
     )pbdoc");
   m.def(
       "triu",
