@@ -70,6 +70,36 @@ TEST_CASE("test reshape") {
   CHECK_EQ(y.strides()[2], 1);
   CHECK_EQ(y.strides()[3], 8);
   CHECK_EQ(x.data<int32_t>(), y.data<int32_t>());
+
+  // Split transposed (2, 8, 4) -> (2, 8, 2, 2)
+  y = reshape(transpose(x, {0, 2, 1}), {2, 8, 2, 2});
+  y.eval();
+  CHECK_EQ(y.strides()[0], 32);
+  CHECK_EQ(y.strides()[1], 1);
+  CHECK_EQ(y.strides()[2], 16);
+  CHECK_EQ(y.strides()[3], 8);
+  CHECK_EQ(x.data<int32_t>(), y.data<int32_t>());
+
+  // Split transposed (2, 8, 4) -> (2, 8, 2, 1, 2)
+  y = reshape(transpose(x, {0, 2, 1}), {2, 8, 2, 1, 2});
+  y.eval();
+  CHECK_EQ(y.strides()[0], 32);
+  CHECK_EQ(y.strides()[1], 1);
+  CHECK_EQ(y.strides()[2], 16);
+  // y.strides()[3] can be anything since y.shape()[3] == 1
+  CHECK_EQ(y.strides()[4], 8);
+  CHECK_EQ(x.data<int32_t>(), y.data<int32_t>());
+
+  // Split transposed (2, 8, 4) -> (2, 8, 2, 1, 2, 1)
+  y = reshape(transpose(x, {0, 2, 1}), {2, 8, 2, 1, 2, 1});
+  y.eval();
+  CHECK_EQ(y.strides()[0], 32);
+  CHECK_EQ(y.strides()[1], 1);
+  CHECK_EQ(y.strides()[2], 16);
+  // y.strides()[3] can be anything since y.shape()[3] == 1
+  CHECK_EQ(y.strides()[4], 8);
+  // y.strides()[5] can be anything since y.shape()[5] == 1
+  CHECK_EQ(x.data<int32_t>(), y.data<int32_t>());
 }
 
 TEST_CASE("test flatten") {
