@@ -54,6 +54,18 @@ class TestBase(mlx_tests.MLXTestCase):
 
         m.apply_to_modules(assert_training)
 
+    def test_model_with_dict(self):
+        class DictModule(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.weights = {"w1": mx.zeros((2, 2)), "w2": mx.ones((2, 2))}
+
+        model = DictModule()
+        params = dict(tree_flatten(model.parameters()))
+        self.assertEqual(len(params), 2)
+        self.assertTrue(mx.array_equal(params["weights.w1"], mx.zeros((2, 2))))
+        self.assertTrue(mx.array_equal(params["weights.w2"], mx.ones((2, 2))))
+
     def test_save_npz_weights(self):
         def make_model():
             return nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
