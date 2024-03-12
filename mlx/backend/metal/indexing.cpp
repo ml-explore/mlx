@@ -201,15 +201,12 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   for (int i = idx_ndim; i < upd.ndim(); ++i) {
     upd_size *= upd.shape(i);
   }
-
   if (index_nd1_specialization) {
-    bool upd_col_contiguous = upd.flags().col_contiguous;
     compute_encoder->setBytes(
         out.shape().data(), out.shape().size() * sizeof(int), 3);
     compute_encoder->setBytes(
         out.strides().data(), out.strides().size() * sizeof(size_t), 4);
     compute_encoder->setBytes(&upd_size, sizeof(size_t), 5);
-    compute_encoder->setBytes(&upd_col_contiguous, sizeof(bool), 6);
 
     // Set index buffers
     for (int i = 1; i < nidx + 1; ++i) {
