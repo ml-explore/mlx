@@ -56,6 +56,20 @@ TEST_CASE("test reshape") {
   CHECK_THROWS_AS(reshape(x, {1}), std::invalid_argument);
   y = reshape(x, {1, 5, 0});
   CHECK_EQ(y.shape(), std::vector<int>{1, 5, 0});
+
+  // Check that reshaping a transposed array doesn't result in a copy
+  x = reshape(arange(64), {2, 4, 8});
+  x.eval();
+  CHECK_EQ(x.strides()[0], 32);
+  CHECK_EQ(x.strides()[1], 8);
+  CHECK_EQ(x.strides()[2], 1);
+  y = reshape(transpose(x, {0, 2, 1}), {2, 4, 2, 4});
+  y.eval();
+  CHECK_EQ(y.strides()[0], 32);
+  CHECK_EQ(y.strides()[1], 2);
+  CHECK_EQ(y.strides()[2], 1);
+  CHECK_EQ(y.strides()[3], 8);
+  CHECK_EQ(x.data<int32_t>(), y.data<int32_t>());
 }
 
 TEST_CASE("test flatten") {
