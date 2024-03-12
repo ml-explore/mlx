@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "mlx/backend/common/compiled.h"
+#include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/compiled_preamble.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
