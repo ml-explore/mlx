@@ -21,21 +21,24 @@ template <typename T, typename U, typename Op>
     const constant size_t* strides [[buffer(6)]],
     const constant int& ndim [[buffer(7)]],
     const constant size_t& non_col_reductions [[buffer(8)]],
+    const constant int* non_col_shapes [[buffer(9)]],
+    const constant size_t* non_col_strides [[buffer(10)]],
+    const constant int& non_col_ndim [[buffer(11)]],
     uint tid [[thread_position_in_grid]]) {
 
   Op op;
   U total_val = Op::init;
 
   auto out_idx = tid;
-  uint non_col_offset = 0; 
 
-  for(uint i = 0; i < non_col_reductions; i++, non_col_offset += out_size) {
-    uint in_idx = elem_to_loc(
-      out_idx + non_col_offset,
-      shape,
-      strides,
-      ndim
-    );
+  in += elem_to_loc(
+        out_idx,
+        shape,
+        strides,
+        ndim);
+
+  for(uint i = 0; i < non_col_reductions; i++) {
+    size_t in_idx = elem_to_loc(i, non_col_shapes, non_col_strides, non_col_ndim);
 
     for(uint j = 0; j < reduction_size; j++, in_idx += reduction_stride) {
       U val = static_cast<U>(in[in_idx]);
@@ -58,6 +61,9 @@ template <typename T, typename U, typename Op>
       const constant size_t* strides [[buffer(6)]],  \
       const constant int& ndim [[buffer(7)]],  \
       const constant size_t& non_col_reductions [[buffer(8)]], \
+      const constant int* non_col_shapes [[buffer(9)]], \
+      const constant size_t* non_col_strides [[buffer(10)]], \
+      const constant int& non_col_ndim [[buffer(11)]], \
       uint tid [[thread_position_in_grid]]);
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -238,3 +244,7 @@ instantiate_reduce_ops(instantiate_same_col_reduce_na_helper, instantiate_reduce
 instantiate_col_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>)
 instantiate_reduce_from_types(instantiate_col_reduce_general, and, bool, And)
 instantiate_reduce_from_types(instantiate_col_reduce_general, or, bool, Or)
+
+instantiate_col_reduce_small(sumbool_, bool, uint32_t, Sum<uint32_t>)
+instantiate_reduce_from_types(instantiate_col_reduce_small, and, bool, And)
+instantiate_reduce_from_types(instantiate_col_reduce_small, or, bool, Or)

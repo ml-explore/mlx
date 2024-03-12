@@ -4,6 +4,8 @@
 #include <cassert>
 #include <sstream>
 
+#include <iostream>
+
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
@@ -307,13 +309,6 @@ void strided_reduce_general_dispatch(
     metal::Device& d,
     const Stream& s) {
   Dtype out_dtype = out.dtype();
-  bool is_out_64b_int = is_64b_int(out_dtype);
-  auto kernel = (is_out_64b_int)
-      ? d.get_kernel(
-            "col_reduce_general_no_atomics_" + op_name + type_to_name(in))
-      : d.get_kernel("col_reduce_general_" + op_name + type_to_name(in));
-
-  compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
   size_t reduction_size = plan.shape.back();
@@ -327,6 +322,11 @@ void strided_reduce_general_dispatch(
   for (auto s : shape) {
     non_col_reductions *= static_cast<size_t>(s);
   }
+
+  auto non_col_shapes = shape;
+  auto non_col_strides = strides;
+  int non_col_ndim = shape.size();
+
   auto [rem_shape, rem_strides] = shapes_without_reduction_axes(in, axes);
   for (auto s : rem_shape) {
     shape.push_back(s);
@@ -338,9 +338,14 @@ void strided_reduce_general_dispatch(
 
   // Specialize for small dims
   if (reduction_size * non_col_reductions < 16) {
+    // Select kernel
+    auto kernel =
+        d.get_kernel("col_reduce_small_" + op_name + type_to_name(in));
+    compute_encoder->setComputePipelineState(kernel);
+
     // Select block dims
     MTL::Size grid_dims = MTL::Size(out_size, 1, 1);
-    MTL::Size group_dims = MTL::Size(std::max(256ul, out_size), 1, 1);
+    MTL::Size group_dims = MTL::Size(256ul, 1, 1);
 
     // Encode arrays
     set_array_buffer(compute_encoder, in, 0);
@@ -353,12 +358,26 @@ void strided_reduce_general_dispatch(
         strides.data(), strides.size() * sizeof(size_t), 6);
     compute_encoder->setBytes(&ndim, sizeof(int), 7);
     compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 8);
+    compute_encoder->setBytes(
+        non_col_shapes.data(), non_col_ndim * sizeof(int), 9);
+    compute_encoder->setBytes(
+        non_col_strides.data(), non_col_ndim * sizeof(size_t), 10);
+    compute_encoder->setBytes(&non_col_ndim, sizeof(int), 11);
 
     // Dispatch threads
     compute_encoder->dispatchThreads(grid_dims, group_dims);
 
     return;
   }
+
+  // Select kernel
+  bool is_out_64b_int = is_64b_int(out_dtype);
+  auto kernel = (is_out_64b_int)
+      ? d.get_kernel(
+            "col_reduce_general_no_atomics_" + op_name + type_to_name(in))
+      : d.get_kernel("col_reduce_general_" + op_name + type_to_name(in));
+
+  compute_encoder->setComputePipelineState(kernel);
 
   // Select block dimensions
   // Each thread reads 16 inputs to give it more work
