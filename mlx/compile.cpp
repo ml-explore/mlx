@@ -449,7 +449,7 @@ void compile_simplify(
                 std::swap(src_idx, dst_idx);
               }
               auto& src = parents->second[src_idx].first;
-              auto& dst = parents->second[src_idx].first;
+              auto& dst = parents->second[dst_idx].first;
               if (src.id() != dst.id() && array_equivalent(src, dst) &&
                   output_set.find(src.id()) == output_set.end()) {
                 merge(dst, src, parents_map);
