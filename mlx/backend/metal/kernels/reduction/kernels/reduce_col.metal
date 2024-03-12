@@ -26,6 +26,9 @@ template <typename T, typename U, typename Op>
     const constant int& non_col_ndim [[buffer(11)]],
     uint tid [[thread_position_in_grid]]) {
 
+  // Appease the compiler
+  (void)out_size;
+
   Op op;
   U total_val = Op::init;
 
@@ -33,9 +36,9 @@ template <typename T, typename U, typename Op>
 
   in += elem_to_loc(
         out_idx,
-        shape,
-        strides,
-        ndim);
+        shape + non_col_ndim,
+        strides + non_col_ndim,
+        ndim - non_col_ndim);
 
   for(uint i = 0; i < non_col_reductions; i++) {
     size_t in_idx = elem_to_loc(i, non_col_shapes, non_col_strides, non_col_ndim);
