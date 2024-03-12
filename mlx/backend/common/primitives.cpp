@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <iostream>
 #include <numeric>
 #include <sstream>
 
@@ -472,9 +473,8 @@ std::pair<bool, std::vector<size_t>> Reshape::prepare_reshape(
     const array& in,
     const array& out) {
   // Special case for scalars
-  if (in.ndim() == 0) {
-    std::vector<size_t> out_strides(out.ndim(), 0);
-    return {false, out_strides};
+  if (in.size() == 0) {
+    return {false, out.strides()};
   }
 
   // Firstly let's collapse all the contiguous dimensions of the input
