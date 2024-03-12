@@ -631,6 +631,28 @@ class TestCompile(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(expected[0], out[0]))
         self.assertTrue(mx.allclose(expected[1], out[1]))
 
+        def fun(w1, w2, x):
+            x = x @ w1
+            y = x @ w2
+            x = x + y * y
+            return (x * x).sum()
+
+        w1 = mx.zeros((4, 4))
+        w2 = mx.zeros((4, 4))
+        x = mx.zeros((4, 4))
+
+        def step(w1, w2, x):
+            loss, gradient = mx.value_and_grad(fun)(w1, w2, x)
+            w1 = w1 + gradient
+            return loss, w1
+
+        mx.eval(x, w1, w2)
+        expected = step(w1, w2, x)
+        out = mx.compile(step)(w1, w2, x)
+
+        self.assertTrue(mx.allclose(expected[0], out[0]))
+        self.assertTrue(mx.allclose(expected[1], out[1]))
+
 
 if __name__ == "__main__":
     unittest.main()

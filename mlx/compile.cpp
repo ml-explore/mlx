@@ -415,7 +415,7 @@ void compile_simplify(
   }
   tape = std::move(new_tape);
 
-  std::map<std::uintptr_t, uint32_t> tape_order;
+  std::unordered_map<std::uintptr_t, uint32_t> tape_order;
   for (uint32_t i = 0; i < tape.size(); ++i) {
     tape_order.insert({tape[i].id(), i});
   }
@@ -444,12 +444,12 @@ void compile_simplify(
               }
               auto src_idx = j;
               auto dst_idx = i;
-              auto& src = parents->second[j].first;
-              auto& dst = parents->second[i].first;
-              if (tape_order[src.id()] < tape_order[dst.id()]) {
+              if (tape_order[parents->second[src_idx].first.id()] <
+                  tape_order[parents->second[dst_idx].first.id()]) {
                 std::swap(src_idx, dst_idx);
-                std::swap(src, dst);
               }
+              auto& src = parents->second[src_idx].first;
+              auto& dst = parents->second[src_idx].first;
               if (src.id() != dst.id() && array_equivalent(src, dst) &&
                   output_set.find(src.id()) == output_set.end()) {
                 merge(dst, src, parents_map);
