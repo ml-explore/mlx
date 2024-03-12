@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <metal_stdlib>
 #include <metal_simdgroup>
@@ -22,7 +22,8 @@ template <
   const int BM, /* Threadgroup rows (in threads) */
   const int BN, /* Threadgroup cols (in threads) */
   const int TM, /* Thread rows (in elements) */
-  const int TN > /* Thread cols (in elements) */ 
+  const int TN , /* Thread cols (in elements) */ 
+  const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
 struct GEMVKernel {
 
   static_assert(BN == SIMD_SIZE, "gemv block must have a width of SIMD_SIZE");
@@ -48,11 +49,16 @@ struct GEMVKernel {
   MLX_MTL_CONST short tgp_mem_size = BN * TN * 2;
 
   static METAL_FUNC void run(
-      const device T* mat,
-      const device T* in_vec,
-      device T* out_vec, 
-      const constant int& in_vec_size [[buffer(3)]],
-      const constant int& out_vec_size [[buffer(4)]],
+      const device T* mat [[buffer(0)]],
+      const device T* in_vec [[buffer(1)]],
+      const device T* bias [[buffer(2)]],
+      device T* out_vec [[buffer(3)]], 
+      const constant int& in_vec_size [[buffer(4)]],
+      const constant int& out_vec_size [[buffer(5)]],
+      const constant int& marix_ld [[buffer(6)]],
+      const constant float& alpha [[buffer(7)]],
+      const constant float& beta [[buffer(8)]],
+      const constant int& bias_stride [[buffer(14)]],
       threadgroup T* tgp_memory [[threadgroup(0)]],
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]],
@@ -81,7 +87,7 @@ struct GEMVKernel {
     out_row = out_row + TM <= out_vec_size ? out_row : out_vec_size - TM;
 
     // Advance matrix
-    mat += out_row * in_vec_size;
+    mat += out_row * marix_ld;
 
     // Loop over in_vec in blocks of BN * TN
     for(int bn = simd_lid * TN; bn < in_vec_size; bn += BN * TN) {
@@ -124,14 +130,14 @@ struct GEMVKernel {
         if(bn + TN <= in_vec_size) {
           #pragma clang loop unroll(full)
           for(int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[tm * in_vec_size + bn + tn];
+            inter[tn] = mat[tm * marix_ld + bn + tn];
           }
 
         } else { // Edgecase
           #pragma clang loop unroll(full)
           for(int tn = 0; tn < TN; tn++) {
             int col_idx = (bn + tn) < in_vec_size ? (bn + tn) : (in_vec_size - 1);
-            inter[tn] = mat[tm * in_vec_size + col_idx];
+            inter[tn] = mat[tm * marix_ld + col_idx];
           }
         }
 
@@ -154,7 +160,13 @@ struct GEMVKernel {
 
       #pragma clang loop unroll(full)
       for(int tm = 0; tm < TM; tm++) {
-        out_vec[out_row + tm] = result[tm];
+        if(kDoAxpby) {
+          out_vec[out_row + tm] = 
+              static_cast<T>(alpha) * result[tm] + 
+              static_cast<T>(beta) * bias[(out_row + tm) * bias_stride];
+        } else {
+          out_vec[out_row + tm] = result[tm];
+        }
       }
 
     }
@@ -172,7 +184,8 @@ template <
   const int BM, /* Threadgroup rows (in threads) */
   const int BN, /* Threadgroup cols (in threads) */
   const int TM, /* Thread rows (in elements) */
-  const int TN > /* Thread cols (in elements) */ 
+  const int TN, /* Thread cols (in elements) */ 
+  const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
 struct GEMVTKernel {
 
   // - The matrix of size (M = in_vec_size, N = out_vec_size) is divided up 
@@ -197,11 +210,16 @@ struct GEMVTKernel {
   MLX_MTL_CONST short tgp_mem_size = BN * BM * TN;
 
   static METAL_FUNC void run(
-      const device T* mat,
-      const device T* in_vec,
-      device T* out_vec, 
-      const constant int& in_vec_size [[buffer(3)]],
-      const constant int& out_vec_size [[buffer(4)]],
+      const device T* mat [[buffer(0)]],
+      const device T* in_vec [[buffer(1)]],
+      const device T* bias [[buffer(2)]],
+      device T* out_vec [[buffer(3)]], 
+      const constant int& in_vec_size [[buffer(4)]],
+      const constant int& out_vec_size [[buffer(5)]],
+      const constant int& marix_ld [[buffer(6)]],
+      const constant float& alpha [[buffer(7)]],
+      const constant float& beta [[buffer(8)]],
+      const constant int& bias_stride [[buffer(14)]],
       threadgroup T* tgp_memory [[threadgroup(0)]],
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]],
@@ -245,7 +263,7 @@ struct GEMVTKernel {
           #pragma clang loop unroll(full)
           for(int tm = 0; tm < TM; tm++) {
             for(int tn = 0; tn < TN; tn++) {
-              inter[tn] = mat[(bm + tm) * out_vec_size + out_col + tn];
+              inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
             }
             for(int tn = 0; tn < TN; tn++) {
               result[tn] += v_coeff[tm] * inter[tn];
@@ -257,7 +275,7 @@ struct GEMVTKernel {
             v_coeff[tm] = in_vec[bm + tm];
 
             for(int tn = 0; tn < TN; tn++) {
-              inter[tn] = mat[(bm + tm) * out_vec_size + out_col + tn];
+              inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
             }
             for(int tn = 0; tn < TN; tn++) {
               result[tn] += v_coeff[tm] * inter[tn];
@@ -292,13 +310,17 @@ struct GEMVTKernel {
 
       #pragma clang loop unroll(full)
       for(int j = 0; j < TN; j++) {
-        out_vec[out_col + j] = result[j];
+
+        if(kDoAxpby) {
+          out_vec[out_col + j] = 
+              static_cast<T>(alpha) * result[j] + 
+              static_cast<T>(beta) * bias[(out_col + j) * bias_stride];
+        } else {
+          out_vec[out_col + j] = result[j];
+        }
       }
     }
-
   }
-
-
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -310,78 +332,64 @@ template <
     const int BM, /* Threadgroup rows (in threads) */
     const int BN, /* Threadgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
-    const int TN> /* Thread cols (in elements) */
+    const int TN, /* Thread cols (in elements) */
+    const bool kDoNCBatch, /* Batch ndim > 1 */
+    const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
 [[kernel, max_total_threads_per_threadgroup(BM * BN)]] void gemv(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
-    device T* out_vec [[buffer(2)]], 
-    const constant int& in_vec_size [[buffer(3)]],
-    const constant int& out_vec_size [[buffer(4)]],
-    const constant int& vector_batch_stride [[buffer(5)]],
-    const constant int& matrix_batch_stride [[buffer(6)]],
+    const device T* bias [[buffer(2)]],
+    device T* out_vec [[buffer(3)]], 
+    const constant int& in_vec_size [[buffer(4)]],
+    const constant int& out_vec_size [[buffer(5)]],
+    const constant int& marix_ld [[buffer(6)]],
+    const constant float& alpha [[buffer(7)]],
+    const constant float& beta [[buffer(8)]],
+    const constant int& batch_ndim [[buffer(9)]],
+    const constant int* batch_shape [[buffer(10)]],
+    const constant size_t* vector_batch_stride [[buffer(11)]],
+    const constant size_t* matrix_batch_stride [[buffer(12)]],
+    const constant size_t* bias_batch_stride [[buffer(13)]],
+    const constant int& bias_stride [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
 
-  using gemv_kernel = GEMVKernel<T, BM, BN, TM, TN>;
+  using gemv_kernel = GEMVKernel<T, BM, BN, TM, TN, kDoAxpby>;
   threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
 
   // Update batch offsets
-  in_vec += tid.z * vector_batch_stride;
-  mat += tid.z * matrix_batch_stride;
+  if(kDoNCBatch) {
+    in_vec += elem_to_loc(tid.z, batch_shape, vector_batch_stride, batch_ndim);
+    mat += elem_to_loc(tid.z, batch_shape, matrix_batch_stride, batch_ndim);
+
+    if(kDoAxpby) {
+      bias += elem_to_loc(tid.z, batch_shape, bias_batch_stride, batch_ndim);
+    }
+
+  } else {
+    in_vec += tid.z * vector_batch_stride[0];
+    mat += tid.z * matrix_batch_stride[0];
+
+    if(kDoAxpby) {
+      bias += tid.z * bias_batch_stride[0];
+    }
+  }
+
   out_vec += tid.z * out_vec_size;
 
   gemv_kernel::run( 
     mat, 
     in_vec, 
+    bias,
     out_vec,
     in_vec_size,
     out_vec_size,
-    tgp_memory,
-    tid,
-    lid,
-    simd_gid,
-    simd_lid
-  );
-
-}
-
-template <
-    typename T, 
-    const int BM, /* Threadgroup rows (in threads) */
-    const int BN, /* Threadgroup cols (in threads) */
-    const int TM, /* Thread rows (in elements) */
-    const int TN> /* Thread cols (in elements) */
-[[kernel, max_total_threads_per_threadgroup(BM * BN)]] void gemv_nc(
-    const device T* mat [[buffer(0)]],
-    const device T* in_vec [[buffer(1)]],
-    device T* out_vec [[buffer(2)]], 
-    const constant int& in_vec_size [[buffer(3)]],
-    const constant int& out_vec_size [[buffer(4)]],
-    const constant int& nc_dim [[buffer(5)]],
-    const device int* nc_shape [[buffer(6)]],
-    const device size_t* nc_strides_vec [[buffer(7)]],
-    const device size_t* nc_strides_mat [[buffer(8)]],
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]]) {
-
-  using gemv_kernel = GEMVKernel<T, BM, BN, TM, TN>;
-  threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
-
-  // Update batch offsets
-  in_vec += elem_to_loc(tid.z, nc_shape, nc_strides_vec, nc_dim);
-  mat += elem_to_loc(tid.z, nc_shape, nc_strides_mat, nc_dim);
-  out_vec += tid.z * out_vec_size;
-
-  gemv_kernel::run( 
-    mat, 
-    in_vec, 
-    out_vec,
-    in_vec_size,
-    out_vec_size,
+    marix_ld,
+    alpha,
+    beta,
+    bias_stride,
     tgp_memory,
     tid,
     lid,
@@ -392,41 +400,34 @@ template <
 }
 
 
-#define instantiate_gemv_c(name, itype, bm, bn, tm, tn) \
-  template [[host_name("gemv_" #name "_bm" #bm "_bn" #bn "_tm" #tm "_tn" #tn)]] \
-  [[kernel]] void gemv<itype, bm, bn, tm, tn>( \
+#define instantiate_gemv_helper(name, itype, bm, bn, tm, tn, nc, axpby) \
+  template [[host_name("gemv_" #name "_bm" #bm "_bn" #bn "_tm" #tm "_tn" #tn "_nc" #nc "_axpby" #axpby)]] \
+  [[kernel]] void gemv<itype, bm, bn, tm, tn, nc, axpby>( \
     const device itype* mat [[buffer(0)]], \
-    const device itype* vec [[buffer(1)]], \
-    device itype* out [[buffer(2)]], \
-    const constant int& in_vec_size [[buffer(3)]], \
-    const constant int& out_vec_size [[buffer(4)]], \
-    const constant int& vector_batch_stride [[buffer(5)]], \
-    const constant int& matrix_batch_stride [[buffer(6)]], \
-    uint3 tid [[threadgroup_position_in_grid]], \
-    uint3 lid [[thread_position_in_threadgroup]], \
-    uint simd_gid [[simdgroup_index_in_threadgroup]], \
-    uint simd_lid [[thread_index_in_simdgroup]]);
-
-#define instantiate_gemv_nc(name, itype, bm, bn, tm, tn) \
-  template [[host_name("gemv_" #name "_bm" #bm "_bn" #bn "_tm" #tm "_tn" #tn "_nc")]] \
-  [[kernel]] void gemv_nc<itype, bm, bn, tm, tn>( \
-    const device itype* mat [[buffer(0)]], \
-    const device itype* vec [[buffer(1)]], \
-    device itype* out [[buffer(2)]], \
-    const constant int& in_vec_size [[buffer(3)]], \
-    const constant int& out_vec_size [[buffer(4)]], \
-    const constant int& nc_dim [[buffer(5)]], \
-    const device int* nc_shape [[buffer(6)]], \
-    const device size_t* nc_strides_vec [[buffer(7)]], \
-    const device size_t* nc_strides_mat [[buffer(8)]], \
+    const device itype* in_vec [[buffer(1)]], \
+    const device itype* bias [[buffer(2)]], \
+    device itype* out_vec [[buffer(3)]], \
+    const constant int& in_vec_size [[buffer(4)]], \
+    const constant int& out_vec_size [[buffer(5)]], \
+    const constant int& marix_ld [[buffer(6)]], \
+    const constant float& alpha [[buffer(7)]], \
+    const constant float& beta [[buffer(8)]], \
+    const constant int& batch_ndim [[buffer(9)]], \
+    const constant int* batch_shape [[buffer(10)]], \
+    const constant size_t* vector_batch_stride [[buffer(11)]], \
+    const constant size_t* matrix_batch_stride [[buffer(12)]], \
+    const constant size_t* bias_batch_stride [[buffer(13)]], \
+    const constant int& bias_stride [[buffer(14)]], \
     uint3 tid [[threadgroup_position_in_grid]], \
     uint3 lid [[thread_position_in_threadgroup]], \
     uint simd_gid [[simdgroup_index_in_threadgroup]], \
     uint simd_lid [[thread_index_in_simdgroup]]);
 
 #define instantiate_gemv(name, itype, bm, bn, tm, tn) \
-  instantiate_gemv_c(name, itype, bm, bn, tm, tn) \
-  instantiate_gemv_nc(name, itype, bm, bn, tm, tn)
+  instantiate_gemv_helper(name, itype, bm, bn, tm, tn, 0, 0) \
+  instantiate_gemv_helper(name, itype, bm, bn, tm, tn, 0, 1) \
+  instantiate_gemv_helper(name, itype, bm, bn, tm, tn, 1, 0) \
+  instantiate_gemv_helper(name, itype, bm, bn, tm, tn, 1, 1)
 
 #define instantiate_gemv_blocks(name, itype) \
   instantiate_gemv(name, itype, 4, 32, 1, 4) \
@@ -446,77 +447,64 @@ template <
     const int BM, /* Threadgroup rows (in threads) */
     const int BN, /* Threadgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
-    const int TN> /* Thread cols (in elements) */
+    const int TN, /* Thread cols (in elements) */
+    const bool kDoNCBatch, /* Batch ndim > 1 */
+    const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
 [[kernel, max_total_threads_per_threadgroup(BM * BN)]] void gemv_t(
     const device T* mat [[buffer(0)]],
     const device T* in_vec [[buffer(1)]],
-    device T* out_vec [[buffer(2)]], 
-    const constant int& in_vec_size [[buffer(3)]],
-    const constant int& out_vec_size [[buffer(4)]],
-    const constant int& vector_batch_stride [[buffer(5)]],
-    const constant int& matrix_batch_stride [[buffer(6)]],
+    const device T* bias [[buffer(2)]],
+    device T* out_vec [[buffer(3)]], 
+    const constant int& in_vec_size [[buffer(4)]],
+    const constant int& out_vec_size [[buffer(5)]],
+    const constant int& marix_ld [[buffer(6)]],
+    const constant float& alpha [[buffer(7)]],
+    const constant float& beta [[buffer(8)]],
+    const constant int& batch_ndim [[buffer(9)]],
+    const constant int* batch_shape [[buffer(10)]],
+    const constant size_t* vector_batch_stride [[buffer(11)]],
+    const constant size_t* matrix_batch_stride [[buffer(12)]],
+    const constant size_t* bias_batch_stride [[buffer(13)]],
+    const constant int& bias_stride [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
 
-  using gemv_kernel = GEMVTKernel<T, BM, BN, TM, TN>;
+  using gemv_kernel = GEMVTKernel<T, BM, BN, TM, TN, kDoAxpby>;
   threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
 
   // Update batch offsets
-  in_vec += tid.z * vector_batch_stride;
-  mat += tid.z * matrix_batch_stride;
+  if(kDoNCBatch) {
+    in_vec += elem_to_loc(tid.z, batch_shape, vector_batch_stride, batch_ndim);
+    mat += elem_to_loc(tid.z, batch_shape, matrix_batch_stride, batch_ndim);
+
+    if(kDoAxpby) {
+      bias += elem_to_loc(tid.z, batch_shape, bias_batch_stride, batch_ndim);
+    }
+
+  } else {
+    in_vec += tid.z * vector_batch_stride[0];
+    mat += tid.z * matrix_batch_stride[0];
+
+    if(kDoAxpby) {
+      bias += tid.z * bias_batch_stride[0];
+    }
+  }
+
   out_vec += tid.z * out_vec_size;
 
   gemv_kernel::run( 
     mat, 
     in_vec, 
+    bias,
     out_vec,
     in_vec_size,
     out_vec_size,
-    tgp_memory,
-    tid,
-    lid,
-    simd_gid,
-    simd_lid
-  );
-}
-
-template <
-    typename T, 
-    const int BM, /* Threadgroup rows (in threads) */
-    const int BN, /* Threadgroup cols (in threads) */
-    const int TM, /* Thread rows (in elements) */
-    const int TN> /* Thread cols (in elements) */
-[[kernel, max_total_threads_per_threadgroup(BM * BN)]] void gemv_t_nc(
-    const device T* mat [[buffer(0)]],
-    const device T* in_vec [[buffer(1)]],
-    device T* out_vec [[buffer(2)]], 
-    const constant int& in_vec_size [[buffer(3)]],
-    const constant int& out_vec_size [[buffer(4)]],
-    const constant int& nc_dim [[buffer(5)]],
-    const device int* nc_shape [[buffer(6)]],
-    const device size_t* nc_strides_vec [[buffer(7)]],
-    const device size_t* nc_strides_mat [[buffer(8)]],
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint simd_gid [[simdgroup_index_in_threadgroup]],
-    uint simd_lid [[thread_index_in_simdgroup]]) {
-
-  using gemv_kernel = GEMVTKernel<T, BM, BN, TM, TN>;
-  threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
-
-  // Update batch offsets
-  in_vec += elem_to_loc(tid.z, nc_shape, nc_strides_vec, nc_dim);
-  mat += elem_to_loc(tid.z, nc_shape, nc_strides_mat, nc_dim);
-  out_vec += tid.z * out_vec_size;
-
-  gemv_kernel::run( 
-    mat, 
-    in_vec, 
-    out_vec,
-    in_vec_size,
-    out_vec_size,
+    marix_ld,
+    alpha,
+    beta,
+    bias_stride,
     tgp_memory,
     tid,
     lid,
@@ -526,41 +514,34 @@ template <
 
 }
 
-#define instantiate_gemv_t_c(name, itype, bm, bn, tm, tn) \
-  template [[host_name("gemv_t_" #name "_bm" #bm "_bn" #bn "_tm" #tm "_tn" #tn)]] \
-  [[kernel]] void gemv_t<itype, bm, bn, tm, tn>( \
+#define instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, nc, axpby) \
+  template [[host_name("gemv_t_" #name "_bm" #bm "_bn" #bn "_tm" #tm "_tn" #tn "_nc" #nc "_axpby" #axpby)]] \
+  [[kernel]] void gemv_t<itype, bm, bn, tm, tn, nc, axpby>( \
     const device itype* mat [[buffer(0)]], \
-    const device itype* vec [[buffer(1)]], \
-    device itype* out [[buffer(2)]], \
-    const constant int& in_vec_size [[buffer(3)]], \
-    const constant int& out_vec_size [[buffer(4)]], \
-    const constant int& vector_batch_stride [[buffer(5)]], \
-    const constant int& matrix_batch_stride [[buffer(6)]], \
-    uint3 tid [[threadgroup_position_in_grid]], \
-    uint3 lid [[thread_position_in_threadgroup]], \
-    uint simd_gid [[simdgroup_index_in_threadgroup]], \
-    uint simd_lid [[thread_index_in_simdgroup]]);
-
-#define instantiate_gemv_t_nc(name, itype, bm, bn, tm, tn) \
-  template [[host_name("gemv_t_" #name "_bm" #bm "_bn" #bn "_tm" #tm "_tn" #tn "_nc")]] \
-  [[kernel]] void gemv_t_nc<itype, bm, bn, tm, tn>( \
-    const device itype* mat [[buffer(0)]], \
-    const device itype* vec [[buffer(1)]], \
-    device itype* out [[buffer(2)]], \
-    const constant int& in_vec_size [[buffer(3)]], \
-    const constant int& out_vec_size [[buffer(4)]], \
-    const constant int& nc_dim [[buffer(5)]], \
-    const device int* nc_shape [[buffer(6)]], \
-    const device size_t* nc_strides_vec [[buffer(7)]], \
-    const device size_t* nc_strides_mat [[buffer(8)]], \
+    const device itype* in_vec [[buffer(1)]], \
+    const device itype* bias [[buffer(2)]], \
+    device itype* out_vec [[buffer(3)]], \
+    const constant int& in_vec_size [[buffer(4)]], \
+    const constant int& out_vec_size [[buffer(5)]], \
+    const constant int& marix_ld [[buffer(6)]], \
+    const constant float& alpha [[buffer(7)]], \
+    const constant float& beta [[buffer(8)]], \
+    const constant int& batch_ndim [[buffer(9)]], \
+    const constant int* batch_shape [[buffer(10)]], \
+    const constant size_t* vector_batch_stride [[buffer(11)]], \
+    const constant size_t* matrix_batch_stride [[buffer(12)]], \
+    const constant size_t* bias_batch_stride [[buffer(13)]], \
+    const constant int& bias_stride [[buffer(14)]], \
     uint3 tid [[threadgroup_position_in_grid]], \
     uint3 lid [[thread_position_in_threadgroup]], \
     uint simd_gid [[simdgroup_index_in_threadgroup]], \
     uint simd_lid [[thread_index_in_simdgroup]]);
 
 #define instantiate_gemv_t(name, itype, bm, bn, tm, tn) \
-  instantiate_gemv_t_c(name, itype, bm, bn, tm, tn) \
-  instantiate_gemv_t_nc(name, itype, bm, bn, tm, tn)
+  instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 0, 0) \
+  instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 0, 1) \
+  instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 1, 0) \
+  instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 1, 1)
 
 #define instantiate_gemv_t_blocks(name, itype) \
   instantiate_gemv_t(name, itype, 8, 8, 4, 1) \

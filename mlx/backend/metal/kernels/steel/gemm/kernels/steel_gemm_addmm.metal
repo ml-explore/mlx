@@ -27,7 +27,10 @@ template <typename T,
     const device T *B [[buffer(1)]],
     const device T *C [[buffer(2)]],
     device T *D [[buffer(3)]],
-    const constant GEMMAddMMParams* params [[buffer(4)]],
+    const constant GEMMParams* params [[buffer(4)]],
+    const constant GEMMAddMMParams* addmm_params [[buffer(5)]],
+    const constant int* batch_shape [[buffer(6)]],
+    const constant size_t* batch_strides [[buffer(7)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
@@ -50,9 +53,24 @@ template <typename T,
     threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
 
     // Adjust for batch
-    A += params->batch_stride_a * tid.z;
-    B += params->batch_stride_b * tid.z;
-    C += params->batch_stride_c * tid.z;
+    if(params->batch_ndim > 1) {
+      const constant size_t* A_bstrides = batch_strides;
+      const constant size_t* B_bstrides = batch_strides + params->batch_ndim;
+      const constant size_t* C_bstrides = B_bstrides + params->batch_ndim;
+
+      ulong3 batch_offsets = elem_to_loc_broadcast(
+          tid.z, batch_shape, A_bstrides, B_bstrides, C_bstrides, params->batch_ndim);
+
+      A += batch_offsets.x;
+      B += batch_offsets.y;
+      C += batch_offsets.z;
+      
+    } else {
+      A += params->batch_stride_a * tid.z;
+      B += params->batch_stride_b * tid.z;
+      C += addmm_params->batch_stride_c * tid.z;
+    }
+
     D += params->batch_stride_d * tid.z;
 
     const int tid_y = ((tid.y) << params->swizzle_log) +
@@ -71,8 +89,9 @@ template <typename T,
 
     A += transpose_a ? c_row : c_row * params->lda;
     B += transpose_b ? c_col * params->ldb : c_col;
-    C += c_row * params->ldc + c_col * params->fdc;
     D += c_row * params->ldd + c_col;
+
+    C += c_row * addmm_params->ldc + c_col * addmm_params->fdc;
 
     // Prepare threadgroup loading operations
     thread loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
@@ -83,7 +102,7 @@ template <typename T,
 
     int gemm_k_iterations = params->gemm_k_iterations_aligned;
 
-    const Epilogue epilogue_op(params->alpha, params->beta);
+    const Epilogue epilogue_op(addmm_params->alpha, addmm_params->beta);
 
     ///////////////////////////////////////////////////////////////////////////////
     // MNK aligned loop
@@ -121,7 +140,7 @@ template <typename T,
       }
 
       // Store results to device memory
-      mma_op.store_result(D, params->ldd, C, params->ldc, params->fdc, epilogue_op);
+      mma_op.store_result(D, params->ldd, C, addmm_params->ldc, addmm_params->fdc, epilogue_op);
       return;
 
     }
@@ -145,7 +164,7 @@ template <typename T,
             leftover_bk,
             LoopAlignment<true, true, K_aligned>{});
 
-        mma_op.store_result(D, params->ldd, C, params->ldc, params->fdc, epilogue_op);
+        mma_op.store_result(D, params->ldd, C, addmm_params->ldc, addmm_params->fdc, epilogue_op);
         return;
 
       } else if (tgp_bn == BN) {
@@ -163,7 +182,7 @@ template <typename T,
 
         return mma_op.store_result_safe(
             D, params->ldd, 
-            C, params->ldc, params->fdc,
+            C, addmm_params->ldc, addmm_params->fdc,
             short2(tgp_bn, tgp_bm), 
             epilogue_op);
 
@@ -182,7 +201,7 @@ template <typename T,
 
         return mma_op.store_result_safe(
             D, params->ldd, 
-            C, params->ldc, params->fdc,
+            C, addmm_params->ldc, addmm_params->fdc,
             short2(tgp_bn, tgp_bm), 
             epilogue_op);
 
@@ -201,7 +220,7 @@ template <typename T,
 
         return mma_op.store_result_safe(
             D, params->ldd, 
-            C, params->ldc, params->fdc,
+            C, addmm_params->ldc, addmm_params->fdc,
             short2(tgp_bn, tgp_bm), 
             epilogue_op);
       }
@@ -219,7 +238,10 @@ template <typename T,
       const device itype *B [[buffer(1)]], \
       const device itype *C [[buffer(2)]], \
       device itype *D [[buffer(3)]], \
-      const constant GEMMAddMMParams* params [[buffer(4)]], \
+      const constant GEMMParams* gemm_params [[buffer(4)]], \
+      const constant GEMMAddMMParams* params [[buffer(5)]], \
+      const constant int* batch_shape [[buffer(6)]], \
+      const constant size_t* batch_strides [[buffer(7)]], \
       uint simd_lane_id [[thread_index_in_simdgroup]], \
       uint simd_group_id [[simdgroup_index_in_threadgroup]], \
       uint3 tid [[threadgroup_position_in_grid]], \

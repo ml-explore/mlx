@@ -26,6 +26,9 @@ void steel_matmul(
     int ldb,
     bool transpose_a,
     bool transpose_b,
-    std::vector<array>& copies);
+    std::vector<array>& copies,
+    std::vector<int> batch_shape = {},
+    std::vector<size_t> A_batch_stride = {},
+    std::vector<size_t> B_batch_stride = {});
 
 } // namespace mlx::core
