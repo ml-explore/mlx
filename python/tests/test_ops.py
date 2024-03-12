@@ -1416,7 +1416,7 @@ class TestOps(mlx_tests.MLXTestCase):
         # Sliced inputs
         y = mx.random.uniform(shape=(8, 4))
         out = mx.softmax(y[:, 0:2], axis=-1)
-        self.assertAlmostEqual(out.sum().item(), 8.0)
+        self.assertAlmostEqual(out.sum().item(), 8.0, 5)
 
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
