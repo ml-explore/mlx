@@ -4,8 +4,6 @@
 #include <cassert>
 #include <sstream>
 
-#include <iostream>
-
 #include "mlx/backend/common/reduce.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
