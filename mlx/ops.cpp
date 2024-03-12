@@ -3406,13 +3406,13 @@ array addmm(
   auto c_broadcast_shape = broadcast_shapes(c.shape(), out_shape_adjusted);
   c = broadcast_to(c, c_broadcast_shape, s);
 
-  if (out_shape.size() != c.ndim()) {
+  if (in_a_ndim == 1 || in_b_ndim == 1) {
     auto c_reshape = c.shape();
-    if (in_b_ndim == 1 && c_reshape[c.ndim() - 1] != 1) {
+    if (in_b_ndim == 1) {
       c_reshape.push_back(1);
     }
 
-    if (in_a_ndim == 1 && c_reshape[c_reshape.size() - 2] != 1) {
+    if (in_a_ndim == 1) {
       c_reshape.push_back(c_reshape.back());
       c_reshape[c_reshape.size() - 2] = 1;
     }

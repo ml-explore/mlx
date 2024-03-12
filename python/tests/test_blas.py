@@ -575,15 +575,28 @@ class TestBlas(mlx_tests.MLXTestCase):
             self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
 
         # Matmul with vector
+        a_npy = np.random.normal(0.0, 1.0 / 128, (16,)).astype(np.float32)
+        b_npy = np.random.normal(0.0, 1.0 / 128, (32, 16, 128)).astype(np.float32)
+        a_mlx = mx.array(a_npy)
+        b_mlx = mx.array(b_npy)
+
+        for c_shape in ((1,), (128,), (32, 128)):
+            c_npy = np.ones(c_shape).astype(np.float32)
+            c_mlx = mx.array(c_npy)
+
+            d_npy = alpha * (a_npy @ b_npy) + beta * c_npy
+            d_mlx = mx.addmm(c_mlx, a_mlx, b_mlx, alpha, beta)
+
+            self.assertListEqual(list(d_npy.shape), list(d_mlx.shape))
+            self.assertTrue(np.allclose(d_mlx, d_npy, atol=1e-5))
+
+        # Matmul with vector
         a_npy = np.random.normal(0.0, 1.0 / 128, (32, 128, 16)).astype(np.float32)
         b_npy = np.random.normal(0.0, 1.0 / 128, (16,)).astype(np.float32)
         a_mlx = mx.array(a_npy)
         b_mlx = mx.array(b_npy)
 
-        for c_shape in (
-            (1,),
-            (32, 128),
-        ):
+        for c_shape in ((1,), (32, 128)):
             c_npy = np.ones(c_shape).astype(np.float32)
             c_mlx = mx.array(c_npy)
 
@@ -635,16 +648,12 @@ class TestBlas(mlx_tests.MLXTestCase):
             out_ref, dout_ref = mx.vjp(
                 f_ref,
                 [c, a, b],
-                [
-                    cotan,
-                ],
+                [cotan],
             )
             out_test, dout_test = mx.vjp(
                 f_test,
                 [c, a, b],
-                [
-                    cotan,
-                ],
+                [cotan],
             )
 
             self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-4).item())

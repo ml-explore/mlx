@@ -751,6 +751,21 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       collapse_batches(a, b, c);
 
   auto batch_size_out = out.size() / (M * N);
+
+  // Collapse batches into M if needed
+  if (batch_size_out > 1 && !transpose_a && batch_shape.size() == 1 &&
+      a.strides()[a.ndim() - 2] == K && A_batch_stride.back() == M * K &&
+      C_batch_stride.back() == M * c.strides()[c.ndim() - 2] &&
+      B_batch_stride.back() == 0) {
+    M *= batch_shape.back();
+    batch_size_out = 1;
+
+    A_batch_stride = {0};
+    B_batch_stride = {0};
+    C_batch_stride = {0};
+    batch_shape = {1};
+  }
+
   int matrix_stride_out = M * N;
 
   /////////////////////////////////////////////////////////////////////////////
