@@ -321,8 +321,8 @@ void strided_reduce_general_dispatch(
     non_col_reductions *= static_cast<size_t>(s);
   }
 
-  auto non_col_shapes = shape;
-  auto non_col_strides = strides;
+  std::vector<int> non_col_shapes = shape;
+  std::vector<size_t> non_col_strides = strides;
   int non_col_ndim = shape.size();
 
   auto [rem_shape, rem_strides] = shapes_without_reduction_axes(in, axes);
@@ -345,6 +345,11 @@ void strided_reduce_general_dispatch(
     MTL::Size grid_dims = MTL::Size(out_size, 1, 1);
     MTL::Size group_dims = MTL::Size(256ul, 1, 1);
 
+    if (non_col_ndim == 0) {
+      non_col_shapes = {1};
+      non_col_strides = {1};
+    }
+
     // Encode arrays
     set_array_buffer(compute_encoder, in, 0);
     set_array_buffer(compute_encoder, out, 1);
@@ -357,9 +362,9 @@ void strided_reduce_general_dispatch(
     compute_encoder->setBytes(&ndim, sizeof(int), 7);
     compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 8);
     compute_encoder->setBytes(
-        non_col_shapes.data(), non_col_ndim * sizeof(int), 9);
+        non_col_shapes.data(), non_col_shapes.size() * sizeof(int), 9);
     compute_encoder->setBytes(
-        non_col_strides.data(), non_col_ndim * sizeof(size_t), 10);
+        non_col_strides.data(), non_col_shapes.size() * sizeof(size_t), 10);
     compute_encoder->setBytes(&non_col_ndim, sizeof(int), 11);
 
     // Dispatch threads
