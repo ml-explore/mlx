@@ -1765,7 +1765,7 @@ array logsumexp(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  auto maxval = stop_gradient(max(a, axes, true, s));
+  auto maxval = stop_gradient(max(a, axes, true, s), s);
   auto out = log(sum(exp(subtract(a, maxval, s), s), axes, keepdims, s), s);
   out = add(out, reshape(maxval, out.shape(), s), s);
   if (!keepdims) {

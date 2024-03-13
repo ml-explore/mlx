@@ -23,6 +23,10 @@ std::tuple<array, array, int> vmap_binary_op(
   assert(inputs.size() == 2);
   assert(axes.size() == 2);
 
+  if (axes[0] == -1 && axes[1] == -1) {
+    return {inputs[0], inputs[1], -1};
+  }
+
   auto a = inputs[0];
   auto b = inputs[1];
   int ndim = std::max(a.ndim() + (axes[0] == -1), b.ndim() + (axes[1] == -1));
@@ -54,6 +58,10 @@ std::tuple<array, array, array, int> vmap_ternary_op(
     const Stream& stream) {
   assert(inputs.size() == 3);
   assert(axes.size() == 3);
+
+  if (axes[0] == -1 && axes[1] == -1 && axes[2] == -1) {
+    return {inputs[0], inputs[1], inputs[2], -1};
+  }
 
   auto a = inputs[0];
   auto b = inputs[1];
@@ -403,8 +411,8 @@ std::pair<std::vector<array>, std::vector<int>> ArgPartition::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
 
-  return {
-      {argpartition(inputs[0], axis_ + (axes[0] <= axis_), stream())}, axes};
+  int axis_left = axes[0] >= 0 && axes[0] <= axis_;
+  return {{argpartition(inputs[0], axis_ + axis_left, stream())}, axes};
 }
 
 bool ArgPartition::is_equivalent(const Primitive& other) const {
@@ -420,7 +428,7 @@ bool ArgReduce::is_equivalent(const Primitive& other) const {
 std::pair<std::vector<array>, std::vector<int>> ArgReduce::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  int reduce_ax = axis_ + (axis_ >= axes[0]);
+  int reduce_ax = axis_ + (axes[0] >= 0 && axis_ >= axes[0]);
   auto& in = inputs[0];
   std::vector<array> out;
   if (reduce_type_ == ArgReduce::ArgMin) {
@@ -437,7 +445,8 @@ std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
 
-  return {{argsort(inputs[0], axis_ + (axes[0] <= axis_), stream())}, axes};
+  int axis_left = axes[0] >= 0 && axes[0] <= axis_;
+  return {{argsort(inputs[0], axis_ + axis_left, stream())}, axes};
 }
 
 std::vector<std::vector<int>> ArgReduce::output_shapes(
@@ -563,13 +572,16 @@ std::pair<std::vector<array>, std::vector<int>> Broadcast::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
   auto ax = axes[0];
-  auto in_shape = inputs[0].shape();
-  int diff = shape_.size() - inputs[0].ndim() + 1;
-  assert(diff >= 0);
-  in_shape.insert(in_shape.begin(), diff, 1);
-  ax += diff;
-  shape_.insert(shape_.begin() + ax, in_shape[ax]);
-  auto in = reshape(inputs[0], in_shape, stream());
+  auto in = inputs[0];
+  if (ax >= 0) {
+    auto in_shape = in.shape();
+    int diff = shape_.size() - in.ndim() + 1;
+    assert(diff >= 0);
+    in_shape.insert(in_shape.begin(), diff, 1);
+    ax += diff;
+    shape_.insert(shape_.begin() + ax, in_shape[ax]);
+    in = reshape(in, in_shape, stream());
+  }
   return {{broadcast_to(in, shape_, stream())}, {ax}};
 }
 
@@ -653,24 +665,30 @@ std::pair<std::vector<array>, std::vector<int>> Concatenate::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   std::vector<array> t_inputs;
+  int out_ax = -1;
   // Find the first vmapped input
   int i = 0;
   for (; i < axes.size(); i++) {
     t_inputs.push_back(inputs[i]);
     if (axes[i] >= 0) {
+      out_ax = axes[i];
       break;
     }
   }
-  auto out_ax = axes[i++];
-  // Move vmap axes to the same spot.
-  for (; i < axes.size(); ++i) {
-    if (out_ax != axes[i] && axes[i] >= 0) {
-      t_inputs.push_back(moveaxis(inputs[i], axes[i], out_ax, stream()));
-    } else {
-      t_inputs.push_back(inputs[i]);
+  if (out_ax >= 0) {
+    // Advance to the next input
+    i++;
+
+    // Move vmap axes to the same spot.
+    for (; i < axes.size(); ++i) {
+      if (out_ax != axes[i] && axes[i] >= 0) {
+        t_inputs.push_back(moveaxis(inputs[i], axes[i], out_ax, stream()));
+      } else {
+        t_inputs.push_back(inputs[i]);
+      }
     }
   }
-  auto axis = axis_ + (axis_ >= out_ax);
+  auto axis = axis_ + (out_ax >= 0 && axis_ >= out_ax);
   return {{concatenate(t_inputs, axis, stream())}, {out_ax}};
 }
 
@@ -1210,13 +1228,15 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
   int ax = axes[0];
   auto fft_axes = axes_;
   auto out_shape = in.shape();
-  for (auto& fft_ax : fft_axes) {
-    if (fft_ax >= ax) {
-      fft_ax++;
-    }
-    if (real_) {
-      auto n = out_shape[fft_ax];
-      out_shape[fft_ax] = inverse_ ? 2 * (n - 1) : n / 2 + 1;
+  if (ax >= 0) {
+    for (auto& fft_ax : fft_axes) {
+      if (fft_ax >= ax) {
+        fft_ax++;
+      }
+      if (real_) {
+        auto n = out_shape[fft_ax];
+        out_shape[fft_ax] = inverse_ ? 2 * (n - 1) : n / 2 + 1;
+      }
     }
   }
   return {
@@ -2064,7 +2084,8 @@ std::pair<std::vector<array>, std::vector<int>> Partition::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
 
-  return {{partition(inputs[0], axis_ + (axes[0] <= axis_), stream())}, axes};
+  int axis_left = axes[0] >= 0 && axes[0] <= axis_;
+  return {{partition(inputs[0], axis_ + axis_left, stream())}, axes};
 }
 
 bool Partition::is_equivalent(const Primitive& other) const {
@@ -2185,7 +2206,9 @@ std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
   }
 
   auto shape = shape_;
-  shape.insert(shape.begin() + kax, key.shape()[kax]);
+  if (kax >= 0) {
+    shape.insert(shape.begin() + kax, key.shape()[kax]);
+  }
 
   auto get_dtype = [width = width_]() {
     switch (width) {
@@ -2217,15 +2240,19 @@ std::pair<std::vector<array>, std::vector<int>> Reshape::vmap(
   // Transpose the input so that the vmap dim is first.
   auto& in = inputs[0];
   auto ax = axes[0];
-  std::vector<int> reorder(in.ndim());
-  std::iota(reorder.begin(), reorder.end(), 0);
-  reorder.erase(reorder.begin() + ax);
-  reorder.insert(reorder.begin(), ax);
-  // Insert the vmap dim into the shape at the beginning.
-  auto out = transpose(in, reorder, stream());
-  shape_.insert(shape_.begin(), in.shape()[ax]);
-  // Reshape the transposed input to the new shape.
-  return {{reshape(out, shape_, stream())}, {0}};
+  if (ax >= 0) {
+    std::vector<int> reorder(in.ndim());
+    std::iota(reorder.begin(), reorder.end(), 0);
+    reorder.erase(reorder.begin() + ax);
+    reorder.insert(reorder.begin(), ax);
+    // Insert the vmap dim into the shape at the beginning.
+    auto out = transpose(in, reorder, stream());
+    shape_.insert(shape_.begin(), in.shape()[ax]);
+    // Reshape the transposed input to the new shape.
+    return {{reshape(out, shape_, stream())}, {0}};
+  } else {
+    return {{reshape(in, shape_, stream())}, {ax}};
+  }
 }
 
 std::vector<array> Reshape::vjp(
@@ -2349,9 +2376,11 @@ std::pair<std::vector<array>, std::vector<int>> Reduce::vmap(
     const std::vector<int>& axes) {
   auto ax = axes[0];
   auto reduce_axes = axes_;
-  for (auto& rax : reduce_axes) {
-    if (rax >= ax) {
-      rax++;
+  if (ax >= 0) {
+    for (auto& rax : reduce_axes) {
+      if (rax >= ax) {
+        rax++;
+      }
     }
   }
   auto& in = inputs[0];
@@ -2424,16 +2453,13 @@ std::pair<std::vector<array>, std::vector<int>> Scan::vmap(
   auto& in = inputs[0];
   auto out_dtype =
       (in.dtype() == bool_ && reduce_type_ == Scan::Sum) ? int32 : in.dtype();
+  int axis_left = axes[0] >= 0 && axes[0] <= axis_;
   return {
       {array(
           in.shape(),
           out_dtype,
           std::make_unique<Scan>(
-              stream(),
-              reduce_type_,
-              axis_ + (axes[0] <= axis_),
-              reverse_,
-              inclusive_),
+              stream(), reduce_type_, axis_ + axis_left, reverse_, inclusive_),
           {in})},
       axes};
 }
@@ -2698,9 +2724,11 @@ std::pair<std::vector<array>, std::vector<int>> Slice::vmap(
   auto strides = strides_;
   auto ax = axes[0];
   auto& input = inputs[0];
-  start.insert(start.begin() + ax, 0);
-  stop.insert(stop.begin() + ax, input.shape(ax));
-  strides.insert(strides.begin() + ax, 1);
+  if (ax >= 0) {
+    start.insert(start.begin() + ax, 0);
+    stop.insert(stop.begin() + ax, input.shape(ax));
+    strides.insert(strides.begin() + ax, 1);
+  }
   return {{slice(input, start, stop, strides, stream())}, {ax}};
 }
 
@@ -2796,7 +2824,7 @@ std::pair<std::vector<array>, std::vector<int>> Softmax::vmap(
 
   // We are vectorizing over an axis other than the last one so keep the
   // softmax axis unchanged
-  if (axes[0] < inputs[0].ndim() - 1) {
+  if (axes[0] >= 0 && axes[0] < inputs[0].ndim() - 1) {
     softmax_axes.push_back(-1);
   } else {
     softmax_axes.push_back(-2);
@@ -2837,7 +2865,8 @@ std::pair<std::vector<array>, std::vector<int>> Sort::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
 
-  return {{sort(inputs[0], axis_ + (axes[0] <= axis_), stream())}, axes};
+  int axis_left = axes[0] >= 0 && axes[0] <= axis_;
+  return {{sort(inputs[0], axis_ + axis_left, stream())}, axes};
 }
 
 std::vector<array> Sort::vjp(
@@ -2867,8 +2896,8 @@ bool Sort::is_equivalent(const Primitive& other) const {
 std::pair<std::vector<array>, std::vector<int>> Split::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  return {
-      {split(inputs[0], indices_, axis_ + (axes[0] <= axis_), stream())}, axes};
+  int axis_left = axes[0] >= 0 && axes[0] <= axis_;
+  return {{split(inputs[0], indices_, axis_ + axis_left, stream())}, axes};
 }
 
 std::vector<array> Split::vjp(
@@ -2971,7 +3000,7 @@ bool Sqrt::is_equivalent(const Primitive& other) const {
 std::pair<std::vector<array>, std::vector<int>> StopGradient::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  return {inputs, axes};
+  return {{stop_gradient(inputs[0], stream())}, axes};
 };
 
 std::vector<array> Subtract::vjp(
@@ -3093,12 +3122,14 @@ std::pair<std::vector<array>, std::vector<int>> Transpose::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
   auto vdim = axes[0];
-  for (auto& dim : axes_) {
-    if (dim >= vdim) {
-      dim++;
+  if (vdim >= 0) {
+    for (auto& dim : axes_) {
+      if (dim >= vdim) {
+        dim++;
+      }
     }
+    axes_.insert(axes_.begin() + vdim, vdim);
   }
-  axes_.insert(axes_.begin() + vdim, vdim);
   return {{transpose(inputs[0], axes_, stream())}, {vdim}};
 }
 
@@ -3113,17 +3144,23 @@ std::pair<std::vector<array>, std::vector<int>> NumberOfElements::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
 
-  auto vdim = axes[0];
   std::vector<int> new_axes = axes_;
-  for (auto& dim : new_axes) {
-    if (dim >= vdim) {
-      dim++;
+  auto vdim = axes[0];
+  if (vdim >= 0) {
+    for (auto& dim : new_axes) {
+      if (dim >= vdim) {
+        dim++;
+      }
     }
   }
 
-  return {
-      {number_of_elements(inputs[0], new_axes, inverted_, dtype_, stream())},
-      {-1}};
+  array out = array(
+      std::vector<int>{},
+      dtype_,
+      std::make_unique<NumberOfElements>(stream(), new_axes, inverted_, dtype_),
+      inputs);
+
+  return {{out}, {-1}};
 }
 
 bool NumberOfElements::is_equivalent(const Primitive& other) const {
