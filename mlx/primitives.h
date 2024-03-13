@@ -1359,6 +1359,14 @@ class Reshape : public UnaryPrimitive {
   std::vector<int> shape_;
 
   void eval(const std::vector<array>& inputs, array& out);
+
+  std::pair<bool, std::vector<size_t>> prepare_reshape(
+      const array& in,
+      const array& out);
+  void shared_buffer_reshape(
+      const array& in,
+      const std::vector<size_t>& out_strides,
+      array& out);
 };
 
 class Reduce : public UnaryPrimitive {

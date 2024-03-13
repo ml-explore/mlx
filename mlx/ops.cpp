@@ -1518,9 +1518,11 @@ array min(
 
 array argmin(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   int size = a.size();
-  auto result = argmin(reshape(a, {size}, s), 0, false, s);
+  auto result = argmin(reshape(a, {size}, s), 0, true, s);
   if (keepdims) {
     result = reshape(result, std::vector<int>(a.shape().size(), 1), s);
+  } else {
+    result = squeeze(result, s);
   }
   return result;
 }
@@ -1549,9 +1551,11 @@ array argmin(
 
 array argmax(const array& a, bool keepdims, StreamOrDevice s /* = {} */) {
   int size = a.size();
-  auto result = argmax(reshape(a, {size}, s), 0, false, s);
+  auto result = argmax(reshape(a, {size}, s), 0, true, s);
   if (keepdims) {
     result = reshape(result, std::vector<int>(a.shape().size(), 1), s);
+  } else {
+    result = squeeze(result, s);
   }
   return result;
 }

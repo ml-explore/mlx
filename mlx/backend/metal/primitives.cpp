@@ -805,13 +805,13 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (in.flags().row_contiguous) {
-    auto flags = in.flags();
-    auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
-    flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
-    out.copy_shared_buffer(in, out.strides(), flags, in.data_size());
-  } else {
+
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+
+  if (copy_necessary) {
     copy_gpu(in, out, CopyType::General);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
   }
 }
 

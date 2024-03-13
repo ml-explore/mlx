@@ -468,20 +468,78 @@ void RandomBits::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+std::pair<bool, std::vector<size_t>> Reshape::prepare_reshape(
+    const array& in,
+    const array& out) {
+  // Special case for empty arrays
+  if (in.size() == 0) {
+    return {false, out.strides()};
+  }
+
+  // Special case for scalars
+  if (in.ndim() == 0) {
+    std::vector<size_t> out_strides(out.ndim(), 0);
+    return {false, out_strides};
+  }
+
+  // Firstly let's collapse all the contiguous dimensions of the input
+  auto [shape, _strides] = collapse_contiguous_dims(in);
+  auto& strides = _strides[0];
+
+  // If shapes fit exactly in the contiguous dims then no copy is necessary so
+  // let's check.
+  std::vector<size_t> out_strides;
+  bool copy_necessary = false;
+  int j = 0;
+  for (int i = 0; i < out.ndim(); i++) {
+    int N = out.shape(i);
+    if (j < shape.size() && shape[j] % N == 0) {
+      shape[j] /= N;
+      out_strides.push_back(shape[j] * strides[j]);
+      j += (shape[j] == 1);
+    } else if (N == 1) {
+      // i > 0 because otherwise j < shape.size() && shape[j] % 1 == 0
+      out_strides.push_back(out_strides.back());
+    } else {
+      copy_necessary = true;
+      break;
+    }
+  }
+
+  return {copy_necessary, out_strides};
+}
+
+void Reshape::shared_buffer_reshape(
+    const array& in,
+    const std::vector<size_t>& out_strides,
+    array& out) {
+  auto flags = in.flags();
+  if (flags.contiguous && in.data_size() == in.size()) {
+    size_t f_stride = 1;
+    size_t b_stride = 1;
+    flags.col_contiguous = true;
+    flags.row_contiguous = true;
+    for (int i = 0, ri = out.ndim() - 1; i < out.ndim(); ++i, --ri) {
+      flags.col_contiguous &= (out_strides[i] == f_stride || out.shape(i) == 1);
+      f_stride *= out.shape(i);
+      flags.row_contiguous &=
+          (out_strides[ri] == b_stride || out.shape(ri) == 1);
+      b_stride *= out.shape(ri);
+    }
+  }
+  out.copy_shared_buffer(in, out_strides, flags, in.data_size());
+}
+
 void Reshape::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (in.flags().row_contiguous) {
-    // For row contiguous reshapes:
-    // - Shallow copy the buffer
-    // - If reshaping into a vector (all singleton dimensions except one) it
-    //    becomes col contiguous again.
-    auto flags = in.flags();
-    auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
-    flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
-    out.copy_shared_buffer(in, out.strides(), flags, in.data_size());
-  } else {
+
+  auto [copy_necessary, out_strides] = prepare_reshape(in, out);
+
+  if (copy_necessary) {
     copy(in, out, in.data_size() == 1 ? CopyType::Scalar : CopyType::General);
+  } else {
+    shared_buffer_reshape(in, out_strides, out);
   }
 }
 
