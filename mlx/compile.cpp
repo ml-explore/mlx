@@ -74,7 +74,7 @@ bool allows_shapeless(const Primitive& p) {
       is_noop(p) || is_reduction(p) || typeid(p) == typeid(Softmax) ||
       typeid(p) == typeid(Sort) || typeid(p) == typeid(ArgSort) ||
       typeid(p) == typeid(ArgPartition) || typeid(p) == typeid(Partition) ||
-      typeid(p) == typeid(Select);
+      typeid(p) == typeid(Select) || typeid(p) == typeid(NumberOfElements);
 }
 
 Compiled::Compiled(

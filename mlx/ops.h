@@ -1173,4 +1173,15 @@ std::vector<array> atleast_3d(
     const std::vector<array>& a,
     StreamOrDevice s = {});
 
+/**
+ * Extract the number of elements along some axes as a scalar array. Used to
+ * allow shape dependent shapeless compilation (pun intended).
+ */
+array number_of_elements(
+    const array& a,
+    std::vector<int> axes,
+    bool inverted,
+    Dtype dtype = int32,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core

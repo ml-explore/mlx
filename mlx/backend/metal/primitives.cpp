@@ -696,6 +696,10 @@ void Minimum::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "min");
 }
 
+void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
+  eval(inputs, out);
+}
+
 void Floor::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "floor");
 }

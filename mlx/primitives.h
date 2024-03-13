@@ -1229,6 +1229,37 @@ class NotEqual : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class NumberOfElements : public UnaryPrimitive {
+ public:
+  explicit NumberOfElements(
+      Stream stream,
+      std::vector<int> axes,
+      bool inverted,
+      Dtype dtype)
+      : UnaryPrimitive(stream),
+        axes_(std::move(axes)),
+        inverted_(inverted),
+        dtype_(dtype) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(NumberOfElements)
+  bool is_equivalent(const Primitive& other) const override;
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override {
+    return {{}};
+  }
+
+ private:
+  std::vector<int> axes_;
+  bool inverted_;
+  Dtype dtype_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Pad : public UnaryPrimitive {
  public:
   explicit Pad(

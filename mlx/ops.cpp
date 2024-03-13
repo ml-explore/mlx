@@ -46,14 +46,6 @@ std::pair<std::vector<int>, std::vector<int>> compute_reduce_shape(
   return {out_shape, sorted_axes};
 }
 
-int compute_number_of_elements(const array& a, const std::vector<int>& axes) {
-  int nelements = 1;
-  for (auto axis : axes) {
-    nelements *= a.shape(axis);
-  }
-  return nelements;
-}
-
 Dtype at_least_float(const Dtype& d) {
   return is_floating_point(d) ? d : promote_types(d, float32);
 }
@@ -1356,9 +1348,9 @@ array mean(
       throw std::invalid_argument(msg.str());
     }
   }
-  auto nelements = compute_number_of_elements(a, axes);
   auto dtype = at_least_float(a.dtype());
-  return multiply(sum(a, axes, keepdims, s), array(1.0 / nelements, dtype), s);
+  auto normalizer = number_of_elements(a, axes, true, dtype, s);
+  return multiply(sum(a, axes, keepdims, s), normalizer, s);
 }
 
 array mean(
@@ -1391,9 +1383,12 @@ array var(
   auto v = subtract(a2, mu2, s);
 
   if (ddof != 0) {
-    auto nelements = compute_number_of_elements(a, axes);
-    auto factor = nelements / static_cast<float>(std::max(nelements - ddof, 0));
-    v = multiply(v, array(factor, dtype), s);
+    auto nelements = number_of_elements(a, axes, false, dtype, s);
+    auto factor = divide(
+        nelements,
+        maximum(subtract(nelements, array(ddof, dtype), s), array(0, dtype), s),
+        s);
+    v = multiply(v, factor, s);
   }
 
   return v;
@@ -1770,7 +1765,7 @@ array logsumexp(
     const std::vector<int>& axes,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {}*/) {
-  auto maxval = stop_gradient(max(a, axes, true, s));
+  auto maxval = stop_gradient(max(a, axes, true, s), s);
   auto out = log(sum(exp(subtract(a, maxval, s), s), axes, keepdims, s), s);
   out = add(out, reshape(maxval, out.shape(), s), s);
   if (!keepdims) {
@@ -3598,6 +3593,31 @@ std::vector<array> atleast_3d(
     out.push_back(atleast_3d(a, s));
   }
   return out;
+}
+
+array number_of_elements(
+    const array& a,
+    std::vector<int> axes,
+    bool inverted,
+    Dtype dtype /* = int32 */,
+    StreamOrDevice s /* = {} */) {
+  for (auto& ax : axes) {
+    int normal_axis = (ax + a.ndim()) % a.ndim();
+    if (normal_axis >= a.ndim() || normal_axis < 0) {
+      std::ostringstream msg;
+      msg << "[number_of_elements] Can't get the shape for axis " << ax
+          << " from an array with " << a.ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    ax = normal_axis;
+  }
+
+  return stop_gradient(array(
+      std::vector<int>{},
+      dtype,
+      std::make_unique<NumberOfElements>(
+          to_stream(s), std::move(axes), inverted, dtype),
+      {a}));
 }
 
 } // namespace mlx::core
