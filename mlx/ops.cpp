@@ -3615,7 +3615,8 @@ array number_of_elements(
   return stop_gradient(array(
       std::vector<int>{},
       dtype,
-      std::make_unique<NumberOfElements>(to_stream(s), axes, inverted, dtype),
+      std::make_unique<NumberOfElements>(
+          to_stream(s), std::move(axes), inverted, dtype),
       {a}));
 }
 

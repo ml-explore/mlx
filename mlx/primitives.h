@@ -1237,7 +1237,7 @@ class NumberOfElements : public UnaryPrimitive {
       bool inverted,
       Dtype dtype)
       : UnaryPrimitive(stream),
-        axes_(axes),
+        axes_(std::move(axes)),
         inverted_(inverted),
         dtype_(dtype) {}
 
