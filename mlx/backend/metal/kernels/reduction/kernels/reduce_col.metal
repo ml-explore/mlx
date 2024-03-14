@@ -7,6 +7,69 @@
 using namespace metal;
 
 ///////////////////////////////////////////////////////////////////////////////
+// Small column reduce kernel
+///////////////////////////////////////////////////////////////////////////////
+
+template <typename T, typename U, typename Op>
+[[kernel]] void col_reduce_small(
+    const device T *in [[buffer(0)]],
+    device U *out [[buffer(1)]],
+    const constant size_t& reduction_size [[buffer(2)]],
+    const constant size_t& reduction_stride [[buffer(3)]],
+    const constant size_t& out_size [[buffer(4)]],
+    const constant int* shape [[buffer(5)]],
+    const constant size_t* strides [[buffer(6)]],
+    const constant int& ndim [[buffer(7)]],
+    const constant size_t& non_col_reductions [[buffer(8)]],
+    const constant int* non_col_shapes [[buffer(9)]],
+    const constant size_t* non_col_strides [[buffer(10)]],
+    const constant int& non_col_ndim [[buffer(11)]],
+    uint tid [[thread_position_in_grid]]) {
+
+  // Appease the compiler
+  (void)out_size;
+
+  Op op;
+  U total_val = Op::init;
+
+  auto out_idx = tid;
+
+  in += elem_to_loc(
+        out_idx,
+        shape + non_col_ndim,
+        strides + non_col_ndim,
+        ndim - non_col_ndim);
+
+  for(uint i = 0; i < non_col_reductions; i++) {
+    size_t in_idx = elem_to_loc(i, non_col_shapes, non_col_strides, non_col_ndim);
+
+    for(uint j = 0; j < reduction_size; j++, in_idx += reduction_stride) {
+      U val = static_cast<U>(in[in_idx]);
+      total_val = op(total_val, val);
+    }
+  }
+
+  out[out_idx] = total_val;
+}
+
+#define instantiate_col_reduce_small(name, itype, otype, op) \
+  template [[host_name("col_reduce_small_" #name)]] \
+  [[kernel]] void col_reduce_small<itype, otype, op>( \
+      const device itype *in [[buffer(0)]], \
+      device otype *out [[buffer(1)]], \
+      const constant size_t& reduction_size [[buffer(2)]], \
+      const constant size_t& reduction_stride [[buffer(3)]], \
+      const constant size_t& out_size [[buffer(4)]], \
+      const constant int* shape [[buffer(5)]],  \
+      const constant size_t* strides [[buffer(6)]],  \
+      const constant int& ndim [[buffer(7)]],  \
+      const constant size_t& non_col_reductions [[buffer(8)]], \
+      const constant int* non_col_shapes [[buffer(9)]], \
+      const constant size_t* non_col_strides [[buffer(10)]], \
+      const constant int& non_col_ndim [[buffer(11)]], \
+      uint tid [[thread_position_in_grid]]);
+
+///////////////////////////////////////////////////////////////////////////////
 // Column reduce helper
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -171,9 +234,11 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
 ///////////////////////////////////////////////////////////////////////////////
 
 #define instantiate_same_col_reduce_helper(name, tname, type, op) \
+  instantiate_col_reduce_small(name ##tname, type, type, op<type>) \
   instantiate_col_reduce_general(name ##tname, type, type, op<type>)
 
 #define instantiate_same_col_reduce_na_helper(name, tname, type, op) \
+  instantiate_col_reduce_small(name ##tname, type, type, op<type>) \
   instantiate_col_reduce_general_no_atomics(name ##tname, type, type, op<type>)
 
 instantiate_reduce_ops(instantiate_same_col_reduce_helper, instantiate_reduce_helper_types)
@@ -182,3 +247,7 @@ instantiate_reduce_ops(instantiate_same_col_reduce_na_helper, instantiate_reduce
 instantiate_col_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>)
 instantiate_reduce_from_types(instantiate_col_reduce_general, and, bool, And)
 instantiate_reduce_from_types(instantiate_col_reduce_general, or, bool, Or)
+
+instantiate_col_reduce_small(sumbool_, bool, uint32_t, Sum<uint32_t>)
+instantiate_reduce_from_types(instantiate_col_reduce_small, and, bool, And)
+instantiate_reduce_from_types(instantiate_col_reduce_small, or, bool, Or)
