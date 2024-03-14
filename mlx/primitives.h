@@ -200,6 +200,7 @@ class AddMM : public UnaryPrimitive {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
+  DEFINE_VMAP()
   DEFINE_PRINT(AddMM)
 
   bool is_equivalent(const Primitive& other) const override;
@@ -1140,6 +1141,7 @@ class Matmul : public UnaryPrimitive {
       const std::vector<int>& argnums,
       const std::vector<array>& outputs) override;
 
+  DEFINE_VMAP()
   DEFINE_PRINT(Matmul)
   DEFINE_DEFAULT_IS_EQUIVALENT()
 };
