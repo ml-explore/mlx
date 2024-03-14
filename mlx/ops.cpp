@@ -582,6 +582,29 @@ array slice(
   return slice(a, start, stop, std::vector<int>(a.ndim(), 1), to_stream(s));
 }
 
+// TODO
+/** Update a slice from the source array */
+array slice_update(
+    const array& src,
+    const array& update,
+    std::vector<int> start,
+    std::vector<int> stop,
+    std::vector<int> strides,
+    StreamOrDevice s /* = {} */) {
+  return src;
+}
+
+/** Update a slice from the source array with stride 1 in each dimension */
+array slice_update(
+    const array& src,
+    const array& update,
+    std::vector<int> start,
+    std::vector<int> stop,
+    StreamOrDevice s /* = {} */) {
+  auto strides = std::vector<int>(src.ndim(), 1);
+  return slice_update(src, update, start, stop, strides, s);
+}
+
 std::vector<array> split(
     const array& a,
     const std::vector<int>& indices,
