@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/backend/common/compiled.h"
+#include "mlx/graph_utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
@@ -81,13 +82,27 @@ std::string build_lib_name(
     const std::vector<array>& outputs,
     const std::vector<array>& tape,
     const std::unordered_set<uintptr_t>& constant_ids) {
+  NodeNamer namer;
   std::ostringstream os;
   std::ostringstream constant_hasher;
+
+  // Fill the input names. This is not really necessary, I just like having A,
+  // B, C, ... as the inputs.
+  for (auto& x : inputs) {
+    namer.get_name(x);
+  }
 
   // The primitives describing the tape. For unary and binary primitives this
   // must be enough to describe the full computation.
   for (auto& a : tape) {
+    // name and type of output
+    os << namer.get_name(a) << kindof(a.dtype()) << a.itemsize();
+    // computation performed
     a.primitive().print(os);
+    // name of inputs to the function
+    for (auto& inp : a.inputs()) {
+      os << namer.get_name(inp);
+    }
   }
   os << "_";
 
