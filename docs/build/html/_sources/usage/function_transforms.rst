@@ -40,7 +40,7 @@ getting higher order derivatives.
 
 Any of the MLX function transformations can be composed in any order to any
 depth. See the following sections for more information on :ref:`automatic
-differentiaion <auto diff>` and :ref:`automatic vectorization <vmap>`.
+differentiation <auto diff>` and :ref:`automatic vectorization <vmap>`.
 For more information on :func:`compile` see the :ref:`compile documentation <compile>`.
 
 
