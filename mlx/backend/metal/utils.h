@@ -17,6 +17,18 @@ set_array_buffer(MTL::ComputeCommandEncoder* enc, const array& a, int idx) {
   enc->setBuffer(a_buf, offset, idx);
 }
 
+inline void set_array_buffer(
+    MTL::ComputeCommandEncoder* enc,
+    const array& a,
+    int64_t offset,
+    int idx) {
+  auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
+  auto base_offset = a.data<char>() -
+      static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
+  base_offset += offset;
+  enc->setBuffer(a_buf, base_offset, idx);
+}
+
 template <typename T>
 inline void set_vector_bytes(
     MTL::ComputeCommandEncoder* enc,

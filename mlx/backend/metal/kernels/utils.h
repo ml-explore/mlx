@@ -271,6 +271,212 @@ inline uint elem_to_loc_nd<4>(
   return loc;
 }
 
+inline int64_t elem_to_loc(
+    uint elem,
+    device const int* shape,
+    device const int64_t* strides,
+    int ndim) {
+  int64_t loc = 0;
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    loc += (elem % shape[i]) * strides[i];
+    elem /= shape[i];
+  }
+  return loc;
+}
+
+inline int64_t elem_to_loc(
+    uint elem,
+    constant const int* shape,
+    constant const int64_t* strides,
+    int ndim) {
+  int64_t loc = 0;
+  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
+    loc += (elem % shape[i]) * strides[i];
+    elem /= shape[i];
+  }
+  return loc;
+}
+
+template <int NDIM>
+inline uint3 elem_to_loc_3_nd(
+    uint3 elem,
+    constant const int shape[NDIM],
+    constant const int64_t a_strides[NDIM],
+    constant const int64_t b_strides[NDIM],
+    constant const int64_t c_strides[NDIM]) {
+  uint3 loc = {
+      static_cast<uint>(
+          elem.x * a_strides[NDIM - 1] + elem.y * a_strides[NDIM - 2]),
+      static_cast<uint>(
+          elem.x * b_strides[NDIM - 1] + elem.y * b_strides[NDIM - 2]),
+      static_cast<uint>(
+          elem.x * c_strides[NDIM - 1] + elem.y * c_strides[NDIM - 2])};
+  for (int d = NDIM - 3; d >= 0; --d) {
+    uint l = elem.z % shape[d];
+    loc.x += l * a_strides[d];
+    loc.y += l * b_strides[d];
+    loc.z += l * c_strides[d];
+    elem.z /= shape[d];
+  }
+  return loc;
+}
+
+template <int NDIM>
+inline uint2 elem_to_loc_2_nd(
+    uint3 elem,
+    constant const int shape[NDIM],
+    constant const int64_t a_strides[NDIM],
+    constant const int64_t b_strides[NDIM]) {
+  uint2 loc = {
+      static_cast<uint>(
+          elem.x * a_strides[NDIM - 1] + elem.y * a_strides[NDIM - 2]),
+      static_cast<uint>(
+          elem.x * b_strides[NDIM - 1] + elem.y * b_strides[NDIM - 2])};
+  for (int d = NDIM - 3; d >= 0; --d) {
+    uint l = elem.z % shape[d];
+    loc.x += l * a_strides[d];
+    loc.y += l * b_strides[d];
+    elem.z /= shape[d];
+  }
+  return loc;
+}
+
+template <int NDIM>
+inline int64_t elem_to_loc_nd(
+    uint3 elem,
+    constant const int shape[NDIM],
+    constant const int64_t strides[NDIM]) {
+  int64_t loc = elem.x * strides[NDIM - 1] + elem.y * strides[NDIM - 2];
+  for (int d = NDIM - 3; d >= 0; --d) {
+    loc += (elem.z % shape[d]) * strides[d];
+    elem.z /= shape[d];
+  }
+  return loc;
+}
+
+inline int64_t elem_to_loc_1(uint elem, constant const int64_t& stride) {
+  return elem * stride;
+}
+
+inline int64_t elem_to_loc_2(uint2 elem, constant const int64_t strides[2]) {
+  return elem.x * strides[1] + elem.y * strides[0];
+}
+
+inline int64_t elem_to_loc_3(uint3 elem, constant const int64_t strides[3]) {
+  return elem.x * strides[2] + elem.y * strides[1] + elem.z * strides[0];
+}
+
+// Non templated version to handle arbitrary dims
+inline int64_t elem_to_loc(
+    uint3 elem,
+    constant const int* shape,
+    constant const int64_t* strides,
+    int ndim) {
+  int64_t loc = elem.x * strides[ndim - 1] + elem.y * strides[ndim - 2];
+  for (int d = ndim - 3; d >= 0; --d) {
+    loc += (elem.z % shape[d]) * strides[d];
+    elem.z /= shape[d];
+  }
+  return loc;
+}
+
+inline uint3 elem_to_loc_3_nd(
+    uint3 elem,
+    constant const int* shape,
+    constant const int64_t* a_strides,
+    constant const int64_t* b_strides,
+    constant const int64_t* c_strides,
+    int ndim) {
+  uint3 loc = {
+      static_cast<uint>(
+          elem.x * a_strides[ndim - 1] + elem.y * a_strides[ndim - 2]),
+      static_cast<uint>(
+          elem.x * b_strides[ndim - 1] + elem.y * b_strides[ndim - 2]),
+      static_cast<uint>(
+          elem.x * c_strides[ndim - 1] + elem.y * c_strides[ndim - 2])};
+  for (int d = ndim - 3; d >= 0; --d) {
+    uint l = elem.z % shape[d];
+    loc.x += l * a_strides[d];
+    loc.y += l * b_strides[d];
+    loc.z += l * c_strides[d];
+    elem.z /= shape[d];
+  }
+  return loc;
+}
+
+inline uint2 elem_to_loc_2_nd(
+    uint3 elem,
+    constant const int* shape,
+    constant const int64_t* a_strides,
+    constant const int64_t* b_strides,
+    int ndim) {
+  uint2 loc = {
+      static_cast<uint>(
+          elem.x * a_strides[ndim - 1] + elem.y * a_strides[ndim - 2]),
+      static_cast<uint>(
+          elem.x * b_strides[ndim - 1] + elem.y * b_strides[ndim - 2])};
+  for (int d = ndim - 3; d >= 0; --d) {
+    uint l = elem.z % shape[d];
+    loc.x += l * a_strides[d];
+    loc.y += l * b_strides[d];
+    elem.z /= shape[d];
+  }
+  return loc;
+}
+
+template <int NDIM>
+inline uint elem_to_loc_nd(
+    uint elem,
+    device const int* shape,
+    device const int64_t* strides);
+
+template <>
+inline uint elem_to_loc_nd<1>(
+    uint elem,
+    device const int* shape,
+    device const int64_t* strides) {
+  return (elem % shape[0]) * strides[0];
+}
+
+template <>
+inline uint elem_to_loc_nd<2>(
+    uint elem,
+    device const int* shape,
+    device const int64_t* strides) {
+  uint loc = (elem % shape[1]) * strides[1];
+  elem /= shape[1];
+  loc += (elem % shape[0]) * strides[0];
+  return loc;
+}
+
+template <>
+inline uint elem_to_loc_nd<3>(
+    uint elem,
+    device const int* shape,
+    device const int64_t* strides) {
+  uint loc = (elem % shape[2]) * strides[2];
+  elem /= shape[2];
+  loc += (elem % shape[1]) * strides[1];
+  elem /= shape[1];
+  loc += (elem % shape[0]) * strides[0];
+  return loc;
+}
+
+template <>
+inline uint elem_to_loc_nd<4>(
+    uint elem,
+    device const int* shape,
+    device const int64_t* strides) {
+  uint loc = (elem % shape[3]) * strides[3];
+  elem /= shape[3];
+  loc += (elem % shape[2]) * strides[2];
+  elem /= shape[2];
+  loc += (elem % shape[1]) * strides[1];
+  elem /= shape[1];
+  loc += (elem % shape[0]) * strides[0];
+  return loc;
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 // Calculation utils
 ///////////////////////////////////////////////////////////////////////////////

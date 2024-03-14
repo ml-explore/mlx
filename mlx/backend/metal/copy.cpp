@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <sstream>
 
@@ -37,15 +37,20 @@ void copy_gpu(const array& in, array& out, CopyType ctype) {
   copy_gpu(in, out, ctype, out.primitive().stream());
 }
 
+template <typename stride_t>
 void copy_gpu_inplace(
     const array& in,
     array& out,
+    const std::vector<stride_t>& strides_in_pre,
+    const std::vector<stride_t>& strides_out_pre,
+    int64_t offset,
     CopyType ctype,
     const Stream& s) {
   // Try to collapse contiguous dims
-  auto [shape, strides] = collapse_contiguous_dims(in, out);
-  auto& strides_in = strides[0];
-  auto& strides_out = strides[1];
+  auto [shape, strides] = collapse_contiguous_dims(
+      in.shape(), std::vector{strides_in_pre, strides_out_pre});
+  auto& strides_in_ = strides[0];
+  auto& strides_out_ = strides[1];
 
   auto& d = metal::device(s.device);
   std::ostringstream kname;
@@ -77,17 +82,20 @@ void copy_gpu_inplace(
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
     size_t ndim = shape.size();
+    std::vector<int64_t> strides_in{strides_in_.begin(), strides_in_.end()};
+    std::vector<int64_t> strides_out{strides_out_.begin(), strides_out_.end()};
+
     if (ndim > 3) {
-      compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 2);
-      compute_encoder->setBytes(strides_in.data(), ndim * sizeof(size_t), 3);
+      set_vector_bytes(compute_encoder, shape, ndim, 2);
+      set_vector_bytes(compute_encoder, strides_in, ndim, 3);
       if (ctype == CopyType::GeneralGeneral) {
-        compute_encoder->setBytes(strides_out.data(), ndim * sizeof(size_t), 4);
+        set_vector_bytes(compute_encoder, strides_out, ndim, 4);
       }
     } else {
       // The shape is implicit in the grid for <= 3D
-      compute_encoder->setBytes(strides_in.data(), ndim * sizeof(size_t), 2);
+      set_vector_bytes(compute_encoder, strides_in, ndim, 2);
       if (ctype == CopyType::GeneralGeneral) {
-        compute_encoder->setBytes(strides_out.data(), ndim * sizeof(size_t), 3);
+        set_vector_bytes(compute_encoder, strides_out, ndim, 3);
       }
     }
 
@@ -118,6 +126,14 @@ void copy_gpu_inplace(
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+}
+
+void copy_gpu_inplace(
+    const array& in,
+    array& out,
+    CopyType ctype,
+    const Stream& s) {
+  return copy_gpu_inplace(in, out, in.strides(), out.strides(), 0, ctype, s);
 }
 
 } // namespace mlx::core
