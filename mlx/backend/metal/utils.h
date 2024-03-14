@@ -9,14 +9,29 @@ namespace mlx::core {
 
 namespace {
 
-void set_array_buffer(
-    MTL::ComputeCommandEncoder* enc,
-    const array& a,
-    int idx) {
+inline void
+set_array_buffer(MTL::ComputeCommandEncoder* enc, const array& a, int idx) {
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
   auto offset = a.data<char>() -
       static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
   enc->setBuffer(a_buf, offset, idx);
+}
+
+template <typename T>
+inline void set_vector_bytes(
+    MTL::ComputeCommandEncoder* enc,
+    const std::vector<T>& vec,
+    size_t nelems,
+    int idx) {
+  enc->setBytes(vec.data(), nelems * sizeof(T), idx);
+}
+
+template <typename T>
+inline void set_vector_bytes(
+    MTL::ComputeCommandEncoder* enc,
+    const std::vector<T>& vec,
+    int idx) {
+  return set_vector_bytes(enc, vec, vec.size(), idx);
 }
 
 std::string type_to_name(const array& a) {

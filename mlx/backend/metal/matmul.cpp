@@ -206,7 +206,7 @@ inline auto collapse_batches(const array& a, const array& b) {
   std::vector<size_t> B_bstride{b.strides().begin(), b.strides().end() - 2};
 
   auto [batch_shape, batch_strides] =
-      collapse_contiguous_dims(A_bshape, {A_bstride, B_bstride});
+      collapse_contiguous_dims(A_bshape, std::vector{A_bstride, B_bstride});
 
   auto A_batch_stride = batch_strides[0];
   auto B_batch_stride = batch_strides[1];
@@ -237,8 +237,8 @@ inline auto collapse_batches(const array& a, const array& b, const array& c) {
   std::vector<size_t> B_bstride{b.strides().begin(), b.strides().end() - 2};
   std::vector<size_t> C_bstride{c.strides().begin(), c.strides().end() - 2};
 
-  auto [batch_shape, batch_strides] =
-      collapse_contiguous_dims(A_bshape, {A_bstride, B_bstride, C_bstride});
+  auto [batch_shape, batch_strides] = collapse_contiguous_dims(
+      A_bshape, std::vector{A_bstride, B_bstride, C_bstride});
 
   auto A_batch_stride = batch_strides[0];
   auto B_batch_stride = batch_strides[1];
