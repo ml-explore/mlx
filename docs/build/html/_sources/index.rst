@@ -64,6 +64,7 @@ are the CPU and GPU.
    python/transforms
    python/fft
    python/linalg
+   python/metal
    python/nn
    python/optimizers
    python/tree_utils
