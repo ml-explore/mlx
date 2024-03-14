@@ -81,27 +81,20 @@ void copy_gpu_inplace(
   set_array_buffer(compute_encoder, out, 1);
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-    size_t ndim = shape.size();
+    int ndim = shape.size();
     std::vector<int64_t> strides_in{strides_in_.begin(), strides_in_.end()};
     std::vector<int64_t> strides_out{strides_out_.begin(), strides_out_.end()};
 
     if (ndim > 3) {
       set_vector_bytes(compute_encoder, shape, ndim, 2);
-      set_vector_bytes(compute_encoder, strides_in, ndim, 3);
-      if (ctype == CopyType::GeneralGeneral) {
-        set_vector_bytes(compute_encoder, strides_out, ndim, 4);
-      }
-    } else {
-      // The shape is implicit in the grid for <= 3D
-      set_vector_bytes(compute_encoder, strides_in, ndim, 2);
-      if (ctype == CopyType::GeneralGeneral) {
-        set_vector_bytes(compute_encoder, strides_out, ndim, 3);
-      }
+    }
+    set_vector_bytes(compute_encoder, strides_in, ndim, 3);
+    if (ctype == CopyType::GeneralGeneral) {
+      set_vector_bytes(compute_encoder, strides_out, ndim, 4);
     }
 
     if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
-      compute_encoder->setBytes(
-          &ndim, sizeof(int), (ctype == CopyType::GeneralGeneral) ? 5 : 4);
+      compute_encoder->setBytes(&ndim, sizeof(int), 5);
     }
 
     int dim0 = ndim > 0 ? shape[ndim - 1] : 1;
