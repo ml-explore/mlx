@@ -21,9 +21,11 @@ Layers
    Embedding
    GELU
    GroupNorm
+   GRU
    InstanceNorm
    LayerNorm
    Linear
+   LSTM
    MaxPool1d
    MaxPool2d
    Mish
@@ -32,6 +34,7 @@ Layers
    QuantizedLinear
    RMSNorm
    ReLU
+   RNN
    RoPE
    SELU
    Sequential
