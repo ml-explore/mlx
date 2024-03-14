@@ -110,7 +110,11 @@ std::vector<array> Primitive::jvp(
     const std::vector<array>&,
     const std::vector<array>&,
     const std::vector<int>&) {
-  throw std::invalid_argument("Primitive's jvp not implemented.");
+  std::ostringstream msg;
+  msg << "[Primitive::jvp] Not implemented for ";
+  print(msg);
+  msg << ".";
+  throw std::invalid_argument(msg.str());
 };
 
 std::vector<array> Primitive::vjp(
@@ -118,13 +122,21 @@ std::vector<array> Primitive::vjp(
     const std::vector<array>&,
     const std::vector<int>&,
     const std::vector<array>&) {
-  throw std::invalid_argument("Primitive's vjp not implemented.");
+  std::ostringstream msg;
+  msg << "[Primitive::vip] Not implemented for ";
+  print(msg);
+  msg << ".";
+  throw std::invalid_argument(msg.str());
 };
 
 std::pair<std::vector<array>, std::vector<int>> Primitive::vmap(
     const std::vector<array>&,
     const std::vector<int>&) {
-  throw std::invalid_argument("Primitive's vmap not implemented.");
+  std::ostringstream msg;
+  msg << "[Primitive::vmap] Not implemented for ";
+  print(msg);
+  msg << ".";
+  throw std::invalid_argument(msg.str());
 };
 
 std::vector<std::vector<int>> Primitive::output_shapes(
@@ -233,6 +245,18 @@ std::vector<array> AddMM::vjp(
 bool AddMM::is_equivalent(const Primitive& other) const {
   const AddMM& a_other = static_cast<const AddMM&>(other);
   return (alpha_ == a_other.alpha_ && beta_ == a_other.beta_);
+}
+
+std::pair<std::vector<array>, std::vector<int>> AddMM::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto maybe_move_ax = [this](auto& arr, auto ax) {
+    return ax > 0 ? moveaxis(arr, ax, 0, stream()) : arr;
+  };
+  auto a = maybe_move_ax(inputs[0], axes[0]);
+  auto b = maybe_move_ax(inputs[1], axes[1]);
+  auto c = maybe_move_ax(inputs[2], axes[2]);
+  return {{addmm(c, a, b, alpha_, beta_, stream())}, {0}};
 }
 
 bool Arange::is_equivalent(const Primitive& other) const {
@@ -1770,6 +1794,17 @@ std::vector<array> Matmul::vjp(
     }
   }
   return vjps;
+}
+
+std::pair<std::vector<array>, std::vector<int>> Matmul::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto maybe_move_ax = [this](auto& arr, auto ax) {
+    return ax > 0 ? moveaxis(arr, ax, 0, stream()) : arr;
+  };
+  auto a = maybe_move_ax(inputs[0], axes[0]);
+  auto b = maybe_move_ax(inputs[1], axes[1]);
+  return {{matmul(a, b, stream())}, {0}};
 }
 
 std::vector<array> Maximum::vjp(
