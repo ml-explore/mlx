@@ -2,6 +2,9 @@
 
 #include <sstream>
 
+#include <iostream>
+#include "mlx/utils.h"
+
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
@@ -43,12 +46,13 @@ void copy_gpu_inplace(
     array& out,
     const std::vector<stride_t>& strides_in_pre,
     const std::vector<stride_t>& strides_out_pre,
-    int64_t offset,
+    int64_t inp_offset,
+    int64_t out_offset,
     CopyType ctype,
     const Stream& s) {
   // Try to collapse contiguous dims
   auto [shape, strides] = collapse_contiguous_dims(
-      in.shape(), std::vector{strides_in_pre, strides_out_pre});
+      out.shape(), std::vector{strides_in_pre, strides_out_pre});
   auto& strides_in_ = strides[0];
   auto& strides_out_ = strides[1];
 
@@ -77,8 +81,12 @@ void copy_gpu_inplace(
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_in = in.data_shared_ptr() == nullptr;
-  set_array_buffer(compute_encoder, donate_in ? out : in, 0);
-  set_array_buffer(compute_encoder, out, 1);
+
+  inp_offset *= size_of(in.dtype());
+  out_offset *= size_of(out.dtype());
+
+  set_array_buffer(compute_encoder, donate_in ? out : in, inp_offset, 0);
+  set_array_buffer(compute_encoder, out, out_offset, 1);
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
     int ndim = shape.size();
@@ -126,7 +134,18 @@ void copy_gpu_inplace(
     array& out,
     CopyType ctype,
     const Stream& s) {
-  return copy_gpu_inplace(in, out, in.strides(), out.strides(), 0, ctype, s);
+  return copy_gpu_inplace(in, out, in.strides(), out.strides(), 0, 0, ctype, s);
+}
+
+void copy_gpu_inplace(
+    const array& in,
+    array& out,
+    const std::vector<int64_t>& istride,
+    int64_t ioffset,
+    CopyType ctype,
+    const Stream& s) {
+  std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
+  return copy_gpu_inplace(in, out, istride, ostrides, ioffset, 0, ctype, s);
 }
 
 } // namespace mlx::core

@@ -657,30 +657,27 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
     out.set_data(nullptr);
     return;
   }
+
   auto& in = inputs[0];
-  auto strides = in.strides();
-  auto flags = in.flags();
-  size_t data_offset = 0;
+
+  // Calculate out strides, initial offset and if copy needs to be made
+  int64_t data_offset = 0;
+  bool copy_needed = false;
+  std::vector<int64_t> out_strides(in.ndim(), 0);
   for (int i = 0; i < in.ndim(); ++i) {
     data_offset += start_indices_[i] * in.strides()[i];
-    strides[i] *= strides_[i];
+    out_strides[i] = in.strides()[i] * strides_[i];
+
+    copy_needed |= strides_[i] < 0;
   }
 
   // Compute row/col contiguity
-  size_t data_size = 1;
-  size_t f_stride = 1;
-  size_t b_stride = 1;
-  flags.row_contiguous = true;
-  flags.col_contiguous = true;
-  for (int i = 0, ri = out.ndim() - 1; ri >= 0; i++, ri--) {
-    flags.col_contiguous &= strides[i] == f_stride || out.shape(i) == 1;
-    flags.row_contiguous &= strides[ri] == b_stride || out.shape(ri) == 1;
-    f_stride *= out.shape(i);
-    b_stride *= out.shape(ri);
-    if (strides[i] > 0) {
-      data_size *= out.shape(i);
-    }
-  }
+  auto [data_size, is_row_contiguous, is_col_contiguous] =
+      check_contiguity(out.shape(), out_strides);
+
+  auto flags = in.flags();
+  flags.row_contiguous = is_row_contiguous;
+  flags.col_contiguous = is_col_contiguous;
 
   if (data_size == 1) {
     // Broadcasted scalar array is contiguous.
@@ -694,7 +691,12 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
     flags.contiguous &= flags.row_contiguous || flags.col_contiguous;
   }
 
-  out.copy_shared_buffer(in, strides, flags, data_size, data_offset);
+  // Do copy if needed
+  if (copy_needed) {
+  } else {
+    std::vector<size_t> strides{out_strides.begin(), out_strides.end()};
+    out.copy_shared_buffer(in, strides, flags, data_size, data_offset);
+  }
 }
 
 void Split::eval(

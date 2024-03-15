@@ -7,6 +7,8 @@
 #include <set>
 #include <sstream>
 
+#include <iostream>
+
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -459,9 +461,9 @@ array slice(
     throw std::invalid_argument(msg.str());
   }
 
-  std::vector<int> negatively_strided_axes;
-  std::vector<std::vector<int>> negatively_strided_slices;
   std::vector<int> out_shape(a.ndim());
+  bool has_neg_strides = false;
+
   for (int i = 0; i < a.ndim(); ++i) {
     // Following numpy docs
     //  Negative i and j are interpreted as n + i and n + j where n is
@@ -477,95 +479,37 @@ array slice(
     // Note: We pass positive strides to the primitive and then flip
     //       the axes later as needed
     if (strides[i] < 0) {
-      negatively_strided_axes.push_back(i);
+      has_neg_strides |= true;
+
+      // Clamp to bounds
       auto st = std::min(s, n - 1);
-      auto ed = std::max(e, -1);
-      negatively_strided_slices.push_back({st, ed, strides[i]});
-      start[i] = 0;
-      stop[i] = n;
-      strides[i] = 1;
+      auto ed = std::max(-1, e);
+
+      start[i] = st;
+      stop[i] = ed > st ? st : ed;
+
+      auto str = -strides[i];
+      out_shape[i] = (start[i] - stop[i] + str - 1) / str;
+
+      // std::cout << std::vector<int>{s, e, start[i], stop[i], strides[i],
+      // out_shape[i]} << std::endl;
+
     } else {
-      start[i] = s;
-      stop[i] = e < s ? s : e;
+      // Clamp to bounds
+      auto st = std::max(0, std::min(s, n));
+      auto ed = std::max(0, std::min(e, n));
+
+      start[i] = st;
+      stop[i] = ed < st ? st : ed;
+
+      out_shape[i] = (stop[i] - start[i] + strides[i] - 1) / strides[i];
     }
-
-    // Clamp to bounds
-    start[i] = std::max(0, std::min(start[i], n));
-    stop[i] = std::max(0, std::min(stop[i], n));
-
-    out_shape[i] = (stop[i] - start[i] + strides[i] - 1) / strides[i];
   }
 
-  // If strides are negative, slice and then make a copy with axes flipped
-  if (negatively_strided_axes.size() > 0) {
-    // First, take the slice of the positively strided axes
-    auto out = array(
-        out_shape,
-        a.dtype(),
-        std::make_unique<Slice>(
-            to_stream(s),
-            std::move(start),
-            std::move(stop),
-            std::move(strides)),
-        {a});
-
-    std::vector<array> indices;
-    std::vector<int> slice_sizes = out.shape();
-    std::vector<int> t_axes(out.ndim(), -1);
-    std::vector<int> out_reshape(out.ndim(), -1);
-
-    int n_axes = negatively_strided_axes.size();
-    for (int i = 0; i < n_axes; i++) {
-      // Get axis and corresponding slice
-      auto ax = negatively_strided_axes[i];
-      auto sl = negatively_strided_slices[i];
-
-      // Get indices for the slice
-      auto ax_idx = arange(sl[0], sl[1], sl[2], s);
-
-      // Reshape indices for broadcast as needed
-      std::vector<int> ax_idx_shape(n_axes, 1);
-      ax_idx_shape[i] = ax_idx.size();
-      ax_idx = reshape(ax_idx, ax_idx_shape, s);
-
-      // Add indices to list
-      indices.push_back(ax_idx);
-
-      // Set slice size for axis
-      slice_sizes[ax] = 1;
-
-      // Gather moves the axis up, remainder needs to be squeezed
-      out_reshape[i] = indices[i].size();
-
-      // Gather moves the axis up, needs to be transposed
-      t_axes[ax] = i;
-    }
-
-    // Prepare out_reshape to squeeze gathered dims
-    // Prepare to transpose dims as needed
-    int j = n_axes;
-    for (int i = 0; j < out.ndim() && i < out.ndim(); i++) {
-      if (t_axes[i] < 0) {
-        t_axes[i] = j;
-        out_reshape[j] = out_shape[i];
-        j++;
-      }
-    }
-
-    // Gather
-    out = gather(out, indices, negatively_strided_axes, slice_sizes, s);
-
-    // Squeeze dims
-    out = reshape(out, out_reshape, s);
-
-    // Transpose dims
-    out = transpose(out, t_axes, s);
-
-    return out;
-  }
-  if (out_shape == a.shape()) {
+  if (!has_neg_strides && out_shape == a.shape()) {
     return a;
   }
+
   return array(
       out_shape,
       a.dtype(),

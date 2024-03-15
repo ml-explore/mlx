@@ -96,4 +96,27 @@ collapse_contiguous_dims(Arrays... xs) {
       std::vector<array>{std::forward<Arrays>(xs)...});
 }
 
+template <typename stride_t>
+inline auto check_contiguity(
+    const std::vector<int>& shape,
+    const std::vector<stride_t>& strides) {
+  size_t data_size = 1;
+  size_t f_stride = 1;
+  size_t b_stride = 1;
+  bool is_row_contiguous = true;
+  bool is_col_contiguous = true;
+
+  for (int i = 0, ri = shape.size() - 1; ri >= 0; i++, ri--) {
+    is_row_contiguous &= strides[i] == f_stride || shape[i] == 1;
+    is_col_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
+    f_stride *= shape[i];
+    b_stride *= shape[ri];
+    if (strides[i] > 0) {
+      data_size *= shape[i];
+    }
+  }
+
+  return std::make_tuple(data_size, is_row_contiguous, is_col_contiguous);
+}
+
 } // namespace mlx::core

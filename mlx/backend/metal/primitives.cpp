@@ -865,7 +865,59 @@ void Sqrt::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
+  assert(inputs.size() == 1);
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+
+  // Calculate out strides, initial offset and if copy needs to be made
+  int64_t data_offset = 0;
+  bool copy_needed = false;
+  std::vector<int64_t> inp_strides(in.ndim(), 0);
+  for (int i = 0; i < in.ndim(); ++i) {
+    data_offset += start_indices_[i] * in.strides()[i];
+    inp_strides[i] = in.strides()[i] * strides_[i];
+
+    copy_needed |= strides_[i] < 0;
+  }
+
+  // Compute row/col contiguity
+  auto [data_size, is_row_contiguous, is_col_contiguous] =
+      check_contiguity(out.shape(), inp_strides);
+
+  auto flags = in.flags();
+  flags.row_contiguous = is_row_contiguous;
+  flags.col_contiguous = is_col_contiguous;
+
+  if (data_size == 1) {
+    // Broadcasted scalar array is contiguous.
+    flags.contiguous = true;
+  } else if (data_size == in.data_size()) {
+    // Means we sliced a broadcasted dimension so leave the "no holes" flag
+    // alone.
+  } else {
+    // We sliced something. So either we are row or col contiguous or we
+    // punched a hole.
+    flags.contiguous &= flags.row_contiguous || flags.col_contiguous;
+  }
+
+  // Do copy if needed
+  if (copy_needed) {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    copy_gpu_inplace(
+        /* const array& in = */ in,
+        /* array& out = */ out,
+        /* const std::vector<int64_t>& istride = */ inp_strides,
+        /* int64_t ioffset = */ data_offset,
+        /* CopyType ctype = */ CopyType::GeneralGeneral,
+        /* const Stream& s = */ stream());
+  } else {
+    std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};
+    out.copy_shared_buffer(in, ostrides, flags, data_size, data_offset);
+  }
 }
 
 void StopGradient::eval_gpu(const std::vector<array>& inputs, array& out) {
