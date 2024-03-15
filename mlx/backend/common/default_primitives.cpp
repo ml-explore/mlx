@@ -105,6 +105,7 @@ DEFAULT_MULTI(SVD)
 DEFAULT(Tan)
 DEFAULT(Tanh)
 DEFAULT(Transpose)
+DEFAULT(Inverse)
 
 namespace {
 

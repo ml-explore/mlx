@@ -64,4 +64,6 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s = {});
 
 std::vector<array> svd(const array& a, StreamOrDevice s = {});
 
+array inv(const array& a, StreamOrDevice s = {});
+
 } // namespace mlx::core::linalg

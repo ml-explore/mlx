@@ -1897,4 +1897,18 @@ class SVD : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
+/* Matrix inversion primitive. */
+class Inverse : public UnaryPrimitive {
+ public:
+  explicit Inverse(Stream stream) : UnaryPrimitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& output) override;
+  void eval_gpu(const std::vector<array>& inputs, array& output) override;
+
+  DEFINE_PRINT(Inverse)
+
+ private:
+  void eval(const std::vector<array>& inputs, array& output);
+};
+
 } // namespace mlx::core

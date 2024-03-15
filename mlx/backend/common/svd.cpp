@@ -49,8 +49,7 @@ void svd_impl(const array& a, array& u, array& s, array& vt) {
 
   // Will contain the indices of eigenvectors that failed to converge (not used
   // here but required by lapack).
-  std::vector<int> iwork;
-  iwork.resize(12 * K);
+  auto iwork = array::Data{allocator::malloc_or_wait(sizeof(int) * 12 * K)};
 
   static const int lwork_query = -1;
 
@@ -82,7 +81,7 @@ void svd_impl(const array& a, array& u, array& s, array& vt) {
       /* ldvt = */ &ldvt,
       /* work = */ &workspace_dimension,
       /* lwork = */ &lwork_query,
-      /* iwork = */ iwork.data(),
+      /* iwork = */ static_cast<int*>(iwork.buffer.raw_ptr()),
       /* info = */ &info);
 
   if (info != 0) {
@@ -120,7 +119,7 @@ void svd_impl(const array& a, array& u, array& s, array& vt) {
         /* ldvt = */ &ldvt,
         /* work = */ static_cast<float*>(scratch.buffer.raw_ptr()),
         /* lwork = */ &lwork,
-        /* iwork = */ iwork.data(),
+        /* iwork = */ static_cast<int*>(iwork.buffer.raw_ptr()),
         /* info = */ &info);
 
     if (info != 0) {
