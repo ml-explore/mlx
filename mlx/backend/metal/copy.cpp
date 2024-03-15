@@ -2,9 +2,6 @@
 
 #include <sstream>
 
-#include <iostream>
-#include "mlx/utils.h"
-
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
@@ -44,6 +41,7 @@ template <typename stride_t>
 void copy_gpu_inplace(
     const array& in,
     array& out,
+    const std::vector<int>& data_shape,
     const std::vector<stride_t>& strides_in_pre,
     const std::vector<stride_t>& strides_out_pre,
     int64_t inp_offset,
@@ -52,7 +50,7 @@ void copy_gpu_inplace(
     const Stream& s) {
   // Try to collapse contiguous dims
   auto [shape, strides] = collapse_contiguous_dims(
-      out.shape(), std::vector{strides_in_pre, strides_out_pre});
+      data_shape, std::vector{strides_in_pre, strides_out_pre});
   auto& strides_in_ = strides[0];
   auto& strides_out_ = strides[1];
 
@@ -134,7 +132,8 @@ void copy_gpu_inplace(
     array& out,
     CopyType ctype,
     const Stream& s) {
-  return copy_gpu_inplace(in, out, in.strides(), out.strides(), 0, 0, ctype, s);
+  return copy_gpu_inplace(
+      in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s);
 }
 
 void copy_gpu_inplace(
@@ -145,7 +144,8 @@ void copy_gpu_inplace(
     CopyType ctype,
     const Stream& s) {
   std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
-  return copy_gpu_inplace(in, out, istride, ostrides, ioffset, 0, ctype, s);
+  return copy_gpu_inplace(
+      in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s);
 }
 
 } // namespace mlx::core

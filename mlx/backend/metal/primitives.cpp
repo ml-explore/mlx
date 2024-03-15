@@ -907,12 +907,16 @@ void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Do copy if needed
   if (copy_needed) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
     copy_gpu_inplace(
         /* const array& in = */ in,
         /* array& out = */ out,
-        /* const std::vector<int64_t>& istride = */ inp_strides,
-        /* int64_t ioffset = */ data_offset,
-        /* CopyType ctype = */ CopyType::GeneralGeneral,
+        /* const std::vector<int>& data_shape = */ out.shape(),
+        /* const std::vector<stride_t>& i_strides = */ inp_strides,
+        /* const std::vector<stride_t>& o_strides = */ ostrides,
+        /* int64_t i_offset = */ data_offset,
+        /* int64_t o_offset = */ 0,
+        /* CopyType ctype = */ CopyType::General,
         /* const Stream& s = */ stream());
   } else {
     std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};

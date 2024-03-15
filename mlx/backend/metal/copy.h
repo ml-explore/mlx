@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -12,10 +12,11 @@ template <typename stride_t>
 void copy_gpu_inplace(
     const array& in,
     array& out,
-    const std::vector<stride_t>& strides_inp_pre,
-    const std::vector<stride_t>& strides_out_pre,
-    int64_t inp_offset,
-    int64_t out_offset,
+    const std::vector<int>& data_shape,
+    const std::vector<stride_t>& i_strides,
+    const std::vector<stride_t>& o_strides,
+    int64_t i_offset,
+    int64_t o_offset,
     CopyType ctype,
     const Stream& s);
 

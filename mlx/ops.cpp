@@ -7,8 +7,6 @@
 #include <set>
 #include <sstream>
 
-#include <iostream>
-
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
