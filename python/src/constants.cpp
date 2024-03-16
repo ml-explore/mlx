@@ -1,11 +1,11 @@
-// init_constants.cpp
+// Copyright © 2023-2024 Apple Inc.
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
 #include <limits>
 
-namespace py = pybind11;
+namespace nb = nanobind;
 
-void init_constants(py::module_& m) {
+void init_constants(nb::module_& m) {
   m.attr("Inf") = std::numeric_limits<double>::infinity();
   m.attr("Infinity") = std::numeric_limits<double>::infinity();
   m.attr("NAN") = NAN;
@@ -19,6 +19,6 @@ void init_constants(py::module_& m) {
   m.attr("inf") = std::numeric_limits<double>::infinity();
   m.attr("infty") = std::numeric_limits<double>::infinity();
   m.attr("nan") = NAN;
-  m.attr("newaxis") = pybind11::none();
+  m.attr("newaxis") = nb::none();
   m.attr("pi") = 3.1415926535897932384626433;
 }

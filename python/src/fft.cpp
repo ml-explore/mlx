@@ -1,19 +1,18 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
-
-#include "python/src/utils.h"
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/vector.h>
+#include <numeric>
 
 #include "mlx/fft.h"
 #include "mlx/ops.h"
 
-namespace py = pybind11;
-using namespace py::literals;
+namespace nb = nanobind;
+using namespace nb::literals;
 
 using namespace mlx::core;
 
-void init_fft(py::module_& parent_module) {
+void init_fft(nb::module_& parent_module) {
   auto m = parent_module.def_submodule(
       "fft", "mlx.core.fft: Fast Fourier Transforms.");
   m.def(
@@ -29,9 +28,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "n"_a = none,
+      "n"_a = nb::none(),
       "axis"_a = -1,
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         One dimensional discrete Fourier Transform.
 
@@ -59,9 +58,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "n"_a = none,
+      "n"_a = nb::none(),
       "axis"_a = -1,
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         One dimensional inverse discrete Fourier Transform.
 
@@ -95,9 +94,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
+      "s"_a = nb::none(),
       "axes"_a = std::vector<int>{-2, -1},
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         Two dimensional discrete Fourier Transform.
 
@@ -132,9 +131,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
+      "s"_a = nb::none(),
       "axes"_a = std::vector<int>{-2, -1},
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         Two dimensional inverse discrete Fourier Transform.
 
@@ -169,9 +168,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
-      "axes"_a = none,
-      "stream"_a = none,
+      "s"_a = nb::none(),
+      "axes"_a = nb::none(),
+      "stream"_a = nb::none(),
       R"pbdoc(
         n-dimensional discrete Fourier Transform.
 
@@ -207,9 +206,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
-      "axes"_a = none,
-      "stream"_a = none,
+      "s"_a = nb::none(),
+      "axes"_a = nb::none(),
+      "stream"_a = nb::none(),
       R"pbdoc(
         n-dimensional inverse discrete Fourier Transform.
 
@@ -239,9 +238,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "n"_a = none,
+      "n"_a = nb::none(),
       "axis"_a = -1,
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         One dimensional discrete Fourier Transform on a real input.
 
@@ -274,9 +273,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "n"_a = none,
+      "n"_a = nb::none(),
       "axis"_a = -1,
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         The inverse of :func:`rfft`.
 
@@ -314,9 +313,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
+      "s"_a = nb::none(),
       "axes"_a = std::vector<int>{-2, -1},
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         Two dimensional real discrete Fourier Transform.
 
@@ -357,9 +356,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
+      "s"_a = nb::none(),
       "axes"_a = std::vector<int>{-2, -1},
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         The inverse of :func:`rfft2`.
 
@@ -400,9 +399,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
-      "axes"_a = none,
-      "stream"_a = none,
+      "s"_a = nb::none(),
+      "axes"_a = nb::none(),
+      "stream"_a = nb::none(),
       R"pbdoc(
         n-dimensional real discrete Fourier Transform.
 
@@ -443,9 +442,9 @@ void init_fft(py::module_& parent_module) {
         }
       },
       "a"_a,
-      "s"_a = none,
-      "axes"_a = none,
-      "stream"_a = none,
+      "s"_a = nb::none(),
+      "axes"_a = nb::none(),
+      "stream"_a = nb::none(),
       R"pbdoc(
         The inverse of :func:`rfftn`.
 

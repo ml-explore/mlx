@@ -1,16 +1,15 @@
-// Copyright © 2023 Apple Inc.
-
-#include <pybind11/pybind11.h>
+// Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/backend/metal/metal.h"
+#include <nanobind/nanobind.h>
 
-namespace py = pybind11;
-using namespace py::literals;
+namespace nb = nanobind;
+using namespace nb::literals;
 
 using namespace mlx::core;
 
-void init_metal(py::module_& m) {
-  py::module_ metal = m.def_submodule("metal", "mlx.metal");
+void init_metal(nb::module_& m) {
+  nb::module_ metal = m.def_submodule("metal", "mlx.metal");
   metal.def(
       "is_available",
       &metal::is_available,
@@ -48,7 +47,7 @@ void init_metal(py::module_& m) {
       "set_memory_limit",
       &metal::set_memory_limit,
       "limit"_a,
-      py::kw_only(),
+      nb::kw_only(),
       "relaxed"_a = true,
       R"pbdoc(
       Set the memory limit.

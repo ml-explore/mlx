@@ -1,20 +1,15 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
 
 #include "mlx/fast.h"
 #include "mlx/ops.h"
-#include "python/src/utils.h"
 
-namespace py = pybind11;
-using namespace py::literals;
+namespace nb = nanobind;
+using namespace nb::literals;
 using namespace mlx::core;
 
-void init_extensions(py::module_& parent_module) {
-  py::options options;
-  options.disable_function_signatures();
-
+void init_fast(nb::module_& parent_module) {
   auto m =
       parent_module.def_submodule("fast", "mlx.core.fast: fast operations");
 
@@ -31,12 +26,12 @@ void init_extensions(py::module_& parent_module) {
       },
       "a"_a,
       "dims"_a,
-      py::kw_only(),
+      nb::kw_only(),
       "traditional"_a,
       "base"_a,
       "scale"_a,
       "offset"_a,
-      "stream"_a = none,
+      "stream"_a = nb::none(),
       R"pbdoc(
         rope(a: array, dims: int, *, traditinoal: bool, base: float, scale: float, offset: int, stream: Union[None, Stream, Device] = None) -> array
 
@@ -70,10 +65,10 @@ void init_extensions(py::module_& parent_module) {
       "q"_a,
       "k"_a,
       "v"_a,
-      py::kw_only(),
+      nb::kw_only(),
       "scale"_a,
-      "mask"_a = none,
-      "stream"_a = none,
+      "mask"_a = nb::none(),
+      "stream"_a = nb::none(),
       R"pbdoc(
                   scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array
 
