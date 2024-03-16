@@ -20,9 +20,9 @@ namespace mlx::core::metal {
 namespace {
 
 // TODO nicer way to set this or possibly expose as an environment variable
-static constexpr int MAX_BUFFERS_PER_QUEUE = 12;
+constexpr int MAX_BUFFERS_PER_QUEUE = 12;
 
-static constexpr const char* default_mtllib_path = METAL_PATH;
+constexpr const char* default_mtllib_path = METAL_PATH;
 
 auto load_device() {
   auto devices = MTL::CopyAllDevices();

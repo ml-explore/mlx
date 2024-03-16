@@ -17,7 +17,7 @@ namespace mlx::core {
 
 namespace {
 
-static constexpr int METAL_MAX_INDEX_ARRAYS = 10;
+constexpr int METAL_MAX_INDEX_ARRAYS = 10;
 
 void binary_op(
     const std::vector<array>& inputs,

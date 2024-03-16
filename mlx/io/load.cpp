@@ -18,7 +18,7 @@ namespace mlx::core {
 
 namespace {
 
-static constexpr uint8_t MAGIC[] = {
+constexpr uint8_t MAGIC[] = {
     0x93,
     0x4e,
     0x55,
