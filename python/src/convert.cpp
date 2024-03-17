@@ -43,7 +43,7 @@ array nd_array_to_mlx(
   // Compute the shape and size
   std::vector<int> shape;
   for (int i = 0; i < nd_array.ndim(); i++) {
-    shape.push_back(nd_array.shape(i));
+    shape.push_back(check_shape_dim(nd_array.shape(i)));
   }
   auto type = nd_array.dtype();
 

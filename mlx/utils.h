@@ -68,6 +68,22 @@ std::vector<int> broadcast_shapes(
 
 bool is_same_shape(const std::vector<array>& arrays);
 
+/** Returns the shape dimension if it's within allowed range. */
+template <typename T>
+int check_shape_dim(const T dim) {
+  constexpr bool is_signed = std::numeric_limits<T>::is_signed;
+  using U = std::conditional_t<is_signed, ssize_t, size_t>;
+  constexpr U min = static_cast<U>(std::numeric_limits<int>::min());
+  constexpr U max = static_cast<U>(std::numeric_limits<int>::max());
+
+  if ((is_signed && dim < min) || dim > max) {
+    throw std::invalid_argument(
+        "Shape dimension falls outside supported `int` range.");
+  }
+
+  return static_cast<int>(dim);
+}
+
 /**
  * Returns the axis normalized to be in the range [0, ndim).
  * Based on numpy's normalize_axis_index. See

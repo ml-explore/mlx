@@ -196,7 +196,7 @@ PyScalarT validate_shape(
 
 template <typename T>
 void get_shape(T list, std::vector<int>& shape) {
-  shape.push_back(nb::len(list));
+  shape.push_back(check_shape_dim(nb::len(list)));
   if (shape.back() > 0) {
     auto l = list.begin();
     if (nb::isinstance<nb::list>(*l)) {
@@ -205,6 +205,9 @@ void get_shape(T list, std::vector<int>& shape) {
       return get_shape(nb::cast<nb::tuple>(*l), shape);
     } else if (nb::isinstance<array>(*l)) {
       auto arr = nb::cast<array>(*l);
+      for (int i = 0; i < arr.ndim(); i++) {
+        shape.push_back(check_shape_dim(arr.shape(i)));
+      }
       shape.insert(shape.end(), arr.shape().begin(), arr.shape().end());
       return;
     }
