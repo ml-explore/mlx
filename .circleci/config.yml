@@ -31,7 +31,7 @@ jobs:
           name: Install dependencies
           command: |
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install pybind11-stubgen
             pip install numpy
             sudo apt-get update
@@ -80,7 +80,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install pybind11-stubgen
             pip install numpy
             pip install torch
@@ -144,7 +144,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install --upgrade setuptools
             pip install pybind11-stubgen
             pip install numpy
@@ -209,7 +209,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install --upgrade setuptools
             pip install pybind11-stubgen
             pip install numpy

@@ -5,10 +5,16 @@
 #include <variant>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/tuple.h>
+#include <nanobind/stl/variant.h>
+#include <nanobind/stl/vector.h>
 
 #include "mlx/ops.h"
 #include "mlx/utils.h"
-// #include "python/src/load.h"
+#include "python/src/load.h"
 #include "python/src/utils.h"
 
 namespace nb = nanobind;
@@ -155,9 +161,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def abs(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        abs(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise absolute value.
 
         Args:
@@ -172,9 +178,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def sign(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        sign(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise sign.
 
         Args:
@@ -189,9 +195,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def negative(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        negative(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise negation.
 
         Args:
@@ -210,9 +216,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def add(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        add(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise addition.
 
         Add two arrays with numpy-style broadcasting semantics. Either or both input arrays
@@ -235,9 +241,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def subtract(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        subtract(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise subtraction.
 
         Subtract one array from another with numpy-style broadcasting semantics. Either or both
@@ -260,9 +266,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def multiply(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        multiply(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise multiplication.
 
         Multiply two arrays with numpy-style broadcasting semantics. Either or both
@@ -285,9 +291,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise division.
 
         Divide two arrays with numpy-style broadcasting semantics. Either or both
@@ -310,9 +316,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def divmod(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        divmod(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise quotient and remainder.
 
         The fuction ``divmod(a, b)`` is equivalent to but faster than
@@ -336,9 +342,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def floor_divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        floor_divide(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise integer division.
 
         If either array is a floating point type then it is equivalent to
@@ -361,9 +367,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def remainder(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        remainder(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise remainder of division.
 
         Computes the remainder of dividing a with b with numpy-style
@@ -387,9 +393,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise equality.
 
         Equality comparison on two arrays with numpy-style broadcasting semantics.
@@ -412,9 +418,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def not_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        not_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise not equal.
 
         Not equal comparison on two arrays with numpy-style broadcasting semantics.
@@ -437,9 +443,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def less(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        less(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise less than.
 
         Strict less than on two arrays with numpy-style broadcasting semantics.
@@ -462,9 +468,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def less_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        less_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise less than or equal.
 
         Less than or equal on two arrays with numpy-style broadcasting semantics.
@@ -487,9 +493,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def greater(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        greater(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise greater than.
 
         Strict greater than on two arrays with numpy-style broadcasting semantics.
@@ -512,9 +518,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def greater_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        greater_equal(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise greater or equal.
 
         Greater than or equal on two arrays with numpy-style broadcasting semantics.
@@ -541,9 +547,9 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "equal_nan"_a = false,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def array_equal(a: Union[scalar, array], b: Union[scalar, array], equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        array_equal(a: Union[scalar, array], b: Union[scalar, array], equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
-
         Array equality check.
 
         Compare two arrays for equality. Returns ``True`` if and only if the arrays
@@ -566,9 +572,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def matmul(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        matmul(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Matrix multiplication.
 
         Perform the (possibly batched) matrix multiplication of two arrays. This function supports
@@ -597,9 +603,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def square(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        square(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise square.
 
         Args:
@@ -614,9 +620,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def sqrt(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        sqrt(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise square root.
 
         Args:
@@ -631,9 +637,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def rsqrt(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        rsqrt(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise reciprocal and square root.
 
         Args:
@@ -648,9 +654,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def reciprocal(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        reciprocal(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise reciprocal.
 
         Args:
@@ -667,9 +673,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def logical_not(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        logical_not(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise logical not.
 
         Args:
@@ -687,9 +693,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def logical_and(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        logical_and(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise logical and.
 
         Args:
@@ -709,9 +715,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def logical_or(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        logical_or(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise logical or.
 
         Args:
@@ -731,9 +737,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def logaddexp(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        logaddexp(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise log-add-exp.
 
         This is a numerically stable log-add-exp of two arrays with numpy-style
@@ -754,9 +760,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def exp(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        exp(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise exponential.
 
         Args:
@@ -771,9 +777,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def erf(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        erf(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise error function.
 
         .. math::
@@ -791,9 +797,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def erfinv(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        erfinv(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise inverse of :func:`erf`.
 
         Args:
@@ -808,9 +814,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def sin(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        sin(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise sine.
 
         Args:
@@ -825,9 +831,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cos(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        cos(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise cosine.
 
         Args:
@@ -842,9 +848,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def tan(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        tan(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise tangent.
 
         Args:
@@ -859,9 +865,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def arcsin(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        arcsin(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise inverse sine.
 
         Args:
@@ -876,9 +882,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def arccos(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        arccos(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise inverse cosine.
 
         Args:
@@ -893,9 +899,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def arctan(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        arctan(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise inverse tangent.
 
         Args:
@@ -910,9 +916,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def sinh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        sinh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise hyperbolic sine.
 
         Args:
@@ -927,9 +933,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cosh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        cosh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise hyperbolic cosine.
 
         Args:
@@ -944,9 +950,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def tanh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        tanh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise hyperbolic tangent.
 
         Args:
@@ -961,9 +967,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def arcsinh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        arcsinh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise inverse hyperbolic sine.
 
         Args:
@@ -978,9 +984,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def arccosh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        arccosh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise inverse hyperbolic cosine.
 
         Args:
@@ -995,9 +1001,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def arctanh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        arctanh(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise inverse hyperbolic tangent.
 
         Args:
@@ -1012,9 +1018,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def log(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        log(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise natural logarithm.
 
         Args:
@@ -1029,9 +1035,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def log2(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        log2(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise base-2 logarithm.
 
         Args:
@@ -1046,9 +1052,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def log10(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        log10(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise base-10 logarithm.
 
         Args:
@@ -1063,9 +1069,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def log1p(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        log1p(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise natural log of one plus the array.
 
         Args:
@@ -1080,9 +1086,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def stop_gradient(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        stop_gradient(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Stop gradients from being computed.
 
         The operation is the identity but it prevents gradients from flowing
@@ -1101,9 +1107,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def sigmoid(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        sigmoid(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise logistic sigmoid.
 
         The logistic sigmoid function is:
@@ -1127,9 +1133,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def power(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        power(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise power operation.
 
         Raise the elements of a to the powers in elements of b with numpy-style
@@ -1212,9 +1218,9 @@ void init_ops(nb::module_& m) {
       "step"_a,
       "dtype"_a = nb::none(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def arange(start, stop, step, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      arange(start, stop, step, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
-
       Generates ranges of numbers.
 
       Generate numbers in the half-open interval ``[start, stop)`` in
@@ -1323,7 +1329,7 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "indices"_a,
-      "axis"_a,
+      "axis"_a.none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -2270,7 +2276,7 @@ void init_ops(nb::module_& m) {
         }
       },
       nb::arg(),
-      "axis"_a = -1,
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -2297,7 +2303,7 @@ void init_ops(nb::module_& m) {
         }
       },
       nb::arg(),
-      "axis"_a = -1,
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -2325,7 +2331,7 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "kth"_a,
-      "axis"_a = -1,
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -2396,7 +2402,7 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "k"_a,
-      "axis"_a = -1,
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -2480,7 +2486,7 @@ void init_ops(nb::module_& m) {
         }
       },
       nb::arg(),
-      "axis"_a = 0,
+      "axis"_a.none() = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -2575,8 +2581,8 @@ void init_ops(nb::module_& m) {
         return clip(a, min_, max_, s);
       },
       nb::arg(),
-      "a_min"_a,
-      "a_max"_a,
+      "a_min"_a.none(),
+      "a_max"_a.none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -3105,224 +3111,226 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The convolved array.
       )pbdoc");
-  //  m.def(
-  //      "save",
-  //      &mlx_save_helper,
-  //      "file"_a,
-  //      "arr"_a,
-  //      R"pbdoc(
-  //        save(file: str, arr: array)
-  //
-  //        Save the array to a binary file in ``.npy`` format.
-  //
-  //        Args:
-  //            file (str): File to which the array is saved
-  //            arr (array): Array to be saved.
-  //      )pbdoc");
-  //  m.def(
-  //      "savez",
-  //      [](nb::object file, nb::args args, const nb::kwargs& kwargs) {
-  //        mlx_savez_helper(file, args, kwargs, /*compressed=*/false);
-  //      },
-  //      nb::arg(),
-  //      nb::kw_only(),
-  //      R"pbdoc(
-  //        savez(file: str, *args, **kwargs)
-  //
-  //        Save several arrays to a binary file in uncompressed ``.npz``
-  //        format.
-  //
-  //        .. code-block:: python
-  //
-  //            import mlx.core as mx
-  //
-  //            x = mx.ones((10, 10))
-  //            mx.savez("my_path.npz", x=x)
-  //
-  //            import mlx.nn as nn
-  //            from mlx.utils import tree_flatten
-  //
-  //            model = nn.TransformerEncoder(6, 128, 4)
-  //            flat_params = tree_flatten(model.parameters())
-  //            mx.savez("model.npz", **dict(flat_params))
-  //
-  //        Args:
-  //            file (file, str): Path to file to which the arrays are saved.
-  //            args (arrays): Arrays to be saved.
-  //            kwargs (arrays): Arrays to be saved. Each array will be saved
-  //              with the associated keyword as the output file name.
-  //
-  //      )pbdoc");
-  //  m.def(
-  //      "savez_compressed",
-  //      [](nb::object file, nb::args args, const nb::kwargs& kwargs) {
-  //        mlx_savez_helper(file, args, kwargs, /*compressed=*/true);
-  //      },
-  //      nb::arg(),
-  //      nb::kw_only(),
-  //      R"pbdoc(
-  //        savez_compressed(file: str, *args, **kwargs)
-  //
-  //        Save several arrays to a binary file in compressed ``.npz`` format.
-  //
-  //        Args:
-  //            file (file, str): Path to file to which the arrays are saved.
-  //            args (arrays): Arrays to be saved.
-  //            kwargs (arrays): Arrays to be saved. Each array will be saved
-  //              with the associated keyword as the output file name.
-  //
-  //      )pbdoc");
-  //  m.def(
-  //      "load",
-  //      &mlx_load_helper,
-  //      nb::arg(),
-  //      "format"_a = nb::none(),
-  //      "return_metadata"_a = false,
-  //      nb::kw_only(),
-  //      "stream"_a = nb::none(),
-  //      R"pbdoc(
-  //        load(file: str, /, format: Optional[str] = None, return_metadata:
-  //        bool = False, *, stream: Union[None, Stream, Device] = None) ->
-  //        Union[array, Dict[str, array]]
-  //
-  //        Load array(s) from a binary file.
-  //
-  //        The supported formats are ``.npy``, ``.npz``, ``.safetensors``, and
-  //        ``.gguf``.
-  //
-  //        Args:
-  //            file (file, str): File in which the array is saved.
-  //            format (str, optional): Format of the file. If ``None``, the
-  //            format
-  //              is inferred from the file extension. Supported formats:
-  //              ``npy``,
-  //              ``npz``, and ``safetensors``. Default: ``None``.
-  //            return_metadata (bool, optional): Load the metadata for formats
-  //            which
-  //              support matadata. The metadata will be returned as an
-  //              additional dictionary.
-  //        Returns:
-  //            result (array, dict):
-  //                A single array if loading from a ``.npy`` file or a dict
-  //                mapping names to arrays if loading from a ``.npz`` or
-  //                ``.safetensors`` file. If ``return_metadata` is ``True`` an
-  //                additional dictionary of metadata will be returned.
-  //
-  //        Warning:
-  //
-  //          When loading unsupported quantization formats from GGUF, tensors
-  //          will automatically cast to ``mx.float16``
-  //
-  //      )pbdoc");
-  //  m.def(
-  //      "save_safetensors",
-  //      &mlx_save_safetensor_helper,
-  //      "file"_a,
-  //      "arrays"_a,
-  //      "metadata"_a = nb::none(),
-  //      R"pbdoc(
-  //        save_safetensors(file: str, arrays: Dict[str, array], metadata:
-  //        Optional[Dict[str, str]] = None)
-  //
-  //        Save array(s) to a binary file in ``.safetensors`` format.
-  //
-  //        See the `Safetensors documentation
-  //        <https://huggingface.co/docs/safetensors/index>`_ for more
-  //        information on the format.
-  //
-  //        Args:
-  //            file (file, str): File in which the array is saved.
-  //            arrays (dict(str, array)): The dictionary of names to arrays to
-  //            be saved. metadata (dict(str, str), optional): The dictionary of
-  //            metadata to be saved.
-  //      )pbdoc");
-  //  m.def(
-  //      "save_gguf",
-  //      &mlx_save_gguf_helper,
-  //      "file"_a,
-  //      "arrays"_a,
-  //      "metadata"_a = nb::none(),
-  //      R"pbdoc(
-  //        save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str,
-  //        Union[array, str, List[str]]])
-  //
-  //        Save array(s) to a binary file in ``.gguf`` format.
-  //
-  //        See the `GGUF documentation
-  //        <https://github.com/ggerganov/ggml/blob/master/docs/gguf.md>`_ for
-  //        more information on the format.
-  //
-  //        Args:
-  //            file (file, str): File in which the array is saved.
-  //            arrays (dict(str, array)): The dictionary of names to arrays to
-  //            be saved. metadata (dict(str, Union[array, str, list(str)])):
-  //            The dictionary of
-  //               metadata to be saved. The values can be a scalar or 1D
-  //               obj:`array`, a :obj:`str`, or a :obj:`list` of :obj:`str`.
-  //      )pbdoc");
-  //  m.def(
-  //      "where",
-  //      [](const ScalarOrArray& condition,
-  //         const ScalarOrArray& x_,
-  //         const ScalarOrArray& y_,
-  //         StreamOrDevice s) {
-  //        auto [x, y] = to_arrays(x_, y_);
-  //        return where(to_array(condition), x, y, s);
-  //      },
-  //      "condition"_a,
-  //      nb::arg(),
-  //      nb::arg(),
-  //      nb::kw_only(),
-  //      "stream"_a = nb::none(),
-  //      R"pbdoc(
-  //        where(condition: Union[scalar, array], x: Union[scalar, array], y:
-  //        Union[scalar, array], /, *, stream: Union[None, Stream, Device] =
-  //        None) -> array
-  //
-  //        Select from ``x`` or ``y`` according to ``condition``.
-  //
-  //        The condition and input arrays must be the same shape or
-  //        broadcastable with each another.
-  //
-  //        Args:
-  //          condition (array): The condition array.
-  //          x (array): The input selected from where condition is ``True``.
-  //          y (array): The input selected from where condition is ``False``.
-  //
-  //        Returns:
-  //            result (array): The output containing elements selected from
-  //            ``x`` and ``y``.
-  //      )pbdoc");
-  //  m.def(
-  //      "round",
-  //      [](const array& a, int decimals, StreamOrDevice s) {
-  //        return round(a, decimals, s);
-  //      },
-  //      nb::arg(),
-  //      "decimals"_a = 0,
-  //      nb::kw_only(),
-  //      "stream"_a = nb::none(),
-  //      R"pbdoc(
-  //        round(a: array, /, decimals: int = 0, stream: Union[None, Stream,
-  //        Device] = None) -> array
-  //
-  //        Round to the given number of decimals.
-  //
-  //        Basically performs:
-  //
-  //        .. code-block:: python
-  //
-  //          s = 10**decimals
-  //          x = round(x * s) / s
-  //
-  //        Args:
-  //          a (array): Input array
-  //          decimals (int): Number of decimal places to round to. (default: 0)
-  //
-  //        Returns:
-  //          result (array): An array of the same type as ``a`` rounded to the
-  //          given number of decimals.
-  //      )pbdoc");
+  m.def(
+      "save",
+      &mlx_save_helper,
+      "file"_a,
+      "arr"_a,
+      R"pbdoc(
+        save(file: str, arr: array)
+
+        Save the array to a binary file in ``.npy`` format.
+
+        Args:
+            file (str): File to which the array is saved
+            arr (array): Array to be saved.
+      )pbdoc");
+  m.def(
+      "savez",
+      [](nb::object file, nb::args args, const nb::kwargs& kwargs) {
+        mlx_savez_helper(file, args, kwargs, /* compressed= */ false);
+      },
+      nb::arg(),
+      "args"_a,
+      "kwargs"_a,
+      R"pbdoc(
+        savez(file: str, *args, **kwargs)
+
+        Save several arrays to a binary file in uncompressed ``.npz``
+        format.
+
+        .. code-block:: python
+
+            import mlx.core as mx
+
+            x = mx.ones((10, 10))
+            mx.savez("my_path.npz", x=x)
+
+            import mlx.nn as nn
+            from mlx.utils import tree_flatten
+
+            model = nn.TransformerEncoder(6, 128, 4)
+            flat_params = tree_flatten(model.parameters())
+            mx.savez("model.npz", **dict(flat_params))
+
+        Args:
+            file (file, str): Path to file to which the arrays are saved.
+            args (arrays): Arrays to be saved.
+            kwargs (arrays): Arrays to be saved. Each array will be saved
+              with the associated keyword as the output file name.
+
+      )pbdoc");
+  m.def(
+      "savez_compressed",
+      [](nb::object file, nb::args args, const nb::kwargs& kwargs) {
+        mlx_savez_helper(file, args, kwargs, /*compressed=*/true);
+      },
+      nb::arg(),
+      "args"_a,
+      "kwargs"_a,
+      R"pbdoc(
+        savez_compressed(file: str, *args, **kwargs)
+
+        Save several arrays to a binary file in compressed ``.npz`` format.
+
+        Args:
+            file (file, str): Path to file to which the arrays are saved.
+            args (arrays): Arrays to be saved.
+            kwargs (arrays): Arrays to be saved. Each array will be saved
+              with the associated keyword as the output file name.
+
+      )pbdoc");
+  m.def(
+      "load",
+      &mlx_load_helper,
+      nb::arg(),
+      "format"_a = nb::none(),
+      "return_metadata"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        load(file: str, /, format: Optional[str] = None, return_metadata:
+        bool = False, *, stream: Union[None, Stream, Device] = None) ->
+        Union[array, Dict[str, array]]
+
+        Load array(s) from a binary file.
+
+        The supported formats are ``.npy``, ``.npz``, ``.safetensors``, and
+        ``.gguf``.
+
+        Args:
+            file (file, str): File in which the array is saved.
+            format (str, optional): Format of the file. If ``None``, the
+            format
+              is inferred from the file extension. Supported formats:
+              ``npy``,
+              ``npz``, and ``safetensors``. Default: ``None``.
+            return_metadata (bool, optional): Load the metadata for formats
+            which
+              support matadata. The metadata will be returned as an
+              additional dictionary.
+        Returns:
+            result (array, dict):
+                A single array if loading from a ``.npy`` file or a dict
+                mapping names to arrays if loading from a ``.npz`` or
+                ``.safetensors`` file. If ``return_metadata` is ``True`` an
+                additional dictionary of metadata will be returned.
+
+        Warning:
+
+          When loading unsupported quantization formats from GGUF, tensors
+          will automatically cast to ``mx.float16``
+
+      )pbdoc");
+  m.def(
+      "save_safetensors",
+      &mlx_save_safetensor_helper,
+      "file"_a,
+      "arrays"_a,
+      "metadata"_a = nb::none(),
+      R"pbdoc(
+        save_safetensors(file: str, arrays: Dict[str, array], metadata:
+        Optional[Dict[str, str]] = None)
+
+        Save array(s) to a binary file in ``.safetensors`` format.
+
+        See the `Safetensors documentation
+        <https://huggingface.co/docs/safetensors/index>`_ for more
+        information on the format.
+
+        Args:
+            file (file, str): File in which the array is saved.
+            arrays (dict(str, array)): The dictionary of names to arrays to
+            be saved. metadata (dict(str, str), optional): The dictionary of
+            metadata to be saved.
+      )pbdoc");
+  m.def(
+      "save_gguf",
+      &mlx_save_gguf_helper,
+      "file"_a,
+      "arrays"_a,
+      "metadata"_a = nb::none(),
+      R"pbdoc(
+        save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str,
+        Union[array, str, List[str]]])
+
+        Save array(s) to a binary file in ``.gguf`` format.
+
+        See the `GGUF documentation
+        <https://github.com/ggerganov/ggml/blob/master/docs/gguf.md>`_ for
+        more information on the format.
+
+        Args:
+            file (file, str): File in which the array is saved.
+            arrays (dict(str, array)): The dictionary of names to arrays to
+            be saved. metadata (dict(str, Union[array, str, list(str)])):
+            The dictionary of
+               metadata to be saved. The values can be a scalar or 1D
+               obj:`array`, a :obj:`str`, or a :obj:`list` of :obj:`str`.
+      )pbdoc");
+  m.def(
+      "where",
+      [](const ScalarOrArray& condition,
+         const ScalarOrArray& x_,
+         const ScalarOrArray& y_,
+         StreamOrDevice s) {
+        auto [x, y] = to_arrays(x_, y_);
+        return where(to_array(condition), x, y, s);
+      },
+      "condition"_a,
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        where(condition: Union[scalar, array], x: Union[scalar, array], y:
+        Union[scalar, array], /, *, stream: Union[None, Stream, Device] =
+        None) -> array
+
+        Select from ``x`` or ``y`` according to ``condition``.
+
+        The condition and input arrays must be the same shape or
+        broadcastable with each another.
+
+        Args:
+          condition (array): The condition array.
+          x (array): The input selected from where condition is ``True``.
+          y (array): The input selected from where condition is ``False``.
+
+        Returns:
+            result (array): The output containing elements selected from
+            ``x`` and ``y``.
+      )pbdoc");
+  m.def(
+      "round",
+      [](const array& a, int decimals, StreamOrDevice s) {
+        return round(a, decimals, s);
+      },
+      nb::arg(),
+      "decimals"_a = 0,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        round(a: array, /, decimals: int = 0, stream: Union[None, Stream,
+        Device] = None) -> array
+
+        Round to the given number of decimals.
+
+        Basically performs:
+
+        .. code-block:: python
+
+          s = 10**decimals
+          x = round(x * s) / s
+
+        Args:
+          a (array): Input array
+          decimals (int): Number of decimal places to round to. (default: 0)
+
+        Returns:
+          result (array): An array of the same type as ``a`` rounded to the
+          given number of decimals.
+      )pbdoc");
   m.def(
       "quantized_matmul",
       &quantized_matmul,
@@ -3647,7 +3655,7 @@ void init_ops(nb::module_& m) {
         if (arys.size() == 1) {
           return nb::cast(atleast_1d(nb::cast<array>(arys[0]), s));
         }
-        return nb::cast(atleast_1d(args_to_vec<array>(arys), s));
+        return nb::cast(atleast_1d(nb::cast<std::vector<array>>(arys), s));
       },
       "arys"_a,
       "stream"_a = nb::none(),
@@ -3669,7 +3677,7 @@ void init_ops(nb::module_& m) {
         if (arys.size() == 1) {
           return nb::cast(atleast_2d(nb::cast<array>(arys[0]), s));
         }
-        return nb::cast(atleast_2d(args_to_vec<array>(arys), s));
+        return nb::cast(atleast_2d(nb::cast<std::vector<array>>(arys), s));
       },
       "arys"_a,
       "stream"_a = nb::none(),
@@ -3691,7 +3699,7 @@ void init_ops(nb::module_& m) {
         if (arys.size() == 1) {
           return nb::cast(atleast_3d(nb::cast<array>(arys[0]), s));
         }
-        return nb::cast(atleast_3d(args_to_vec<array>(arys), s));
+        return nb::cast(atleast_3d(nb::cast<std::vector<array>>(arys), s));
       },
       "arys"_a,
       "stream"_a = nb::none(),

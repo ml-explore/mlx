@@ -3,6 +3,9 @@
 #include <variant>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/linalg.h"
 
@@ -58,9 +61,9 @@ void init_linalg(nb::module_& parent_module) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def norm(a: array, /, ord: Union[None, scalar, str] = None, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        norm(a: array, /, ord: Union[None, scalar, str] = None, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         Matrix or vector norm.
 
         This function computes vector or  matrix norms depending on the value of
@@ -182,9 +185,9 @@ void init_linalg(nb::module_& parent_module) {
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def qr(a: array, *, stream: Union[None, Stream, Device] = None) -> (array, array)"),
       R"pbdoc(
-        qr(a: array, *, stream: Union[None, Stream, Device] = None) -> (array, array)
-
         The QR factorization of the input matrix.
 
         This function supports arrays with at least 2 dimensions. The matrices
@@ -215,9 +218,9 @@ void init_linalg(nb::module_& parent_module) {
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def svd(a: array, *, stream: Union[None, Stream, Device] = None) -> (array, array, array)"),
       R"pbdoc(
-        svd(a: array, *, stream: Union[None, Stream, Device] = None) -> (array, array, array)
-
         The Singular Value Decomposition (SVD) of the input matrix.
 
         This function supports arrays with at least 2 dimensions. When the input
@@ -239,9 +242,9 @@ void init_linalg(nb::module_& parent_module) {
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def inv(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        inv(a: array, *, stream: Union[None, Stream, Device] = None) -> array
-
         Compute the inverse of a square matrix.
 
         This function supports arrays with at least 2 dimensions. When the input

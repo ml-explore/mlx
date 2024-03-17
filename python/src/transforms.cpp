@@ -1,6 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/pair.h>
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
 #include <algorithm>
@@ -23,7 +27,7 @@ using IntOrVec = std::variant<int, std::vector<int>>;
 using StrOrVec = std::variant<std::string, std::vector<std::string>>;
 
 inline std::string type_name_str(const nb::handle& o) {
-  return nb::cast<std::string>(nb::type_name(o));
+  return nb::cast<std::string>(nb::type_name(o.type()));
 }
 
 template <typename T>
@@ -133,15 +137,15 @@ auto py_value_and_grad(
          &error_msg_tag,
          scalar_func_only](const std::vector<array>& a) {
           // Copy the arguments
-          std::vector<nb::object> args_cpy(args.size());
+          nb::list args_cpy;
           nb::kwargs kwargs_cpy = nb::kwargs();
           int j = 0;
           for (int i = 0; i < args.size(); ++i) {
             if (j < argnums.size() && i == argnums[j]) {
-              args_cpy[i] = tree_unflatten(args[i], a, counts[j]);
+              args_cpy.append(tree_unflatten(args[i], a, counts[j]));
               j++;
             } else {
-              args_cpy[i] = args[i];
+              args_cpy.append(args[i]);
             }
           }
           for (auto& key : argnames) {
@@ -157,8 +161,7 @@ auto py_value_and_grad(
           }
 
           // Call the python function
-          py_value_out =
-              fun(*nb::make_tuple(std::move(args_cpy)), **kwargs_cpy);
+          py_value_out = fun(*args_cpy, **kwargs_cpy);
 
           // Validate the return value of the python function
           if (!nb::isinstance<array>(py_value_out)) {
@@ -227,12 +230,11 @@ auto py_value_and_grad(
     if (argnums.size() == 1) {
       positional_grads = tree_unflatten(args[argnums[0]], gradients, counts[0]);
     } else if (argnums.size() > 1) {
-      std::vector<nb::object> grads_(argnums.size());
+      nb::list grads_;
       for (int i = 0; i < argnums.size(); i++) {
-        grads_[i] = tree_unflatten(args[argnums[i]], gradients, counts[i]);
+        grads_.append(tree_unflatten(args[argnums[i]], gradients, counts[i]));
       }
-      positional_grads =
-          nb::cast<nb::object>(nb::make_tuple(std::move(grads_)));
+      positional_grads = nb::tuple(grads_);
     } else {
       positional_grads = nb::none();
     }
@@ -247,10 +249,9 @@ auto py_value_and_grad(
         grads_[k.c_str()] = tree_unflatten(
             kwargs[k.c_str()], gradients, counts[i + argnums.size()]);
       }
-      keyword_grads = nb::cast<nb::object>(grads_);
+      keyword_grads = grads_;
 
-      py_grads =
-          nb::cast<nb::object>(nb::make_tuple(positional_grads, keyword_grads));
+      py_grads = nb::make_tuple(positional_grads, keyword_grads);
     }
 
     // Put the values back in the container
@@ -557,9 +558,8 @@ void init_transforms(nb::module_& m) {
         }
       },
       nb::arg(),
+      nb::sig("def eval(*args) -> None"),
       R"pbdoc(
-        eval(*args) -> None
-
         Evaluate an :class:`array` or tree of :class:`array`.
 
         Args:
@@ -574,7 +574,7 @@ void init_transforms(nb::module_& m) {
          const std::vector<array>& primals,
          const std::vector<array>& tangents) {
         auto vfun = [&fun](const std::vector<array>& primals) {
-          auto out = fun(*nb::make_tuple(primals));
+          auto out = fun(*nb::cast(primals));
           if (nb::isinstance<array>(out)) {
             return std::vector<array>{nb::cast<array>(out)};
           } else {
@@ -586,10 +586,9 @@ void init_transforms(nb::module_& m) {
       "fun"_a,
       "primals"_a,
       "tangents"_a,
+      nb::sig(
+          "def jvp(fun: callable, primals: List[array], tangents: List[array]) -> Tuple[List[array], List[array]]"),
       R"pbdoc(
-        jvp(fun: callable, primals: List[array], tangents: List[array]) -> Tuple[List[array], List[array]]
-
-
         Compute the Jacobian-vector product.
 
         This computes the product of the Jacobian of a function ``fun`` evaluated
@@ -614,7 +613,7 @@ void init_transforms(nb::module_& m) {
          const std::vector<array>& primals,
          const std::vector<array>& cotangents) {
         auto vfun = [&fun](const std::vector<array>& primals) {
-          auto out = fun(*nb::make_tuple(primals));
+          auto out = fun(*nb::cast(primals));
           if (nb::isinstance<array>(out)) {
             return std::vector<array>{nb::cast<array>(out)};
           } else {
@@ -626,9 +625,9 @@ void init_transforms(nb::module_& m) {
       "fun"_a,
       "primals"_a,
       "cotangents"_a,
+      nb::sig(
+          "def vjp(fun: callable, primals: List[array], cotangents: List[array]) -> Tuple[List[array], List[array]]"),
       R"pbdoc(
-        vjp(fun: callable, primals: List[array], cotangents: List[array]) -> Tuple[List[array], List[array]]
-
         Compute the vector-Jacobian product.
 
         Computes the product of the ``cotangents`` with the Jacobian of a
@@ -660,9 +659,9 @@ void init_transforms(nb::module_& m) {
       "fun"_a,
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
+      nb::sig(
+          "def value_and_grad(fun: callable, argnums: Optional[Union[int, List[int]]] = None, argnames: Union[str, List[str]] = []) -> callable"),
       R"pbdoc(
-        value_and_grad(fun: callable, argnums: Optional[Union[int, List[int]]] = None, argnames: Union[str, List[str]] = []) -> callable
-
         Returns a function which computes the value and gradient of ``fun``.
 
         The function passed to :func:`value_and_grad` should return either
@@ -728,9 +727,9 @@ void init_transforms(nb::module_& m) {
       "fun"_a,
       "argnums"_a = nb::none(),
       "argnames"_a = std::vector<std::string>{},
+      nb::sig(
+          "def grad(fun: callable, argnums: Optional[Union[int, List[int]]] = None, argnames: Union[str, List[str]] = []) -> callable"),
       R"pbdoc(
-        grad(fun: callable, argnums: Optional[Union[int, List[int]]] = None, argnames: Union[str, List[str]] = []) -> callable
-
         Returns a function which computes the gradient of ``fun``.
 
         Args:
@@ -760,9 +759,9 @@ void init_transforms(nb::module_& m) {
       "fun"_a,
       "in_axes"_a = 0,
       "out_axes"_a = 0,
+      nb::sig(
+          "def vmap(fun: callable, in_axes: object = 0, out_axes: object = 0) -> callable"),
       R"pbdoc(
-        vmap(fun: callable, in_axes: object = 0, out_axes: object = 0) -> callable
-
         Returns a vectorized version of ``fun``.
 
         Args:
@@ -840,8 +839,6 @@ void init_transforms(nb::module_& m) {
       "outputs"_a = nb::none(),
       "shapeless"_a = false,
       R"pbdoc(
-        compile(fun: callable) -> callable
-
         Returns a compiled function which produces the same output as ``fun``.
 
         Args:
@@ -873,8 +870,6 @@ void init_transforms(nb::module_& m) {
       "disable_compile",
       &disable_compile,
       R"pbdoc(
-        disable_compile() -> None
-
         Globally disable compilation. Setting the environment variable
         ``MLX_DISABLE_COMPILE`` can also be used to disable compilation.
       )pbdoc");
@@ -882,8 +877,6 @@ void init_transforms(nb::module_& m) {
       "enable_compile",
       &enable_compile,
       R"pbdoc(
-        enable_compile() -> None
-
         Globally enable compilation. This will override the environment
         variable ``MLX_DISABLE_COMPILE`` if set.
       )pbdoc");

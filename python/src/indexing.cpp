@@ -389,6 +389,8 @@ array mlx_get_item(const array& src, const nb::object& obj) {
     return mlx_get_item_int(src, nb::cast<nb::int_>(obj));
   } else if (nb::isinstance<nb::tuple>(obj)) {
     return mlx_get_item_nd(src, nb::cast<nb::tuple>(obj));
+  } else if (nb::isinstance<nb::ellipsis>(obj)) {
+    return src;
   } else if (obj.is_none()) {
     std::vector<int> s(1, 1);
     s.insert(s.end(), src.shape().begin(), src.shape().end());

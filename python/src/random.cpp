@@ -1,6 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
 #include <chrono>
@@ -120,7 +122,7 @@ void init_random(nb::module_& parent_module) {
       "low"_a = 0,
       "high"_a = 1,
       "shape"_a = std::vector<int>{},
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -152,7 +154,7 @@ void init_random(nb::module_& parent_module) {
         return normal(shape, type.value_or(float32), loc, scale, key, s);
       },
       "shape"_a = std::vector<int>{},
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       "loc"_a = 0.0,
       "scale"_a = 1.0,
       "key"_a = nb::none(),
@@ -185,7 +187,7 @@ void init_random(nb::module_& parent_module) {
       "low"_a,
       "high"_a,
       "shape"_a = std::vector<int>{},
-      "dtype"_a = int32,
+      "dtype"_a.none() = int32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -261,7 +263,7 @@ void init_random(nb::module_& parent_module) {
       "lower"_a,
       "upper"_a,
       "shape"_a = nb::none(),
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       R"pbdoc(
@@ -293,7 +295,7 @@ void init_random(nb::module_& parent_module) {
         return gumbel(shape, type.value_or(float32), key, s);
       },
       "shape"_a = std::vector<int>{},
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       "stream"_a = nb::none(),
       "key"_a = nb::none(),
       R"pbdoc(

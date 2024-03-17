@@ -1,6 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 #include <numeric>
 
@@ -95,7 +97,7 @@ void init_fft(nb::module_& parent_module) {
       },
       "a"_a,
       "s"_a = nb::none(),
-      "axes"_a = std::vector<int>{-2, -1},
+      "axes"_a.none() = std::vector<int>{-2, -1},
       "stream"_a = nb::none(),
       R"pbdoc(
         Two dimensional discrete Fourier Transform.
@@ -132,7 +134,7 @@ void init_fft(nb::module_& parent_module) {
       },
       "a"_a,
       "s"_a = nb::none(),
-      "axes"_a = std::vector<int>{-2, -1},
+      "axes"_a.none() = std::vector<int>{-2, -1},
       "stream"_a = nb::none(),
       R"pbdoc(
         Two dimensional inverse discrete Fourier Transform.
@@ -314,7 +316,7 @@ void init_fft(nb::module_& parent_module) {
       },
       "a"_a,
       "s"_a = nb::none(),
-      "axes"_a = std::vector<int>{-2, -1},
+      "axes"_a.none() = std::vector<int>{-2, -1},
       "stream"_a = nb::none(),
       R"pbdoc(
         Two dimensional real discrete Fourier Transform.
@@ -357,7 +359,7 @@ void init_fft(nb::module_& parent_module) {
       },
       "a"_a,
       "s"_a = nb::none(),
-      "axes"_a = std::vector<int>{-2, -1},
+      "axes"_a.none() = std::vector<int>{-2, -1},
       "stream"_a = nb::none(),
       R"pbdoc(
         The inverse of :func:`rfft2`.

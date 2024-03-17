@@ -4,6 +4,8 @@
 #include <variant>
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/complex.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/array.h"
 
@@ -31,8 +33,13 @@ inline std::vector<int> get_reduce_axes(const IntOrVec& v, int dims) {
 inline array to_array_with_accessor(nb::object obj) {
   if (nb::hasattr(obj, "__mlx_array__")) {
     return nb::cast<array>(obj.attr("__mlx_array__")());
-  } else {
+  } else if (nb::isinstance<array>(obj)) {
     return nb::cast<array>(obj);
+  } else {
+    std::ostringstream msg;
+    msg << "Invalid type  " << nb::type_name(obj.type()).c_str()
+        << " received in array initialization .";
+    throw std::invalid_argument(msg.str());
   }
 }
 
@@ -77,21 +84,4 @@ inline std::pair<array, array> to_arrays(
   } else {
     return {to_array(a), to_array(b)};
   }
-}
-
-// TODO un-inline
-template <typename T>
-std::vector<T> args_to_vec(nb::args args) {
-  nb::args s;
-  if (!nb::isinstance<T>(args[0])) {
-    s = args[0];
-  } else {
-    s = args;
-  }
-  std::vector<T> shape;
-  shape.reserve(s.size());
-  for (auto i : s) {
-    shape.push_back(nb::cast<T>(i));
-  }
-  return shape;
 }

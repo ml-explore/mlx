@@ -1,8 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <nanobind/nanobind.h>
-// #include <pybind11/stl.h>
-
+#include <nanobind/stl/vector.h>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
@@ -140,8 +138,8 @@ class PyFileReader : public io::Reader {
 
   void read(char* data, size_t n) override {
     nb::gil_scoped_acquire gil;
-    auto memview = PyMemoryView_FromMemory(data, n, PyBUF_READ);
-    nb::object bytes_read = readinto_func_(memview);
+    auto memview = PyMemoryView_FromMemory(data, n, PyBUF_WRITE);
+    nb::object bytes_read = readinto_func_(nb::handle(memview));
 
     if (bytes_read.is_none() || nb::cast<size_t>(bytes_read) < n) {
       throw std::runtime_error("[load] Failed to read from python stream");
@@ -356,7 +354,7 @@ class PyFileWriter : public io::Writer {
 
     auto memview =
         PyMemoryView_FromMemory(const_cast<char*>(data), n, PyBUF_READ);
-    nb::object bytes_written = write_func_(memview);
+    nb::object bytes_written = write_func_(nb::handle(memview));
 
     if (bytes_written.is_none() || nb::cast<size_t>(bytes_written) < n) {
       throw std::runtime_error("[load] Failed to write to python stream");

@@ -7,6 +7,25 @@
 namespace mlx::core {
 
 struct complex64_t;
+struct complex128_t;
+
+template <typename T>
+static constexpr bool can_convert_to_complex128 =
+    !std::is_same_v<T, complex128_t> && std::is_convertible_v<T, double>;
+
+struct complex128_t : public std::complex<double> {
+  complex128_t(double v, double u) : std::complex<double>(v, u){};
+  complex128_t(std::complex<double> v) : std::complex<double>(v){};
+
+  template <
+      typename T,
+      typename = typename std::enable_if<can_convert_to_complex128<T>>::type>
+  complex128_t(T x) : std::complex<double>(x){};
+
+  operator float() const {
+    return real();
+  };
+};
 
 template <typename T>
 static constexpr bool can_convert_to_complex64 =

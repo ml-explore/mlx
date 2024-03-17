@@ -3,7 +3,8 @@
 #include <sstream>
 
 #include <nanobind/nanobind.h>
-#include <nanobind/stl/string.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/stream.h"
 #include "mlx/utils.h"
@@ -100,7 +101,10 @@ void init_stream(nb::module_& m) {
           [](PyStreamContext& scm,
              const std::optional<nb::type_object>& exc_type,
              const std::optional<nb::object>& exc_value,
-             const std::optional<nb::object>& traceback) { scm.exit(); });
+             const std::optional<nb::object>& traceback) { scm.exit(); },
+          "exc_type"_a = nb::none(),
+          "exc_value"_a = nb::none(),
+          "traceback"_a = nb::none());
   m.def(
       "stream",
       [](StreamOrDevice s) { return PyStreamContext(s); },

@@ -2,6 +2,7 @@ nanobind_add_module(
   core
   ${CMAKE_CURRENT_SOURCE_DIR}/mlx.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/convert.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fast.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp

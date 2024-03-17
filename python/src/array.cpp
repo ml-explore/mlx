@@ -3,14 +3,15 @@
 #include <cstring>
 #include <sstream>
 
-// #include <nanobind/stl/complex.h> including this breaks to_array
+#include <nanobind/ndarray.h>
+#include <nanobind/stl/complex.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "python/src/convert.h"
 #include "python/src/indexing.h"
-// #include "python/src/pybind11_numpy_fp16.h"
 #include "python/src/utils.h"
 
 #include "mlx/ops.h"
@@ -86,7 +87,6 @@ nb::object tolist(array& a) {
     nb::gil_scoped_release nogil;
     a.eval();
   }
-  nb::object pl;
   switch (a.dtype()) {
     case bool_:
       return to_list<bool>(a, 0, 0);
@@ -184,8 +184,8 @@ PyScalarT validate_shape(
       }
     } else {
       std::ostringstream msg;
-      msg << "Invalid type in array initialization"
-          << nb::cast<std::string>(nb::type_name(l)) << ".";
+      msg << "Invalid type  " << nb::type_name(l.type()).c_str()
+          << " received in array initialization .";
       throw std::invalid_argument(msg.str());
     }
     type = std::max(type, t);
@@ -214,12 +214,12 @@ using ArrayInitType = std::variant<
     nb::bool_,
     nb::int_,
     nb::float_,
+    // Must be above complex
+    nb::ndarray<nb::ro, nb::c_contig>,
     std::complex<float>,
     nb::list,
     nb::tuple,
     array,
-    //    nb::array,
-    //    nb::buffer,
     nb::object>;
 
 // Forward declaration
@@ -307,175 +307,6 @@ array array_from_list(T pl, std::optional<Dtype> dtype) {
   return stack(arrays);
 }
 
-/////////////////////////////////////////////////////////////////////////////////
-//// Numpy -> MLX
-/////////////////////////////////////////////////////////////////////////////////
-//
-// template <typename T>
-// array np_array_to_mlx_contiguous(
-//    nb::array_t<T, nb::array::c_style | nb::array::forcecast> np_array,
-//    const std::vector<int>& shape,
-//    Dtype dtype) {
-//  // Make a copy of the numpy buffer
-//  // Get buffer ptr pass to array constructor
-//  nb::buffer_info buf = np_array.request();
-//  const T* data_ptr = static_cast<T*>(buf.ptr);
-//  return array(data_ptr, shape, dtype);
-//
-//  // Note: Leaving the following memoryless copy from np to mx commented
-//  // out for the time being since it is unsafe given that the incoming
-//  // numpy array may change the underlying data
-//
-//  // // Share underlying numpy buffer
-//  // // Copy to increase ref count
-//  // auto deleter = [np_array](void*) {};
-//  // void* data_ptr = np_array.mutable_data();
-//  // // Use buffer from numpy
-//  // return array(data_ptr, deleter, shape, dtype);
-//}
-//
-// template <>
-// array np_array_to_mlx_contiguous(
-//    nb::array_t<std::complex<float>, nb::array::c_style |
-//    nb::array::forcecast>
-//        np_array,
-//    const std::vector<int>& shape,
-//    Dtype dtype) {
-//  // Get buffer ptr pass to array constructor
-//  nb::buffer_info buf = np_array.request();
-//  auto data_ptr = static_cast<std::complex<float>*>(buf.ptr);
-//  return array(reinterpret_cast<complex64_t*>(data_ptr), shape, dtype);
-//}
-//
-// array np_array_to_mlx(nb::array np_array, std::optional<Dtype> dtype) {
-//  // Compute the shape and size
-//  std::vector<int> shape;
-//  for (int i = 0; i < np_array.ndim(); i++) {
-//    shape.push_back(np_array.shape(i));
-//  }
-//
-//  // Copy data and make array
-//  if (nb::isinstance<nb::array_t<int32_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<int32_t>(
-//        np_array, shape, dtype.value_or(int32));
-//  } else if (nb::isinstance<nb::array_t<uint32_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<uint32_t>(
-//        np_array, shape, dtype.value_or(uint32));
-//  } else if (nb::isinstance<nb::array_t<bool>>(np_array)) {
-//    return np_array_to_mlx_contiguous<bool>(
-//        np_array, shape, dtype.value_or(bool_));
-//  } else if (nb::isinstance<nb::array_t<double>>(np_array)) {
-//    return np_array_to_mlx_contiguous<double>(
-//        np_array, shape, dtype.value_or(float32));
-//  } else if (nb::isinstance<nb::array_t<float>>(np_array)) {
-//    return np_array_to_mlx_contiguous<float>(
-//        np_array, shape, dtype.value_or(float32));
-//  } else if (nb::isinstance<nb::array_t<float16_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<float>(
-//        np_array, shape, dtype.value_or(float16));
-//  } else if (nb::isinstance<nb::array_t<uint8_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<uint8_t>(
-//        np_array, shape, dtype.value_or(uint8));
-//  } else if (nb::isinstance<nb::array_t<uint16_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<uint16_t>(
-//        np_array, shape, dtype.value_or(uint16));
-//  } else if (nb::isinstance<nb::array_t<uint64_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<uint64_t>(
-//        np_array, shape, dtype.value_or(uint64));
-//  } else if (nb::isinstance<nb::array_t<int8_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<int8_t>(
-//        np_array, shape, dtype.value_or(int8));
-//  } else if (nb::isinstance<nb::array_t<int16_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<int16_t>(
-//        np_array, shape, dtype.value_or(int16));
-//  } else if (nb::isinstance<nb::array_t<int64_t>>(np_array)) {
-//    return np_array_to_mlx_contiguous<int64_t>(
-//        np_array, shape, dtype.value_or(int64));
-//  } else if (nb::isinstance<nb::array_t<std::complex<float>>>(np_array)) {
-//    return np_array_to_mlx_contiguous<std::complex<float>>(
-//        np_array, shape, dtype.value_or(complex64));
-//  } else if (nb::isinstance<nb::array_t<std::complex<double>>>(np_array)) {
-//    return np_array_to_mlx_contiguous<std::complex<float>>(
-//        np_array, shape, dtype.value_or(complex64));
-//  } else {
-//    std::ostringstream msg;
-//    msg << "Cannot convert numpy array of type " << np_array.dtype()
-//        << " to mlx array.";
-//    throw std::invalid_argument(msg.str());
-//  }
-//}
-//
-/////////////////////////////////////////////////////////////////////////////////
-//// Python Buffer Protocol (MLX -> Numpy)
-/////////////////////////////////////////////////////////////////////////////////
-//
-// std::optional<std::string> buffer_format(const array& a) {
-//  // https://docs.python.org/3.10/library/struct.html#format-characters
-//  switch (a.dtype()) {
-//    case bool_:
-//      return pybind11::format_descriptor<bool>::format();
-//    case uint8:
-//      return pybind11::format_descriptor<uint8_t>::format();
-//    case uint16:
-//      return pybind11::format_descriptor<uint16_t>::format();
-//    case uint32:
-//      return pybind11::format_descriptor<uint32_t>::format();
-//    case uint64:
-//      return pybind11::format_descriptor<uint64_t>::format();
-//    case int8:
-//      return pybind11::format_descriptor<int8_t>::format();
-//    case int16:
-//      return pybind11::format_descriptor<int16_t>::format();
-//    case int32:
-//      return pybind11::format_descriptor<int32_t>::format();
-//    case int64:
-//      return pybind11::format_descriptor<int64_t>::format();
-//    case float16:
-//      // https://github.com/pybind/pybind11/issues/4998
-//      return "e";
-//    case float32: {
-//      return pybind11::format_descriptor<float>::format();
-//    }
-//    case bfloat16:
-//      // not supported by python buffer protocol or numpy.
-//      // must be null according to
-//      // https://docs.python.org/3.10/c-api/buffer.html#c.PyBUF_FORMAT
-//      // which implies 'B'.
-//      return {};
-//    case complex64:
-//      return pybind11::format_descriptor<std::complex<float>>::format();
-//    default: {
-//      std::ostringstream os;
-//      os << "bad dtype: " << a.dtype();
-//      throw std::runtime_error(os.str());
-//    }
-//  }
-//}
-//
-// std::vector<size_t> buffer_strides(const array& a) {
-//  std::vector<size_t> py_strides;
-//  py_strides.reserve(a.strides().size());
-//  for (const size_t stride : a.strides()) {
-//    py_strides.push_back(stride * a.itemsize());
-//  }
-//  return py_strides;
-//}
-//
-// nb::buffer_info buffer_info(array& a) {
-//  // Eval if not already evaled
-//  if (!a.is_evaled()) {
-//    nb::gil_scoped_release nogil;
-//    a.eval();
-//  }
-//  return pybind11::buffer_info(
-//      a.data<void>(),
-//      a.itemsize(),
-//      buffer_format(a).value_or("B"), // we use "B" because pybind uses a
-//                                      // std::string which can't be null
-//      a.ndim(),
-//      a.shape(),
-//      buffer_strides(a));
-//}
 ///////////////////////////////////////////////////////////////////////////////
 // Module
 ///////////////////////////////////////////////////////////////////////////////
@@ -493,12 +324,10 @@ array create_array(ArrayInitType v, std::optional<Dtype> t) {
     return array_from_list(*pv, t);
   } else if (auto pv = std::get_if<nb::tuple>(&v); pv) {
     return array_from_list(*pv, t);
+  } else if (auto pv = std::get_if<nb::ndarray<nb::ro, nb::c_contig>>(&v); pv) {
+    return nd_array_to_mlx(*pv, t);
   } else if (auto pv = std::get_if<array>(&v); pv) {
     return astype(*pv, t.value_or((*pv).dtype()));
-    //  } else if (auto pv = std::get_if<nb::array>(&v); pv) {
-    //    return np_array_to_mlx(*pv, t);
-    //  } else if (auto pv = std::get_if<nb::buffer>(&v); pv) {
-    //    return np_array_to_mlx(*pv, t);
   } else {
     auto arr = to_array_with_accessor(std::get<nb::object>(v));
     return astype(arr, t.value_or(arr.dtype()));
@@ -613,7 +442,7 @@ void init_array(nb::module_& m) {
           nb::init<const array&>(),
           "x"_a,
           nb::sig("def __init__(self, x: array)"))
-      .def("__getitem__", &ArrayAt::set_indices, "indices"_a)
+      .def("__getitem__", &ArrayAt::set_indices, "indices"_a.none())
       .def("add", &ArrayAt::add, "value"_a)
       .def("subtract", &ArrayAt::subtract, "value"_a)
       .def("multiply", &ArrayAt::multiply, "value"_a)
@@ -635,18 +464,15 @@ void init_array(nb::module_& m) {
       .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
 
   nb::class_<array>(m, "array", R"pbdoc(An N-dimensional array object.)pbdoc")
-      //      nb::buffer_protocol()); // TODO
       .def(
           "__init__",
           [](array* aptr, ArrayInitType v, std::optional<Dtype> t) {
-            new (aptr) array(1.0);
+            new (aptr) array(create_array(v, t));
           },
           "val"_a,
           "dtype"_a = nb::none(),
           nb::sig(
               "def __init__(self: array, val: Union[scalar, list, tuple, numpy.ndarray, array], dtype: Optional[Dtype] = None)"))
-      //      .def_buffer([](array& a) -> nb::buffer_info { return
-      //      buffer_info(a); })
       .def_prop_ro(
           "size", &array::size, R"pbdoc(Number of elements in the array.)pbdoc")
       .def_prop_ro("ndim", &array::ndim, R"pbdoc(The array's dimension.)pbdoc")
@@ -699,6 +525,7 @@ void init_array(nb::module_& m) {
                 The value type of the list corresponding to the last dimension is either
                 ``bool``, ``int`` or ``float`` depending on the ``dtype`` of the array.
           )pbdoc")
+      .def("__array__", [](const array& a) { return mlx_to_np_array(a); })
       .def(
           "astype",
           &astype,
@@ -714,8 +541,8 @@ void init_array(nb::module_& m) {
             Returns:
                 array: The array with type ``dtype``.
           )pbdoc")
-      .def("__getitem__", mlx_get_item)
-      .def("__setitem__", mlx_set_item)
+      .def("__getitem__", mlx_get_item, nb::arg().none())
+      .def("__setitem__", mlx_set_item, nb::arg().none(), nb::arg())
       .def_prop_ro(
           "at",
           [](const array& a) { return ArrayAt(a); },
@@ -757,21 +584,18 @@ void init_array(nb::module_& m) {
             return a.shape(0);
           })
       .def("__iter__", [](const array& a) { return ArrayPythonIterator(a); })
-      //      .def(nb::pickle(
-      //          [](array& a) { // __getstate__
-      //            if (a.dtype() == bfloat16) {
-      //              throw std::runtime_error(
-      //                  "[array.__getstate__] Not supported for bfloat16.");
-      //            }
-      //            return nb::array(buffer_info(a));
-      //          },
-      //          [](nb::array npa) { // __setstate__
-      //            if (not nb::isinstance<nb::array>(npa)) {
-      //              throw std::runtime_error(
-      //                  "[array.__setstate__] Received invalid state.");
-      //            }
-      //            return np_array_to_mlx(npa, std::nullopt);
-      //          }))
+      .def(
+          "__getstate__",
+          [](const array& a) {
+            if (a.dtype() == bfloat16) {
+            }
+            return mlx_to_np_array(a);
+          })
+      .def(
+          "__setstate__",
+          [](array& arr, const nb::ndarray<nb::ro, nb::c_contig>& state) {
+            new (&arr) array(nd_array_to_mlx(state, std::nullopt));
+          })
       .def("__copy__", [](const array& self) { return array(self); })
       .def(
           "__deepcopy__",
@@ -790,7 +614,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(add(a, to_array(v, a.dtype())));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__radd__",
           [](const array& a, const ScalarOrArray v) {
@@ -809,7 +634,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(subtract(a, to_array(v, a.dtype())));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__rsub__",
           [](const array& a, const ScalarOrArray v) {
@@ -828,7 +654,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(multiply(a, to_array(v, a.dtype())));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__rmul__",
           [](const array& a, const ScalarOrArray v) {
@@ -851,7 +678,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(divide(a, to_array(v, a.dtype())));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__rtruediv__",
           [](const array& a, const ScalarOrArray v) {
@@ -882,7 +710,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(floor_divide(a, to_array(v, a.dtype())));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__rfloordiv__",
           [](const array& a, const ScalarOrArray v) {
@@ -902,7 +731,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(remainder(a, to_array(v, a.dtype())));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__rmod__",
           [](const array& a, const ScalarOrArray v) {
@@ -968,7 +798,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(matmul(a, other));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__pow__",
           [](const array& a, const ScalarOrArray v) {
@@ -987,7 +818,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(power(a, to_array(v, a.dtype())));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__invert__",
           [](const array& a) {
@@ -1031,7 +863,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(logical_and(a, b));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "__or__",
           [](const array& a, const ScalarOrArray v) {
@@ -1062,7 +895,8 @@ void init_array(nb::module_& m) {
             a.overwrite_descriptor(logical_or(a, b));
             return a;
           },
-          "other"_a)
+          "other"_a,
+          nb::rv_policy::none)
       .def(
           "flatten",
           [](const array& a,
@@ -1080,8 +914,14 @@ void init_array(nb::module_& m) {
           )pbdoc")
       .def(
           "reshape",
-          [](const array& a, nb::args shape, StreamOrDevice s) {
-            return reshape(a, args_to_vec<int>(shape), s);
+          [](const array& a, nb::args shape_, StreamOrDevice s) {
+            std::vector<int> shape;
+            if (!nb::isinstance<int>(shape_[0])) {
+              shape = nb::cast<std::vector<int>>(shape_[0]);
+            } else {
+              shape = nb::cast<std::vector<int>>(shape_);
+            }
+            return reshape(a, shape, s);
           },
           "shape"_a,
           "stream"_a = nb::none(),
@@ -1226,11 +1066,17 @@ void init_array(nb::module_& m) {
           "See :func:`swapaxes`.")
       .def(
           "transpose",
-          [](const array& a, nb::args axes, StreamOrDevice s) {
-            if (axes.size() == 0) {
+          [](const array& a, nb::args axes_, StreamOrDevice s) {
+            if (axes_.size() == 0) {
               return transpose(a, s);
             }
-            return transpose(a, args_to_vec<int>(axes), s);
+            std::vector<int> axes;
+            if (!nb::isinstance<int>(axes_[0])) {
+              axes = nb::cast<std::vector<int>>(axes_[0]);
+            } else {
+              axes = nb::cast<std::vector<int>>(axes_);
+            }
+            return transpose(a, axes, s);
           },
           "axes"_a,
           "stream"_a = nb::none(),
