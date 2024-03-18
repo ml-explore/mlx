@@ -39,7 +39,7 @@ inline array to_array_with_accessor(nb::object obj) {
   } else {
     std::ostringstream msg;
     msg << "Invalid type  " << nb::type_name(obj.type()).c_str()
-        << " received in array initialization .";
+        << " received in array initialization.";
     throw std::invalid_argument(msg.str());
   }
 }

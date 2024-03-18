@@ -28,7 +28,7 @@ static constexpr dlpack::dtype bfloat16{4, 16, 1};
 
 template <typename T>
 array nd_array_to_mlx_contiguous(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
     const std::vector<int>& shape,
     Dtype dtype) {
   // Make a copy of the numpy buffer
@@ -38,7 +38,7 @@ array nd_array_to_mlx_contiguous(
 }
 
 array nd_array_to_mlx(
-    nb::ndarray<nb::ro, nb::c_contig> nd_array,
+    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
     std::optional<Dtype> dtype) {
   // Compute the shape and size
   std::vector<int> shape;

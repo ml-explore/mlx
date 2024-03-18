@@ -186,7 +186,7 @@ PyScalarT validate_shape(
     } else {
       std::ostringstream msg;
       msg << "Invalid type  " << nb::type_name(l.type()).c_str()
-          << " received in array initialization .";
+          << " received in array initialization.";
       throw std::invalid_argument(msg.str());
     }
     type = std::max(type, t);
@@ -218,7 +218,7 @@ using ArrayInitType = std::variant<
     // Must be above ndarray
     array,
     // Must be above complex
-    nb::ndarray<nb::ro, nb::c_contig>,
+    nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>,
     std::complex<float>,
     nb::list,
     nb::tuple,
@@ -326,7 +326,9 @@ array create_array(ArrayInitType v, std::optional<Dtype> t) {
     return array_from_list(*pv, t);
   } else if (auto pv = std::get_if<nb::tuple>(&v); pv) {
     return array_from_list(*pv, t);
-  } else if (auto pv = std::get_if<nb::ndarray<nb::ro, nb::c_contig>>(&v); pv) {
+  } else if (auto pv = std::get_if<
+                 nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>>(&v);
+             pv) {
     return nd_array_to_mlx(*pv, t);
   } else if (auto pv = std::get_if<array>(&v); pv) {
     return astype(*pv, t.value_or((*pv).dtype()));
@@ -605,7 +607,8 @@ void init_array(nb::module_& m) {
           })
       .def(
           "__setstate__",
-          [](array& arr, const nb::ndarray<nb::ro, nb::c_contig>& state) {
+          [](array& arr,
+             const nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>& state) {
             new (&arr) array(nd_array_to_mlx(state, std::nullopt));
           })
       .def("__copy__", [](const array& self) { return array(self); })

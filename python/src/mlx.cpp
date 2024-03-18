@@ -24,6 +24,7 @@ NB_MODULE(core, m) {
 
   auto reprlib_fix = nb::module_::import_("mlx._reprlib_fix");
   nb::module_::import_("mlx._os_warning");
+  nb::set_leak_warnings(false);
 
   init_device(m);
   init_stream(m);

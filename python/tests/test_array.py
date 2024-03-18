@@ -1365,7 +1365,7 @@ class TestArray(mlx_tests.MLXTestCase):
         for mlx_dtype, tf_dtype, np_dtype in dtypes_list:
             a_np = np.random.uniform(low=0, high=100, size=(3, 4)).astype(np_dtype)
             a_tf = tf.constant(a_np, dtype=tf_dtype)
-            a_mx = mx.array(a_tf)
+            a_mx = mx.array(np.array(a_tf))
             for f in [
                 lambda x: x,
                 lambda x: tf.transpose(x) if isinstance(x, tf.Tensor) else x.T,
