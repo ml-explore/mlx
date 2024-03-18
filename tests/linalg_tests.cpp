@@ -322,3 +322,24 @@ TEST_CASE("test matrix inversion") {
   CHECK(allclose(matmul(A_inv, A), identity, /* rtol = */ 0, /* atol = */ 1e-6)
             .item<bool>());
 }
+
+TEST_CASE("test matrix pseudo-inverse") {
+  // 0D and 1D throw
+  CHECK_THROWS(linalg::pinv(array(0.0), Device::cpu));
+  CHECK_THROWS(linalg::pinv(array({0.0, 1.0}), Device::cpu));
+
+  // Unsupported types throw
+  CHECK_THROWS(linalg::pinv(array({0, 1}, {1, 2}), Device::cpu));
+
+  // Non-square doesn't throw.
+  CHECK_NOTHROW(linalg::pinv(array({1.0, 2.0, 3.0, 4.0, 5.0, 6.0}, {2, 3}), Device::cpu));
+
+  const auto prng_key = random::key(42);
+  const auto A = random::normal({4, 5}, prng_key);
+  const auto A_plus = transpose(linalg::pinv(A, Device::cpu));
+  const auto identity = eye(A.shape(0));
+
+  const auto expected = matmul(matmul(A, A_plus), A);
+
+  CHECK(allclose(expected, A, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
+}
