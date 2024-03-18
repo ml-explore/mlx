@@ -663,17 +663,17 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
   // Calculate out strides, initial offset and if copy needs to be made
   int64_t data_offset = 0;
   bool copy_needed = false;
-  std::vector<int64_t> out_strides(in.ndim(), 0);
+  std::vector<int64_t> inp_strides(in.ndim(), 0);
   for (int i = 0; i < in.ndim(); ++i) {
     data_offset += start_indices_[i] * in.strides()[i];
-    out_strides[i] = in.strides()[i] * strides_[i];
+    inp_strides[i] = in.strides()[i] * strides_[i];
 
     copy_needed |= strides_[i] < 0;
   }
 
   // Compute row/col contiguity
   auto [data_size, is_row_contiguous, is_col_contiguous] =
-      check_contiguity(out.shape(), out_strides);
+      check_contiguity(out.shape(), inp_strides);
 
   auto flags = in.flags();
   flags.row_contiguous = is_row_contiguous;
@@ -693,8 +693,19 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
 
   // Do copy if needed
   if (copy_needed) {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
+    copy_inplace<int64_t>(
+        /* const array& src = */ in,
+        /* array& dst = */ out,
+        /* const std::vector<int>& data_shape = */ out.shape(),
+        /* const std::vector<stride_t>& i_strides = */ inp_strides,
+        /* const std::vector<stride_t>& o_strides = */ ostrides,
+        /* int64_t i_offset = */ data_offset,
+        /* int64_t o_offset = */ 0,
+        /* CopyType ctype = */ CopyType::General);
   } else {
-    std::vector<size_t> strides{out_strides.begin(), out_strides.end()};
+    std::vector<size_t> strides{inp_strides.begin(), inp_strides.end()};
     out.copy_shared_buffer(in, strides, flags, data_size, data_offset);
   }
 }
