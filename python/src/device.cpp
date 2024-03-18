@@ -19,8 +19,12 @@ void init_device(nb::module_& m) {
       .value("cpu", Device::DeviceType::cpu)
       .value("gpu", Device::DeviceType::gpu)
       .export_values()
-      .def("__eq__", [](const Device::DeviceType& d1, const Device& d2) {
-        return d1 == d2;
+      .def("__eq__", [](const Device::DeviceType& d, const nb::object& other) {
+        if (!nb::isinstance<Device>(other) &&
+            !nb::isinstance<Device::DeviceType>(other)) {
+          return false;
+        }
+        return d == nb::cast<Device>(other);
       });
 
   device_class.def(nb::init<Device::DeviceType, int>(), "type"_a, "index"_a = 0)
@@ -32,8 +36,12 @@ void init_device(nb::module_& m) {
             os << d;
             return os.str();
           })
-      .def("__eq__", [](const Device& d1, const Device& d2) {
-        return d1 == d2;
+      .def("__eq__", [](const Device& d, const nb::object& other) {
+        if (!nb::isinstance<Device>(other) &&
+            !nb::isinstance<Device::DeviceType>(other)) {
+          return false;
+        }
+        return d == nb::cast<Device>(other);
       });
 
   nb::implicitly_convertible<Device::DeviceType, Device>();

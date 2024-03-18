@@ -418,7 +418,11 @@ void init_array(nb::module_& m) {
             os << t;
             return os.str();
           })
-      .def("__eq__", [](const Dtype& t1, const Dtype& t2) { return t1 == t2; })
+      .def(
+          "__eq__",
+          [](const Dtype& t, const nb::object& other) {
+            return nb::isinstance<Dtype>(other) && t == nb::cast<Dtype>(other);
+          })
       .def("__hash__", [](const Dtype& t) {
         return static_cast<int64_t>(t.val);
       });

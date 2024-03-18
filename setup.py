@@ -134,7 +134,7 @@ class GenerateStubs(Command):
         pass
 
     def run(self) -> None:
-        subprocess.run(["pybind11-stubgen", "mlx.core", "-o", "python"])
+        subprocess.run(["python", "-m", "nanobind.stubgen", "-m", "mlx.core", "-r"])
 
 
 # Read the content of README.md

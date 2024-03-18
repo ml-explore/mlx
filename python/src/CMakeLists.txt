@@ -1,6 +1,6 @@
 nanobind_add_module(
   core
-  NB_STATIC STABLE_ABI LTO
+  NB_STATIC STABLE_ABI LTO NOMINSIZE
   NB_DOMAIN mlx
   ${CMAKE_CURRENT_SOURCE_DIR}/mlx.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/array.cpp
