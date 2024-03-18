@@ -7,6 +7,13 @@
 #include "mlx/array.h"
 #include "mlx/utils.h"
 
+// Only defined in >= Python 3.9
+// https://github.com/python/cpython/blob/f6cdc6b4a191b75027de342aa8b5d344fb31313e/Include/typeslots.h#L2-L3
+#ifndef Py_bf_getbuffer
+#define Py_bf_getbuffer 1
+#define Py_bf_releasebuffer 2
+#endif
+
 namespace nb = nanobind;
 using namespace mlx::core;
 
