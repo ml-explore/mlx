@@ -130,7 +130,7 @@ void sort(const array& in, array& out, int axis) {
     StridedIterator st(data_ptr, axis_stride, 0);
     StridedIterator ed(data_ptr, axis_stride, axis_size);
 
-    std::stable_sort(st, ed);
+    std::sort(st, ed);
   }
 }
 
