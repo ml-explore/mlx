@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #pragma once
 #include <numeric>
+#include <optional>
 #include <variant>
 
 #include <nanobind/nanobind.h>
