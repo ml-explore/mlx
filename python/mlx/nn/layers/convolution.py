@@ -24,6 +24,7 @@ class Conv1d(Module):
         padding (int, optional): How many positions to 0-pad the input with.
             Default: 0.
         dilation (int, optional): The dilation of the convolution.
+        groups (int, optional): The number of groups to split the input.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
             Default: ``True``
     """
@@ -36,6 +37,7 @@ class Conv1d(Module):
         stride: int = 1,
         padding: int = 0,
         dilation: int = 1,
+        groups : int = 1,
         bias: bool = True,
     ):
         super().__init__()
@@ -51,6 +53,7 @@ class Conv1d(Module):
 
         self.padding = padding
         self.dilation = dilation
+        self.groups = groups
         self.stride = stride
 
     def _extra_repr(self):
@@ -58,11 +61,11 @@ class Conv1d(Module):
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
-            f"bias={'bias' in self}"
+            f"groups={self.groups}, bias={'bias' in self}"
         )
 
     def __call__(self, x):
-        y = mx.conv1d(x, self.weight, self.stride, self.padding, self.dilation)
+        y = mx.conv1d(x, self.weight, self.stride, self.padding, self.dilation, self.groups)
         if "bias" in self:
             y = y + self.bias
         return y
@@ -86,6 +89,7 @@ class Conv2d(Module):
         padding (int or tuple, optional): How many positions to 0-pad
             the input with. Default: 0.
         dilation (int or tuple, optional): The dilation of the convolution.
+        groups (int, optional): The number of groups to split the input.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``
     """
@@ -98,9 +102,17 @@ class Conv2d(Module):
         stride: Union[int, tuple] = 1,
         padding: Union[int, tuple] = 0,
         dilation: Union[int, tuple] = 1,
+        groups: int = 1,
         bias: bool = True,
     ):
         super().__init__()
+        if groups <= 0:
+            raise ValueError("The number of groups must be positive")
+        if in_channels % groups != 0:
+            raise ValueError("The number of input channels must be divisible by the number of groups")
+        if out_channels % groups != 0:
+            raise ValueError("The number of output channels must be divisible by the number of groups")
+
 
         kernel_size, stride, padding = map(
             lambda x: (x, x) if isinstance(x, int) else x,
@@ -118,17 +130,18 @@ class Conv2d(Module):
         self.padding = padding
         self.stride = stride
         self.dilation = dilation
+        self.groups = groups
 
     def _extra_repr(self):
         return (
             f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
             f"kernel_size={self.weight.shape[1:2]}, stride={self.stride}, "
             f"padding={self.padding}, dilation={self.dilation}, "
-            f"bias={'bias' in self}"
+            f"groups={self.groups}, bias={'bias' in self}"
         )
 
     def __call__(self, x):
-        y = mx.conv2d(x, self.weight, self.stride, self.padding, self.dilation)
+        y = mx.conv2d(x, self.weight, self.stride, self.padding, self.dilation, self.groups)
         if "bias" in self:
             y = y + self.bias
         return y
