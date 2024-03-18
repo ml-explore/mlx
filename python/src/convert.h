@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <optional>
+
 #include <nanobind/nanobind.h>
 #include <nanobind/ndarray.h>
 

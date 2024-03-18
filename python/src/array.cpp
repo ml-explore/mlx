@@ -10,6 +10,7 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "python/src/buffer.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
 #include "python/src/utils.h"
@@ -214,12 +215,13 @@ using ArrayInitType = std::variant<
     nb::bool_,
     nb::int_,
     nb::float_,
+    // Must be above ndarray
+    array,
     // Must be above complex
     nb::ndarray<nb::ro, nb::c_contig>,
     std::complex<float>,
     nb::list,
     nb::tuple,
-    array,
     nb::object>;
 
 // Forward declaration
@@ -463,7 +465,18 @@ void init_array(nb::module_& m) {
       .def("__next__", &ArrayPythonIterator::next)
       .def("__iter__", [](const ArrayPythonIterator& it) { return it; });
 
-  nb::class_<array>(m, "array", R"pbdoc(An N-dimensional array object.)pbdoc")
+  // Install buffer protocol functions
+  PyType_Slot array_slots[] = {
+      {Py_bf_getbuffer, (void*)getbuffer},
+      {Py_bf_releasebuffer, (void*)releasebuffer},
+      {0, nullptr}};
+
+  nb::class_<array>(
+      m,
+      "array",
+      R"pbdoc(An N-dimensional array object.)pbdoc",
+      nb::type_slots(array_slots),
+      nb::is_weak_referenceable())
       .def(
           "__init__",
           [](array* aptr, ArrayInitType v, std::optional<Dtype> t) {
@@ -525,7 +538,6 @@ void init_array(nb::module_& m) {
                 The value type of the list corresponding to the last dimension is either
                 ``bool``, ``int`` or ``float`` depending on the ``dtype`` of the array.
           )pbdoc")
-      .def("__array__", [](const array& a) { return mlx_to_np_array(a); })
       .def(
           "astype",
           &astype,
