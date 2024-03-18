@@ -1263,20 +1263,20 @@ void init_ops(nb::module_& m) {
       "num"_a = 50,
       "dtype"_a = float32,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array
+        Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
 
-      Generate ``num`` evenly spaced numbers over interval ``[start, stop]``.
+        Args:
+            start (scalar): Starting value.
+            stop (scalar): Stopping value.
+            num (int, optional): Number of samples, defaults to ``50``.
+            dtype (Dtype, optional): Specifies the data type of the output,
+              default to ``float32``.
 
-      Args:
-          start (scalar): Starting value.
-          stop (scalar): Stopping value.
-          num (int, optional): Number of samples, defaults to ``50``.
-          dtype (Dtype, optional): Specifies the data type of the output,
-            default to ``float32``.
-
-      Returns:
-          array: The range of values.
+        Returns:
+            array: The range of values.
       )pbdoc");
   m.def(
       "take",
@@ -1295,9 +1295,9 @@ void init_ops(nb::module_& m) {
       "axis"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def take(a: array, /, indices: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        take(a: array, /, indices: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
-
         Take elements along an axis.
 
         The elements are taken from ``indices`` along the specified axis.
@@ -1332,9 +1332,9 @@ void init_ops(nb::module_& m) {
       "axis"_a.none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def take_along_axis(a: array, /, indices: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        take_along_axis(a: array, /, indices: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
-
         Take values along an axis at the specified indices.
 
         Args:
@@ -1366,9 +1366,9 @@ void init_ops(nb::module_& m) {
       "dtype"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def full(shape: Union[int, List[int]], vals: Union[scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        full(shape: Union[int, List[int]], vals: Union[scalar, array], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
-
         Construct an array with the given value.
 
         Constructs an array of size ``shape`` filled with ``vals``. If ``vals``
@@ -1399,9 +1399,9 @@ void init_ops(nb::module_& m) {
       "dtype"_a = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def zeros(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        zeros(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
-
         Construct an array of zeros.
 
         Args:
@@ -1418,9 +1418,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def zeros_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        zeros_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         An array of zeros like the input.
 
         Args:
@@ -1445,9 +1445,9 @@ void init_ops(nb::module_& m) {
       "dtype"_a = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def ones(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        ones(shape: Union[int, List[int]], dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
-
         Construct an array of ones.
 
         Args:
@@ -1464,9 +1464,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def ones_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        ones_like(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         An array of ones like the input.
 
         Args:
@@ -1490,20 +1490,20 @@ void init_ops(nb::module_& m) {
       "dtype"_a = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def eye(n: int, m: Optional[int] = None, k: int = 0, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      eye(n: int, m: Optional[int] = None, k: int = 0, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
+        Create an identity matrix or a general diagonal matrix.
 
-      Create an identity matrix or a general diagonal matrix.
+        Args:
+            n (int): The number of rows in the output.
+            m (int, optional): The number of columns in the output. Defaults to n.
+            k (int, optional): Index of the diagonal. Defaults to 0 (main diagonal).
+            dtype (Dtype, optional): Data type of the output array. Defaults to float32.
+            stream (Stream, optional): Stream or device. Defaults to None.
 
-      Args:
-          n (int): The number of rows in the output.
-          m (int, optional): The number of columns in the output. Defaults to n.
-          k (int, optional): Index of the diagonal. Defaults to 0 (main diagonal).
-          dtype (Dtype, optional): Data type of the output array. Defaults to float32.
-          stream (Stream, optional): Stream or device. Defaults to None.
-
-      Returns:
-          array: An array where all elements are equal to zero, except for the k-th diagonal, whose values are equal to one.
+        Returns:
+            array: An array where all elements are equal to zero, except for the k-th diagonal, whose values are equal to one.
       )pbdoc");
   m.def(
       "identity",
@@ -1514,18 +1514,18 @@ void init_ops(nb::module_& m) {
       "dtype"_a = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def identity(n: int, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      identity(n: int, dtype: Optional[Dtype] = float32, *, stream: Union[None, Stream, Device] = None) -> array
+        Create a square identity matrix.
 
-      Create a square identity matrix.
+        Args:
+            n (int): The number of rows and columns in the output.
+            dtype (Dtype, optional): Data type of the output array. Defaults to float32.
+            stream (Stream, optional): Stream or device. Defaults to None.
 
-      Args:
-          n (int): The number of rows and columns in the output.
-          dtype (Dtype, optional): Data type of the output array. Defaults to float32.
-          stream (Stream, optional): Stream or device. Defaults to None.
-
-      Returns:
-          array: An identity matrix of size n x n.
+        Returns:
+            array: An identity matrix of size n x n.
       )pbdoc");
   m.def(
       "tri",
@@ -1564,19 +1564,19 @@ void init_ops(nb::module_& m) {
       "k"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      tril(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
+        Zeros the array above the given diagonal.
 
-      Zeros the array above the given diagonal.
+        Args:
+          x (array): input array.
+          k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``.
 
-      Args:
-        x (array): input array.
-        k (int, optional): The diagonal of the 2-D array. Defaults to ``0``.
-        stream (Stream, optional): Stream or device. Defaults to ``None``.
-
-      Returns:
-        array: Array zeroed above the given diagonal
-    )pbdoc");
+        Returns:
+          array: Array zeroed above the given diagonal
+      )pbdoc");
   m.def(
       "triu",
       &triu,
@@ -1584,9 +1584,9 @@ void init_ops(nb::module_& m) {
       "k"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def triu(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      triu(x: array, k: int, *, stream: Union[None, Stream, Device] = None) -> array
-
         Zeros the array below the given diagonal.
 
         Args:
@@ -1607,9 +1607,9 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "equal_nan"_a = false,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def allclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        allclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
-
         Approximate comparison of two arrays.
 
         Infinite values are considered equal if they have the same sign, NaN values are not equal unless ``equal_nan`` is ``True``.
@@ -1644,9 +1644,9 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "equal_nan"_a = false,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def isclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        isclose(a: array, b: array, /, rtol: float = 1e-05, atol: float = 1e-08, *, equal_nan: bool = False, stream: Union[None, Stream, Device] = None) -> array
-
         Returns a boolean array where two arrays are element-wise equal within a tolerance.
 
         Infinite values are considered equal if they have the same sign, NaN values are
@@ -1685,9 +1685,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def all(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        all(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         An `and` reduction over the given axes.
 
         Args:
@@ -1714,9 +1714,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def any(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        any(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         An `or` reduction over the given axes.
 
         Args:
@@ -1740,9 +1740,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def minimum(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        minimum(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise minimum.
 
         Take the element-wise min of two arrays with numpy-style broadcasting
@@ -1765,9 +1765,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def maximum(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        maximum(a: Union[scalar, array], b: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise maximum.
 
         Take the element-wise max of two arrays with numpy-style broadcasting
@@ -1786,9 +1786,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def floor(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        floor(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise floor.
 
         Args:
@@ -1803,9 +1803,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def ceil(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        ceil(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
         Element-wise ceil.
 
         Args:
@@ -1820,9 +1820,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def isnan(a: array, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        isnan(a: array, stream: Union[None, Stream, Device] = None) -> array
-
         Return a boolean array indicating which elements are NaN.
 
         Args:
@@ -1837,9 +1837,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def isinf(a: array, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        isinf(a: array, stream: Union[None, Stream, Device] = None) -> array
-
         Return a boolean array indicating which elements are +/- inifnity.
 
         Args:
@@ -1854,9 +1854,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def isposinf(a: array, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        isposinf(a: array, stream: Union[None, Stream, Device] = None) -> array
-
         Return a boolean array indicating which elements are positive infinity.
 
         Args:
@@ -1872,9 +1872,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def isneginf(a: array, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        isneginf(a: array, stream: Union[None, Stream, Device] = None) -> array
-
         Return a boolean array indicating which elements are negative infinity.
 
         Args:
@@ -1892,9 +1892,9 @@ void init_ops(nb::module_& m) {
       "destination"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def moveaxis(a: array, /, source: int, destination: int, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        moveaxis(a: array, /, source: int, destination: int, *, stream: Union[None, Stream, Device] = None) -> array
-
         Move an axis to a new position.
 
         Args:
@@ -1913,9 +1913,9 @@ void init_ops(nb::module_& m) {
       "axis2"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def swapaxes(a: array, /, axis1 : int, axis2: int, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        swapaxes(a: array, /, axis1 : int, axis2: int, *, stream: Union[None, Stream, Device] = None) -> array
-
         Swap two axes of an array.
 
         Args:
@@ -1941,9 +1941,9 @@ void init_ops(nb::module_& m) {
       "axes"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def transpose(a: array, /, axes: Optional[List[int]] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        transpose(a: array, /, axes: Optional[List[int]] = None, *, stream: Union[None, Stream, Device] = None) -> array
-
         Transpose the dimensions of the array.
 
         Args:
@@ -1967,9 +1967,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def sum(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        sum(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         Sum reduce the array over the given axes.
 
         Args:
@@ -1996,9 +1996,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def prod(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        prod(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         An product reduction over the given axes.
 
         Args:
@@ -2025,9 +2025,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def min(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        min(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         An `min` reduction over the given axes.
 
         Args:
@@ -2054,9 +2054,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def max(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        max(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         An `max` reduction over the given axes.
 
         Args:
@@ -2083,9 +2083,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def logsumexp(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        logsumexp(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         A `log-sum-exp` reduction over the given axes.
 
         The log-sum-exp reduction is a numerically stable version of:
@@ -2118,9 +2118,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def mean(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        mean(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         Compute the mean(s) over the given axes.
 
         Args:
@@ -2149,9 +2149,9 @@ void init_ops(nb::module_& m) {
       "ddof"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def var(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, ddof: int = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        var(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, ddof: int = 0, *, stream: Union[None, Stream, Device] = None) -> array
-
         Compute the variance(s) over the given axes.
 
         Args:
@@ -2185,9 +2185,9 @@ void init_ops(nb::module_& m) {
       "axis"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def split(a: array, /, indices_or_sections: Union[int, List[int]], axis: int = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        split(a: array, /, indices_or_sections: Union[int, List[int]], axis: int = 0, *, stream: Union[None, Stream, Device] = None) -> array
-
         Split an array along a given axis.
 
         Args:
@@ -2219,9 +2219,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def argmin(a: array, /, axis: Union[None, int] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        argmin(a: array, /, axis: Union[None, int] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         Indices of the minimum values along the axis.
 
         Args:
@@ -2251,9 +2251,9 @@ void init_ops(nb::module_& m) {
       "keepdims"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def argmax(a: array, /, axis: Union[None, int] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        argmax(a: array, /, axis: Union[None, int] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array
-
         Indices of the maximum values along the axis.
 
         Args:
@@ -2279,9 +2279,9 @@ void init_ops(nb::module_& m) {
       "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def sort(a: array, /, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        sort(a: array, /, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array
-
         Returns a sorted copy of the array.
 
         Args:
@@ -2306,9 +2306,9 @@ void init_ops(nb::module_& m) {
       "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def argsort(a: array, /, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        argsort(a: array, /, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array
-
         Returns the indices that sort the array.
 
         Args:
@@ -2334,9 +2334,9 @@ void init_ops(nb::module_& m) {
       "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def partition(a: array, /, kth: int, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        partition(a: array, /, kth: int, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array
-
         Returns a partitioned copy of the array such that the smaller ``kth``
         elements are first.
 
@@ -2369,9 +2369,9 @@ void init_ops(nb::module_& m) {
       "axis"_a = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def argpartition(a: array, /, kth: int, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        argpartition(a: array, /, kth: int, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array
-
         Returns the indices that partition the array.
 
         The ordering of the elements within a partition in given by the indices
@@ -2405,9 +2405,9 @@ void init_ops(nb::module_& m) {
       "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def topk(a: array, /, k: int, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        topk(a: array, /, k: int, axis: Union[None, int] = -1, *, stream: Union[None, Stream, Device] = None) -> array
-
         Returns the ``k`` largest elements from the input along a given axis.
 
         The elements will not necessarily be in sorted order.
@@ -2431,9 +2431,9 @@ void init_ops(nb::module_& m) {
       "shape"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def broadcast_to(a: Union[scalar, array], /, shape: List[int], *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        broadcast_to(a: Union[scalar, array], /, shape: List[int], *, stream: Union[None, Stream, Device] = None) -> array
-
         Broadcast an array to the given shape.
 
         The broadcasting semantics are the same as Numpy.
@@ -2454,9 +2454,9 @@ void init_ops(nb::module_& m) {
       "axis"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def softmax(a: array, /, axis: Union[None, int, List[int]] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        softmax(a: array, /, axis: Union[None, int, List[int]] = None, *, stream: Union[None, Stream, Device] = None) -> array
-
         Perform the softmax along the given axis.
 
         This operation is a numerically stable version of:
@@ -2489,9 +2489,9 @@ void init_ops(nb::module_& m) {
       "axis"_a.none() = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def concatenate(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        concatenate(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array
-
         Concatenate the arrays along the given axis.
 
         Args:
@@ -2517,20 +2517,20 @@ void init_ops(nb::module_& m) {
       "axis"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def stack(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      stack(arrays: List[array], axis: Optional[int] = 0, *, stream: Union[None, Stream, Device] = None) -> array
+        Stacks the arrays along a new axis.
 
-      Stacks the arrays along a new axis.
+        Args:
+            arrays (list(array)): A list of arrays to stack.
+            axis (int, optional): The axis in the result array along which the
+              input arrays are stacked. Defaults to ``0``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``.
 
-      Args:
-          arrays (list(array)): A list of arrays to stack.
-          axis (int, optional): The axis in the result array along which the
-            input arrays are stacked. Defaults to ``0``.
-          stream (Stream, optional): Stream or device. Defaults to ``None``.
-
-      Returns:
-          array: The resulting stacked array.
-    )pbdoc");
+        Returns:
+            array: The resulting stacked array.
+      )pbdoc");
   m.def(
       "repeat",
       [](const array& array,
@@ -2548,22 +2548,22 @@ void init_ops(nb::module_& m) {
       "axis"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def repeat(array: array, repeats: int, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      repeat(array: array, repeats: int, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array
+        Repeat an array along a specified axis.
 
-      Repeat an array along a specified axis.
+        Args:
+            array (array): Input array.
+            repeats (int): The number of repetitions for each element.
+            axis (int, optional): The axis in which to repeat the array along. If
+              unspecified it uses the flattened array of the input and repeats
+              along axis 0.
+            stream (Stream, optional): Stream or device. Defaults to ``None``.
 
-      Args:
-          array (array): Input array.
-          repeats (int): The number of repetitions for each element.
-          axis (int, optional): The axis in which to repeat the array along. If
-            unspecified it uses the flattened array of the input and repeats
-            along axis 0.
-          stream (Stream, optional): Stream or device. Defaults to ``None``.
-
-      Returns:
-          array: The resulting repeated array.
-    )pbdoc");
+        Returns:
+            array: The resulting repeated array.
+      )pbdoc");
   m.def(
       "clip",
       [](const array& a,
@@ -2585,23 +2585,23 @@ void init_ops(nb::module_& m) {
       "a_max"_a.none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def clip(a: array, /, a_min: Union[scalar, array, None], a_max: Union[scalar, array, None], *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      clip(a: array, /, a_min: Union[scalar, array, None], a_max: Union[scalar, array, None], *, stream: Union[None, Stream, Device] = None) -> array
+        Clip the values of the array between the given minimum and maximum.
 
-      Clip the values of the array between the given minimum and maximum.
+        If either ``a_min`` or ``a_max`` are ``None``, then corresponding edge
+        is ignored. At least one of ``a_min`` and ``a_max`` cannot be ``None``.
+        The input ``a`` and the limits must broadcast with one another.
 
-      If either ``a_min`` or ``a_max`` are ``None``, then corresponding edge
-      is ignored. At least one of ``a_min`` and ``a_max`` cannot be ``None``.
-      The input ``a`` and the limits must broadcast with one another.
+        Args:
+            a (array): Input array.
+            a_min (scalar or array or None): Minimum value to clip to.
+            a_max (scalar or array or None): Maximum value to clip to.
 
-      Args:
-          a (array): Input array.
-          a_min (scalar or array or None): Minimum value to clip to.
-          a_max (scalar or array or None): Maximum value to clip to.
-
-      Returns:
-          array: The clipped array.
-    )pbdoc");
+        Returns:
+            array: The clipped array.
+      )pbdoc");
   m.def(
       "pad",
       [](const array& a,
@@ -2632,9 +2632,9 @@ void init_ops(nb::module_& m) {
       "constant_values"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def pad(a: array, pad_with: Union[int, Tuple[int], Tuple[int, int], List[Tuple[int, int]]], constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        pad(a: array, pad_with: Union[int, Tuple[int], Tuple[int, int], List[Tuple[int, int]]], constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array
-
         Pad an array with a constant value
 
         Args:
@@ -2676,9 +2676,9 @@ void init_ops(nb::module_& m) {
       "offset"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def as_strided(a: array, /, shape: Optional[List[int]] = None, strides: Optional[List[int]] = None, offset: int = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        as_strided(a: array, /, shape: Optional[List[int]] = None, strides: Optional[List[int]] = None, offset: int = 0, *, stream: Union[None, Stream, Device] = None) -> array
-
         Create a view into the array with the given shape and strides.
 
         The resulting array will always be as if the provided array was row
@@ -2723,9 +2723,9 @@ void init_ops(nb::module_& m) {
       "reverse"_a = false,
       "inclusive"_a = true,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        cumsum(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array
-
         Return the cumulative sum of the elements along the given axis.
 
         Args:
@@ -2756,9 +2756,9 @@ void init_ops(nb::module_& m) {
       "reverse"_a = false,
       "inclusive"_a = true,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        cumprod(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array
-
         Return the cumulative product of the elements along the given axis.
 
         Args:
@@ -2789,9 +2789,9 @@ void init_ops(nb::module_& m) {
       "reverse"_a = false,
       "inclusive"_a = true,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cummax(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        cummax(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array
-
         Return the cumulative maximum of the elements along the given axis.
 
         Args:
@@ -2822,9 +2822,9 @@ void init_ops(nb::module_& m) {
       "reverse"_a = false,
       "inclusive"_a = true,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def cummin(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        cummin(a: array, /, axis: Optional[int] = None, *, reverse: bool = False, inclusive: bool = True, stream: Union[None, Stream, Device] = None) -> array
-
         Return the cumulative minimum of the elements along the given axis.
 
         Args:
@@ -2893,9 +2893,9 @@ void init_ops(nb::module_& m) {
       "mode"_a = "full",
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          R"(def convolve(a: array, v: array, /, mode: str = "full", *, stream: Union[None, Stream, Device] = None) -> array)"),
       R"pbdoc(
-        convolve(a: array, v: array, /, mode: str = "full", *, stream: Union[None, Stream, Device] = None) -> array
-
         The discrete convolution of 1D arrays.
 
         If ``v`` is longer than ``a``, then they are swapped.
@@ -2920,9 +2920,9 @@ void init_ops(nb::module_& m) {
       "groups"_a = 1,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def conv1d(input: array, weight: array, /, stride: int = 1, padding: int = 0, dilation: int = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        conv1d(input: array, weight: array, /, stride: int = 1, padding: int = 0, dilation: int = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array
-
         1D convolution over an input with several channels
 
         Note: Only the default ``groups=1`` is currently supported.
@@ -2980,9 +2980,9 @@ void init_ops(nb::module_& m) {
       "groups"_a = 1,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def conv2d(input: array, weight: array, /, stride: Union[int, Tuple[int, int]] = 1, padding: Union[int, Tuple[int, int]] = 0, dilation: Union[int, Tuple[int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        conv2d(input: array, weight: array, /, stride: Union[int, Tuple[int, int]] = 1, padding: Union[int, Tuple[int, int]] = 0, dilation: Union[int, Tuple[int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array
-
         2D convolution over an input with several channels
 
         Note: Only the default ``groups=1`` is currently supported.
@@ -3077,9 +3077,9 @@ void init_ops(nb::module_& m) {
       "flip"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def conv_general(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int], Tuple[List[int], List[int]]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        conv_general(input: array, weight: array, /, stride: Union[int, List[int]] = 1, padding: Union[int, List[int], Tuple[List[int], List[int]]] = 0, kernel_dilation: Union[int, List[int]] = 1, input_dilation: Union[int, List[int]] = 1, groups: int = 1, flip: bool = false, *, stream: Union[None, Stream, Device] = None) -> array
-
         General convolution over an input with several channels
 
         .. note::
@@ -3116,9 +3116,8 @@ void init_ops(nb::module_& m) {
       &mlx_save_helper,
       "file"_a,
       "arr"_a,
+      nb::sig("def save(file: str, arr: array) -> None"),
       R"pbdoc(
-        save(file: str, arr: array)
-
         Save the array to a binary file in ``.npy`` format.
 
         Args:
@@ -3130,12 +3129,10 @@ void init_ops(nb::module_& m) {
       [](nb::object file, nb::args args, const nb::kwargs& kwargs) {
         mlx_savez_helper(file, args, kwargs, /* compressed= */ false);
       },
-      nb::arg(),
+      "file"_a,
       "args"_a,
       "kwargs"_a,
       R"pbdoc(
-        savez(file: str, *args, **kwargs)
-
         Save several arrays to a binary file in uncompressed ``.npz``
         format.
 
@@ -3158,7 +3155,6 @@ void init_ops(nb::module_& m) {
             args (arrays): Arrays to be saved.
             kwargs (arrays): Arrays to be saved. Each array will be saved
               with the associated keyword as the output file name.
-
       )pbdoc");
   m.def(
       "savez_compressed",
@@ -3168,9 +3164,8 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       "args"_a,
       "kwargs"_a,
+      nb::sig("def savez_compressed(file: str, *args, **kwargs)"),
       R"pbdoc(
-        savez_compressed(file: str, *args, **kwargs)
-
         Save several arrays to a binary file in compressed ``.npz`` format.
 
         Args:
@@ -3178,7 +3173,6 @@ void init_ops(nb::module_& m) {
             args (arrays): Arrays to be saved.
             kwargs (arrays): Arrays to be saved. Each array will be saved
               with the associated keyword as the output file name.
-
       )pbdoc");
   m.def(
       "load",
@@ -3188,11 +3182,9 @@ void init_ops(nb::module_& m) {
       "return_metadata"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def load(file: str, /, format: Optional[str] = None, return_metadata: bool = False, *, stream: Union[None, Stream, Device] = None) -> Union[array, Dict[str, array]]"),
       R"pbdoc(
-        load(file: str, /, format: Optional[str] = None, return_metadata:
-        bool = False, *, stream: Union[None, Stream, Device] = None) ->
-        Union[array, Dict[str, array]]
-
         Load array(s) from a binary file.
 
         The supported formats are ``.npy``, ``.npz``, ``.safetensors``, and
@@ -3220,7 +3212,6 @@ void init_ops(nb::module_& m) {
 
           When loading unsupported quantization formats from GGUF, tensors
           will automatically cast to ``mx.float16``
-
       )pbdoc");
   m.def(
       "save_safetensors",
@@ -3228,10 +3219,9 @@ void init_ops(nb::module_& m) {
       "file"_a,
       "arrays"_a,
       "metadata"_a = nb::none(),
+      nb::sig(
+          "def save_safetensors(file: str, arrays: Dict[str, array], metadata: Optional[Dict[str, str]] = None)"),
       R"pbdoc(
-        save_safetensors(file: str, arrays: Dict[str, array], metadata:
-        Optional[Dict[str, str]] = None)
-
         Save array(s) to a binary file in ``.safetensors`` format.
 
         See the `Safetensors documentation
@@ -3250,10 +3240,9 @@ void init_ops(nb::module_& m) {
       "file"_a,
       "arrays"_a,
       "metadata"_a = nb::none(),
+      nb::sig(
+          "def save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str, Union[array, str, List[str]]])"),
       R"pbdoc(
-        save_gguf(file: str, arrays: Dict[str, array], metadata: Dict[str,
-        Union[array, str, List[str]]])
-
         Save array(s) to a binary file in ``.gguf`` format.
 
         See the `GGUF documentation
@@ -3282,11 +3271,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def where(condition: Union[scalar, array], x: Union[scalar, array], y: Union[scalar, array], /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        where(condition: Union[scalar, array], x: Union[scalar, array], y:
-        Union[scalar, array], /, *, stream: Union[None, Stream, Device] =
-        None) -> array
-
         Select from ``x`` or ``y`` according to ``condition``.
 
         The condition and input arrays must be the same shape or
@@ -3310,10 +3297,9 @@ void init_ops(nb::module_& m) {
       "decimals"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def round(a: array, /, decimals: int = 0, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        round(a: array, /, decimals: int = 0, stream: Union[None, Stream,
-        Device] = None) -> array
-
         Round to the given number of decimals.
 
         Basically performs:
@@ -3343,9 +3329,9 @@ void init_ops(nb::module_& m) {
       "bits"_a = 4,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        quantized_matmul(x: array, w: array, /, scales: array, biases: array, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
-
         Perform the matrix multiplication with the quantized matrix ``w``. The
         quantization uses one floating point scale and bias per ``group_size`` of
         elements. Each element in ``w`` takes ``bits`` bits and is packed in an
@@ -3375,9 +3361,9 @@ void init_ops(nb::module_& m) {
       "bits"_a = 4,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
       R"pbdoc(
-        quantize(w: array, /, group_size: int = 64, bits : int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]
-
         Quantize the matrix ``w`` using ``bits`` bits per element.
 
         Note, every ``group_size`` elements in a row of ``w`` are quantized
@@ -3436,9 +3422,9 @@ void init_ops(nb::module_& m) {
       "bits"_a = 4,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def dequantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        dequantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array
-
         Dequantize the matrix ``w`` using the provided ``scales`` and
         ``biases`` and the ``group_size`` and ``bits`` configuration.
 
@@ -3484,9 +3470,9 @@ void init_ops(nb::module_& m) {
       "axes"_a = 2,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def tensordot(a: array, b: array, /, axes: Union[int, List[List[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        tensordot(a: array, b: array, /, axes: Union[int, List[List[int]]] = 2, *, stream: Union[None, Stream, Device] = None) -> array
-
         Compute the tensor dot product along the specified axes.
 
         Args:
@@ -3508,9 +3494,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def inner(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      inner(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
       Ordinary inner product of vectors for 1-D arrays, in higher dimensions a sum product over the last axes.
 
       Args:
@@ -3527,9 +3513,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def outer(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      outer(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array
-
       Compute the outer product of two 1-D arrays, if the array's passed are not 1-D a flatten op will be run beforehand.
 
       Args:
@@ -3552,9 +3538,9 @@ void init_ops(nb::module_& m) {
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def tile(a: array, reps: Union[int, List[int]], /, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      tile(a: array, reps: Union[int, List[int]], /, *, stream: Union[None, Stream, Device] = None) -> array
-
       Construct an array by repeating ``a`` the number of times given by ``reps``.
 
       Args:
@@ -3574,9 +3560,9 @@ void init_ops(nb::module_& m) {
       "beta"_a = 1.0f,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def addmm(c: array, a: array, b: array, /, alpha: float = 1.0, beta: float = 1.0,  *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        addmm(c: array, a: array, b: array, /, alpha: float = 1.0, beta: float = 1.0,  *, stream: Union[None, Stream, Device] = None) -> array
-
         Matrix multiplication with addition and optional scaling.
 
         Perform the (possibly batched) matrix multiplication of two arrays and add to the result
@@ -3601,9 +3587,9 @@ void init_ops(nb::module_& m) {
       "axis1"_a = 0,
       "axis2"_a = 1,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def diagonal(a: array, offset: int = 0, axis1: int = 0, axis2: int = 1, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        diagonal(a: array, offset: int = 0, axis1: int = 0, axis2: int = 1, stream: Union[None, Stream, Device] = None) -> array
-
         Return specified diagonals.
 
         If ``a`` is 2-D, then a 1-D array containing the diagonal at the given
@@ -3633,9 +3619,9 @@ void init_ops(nb::module_& m) {
       "k"_a = 0,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def diag(a: array, /, k: int = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        diag(a: array, /, k: int = 0, *, stream: Union[None, Stream, Device] = None) -> array
-
         Extract a diagonal or construct a diagonal matrix.
         If ``a`` is 1-D then a diagonal matrix is constructed with ``a`` on the
         :math:`k`-th diagonal. If ``a`` is 2-D then the :math:`k`-th diagonal is
@@ -3659,9 +3645,9 @@ void init_ops(nb::module_& m) {
       },
       "arys"_a,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def atleast_1d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]"),
       R"pbdoc(
-        atleast_1d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
-
         Convert all arrays to have at least one dimension.
 
         Args:
@@ -3681,9 +3667,9 @@ void init_ops(nb::module_& m) {
       },
       "arys"_a,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def atleast_2d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]"),
       R"pbdoc(
-        atleast_2d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
-
         Convert all arrays to have at least two dimensions.
 
         Args:
@@ -3703,9 +3689,9 @@ void init_ops(nb::module_& m) {
       },
       "arys"_a,
       "stream"_a = nb::none(),
+      nb::sig(
+          "def atleast_3d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]"),
       R"pbdoc(
-        atleast_3d(*arys: array, stream: Union[None, Stream, Device] = None) -> Union[array, List[array]]
-
         Convert all arrays to have at least three dimensions.
 
         Args:

@@ -29,12 +29,10 @@ autosummary_generate = True
 autosummary_filename_map = {"mlx.core.Stream": "stream_class"}
 
 intersphinx_mapping = {
-    "https://docs.python.org/3": None,
-    "https://numpy.org/doc/stable/": None,
+    "python": ("https://docs.python.org/3", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
 }
 
-templates_path = ["_templates"]
-html_static_path = ["_static"]
 source_suffix = ".rst"
 master_doc = "index"
 highlight_language = "python"
@@ -59,3 +57,14 @@ html_theme_options = {
 # -- Options for HTMLHelp output ---------------------------------------------
 
 htmlhelp_basename = "mlx_doc"
+
+
+def setup(app):
+    wrapped = app.registry.documenters["function"].can_document_member
+
+    def nanobind_function_patch(member: Any, *args, **kwargs) -> bool:
+        return "nanobind.nb_func" in str(type(member)) or wrapped(
+            member, *args, **kwargs
+        )
+
+    app.registry.documenters["function"].can_document_member = nanobind_function_patch
