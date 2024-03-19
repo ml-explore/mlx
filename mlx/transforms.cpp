@@ -118,7 +118,7 @@ void eval(const std::vector<array>& outputs) {
         arr_deps.push_back(it->second);
       }
     }
-    std::shared_ptr<std::promise<void>> p{nullptr};
+    std::shared_ptr<std::promise<void>> p;
     if (auto it = deps.find(arr.primitive_id()); it != deps.end()) {
       p = std::make_unique<std::promise<void>>();
       ps.push_back(p);

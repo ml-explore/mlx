@@ -11,9 +11,9 @@ namespace mlx::core {
 
 namespace {
 
-static constexpr int num_types = 13;
+constexpr int num_types = 13;
 
-static constexpr Dtype::Kind type_kinds[num_types] = {
+constexpr Dtype::Kind type_kinds[num_types] = {
     Dtype::Kind::b, // bool_,
     Dtype::Kind::u, // uint8,
     Dtype::Kind::u, // uint16,
@@ -32,7 +32,7 @@ static constexpr Dtype::Kind type_kinds[num_types] = {
 // Following Jax type promotion rules:
 // https://jax.readthedocs.io/en/latest/type_promotion.html
 // clang-format off
-static constexpr Dtype type_rules[num_types][num_types] = {
+constexpr Dtype type_rules[num_types][num_types] = {
 // bool       uint8      uint16     uint32     uint64     int8       int16      int32      int64      float16    float32    bfloat16   complex64
   {bool_,     uint8,     uint16,    uint32,    uint64,    int8,      int16,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // bool
   {uint8,     uint8,     uint16,    uint32,    uint64,    int16,     int16,     int32,     int64,     float16,   float32,   bfloat16,  complex64}, // uint8

@@ -1,5 +1,6 @@
 // Copyright © 2023 Apple Inc.
 #pragma once
+
 #include <algorithm>
 #include <cstdint>
 #include <functional>
@@ -362,7 +363,7 @@ class array {
     std::vector<size_t> strides;
     size_t size;
     Dtype dtype;
-    std::shared_ptr<Primitive> primitive{nullptr};
+    std::shared_ptr<Primitive> primitive;
 
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph
@@ -370,7 +371,7 @@ class array {
 
     // This is a shared pointer so that *different* arrays
     // can share the underlying data buffer.
-    std::shared_ptr<Data> data{nullptr};
+    std::shared_ptr<Data> data;
 
     // Properly offset data pointer
     void* data_ptr{nullptr};
@@ -409,7 +410,7 @@ class array {
   // shape, strides, the data type. It also includes
   // the primitive which knows how to compute the array's data from its inputs
   // and the list of array's inputs for the primitive.
-  std::shared_ptr<ArrayDesc> array_desc_{nullptr};
+  std::shared_ptr<ArrayDesc> array_desc_;
 };
 
 template <typename T>
