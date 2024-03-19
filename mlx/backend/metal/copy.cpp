@@ -105,13 +105,18 @@ void copy_gpu_inplace(
 
     int dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     int dim1 = ndim > 1 ? shape[ndim - 2] : 1;
-    int rest = in.size() / (dim0 * dim1);
+
+    size_t data_size = 1;
+    for (auto& s : shape)
+      data_size *= s;
+    int rest = data_size / (dim0 * dim1);
 
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::copy] Must use 1024 sized block");
     }
+
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
