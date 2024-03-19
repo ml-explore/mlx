@@ -1911,4 +1911,17 @@ class Inverse : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& output);
 };
 
+class PseudoInverse : public UnaryPrimitive {
+ public:
+  explicit PseudoInverse(Stream stream) : UnaryPrimitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& output) override;
+  void eval_gpu(const std::vector<array>& inputs, array& output) override;
+
+  DEFINE_PRINT(PseudoInverse)
+
+ private:
+  void eval(const std::vector<array>& inputs, array& output);
+};
+
 } // namespace mlx::core

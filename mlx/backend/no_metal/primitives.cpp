@@ -99,6 +99,7 @@ NO_GPU(Tan)
 NO_GPU(Tanh)
 NO_GPU(Transpose)
 NO_GPU(Inverse)
+NO_GPU(PseudoInverse)
 
 namespace fast {
 NO_GPU_MULTI(RoPE)

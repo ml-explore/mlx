@@ -261,4 +261,22 @@ array inv(const array& a, StreamOrDevice s /* = {} */) {
       a.shape(), a.dtype(), std::make_unique<Inverse>(to_stream(s)), {a});
 }
 
+array pinv(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  return array(
+      a.shape(), a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+}
+
 } // namespace mlx::core::linalg
