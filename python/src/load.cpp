@@ -207,7 +207,7 @@ std::unordered_map<std::string, array> mlx_load_npz_helper(
     // Open zip file as a python file stream
     nb::object sub_file = zipfile_object.open(st);
 
-    // Create array from python fille stream
+    // Create array from python file stream
     auto arr = load(std::make_shared<PyFileReader>(sub_file), s);
 
     // Remove .npy from file if it is there
