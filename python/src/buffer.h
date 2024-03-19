@@ -43,7 +43,7 @@ std::string buffer_format(const array& a) {
     case float32:
       return "f";
     case bfloat16:
-      return "\0";
+      return "B";
     case complex64:
       return "Zf\0";
     default: {

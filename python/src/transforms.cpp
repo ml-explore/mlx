@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/pair.h>
@@ -805,34 +804,32 @@ void init_transforms(nb::module_& m) {
          const nb::object& inputs,
          const nb::object& outputs,
          bool shapeless) {
-        /*        std::ostringstream doc;
-                auto name = nb::cast<std::string>(fun.attr("__name__"));
-                doc << name;
+        //  Try to get the name
+        auto n = fun.attr("__name__");
+        auto name = n.is_none() ? "compiled" : nb::cast<std::string>(n);
 
-                // Try to get the signature
-                auto inspect = nb::module_::import_("inspect");
-                if (!nb::cast<bool>(inspect.attr("isbuiltin")(fun))) {
-                  doc << nb::cast<std::string>(inspect.attr("signature")(fun)
-                             .attr("__str__")());
-                }
+        // Try to get the signature
+        std::ostringstream sig;
+        sig << "def " << name;
+        auto inspect = nb::module_::import_("inspect");
+        if (nb::cast<bool>(inspect.attr("isroutine")(fun))) {
+          sig << nb::cast<std::string>(
+              inspect.attr("signature")(fun).attr("__str__")());
+        } else {
+          sig << "(*args, **kwargs)";
+        }
 
-                // Try to get the doc string
-                if (auto d = fun.attr("__doc__"); nb::isinstance<nb::str>(d)) {
-                  doc << "\n\n";
-                  auto dstr = nb::cast<std::string>(d);
-                  // Add spaces to match first line indentation with remainder
-           of
-                  // docstring
-                  int i = 0;
-                  for (int i = dstr.size() - 1; i >= 0 && dstr[i] == ' '; i--) {
-                    doc << ' ';
-                  }
-                  doc << dstr;
-                }
-                auto doc_str = doc.str();*/
-        return nb::cpp_function(PyCompiledFun{fun, inputs, outputs, shapeless});
-        //            nb::name(name.c_str()),
-        //            nb::doc(doc_str.c_str()));
+        // Try to get the doc string
+        auto d = inspect.attr("getdoc")(fun);
+        std::string doc =
+            d.is_none() ? "MLX compiled function." : nb::cast<std::string>(d);
+
+        auto sig_str = sig.str();
+        return nb::cpp_function(
+            PyCompiledFun{fun, inputs, outputs, shapeless},
+            nb::name(name.c_str()),
+            nb::sig(sig_str.c_str()),
+            doc.c_str());
       },
       "fun"_a,
       "inputs"_a = nb::none(),

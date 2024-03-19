@@ -1299,7 +1299,7 @@ class TestArray(mlx_tests.MLXTestCase):
         mv_mx = memoryview(a_mx)
         self.assertEqual(mv_mx.strides, (8, 2))
         self.assertEqual(mv_mx.shape, (3, 4))
-        self.assertEqual(mv_mx.format, "")
+        self.assertEqual(mv_mx.format, "B")
         with self.assertRaises(RuntimeError) as cm:
             np.array(a_mx)
         e = cm.exception

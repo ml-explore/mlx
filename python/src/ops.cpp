@@ -1542,9 +1542,9 @@ void init_ops(nb::module_& m) {
       "dtype"_a = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def tri(n: int, m: int, k: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        tri(n: int, m: int, k: int, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array
-
         An array with ones at and below the given diagonal and zeros elsewhere.
 
         Args:
@@ -2028,7 +2028,7 @@ void init_ops(nb::module_& m) {
       nb::sig(
           "def min(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        An `min` reduction over the given axes.
+        A `min` reduction over the given axes.
 
         Args:
             a (array): Input array.
@@ -2057,7 +2057,7 @@ void init_ops(nb::module_& m) {
       nb::sig(
           "def max(a: array, /, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        An `max` reduction over the given axes.
+        A `max` reduction over the given axes.
 
         Args:
             a (array): Input array.
