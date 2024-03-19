@@ -2849,6 +2849,13 @@ bool Slice::is_equivalent(const Primitive& other) const {
       end_indices_ == s_other.end_indices_ && strides_ == s_other.strides_);
 }
 
+bool SliceUpdate::is_equivalent(const Primitive& other) const {
+  const SliceUpdate& s_other = static_cast<const SliceUpdate&>(other);
+  return (
+      start_indices_ == s_other.start_indices_ &&
+      end_indices_ == s_other.end_indices_ && strides_ == s_other.strides_);
+}
+
 std::pair<std::vector<array>, std::vector<int>> Softmax::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

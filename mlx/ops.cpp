@@ -445,37 +445,30 @@ array expand_dims(
   return reshape(a, out_shape, s);
 }
 
-array slice(
-    const array& a,
+// Slice helper
+namespace {
+
+inline auto normalize_slice(
+    std::vector<int> shape,
     std::vector<int> start,
     std::vector<int> stop,
-    std::vector<int> strides,
-    StreamOrDevice s /* = {} */) {
-  if (start.size() != a.ndim() || stop.size() != a.ndim() ||
-      strides.size() != a.ndim()) {
-    std::ostringstream msg;
-    msg << "[slice] Invalid number of indices or strides for "
-        << "array with dimension " << a.ndim() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  std::vector<int> out_shape(a.ndim());
+    std::vector<int> strides) {
+  std::vector<int> out_shape(shape.size());
   bool has_neg_strides = false;
 
-  for (int i = 0; i < a.ndim(); ++i) {
+  for (int i = 0; i < shape.size(); ++i) {
     // Following numpy docs
     //  Negative i and j are interpreted as n + i and n + j where n is
     //  the number of elements in the corresponding dimension. Negative
     //  k makes stepping go towards smaller indices
 
-    auto n = a.shape(i);
+    auto n = shape[i];
     auto s = start[i];
     s = s < 0 ? s + n : s;
     auto e = stop[i];
     e = e < 0 ? e + n : e;
 
-    // Note: We pass positive strides to the primitive and then flip
-    //       the axes later as needed
+    // Note: -ve strides require start >= stop
     if (strides[i] < 0) {
       has_neg_strides |= true;
 
@@ -489,9 +482,6 @@ array slice(
       auto str = -strides[i];
       out_shape[i] = (start[i] - stop[i] + str - 1) / str;
 
-      // std::cout << std::vector<int>{s, e, start[i], stop[i], strides[i],
-      // out_shape[i]} << std::endl;
-
     } else {
       // Clamp to bounds
       auto st = std::max(0, std::min(s, n));
@@ -503,6 +493,28 @@ array slice(
       out_shape[i] = (stop[i] - start[i] + strides[i] - 1) / strides[i];
     }
   }
+
+  return std::make_tuple(has_neg_strides, out_shape, start, stop);
+}
+
+} // namespace
+
+array slice(
+    const array& a,
+    std::vector<int> start_,
+    std::vector<int> stop_,
+    std::vector<int> strides,
+    StreamOrDevice s /* = {} */) {
+  if (start_.size() != a.ndim() || stop_.size() != a.ndim() ||
+      strides.size() != a.ndim()) {
+    std::ostringstream msg;
+    msg << "[slice] Invalid number of indices or strides for "
+        << "array with dimension " << a.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto [has_neg_strides, out_shape, start, stop] =
+      normalize_slice(a.shape(), start_, stop_, strides);
 
   if (!has_neg_strides && out_shape == a.shape()) {
     return a;
@@ -529,11 +541,38 @@ array slice(
 array slice_update(
     const array& src,
     const array& update,
-    std::vector<int> start,
-    std::vector<int> stop,
+    std::vector<int> start_,
+    std::vector<int> stop_,
     std::vector<int> strides,
     StreamOrDevice s /* = {} */) {
-  return src;
+  // Check dimensions
+  if (start_.size() != src.ndim() || stop_.size() != src.ndim() ||
+      strides.size() != src.ndim()) {
+    std::ostringstream msg;
+    msg << "[slice] Invalid number of indices or strides for "
+        << "array with dimension " << src.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Process slice dimensions
+  auto [has_neg_strides, upd_shape, start, stop] =
+      normalize_slice(src.shape(), start_, stop_, strides);
+
+  // Broadcast update shape to slice shape
+  auto upd_shape_broadcast = broadcast_shapes(upd_shape, update.shape());
+  auto update_broadcasted = broadcast_to(update, upd_shape_broadcast, s);
+
+  // If the entire src is the slice, just return the update
+  if (!has_neg_strides && upd_shape == src.shape()) {
+    return astype(update_broadcasted, src.dtype(), s);
+  }
+
+  return array(
+      src.shape(),
+      src.dtype(),
+      std::make_unique<SliceUpdate>(
+          to_stream(s), std::move(start), std::move(stop), std::move(strides)),
+      {src, update});
 }
 
 /** Update a slice from the source array with stride 1 in each dimension */

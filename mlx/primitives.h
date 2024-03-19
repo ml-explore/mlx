@@ -1662,13 +1662,42 @@ class Slice : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 
   std::tuple<bool, int64_t, std::vector<int64_t>> prepare_slice(
-      const array& in,
-      const array& out);
+      const array& in);
   void shared_buffer_slice(
       const array& in,
       const std::vector<size_t>& out_strides,
       size_t data_offset,
       array& out);
+};
+
+class SliceUpdate : public UnaryPrimitive {
+ public:
+  explicit SliceUpdate(
+      Stream stream,
+      const std::vector<int>& start_indices,
+      const std::vector<int>& end_indices,
+      const std::vector<int>& strides)
+      : UnaryPrimitive(stream),
+        start_indices_(start_indices),
+        end_indices_(end_indices),
+        strides_(strides){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  // DEFINE_VMAP()
+  // DEFINE_GRADS()
+  DEFINE_PRINT(SliceUpdate)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  std::vector<int> start_indices_;
+  std::vector<int> end_indices_;
+  std::vector<int> strides_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+
+  std::tuple<int64_t, std::vector<int64_t>> prepare_slice(const array& in);
 };
 
 class Softmax : public UnaryPrimitive {

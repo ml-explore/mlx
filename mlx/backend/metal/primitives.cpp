@@ -874,7 +874,7 @@ void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   // Calculate out strides, initial offset and if copy needs to be made
-  auto [copy_needed, data_offset, inp_strides] = prepare_slice(in, out);
+  auto [copy_needed, data_offset, inp_strides] = prepare_slice(in);
 
   // Do copy if needed
   if (copy_needed) {
@@ -894,6 +894,44 @@ void Slice::eval_gpu(const std::vector<array>& inputs, array& out) {
     std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};
     shared_buffer_slice(in, ostrides, data_offset, out);
   }
+}
+
+void SliceUpdate::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+
+  if (upd.size() == 0) {
+    out.copy_shared_buffer(in);
+    return;
+  }
+
+  // Check if materialization is needed
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy_gpu(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype, stream());
+
+  // Calculate out strides, initial offset and if copy needs to be made
+  auto [data_offset, out_strides] = prepare_slice(out);
+
+  // Do copy
+  std::vector<int64_t> upd_strides{upd.strides().begin(), upd.strides().end()};
+  copy_gpu_inplace<int64_t>(
+      /* const array& src = */ upd,
+      /* array& dst = */ out,
+      /* const std::vector<int>& data_shape = */ upd.shape(),
+      /* const std::vector<stride_t>& i_strides = */ upd_strides,
+      /* const std::vector<stride_t>& o_strides = */ out_strides,
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ data_offset,
+      /* CopyType ctype = */ CopyType::GeneralGeneral,
+      /* const Stream& s = */ stream());
 }
 
 void StopGradient::eval_gpu(const std::vector<array>& inputs, array& out) {
