@@ -54,10 +54,10 @@ array rope(
     float scale,
     int offset,
     StreamOrDevice s /* = {} */) {
-  if (x.ndim() != 3) {
+  if (x.ndim() < 3) {
     std::ostringstream msg;
-    msg << "[rope] Input must have 3 dimensions but got input with " << x.ndim()
-        << " dimensions.";
+    msg << "[rope] Input must have at least 3 dimensions but got input with "
+        << x.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
   if (traditional && x.shape(-1) != dims) {
@@ -67,7 +67,9 @@ array rope(
 
   auto fallback = [dims, traditional, base, scale, offset, s](
                       const std::vector<array>& inputs) {
-    auto& x = inputs[0];
+    auto& shape = inputs[0].shape();
+    int ndim = shape.size();
+    auto x = reshape(inputs[0], {-1, shape[ndim - 2], shape[ndim - 1]}, s);
     auto t = x.dtype();
     auto N = x.shape(1) + offset;
     // Compute sines and cosines
@@ -89,7 +91,7 @@ array rope(
       for (auto& o : outs) {
         o = expand_dims(o, 3, s);
       }
-      return std::vector<array>{reshape(concatenate(outs, 3, s), x.shape(), s)};
+      return std::vector<array>{reshape(concatenate(outs, 3, s), shape, s)};
     } else {
       auto out_s = x.shape();
       out_s.back() = half_dims;
@@ -103,7 +105,7 @@ array rope(
       if (dims < x.shape(-1)) {
         outs.push_back(slice(x, {0, 0, dims}, x.shape(), s));
       }
-      return std::vector<array>{concatenate(outs, 2, s)};
+      return std::vector<array>{reshape(concatenate(outs, 2, s), shape, s)};
     }
   };
   auto stream = to_stream(s);
