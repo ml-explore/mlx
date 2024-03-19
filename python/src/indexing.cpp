@@ -492,6 +492,7 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
 
   // Expand ellipses into a series of ':' slices
   {
+    // Go over all entries and note the position of ellipses
     int non_none_indices_before = 0;
     int non_none_indices_after = 0;
     bool has_ellipsis = false;
@@ -516,10 +517,12 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
         has_ellipsis = true;
       }
     }
+
+    // If ellipses are present, add the needed full slices
     if (has_ellipsis) {
-      for (int axis = non_none_indices_before;
-           axis < src.ndim() - non_none_indices_after;
-           axis++) {
+      for (int axis = src.ndim() - non_none_indices_after - 1;
+           axis >= non_none_indices_before;
+           axis--) {
         indices.insert(
             indices.begin() + indices_before, nb::slice(0, src.shape(axis), 1));
       }
@@ -548,17 +551,29 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
     return {{}, broadcast_to(up, src.shape()), {}};
   }
 
+  // Analyse the types of the indices
   unsigned long max_dim = 0;
   bool arrays_first = false;
+  int num_none = 0;
   int num_slices = 0;
   int num_arrays = 0;
+  int num_strided_slices = 0;
   {
     bool have_array = false;
     bool have_non_array = false;
     for (auto& idx : indices) {
-      if (nb::isinstance<nb::slice>(idx) || idx.is_none()) {
+      if (idx.is_none()) {
+        have_non_array = have_array;
+        num_none++;
+
+      } else if (nb::isinstance<nb::slice>(idx)) {
         have_non_array = have_array;
         num_slices++;
+
+        auto slice = nb::cast<nb::slice>(idx);
+        int stride = get_slice_int(nb::getattr(slice, "step"), 1);
+        num_strided_slices += (stride != 1);
+
       } else if (nb::isinstance<array>(idx)) {
         have_array = true;
         if (have_array && have_non_array) {
@@ -570,10 +585,23 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
     }
   }
 
+  // We have index dims for the arrays, strided slices (implemented as arrays),
+  // none
+  int idx_ndim = max_dim + num_strided_slices + num_none;
+
+  // If we have simple non-strided slices, we also attach an index for that
+  idx_ndim += (num_slices < num_strided_slices);
+
+  // Go over each index type and translate to the needed scatter args
   std::vector<array> arr_indices;
   int slice_num = 0;
   int array_num = 0;
   int ax = 0;
+
+  // We collect the shapes of the slices and updates during this process
+  std::vector<int> update_shape(non_none_indices, 1);
+  std::vector<int> slice_shapes;
+
   for (int i = 0; i < indices.size(); ++i) {
     auto& pyidx = indices[i];
     if (nb::isinstance<nb::slice>(pyidx)) {
@@ -586,48 +614,79 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
       start = (start < 0) ? start + axis_size : start;
       end = (end < 0) ? end + axis_size : end;
 
-      auto idx = arange(start, end, stride, uint32);
-      std::vector<int> idx_shape(max_dim + num_slices, 1);
-      auto loc = slice_num + (arrays_first ? max_dim : 0);
-      slice_num++;
-      idx_shape[loc] = idx.size();
-      arr_indices.push_back(reshape(idx, idx_shape));
+      std::vector<int> idx_shape(idx_ndim, 1);
+
+      // If it's a simple slice, we only need to add the start index
+      if (stride == 1) {
+        auto idx = array({start}, idx_shape, uint32);
+        slice_shapes.push_back(end - start);
+        arr_indices.push_back(idx);
+      }
+      // Otherwise we expand the slice into indices using arange
+      else {
+        auto idx = arange(start, end, stride, uint32);
+        auto loc = slice_num + (arrays_first ? max_dim : 0);
+        slice_num++;
+        idx_shape[loc] = idx.size();
+        slice_shapes.push_back(idx.size());
+        arr_indices.push_back(reshape(idx, idx_shape));
+      }
+      // Add the shape to the update
+      update_shape[ax - 1] = slice_shapes.back();
     } else if (nb::isinstance<nb::int_>(pyidx)) {
+      // Add index to arrays
       arr_indices.push_back(get_int_index(pyidx, src.shape(ax++)));
+      // Add the shape to the update
+      update_shape[ax - 1] = 1;
     } else if (pyidx.is_none()) {
+      // We only use the None's for bookeeping dimensions
       slice_num++;
     } else if (nb::isinstance<array>(pyidx)) {
       ax++;
       auto idx = nb::cast<array>(pyidx);
-      std::vector<int> idx_shape;
-      if (!arrays_first) {
-        idx_shape.insert(idx_shape.end(), slice_num, 1);
+      std::vector<int> idx_shape(idx_ndim, 1);
+
+      // Place the arrays in the correct dimension
+      int st = (!arrays_first) * slice_num + max_dim - idx.ndim();
+      for (int j = 0; j < idx.ndim(); j++) {
+        idx_shape[st + j] = idx.shape()[j];
       }
-      idx_shape.insert(idx_shape.end(), max_dim - idx.ndim(), 1);
-      idx_shape.insert(idx_shape.end(), idx.shape().begin(), idx.shape().end());
-      idx_shape.insert(
-          idx_shape.end(), num_slices - (arrays_first ? 0 : slice_num), 1);
       arr_indices.push_back(reshape(idx, idx_shape));
       if (!arrays_first && ++array_num == num_arrays) {
         slice_num += max_dim;
       }
+
+      // Add the shape to the update
+      update_shape[ax - 1] = 1;
     } else {
       throw std::invalid_argument(
           "Cannot index mlx array using the given type yet");
     }
   }
 
+  // Broadcast the update to the indices and slices
   arr_indices = broadcast_arrays(arr_indices);
-  up_shape = arr_indices[0].shape();
-  up_shape.insert(
-      up_shape.end(),
+  auto up_shape_broadcast = arr_indices[0].shape();
+
+  up_shape_broadcast.insert(
+      up_shape_broadcast.end(), slice_shapes.begin(), slice_shapes.end());
+  up_shape_broadcast.insert(
+      up_shape_broadcast.end(),
       src.shape().begin() + non_none_indices,
       src.shape().end());
-  up = broadcast_to(up, up_shape);
-  up_shape.insert(
-      up_shape.begin() + arr_indices[0].ndim(), non_none_indices, 1);
-  up = reshape(up, up_shape);
+  up = broadcast_to(up, up_shape_broadcast);
 
+  // Reshape the update with the size-1 dims for the int and array indices
+  auto up_reshape = arr_indices[0].shape();
+  up_reshape.insert(up_reshape.end(), update_shape.begin(), update_shape.end());
+  up_reshape.insert(
+      up_reshape.end(),
+      src.shape().begin() + non_none_indices,
+      src.shape().end());
+
+  up = reshape(up, up_reshape);
+
+  // Collect axes
   std::vector<int> axes(arr_indices.size(), 0);
   std::iota(axes.begin(), axes.end(), 0);
 
