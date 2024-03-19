@@ -2849,6 +2849,79 @@ bool Slice::is_equivalent(const Primitive& other) const {
       end_indices_ == s_other.end_indices_ && strides_ == s_other.strides_);
 }
 
+std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto start = start_indices_;
+  auto stop = end_indices_;
+  auto strides = strides_;
+  auto ax = axes[0];
+  auto& src = inputs[0];
+  auto upd = inputs[1];
+  if (ax >= 0) {
+    start.insert(start.begin() + ax, 0);
+    stop.insert(stop.begin() + ax, src.shape(ax));
+    strides.insert(strides.begin() + ax, 1);
+
+    upd = expand_dims(upd, ax, stream());
+  }
+  return {{slice_update(src, upd, start, stop, strides, stream())}, {ax}};
+}
+
+std::vector<array> SliceUpdate::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  // Check inputs
+  assert(primals.size() == 2);
+
+  auto& cotan = cotangents[0];
+  auto& src = primals[0];
+  auto& upd = primals[1];
+
+  std::vector<array> vjps;
+
+  for (int num : argnums) {
+    // Vjp for source
+    if (num == 0) {
+      auto grad = slice_update(
+          cotan,
+          zeros_like(upd, stream()),
+          start_indices_,
+          end_indices_,
+          strides_,
+          stream());
+
+      vjps.push_back(grad);
+    }
+    // Vjp fpr updates
+    else {
+      auto grad =
+          slice(cotan, start_indices_, end_indices_, strides_, stream());
+
+      vjps.push_back(grad);
+    }
+  }
+
+  return vjps;
+}
+
+std::vector<array> SliceUpdate::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  // Check inputs
+  assert(primals.size() == 2);
+  return {slice_update(
+      tangents[0],
+      tangents[1],
+      start_indices_,
+      end_indices_,
+      strides_,
+      stream())};
+}
+
 bool SliceUpdate::is_equivalent(const Primitive& other) const {
   const SliceUpdate& s_other = static_cast<const SliceUpdate&>(other);
   return (
