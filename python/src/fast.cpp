@@ -1,20 +1,17 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/fast.h"
 #include "mlx/ops.h"
-#include "python/src/utils.h"
 
-namespace py = pybind11;
-using namespace py::literals;
+namespace nb = nanobind;
+using namespace nb::literals;
 using namespace mlx::core;
 
-void init_extensions(py::module_& parent_module) {
-  py::options options;
-  options.disable_function_signatures();
-
+void init_fast(nb::module_& parent_module) {
   auto m =
       parent_module.def_submodule("fast", "mlx.core.fast: fast operations");
 
@@ -31,15 +28,15 @@ void init_extensions(py::module_& parent_module) {
       },
       "a"_a,
       "dims"_a,
-      py::kw_only(),
+      nb::kw_only(),
       "traditional"_a,
       "base"_a,
       "scale"_a,
       "offset"_a,
-      "stream"_a = none,
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def rope(a: array, dims: int, *, traditinoal: bool, base: float, scale: float, offset: int, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        rope(a: array, dims: int, *, traditinoal: bool, base: float, scale: float, offset: int, stream: Union[None, Stream, Device] = None) -> array
-
         Apply rotary positional encoding to the input.
 
         Args:
@@ -70,30 +67,34 @@ void init_extensions(py::module_& parent_module) {
       "q"_a,
       "k"_a,
       "v"_a,
-      py::kw_only(),
+      nb::kw_only(),
       "scale"_a,
-      "mask"_a = none,
-      "stream"_a = none,
+      "mask"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-                  scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array
+        A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
-            A fast implementation of multi-head attention: O = softmax(Q @ K.T, dim=-1) @ V.
-            Supports [Multi-Head Attention](https://arxiv.org/abs/1706.03762), [Grouped Query Attention](https://arxiv.org/abs/2305.13245), and [Multi-Query Attention](https://arxiv.org/abs/1911.02150).
+        Supports:
+        * [Multi-Head Attention](https://arxiv.org/abs/1706.03762)
+        * [Grouped Query Attention](https://arxiv.org/abs/2305.13245)
+        * [Multi-Query Attention](https://arxiv.org/abs/1911.02150).
 
-            This function will dispatch to an optimized Metal kernel when the query sequence length is 1. It handles other cases with regular MLX operations.
+        Note: The softmax operation is performed in ``float32`` regardless of
+        input precision.
 
-            Note: The softmax operation is performed in float32 precision regardless of input precision (float16 or float32).
-            Note: For Grouped Query Attention and Multi-Query Attention, the input arrays for `key` and `value` should not be pre-tiled to match the `query` array.
+        Note: For Grouped Query Attention and Multi-Query Attention, the ``k``
+        and ``v`` inputs should not be pre-tiled to match ``q``.
 
-            Args:
-                q (array): Input query array.
-                k (array): Input keys array.
-                v (array): Input values array.
-                scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
-                mask (array, optional): An additive mask to apply to the query-key scores.
+        Args:
+            q (array): Input query array.
+            k (array): Input keys array.
+            v (array): Input values array.
+            scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
+            mask (array, optional): An additive mask to apply to the query-key scores.
 
-            Returns:
-                array: The output array.
-
-          )pbdoc");
+        Returns:
+            array: The output array.
+      )pbdoc");
 }

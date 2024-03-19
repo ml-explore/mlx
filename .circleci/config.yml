@@ -31,8 +31,7 @@ jobs:
           name: Install dependencies
           command: |
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
-            pip install pybind11-stubgen
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
@@ -44,7 +43,8 @@ jobs:
       - run:
           name: Generate package stubs
           command: |
-            python3 setup.py generate_stubs
+            echo "stubs"
+            python -m nanobind.stubgen -m mlx.core -r -O python
       - run:
           name: Run Python tests
           command: |
@@ -80,8 +80,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
-            pip install pybind11-stubgen
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install numpy
             pip install torch
             pip install tensorflow
@@ -95,7 +94,7 @@ jobs:
           name: Generate package stubs
           command: |
             source env/bin/activate
-            python setup.py generate_stubs
+            python -m nanobind.stubgen -m mlx.core -r -O python
       - run:
           name: Run Python tests
           command: |
@@ -144,9 +143,8 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install --upgrade setuptools
-            pip install pybind11-stubgen
             pip install numpy
             pip install twine
             pip install build
@@ -161,7 +159,7 @@ jobs:
           name: Generate package stubs
           command: |
             source env/bin/activate
-            python setup.py generate_stubs
+            python -m nanobind.stubgen -m mlx.core -r -O python
       - run:
           name: Build Python package
           command: |
@@ -209,9 +207,8 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install --upgrade pybind11[global]
+            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
             pip install --upgrade setuptools
-            pip install pybind11-stubgen
             pip install numpy
             pip install auditwheel
             pip install patchelf
@@ -219,7 +216,7 @@ jobs:
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
               pip install . -v
-            python setup.py generate_stubs
+            python -m nanobind.stubgen -m mlx.core -r -O python
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
               python -m build --wheel

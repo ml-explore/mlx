@@ -1,3 +1,7 @@
 [build-system]
-requires = ["setuptools>=42", "pybind11>=2.10", "cmake>=3.24"]
+requires = [
+  "setuptools>=42",
+  "nanobind@git+https://github.com/wjakob/nanobind.git#egg=4148debcf91f5ccab0c3b8d67b5c3cabd61f407f",
+  "cmake>=3.24",
+]
 build-backend = "setuptools.build_meta"

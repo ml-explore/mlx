@@ -1,32 +1,34 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <sstream>
 
-#include <pybind11/pybind11.h>
+#include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 
 #include "mlx/device.h"
 #include "mlx/utils.h"
 
-namespace py = pybind11;
-using namespace py::literals;
+namespace nb = nanobind;
+using namespace nb::literals;
 using namespace mlx::core;
 
-void init_device(py::module_& m) {
-  auto device_class = py::class_<Device>(
+void init_device(nb::module_& m) {
+  auto device_class = nb::class_<Device>(
       m, "Device", R"pbdoc(A device to run operations on.)pbdoc");
-  py::enum_<Device::DeviceType>(m, "DeviceType")
+  nb::enum_<Device::DeviceType>(m, "DeviceType")
       .value("cpu", Device::DeviceType::cpu)
       .value("gpu", Device::DeviceType::gpu)
       .export_values()
-      .def(
-          "__eq__",
-          [](const Device::DeviceType& d1, const Device& d2) {
-            return d1 == d2;
-          },
-          py::prepend());
+      .def("__eq__", [](const Device::DeviceType& d, const nb::object& other) {
+        if (!nb::isinstance<Device>(other) &&
+            !nb::isinstance<Device::DeviceType>(other)) {
+          return false;
+        }
+        return d == nb::cast<Device>(other);
+      });
 
-  device_class.def(py::init<Device::DeviceType, int>(), "type"_a, "index"_a = 0)
-      .def_readonly("type", &Device::type)
+  device_class.def(nb::init<Device::DeviceType, int>(), "type"_a, "index"_a = 0)
+      .def_ro("type", &Device::type)
       .def(
           "__repr__",
           [](const Device& d) {
@@ -34,11 +36,15 @@ void init_device(py::module_& m) {
             os << d;
             return os.str();
           })
-      .def("__eq__", [](const Device& d1, const Device& d2) {
-        return d1 == d2;
+      .def("__eq__", [](const Device& d, const nb::object& other) {
+        if (!nb::isinstance<Device>(other) &&
+            !nb::isinstance<Device::DeviceType>(other)) {
+          return false;
+        }
+        return d == nb::cast<Device>(other);
       });
 
-  py::implicitly_convertible<Device::DeviceType, Device>();
+  nb::implicitly_convertible<Device::DeviceType, Device>();
 
   m.def(
       "default_device",

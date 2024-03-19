@@ -134,7 +134,9 @@ class GenerateStubs(Command):
         pass
 
     def run(self) -> None:
-        subprocess.run(["pybind11-stubgen", "mlx.core", "-o", "python"])
+        subprocess.run(
+            ["python", "-m", "nanobind.stubgen", "-m", "mlx.core", "-r", "-O", "python"]
+        )
 
 
 # Read the content of README.md
@@ -165,7 +167,7 @@ if __name__ == "__main__":
         include_package_data=True,
         extras_require={
             "testing": ["numpy", "torch"],
-            "dev": ["pre-commit", "pybind11-stubgen"],
+            "dev": ["pre-commit"],
         },
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
