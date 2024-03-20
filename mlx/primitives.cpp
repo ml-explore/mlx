@@ -2852,20 +2852,48 @@ bool Slice::is_equivalent(const Primitive& other) const {
 std::pair<std::vector<array>, std::vector<int>> SliceUpdate::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+
   auto start = start_indices_;
   auto stop = end_indices_;
   auto strides = strides_;
-  auto ax = axes[0];
-  auto& src = inputs[0];
-  auto upd = inputs[1];
-  if (ax >= 0) {
-    start.insert(start.begin() + ax, 0);
-    stop.insert(stop.begin() + ax, src.shape(ax));
-    strides.insert(strides.begin() + ax, 1);
 
-    upd = expand_dims(upd, ax, stream());
+  auto src = inputs[0];
+  auto upd = inputs[1];
+
+  auto src_ax = axes[0];
+  auto upd_ax = axes[1];
+
+  // No vmapping needed
+  if (src_ax == -1 && upd_ax == -1) {
+    return {{slice_update(src, upd, start, stop, strides, stream())}, {-1}};
   }
-  return {{slice_update(src, upd, start, stop, strides, stream())}, {ax}};
+
+  // Broadcast src
+  if (src_ax == -1) {
+    src = expand_dims(src, upd_ax, stream());
+    auto shape = src.shape();
+    shape[upd_ax] = upd.shape(upd_ax);
+    src = broadcast_to(src, shape, stream());
+    src_ax = upd_ax;
+  }
+
+  // Broadcast upd
+  if (upd_ax == -1) {
+    upd = expand_dims(upd, src_ax, stream());
+    upd_ax = src_ax;
+  }
+
+  if (src_ax != upd_ax) {
+    upd = moveaxis(upd, upd_ax, src_ax, stream());
+  }
+
+  start.insert(start.begin() + src_ax, 0);
+  stop.insert(stop.begin() + src_ax, src.shape(src_ax));
+  strides.insert(strides.begin() + src_ax, 1);
+
+  return {{slice_update(src, upd, start, stop, strides, stream())}, {src_ax}};
 }
 
 std::vector<array> SliceUpdate::vjp(
