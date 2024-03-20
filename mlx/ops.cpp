@@ -449,10 +449,10 @@ array expand_dims(
 namespace {
 
 inline auto normalize_slice(
-    std::vector<int> shape,
-    std::vector<int> start,
-    std::vector<int> stop,
-    std::vector<int> strides) {
+    const std::vector<int>& shape,
+    std::vector<int>& start,
+    std::vector<int>& stop,
+    std::vector<int>& strides) {
   std::vector<int> out_shape(shape.size());
   bool has_neg_strides = false;
 
@@ -470,7 +470,7 @@ inline auto normalize_slice(
 
     // Note: -ve strides require start >= stop
     if (strides[i] < 0) {
-      has_neg_strides |= true;
+      has_neg_strides = true;
 
       // Clamp to bounds
       auto st = std::min(s, n - 1);
@@ -494,18 +494,18 @@ inline auto normalize_slice(
     }
   }
 
-  return std::make_tuple(has_neg_strides, out_shape, start, stop);
+  return std::make_pair(has_neg_strides, out_shape);
 }
 
 } // namespace
 
 array slice(
     const array& a,
-    std::vector<int> start_,
-    std::vector<int> stop_,
+    std::vector<int> start,
+    std::vector<int> stop,
     std::vector<int> strides,
     StreamOrDevice s /* = {} */) {
-  if (start_.size() != a.ndim() || stop_.size() != a.ndim() ||
+  if (start.size() != a.ndim() || stop.size() != a.ndim() ||
       strides.size() != a.ndim()) {
     std::ostringstream msg;
     msg << "[slice] Invalid number of indices or strides for "
@@ -513,8 +513,8 @@ array slice(
     throw std::invalid_argument(msg.str());
   }
 
-  auto [has_neg_strides, out_shape, start, stop] =
-      normalize_slice(a.shape(), start_, stop_, strides);
+  auto [has_neg_strides, out_shape] =
+      normalize_slice(a.shape(), start, stop, strides);
 
   if (!has_neg_strides && out_shape == a.shape()) {
     return a;
@@ -536,17 +536,16 @@ array slice(
   return slice(a, start, stop, std::vector<int>(a.ndim(), 1), to_stream(s));
 }
 
-// TODO
 /** Update a slice from the source array */
 array slice_update(
     const array& src,
     const array& update,
-    std::vector<int> start_,
-    std::vector<int> stop_,
+    std::vector<int> start,
+    std::vector<int> stop,
     std::vector<int> strides,
     StreamOrDevice s /* = {} */) {
   // Check dimensions
-  if (start_.size() != src.ndim() || stop_.size() != src.ndim() ||
+  if (start.size() != src.ndim() || stop.size() != src.ndim() ||
       strides.size() != src.ndim()) {
     std::ostringstream msg;
     msg << "[slice] Invalid number of indices or strides for "
@@ -555,8 +554,8 @@ array slice_update(
   }
 
   // Process slice dimensions
-  auto [has_neg_strides, upd_shape, start, stop] =
-      normalize_slice(src.shape(), start_, stop_, strides);
+  auto [has_neg_strides, upd_shape] =
+      normalize_slice(src.shape(), start, stop, strides);
 
   // Broadcast update shape to slice shape
   auto upd_shape_broadcast = broadcast_shapes(upd_shape, update.shape());
@@ -583,7 +582,8 @@ array slice_update(
     std::vector<int> stop,
     StreamOrDevice s /* = {} */) {
   auto strides = std::vector<int>(src.ndim(), 1);
-  return slice_update(src, update, start, stop, strides, s);
+  return slice_update(
+      src, update, std::move(start), std::move(stop), std::move(strides), s);
 }
 
 std::vector<array> split(
