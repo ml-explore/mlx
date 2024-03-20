@@ -32,7 +32,7 @@ class array {
   template <typename It>
   array(
       It data,
-      const std::vector<int>& shape,
+      std::vector<int> shape,
       Dtype dtype =
           TypeToDtype<typename std::iterator_traits<It>::value_type>());
 
@@ -48,13 +48,13 @@ class array {
   template <typename T>
   array(
       std::initializer_list<T> data,
-      const std::vector<int>& shape,
+      std::vector<int> shape,
       Dtype dtype = TypeToDtype<T>());
 
   /* Build an array from a buffer */
   array(
       allocator::Buffer data,
-      const std::vector<int>& shape,
+      std::vector<int> shape,
       Dtype dtype,
       deleter_t deleter = allocator::free);
 
@@ -174,16 +174,10 @@ class array {
    */
 
   array(
-      const std::vector<int>& shape,
-      Dtype dtype,
-      std::shared_ptr<Primitive> primitive,
-      const std::vector<array>& inputs);
-
-  array(
       std::vector<int> shape,
       Dtype dtype,
       std::shared_ptr<Primitive> primitive,
-      std::vector<array>&& inputs);
+      std::vector<array> inputs);
 
   static std::vector<array> make_arrays(
       const std::vector<std::vector<int>>& shapes,
@@ -391,19 +385,13 @@ class array {
     // The arrays position in the output list
     uint32_t position{0};
 
-    explicit ArrayDesc(const std::vector<int>& shape, Dtype dtype);
+    explicit ArrayDesc(std::vector<int> shape, Dtype dtype);
 
     explicit ArrayDesc(
-        const std::vector<int>& shape,
+        std::vector<int> shape,
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
-        const std::vector<array>& inputs);
-
-    explicit ArrayDesc(
-        std::vector<int>&& shape,
-        Dtype dtype,
-        std::shared_ptr<Primitive> primitive,
-        std::vector<array>&& inputs);
+        std::vector<array> inputs);
   };
 
   // The ArrayDesc contains the details of the materialized array including the
@@ -422,9 +410,9 @@ array::array(T val, Dtype dtype /* = TypeToDtype<T>() */)
 template <typename It>
 array::array(
   It data,
-  const std::vector<int>& shape,
+  std::vector<int> shape,
   Dtype dtype /* = TypeToDtype<typename std::iterator_traits<It>::value_type>() */) :
-    array_desc_(std::make_shared<ArrayDesc>(shape, dtype)) {
+    array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
   init(data);
 }
 
@@ -441,9 +429,9 @@ array::array(
 template <typename T>
 array::array(
     std::initializer_list<T> data,
-    const std::vector<int>& shape,
+    std::vector<int> shape,
     Dtype dtype /* = TypeToDtype<T>() */)
-    : array_desc_(std::make_shared<ArrayDesc>(shape, dtype)) {
+    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
   if (data.size() != size()) {
     throw std::invalid_argument(
         "Data size and provided shape mismatch in array construction.");
