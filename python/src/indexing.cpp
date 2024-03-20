@@ -683,7 +683,112 @@ mlx_compute_scatter_args(
   throw std::invalid_argument("Cannot index mlx array using the given type.");
 }
 
+auto mlx_slice_update(
+    const array& src,
+    const nb::object& obj,
+    const ScalarOrArray& v) {
+  // Can't route to slice update if not slice or tuple
+  if (src.ndim() == 0 ||
+      (!nb::isinstance<nb::slice>(obj) && !nb::isinstance<nb::tuple>(obj))) {
+    return std::make_pair(false, src);
+  }
+
+  // Should be able to route to slice update
+
+  // Pre process tuple
+  auto upd = to_array(v, src.dtype());
+
+  // Remove leading singletons dimensions from the update
+  int s = 0;
+  for (; s < upd.ndim() && upd.shape(s) == 1; s++) {
+  };
+  auto up_shape = std::vector<int>(upd.shape().begin() + s, upd.shape().end());
+  up_shape = up_shape.empty() ? std::vector{1} : up_shape;
+  auto up = reshape(upd, up_shape);
+
+  // Build slice update params
+  std::vector<int> starts(src.ndim(), 0);
+  std::vector<int> stops = src.shape();
+  std::vector<int> strides(src.ndim(), 1);
+
+  // If it's just a simple slice, just do a slice update and return
+  if (nb::isinstance<nb::slice>(obj)) {
+    // Read slice arguments
+    get_slice_params(
+        starts[0],
+        stops[0],
+        strides[0],
+        nb::cast<nb::slice>(obj),
+        src.shape(0));
+
+    // Do slice update
+    auto out = slice_update(src, up, starts, stops, strides);
+    return std::make_pair(true, out);
+  }
+
+  // It must be a tuple
+  auto entries = nb::cast<nb::tuple>(obj);
+
+  // Can't route to slice update if any arrays are present
+  for (int i = 0; i < entries.size(); i++) {
+    auto idx = entries[i];
+    if (nb::isinstance<array>(idx)) {
+      return std::make_pair(false, src);
+    }
+  }
+
+  // Expand ellipses into a series of ':' slices
+  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
+
+  // Dimension check
+  if (non_none_indices > src.ndim()) {
+    std::ostringstream msg;
+    msg << "Too many indices for array with " << src.ndim() << "dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // If no non-None indices return the broadcasted update
+  if (non_none_indices == 0) {
+    return std::make_pair(true, broadcast_to(up, src.shape()));
+  }
+
+  // Process entries
+  std::vector<int> upd_expand_dims;
+  int ax = 0;
+  for (int i = 0; i < indices.size(); ++i) {
+    auto& pyidx = indices[i];
+    if (nb::isinstance<nb::slice>(pyidx)) {
+      get_slice_params(
+          starts[ax],
+          stops[ax],
+          strides[ax],
+          nb::cast<nb::slice>(pyidx),
+          src.shape(ax));
+      ax++;
+    } else if (nb::isinstance<nb::int_>(pyidx)) {
+      int st = nb::cast<int>(pyidx);
+      st = (st < 0) ? st + src.shape(ax) : st;
+      starts[ax] = st;
+      stops[ax] = st + 1;
+      if (src.ndim() - ax < up.ndim()) {
+        upd_expand_dims.push_back(ax - src.ndim());
+      }
+      ax++;
+    }
+  }
+
+  up = expand_dims(up, upd_expand_dims);
+  auto out = slice_update(src, up, starts, stops, strides);
+  return std::make_pair(true, out);
+}
+
 void mlx_set_item(array& src, const nb::object& obj, const ScalarOrArray& v) {
+  auto [success, out] = mlx_slice_update(src, obj, v);
+  if (success) {
+    src.overwrite_descriptor(out);
+    return;
+  }
+
   auto [indices, updates, axes] = mlx_compute_scatter_args(src, obj, v);
   if (indices.size() > 0) {
     auto out = scatter(src, indices, updates, axes);
