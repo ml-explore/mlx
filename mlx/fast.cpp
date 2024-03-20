@@ -46,6 +46,59 @@ std::pair<std::vector<array>, std::vector<int>> Custom::vmap(
   return {outputs, out_axes};
 }
 
+array rms_norm(
+    const array& x,
+    const array& weight,
+    float eps,
+    StreamOrDevice s /* = {} */) {
+  if (x.ndim() == 0) {
+    std::ostringstream msg;
+    msg << "[rms_norm] Input must have at least 1 dimension but got input with "
+           "0 dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (weight.ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[rms_norm] weight must have 1 dimension but has " << weight.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto out_type = result_type({x, weight});
+  if (!is_floating_point(out_type) || is_complex(out_type)) {
+    std::ostringstream msg;
+    msg << "[rms_norm] Received unsupported type " << out_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto stream = to_stream(s);
+  auto fallback = [eps, out_type, stream](const std::vector<array>& inputs) {
+    auto x = astype(inputs[0], float32, stream);
+    x = multiply(
+        x,
+        rsqrt(
+            add(mean(square(x, stream), -1, /* keepdims */ true, stream),
+                array(eps, float32),
+                stream),
+            stream),
+        stream);
+    x = astype(x, out_type, stream);
+    return std::vector<array>{multiply(inputs[1], x, stream)};
+  };
+  if (stream.device == Device::gpu && false) {
+    return array(
+        x.shape(),
+        x.dtype(),
+        std::make_unique<RMSNorm>(stream, fallback, eps),
+        {x});
+  }
+  return fallback({x, weight})[0];
+}
+
+bool RMSNorm::is_equivalent(const Primitive& other) const {
+  const RMSNorm& a_other = static_cast<const RMSNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
 array rope(
     const array& x,
     int dims,

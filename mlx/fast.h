@@ -8,6 +8,12 @@
 
 namespace mlx::core::fast {
 
+array rms_norm(
+    const array& x,
+    const array& weight,
+    float eps,
+    StreamOrDevice s /* = {} */);
+
 array rope(
     const array& x,
     int dims,

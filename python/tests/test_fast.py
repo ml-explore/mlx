@@ -115,6 +115,49 @@ class TestFast(mlx_tests.MLXTestCase):
                 )
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
+    def test_rms_norm(self):
+        def rms_norm(x, weight, eps):
+            x = x.astype(mx.float32)
+            x = x * mx.rsqrt(x.square().mean(-1, keepdims=True) + eps)
+            return weight * x.astype(weight.dtype)
+
+        # Per dtype absolute tolerance
+        tolerances = {mx.float32: 1e-6, mx.float16: 1e-3, mx.bfloat16: 1e-2}
+
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        epss = [1e-3, 1e-5]
+        dimss = [31, 32, 33]
+        defaults = (mx.float32, 1e-5, 32)
+
+        for dtype in dtypes:
+            _, eps, dims = defaults
+            x = mx.random.uniform(
+                shape=(
+                    2,
+                    dims,
+                )
+            ).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = rms_norm(x, weight, eps)
+            rx_fast = mx.fast.rms_norm(x, weight, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        for eps in epss:
+            dtype, _, dims = defaults
+            x = mx.random.uniform(shape=(2, dims)).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = rms_norm(x, weight, eps)
+            rx_fast = mx.fast.rms_norm(x, weight, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        for dims in dimss:
+            dtype, eps, _ = defaults
+            x = mx.random.uniform(shape=(2, dims)).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = rms_norm(x, weight, eps)
+            rx_fast = mx.fast.rms_norm(x, weight, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
     def test_fast_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))
 
