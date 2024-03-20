@@ -46,22 +46,22 @@ struct Dtype {
   };
 };
 
-static constexpr Dtype bool_{Dtype::Val::bool_, sizeof(bool)};
+inline constexpr Dtype bool_{Dtype::Val::bool_, sizeof(bool)};
 
-static constexpr Dtype uint8{Dtype::Val::uint8, sizeof(uint8_t)};
-static constexpr Dtype uint16{Dtype::Val::uint16, sizeof(uint16_t)};
-static constexpr Dtype uint32{Dtype::Val::uint32, sizeof(uint32_t)};
-static constexpr Dtype uint64{Dtype::Val::uint64, sizeof(uint64_t)};
+inline constexpr Dtype uint8{Dtype::Val::uint8, sizeof(uint8_t)};
+inline constexpr Dtype uint16{Dtype::Val::uint16, sizeof(uint16_t)};
+inline constexpr Dtype uint32{Dtype::Val::uint32, sizeof(uint32_t)};
+inline constexpr Dtype uint64{Dtype::Val::uint64, sizeof(uint64_t)};
 
-static constexpr Dtype int8{Dtype::Val::int8, sizeof(int8_t)};
-static constexpr Dtype int16{Dtype::Val::int16, sizeof(int16_t)};
-static constexpr Dtype int32{Dtype::Val::int32, sizeof(int32_t)};
-static constexpr Dtype int64{Dtype::Val::int64, sizeof(int64_t)};
+inline constexpr Dtype int8{Dtype::Val::int8, sizeof(int8_t)};
+inline constexpr Dtype int16{Dtype::Val::int16, sizeof(int16_t)};
+inline constexpr Dtype int32{Dtype::Val::int32, sizeof(int32_t)};
+inline constexpr Dtype int64{Dtype::Val::int64, sizeof(int64_t)};
 
-static constexpr Dtype float16{Dtype::Val::float16, sizeof(uint16_t)};
-static constexpr Dtype float32{Dtype::Val::float32, sizeof(float)};
-static constexpr Dtype bfloat16{Dtype::Val::bfloat16, sizeof(uint16_t)};
-static constexpr Dtype complex64{Dtype::Val::complex64, sizeof(complex64_t)};
+inline constexpr Dtype float16{Dtype::Val::float16, sizeof(uint16_t)};
+inline constexpr Dtype float32{Dtype::Val::float32, sizeof(float)};
+inline constexpr Dtype bfloat16{Dtype::Val::bfloat16, sizeof(uint16_t)};
+inline constexpr Dtype complex64{Dtype::Val::complex64, sizeof(complex64_t)};
 
 Dtype promote_types(const Dtype& t1, const Dtype& t2);
 
