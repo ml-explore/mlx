@@ -177,6 +177,23 @@ array slice(
     const std::vector<int>& stop,
     StreamOrDevice s = {});
 
+/** Update a slice from the source array */
+array slice_update(
+    const array& src,
+    const array& update,
+    std::vector<int> start,
+    std::vector<int> stop,
+    std::vector<int> strides,
+    StreamOrDevice s = {});
+
+/** Update a slice from the source array with stride 1 in each dimension */
+array slice_update(
+    const array& src,
+    const array& update,
+    std::vector<int> start,
+    std::vector<int> stop,
+    StreamOrDevice s = {});
+
 /** Split an array into sub-arrays along a given axis. */
 std::vector<array>
 split(const array& a, int num_splits, int axis, StreamOrDevice s = {});

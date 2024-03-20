@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <sstream>
 
@@ -37,15 +37,22 @@ void copy_gpu(const array& in, array& out, CopyType ctype) {
   copy_gpu(in, out, ctype, out.primitive().stream());
 }
 
+template <typename stride_t>
 void copy_gpu_inplace(
     const array& in,
     array& out,
+    const std::vector<int>& data_shape,
+    const std::vector<stride_t>& strides_in_pre,
+    const std::vector<stride_t>& strides_out_pre,
+    int64_t inp_offset,
+    int64_t out_offset,
     CopyType ctype,
     const Stream& s) {
   // Try to collapse contiguous dims
-  auto [shape, strides] = collapse_contiguous_dims(in, out);
-  auto& strides_in = strides[0];
-  auto& strides_out = strides[1];
+  auto [shape, strides] = collapse_contiguous_dims(
+      data_shape, std::vector{strides_in_pre, strides_out_pre});
+  auto& strides_in_ = strides[0];
+  auto& strides_out_ = strides[1];
 
   auto& d = metal::device(s.device);
   std::ostringstream kname;
@@ -72,39 +79,44 @@ void copy_gpu_inplace(
   auto compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_in = in.data_shared_ptr() == nullptr;
-  set_array_buffer(compute_encoder, donate_in ? out : in, 0);
-  set_array_buffer(compute_encoder, out, 1);
+
+  inp_offset *= size_of(in.dtype());
+  out_offset *= size_of(out.dtype());
+
+  set_array_buffer(compute_encoder, donate_in ? out : in, inp_offset, 0);
+  set_array_buffer(compute_encoder, out, out_offset, 1);
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-    size_t ndim = shape.size();
+    int ndim = shape.size();
+    std::vector<int64_t> strides_in{strides_in_.begin(), strides_in_.end()};
+    std::vector<int64_t> strides_out{strides_out_.begin(), strides_out_.end()};
+
     if (ndim > 3) {
-      compute_encoder->setBytes(shape.data(), ndim * sizeof(int), 2);
-      compute_encoder->setBytes(strides_in.data(), ndim * sizeof(size_t), 3);
-      if (ctype == CopyType::GeneralGeneral) {
-        compute_encoder->setBytes(strides_out.data(), ndim * sizeof(size_t), 4);
-      }
-    } else {
-      // The shape is implicit in the grid for <= 3D
-      compute_encoder->setBytes(strides_in.data(), ndim * sizeof(size_t), 2);
-      if (ctype == CopyType::GeneralGeneral) {
-        compute_encoder->setBytes(strides_out.data(), ndim * sizeof(size_t), 3);
-      }
+      set_vector_bytes(compute_encoder, shape, ndim, 2);
+    }
+    set_vector_bytes(compute_encoder, strides_in, ndim, 3);
+    if (ctype == CopyType::GeneralGeneral) {
+      set_vector_bytes(compute_encoder, strides_out, ndim, 4);
     }
 
     if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
-      compute_encoder->setBytes(
-          &ndim, sizeof(int), (ctype == CopyType::GeneralGeneral) ? 5 : 4);
+      compute_encoder->setBytes(&ndim, sizeof(int), 5);
     }
 
     int dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     int dim1 = ndim > 1 ? shape[ndim - 2] : 1;
-    int rest = in.size() / (dim0 * dim1);
+
+    size_t data_size = 1;
+    for (auto& s : shape)
+      data_size *= s;
+    int rest = data_size / (dim0 * dim1);
 
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::copy] Must use 1024 sized block");
     }
+
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
@@ -118,6 +130,27 @@ void copy_gpu_inplace(
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+}
+
+void copy_gpu_inplace(
+    const array& in,
+    array& out,
+    CopyType ctype,
+    const Stream& s) {
+  return copy_gpu_inplace(
+      in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s);
+}
+
+void copy_gpu_inplace(
+    const array& in,
+    array& out,
+    const std::vector<int64_t>& istride,
+    int64_t ioffset,
+    CopyType ctype,
+    const Stream& s) {
+  std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
+  return copy_gpu_inplace(
+      in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s);
 }
 
 } // namespace mlx::core

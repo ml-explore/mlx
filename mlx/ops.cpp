@@ -445,6 +445,60 @@ array expand_dims(
   return reshape(a, out_shape, s);
 }
 
+// Slice helper
+namespace {
+
+inline auto normalize_slice(
+    const std::vector<int>& shape,
+    std::vector<int>& start,
+    std::vector<int>& stop,
+    std::vector<int>& strides) {
+  std::vector<int> out_shape(shape.size());
+  bool has_neg_strides = false;
+
+  for (int i = 0; i < shape.size(); ++i) {
+    // Following numpy docs
+    //  Negative i and j are interpreted as n + i and n + j where n is
+    //  the number of elements in the corresponding dimension. Negative
+    //  k makes stepping go towards smaller indices
+
+    auto n = shape[i];
+    auto s = start[i];
+    s = s < 0 ? s + n : s;
+    auto e = stop[i];
+    e = e < 0 ? e + n : e;
+
+    // Note: -ve strides require start >= stop
+    if (strides[i] < 0) {
+      has_neg_strides = true;
+
+      // Clamp to bounds
+      auto st = std::min(s, n - 1);
+      auto ed = std::max(-1, e);
+
+      start[i] = st;
+      stop[i] = ed > st ? st : ed;
+
+      auto str = -strides[i];
+      out_shape[i] = (start[i] - stop[i] + str - 1) / str;
+
+    } else {
+      // Clamp to bounds
+      auto st = std::max(0, std::min(s, n));
+      auto ed = std::max(0, std::min(e, n));
+
+      start[i] = st;
+      stop[i] = ed < st ? st : ed;
+
+      out_shape[i] = (stop[i] - start[i] + strides[i] - 1) / strides[i];
+    }
+  }
+
+  return std::make_pair(has_neg_strides, out_shape);
+}
+
+} // namespace
+
 array slice(
     const array& a,
     std::vector<int> start,
@@ -459,113 +513,13 @@ array slice(
     throw std::invalid_argument(msg.str());
   }
 
-  std::vector<int> negatively_strided_axes;
-  std::vector<std::vector<int>> negatively_strided_slices;
-  std::vector<int> out_shape(a.ndim());
-  for (int i = 0; i < a.ndim(); ++i) {
-    // Following numpy docs
-    //  Negative i and j are interpreted as n + i and n + j where n is
-    //  the number of elements in the corresponding dimension. Negative
-    //  k makes stepping go towards smaller indices
+  auto [has_neg_strides, out_shape] =
+      normalize_slice(a.shape(), start, stop, strides);
 
-    auto n = a.shape(i);
-    auto s = start[i];
-    s = s < 0 ? s + n : s;
-    auto e = stop[i];
-    e = e < 0 ? e + n : e;
-
-    // Note: We pass positive strides to the primitive and then flip
-    //       the axes later as needed
-    if (strides[i] < 0) {
-      negatively_strided_axes.push_back(i);
-      auto st = std::min(s, n - 1);
-      auto ed = std::max(e, -1);
-      negatively_strided_slices.push_back({st, ed, strides[i]});
-      start[i] = 0;
-      stop[i] = n;
-      strides[i] = 1;
-    } else {
-      start[i] = s;
-      stop[i] = e < s ? s : e;
-    }
-
-    // Clamp to bounds
-    start[i] = std::max(0, std::min(start[i], n));
-    stop[i] = std::max(0, std::min(stop[i], n));
-
-    out_shape[i] = (stop[i] - start[i] + strides[i] - 1) / strides[i];
-  }
-
-  // If strides are negative, slice and then make a copy with axes flipped
-  if (negatively_strided_axes.size() > 0) {
-    // First, take the slice of the positively strided axes
-    auto out = array(
-        out_shape,
-        a.dtype(),
-        std::make_unique<Slice>(
-            to_stream(s),
-            std::move(start),
-            std::move(stop),
-            std::move(strides)),
-        {a});
-
-    std::vector<array> indices;
-    std::vector<int> slice_sizes = out.shape();
-    std::vector<int> t_axes(out.ndim(), -1);
-    std::vector<int> out_reshape(out.ndim(), -1);
-
-    int n_axes = negatively_strided_axes.size();
-    for (int i = 0; i < n_axes; i++) {
-      // Get axis and corresponding slice
-      auto ax = negatively_strided_axes[i];
-      auto sl = negatively_strided_slices[i];
-
-      // Get indices for the slice
-      auto ax_idx = arange(sl[0], sl[1], sl[2], s);
-
-      // Reshape indices for broadcast as needed
-      std::vector<int> ax_idx_shape(n_axes, 1);
-      ax_idx_shape[i] = ax_idx.size();
-      ax_idx = reshape(ax_idx, ax_idx_shape, s);
-
-      // Add indices to list
-      indices.push_back(ax_idx);
-
-      // Set slice size for axis
-      slice_sizes[ax] = 1;
-
-      // Gather moves the axis up, remainder needs to be squeezed
-      out_reshape[i] = indices[i].size();
-
-      // Gather moves the axis up, needs to be transposed
-      t_axes[ax] = i;
-    }
-
-    // Prepare out_reshape to squeeze gathered dims
-    // Prepare to transpose dims as needed
-    int j = n_axes;
-    for (int i = 0; j < out.ndim() && i < out.ndim(); i++) {
-      if (t_axes[i] < 0) {
-        t_axes[i] = j;
-        out_reshape[j] = out_shape[i];
-        j++;
-      }
-    }
-
-    // Gather
-    out = gather(out, indices, negatively_strided_axes, slice_sizes, s);
-
-    // Squeeze dims
-    out = reshape(out, out_reshape, s);
-
-    // Transpose dims
-    out = transpose(out, t_axes, s);
-
-    return out;
-  }
-  if (out_shape == a.shape()) {
+  if (!has_neg_strides && out_shape == a.shape()) {
     return a;
   }
+
   return array(
       out_shape,
       a.dtype(),
@@ -580,6 +534,56 @@ array slice(
     const std::vector<int>& stop,
     StreamOrDevice s /* = {} */) {
   return slice(a, start, stop, std::vector<int>(a.ndim(), 1), to_stream(s));
+}
+
+/** Update a slice from the source array */
+array slice_update(
+    const array& src,
+    const array& update,
+    std::vector<int> start,
+    std::vector<int> stop,
+    std::vector<int> strides,
+    StreamOrDevice s /* = {} */) {
+  // Check dimensions
+  if (start.size() != src.ndim() || stop.size() != src.ndim() ||
+      strides.size() != src.ndim()) {
+    std::ostringstream msg;
+    msg << "[slice] Invalid number of indices or strides for "
+        << "array with dimension " << src.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Process slice dimensions
+  auto [has_neg_strides, upd_shape] =
+      normalize_slice(src.shape(), start, stop, strides);
+
+  // Broadcast update shape to slice shape
+  auto upd_shape_broadcast = broadcast_shapes(upd_shape, update.shape());
+  auto update_broadcasted = broadcast_to(update, upd_shape_broadcast, s);
+
+  // If the entire src is the slice, just return the update
+  if (!has_neg_strides && upd_shape == src.shape()) {
+    return astype(update_broadcasted, src.dtype(), s);
+  }
+
+  return array(
+      src.shape(),
+      src.dtype(),
+      std::make_unique<SliceUpdate>(
+          to_stream(s), std::move(start), std::move(stop), std::move(strides)),
+      {src, update});
+}
+
+/** Update a slice from the source array with stride 1 in each dimension */
+array slice_update(
+    const array& src,
+    const array& update,
+    std::vector<int> start,
+    std::vector<int> stop,
+    StreamOrDevice s /* = {} */) {
+  auto strides = std::vector<int>(src.ndim(), 1);
+  return slice_update(
+      src, update, std::move(start), std::move(stop), std::move(strides), s);
 }
 
 std::vector<array> split(

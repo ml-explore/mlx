@@ -651,36 +651,33 @@ void Sinh::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Slice::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  if (out.size() == 0) {
-    out.set_data(nullptr);
-    return;
-  }
-  auto& in = inputs[0];
-  auto strides = in.strides();
-  auto flags = in.flags();
-  size_t data_offset = 0;
+std::tuple<bool, int64_t, std::vector<int64_t>> Slice::prepare_slice(
+    const array& in) {
+  int64_t data_offset = 0;
+  bool copy_needed = false;
+  std::vector<int64_t> inp_strides(in.ndim(), 0);
   for (int i = 0; i < in.ndim(); ++i) {
     data_offset += start_indices_[i] * in.strides()[i];
-    strides[i] *= strides_[i];
+    inp_strides[i] = in.strides()[i] * strides_[i];
+
+    copy_needed |= strides_[i] < 0;
   }
 
+  return std::make_tuple(copy_needed, data_offset, inp_strides);
+}
+
+void Slice::shared_buffer_slice(
+    const array& in,
+    const std::vector<size_t>& out_strides,
+    size_t data_offset,
+    array& out) {
   // Compute row/col contiguity
-  size_t data_size = 1;
-  size_t f_stride = 1;
-  size_t b_stride = 1;
-  flags.row_contiguous = true;
-  flags.col_contiguous = true;
-  for (int i = 0, ri = out.ndim() - 1; ri >= 0; i++, ri--) {
-    flags.col_contiguous &= strides[i] == f_stride || out.shape(i) == 1;
-    flags.row_contiguous &= strides[ri] == b_stride || out.shape(ri) == 1;
-    f_stride *= out.shape(i);
-    b_stride *= out.shape(ri);
-    if (strides[i] > 0) {
-      data_size *= out.shape(i);
-    }
-  }
+  auto [data_size, is_row_contiguous, is_col_contiguous] =
+      check_contiguity(out.shape(), out_strides);
+
+  auto flags = in.flags();
+  flags.row_contiguous = is_row_contiguous;
+  flags.col_contiguous = is_col_contiguous;
 
   if (data_size == 1) {
     // Broadcasted scalar array is contiguous.
@@ -694,7 +691,87 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
     flags.contiguous &= flags.row_contiguous || flags.col_contiguous;
   }
 
-  out.copy_shared_buffer(in, strides, flags, data_size, data_offset);
+  out.copy_shared_buffer(in, out_strides, flags, data_size, data_offset);
+}
+
+void Slice::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+
+  // Calculate out strides, initial offset and if copy needs to be made
+  auto [copy_needed, data_offset, inp_strides] = prepare_slice(in);
+
+  // Do copy if needed
+  if (copy_needed) {
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
+    copy_inplace<int64_t>(
+        /* const array& src = */ in,
+        /* array& dst = */ out,
+        /* const std::vector<int>& data_shape = */ out.shape(),
+        /* const std::vector<stride_t>& i_strides = */ inp_strides,
+        /* const std::vector<stride_t>& o_strides = */ ostrides,
+        /* int64_t i_offset = */ data_offset,
+        /* int64_t o_offset = */ 0,
+        /* CopyType ctype = */ CopyType::General);
+  } else {
+    std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};
+    shared_buffer_slice(in, ostrides, data_offset, out);
+  }
+}
+
+std::tuple<int64_t, std::vector<int64_t>> SliceUpdate::prepare_slice(
+    const array& in) {
+  int64_t data_offset = 0;
+  std::vector<int64_t> inp_strides(in.ndim(), 0);
+  for (int i = 0; i < in.ndim(); ++i) {
+    data_offset += start_indices_[i] * in.strides()[i];
+    inp_strides[i] = in.strides()[i] * strides_[i];
+  }
+
+  return std::make_tuple(data_offset, inp_strides);
+}
+
+void SliceUpdate::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  if (out.size() == 0) {
+    out.set_data(nullptr);
+    return;
+  }
+
+  auto& in = inputs[0];
+  auto& upd = inputs[1];
+
+  if (upd.size() == 0) {
+    out.copy_shared_buffer(in);
+    return;
+  }
+
+  // Check if materialization is needed
+  auto ctype = in.flags().contiguous && in.size() == in.data_size()
+      ? CopyType::Vector
+      : CopyType::General;
+  copy(in, out, in.data_size() == 1 ? CopyType::Scalar : ctype);
+
+  // Calculate out strides, initial offset and if copy needs to be made
+  auto [data_offset, out_strides] = prepare_slice(out);
+
+  // Do copy
+  std::vector<int64_t> upd_strides{upd.strides().begin(), upd.strides().end()};
+  copy_inplace<int64_t>(
+      /* const array& src = */ upd,
+      /* array& dst = */ out,
+      /* const std::vector<int>& data_shape = */ upd.shape(),
+      /* const std::vector<stride_t>& i_strides = */ upd_strides,
+      /* const std::vector<stride_t>& o_strides = */ out_strides,
+      /* int64_t i_offset = */ 0,
+      /* int64_t o_offset = */ data_offset,
+      /* CopyType ctype = */ CopyType::GeneralGeneral);
 }
 
 void Split::eval(
