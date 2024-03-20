@@ -655,6 +655,7 @@ std::vector<array> vmap_replace(
     }
 
     auto [v_outputs, v_out_axes] = a.primitive().vmap(v_inputs, v_axes);
+
     // For each primitive's outputs add its id, the vout id and the vax
     auto outputs = a.outputs();
     for (int i = 0; i < v_outputs.size(); ++i) {

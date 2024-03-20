@@ -1891,6 +1891,7 @@ class SVD : public Primitive {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
+  DEFINE_VMAP()
   DEFINE_PRINT(SVD)
 
  private:
@@ -1905,6 +1906,7 @@ class Inverse : public UnaryPrimitive {
   void eval_cpu(const std::vector<array>& inputs, array& output) override;
   void eval_gpu(const std::vector<array>& inputs, array& output) override;
 
+  DEFINE_VMAP()
   DEFINE_PRINT(Inverse)
 
  private:
