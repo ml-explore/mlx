@@ -12,16 +12,6 @@ namespace mlx::core {
 
 namespace {
 
-std::pair<size_t, std::vector<size_t>> cum_prod(const std::vector<int>& shape) {
-  std::vector<size_t> strides(shape.size());
-  size_t cum_prod = 1;
-  for (int i = shape.size() - 1; i >= 0; --i) {
-    strides[i] = cum_prod;
-    cum_prod *= shape[i];
-  }
-  return {cum_prod, strides};
-}
-
 /** Return true if we are currently performing a function transformation in
  * order to keep the graph when evaluating tracer arrays. */
 bool in_tracing() {
@@ -170,9 +160,21 @@ void array::move_shared_buffer(array other) {
   move_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
+void array::ArrayDesc::init() {
+  strides.reserve(shape.size());
+  size = 1;
+  for (int i = shape.size() - 1; i >= 0; --i) {
+    strides.push_back(size);
+    size *= shape[i];
+  }
+  for (auto& in : inputs) {
+    is_tracer |= in.is_tracer();
+  }
+}
+
 array::ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
     : shape(std::move(shape)), dtype(dtype) {
-  std::tie(size, strides) = cum_prod(this->shape);
+  init();
 }
 
 array::ArrayDesc::ArrayDesc(
@@ -184,10 +186,7 @@ array::ArrayDesc::ArrayDesc(
       dtype(dtype),
       primitive(std::move(primitive)),
       inputs(std::move(inputs)) {
-  std::tie(size, strides) = cum_prod(this->shape);
-  for (auto& in : this->inputs) {
-    is_tracer |= in.is_tracer();
-  }
+  init();
 }
 
 array::ArrayIterator::ArrayIterator(const array& arr, int idx)

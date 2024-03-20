@@ -318,7 +318,7 @@ array scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  auto final_type = result_type({queries, keys, values});
+  auto final_type = result_type(queries, keys, values);
   if (!is_floating_point(final_type) || is_complex(final_type)) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] Received unsupported type "
