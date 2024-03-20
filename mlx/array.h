@@ -253,6 +253,9 @@ class array {
   }
 
   /** The array's siblings. */
+  std::vector<array>& siblings() {
+    return array_desc_->siblings;
+  };
   const std::vector<array>& siblings() const {
     return array_desc_->siblings;
   };

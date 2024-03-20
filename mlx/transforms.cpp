@@ -164,25 +164,85 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
   // Set the global tracing flag.
   detail::InTracing in_tracing;
 
-  // Make tracers from given primals
-  std::vector<array> primals_;
-  for (auto& p : primals) {
-    auto s = p.has_primitive() ? p.primitive().stream()
-                               : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
-    primals_.back().set_tracer(true);
+  // Create a shallow copy of primals with tracers.
+  std::vector<array> traced_primals;
+  for (const array& primal : primals) {
+    Stream s = primal.has_primitive() ? primal.primitive().stream()
+                                      : default_stream(default_device());
+    // Use |copy| primitive to avoid deep copy.
+    traced_primals.push_back(copy(primal, s));
+    traced_primals.back().set_tracer(true);
   }
 
   // Pass tracer primals through the function
   // Any variables that depend on the primals are marked as tracers
-  auto outputs = fun(primals_);
+  std::vector<array> outputs = fun(traced_primals);
 
-  // Map outputs to passed cotans while ignoring the outputs
-  // that have stop_gradient called on them
-  int cotan_index = 0;
-  std::vector<std::pair<int, int>> output_cotan_pairs;
-  for (int i = 0; i < outputs.size(); ++i) {
+  // Remove tracer after calling the function.
+  for (array& primal : traced_primals) {
+    primal.set_tracer(false);
+  }
+
+  // Prepare cache to avoid visiting same node in |recusrse|.
+  std::unordered_set<std::uintptr_t> cache;
+  std::unordered_set<std::uintptr_t> calc_grad;
+  for (const array& primal : traced_primals) {
+    cache.insert(primal.id());
+    calc_grad.insert(primal.id());
+  }
+
+  // Records the nodes that need gradients.
+  std::vector<array> tape;
+
+  // Topologically sort the compute graph, and add graph nodes which need
+  // gradients to the tape.
+  std::function<void(array&)> recurse;
+  recurse = [&tape, &cache, &calc_grad, &recurse](array& a) {
+    // Skip visited node and add unvisited to |cache|.
+    if (auto inserted = cache.insert(a.id()); !inserted.second) {
+      return;
+    }
+    // Remove tracing for visited nodes.
+    a.set_tracer(false);
+    for (array& s : a.siblings()) {
+      s.set_tracer(false);
+      cache.insert(s.id());
+    }
+
+    for (array& input : a.inputs()) {
+      recurse(input);
+    }
+
+    // Skip nodes that called with |stop_gradient| primitive.
+    if (a.has_primitive()) {
+      if (auto& p = a.primitive(); typeid(p) == typeid(StopGradient)) {
+        return;
+      }
+    }
+
+    // Calculate gradient for the node if any of its inputs requires gradient.
+    for (array& input : a.inputs()) {
+      // Skip visited node and add unvisited to |calc_grad|.
+      if (auto inserted = calc_grad.insert(input.id()); !inserted.second) {
+        continue;
+      }
+      for (const array& s : a.siblings()) {
+        calc_grad.insert(s.id());
+      }
+      tape.push_back(a);
+    }
+  };
+
+  for (array& out : outputs) {
+    recurse(out);
+  }
+
+  // Map index of outputs to index of passed cotans.
+  std::vector<std::pair<size_t, size_t>> output_cotan_pairs;
+  size_t cotan_index = 0;
+  for (size_t i = 0; i < outputs.size(); ++i) {
     auto& out = outputs[i];
+    // Skip outputs that called with |stop_gradient| primitive.
     if (out.has_primitive()) {
       if (auto& p = out.primitive(); typeid(p) == typeid(StopGradient)) {
         continue;
@@ -208,123 +268,78 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     output_cotan_pairs.emplace_back(i, cotan_index++);
   }
 
-  // Topologically sort the compute graph, add graph nodes
-  // to the tape which need a gradient.
-  std::unordered_set<std::uintptr_t> cache;
-  std::unordered_set<std::uintptr_t> calc_grad;
-  for (auto& primal : primals_) {
-    primal.set_tracer(false);
-    calc_grad.insert(primal.id());
-    cache.insert(primal.id());
-  }
-
-  std::vector<array> tape;
-
-  std::function<void(array&)> recurse;
-  recurse = [&](auto& a) {
-    // Check if visited and add to cache if not
-    if (auto inserted = cache.insert(a.id()); !inserted.second) {
-      return;
-    }
-    a.set_tracer(false);
-    for (auto s : a.siblings()) {
-      s.set_tracer(false);
-      cache.insert(s.id());
-    }
-
-    for (auto& input : a.inputs()) {
-      recurse(input);
-    }
-
-    // Stop grad
-    if (a.has_primitive()) {
-      if (auto& p = a.primitive(); typeid(p) == typeid(StopGradient)) {
-        return;
-      }
-    }
-
-    // Calculate gradient if any inputs require gradient
-    for (auto& input : a.inputs()) {
-      if (calc_grad.find(input.id()) != calc_grad.end()) {
-        tape.push_back(a);
-        calc_grad.insert(a.id());
-        for (auto& s : a.siblings()) {
-          calc_grad.insert(s.id());
-        }
-        break;
-      }
-    }
-  };
-
-  for (auto out : outputs) {
-    recurse(out);
-  }
-
-  // Run the tape backwards, computing vector-jacobian
-  // products for each primitive
+  // Create a map using output's id as key and matched cotan as value.
   std::unordered_map<std::uintptr_t, array> cotan_map;
   for (auto [out_idx, cotan_idx] : output_cotan_pairs) {
-    auto& o = outputs[out_idx];
-    auto s = o.has_primitive() ? o.primitive().stream()
-                               : default_stream(default_device());
-    cotan_map.insert({o.id(), astype(cotans[cotan_idx], o.dtype(), s)});
+    const array& out = outputs[out_idx];
+    Stream s = out.has_primitive() ? out.primitive().stream()
+                                   : default_stream(default_device());
+    cotan_map.emplace(out.id(), astype(cotans[cotan_idx], out.dtype(), s));
   }
-  for (auto it = tape.rbegin(); it != tape.rend(); ++it) {
-    auto& a = *it;
 
-    // Get the arguments whose gradients are needed
-    std::vector<int> argnums;
-    for (int i = 0; i < a.inputs().size(); ++i) {
-      if (calc_grad.find(a.inputs()[i].id()) != calc_grad.end()) {
-        argnums.push_back(i);
-      }
-    }
+  // Run the tape backwards, computing vector-jacobian products for each
+  // primitive.
+  for (auto it = tape.rbegin(); it != tape.rend(); ++it) {
+    array& a = *it;
 
     // Check if any of the array or its siblings have cotangents,
     // if not, we can skip this primitive
-    auto outputs = a.outputs();
-    bool has_cotans =
-        std::any_of(outputs.cbegin(), outputs.cend(), [&cotan_map](auto& s) {
+    const std::vector<array>& a_outputs = a.outputs();
+    bool has_cotans = std::any_of(
+        a_outputs.begin(), a_outputs.end(), [&cotan_map](const array& s) {
           return cotan_map.find(s.id()) != cotan_map.end();
         });
     if (!has_cotans) {
       continue;
     }
 
-    auto s = a.primitive().stream();
-    std::vector<array> cotangents{};
-    for (auto& o : outputs) {
-      if (auto cotan_it = cotan_map.find(o.id()); cotan_it != cotan_map.end()) {
-        cotangents.push_back(cotan_map.extract(cotan_it).mapped());
+    // Get the cotangents of the primitive's outputs.
+    Stream s = a.primitive().stream();
+    std::vector<array> cotangents;
+    for (const array& out : a_outputs) {
+      auto handle = cotan_map.extract(out.id()); // removed from map
+      if (handle) {
+        cotangents.push_back(std::move(handle.mapped()));
       } else {
-        cotangents.push_back(zeros_like(o, s));
+        cotangents.push_back(zeros_like(out, s));
       }
     }
 
-    auto vjps = a.primitive().vjp(a.inputs(), cotangents, argnums, outputs);
-    // Accumulate the vector-jacobian products for each input
-    for (int i = 0; i < argnums.size(); ++i) {
-      auto in_id = a.inputs()[argnums[i]].id();
-      if (auto cotan_it = cotan_map.find(in_id); cotan_it != cotan_map.end()) {
-        cotan_it->second = add(cotan_it->second, vjps[i], s);
+    // Get the argnum of the inputs whose gradients are needed.
+    std::vector<int> argnums;
+    for (size_t i = 0; i < a.inputs().size(); ++i) {
+      if (calc_grad.find(a.inputs()[i].id()) != calc_grad.end()) {
+        argnums.push_back(static_cast<int>(i));
+      }
+    }
+
+    auto vjps = a.primitive().vjp(a.inputs(), cotangents, argnums, a_outputs);
+
+    // Accumulate the vector-jacobian products for each input.
+    for (size_t i = 0; i < argnums.size(); ++i) {
+      std::uintptr_t input_id = a.inputs()[argnums[i]].id();
+      if (auto cotan_it = cotan_map.find(input_id);
+          cotan_it != cotan_map.end()) {
+        cotan_it->second = add(cotan_it->second, std::move(vjps[i]), s);
       } else {
-        cotan_map.insert({in_id, vjps[i]});
+        cotan_map.emplace(input_id, std::move(vjps[i]));
       }
     }
   }
 
+  // Gather the results of vector-jacobian products.
   std::vector<array> vjps;
-  for (auto& primal : primals_) {
+  for (const array& primal : traced_primals) {
     if (auto cotan_it = cotan_map.find(primal.id());
         cotan_it != cotan_map.end()) {
       vjps.push_back(cotan_it->second);
     } else {
-      auto s = primal.has_primitive() ? primal.primitive().stream()
-                                      : default_stream(default_device());
+      Stream s = primal.has_primitive() ? primal.primitive().stream()
+                                        : default_stream(default_device());
       vjps.push_back(zeros_like(primal, s));
     }
   }
-  return {outputs, vjps};
+  return {std::move(outputs), std::move(vjps)};
 }
 
 std::pair<array, array> vjp(
@@ -335,122 +350,128 @@ std::pair<array, array> vjp(
     return std::vector<array>{fun(inputs[0])};
   };
   auto [outputs, vjps] = vjp(vec_fun, {primal}, {cotan});
-  return {outputs[0], vjps[0]};
+  return {std::move(outputs[0]), std::move(vjps[0])};
 }
 
 std::pair<std::vector<array>, std::vector<array>> jvp(
     const std::function<std::vector<array>(const std::vector<array>&)>& fun,
     const std::vector<array>& primals,
     const std::vector<array>& tangents) {
-  // Set the global tracing flag.
-  detail::InTracing in_tracing;
-
   if (primals.size() != tangents.size()) {
     throw std::invalid_argument(
         "[jvp] Number of inputs does not match number of tangents.");
   }
-  for (int i = 0; i < primals.size(); ++i) {
+  for (size_t i = 0; i < primals.size(); ++i) {
     if (primals[i].shape() != tangents[i].shape()) {
       throw std::invalid_argument(
           "[jvp] Input shape does not match shape of tangent.");
     }
   }
 
-  std::vector<array> primals_;
-  for (auto& p : primals) {
-    auto s = p.has_primitive() ? p.primitive().stream()
-                               : default_stream(default_device());
-    primals_.push_back(copy(p, s)); // Does not do a deep copy
-    primals_.back().set_tracer(true);
-  }
-  auto outputs = fun(primals_);
+  // The following part of |jvp| is equivalent to |vjp|.
+  // TODO: Remove duplicate code.
+  detail::InTracing in_tracing;
 
-  // Topologically sort the compute graph, record outputs
-  // in the tape if a gradient is needed.
+  std::vector<array> traced_primals;
+  for (const array& primal : primals) {
+    Stream s = primal.has_primitive() ? primal.primitive().stream()
+                                      : default_stream(default_device());
+    traced_primals.push_back(copy(primal, s));
+    traced_primals.back().set_tracer(true);
+  }
+
+  std::vector<array> outputs = fun(traced_primals);
+
+  for (array& primal : traced_primals) {
+    primal.set_tracer(false);
+  }
+
   std::unordered_set<std::uintptr_t> cache;
   std::unordered_set<std::uintptr_t> calc_grad;
-  for (auto& primal : primals_) {
-    primal.set_tracer(false);
-    calc_grad.insert(primal.id());
+  for (const array& primal : traced_primals) {
     cache.insert(primal.id());
+    calc_grad.insert(primal.id());
   }
 
   std::vector<array> tape;
 
   std::function<void(array&)> recurse;
-  recurse = [&](auto& a) {
-    // Check if visited and add to cache if not
+  recurse = [&tape, &cache, &calc_grad, &recurse](array& a) {
     if (auto inserted = cache.insert(a.id()); !inserted.second) {
       return;
     }
     a.set_tracer(false);
-    for (auto s : a.siblings()) {
+    for (array& s : a.siblings()) {
       s.set_tracer(false);
       cache.insert(s.id());
     }
 
-    for (auto input : a.inputs()) {
+    for (array& input : a.inputs()) {
       recurse(input);
     }
 
-    // Stop grad
     if (a.has_primitive()) {
       if (auto& p = a.primitive(); typeid(p) == typeid(StopGradient)) {
         return;
       }
     }
 
-    // Calculate gradient if any inputs require gradient
-    for (auto& input : a.inputs()) {
-      if (calc_grad.find(input.id()) != calc_grad.end()) {
-        tape.push_back(a);
-        calc_grad.insert(a.id());
-        for (auto& s : a.siblings()) {
-          calc_grad.insert(s.id());
-        }
-        break;
+    for (array& input : a.inputs()) {
+      if (auto inserted = calc_grad.insert(input.id()); !inserted.second) {
+        continue;
       }
+      for (const array& s : a.siblings()) {
+        calc_grad.insert(s.id());
+      }
+      tape.push_back(a);
     }
   };
 
-  for (auto out : outputs) {
+  for (array& out : outputs) {
     recurse(out);
   }
 
+  // Below is where |jvp| starts to differ from |vjp|.
+
+  // Map primals to passed tans.
   std::unordered_map<std::uintptr_t, array> tan_map;
-  for (int i = 0; i < primals_.size(); ++i) {
-    tan_map.insert({primals_[i].id(), tangents[i]});
+  for (size_t i = 0; i < traced_primals.size(); ++i) {
+    tan_map.emplace(traced_primals[i].id(), tangents[i]);
   }
 
-  for (auto& a : tape) {
-    // Get the arguments used in the jvp
+  // Run the tape forwards, computing jacobian-vector products for each
+  // primitive.
+  for (array& a : tape) {
+    // Get argnum and tan of primitive's inputs.
     std::vector<int> argnums;
     std::vector<array> tangents;
-    for (int i = 0; i < a.inputs().size(); ++i) {
+    for (size_t i = 0; i < a.inputs().size(); ++i) {
       if (auto it = tan_map.find(a.inputs()[i].id()); it != tan_map.end()) {
-        argnums.push_back(i);
+        argnums.push_back(static_cast<int>(i));
         tangents.push_back(it->second);
       }
     }
 
     auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
-    auto outputs = a.outputs();
-    for (int i = 0; i < jvps.size(); ++i) {
-      tan_map.insert({outputs[i].id(), jvps[i]});
+
+    // Save the results of jvp.
+    for (size_t i = 0; i < jvps.size(); ++i) {
+      tan_map.emplace(a.outputs()[i].id(), std::move(jvps[i]));
     }
   }
 
+  // Gather the results of jacobian-vector products.
   std::vector<array> jvps;
-  for (auto& out : outputs) {
+  for (const array& out : outputs) {
     if (auto it = tan_map.find(out.id()); it != tan_map.end()) {
-      jvps.push_back(it->second);
+      jvps.push_back(std::move(it->second));
     } else {
-      auto s = out.has_primitive() ? out.primitive().stream()
-                                   : default_stream(default_device());
+      Stream s = out.has_primitive() ? out.primitive().stream()
+                                     : default_stream(default_device());
       jvps.push_back(zeros_like(out, s));
     }
   }
-  return {outputs, jvps};
+  return {std::move(outputs), std::move(jvps)};
 }
 
 std::pair<array, array> jvp(
@@ -461,7 +482,7 @@ std::pair<array, array> jvp(
     return std::vector<array>{fun(inputs[0])};
   };
   auto [outputs, jvps] = jvp(vec_fun, {primal}, {tangent});
-  return {outputs[0], jvps[0]};
+  return {std::move(outputs[0]), std::move(jvps[0])};
 }
 
 ValueAndGradFn value_and_grad(
@@ -471,15 +492,17 @@ ValueAndGradFn value_and_grad(
     throw std::invalid_argument("[grad] Must specify at least one argument.");
   }
   return [fun, argnums](const std::vector<array>& inputs) {
-    std::set<int> args;
-    for (auto& arg : argnums) {
+    // Translate signed index to unsigned.
+    std::set<size_t> args;
+    for (int arg : argnums) {
       args.insert(arg < 0 ? arg + inputs.size() : arg);
     }
+
     if (args.size() != argnums.size()) {
       throw std::invalid_argument(
           "[grad] Repeat argument number not allowed in grad.");
     }
-    if (*args.begin() < 0 || *args.rbegin() >= inputs.size()) {
+    if (*args.rbegin() >= inputs.size()) {
       std::ostringstream msg;
       msg << "[grad] Invalid argument number for function with "
           << inputs.size() << " inputs.";
@@ -487,29 +510,34 @@ ValueAndGradFn value_and_grad(
     }
 
     auto gfun = [&fun, &inputs, &args](const std::vector<array>& ginputs) {
-      std::vector<array> inputs_(inputs);
+      // Replace the nodes in |inputs| located at |args| with |ginputs|,
+      // which were made tracers by |vjp|.
+      std::vector<array> traced_inputs(inputs);
       auto argit = args.begin();
-      for (int i = 0; i < ginputs.size(); ++i) {
-        inputs_[*argit] = ginputs[i];
+      for (size_t i = 0; i < ginputs.size(); ++i) {
+        traced_inputs[*argit] = ginputs[i];
         ++argit;
       }
-      auto outputs = fun(inputs_);
-      for (int i = 1; i < outputs.size(); i++) {
+      // Pass the traced inputs to function.
+      std::vector<array> outputs = fun(traced_inputs);
+      // Stop gradients of |outputs| from propgating.
+      for (size_t i = 1; i < outputs.size(); i++) {
         auto& out = outputs[i];
-        auto s = out.has_primitive() ? out.primitive().stream()
-                                     : default_stream(default_device());
+        Stream s = out.has_primitive() ? out.primitive().stream()
+                                       : default_stream(default_device());
         outputs[i] = stop_gradient(out, s);
       }
       return outputs;
     };
 
+    // Gather the inputs located at |args| which will have gradients computed.
     std::vector<array> ginputs;
-    for (auto arg : args) {
+    for (size_t arg : args) {
       ginputs.push_back(inputs[arg]);
     }
-    // Set the incoming gradient to int32, vjp will cast it to the output type
-    auto [outputs, grads] = vjp(gfun, ginputs, {array(1.0f)});
-    return std::make_pair(outputs, grads);
+    // The incoming gradient's type is float32, which will be casted to output's
+    // dtype by |vjp|.
+    return vjp(gfun, ginputs, {array(1.0f)});
   };
 }
 
