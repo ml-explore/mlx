@@ -37,21 +37,10 @@ array::array(const std::complex<float>& val, Dtype dtype /* = complex64 */)
 }
 
 array::array(
-    const std::vector<int>& shape,
-    Dtype dtype,
-    std::shared_ptr<Primitive> primitive,
-    const std::vector<array>& inputs)
-    : array_desc_(std::make_shared<ArrayDesc>(
-          shape,
-          dtype,
-          std::move(primitive),
-          inputs)) {}
-
-array::array(
     std::vector<int> shape,
     Dtype dtype,
     std::shared_ptr<Primitive> primitive,
-    std::vector<array>&& inputs)
+    std::vector<array> inputs)
     : array_desc_(std::make_shared<ArrayDesc>(
           std::move(shape),
           dtype,
@@ -92,10 +81,10 @@ array::array(std::initializer_list<int> data, Dtype dtype)
 /* Build an array from a shared buffer */
 array::array(
     allocator::Buffer data,
-    const std::vector<int>& shape,
+    std::vector<int> shape,
     Dtype dtype,
     deleter_t deleter)
-    : array_desc_(std::make_shared<ArrayDesc>(shape, dtype)) {
+    : array_desc_(std::make_shared<ArrayDesc>(std::move(shape), dtype)) {
   set_data(data, deleter);
 }
 
@@ -181,31 +170,16 @@ void array::move_shared_buffer(array other) {
   move_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
-array::ArrayDesc::ArrayDesc(const std::vector<int>& shape, Dtype dtype)
-    : shape(shape), dtype(dtype) {
-  std::tie(size, strides) = cum_prod(shape);
-}
-
-array::ArrayDesc::ArrayDesc(
-    const std::vector<int>& shape,
-    Dtype dtype,
-    std::shared_ptr<Primitive> primitive,
-    const std::vector<array>& inputs)
-    : shape(shape),
-      dtype(dtype),
-      primitive(std::move(primitive)),
-      inputs(inputs) {
+array::ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
+    : shape(std::move(shape)), dtype(dtype) {
   std::tie(size, strides) = cum_prod(this->shape);
-  for (auto& in : this->inputs) {
-    is_tracer |= in.is_tracer();
-  }
 }
 
 array::ArrayDesc::ArrayDesc(
-    std::vector<int>&& shape,
+    std::vector<int> shape,
     Dtype dtype,
     std::shared_ptr<Primitive> primitive,
-    std::vector<array>&& inputs)
+    std::vector<array> inputs)
     : shape(std::move(shape)),
       dtype(dtype),
       primitive(std::move(primitive)),
