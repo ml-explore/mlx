@@ -186,6 +186,64 @@ array mlx_gather_nd(
   return src;
 }
 
+auto mlx_expand_ellipsis(
+    const std::vector<int>& shape,
+    const nb::tuple& entries) {
+  std::vector<nb::object> indices;
+
+  // Go over all entries and note the position of ellipsis
+  int non_none_indices_before = 0;
+  int non_none_indices_after = 0;
+  std::vector<nb::object> r_indices;
+  int i = 0;
+
+  // Start from dimension 0 till we hit an ellipsis
+  for (; i < entries.size(); i++) {
+    auto idx = entries[i];
+    if (!is_valid_index_type(idx)) {
+      throw std::invalid_argument(
+          "Cannot index mlx array using the given type yet");
+    }
+    if (!nb::ellipsis().is(idx)) {
+      indices.push_back(idx);
+      non_none_indices_before += !idx.is_none();
+    } else {
+      break;
+    }
+  }
+
+  // If we do hit an ellipsis, collect indices from the back
+  for (int j = entries.size() - 1; j > i; j--) {
+    auto idx = entries[j];
+    if (!is_valid_index_type(idx)) {
+      throw std::invalid_argument(
+          "Cannot index mlx array using the given type yet");
+    }
+    if (nb::ellipsis().is(idx)) {
+      throw std::invalid_argument(
+          "An index can only have a single ellipsis (...)");
+    }
+    r_indices.push_back(idx);
+    non_none_indices_after += !idx.is_none();
+  }
+
+  // Count up the number of non none indices
+  int non_none_indices = non_none_indices_before + non_none_indices_after;
+
+  // Expand ellipsis
+  for (int axis = non_none_indices_before;
+       axis < shape.size() - non_none_indices_after;
+       axis++) {
+    indices.push_back(nb::slice(0, shape[axis], 1));
+    non_none_indices++;
+  }
+
+  // Insert indices collected after the ellipsis
+  indices.insert(indices.end(), r_indices.rbegin(), r_indices.rend());
+
+  return std::make_pair(non_none_indices, indices);
+}
+
 array mlx_get_item_nd(array src, const nb::tuple& entries) {
   // No indices make this a noop
   if (entries.size() == 0) {
@@ -198,59 +256,13 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
   // 3. Calculate the remaining slices and reshapes
 
   // Ellipsis handling
-  std::vector<nb::object> indices;
-  {
-    int non_none_indices_before = 0;
-    int non_none_indices_after = 0;
-    std::vector<nb::object> r_indices;
-    int i = 0;
-    for (; i < entries.size(); i++) {
-      auto idx = entries[i];
-      if (!is_valid_index_type(idx)) {
-        throw std::invalid_argument(
-            "Cannot index mlx array using the given type yet");
-      }
-      if (!nb::ellipsis().is(idx)) {
-        indices.push_back(idx);
-        non_none_indices_before += !idx.is_none();
-      } else {
-        break;
-      }
-    }
-    for (int j = entries.size() - 1; j > i; j--) {
-      auto idx = entries[j];
-      if (!is_valid_index_type(idx)) {
-        throw std::invalid_argument(
-            "Cannot index mlx array using the given type yet");
-      }
-      if (nb::ellipsis().is(idx)) {
-        throw std::invalid_argument(
-            "An index can only have a single ellipsis (...)");
-      }
-      r_indices.push_back(idx);
-      non_none_indices_after += !idx.is_none();
-    }
-    for (int axis = non_none_indices_before;
-         axis < src.ndim() - non_none_indices_after;
-         axis++) {
-      indices.push_back(nb::slice(0, src.shape(axis), 1));
-    }
-    indices.insert(indices.end(), r_indices.rbegin(), r_indices.rend());
-  }
+  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
 
   // Check for the number of indices passed
-  {
-    int cnt = src.ndim();
-    for (auto& idx : indices) {
-      if (!idx.is_none()) {
-        cnt--;
-      }
-    }
-    if (cnt < 0) {
-      std::ostringstream msg;
-      msg << "Too many indices for array with " << src.ndim() << "dimensions.";
-      throw std::invalid_argument(msg.str());
-    }
+  if (non_none_indices > src.ndim()) {
+    std::ostringstream msg;
+    msg << "Too many indices for array with " << src.ndim() << "dimensions.";
+    throw std::invalid_argument(msg.str());
   }
 
   // Gather handling
@@ -487,50 +499,8 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
     const array& src,
     const nb::tuple& entries,
     const array& update) {
-  std::vector<nb::object> indices;
-  int non_none_indices = 0;
-
   // Expand ellipses into a series of ':' slices
-  {
-    // Go over all entries and note the position of ellipses
-    int non_none_indices_before = 0;
-    int non_none_indices_after = 0;
-    bool has_ellipsis = false;
-    int indices_before = 0;
-    for (int i = 0; i < entries.size(); ++i) {
-      auto idx = entries[i];
-      if (!is_valid_index_type(idx)) {
-        throw std::invalid_argument(
-            "Cannot index mlx array using the given type yet");
-      } else if (!nb::ellipsis().is(idx)) {
-        if (!has_ellipsis) {
-          indices_before++;
-          non_none_indices_before += !idx.is_none();
-        } else {
-          non_none_indices_after += !idx.is_none();
-        }
-        indices.push_back(idx);
-      } else if (has_ellipsis) {
-        throw std::invalid_argument(
-            "An index can only have a single ellipsis (...)");
-      } else {
-        has_ellipsis = true;
-      }
-    }
-
-    // If ellipses are present, add the needed full slices
-    if (has_ellipsis) {
-      for (int axis = src.ndim() - non_none_indices_after - 1;
-           axis >= non_none_indices_before;
-           axis--) {
-        indices.insert(
-            indices.begin() + indices_before, nb::slice(0, src.shape(axis), 1));
-      }
-      non_none_indices = src.ndim();
-    } else {
-      non_none_indices = non_none_indices_before + non_none_indices_after;
-    }
-  }
+  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
 
   if (non_none_indices > src.ndim()) {
     std::ostringstream msg;
