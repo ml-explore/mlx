@@ -89,6 +89,30 @@ class TestDtypes(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(z.shape), list(y.shape))
 
 
+class TestEquality(mlx_tests.MLXTestCase):
+    def test_array_eq_array(self):
+        a = mx.array([1, 2, 3])
+        b = mx.array([1, 2, 3])
+        c = mx.array([1, 2, 4])
+        self.assertTrue(mx.all(a == b))
+        self.assertFalse(mx.all(a == c))
+    
+    def test_array_eq_scalar(self):
+        a = mx.array([1, 2, 3])
+        b = 1
+        c = 4
+
+        self.assertTrue(mx.any(a == b))
+        self.assertFalse(mx.all(a == c))
+    
+    def test_list_equals_array(self):
+        a = mx.array([1, 2, 3])
+        b = [1, 2, 3]
+        c = [1, 2, 4]
+
+        self.assertTrue(mx.all(a == b))
+        # self.assertFalse(a == c)
+
 class TestArray(mlx_tests.MLXTestCase):
     def test_array_basics(self):
         x = mx.array(1)
