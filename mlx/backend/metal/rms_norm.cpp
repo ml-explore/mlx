@@ -36,7 +36,7 @@ void RMSNorm::eval_gpu(
   const array& x = check_input(inputs[0]);
   const array& w = inputs[1];
 
-  if (x.flags().row_contiguous && x.is_donatable()) {
+  if (x.is_donatable()) {
     out.move_shared_buffer(x);
   } else {
     out.set_data(
@@ -54,7 +54,7 @@ void RMSNorm::eval_gpu(
   const int looped_limit = RMS_LOOPED_LIMIT;
   std::string op_name = "rms";
   if (axis_size > looped_limit) {
-    op_name += "looped_";
+    op_name += "_looped";
   }
   op_name += type_to_name(out);
   auto compute_encoder = d.get_command_encoder(s.index);

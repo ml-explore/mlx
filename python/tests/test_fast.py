@@ -158,6 +158,14 @@ class TestFast(mlx_tests.MLXTestCase):
             rx_fast = mx.fast.rms_norm(x, weight, eps)
             self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
+        # Test > 4096
+        dims, dtype, eps = 4099, mx.float32, 1e-5
+        x = mx.random.uniform(shape=(dims,)).astype(dtype)
+        weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+        rx = rms_norm(x, weight, eps)
+        rx_fast = mx.fast.rms_norm(x, weight, eps)
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-6)
+
     def test_fast_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))
 
