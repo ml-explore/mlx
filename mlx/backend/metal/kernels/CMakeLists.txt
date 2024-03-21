@@ -23,6 +23,7 @@ set(
   "gemv"
   "quantized"
   "random"
+  "rms_norm"
   "rope"
   "scan"
   "scaled_dot_product_attention"

@@ -50,7 +50,7 @@ array rms_norm(
     const array& x,
     const array& weight,
     float eps,
-    StreamOrDevice s /* = {} */) {
+    StreamOrDevice s_ /* = {} */) {
   if (x.ndim() == 0) {
     std::ostringstream msg;
     msg << "[rms_norm] Input must have at least 1 dimension but got input with "
@@ -70,26 +70,26 @@ array rms_norm(
     throw std::invalid_argument(msg.str());
   }
 
-  auto stream = to_stream(s);
-  auto fallback = [eps, out_type, stream](const std::vector<array>& inputs) {
-    auto x = astype(inputs[0], float32, stream);
+  auto s = to_stream(s_);
+  auto fallback = [eps, out_type, s](const std::vector<array>& inputs) {
+    auto x = astype(inputs[0], float32, s);
     x = multiply(
         x,
         rsqrt(
-            add(mean(square(x, stream), -1, /* keepdims */ true, stream),
+            add(mean(square(x, s), -1, /* keepdims */ true, s),
                 array(eps, float32),
-                stream),
-            stream),
-        stream);
-    x = astype(x, out_type, stream);
-    return std::vector<array>{multiply(inputs[1], x, stream)};
+                s),
+            s),
+        s);
+    x = astype(x, out_type, s);
+    return std::vector<array>{multiply(inputs[1], x, s)};
   };
-  if (stream.device == Device::gpu && false) {
+  if (s.device == Device::gpu) {
     return array(
         x.shape(),
         x.dtype(),
-        std::make_unique<RMSNorm>(stream, fallback, eps),
-        {x});
+        std::make_unique<RMSNorm>(s, fallback, eps),
+        {astype(x, out_type, s), astype(weight, out_type, s)});
   }
   return fallback({x, weight})[0];
 }
