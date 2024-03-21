@@ -86,7 +86,8 @@ void RMSNorm::eval_gpu(
     compute_encoder->setBytes(&eps_, sizeof(float), 3);
     compute_encoder->setBytes(&axis_size, sizeof(int), 4);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 5);
-    compute_encoder->setThreadgroupMemoryLength(sizeof(float), 0);
+    compute_encoder->setThreadgroupMemoryLength(
+        16 * 8, 0); // minimum of 16 bytes
     compute_encoder->setThreadgroupMemoryLength(simd_size * sizeof(float), 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
