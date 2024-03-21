@@ -87,7 +87,7 @@ array rms_norm(
   if (s.device == Device::gpu) {
     return array(
         x.shape(),
-        x.dtype(),
+        out_type,
         std::make_unique<RMSNorm>(s, fallback, eps),
         {astype(x, out_type, s), astype(weight, out_type, s)});
   }
@@ -96,6 +96,88 @@ array rms_norm(
 
 bool RMSNorm::is_equivalent(const Primitive& other) const {
   const RMSNorm& a_other = static_cast<const RMSNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
+array layer_norm(
+    const array& x,
+    const std::optional<array>& weight,
+    const std::optional<array>& bias,
+    float eps,
+    StreamOrDevice s_ /* = {} */) {
+  if (x.ndim() == 0) {
+    std::ostringstream msg;
+    msg << "[layer_norm] Input must have at least 1 dimension but got input with "
+           "0 dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (weight.has_value() && (*weight).ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[layer_norm] weight must have 1 dimension but has "
+        << (*weight).ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (bias.has_value() && (*bias).ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[layer_norm] bias must have 1 dimension but has " << (*bias).ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out_type = (weight.has_value())
+      ? ((bias.has_value()) ? result_type({x, *weight, *bias})
+                            : result_type({x, *weight}))
+      : x.dtype();
+  if (!is_floating_point(out_type) || is_complex(out_type)) {
+    std::ostringstream msg;
+    msg << "[layer_norm] Received unsupported type " << out_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  bool has_weight = weight.has_value();
+  bool has_bias = bias.has_value();
+  auto fallback = [has_weight, has_bias, eps, out_type, s](
+                      const std::vector<array>& inputs) {
+    auto x = astype(inputs[0], float32, s);
+
+    // Should I not be smart here and leave the double mean to simplify()?
+    auto mu = mean(x, /* axis= */ -1, /* keepdims= */ true, s);
+    auto mu2 = square(mu, s);
+    auto x2 = mean(square(x, s), /* axis= */ -1, /* keepdims= */ true, s);
+    auto v = subtract(x2, mu2, s);
+
+    x = multiply(subtract(x, mu, s), rsqrt(add(v, array(eps, float32), s), s));
+    x = astype(x, out_type, s);
+
+    // If the LN is affine then transform x according to the weight and bias
+    if (has_weight) {
+      x = multiply(x, inputs[1], s);
+    }
+    if (has_bias) {
+      x = add(x, inputs[2], s);
+    }
+
+    return std::vector<array>{x};
+  };
+
+  auto passed_weight =
+      astype((weight.has_value()) ? *weight : array(1, out_type), out_type);
+  auto passed_bias =
+      astype((bias.has_value()) ? *bias : array(0, out_type), out_type);
+
+  if (s.device == Device::gpu) {
+    return array(
+        x.shape(),
+        out_type,
+        std::make_unique<LayerNorm>(s, fallback, eps),
+        {astype(x, out_type, s), passed_weight, passed_bias});
+  }
+  return fallback({x, passed_weight, passed_bias})[0];
+}
+
+bool LayerNorm::is_equivalent(const Primitive& other) const {
+  const LayerNorm& a_other = static_cast<const LayerNorm&>(other);
   return eps_ == a_other.eps_;
 }
 
