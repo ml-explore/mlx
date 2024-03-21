@@ -192,13 +192,13 @@ template <typename T, int N_READS = RMS_N_READS>
     if (r + lid * N_READS + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {
         float xi = (x[r + i] - mean) * normalizer;
-        out[r + i] = w[w_stride * i] * static_cast<T>(xi) + b[b_stride * i];
+        out[r + i] = w[w_stride * (i + r)] * static_cast<T>(xi) + b[b_stride * (i + r)];
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
         if ((r + lid * N_READS + i) < axis_size) {
           float xi = (x[r + i] - mean) * normalizer;
-          out[r + i] = w[w_stride * i] * static_cast<T>(xi) + b[b_stride * i];
+          out[r + i] = w[w_stride * (i + r)] * static_cast<T>(xi) + b[b_stride * (i + r)];
         }
       }
     }
