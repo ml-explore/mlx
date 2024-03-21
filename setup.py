@@ -154,7 +154,7 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.7.0"),
+        version=get_version("0.8.0"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",

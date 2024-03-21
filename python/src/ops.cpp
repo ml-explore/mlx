@@ -1261,7 +1261,7 @@ void init_ops(nb::module_& m) {
       "start"_a,
       "stop"_a,
       "num"_a = 50,
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       "stream"_a = nb::none(),
       nb::sig(
           "def linspace(start, stop, num: Optional[int] = 50, dtype: Optional[Dtype] = float32, stream: Union[None, Stream, Device] = None) -> array"),
@@ -1396,7 +1396,7 @@ void init_ops(nb::module_& m) {
         }
       },
       "shape"_a,
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1442,7 +1442,7 @@ void init_ops(nb::module_& m) {
         }
       },
       "shape"_a,
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1487,7 +1487,7 @@ void init_ops(nb::module_& m) {
       "n"_a,
       "m"_a = nb::none(),
       "k"_a = 0,
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1511,7 +1511,7 @@ void init_ops(nb::module_& m) {
         return identity(n, dtype.value_or(float32), s);
       },
       "n"_a,
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -1539,7 +1539,7 @@ void init_ops(nb::module_& m) {
       "n"_a,
       "m"_a = nb::none(),
       "k"_a = 0,
-      "dtype"_a = float32,
+      "dtype"_a.none() = float32,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
