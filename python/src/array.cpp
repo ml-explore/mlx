@@ -760,8 +760,18 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__eq__",
-          [](const array& a, const ScalarOrArray v) {
-            return equal(a, to_array(v, a.dtype()));
+          [](const array& a, const ScalarOrArray& v) {
+            auto visitor = [&a](auto&& arg) {
+              using T = std::decay_t<decltype(arg)>;
+              if constexpr (std::is_same_v<T, nb::object>) {
+                nb::handle h = arg;
+                if (nb::isinstance<nb::list>(h) || nb::isinstance<nb::tuple>(h)) {
+                  return equal(a, array_from_list(arg, a.dtype()));
+                }
+              }
+              return equal(a, to_array(arg, a.dtype()));
+            };
+            return std::visit(visitor, v);
           },
           "other"_a)
       .def(
