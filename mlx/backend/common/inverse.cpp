@@ -2,6 +2,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/linalg.h"
 #include "mlx/primitives.h"
 
 #ifdef ACCELERATE_NEW_LAPACK
@@ -90,6 +91,14 @@ void Inverse::eval(const std::vector<array>& inputs, array& output) {
     throw std::runtime_error("[Inverse::eval] only supports float32.");
   }
   inverse_impl(inputs[0], output);
+}
+
+std::pair<std::vector<array>, std::vector<int>> Inverse::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto ax = axes[0] >= 0 ? 0 : -1;
+  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  return {{linalg::inv(a, stream())}, {ax}};
 }
 
 } // namespace mlx::core

@@ -3,6 +3,7 @@
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/lapack_helper.h"
+#include "mlx/linalg.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
@@ -142,6 +143,14 @@ void SVD::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
     throw std::runtime_error("[SVD::eval] only supports float32.");
   }
   svd_impl(inputs[0], outputs[0], outputs[1], outputs[2]);
+}
+
+std::pair<std::vector<array>, std::vector<int>> SVD::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto ax = axes[0] >= 0 ? 0 : -1;
+  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  return {{linalg::svd(a, stream())}, {ax, ax, ax}};
 }
 
 } // namespace mlx::core
