@@ -12,7 +12,7 @@ array rms_norm(
     const array& x,
     const array& weight,
     float eps,
-    StreamOrDevice s /* = {} */);
+    StreamOrDevice s = {});
 
 array rope(
     const array& x,
@@ -21,7 +21,7 @@ array rope(
     float base,
     float scale,
     int offset,
-    StreamOrDevice s /* = {} */);
+    StreamOrDevice s = {});
 
 /** Computes: O = softmax(Q @ K.T) @ V **/
 array scaled_dot_product_attention(
