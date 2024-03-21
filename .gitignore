@@ -82,3 +82,4 @@ build/
 
 # Jetbrains
 .cache
+/python/mlx/nn/layers/.ipynb_checkpoints
