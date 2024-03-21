@@ -277,7 +277,7 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
     bool have_non_array = false;
     bool gather_first = false;
     for (auto& idx : indices) {
-      if (nb::isinstance<array>(idx) || nb::isinstance<nb::int_>(idx)) {
+      if (nb::isinstance<array>(idx) || (nb::isinstance<nb::int_>(idx))) {
         if (have_array && have_non_array) {
           gather_first = true;
           break;
@@ -287,6 +287,13 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
         have_non_array |= have_array;
       }
     }
+
+    int n_arr = 0;
+    for (auto& idx : indices) {
+      n_arr += nb::isinstance<array>(idx);
+    }
+
+    have_array &= n_arr > 0;
 
     if (have_array) {
       int last_array;
@@ -355,6 +362,8 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
     remaining_indices = indices;
   }
 
+  bool squeeze_needed = false;
+
   // Slice handling
   {
     std::vector<int> starts(src.ndim(), 0);
@@ -363,12 +372,24 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
     int axis = 0;
     for (auto& idx : remaining_indices) {
       if (!idx.is_none()) {
-        get_slice_params(
-            starts[axis],
-            ends[axis],
-            strides[axis],
-            nb::cast<nb::slice>(idx),
-            ends[axis]);
+        if (!have_array && nb::isinstance<nb::int_>(idx)) {
+          int st = nb::cast<int>(idx);
+          st = (st < 0) ? st + src.shape(axis) : st;
+
+          starts[axis] = st;
+          ends[axis] = st + 1;
+
+          squeeze_needed = true;
+
+        } else {
+          get_slice_params(
+              starts[axis],
+              ends[axis],
+              strides[axis],
+              nb::cast<nb::slice>(idx),
+              ends[axis]);
+        }
+
         axis++;
       }
     }
@@ -376,12 +397,14 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
   }
 
   // Unsqueeze handling
-  if (remaining_indices.size() > src.ndim()) {
+  if (remaining_indices.size() > src.ndim() || squeeze_needed) {
     std::vector<int> out_shape;
     int axis = 0;
     for (auto& idx : remaining_indices) {
       if (idx.is_none()) {
         out_shape.push_back(1);
+      } else if (squeeze_needed && nb::isinstance<nb::int_>(idx)) {
+        axis++;
       } else {
         out_shape.push_back(src.shape(axis++));
       }
