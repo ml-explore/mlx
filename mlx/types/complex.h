@@ -10,7 +10,7 @@ struct complex64_t;
 struct complex128_t;
 
 template <typename T>
-static constexpr bool can_convert_to_complex128 =
+inline constexpr bool can_convert_to_complex128 =
     !std::is_same_v<T, complex128_t> && std::is_convertible_v<T, double>;
 
 struct complex128_t : public std::complex<double> {
@@ -28,7 +28,7 @@ struct complex128_t : public std::complex<double> {
 };
 
 template <typename T>
-static constexpr bool can_convert_to_complex64 =
+inline constexpr bool can_convert_to_complex64 =
     !std::is_same_v<T, complex64_t> && std::is_convertible_v<T, float>;
 
 struct complex64_t : public std::complex<float> {
