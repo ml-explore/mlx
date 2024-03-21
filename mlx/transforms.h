@@ -6,10 +6,10 @@
 
 namespace mlx::core {
 
-void eval(const std::vector<array>& outputs);
+void eval(std::vector<array> outputs);
 
 template <typename... Arrays>
-void eval(Arrays... outputs) {
+void eval(Arrays&&... outputs) {
   eval(std::vector<array>{std::forward<Arrays>(outputs)...});
 }
 

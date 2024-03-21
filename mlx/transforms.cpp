@@ -37,7 +37,7 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation.
 int detail::InTracing::tracing_counter{0};
 
-void eval(const std::vector<array>& outputs) {
+void eval(std::vector<array> outputs) {
   std::function<void(const array&)> recurse;
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;
@@ -52,8 +52,8 @@ void eval(const std::vector<array>& outputs) {
     }
   }
 
-  auto synchronizer =
-      array({}, bool_, std::make_unique<Synchronizer>(stream), outputs);
+  auto synchronizer = array(
+      {}, bool_, std::make_unique<Synchronizer>(stream), std::move(outputs));
 
   size_t depth_counter = 0;
   recurse = [&](const array& a) {
