@@ -28,12 +28,14 @@ template <typename T, int N_READS = RMS_N_READS>
   w += w_stride * lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
-      acc += x[i] * x[i];
+      float xi = x[i];
+      acc += xi * xi;
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
       if ((lid * N_READS + i) < axis_size) {
-        acc += x[i] * x[i];
+        float xi = x[i];
+        acc += xi * xi;
       }
     }
   }
@@ -95,12 +97,14 @@ template <typename T, int N_READS = RMS_N_READS>
   for (uint r = 0; r < axis_size; r += lsize * N_READS) {
     if (r + lid * N_READS + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {
-        acc += x[i + r] * x[i + r];
+        float xi = x[i + r];
+        acc += xi * xi;
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
         if ((r + lid * N_READS + i) < axis_size) {
-          acc += x[i + r] * x[i + r];
+          float xi = x[i + r];
+          acc += xi * xi;
         }
       }
     }
