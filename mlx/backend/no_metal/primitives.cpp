@@ -102,6 +102,7 @@ NO_GPU(Transpose)
 NO_GPU(Inverse)
 
 namespace fast {
+NO_GPU_MULTI(RMSNorm)
 NO_GPU_MULTI(RoPE)
 NO_GPU(ScaledDotProductAttention)
 } // namespace fast
