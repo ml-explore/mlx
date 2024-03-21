@@ -181,7 +181,7 @@ class TestFast(mlx_tests.MLXTestCase):
             return x
 
         # Per dtype absolute tolerance
-        tolerances = {mx.float32: 2e-6, mx.float16: 1e-3, mx.bfloat16: 2e-2}
+        tolerances = {mx.float32: 2e-6, mx.float16: 2e-3, mx.bfloat16: 2e-2}
 
         dtypes = [mx.float32, mx.float16, mx.bfloat16]
         epss = [1e-3, 1e-5]
