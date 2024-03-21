@@ -65,7 +65,7 @@ def cosine_decay(init: float, decay_steps: int, minimum: float = 0.0) -> Callabl
         init (float): Initial value.
         decay_steps (int): Number of steps to decay over. The decayed
             value is constant for steps beyond ``decay_steps``.
-        minimum (float): Minimal value to decay to (defaults to 0)
+        minimum (float, optional): Minimal value to decay to. Default: ``0``.
 
     Example:
 
