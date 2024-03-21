@@ -63,7 +63,7 @@ array rms_norm(
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  auto out_type = result_type({x, weight});
+  auto out_type = result_type(x, weight);
   if (!is_floating_point(out_type) || is_complex(out_type)) {
     std::ostringstream msg;
     msg << "[rms_norm] Received unsupported type " << out_type << ".";
