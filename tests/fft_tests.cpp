@@ -242,7 +242,7 @@ TEST_CASE("test fft vmap") {
   auto y = vmap(fft_fn)(x);
   CHECK(array_equal(y, fft::fft(x)).item<bool>());
 
-  y = vmap(fft_fn, 1, 1)(x);
+  y = vmap(fft_fn, {1}, {1})(x);
   CHECK(array_equal(y, fft::fft(x, 0)).item<bool>());
 
   auto rfft_fn = [](array x) { return fft::rfft(x); };
@@ -250,7 +250,7 @@ TEST_CASE("test fft vmap") {
   y = vmap(rfft_fn)(x);
   CHECK(array_equal(y, fft::rfft(x)).item<bool>());
 
-  y = vmap(rfft_fn, 1, 1)(x);
+  y = vmap(rfft_fn, {1}, {1})(x);
   CHECK(array_equal(y, fft::rfft(x, 0)).item<bool>());
 
   set_default_device(device);

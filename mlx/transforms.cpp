@@ -689,10 +689,10 @@ std::vector<array> vmap_replace(
 } // namespace detail
 
 std::function<std::vector<array>(const std::vector<array>&)> vmap(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<int>& in_axes /* = {} */,
-    const std::vector<int>& out_axes /* = {} */) {
-  auto infer_axes = [](auto axes) {
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::vector<int> in_axes /* = {} */,
+    std::vector<int> out_axes /* = {} */) {
+  auto infer_axes = [](const auto& axes) {
     return !axes.empty() &&
         std::all_of(axes.begin(), axes.end(), [](int ax) { return ax < 0; });
   };
@@ -701,7 +701,9 @@ std::function<std::vector<array>(const std::vector<array>&)> vmap(
         "[vmap] Input (or output) axes must be "
         "specified if output (or input) axes are.");
   }
-  auto vfun = [fun, in_axes = in_axes, out_axes = out_axes](
+  auto vfun = [fun = std::move(fun),
+               in_axes = std::move(in_axes),
+               out_axes = std::move(out_axes)](
                   const std::vector<array>& inputs) mutable {
     if (in_axes.size() == 0) {
       in_axes.resize(inputs.size(), 0);
@@ -721,31 +723,33 @@ std::function<std::vector<array>(const std::vector<array>&)> vmap(
   return vfun;
 }
 
-std::function<array(const array&, const array&)> vmap(
-    const std::function<array(const array&, const array&)>& fun,
-    int in_axis_a /* = 0 */,
-    int in_axis_b /* = 0 */,
-    int out_axis /* = 0 */) {
+std::function<array(array)> vmap(
+    std::function<array(const array&)> fun,
+    std::vector<int> in_axis /* = {0} */,
+    std::vector<int> out_axis /* = {0} */) {
   auto vfun = vmap(
-      [in_axis_a, in_axis_b, out_axis, fun](const std::vector<array>& inputs) {
-        return std::vector<array>{fun(inputs[0], inputs[1])};
-      },
-      {in_axis_a, in_axis_b},
-      {out_axis});
-  return [vfun](const array& a, const array& b) { return vfun({a, b})[0]; };
-}
-
-std::function<array(const array&)> vmap(
-    const std::function<array(const array&)>& fun,
-    int in_axis /* = 0 */,
-    int out_axis /* = 0 */) {
-  auto vfun = vmap(
-      [in_axis, out_axis, fun](const std::vector<array>& inputs) {
+      [fun = std::move(fun)](const std::vector<array>& inputs) {
         return std::vector<array>{fun(inputs[0])};
       },
-      {in_axis},
-      {out_axis});
-  return [vfun](const array& a) { return vfun({a})[0]; };
+      std::move(in_axis),
+      std::move(out_axis));
+  return [vfun = std::move(vfun)](array a) { return vfun({std::move(a)})[0]; };
+}
+
+std::function<array(array, array)> vmap(
+    std::function<array(const array&, const array&)> fun,
+    std::vector<int> in_axis /* = {0, 0} */,
+    std::vector<int> out_axis /* = {0} */) {
+  in_axis.resize(2); // grow partial axis like {-1} to {-1, 0}
+  auto vfun = vmap(
+      [fun = std::move(fun)](const std::vector<array>& inputs) {
+        return std::vector<array>{fun(inputs[0], inputs[1])};
+      },
+      std::move(in_axis),
+      std::move(out_axis));
+  return [vfun = std::move(vfun)](array a, array b) {
+    return vfun({std::move(a), std::move(b)})[0];
+  };
 }
 
 std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(

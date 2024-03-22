@@ -146,23 +146,6 @@ std::function<array(const array&)> inline grad(
 }
 
 /**
- * Automatically vectorize a unary function over the requested axes.
- */
-std::function<array(const array&)> vmap(
-    const std::function<array(const array&)>& fun,
-    int in_axis = 0,
-    int out_axis = 0);
-
-/**
- * Automatically vectorize a binary function over the requested axes.
- */
-std::function<array(const array&, const array&)> vmap(
-    const std::function<array(const array&, const array&)>& fun,
-    int in_axis_a = 0,
-    int in_axis_b = 0,
-    int out_axis = 0);
-
-/**
  * Automatically vectorize a function over the requested axes.
  *
  * The input function to `vmap` takes as an argument a vector of arrays and
@@ -172,9 +155,25 @@ std::function<array(const array&, const array&)> vmap(
  * function.
  */
 std::function<std::vector<array>(const std::vector<array>&)> vmap(
-    const std::function<std::vector<array>(const std::vector<array>&)>& fun,
-    const std::vector<int>& in_axes = {},
-    const std::vector<int>& out_axes = {});
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::vector<int> in_axes = {},
+    std::vector<int> out_axes = {});
+
+/**
+ * Automatically vectorize a unary function over the requested axes.
+ */
+std::function<array(array)> vmap(
+    std::function<array(const array&)> fun,
+    std::vector<int> in_axis = {0},
+    std::vector<int> out_axis = {0});
+
+/**
+ * Automatically vectorize a binary function over the requested axes.
+ */
+std::function<array(array, array)> vmap(
+    std::function<array(const array&, const array&)> fun,
+    std::vector<int> in_axis = {0, 0},
+    std::vector<int> out_axis = {0});
 
 /**
  * Return the results of calling fun with args but if their vjp is computed it

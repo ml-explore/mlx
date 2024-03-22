@@ -18,11 +18,11 @@ TEST_CASE("test simple vmap") {
     auto expected = array({0, 1, 2, 3, 4, 5, 6, 7}, {2, 4});
     CHECK(array_equal(vfun(x), expected).item<bool>());
 
-    vfun = vmap([](array input) { return reshape(input, {4}); }, 1);
+    vfun = vmap([](array input) { return reshape(input, {4}); }, {1});
     expected = array({0, 1, 4, 5, 2, 3, 6, 7}, {2, 4});
     CHECK(array_equal(vfun(x), expected).item<bool>());
 
-    vfun = vmap([](array input) { return reshape(input, {4}); }, 1, 1);
+    vfun = vmap([](array input) { return reshape(input, {4}); }, {1}, {1});
     expected = array({0, 2, 1, 3, 4, 6, 5, 7}, {4, 2});
     CHECK(array_equal(vfun(x), expected).item<bool>());
   }
@@ -31,10 +31,10 @@ TEST_CASE("test simple vmap") {
   {
     auto fun = [](array input) { return broadcast_to(input, {4, 2}); };
 
-    CHECK_THROWS_AS(vmap(fun, 0, -1), std::invalid_argument);
-    CHECK_THROWS_AS(vmap(fun, -1, 0), std::invalid_argument);
+    CHECK_THROWS_AS(vmap(fun, {0}, {-1}), std::invalid_argument);
+    CHECK_THROWS_AS(vmap(fun, {-1}, {0}), std::invalid_argument);
 
-    auto vfun = vmap(fun, -1, -1);
+    auto vfun = vmap(fun, {-1}, {-1});
     auto x = zeros({2});
     CHECK(array_equal(vfun(x), zeros({4, 2})).item<bool>());
 
@@ -42,24 +42,24 @@ TEST_CASE("test simple vmap") {
     x = zeros({3, 2});
     CHECK(array_equal(vfun(x), zeros({3, 4, 2})).item<bool>());
 
-    vfun = vmap(fun, 0, 1);
+    vfun = vmap(fun, {0}, {1});
     CHECK(array_equal(vfun(x), zeros({4, 3, 2})).item<bool>());
 
-    vfun = vmap(fun, 0, 2);
+    vfun = vmap(fun, {0}, {2});
     CHECK(array_equal(vfun(x), zeros({4, 2, 3})).item<bool>());
 
-    vfun = vmap(fun, 0, 2);
+    vfun = vmap(fun, {0}, {2});
     x = zeros({2, 3});
     CHECK_THROWS_AS(vfun(x), std::invalid_argument);
 
     x = zeros({2, 3});
-    vfun = vmap(fun, 1);
+    vfun = vmap(fun, {1});
     CHECK(array_equal(vfun(x), zeros({3, 4, 2})).item<bool>());
 
-    vfun = vmap(fun, 1, 1);
+    vfun = vmap(fun, {1}, {1});
     CHECK(array_equal(vfun(x), zeros({4, 3, 2})).item<bool>());
 
-    vfun = vmap(fun, 1, 2);
+    vfun = vmap(fun, {1}, {2});
     CHECK(array_equal(vfun(x), zeros({4, 2, 3})).item<bool>());
   }
 
@@ -70,17 +70,17 @@ TEST_CASE("test simple vmap") {
     auto x = array({0, 1, 2, 3, 4, 5}, {3, 2});
     CHECK(array_equal(vfun(x), x).item<bool>());
 
-    vfun = vmap(fun, 0, 1);
+    vfun = vmap(fun, {0}, {1});
     CHECK(array_equal(vfun(x), transpose(x)).item<bool>());
 
     x = array({0, 1, 2, 3, 4, 5, 6, 7}, {2, 2, 2});
     vfun = vmap(fun);
     CHECK(array_equal(vfun(x), transpose(x, {0, 2, 1})).item<bool>());
 
-    vfun = vmap(fun, 1, 1);
+    vfun = vmap(fun, {1}, {1});
     CHECK(array_equal(vfun(x), transpose(x, {2, 1, 0})).item<bool>());
 
-    vfun = vmap(fun, 2, 2);
+    vfun = vmap(fun, {2}, {2});
     CHECK(array_equal(vfun(x), transpose(x, {1, 0, 2})).item<bool>());
 
     // vmap twice
@@ -307,7 +307,7 @@ TEST_CASE("test vmap creation ops") {
 
     x = array({1, 2, 3}, {1, 3});
     CHECK_THROWS_AS(vmap(fun)(x), std::invalid_argument);
-    out = vmap(fun, 1, 1)(x);
+    out = vmap(fun, {1}, {1})(x);
     expected = array({1, 2, 3, 1, 2, 3}, {2, 3});
     CHECK(array_equal(out, expected).item<bool>());
   }
@@ -325,7 +325,7 @@ TEST_CASE("test vmap slice") {
   {
     auto fun = [](array in) { return slice(in, {0, 1}, {2, 3}); };
     auto x = reshape(arange(12), {2, 2, 3});
-    auto out = vmap(fun, 1, 0)(x);
+    auto out = vmap(fun, {1}, {0})(x);
     auto expected = reshape(array({1, 2, 7, 8, 4, 5, 10, 11}), {2, 2, 2});
     CHECK(array_equal(out, expected).item<bool>());
   }

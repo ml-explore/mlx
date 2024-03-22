@@ -161,7 +161,7 @@ TEST_CASE("test random bits") {
          1110694964u,
          3819641963u},
         {2, 3});
-    CHECK(array_equal(vmap(fn, 1)(key), expected).item<bool>());
+    CHECK(array_equal(vmap(fn, {1})(key), expected).item<bool>());
 
     // Vmap twice
     key = array(
@@ -199,7 +199,7 @@ TEST_CASE("test random bits") {
         {3, 2, 2});
     CHECK(array_equal(out, expected).item<bool>());
 
-    out = vmap(vmap(fn, 1), 0)(key);
+    out = vmap(vmap(fn, {1}), {0})(key);
     expected = array(
         {1948878966u,
          4237131848u,
@@ -331,7 +331,7 @@ TEST_CASE("test random uniform") {
     auto fun = [](array k, array low) {
       return random::uniform(low, 1, {3}, float32, k);
     };
-    auto out = vmap(fun, -1)(key, zeros({2, 3}));
+    auto out = vmap(fun, {-1})(key, zeros({2, 3}));
     CHECK_EQ(out.shape(), std::vector<int>{2, 3});
 
     key = zeros({2, 2}, uint32);

@@ -2225,12 +2225,14 @@ TEST_CASE("test scan op") {
   CHECK(array_equal(y, expected).item<bool>());
 
   // Check the vmap implementation
-  auto fun = [](array x) { return cumsum(x, 0, false, true); };
-  y = vmap(fun, 0, 0)(x);
+  std::function<array(array)> fun = [](array x) {
+    return cumsum(x, 0, false, true);
+  };
+  y = vmap(fun)(x);
   expected = array({1.0f, 3.0f, 3.0f, 7.0f, 5.0f, 11.0f, 7.0f, 15.0f}, {4, 2});
   CHECK(array_equal(y, expected).item<bool>());
 
-  y = vmap(fun, 1, 1)(x);
+  y = vmap(fun, {1}, {1})(x);
   expected = array({1.0f, 2.0f, 4.0f, 6.0f, 9.0f, 12.0f, 16.0f, 20.0f}, {4, 2});
   CHECK(array_equal(y, expected).item<bool>());
 }
