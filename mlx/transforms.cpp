@@ -782,7 +782,7 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
     }
 
     return array::make_arrays(
-        shapes,
+        std::move(shapes),
         dtypes,
         std::make_shared<CustomVJP>(to_stream(s), fun_vjp),
         inputs);

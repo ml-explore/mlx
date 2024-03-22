@@ -180,9 +180,9 @@ class array {
       std::vector<array> inputs);
 
   static std::vector<array> make_arrays(
-      const std::vector<std::vector<int>>& shapes,
+      std::vector<std::vector<int>> shapes,
       const std::vector<Dtype>& dtypes,
-      std::shared_ptr<Primitive> primitive,
+      const std::shared_ptr<Primitive>& primitive,
       const std::vector<array>& inputs);
 
   /** A unique identifier for an array. */

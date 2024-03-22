@@ -614,7 +614,7 @@ std::vector<array> split(
     shapes.back()[ax] = a.shape(ax) - indices.back();
 
     return array::make_arrays(
-        shapes,
+        std::move(shapes),
         dtypes,
         std::make_shared<Split>(to_stream(s), indices, ax),
         {a});
@@ -1949,7 +1949,7 @@ divmod(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   return array::make_arrays(
       {inputs[0].shape(), inputs[0].shape()},
       {inputs[0].dtype(), inputs[0].dtype()},
-      std::make_unique<DivMod>(to_stream(s)),
+      std::make_shared<DivMod>(to_stream(s)),
       inputs);
 }
 
@@ -3531,7 +3531,10 @@ std::vector<array> depends(
   }
 
   return array::make_arrays(
-      shapes, dtypes, std::make_shared<Depends>(to_stream(s)), all_inputs);
+      std::move(shapes),
+      dtypes,
+      std::make_shared<Depends>(to_stream(s)),
+      all_inputs);
 }
 
 array atleast_1d(const array& a, StreamOrDevice s /* = {} */) {

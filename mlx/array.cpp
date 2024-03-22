@@ -48,15 +48,16 @@ array::array(
           std::move(inputs))) {}
 
 std::vector<array> array::make_arrays(
-    const std::vector<std::vector<int>>& shapes,
+    std::vector<std::vector<int>> shapes,
     const std::vector<Dtype>& dtypes,
-    std::shared_ptr<Primitive> primitive,
+    const std::shared_ptr<Primitive>& primitive,
     const std::vector<array>& inputs) {
   std::vector<array> outputs;
-  for (int i = 0; i < shapes.size(); ++i) {
-    outputs.push_back(array(shapes[i], dtypes[i], primitive, inputs));
+  for (size_t i = 0; i < shapes.size(); ++i) {
+    outputs.emplace_back(std::move(shapes[i]), dtypes[i], primitive, inputs);
   }
-  for (int i = 0; i < outputs.size(); ++i) {
+  // For each node in |outputs|, its siblings are the other nodes.
+  for (size_t i = 0; i < outputs.size(); ++i) {
     auto siblings = outputs;
     siblings.erase(siblings.begin() + i);
     outputs[i].set_siblings(std::move(siblings), i);
