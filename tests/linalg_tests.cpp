@@ -340,7 +340,6 @@ TEST_CASE("test matrix pseudo-inverse") {
   const auto A_plus = transpose(linalg::pinv(A, Device::cpu));
   const auto identity = eye(A.shape(0));
 
-  // TODO: Following line causes SEGFAULT
   const auto expected = matmul(matmul(A, A_plus), A);
 
   CHECK(allclose(expected, A, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
