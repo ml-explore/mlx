@@ -244,7 +244,7 @@ array rope(
     }
   };
   auto stream = to_stream(s);
-  if (stream.device == Device::gpu && x.shape(-1) == dims) {
+  if (stream.device == Device::gpu) {
     return array(
         x.shape(),
         x.dtype(),

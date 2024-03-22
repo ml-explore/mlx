@@ -2590,8 +2590,11 @@ std::vector<array> Scatter::vjp(
           break;
         case Scatter::Max:
         case Scatter::Min: {
-          auto mask = where(result == values, array({1}), array({0}));
-          vjps.push_back(multiply(cotangents[0], mask));
+          vjps.push_back(where(
+              equal(result, values, stream()),
+              cotangents[0],
+              array(0, cotangents[0].dtype()),
+              stream()));
           break;
         }
         default:
