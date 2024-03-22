@@ -645,7 +645,7 @@ void compile_fuse(
       }
     }
     auto compiled_outputs = array::make_arrays(
-        shapes,
+        std::move(shapes),
         types,
         std::make_shared<Compiled>(
             old_outputs.back().primitive().stream(),
@@ -738,8 +738,8 @@ std::vector<array> compile_replace(
             shapes.push_back(o.shape());
           }
         }
-        auto real_out =
-            array::make_arrays(shapes, types, a.primitive_ptr(), real_inputs);
+        auto real_out = array::make_arrays(
+            std::move(shapes), types, a.primitive_ptr(), real_inputs);
         for (int i = 0; i < trace_out.size(); ++i) {
           trace_to_real.insert({trace_out[i].id(), std::move(real_out[i])});
         }
