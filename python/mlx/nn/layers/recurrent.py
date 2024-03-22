@@ -287,14 +287,46 @@ class LSTM(Module):
 
         return mx.stack(all_hidden, axis=-2), mx.stack(all_cell, axis=-2)
 
+r"""A Convolutional LSTM Cell.
+    
+    The input has shape ``NHWC`` or ``HWC`` where:
+
+    * ``N`` is the optional batch dimension
+    * ``H`` is the input's spatial height dimension
+    * ``W`` is the input's spatial weight dimension
+    * ``C`` is the input's channel dimension
+
+    Concretely, for the input, this layer computes:
+
+    .. math::
+        \begin{align*}
+        i_t &= \sigma (W_{xi} \ast X_t + W_{hi} \ast H_{t-1} + W_{ci} \odot C_{t-1} + b_{i}) \\
+        f_t &= \sigma (W_{xf} \odot X_t + W_{hf} \ast H_{t-1} + W_{cf} \odot C_{t-1} + b_{f}) \\
+        C_t &= f_t \odot C_{t-1} + i_t \odot tanh(W_{xc} \ast X_{t} + W_{hc} * H_{t-1} + b_{c} \\
+        o_t &= \sigma (W_{xo} * X_{t} + W_{ho} \ast H_{t-1} + W_{co} \odot C_{t} + b_{o} \\
+        H_t &= o_{t} \dot tanh(C_{t})
+        \end{align*}
+
+    The hidden state :math:`H` and cell state :math:`C` have shape ``NHWO``
+    or ``HWO``, depending on whether the input is batched or not.
+
+    The cell returns two arrays, the hidden state and the cell state, at each time step, with shape ``NHWO`` or ``HWO``.
+
+    Args:
+        in_channels (int): The number of input channels, ``C``.
+        out_channels (int): The number of output channels,  ``O``.
+        kernel_size (int): The size of the convolution filters, must be odd to keep spatial dimensions with padding. Default: ``5``.
+        bias (bool): Whether to use biases or not. Default: ``True``.
+    """
+
 class ConvLSTMCell(nn.Module):
     def __init__(
         self, 
         in_channels: int, 
         out_channels: int, 
-        kernel_size: Union[int, tuple], 
+        kernel_size: Union[int, tuple] = 5, 
         stride: Union[int, tuple] = 1, 
-        padding: Union[int, tuple] = 1, 
+        padding: Union[int, tuple] = 2, 
         dilation: Union[int, tuple] = 1, 
         bias: bool = True,
         ):
@@ -361,13 +393,13 @@ r"""A Convolutional LSTM recurrent layer.
     The hidden state :math:`H` and cell state :math:`C` have shape ``NHWO``
     or ``HWO``, depending on whether the input is batched or not.
 
-    The cell returns two arrays, the hidden state and the cell state at
-    each time step, both of shape ``NLHWO`` or ``LHWO``.
+    The cell returns one array, the hidden state, at each time step, with 
+    shape ``NLHWO`` or ``LHWO``.
 
     Args:
         in_channels (int): The number of input channels, ``C``.
         out_channels (int): The number of output channels,  ``O``.
-        kernel_size (int): The size of the convolution filters. Default: ``5``.
+        kernel_size (int): The size of the convolution filters, must be odd to keep spatial dimensions with padding. Default: ``5``.
         bias (bool): Whether to use biases or not. Default: ``True``.
     """
 
