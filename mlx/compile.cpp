@@ -204,8 +204,6 @@ struct CompilerCache {
     std::vector<array> inputs;
     std::vector<array> outputs;
     std::vector<array> tape;
-    // Used by compile_replace to map trace inputs to real inputs
-    std::unordered_map<uintptr_t, array> map;
     bool empty{true};
     std::vector<uint64_t> constants;
   };
@@ -698,18 +696,18 @@ std::vector<array> compile_replace(
     const std::vector<array>& tape,
     const std::vector<array>& trace_inputs,
     const std::vector<array>& trace_outputs,
-    std::unordered_map<uintptr_t, array>& trace_to_real,
     const std::vector<array>& inputs,
     bool shapeless) {
+  std::unordered_map<uintptr_t, array> trace_to_real;
   for (int i = 0; i < inputs.size(); ++i) {
-    trace_to_real.find(trace_inputs[i].id())->second = inputs[i];
+    trace_to_real.insert({trace_inputs[i].id(), inputs[i]});
   }
 
   for (auto& a : tape) {
     // Arrays in the tape without primitives are constants
     // and can be used directly
     if (!a.has_primitive()) {
-      trace_to_real.find(a.id())->second = a;
+      trace_to_real.insert({a.id(), a});
     } else {
       // Find real inputs
       std::vector<array> real_inputs;
@@ -724,7 +722,7 @@ std::vector<array> compile_replace(
             a.dtype(),
             a.primitive_ptr(),
             std::move(real_inputs));
-        trace_to_real.find(a.id())->second = std::move(real_a);
+        trace_to_real.insert({a.id(), std::move(real_a)});
       } else {
         // Ensure the order is correct for multi-output primitives
         std::vector<Dtype> types;
@@ -743,8 +741,7 @@ std::vector<array> compile_replace(
         auto real_out =
             array::make_arrays(shapes, types, a.primitive_ptr(), real_inputs);
         for (int i = 0; i < trace_out.size(); ++i) {
-          trace_to_real.insert_or_assign(
-              trace_out[i].id(), std::move(real_out[i]));
+          trace_to_real.insert({trace_out[i].id(), std::move(real_out[i])});
         }
       }
     }
@@ -827,16 +824,12 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       if (shapeless) {
         compile_validate_shapeless(entry.tape);
       }
-
-      for (auto& i : entry.tape) {
-        entry.map.insert({i.id(), i});
-      }
     }
 
     // At this point we must have a tape, now replace the placeholders
     // with real arrays that can be evaluated
     return compile_replace(
-        entry.tape, entry.inputs, entry.outputs, entry.map, inputs, shapeless);
+        entry.tape, entry.inputs, entry.outputs, inputs, shapeless);
   };
 }
 
