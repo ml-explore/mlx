@@ -1,7 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include "mlx/backend/common/copy.h"
 #include "mlx/primitives.h"
-#include "mlx/fast_primitives.h"
+#include "mlx/backend/common/svd.h"
 
 namespace mlx::core {
 
@@ -24,14 +25,16 @@ void pseudoinverse_impl(const array& a, array& pinv) {
     // Vᵀ of shape N x N. (M x M in lapack).
     const int ldvt = M;
 
-    // lapack clobbers the input, so we have to make a copy.
-    // auto u_shape = std::vector<int>{M, N};
     array u(std::vector<int>{M, N}, float32, nullptr, {});
     array s(std::vector<int>{K, K}, float32, nullptr, {});
     array vt(std::vector<int>{N, N}, float32, nullptr, {});
 
-    // TODO: Perhaps use svd_impl(a, u, s, vt); 
-    // and then compute A^+ = VΣ^+U^*
+    svd_impl(a, u, s, vt);
+    // Σ^+ = 1 ./ Σ aka element-wise reciprocal of Σ diagonal matrix
+    // then, compute A^+ = VΣ^+U^*
+
+    // TODO: WIP: copy to avoid segfault in tests and deliberately fail
+    copy(a, pinv, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
 }
 
 void PseudoInverse::eval(const std::vector<array>& inputs, array& output) {
