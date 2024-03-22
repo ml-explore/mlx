@@ -140,7 +140,7 @@ class RMSNorm(Module):
         return f"{self.weight.shape[0]}, eps={self.eps}"
 
     def __call__(self, x):
-        return mx.fast.rms_norm(x, self.weight, self.eps)
+        return mx.fast.rms_norm(x, self["weight"], self.eps)
 
 
 class GroupNorm(Module):

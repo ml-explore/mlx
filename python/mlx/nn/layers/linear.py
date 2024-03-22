@@ -64,9 +64,9 @@ class Linear(Module):
 
     def __call__(self, x: mx.array) -> mx.array:
         if "bias" in self:
-            x = mx.addmm(self.bias, x, self.weight.T)
+            x = mx.addmm(self["bias"], x, self["weight"].T)
         else:
-            x = x @ self.weight.T
+            x = x @ self["weight"].T
         return x
 
 
