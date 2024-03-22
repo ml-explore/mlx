@@ -88,7 +88,7 @@ array rms_norm(
     return array(
         x.shape(),
         out_type,
-        std::make_unique<RMSNorm>(s, fallback, eps),
+        std::make_shared<RMSNorm>(s, fallback, eps),
         {astype(x, out_type, s), astype(weight, out_type, s)});
   }
   return fallback({x, weight})[0];
@@ -170,7 +170,7 @@ array layer_norm(
     return array(
         x.shape(),
         out_type,
-        std::make_unique<LayerNorm>(s, fallback, eps),
+        std::make_shared<LayerNorm>(s, fallback, eps),
         {astype(x, out_type, s), passed_weight, passed_bias});
   }
   return fallback({x, passed_weight, passed_bias})[0];
@@ -248,7 +248,7 @@ array rope(
     return array(
         x.shape(),
         x.dtype(),
-        std::make_unique<RoPE>(
+        std::make_shared<RoPE>(
             stream, fallback, dims, traditional, base, scale, offset),
         {x});
   }
@@ -330,9 +330,6 @@ array scaled_dot_product_attention(
   auto k = astype(keys, final_type, s);
   auto v = astype(values, final_type, s);
 
-  auto out_shape =
-      std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
-
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
    * * CPU implementation
@@ -381,10 +378,12 @@ array scaled_dot_product_attention(
   // TODO, update routing conditions post further tuning
   implementation_supports_use_case &= false;
   if (implementation_supports_use_case) {
+    auto out_shape =
+        std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
     auto out = array(
-        out_shape,
+        std::move(out_shape),
         final_type,
-        std::make_unique<ScaledDotProductAttention>(
+        std::make_shared<ScaledDotProductAttention>(
             stream, fallback, scale, false),
         {q, k, v});
     return out;
