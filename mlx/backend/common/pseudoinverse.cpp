@@ -3,6 +3,7 @@
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/svd.h"
 #include "mlx/primitives.h"
+#include "mlx/ops.h"
 
 namespace mlx::core {
 
@@ -35,10 +36,19 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   svd_impl(a, u, s, vt);
   // Σ^+ = 1 ./ Σ aka element-wise reciprocal of Σ diagonal matrix
   // then, compute A^+ = VΣ^+U^*
-
-  // TODO: WIP: copy to avoid segfault in tests and deliberately fail
-  copy(
-      a, pinv, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  // Work-in-progress
+  auto s_plus = transpose(1.0 / s); // TODO: Only run on diagonal elements
+  auto v = transpose(vt);
+  auto ut = transpose(u);
+  // s_plus 4x4
+  // u      4x5
+  // ut     5x4
+  // v      5x5
+  // ut*s   5x4
+  // v*     5x4
+  auto inner = transpose(matmul(s_plus, u));
+  auto result = matmul(v, inner);
+  copy(result, pinv, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
 }
 
 void PseudoInverse::eval(const std::vector<array>& inputs, array& output) {
