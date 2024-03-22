@@ -420,6 +420,50 @@ TEST_CASE("test random normal") {
   }
 }
 
+TEST_CASE("test random multivariate_normal") {
+  {
+    auto mean = zeros({3});
+    auto cov = eye(3);
+    auto x = random::multivariate_normal(mean, cov, {1000}, float32);
+    CHECK_EQ(x.shape(), std::vector<int>({1000, 3}));
+    CHECK_EQ(x.dtype(), float32);
+  }
+
+  // Limit case
+  {
+    auto mean = array({0, 0});
+    auto cov = array({1., -1, -.1, 1.});
+    cov = reshape(cov, {2, 2});
+    auto x = random::multivariate_normal(mean, cov, {1}, float32);
+    CHECK_EQ(x.shape(), std::vector<int>({1, 2}));
+    CHECK_EQ(x.dtype(), float32);
+  }
+
+  // Check wrong shapes
+  {
+    auto mean = zeros({3, 1});
+    auto cov = eye(3);
+    CHECK_THROWS_AS(
+        random::multivariate_normal(mean, cov, {1000, 3}, float32),
+        std::invalid_argument);
+  }
+  {
+    auto mean = zeros({3});
+    auto cov = eye(3);
+    cov = reshape(cov, {1, 3, 3});
+    CHECK_THROWS_AS(
+        random::multivariate_normal(mean, cov, {1000, 3}, float32),
+        std::invalid_argument);
+  }
+  {
+    auto mean = zeros({3});
+    auto cov = eye(4);
+    CHECK_THROWS_AS(
+        random::multivariate_normal(mean, cov, {1000, 3}, float32),
+        std::invalid_argument);
+  }
+}
+
 TEST_CASE("test random randint") {
   CHECK_THROWS_AS(
       random::randint(array(3), array(5), {1}, float32), std::invalid_argument);

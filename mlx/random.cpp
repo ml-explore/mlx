@@ -3,6 +3,7 @@
 #include <cmath>
 #include <sstream>
 
+#include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/random.h"
@@ -170,6 +171,48 @@ array normal(
     samples = add(array(loc, dtype), samples, stream);
   }
   return samples;
+}
+
+array multivariate_normal(
+    const array& mean,
+    const array& cov,
+    const std::vector<int>& shape,
+    Dtype dtype,
+    const std::optional<array>& key,
+    StreamOrDevice s) {
+  auto stream = to_stream(s);
+
+  // Check shape and dimensions
+  if (mean.ndim() != 1) {
+    throw std::invalid_argument(
+        "[multivariate_normal] mean must be a 1D array.");
+  }
+  if (cov.ndim() != 2) {
+    throw std::invalid_argument(
+        "[multivariate_normal] cov must be a 2D array.");
+  }
+  if (cov.shape()[0] != cov.shape()[1]) {
+    throw std::invalid_argument(
+        "[multivariate_normal] cov must be a square matrix.");
+  }
+  if (mean.shape()[0] != cov.shape()[0]) {
+    throw std::invalid_argument(
+        "[multivariate_normal] mean and cov must have compatible shapes.");
+  }
+
+  // Compute output shape
+  auto N = mean.shape()[0];
+  std::vector<int> output_shape = shape;
+  output_shape.push_back(N);
+
+  // Compute the square-root of the covariance matrix, using the SVD
+  auto covariance = astype(cov, float32, stream);
+  auto SVD = linalg::svd(covariance, stream);
+  auto std = astype(matmul(SVD[0] * sqrt(SVD[1]), SVD[2]), dtype, stream);
+
+  auto standard_normal = normal(output_shape, dtype, 0.0, 1.0, key, stream);
+
+  return add(mean, matmul(standard_normal, std), stream);
 }
 
 array randint(

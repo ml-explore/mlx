@@ -1,5 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
+import math
 import unittest
 
 import mlx.core as mx
@@ -95,6 +96,81 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(a, b))
 
         self.assertEqual(mx.random.normal().dtype, mx.random.normal(dtype=None).dtype)
+
+    def test_multivariate_normal(self):
+        key = mx.random.key(0)
+        mean = mx.array([0, 0])
+        cov = mx.array([[1, 0], [0, 1]])
+
+        a = mx.random.multivariate_normal(mean, cov, key=key, stream=mx.cpu)
+        self.assertEqual(a.shape, (2,))
+        self.assertEqual(a.dtype, mx.float32)
+
+        ## Check dtypes
+        for t in [mx.float16, mx.bfloat16, mx.float32]:
+            a = mx.random.multivariate_normal(
+                mean, cov, dtype=t, key=key, stream=mx.cpu
+            )
+            self.assertEqual(a.dtype, t)
+        for t in [mx.int8, mx.int32, mx.int64, mx.uint8, mx.uint32, mx.uint64]:
+            with self.assertRaises(ValueError):
+                mx.random.multivariate_normal(
+                    mean, cov, dtype=t, key=key, stream=mx.cpu
+                )
+
+        ## Check incompatibel shapes
+        with self.assertRaises(ValueError):
+            mean = mx.zeros((2, 2))
+            cov = mx.zeros((2, 2))
+            mx.random.multivariate_normal(mean, cov, key=key, stream=mx.cpu)
+
+        with self.assertRaises(ValueError):
+            mean = mx.zeros((3,))
+            cov = mx.zeros((2, 2))
+            mx.random.multivariate_normal(mean, cov, key=key, stream=mx.cpu)
+
+        with self.assertRaises(ValueError):
+            mean = mx.zeros((2,))
+            cov = mx.zeros((2, 3))
+            mx.random.multivariate_normal(mean, cov, key=key, stream=mx.cpu)
+
+        ## Check correcteness of the mean and covariance
+        n_test = int(1e7)
+
+        def check_jointly_gaussian(data, mean, cov):
+            empirical_mean = mx.mean(data, axis=0)
+            empirical_cov = (
+                (data - empirical_mean).T @ (data - empirical_mean) / data.shape[0]
+            )
+            N = data.shape[1]
+            print(f"empirical_mean: {empirical_mean}")
+            print(f"mean: {mean}")
+            print(f"empirical_cov: {empirical_cov}")
+            print(f"cov: {cov}")
+            self.assertTrue(
+                mx.allclose(
+                    empirical_mean, mean, rtol=0.0, atol=10 * N**2 / math.sqrt(n_test)
+                )
+            )
+            self.assertTrue(
+                mx.allclose(
+                    empirical_cov, cov, rtol=0.0, atol=10 * N**2 / math.sqrt(n_test)
+                )
+            )
+
+        mean = mx.array([4, 7])
+        cov = mx.array([[2, 0.5], [0.5, 1]])
+        data = mx.random.multivariate_normal(
+            mean, cov, shape=(n_test,), key=key, stream=mx.cpu
+        )
+        check_jointly_gaussian(data, mean, cov)
+
+        mean = mx.arange(3)
+        cov = mx.array([[1, -1, 0.5], [-1, 1, -0.5], [0.5, -0.5, 1]])
+        data = mx.random.multivariate_normal(
+            mean, cov, shape=(n_test,), key=key, stream=mx.cpu
+        )
+        check_jointly_gaussian(data, mean, cov)
 
     def test_randint(self):
         a = mx.random.randint(0, 1, [])

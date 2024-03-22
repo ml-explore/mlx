@@ -173,6 +173,39 @@ void init_random(nb::module_& parent_module) {
             array: The output array of random values.
       )pbdoc");
   m.def(
+      "multivariate_normal",
+      [](const array& mean,
+         const array& cov,
+         const std::vector<int>& shape,
+         std::optional<Dtype> type,
+         const std::optional<array>& key_,
+         StreamOrDevice s) {
+        auto key = key_ ? key_.value() : default_key().next();
+        return multivariate_normal(
+            mean, cov, shape, type.value_or(float32), key, s);
+      },
+      "mean"_a,
+      "cov"_a,
+      "shape"_a = std::vector<int>{},
+      "dtype"_a.none() = float32,
+      "key"_a = nb::none(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Generate N-dimensional jointly normal distributed random numbers with  given mean and covariance. Note that ``cov`` is cast to double for the computation.
+
+        ``cov`` must be a positive semi-definite matrix. If the matrix is not positive semi-definite, the behavior is undefined.
+
+        Args:
+            mean (array): N-dimensional array, the mean of the distribution.
+            cov (array): N x N-dimensional array, the covariance matrix of the distribution.
+            shape (list(int), optional): Shape of the output. Default is ``()``.
+            dtype (Dtype, optional): Type of the output. Default is ``float32``.
+            key (array, optional): A PRNG key. Default: None.
+
+        Returns:
+            array: The output array of random values.
+      )pbdoc");
+  m.def(
       "randint",
       [](const ScalarOrArray& low,
          const ScalarOrArray& high,
