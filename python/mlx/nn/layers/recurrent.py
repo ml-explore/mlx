@@ -1,12 +1,12 @@
-
 # Copyright © 2024 Apple Inc.
 
 import math
-from typing import Callable, Optional
+from typing import Callable, Optional, Union
 
 import mlx.core as mx
 from mlx.nn.layers.activations import tanh
 from mlx.nn.layers.base import Module
+from mlx.nn.layers.convolution import Conv2d
 
 
 class RNN(Module):
@@ -287,6 +287,7 @@ class LSTM(Module):
 
         return mx.stack(all_hidden, axis=-2), mx.stack(all_cell, axis=-2)
 
+
 r"""A Convolutional LSTM Cell.
     
     The input has shape ``NHWC`` or ``HWC`` where:
@@ -319,22 +320,41 @@ r"""A Convolutional LSTM Cell.
         bias (bool): Whether to use biases or not. Default: ``True``.
     """
 
-class ConvLSTMCell(nn.Module):
-    def __init__(
-        self, 
-        in_channels: int, 
-        out_channels: int, 
-        kernel_size: Union[int, tuple] = 5, 
-        stride: Union[int, tuple] = 1, 
-        padding: Union[int, tuple] = 2, 
-        dilation: Union[int, tuple] = 1, 
-        bias: bool = True,
-        ):
-        
-        super(ConvLSTMCell, self).__init__()
 
+class _conv_lstm_cell(Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 5,
+        stride: Union[int, tuple] = 1,
+        padding: Union[int, tuple] = 2,
+        dilation: Union[int, tuple] = 1,
+        bias: bool = True,
+    ):
+
+        super(_conv_lstm_cell, self).__init__()
+
+        stride, padding = map(
+            lambda x: (x, x) if isinstance(x, int) else x, (stride, padding)
+        )
+        assert (
+            kernel_size % 2 == 1
+        ), f"Expected kernel size to be odd for same-dimensional spatial padding. Got: {self.kernel_size}"
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.kernel_size = kernel_size
         # creating one conv for all matrix generation
-        self.conv = nn.Conv2d(in_channels + out_channels, out_channels * 4, kernel_size, stride, padding, dilation, bias)
+        self.conv = Conv2d(
+            in_channels + out_channels,
+            out_channels * 4,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
 
     def __call__(self, x_t, prev):
         h_t, c_t = prev
@@ -368,7 +388,8 @@ class ConvLSTMCell(nn.Module):
 
         # returns a tuple of the hidden state and cell state
         return (h, c)
-        
+
+
 r"""A Convolutional LSTM recurrent layer.
     
     The input has shape ``NLHWC`` or ``LHWC`` where:
@@ -403,28 +424,54 @@ r"""A Convolutional LSTM recurrent layer.
         bias (bool): Whether to use biases or not. Default: ``True``.
     """
 
-class ConvLSTM(nn.Module):
+
+class ConvLSTM(Module):
     def __init__(
-        self, 
-        in_channels: int, 
-        out_channels: int, 
-        kernel_size: int = 5, 
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int = 5,
         bias: bool = True,
-        ):
+    ):
         super(ConvLSTM, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
 
-        assert self.kernel_size % 2 == 1, f"Kernel size should be odd for same-dimensional spatial padding. Got: {self.kernel_size}"
-
         padding = kernel_size // 2
-        self.cell = ConvLSTMCell(in_channels, out_channels, kernel_size, stride=1, padding, dilation=1, bias)
+        self.cell = _conv_lstm_cell(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=(1, 1),
+            padding=padding,
+            dilation=1,
+            bias=bias,
+        )
 
+    def _extra_repr(self):
+        return (
+            f"{self.in_channels}, {self.out_channels},"
+            f"kernel_size={self.kernel_size}, bias={self.bias}"
+        )
 
     def __call__(self, x):
-        b, t, h, w, c = x.shape
-        assert c == self.in_channels, f"Channel dimension should be {self.in_channels}. Got: {c}"
+        if len(x.shape) == 4:
+            t, h, w, c = x.shape
+            b = 1
+            x = x.reshape((b, t, h, w, c))
+
+        elif len(x.shape) == 5:
+            b, t, h, w, c = x.shape
+
+        else:
+            assert (
+                True
+            ), f"Expected batched input length to be 5 (BLHWC) or unbatched input length to be 4 (LHWC). Got: {x.shape}"
+
+        assert (
+            c == self.in_channels
+        ), f"Channel dimension should be {self.in_channels}. Got: {c}"
 
         # initializing tensor for initial hidden and cell states
         h_t = mx.zeros([b, h, w, self.out_channels])
@@ -439,6 +486,6 @@ class ConvLSTM(nn.Module):
             hidden_states[i] = h_t
 
         # reshaping back to batch-first
-        hidden_states = hidden_states.reshape([b, t, h, w, self.out_channels])
+        hidden_states = hidden_states.reshape([b, t, h, w, self.out_channels]).squeeze()
 
         return hidden_states

@@ -1558,6 +1558,61 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(h_out.shape, (44, 12))
         self.assertEqual(c_out.shape, (44, 12))
 
+    def test_conv_lstm_cell(self):
+        layer = nn._conv_lstm_cell(3, 64)
+        inp = mx.random.normal((4, 3, 256, 256, 3))
+
+        h_out, c_out = layer(
+            inp[:, 0], (mx.zeros((4, 256, 256, 64), mx.zeros(4, 256, 256, 64)))
+        )
+        self.assertEqual(h_out.shape, (4, 256, 256, 64))
+        self.assertEqual(c_out.shape, (4, 256, 256, 64))
+
+        h_out, c_out = layer(inp[:, 1], (h_out, c_out))
+        self.assertEqual(h_out.shape, (4, 256, 256, 64))
+        self.assertEqual(c_out.shape, (4, 256, 256, 64))
+
+        h_out, c_out = layer(inp[:, 2], (h_out, c_out))
+        self.assertEqual(h_out.shape, (4, 256, 256, 64))
+        self.assertEqual(c_out.shape, (4, 256, 256, 64))
+
+        inp = mx.random((256, 256, 3))
+        h_out, c_out = layer(inp[0], (mx.zeros((256, 256, 64), mx.zeros(256, 256, 64))))
+        self.assertEqual(h_out.shape, (256, 256, 64))
+        self.assertEqual(c_out.shape, (256, 256, 64))
+
+        h_out, c_out = layer(inp[1], (h_out, c_out))
+        self.assertEqual(h_out.shape, (256, 256, 64))
+        self.assertEqual(c_out.shape, (256, 256, 64))
+
+        h_out, c_out = layer(inp[2], (h_out, c_out))
+        self.assertEqual(h_out.shape, (256, 256, 64))
+        self.assertEqual(c_out.shape, (256, 256, 64))
+
+    def test_conv_lstm(self):
+        layer = nn.ConvLSTM(3, 64)
+        inp = mx.random.normal((4, 8, 256, 256, 3))
+
+        h_out = layer(inp)
+        self.assertEqual(h_out.shape, (4, 8, 256, 256, 64))
+
+        inp = mx.random.normal((4, 128, 128, 3))
+
+        h_out = layer(inp)
+        self.assertEqual(h_out.shape, (4, 128, 128, 3))
+
+        # Test repr
+        self.assertEqual(
+            str(nn.ConvLSTM(64, 128)), "ConvLSTM(64, 128, kernel_size=5, bias=True"
+        )
+        self.assertEqual(
+            str(nn.ConvLSTM(3, 64, 3)), "ConvLSTM(3, 64, kernel_size=3, bias=True"
+        )
+        self.assertEqual(
+            str(nn.ConvLSTM(8, 16, 7, bias=False)),
+            "ConvLSTM(8, 16, kernel_size=7, bias=False",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
