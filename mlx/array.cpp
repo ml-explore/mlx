@@ -161,10 +161,10 @@ void array::move_shared_buffer(array other) {
 }
 
 void array::ArrayDesc::init() {
-  strides.reserve(shape.size());
+  strides.resize(shape.size());
   size = 1;
   for (int i = shape.size() - 1; i >= 0; --i) {
-    strides.push_back(size);
+    strides[i] = size;
     size *= shape[i];
   }
   for (auto& in : inputs) {

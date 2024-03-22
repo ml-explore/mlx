@@ -125,8 +125,8 @@ array layer_norm(
   }
 
   auto out_type = (weight.has_value())
-      ? ((bias.has_value()) ? result_type({x, *weight, *bias})
-                            : result_type({x, *weight}))
+      ? ((bias.has_value()) ? result_type(x, *weight, *bias)
+                            : result_type(x, *weight))
       : x.dtype();
   if (!is_floating_point(out_type) || is_complex(out_type)) {
     std::ostringstream msg;
