@@ -63,7 +63,7 @@ array rms_norm(
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  auto out_type = result_type({x, weight});
+  auto out_type = result_type(x, weight);
   if (!is_floating_point(out_type) || is_complex(out_type)) {
     std::ostringstream msg;
     msg << "[rms_norm] Received unsupported type " << out_type << ".";
@@ -88,7 +88,7 @@ array rms_norm(
     return array(
         x.shape(),
         out_type,
-        std::make_unique<RMSNorm>(s, fallback, eps),
+        std::make_shared<RMSNorm>(s, fallback, eps),
         {astype(x, out_type, s), astype(weight, out_type, s)});
   }
   return fallback({x, weight})[0];
@@ -125,8 +125,8 @@ array layer_norm(
   }
 
   auto out_type = (weight.has_value())
-      ? ((bias.has_value()) ? result_type({x, *weight, *bias})
-                            : result_type({x, *weight}))
+      ? ((bias.has_value()) ? result_type(x, *weight, *bias)
+                            : result_type(x, *weight))
       : x.dtype();
   if (!is_floating_point(out_type) || is_complex(out_type)) {
     std::ostringstream msg;
@@ -170,7 +170,7 @@ array layer_norm(
     return array(
         x.shape(),
         out_type,
-        std::make_unique<LayerNorm>(s, fallback, eps),
+        std::make_shared<LayerNorm>(s, fallback, eps),
         {astype(x, out_type, s), passed_weight, passed_bias});
   }
   return fallback({x, passed_weight, passed_bias})[0];
@@ -248,7 +248,7 @@ array rope(
     return array(
         x.shape(),
         x.dtype(),
-        std::make_unique<RoPE>(
+        std::make_shared<RoPE>(
             stream, fallback, dims, traditional, base, scale, offset),
         {x});
   }
@@ -318,7 +318,7 @@ array scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  auto final_type = result_type({queries, keys, values});
+  auto final_type = result_type(queries, keys, values);
   if (!is_floating_point(final_type) || is_complex(final_type)) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] Received unsupported type "
@@ -329,9 +329,6 @@ array scaled_dot_product_attention(
   auto q = astype(queries, final_type, s);
   auto k = astype(keys, final_type, s);
   auto v = astype(values, final_type, s);
-
-  auto out_shape =
-      std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
 
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
@@ -381,10 +378,12 @@ array scaled_dot_product_attention(
   // TODO, update routing conditions post further tuning
   implementation_supports_use_case &= false;
   if (implementation_supports_use_case) {
+    auto out_shape =
+        std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
     auto out = array(
-        out_shape,
+        std::move(out_shape),
         final_type,
-        std::make_unique<ScaledDotProductAttention>(
+        std::make_shared<ScaledDotProductAttention>(
             stream, fallback, scale, false),
         {q, k, v});
     return out;

@@ -54,6 +54,12 @@ struct PrintFormatter {
 extern PrintFormatter global_formatter;
 
 /** The type from promoting the arrays' types with one another. */
+inline Dtype result_type(const array& a, const array& b) {
+  return promote_types(a.dtype(), b.dtype());
+}
+inline Dtype result_type(const array& a, const array& b, const array& c) {
+  return promote_types(result_type(a, b), c.dtype());
+}
 Dtype result_type(const std::vector<array>& arrays);
 
 std::vector<int> broadcast_shapes(

@@ -66,7 +66,7 @@ array bits(
   return array(
       shape,
       get_dtype(),
-      std::make_unique<RandomBits>(to_stream(s), shape, width),
+      std::make_shared<RandomBits>(to_stream(s), shape, width),
       {key});
 }
 

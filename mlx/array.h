@@ -392,6 +392,10 @@ class array {
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
         std::vector<array> inputs);
+
+   private:
+    // Initialize size, strides, and other metadata
+    void init();
   };
 
   // The ArrayDesc contains the details of the materialized array including the
