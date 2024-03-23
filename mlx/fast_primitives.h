@@ -88,13 +88,15 @@ class RoPE : public Custom {
       bool traditional,
       float base,
       float scale,
-      int offset)
+      int offset,
+      bool forward)
       : Custom(stream, fallback),
         dims_(dims),
         traditional_(traditional),
         base_(base),
         scale_(scale),
-        offset_(offset){};
+        offset_(offset),
+        forward_(forward){};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -102,6 +104,12 @@ class RoPE : public Custom {
   };
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
 
   DEFINE_PRINT(RoPE)
   bool is_equivalent(const Primitive& other) const override;
@@ -113,6 +121,7 @@ class RoPE : public Custom {
   float base_;
   float scale_;
   int offset_;
+  bool forward_;
 };
 
 class ScaledDotProductAttention : public Custom {
@@ -126,7 +135,7 @@ class ScaledDotProductAttention : public Custom {
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    outputs[0] = fallback_(inputs)[0];
+    throw std::runtime_error("NYI");
   };
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)

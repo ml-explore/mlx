@@ -188,19 +188,16 @@ array rope(
     float base,
     float scale,
     int offset,
-    StreamOrDevice s /* = {} */) {
+    bool forward,
+    StreamOrDevice s) {
   if (x.ndim() < 3) {
     std::ostringstream msg;
     msg << "[rope] Input must have at least 3 dimensions but got input with "
         << x.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (traditional && x.shape(-1) != dims) {
-    throw std::invalid_argument(
-        "[rope] Does not support partial traditional application.");
-  }
 
-  auto fallback = [dims, traditional, base, scale, offset, s](
+  auto fallback = [dims, traditional, base, scale, offset, forward, s](
                       const std::vector<array>& inputs) {
     auto& shape = inputs[0].shape();
     int ndim = shape.size();
@@ -217,16 +214,39 @@ array rope(
     auto coss = cos(theta, s);
     auto sins = sin(theta, s);
 
-    if (traditional) {
-      auto x1 = slice(x, {0, 0, 0}, x.shape(), {1, 1, 2}, s);
-      auto x2 = slice(x, {0, 0, 1}, x.shape(), {1, 1, 2}, s);
+    auto apply_rope = [forward, s](
+                          const array& x1,
+                          const array& x2,
+                          const array& coss,
+                          const array& sins) {
       std::vector<array> outs;
-      outs.push_back(subtract(multiply(x1, coss, s), multiply(x2, sins, s), s));
-      outs.push_back(add(multiply(x1, sins, s), multiply(x2, coss, s), s));
+      if (forward) {
+        outs.push_back(
+            subtract(multiply(x1, coss, s), multiply(x2, sins, s), s));
+        outs.push_back(add(multiply(x1, sins, s), multiply(x2, coss, s), s));
+      } else {
+        outs.push_back(add(multiply(x2, sins, s), multiply(x1, coss, s), s));
+        outs.push_back(
+            subtract(multiply(x2, coss, s), multiply(x1, sins, s), s));
+      }
+      return outs;
+    };
+
+    if (traditional) {
+      auto x1 =
+          slice(x, {0, 0, 0}, {x.shape(0), x.shape(1), dims}, {1, 1, 2}, s);
+      auto x2 =
+          slice(x, {0, 0, 1}, {x.shape(0), x.shape(1), dims}, {1, 1, 2}, s);
+      auto outs = apply_rope(x1, x2, coss, sins);
       for (auto& o : outs) {
         o = expand_dims(o, 3, s);
       }
-      return std::vector<array>{reshape(concatenate(outs, 3, s), shape, s)};
+      auto out = concatenate(outs, 3, s);
+      if (dims < x.shape(-1)) {
+        out = reshape(out, {x.shape(0), x.shape(1), dims});
+        out = concatenate({out, slice(x, {0, 0, dims}, x.shape(), s)}, 2, s);
+      }
+      return std::vector<array>{reshape(out, shape, s)};
     } else {
       auto out_s = x.shape();
       out_s.back() = half_dims;
@@ -234,9 +254,7 @@ array rope(
       out_s.back() = dims;
       auto x2 = slice(x, {0, 0, half_dims}, out_s, s);
 
-      std::vector<array> outs;
-      outs.push_back(subtract(multiply(x1, coss, s), multiply(x2, sins, s), s));
-      outs.push_back(add(multiply(x1, sins, s), multiply(x2, coss, s), s));
+      auto outs = apply_rope(x1, x2, coss, sins);
       if (dims < x.shape(-1)) {
         outs.push_back(slice(x, {0, 0, dims}, x.shape(), s));
       }
@@ -249,10 +267,46 @@ array rope(
         x.shape(),
         x.dtype(),
         std::make_shared<RoPE>(
-            stream, fallback, dims, traditional, base, scale, offset),
+            stream, fallback, dims, traditional, base, scale, offset, forward),
         {x});
   }
   return fallback({x})[0];
+}
+
+array rope(
+    const array& x,
+    int dims,
+    bool traditional,
+    float base,
+    float scale,
+    int offset,
+    StreamOrDevice s /* = {} */) {
+  return rope(x, dims, traditional, base, scale, offset, true, s);
+}
+
+std::vector<array> RoPE::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  auto s = stream();
+  auto fallback = [dims = dims_,
+                   traditional = traditional_,
+                   base = base_,
+                   scale = scale_,
+                   offset = offset_,
+                   forward = forward_,
+                   s](std::vector<array> inputs) {
+    return std::vector<array>{
+        rope(inputs[0], dims, traditional, base, scale, offset, !forward, s)};
+  };
+
+  return {array(
+      cotangents[0].shape(),
+      cotangents[0].dtype(),
+      std::make_shared<RoPE>(
+          s, fallback, dims_, traditional_, base_, scale_, offset_, !forward_),
+      cotangents)};
 }
 
 bool RoPE::is_equivalent(const Primitive& other) const {
@@ -260,7 +314,7 @@ bool RoPE::is_equivalent(const Primitive& other) const {
   return (
       dims_ == a_other.dims_ && base_ == a_other.base_ &&
       scale_ == a_other.scale_ && traditional_ == a_other.traditional_ &&
-      offset_ == a_other.offset_);
+      offset_ == a_other.offset_ && forward_ == a_other.forward_);
 }
 
 /** Computes: O = softmax(Q @ K.T) @ V **/

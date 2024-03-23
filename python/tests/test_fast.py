@@ -16,11 +16,14 @@ def rope_orig(x, dims, traditional, base, scale, offset):
     theta = mx.reshape(positions, (-1, 1)) * mx.reshape(freqs, (1, -1))
     costheta, sintheta = mx.cos(theta), mx.sin(theta)
     if traditional:
-        x1 = x[..., ::2]
-        x2 = x[..., 1::2]
+        x1 = x[..., :dims:2]
+        x2 = x[..., 1:dims:2]
         rx1 = x1 * costheta - x2 * sintheta
         rx2 = x1 * sintheta + x2 * costheta
         rx = mx.concatenate([rx1[..., None], rx2[..., None]], axis=-1)
+        if dims < x.shape[-1]:
+            rx = mx.reshape(rx, (*x.shape[:-1], dims))
+            rx = mx.concatenate([rx, x[..., dims:]], axis=-1)
         return mx.reshape(rx, x.shape)
     else:
         x1 = x[..., : dims // 2]
@@ -114,6 +117,33 @@ class TestFast(mlx_tests.MLXTestCase):
                     offset=offset,
                 )
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+    def test_rope_grad(self):
+        D = 32
+        defaults = (D, 10000.0, 1.0, 0, False)
+        for dims in (D, D // 2):
+            for traditional in (True, False):
+                _, base, scale, offset, _ = defaults
+                f1 = lambda x, y: (
+                    rope_orig(x, dims, traditional, base, scale, offset) * y
+                ).sum()
+                f2 = lambda x, y: (
+                    mx.fast.rope(
+                        x,
+                        dims,
+                        traditional=traditional,
+                        base=base,
+                        scale=scale,
+                        offset=offset,
+                    )
+                    * y
+                ).sum()
+
+                x = mx.random.uniform(shape=(2, 100, D))
+                y = mx.random.uniform(shape=(2, 100, D))
+                g1 = mx.grad(f1)(x, y)
+                g2 = mx.grad(f2)(x, y)
+                self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
 
     def test_rms_norm(self):
         def rms_norm(x, weight, eps):
