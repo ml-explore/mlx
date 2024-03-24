@@ -166,7 +166,7 @@ class MaxPool1d(_Pool1d):
                     \text{input}(N_i, \text{stride} \times t + m, C_j),
 
     where :math:`L_{out} = \left\lfloor \frac{L + 2 \times \text{padding} -
-    \text{kernel_size}}{\text{stride}}\right\rfloor + 1`.
+    \text{kernel\_size}}{\text{stride}}\right\rfloor + 1`.
 
     Args:
         kernel_size (int or tuple(int)): The size of the pooling window kernel.
@@ -205,7 +205,7 @@ class AvgPool1d(_Pool1d):
                     \text{input}(N_i, \text{stride} \times t + m, C_j),
 
     where :math:`L_{out} = \left\lfloor \frac{L + 2 \times \text{padding} -
-    \text{kernel_size}}{\text{stride}}\right\rfloor + 1`.
+    \text{kernel\_size}}{\text{stride}}\right\rfloor + 1`.
 
     Args:
         kernel_size (int or tuple(int)): The size of the pooling window kernel.
@@ -246,8 +246,8 @@ class MaxPool2d(_Pool2d):
                                                 \text{stride[1]} \times w + n, C_j),
         \end{aligned}
 
-    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
-    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
+    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
+    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
     The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
 
@@ -295,8 +295,8 @@ class AvgPool2d(_Pool2d):
                                                 \text{stride[1]} \times w + n, C_j),
         \end{aligned}
 
-    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
-    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
+    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
+    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
     The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
 

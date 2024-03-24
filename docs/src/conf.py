@@ -36,7 +36,7 @@ intersphinx_mapping = {
 templates_path = ["_templates"]
 html_static_path = ["_static"]
 source_suffix = ".rst"
-master_doc = "index"
+main_doc = "index"
 highlight_language = "python"
 pygments_style = "sphinx"
 add_module_names = False
@@ -74,3 +74,8 @@ def setup(app):
         return wrapped_isfunc(obj)
 
     inspect.isfunction = isfunc
+
+
+# -- Options for LaTeX output ------------------------------------------------
+
+latex_documents = [(main_doc, "MLX.tex", "MLX Documentation", author, "manual")]
