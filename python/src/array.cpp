@@ -80,16 +80,6 @@ auto to_scalar(array& a) {
   }
 }
 
-bool isMlxArray(const ScalarOrArray& v) {
-    auto check_for_obj = std::get_if<nb::object>(&v);
-    if (check_for_obj) {
-        if(isMlxCoreArray(*check_for_obj)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 nb::object tolist(array& a) {
   if (a.ndim() == 0) {
     return to_scalar(a);
@@ -784,8 +774,12 @@ void init_array(nb::module_& m) {
       .def(
           "__lt__",
           [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
-            if(!isMlxArray(v)) {
-              return false; // return false in case of object comparison which is not mlx array
+            auto check_for_obj = std::get_if<nb::object>(&v);
+            if (check_for_obj) {
+              // return false in case of object comparison which is not mlx array
+              if(!isMlxCoreArray(*check_for_obj)) {
+                return false;
+              }
             }
             return less(a, to_array(v, a.dtype()));
           },
@@ -793,8 +787,12 @@ void init_array(nb::module_& m) {
       .def(
           "__le__",
           [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
-            if(!isMlxArray(v)) {
-              return false; // return false in case of object comparison which is not mlx array
+            auto check_for_obj = std::get_if<nb::object>(&v);
+            if (check_for_obj) {
+              // return false in case of object comparison which is not mlx array
+              if(!isMlxCoreArray(*check_for_obj)) {
+                return false;
+              }
             }
             return less_equal(a, to_array(v, a.dtype()));
           },
@@ -802,8 +800,12 @@ void init_array(nb::module_& m) {
       .def(
           "__gt__",
           [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
-            if(!isMlxArray(v)) {
-              return false; // return false in case of object comparison which is not mlx array
+            auto check_for_obj = std::get_if<nb::object>(&v);
+            if (check_for_obj) {
+              // return false in case of object comparison which is not mlx array
+              if(!isMlxCoreArray(*check_for_obj)) {
+                return false;
+              }
             }
             return greater(a, to_array(v, a.dtype()));
           },
@@ -811,8 +813,12 @@ void init_array(nb::module_& m) {
       .def(
           "__ge__",
           [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
-            if(!isMlxArray(v)) {
-              return false; // return false in case of object comparison which is not mlx array
+            auto check_for_obj = std::get_if<nb::object>(&v);
+            if (check_for_obj) {
+              // return false in case of object comparison which is not mlx array
+              if(!isMlxCoreArray(*check_for_obj)) {
+                return false;
+              }
             }
             return greater_equal(a, to_array(v, a.dtype()));
           },
@@ -820,8 +826,12 @@ void init_array(nb::module_& m) {
       .def(
           "__ne__",
           [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
-            if(!isMlxArray(v)) {
-              return true; // return true in case of object comparison which is not mlx array
+            auto check_for_obj = std::get_if<nb::object>(&v);
+            if (check_for_obj) {
+              // return true in case of object inequlity which is not mlx array
+              if(!isMlxCoreArray(*check_for_obj)) {
+                return true;
+              }
             }
             return not_equal(a, to_array(v, a.dtype()));
           },
