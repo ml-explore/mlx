@@ -821,7 +821,7 @@ void init_array(nb::module_& m) {
           "__ne__",
           [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
             if(!isMlxArray(v)) {
-              return false; // return false in case of object comparison which is not mlx array
+              return true; // return true in case of object comparison which is not mlx array
             }
             return not_equal(a, to_array(v, a.dtype()));
           },
