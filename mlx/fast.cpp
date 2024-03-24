@@ -1,5 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <cassert>
+#include <numeric>
+
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
@@ -92,6 +95,49 @@ array rms_norm(
         {astype(x, out_type, s), astype(weight, out_type, s)});
   }
   return fallback({x, weight})[0];
+}
+
+std::vector<array> RMSNorm::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() == 2);
+  assert(outputs.size() == 1);
+  assert(cotangents.size() == 1);
+
+  auto s = stream();
+  std::vector<array> vjps;
+
+  auto& x = primals[0];
+  auto& w = primals[1];
+  auto& r = outputs[0];
+  auto& g = cotangents[0];
+
+  auto zero = array(0, x.dtype());
+  auto one_over_x = where(equal(x, zero, s), zero, reciprocal(x, s), s);
+  auto one_over_w = where(equal(w, zero, s), zero, reciprocal(w, s), s);
+  auto gr = multiply(g, r, s);
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      auto t1 = multiply(r, one_over_x, s);
+      auto t2 = multiply(
+          x,
+          mean(
+              multiply(gr, square(multiply(t1, one_over_w, s), s), s),
+              /* axis= */ -1,
+              /* keepdims= */ true,
+              s),
+          s);
+      vjps.push_back(subtract(multiply(g, t1, s), t2, s));
+    } else if (arg == 1) {
+      std::vector<int> axes(gr.ndim() - 1);
+      std::iota(axes.begin(), axes.end(), 0);
+      vjps.push_back(
+          sum(multiply(gr, one_over_w, s), axes, /* keepdims= */ false, s));
+    }
+  }
+  return vjps;
 }
 
 bool RMSNorm::is_equivalent(const Primitive& other) const {

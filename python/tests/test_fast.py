@@ -37,6 +37,12 @@ def rope_orig(x, dims, traditional, base, scale, offset):
         return rx
 
 
+def rms_norm(x, weight, eps):
+    x = x.astype(mx.float32)
+    x = x * mx.rsqrt(x.square().mean(-1, keepdims=True) + eps)
+    return weight * x.astype(weight.dtype)
+
+
 class TestFast(mlx_tests.MLXTestCase):
     def test_rope(self):
         T = 4
@@ -146,11 +152,6 @@ class TestFast(mlx_tests.MLXTestCase):
                 self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
 
     def test_rms_norm(self):
-        def rms_norm(x, weight, eps):
-            x = x.astype(mx.float32)
-            x = x * mx.rsqrt(x.square().mean(-1, keepdims=True) + eps)
-            return weight * x.astype(weight.dtype)
-
         # Per dtype absolute tolerance
         tolerances = {mx.float32: 1e-6, mx.float16: 1e-3, mx.bfloat16: 1e-2}
 
@@ -195,6 +196,20 @@ class TestFast(mlx_tests.MLXTestCase):
         rx = rms_norm(x, weight, eps)
         rx_fast = mx.fast.rms_norm(x, weight, eps)
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-6)
+
+    def test_rms_norm_grad(self):
+        D = 32
+        eps = 1e-5
+        f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
+        f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
+
+        x = mx.random.uniform(shape=(2, 100, D))
+        w = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(2, 100, D))
+        gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
+        gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
     def test_layer_norm(self):
         def layer_norm(x, weight, bias, eps):

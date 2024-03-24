@@ -48,6 +48,12 @@ class RMSNorm : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
   DEFINE_PRINT(RMSNorm)
   bool is_equivalent(const Primitive& other) const override;
 
