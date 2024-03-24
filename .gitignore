@@ -82,9 +82,3 @@ build/
 
 # Jetbrains
 .cache
-/python/mlx/nn/layers/.ipynb_checkpoints
-docs/src/python/.ipynb_checkpoints/ops-checkpoint.rst
-*.ipynb
-*.ipynb_checkpoints
-/python/mlx/nn/.ipynb_checkpoints
-/python/tests/.ipynb_checkpoints
