@@ -45,8 +45,8 @@ inline array to_array_with_accessor(nb::object obj) {
 }
 
 inline bool isMlxCoreArray(const nb::object& obj) {
-    std::string type_name = nb::type_name(obj.type()).c_str();
-    return type_name.find("mlx.core.array") != std::string::npos;
+  std::string type_name = nb::type_name(obj.type()).c_str();
+  return type_name.find("mlx.core.array") != std::string::npos;
 }
 
 inline array to_array(

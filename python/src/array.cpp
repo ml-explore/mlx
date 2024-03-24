@@ -760,11 +760,13 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__eq__",
-          [](const array& a, const ScalarOrArray& v) -> std::variant<array, bool> {
+          [](const array& a,
+             const ScalarOrArray& v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx array
-              if(!isMlxCoreArray(*check_for_obj)) {
+              // return false in case of object comparison which is not mlx
+              // array
+              if (!isMlxCoreArray(*check_for_obj)) {
                 return false;
               }
             }
@@ -773,11 +775,13 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__lt__",
-          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+          [](const array& a,
+             const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx array
-              if(!isMlxCoreArray(*check_for_obj)) {
+              // return false in case of object comparison which is not mlx
+              // array
+              if (!isMlxCoreArray(*check_for_obj)) {
                 return false;
               }
             }
@@ -786,11 +790,13 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__le__",
-          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+          [](const array& a,
+             const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx array
-              if(!isMlxCoreArray(*check_for_obj)) {
+              // return false in case of object comparison which is not mlx
+              // array
+              if (!isMlxCoreArray(*check_for_obj)) {
                 return false;
               }
             }
@@ -799,11 +805,13 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__gt__",
-          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+          [](const array& a,
+             const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx array
-              if(!isMlxCoreArray(*check_for_obj)) {
+              // return false in case of object comparison which is not mlx
+              // array
+              if (!isMlxCoreArray(*check_for_obj)) {
                 return false;
               }
             }
@@ -812,11 +820,13 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__ge__",
-          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+          [](const array& a,
+             const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx array
-              if(!isMlxCoreArray(*check_for_obj)) {
+              // return false in case of object comparison which is not mlx
+              // array
+              if (!isMlxCoreArray(*check_for_obj)) {
                 return false;
               }
             }
@@ -825,11 +835,12 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__ne__",
-          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+          [](const array& a,
+             const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
               // return true in case of object inequlity which is not mlx array
-              if(!isMlxCoreArray(*check_for_obj)) {
+              if (!isMlxCoreArray(*check_for_obj)) {
                 return true;
               }
             }
