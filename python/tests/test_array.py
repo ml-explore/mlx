@@ -135,7 +135,6 @@ class TestInequality(mlx_tests.MLXTestCase):
         c = mx.array([1, 2, 4])
         self.assertFalse(mx.any(a != b))
         self.assertTrue(mx.any(a != c))
-
     def test_array_ne_scalar(self):
         a = mx.array([1, 2, 3])
         b = 1
