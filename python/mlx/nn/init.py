@@ -156,7 +156,7 @@ def glorot_normal(
     (``fan_out``) units according to:
 
     .. math::
-        \sigma = \gamma \sqrt{\frac{2.0}{\text{fan_in} + \text{fan_out}}}
+        \sigma = \gamma \sqrt{\frac{2.0}{\text{fan\_in} + \text{fan\_out}}}
 
     For more details see the original reference: `Understanding the difficulty
     of training deep feedforward neural networks
@@ -199,7 +199,7 @@ def glorot_uniform(
     units according to:
 
     .. math::
-        \sigma = \gamma \sqrt{\frac{6.0}{\text{fan_in} + \text{fan_out}}}
+        \sigma = \gamma \sqrt{\frac{6.0}{\text{fan\_in} + \text{fan\_out}}}
 
     For more details see the original reference: `Understanding the difficulty
     of training deep feedforward neural networks

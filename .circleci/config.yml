@@ -44,7 +44,7 @@ jobs:
           name: Generate package stubs
           command: |
             echo "stubs"
-            python -m nanobind.stubgen -m mlx.core -r -O python
+            python setup.py generate_stubs 
       - run:
           name: Run Python tests
           command: |
@@ -94,7 +94,7 @@ jobs:
           name: Generate package stubs
           command: |
             source env/bin/activate
-            python -m nanobind.stubgen -m mlx.core -r -O python
+            python setup.py generate_stubs 
       - run:
           name: Run Python tests
           command: |
@@ -159,7 +159,7 @@ jobs:
           name: Generate package stubs
           command: |
             source env/bin/activate
-            python -m nanobind.stubgen -m mlx.core -r -O python
+            python setup.py generate_stubs 
       - run:
           name: Build Python package
           command: |
@@ -216,7 +216,7 @@ jobs:
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
               pip install . -v
-            python -m nanobind.stubgen -m mlx.core -r -O python
+            python setup.py generate_stubs 
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
               python -m build --wheel

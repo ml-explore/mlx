@@ -38,6 +38,10 @@ Operations
    conv_general
    cos
    cosh
+   cummax
+   cummin
+   cumprod
+   cumsum
    dequantize
    diag
    diagonal
