@@ -80,6 +80,16 @@ auto to_scalar(array& a) {
   }
 }
 
+bool isMlxArray(const ScalarOrArray& v) {
+    auto check_for_obj = std::get_if<nb::object>(&v);
+    if (check_for_obj) {
+        if(isMlxCoreArray(*check_for_obj)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 nb::object tolist(array& a) {
   if (a.ndim() == 0) {
     return to_scalar(a);
@@ -764,8 +774,7 @@ void init_array(nb::module_& m) {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
               // return false in case of object comparison which is not mlx array
-              std::string type_name = nb::type_name(check_for_obj->type()).c_str();
-              if (type_name.find("mlx.core.array") == std::string::npos) {
+              if(!isMlxCoreArray(*check_for_obj)) {
                 return false;
               }
             }
@@ -774,31 +783,46 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__lt__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+            if(!isMlxArray(v)) {
+              return false; // return false in case of object comparison which is not mlx array
+            }
             return less(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__le__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+            if(!isMlxArray(v)) {
+              return false; // return false in case of object comparison which is not mlx array
+            }
             return less_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__gt__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+            if(!isMlxArray(v)) {
+              return false; // return false in case of object comparison which is not mlx array
+            }
             return greater(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ge__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+            if(!isMlxArray(v)) {
+              return false; // return false in case of object comparison which is not mlx array
+            }
             return greater_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ne__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> std::variant<array, bool> {
+            if(!isMlxArray(v)) {
+              return false; // return false in case of object comparison which is not mlx array
+            }
             return not_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
