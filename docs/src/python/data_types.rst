@@ -44,9 +44,15 @@ The default floating point type is ``float32`` and the default integer type is
    * - ``int64``
      - 8 
      - 64-bit signed integer 
+   * - ``bfloat16``
+     - 2 
+     - 16-bit brain float (e8, m7)
    * - ``float16``
      - 2 
-     - 16-bit float, only available with `ARM C language extensions <https://developer.arm.com/documentation/101028/0012/3--C-language-extensions?lang=en>`_
+     - 16-bit IEEE float (e5, m10)
    * - ``float32``
      - 4 
      - 32-bit float
+   * - ``complex64``
+     - 8 
+     - 64-bit complex float

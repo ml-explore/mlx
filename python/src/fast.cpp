@@ -118,12 +118,13 @@ void init_fast(nb::module_& parent_module) {
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
         Supports:
+
         * [Multi-Head Attention](https://arxiv.org/abs/1706.03762)
         * [Grouped Query Attention](https://arxiv.org/abs/2305.13245)
-        * [Multi-Query Attention](https://arxiv.org/abs/1911.02150).
+        * [Multi-Query Attention](https://arxiv.org/abs/1911.02150)
 
         Note: The softmax operation is performed in ``float32`` regardless of
-        input precision.
+        the input precision.
 
         Note: For Grouped Query Attention and Multi-Query Attention, the ``k``
         and ``v`` inputs should not be pre-tiled to match ``q``.

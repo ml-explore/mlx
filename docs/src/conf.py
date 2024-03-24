@@ -39,6 +39,7 @@ source_suffix = ".rst"
 master_doc = "index"
 highlight_language = "python"
 pygments_style = "sphinx"
+add_module_names = False
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -62,11 +63,14 @@ htmlhelp_basename = "mlx_doc"
 
 
 def setup(app):
-    wrapped = app.registry.documenters["function"].can_document_member
+    from sphinx.util import inspect
 
-    def nanobind_function_patch(member: Any, *args, **kwargs) -> bool:
-        return "nanobind.nb_func" in str(type(member)) or wrapped(
-            member, *args, **kwargs
-        )
+    wrapped_isfunc = inspect.isfunction
 
-    app.registry.documenters["function"].can_document_member = nanobind_function_patch
+    def isfunc(obj):
+        type_name = str(type(obj))
+        if "nanobind.nb_method" in type_name or "nanobind.nb_func" in type_name:
+            return True
+        return wrapped_isfunc(obj)
+
+    inspect.isfunction = isfunc

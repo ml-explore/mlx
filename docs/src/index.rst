@@ -62,6 +62,7 @@ are the CPU and GPU.
    python/ops
    python/random
    python/transforms
+   python/fast
    python/fft
    python/linalg
    python/metal
