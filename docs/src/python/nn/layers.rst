@@ -15,6 +15,7 @@ Layers
    BatchNorm
    Conv1d
    Conv2d
+   ConvLSTM
    Dropout
    Dropout2d
    Dropout3d

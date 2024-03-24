@@ -288,7 +288,8 @@ class LSTM(Module):
         return mx.stack(all_hidden, axis=-2), mx.stack(all_cell, axis=-2)
 
 
-r"""A Convolutional LSTM Cell.
+class _conv_lstm_cell(Module):
+    r"""A Convolutional LSTM Cell.
     
     The input has shape ``NHWC`` or ``HWC`` where:
 
@@ -320,8 +321,6 @@ r"""A Convolutional LSTM Cell.
         bias (bool): Whether to use biases or not. Default: ``True``.
     """
 
-
-class _conv_lstm_cell(Module):
     def __init__(
         self,
         in_channels: int,
@@ -390,7 +389,8 @@ class _conv_lstm_cell(Module):
         return (h, c)
 
 
-r"""A Convolutional LSTM recurrent layer.
+class ConvLSTM(Module):
+    r"""A Convolutional LSTM recurrent layer.
     
     The input has shape ``NLHWC`` or ``LHWC`` where:
 
@@ -424,8 +424,6 @@ r"""A Convolutional LSTM recurrent layer.
         bias (bool): Whether to use biases or not. Default: ``True``.
     """
 
-
-class ConvLSTM(Module):
     def __init__(
         self,
         in_channels: int,
