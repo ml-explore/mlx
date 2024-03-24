@@ -125,6 +125,43 @@ class TestEquality(mlx_tests.MLXTestCase):
         self.assertFalse(a == b)
         self.assertFalse(a == c)
 
+
+class TestInequality(mlx_tests.MLXTestCase):
+    def test_array_ne_array(self):
+        a = mx.array([1, 2, 3])
+        b = mx.array([1, 2, 3])
+        c = mx.array([1, 2, 4])
+        self.assertFalse(mx.any(a != b))
+        self.assertTrue(mx.any(a != c))
+    
+    def test_array_ne_scalar(self):
+        a = mx.array([1, 2, 3])
+        b = 1
+        c = 4
+
+        self.assertFalse(mx.all(a != b))
+        self.assertTrue(mx.any(a != c))
+    
+    def test_list_not_equals_array(self):
+        a = mx.array([1, 2, 3])
+        b = [1, 2, 3]
+        c = [1, 2, 4]
+        
+        # mlx array inequality returns true if is compared with any kind of 
+        # object which is not an mlx array
+        self.assertTrue(a != b)
+        self.assertTrue(a != c)
+    
+    def test_tuple_not_equals_array(self):
+        a = mx.array([1, 2, 3])
+        b = (1, 2, 3)
+        c = (1, 2, 4)
+
+        # mlx array inequality returns true if is compared with any kind of 
+        # object which is not an mlx array
+        self.assertTrue(a != b)
+        self.assertTrue(a != c)
+
 class TestArray(mlx_tests.MLXTestCase):
     def test_array_basics(self):
         x = mx.array(1)
