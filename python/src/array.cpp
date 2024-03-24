@@ -80,6 +80,16 @@ auto to_scalar(array& a) {
   }
 }
 
+bool isMlxArray(const ScalarOrArray& v) {
+    auto check_for_obj = std::get_if<nb::object>(&v);
+    if (check_for_obj) {
+        if(isMlxCoreArray(*check_for_obj)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 nb::object tolist(array& a) {
   if (a.ndim() == 0) {
     return to_scalar(a);
