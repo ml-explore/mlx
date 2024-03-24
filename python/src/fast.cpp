@@ -119,9 +119,9 @@ void init_fast(nb::module_& parent_module) {
 
         Supports:
 
-        * [Multi-Head Attention](https://arxiv.org/abs/1706.03762)
-        * [Grouped Query Attention](https://arxiv.org/abs/2305.13245)
-        * [Multi-Query Attention](https://arxiv.org/abs/1911.02150)
+        * `Multi-Head Attention <https://arxiv.org/abs/1706.03762>`_
+        * `Grouped Query Attention <https://arxiv.org/abs/2305.13245>`_
+        * `Multi-Query Attention <https://arxiv.org/abs/1911.02150>`_
 
         Note: The softmax operation is performed in ``float32`` regardless of
         the input precision.
