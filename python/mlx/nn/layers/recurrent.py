@@ -1,7 +1,7 @@
 # Copyright © 2024 Apple Inc.
 
 import math
-from typing import Callable, Optional, Union
+from typing import Callable, Optional
 
 import mlx.core as mx
 from mlx.nn.layers.activations import tanh
