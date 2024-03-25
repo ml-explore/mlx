@@ -152,11 +152,9 @@ class TestBase(mlx_tests.MLXTestCase):
         pre_freeze_num_params = len(m.parameters())
         m.freeze().unfreeze()
         self.assertEqual(len(m.parameters()), pre_freeze_num_params)
-        new_params_dict = m.parameters()
-        for key in new_params_dict:
-            new_params_dict[key] = new_params_dict[key] + 1
+        params_dict = m.parameters()
 
-        self.assertFalse(m.update(new_params_dict).eval()._training)
+        self.assertFalse(m.update(params_dict).eval()._training)
         self.assertTrue(m.train()._training)
 
 
