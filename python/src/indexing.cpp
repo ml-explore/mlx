@@ -367,6 +367,7 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
   }
 
   bool squeeze_needed = false;
+  bool unsqueeze_needed = false;
 
   // Slice handling
   {
@@ -395,17 +396,25 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
         }
 
         axis++;
+      } else {
+        unsqueeze_needed = true;
       }
     }
     src = slice(src, starts, ends, strides);
   }
 
+  bool none_exists = false;
+  for (auto idx : remaining_indices) {
+    if (idx.is_none())
+      none_exists = true;
+  }
+
   // Unsqueeze handling
-  if (remaining_indices.size() > src.ndim() || squeeze_needed) {
+  if (unsqueeze_needed || squeeze_needed) {
     std::vector<int> out_shape;
     int axis = 0;
     for (auto& idx : remaining_indices) {
-      if (idx.is_none()) {
+      if (unsqueeze_needed && idx.is_none()) {
         out_shape.push_back(1);
       } else if (squeeze_needed && nb::isinstance<nb::int_>(idx)) {
         axis++;

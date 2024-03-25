@@ -755,6 +755,10 @@ class TestArray(mlx_tests.MLXTestCase):
         a_sliced_npy = np.asarray(a_sliced_mlx)
         self.assertTrue(np.array_equal(a_sliced_npy, a_npy[None]))
 
+        a_sliced_mlx = a_mlx[:, None]
+        a_sliced_npy = np.asarray(a_sliced_mlx)
+        self.assertTrue(np.array_equal(a_sliced_npy, a_npy[:, None]))
+
         # Multi dim indexing, all ints
         self.assertEqual(a_mlx[0, 0].item(), 0)
         self.assertEqual(a_mlx[0, 0].ndim, 0)
