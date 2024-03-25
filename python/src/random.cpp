@@ -198,7 +198,7 @@ void init_random(nb::module_& parent_module) {
         Args:
             mean (array): N-dimensional array, the mean of the distribution.
             cov (array): N x N-dimensional array, the covariance matrix of the distribution.
-            shape (list(int), optional): Shape of the output. Default is ``()``.
+            shape (list(int), optional): The output shape. Default: ``()``.
             dtype (Dtype, optional): Type of the output. Default is ``float32``.
             key (array, optional): A PRNG key. Default: None.
 
