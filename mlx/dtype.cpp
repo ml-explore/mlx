@@ -81,16 +81,6 @@ constexpr Dtype::Category type_to_category[num_types] = {
 
 // clang-format on
 
-inline bool is_big_endian() {
-  union ByteOrder {
-    int32_t i;
-    uint8_t c[4];
-  };
-  ByteOrder b = {0x01234567};
-
-  return b.c[0] == 0x01;
-}
-
 } // namespace
 
 Dtype promote_types(const Dtype& t1, const Dtype& t2) {
