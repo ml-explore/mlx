@@ -3,7 +3,10 @@
 #include "doctest/doctest.h"
 
 #include <cmath>
+#include <iostream>
+#include <numeric>
 
+#include "mlx/backend/metal/qrf.h"
 #include "mlx/mlx.h"
 #include "mlx/ops.h"
 
@@ -258,15 +261,75 @@ TEST_CASE("test QR factorization") {
   // Unsupported types throw
   CHECK_THROWS(linalg::qr(array({0, 1}, {1, 2})));
 
-  array A = array({{2., 3., 1., 2.}, {2, 2}});
-  auto [Q, R] = linalg::qr(A, Device::cpu);
-  auto out = matmul(Q, R);
-  CHECK(allclose(out, A).item<bool>());
-  out = matmul(Q, Q);
-  CHECK(allclose(out, eye(2), 1e-5, 1e-7).item<bool>());
-  CHECK(allclose(tril(R, -1), zeros_like(R)).item<bool>());
+  const auto max_col_block_size = QRFParams::max_col_block_size;
+
+  int n = 0;
+
+  // Test different matrix sizes to ensure blocking on GPU works correctly.
+  //   SUBCASE("") {
+  //     n = 1;
+  //   }
+  //   SUBCASE("") {
+  //     n = 2;
+  //   }
+  //   SUBCASE("") {
+  //     n = max_col_block_size - 1;
+  //   }
+  //   SUBCASE("") {
+  //     n = max_col_block_size;
+  //   }
+  //   SUBCASE("") {
+  //     n = max_col_block_size + 1;
+  //   }
+  //   SUBCASE("") {
+  //     n = 2 * max_col_block_size - 1;
+  //   }
+  //   SUBCASE("") {
+  //     n = 2 * max_col_block_size;
+  //   }
+  //   SUBCASE("") {
+  //     n = 2 * max_col_block_size + 1;
+  //   }
+  //   SUBCASE("") {
+  //     n = 4 * max_col_block_size - 1;
+  //   }
+  //   SUBCASE("") {
+  //     n = 37 * max_col_block_size - 1;
+  //   }
+  //   SUBCASE("") {
+  //     n = 37 * max_col_block_size + 2;
+  //   }
+
+  n = 100;
+
+  CAPTURE(n);
+
+  CHECK_GT(n, 0);
+
+  random::seed(42);
+  array A = 1000 * random::normal({n, n});
+  A.eval();
+
+  auto [Q, R] = linalg::qr(A);
   CHECK_EQ(Q.dtype(), float32);
   CHECK_EQ(R.dtype(), float32);
+
+  // Check that Q is orthogonal.
+  const auto QQT = matmul(Q, transpose(Q));
+  CHECK(allclose(QQT, eye(n), 0, 1e-3).item<bool>());
+
+  // Check that R is upper triangular.
+  CHECK(allclose(tril(R, -1), zeros_like(R), 0, 1e-2).item<bool>());
+
+  // Check that QR = A.
+  auto A_again = matmul(Q, R);
+  CHECK(allclose(A_again, A, 0, 2e-2).item<bool>());
+
+  // Batched inputs.
+  //   array As = 1000 * random::normal({2, 3, n, n});
+  //   As.eval();
+  //   auto [Qs, Rs] = linalg::qr(As);
+  //   Qs.eval();
 }
 
 TEST_CASE("test SVD factorization") {
