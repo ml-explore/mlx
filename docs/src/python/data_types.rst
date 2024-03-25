@@ -56,14 +56,13 @@ The default floating point type is ``float32`` and the default integer type is
      - 64-bit complex float
 
 
-The full reference for the :obj:`Dtype` class is below.
+Data type are aranged in a hierarchy. See the :obj:`DtypeCategory` object
+documentation for more information. Use :func:`issubdtype` to determine if one
+``dtype`` (or category) is a subtype of another category.
 
-.. autoclass:: Dtype
-   :members:
+.. autosummary::
+   :toctree: _autosummary
 
-Categories
-----------
-
-The hierarchy below shows supported values for :obj:`DtypeCategory`.
-
-.. autoclass:: DtypeCategory
+   Dtype
+   DtypeCategory
+   issubdtype

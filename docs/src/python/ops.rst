@@ -64,7 +64,6 @@ Operations
    isclose
    isinf
    isnan
-   issubdtype
    isneginf
    isposinf
    less
