@@ -146,7 +146,7 @@ class Module(dict):
         self,
         file_or_weights: Union[str, List[Tuple[str, mx.array]]],
         strict: bool = True,
-    ):
+    ) -> Module:
         """
         Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
 
@@ -158,6 +158,9 @@ class Module(dict):
               weights exactly match the parameters of the model. Otherwise,
               only the weights actually contained in the model are loaded and
               shapes are not checked. Default: ``True``.
+
+        Returns:
+            The model with the updated weights.
 
         Example:
 
@@ -218,6 +221,7 @@ class Module(dict):
                     )
 
         self.update(tree_unflatten(weights))
+        return self
 
     def save_weights(self, file: str):
         """
@@ -314,7 +318,7 @@ class Module(dict):
 
         return self.filter_and_map(self.valid_child_filter, is_leaf_fn=_is_leaf_module)
 
-    def update(self, parameters: dict):
+    def update(self, parameters: dict) -> Module:
         """Replace the parameters of this Module with the provided ones in the
         dict of dicts and lists.
 
@@ -329,6 +333,8 @@ class Module(dict):
         Args:
             parameters (dict): A complete or partial dictionary of the modules
                                parameters.
+        Returns:
+            The model with the updated parameters.
         """
 
         def apply(dst, parameters):
@@ -355,12 +361,13 @@ class Module(dict):
                         apply(current_value, new_value)
 
         apply(self, parameters)
+        return self
 
     def apply(
         self,
         map_fn: Callable[[mx.array], mx.array],
         filter_fn: Optional[Callable[["mlx.nn.Module", str, Any], bool]] = None,
-    ):
+    ) -> Module:
         """Map all the parameters using the provided ``map_fn`` and immediately
         update the module with the mapped parameters.
 
@@ -371,11 +378,15 @@ class Module(dict):
             map_fn (Callable): Maps an array to another array
             filter_fn (Callable, optional): Filter to select which arrays to
                 map (default: :meth:`Module.valid_parameter_filter`).
+
+        Returns:
+            The model with the updated parameters.
         """
         filter_fn = filter_fn or Module.valid_parameter_filter
         self.update(self.filter_and_map(filter_fn, map_fn))
+        return self
 
-    def update_modules(self, modules: dict):
+    def update_modules(self, modules: dict) -> Module:
         """Replace the child modules of this :class:`Module` instance with the
         provided ones in the dict of dicts and lists.
 
@@ -390,6 +401,8 @@ class Module(dict):
         Args:
             modules (dict): A complete or partial dictionary of the modules
                 submodules.
+        Returns:
+            The module instance with the updated submodules.
         """
 
         def apply(dst, modules):
@@ -412,13 +425,19 @@ class Module(dict):
                         apply(current_value, new_value)
 
         apply(self, modules)
+        return self
 
-    def apply_to_modules(self, apply_fn: Callable[[str, "mlx.nn.Module"], Any]):
+    def apply_to_modules(
+        self, apply_fn: Callable[[str, "mlx.nn.Module"], Any]
+    ) -> Module:
         """Apply a function to all the modules in this instance (including this
         instance).
 
         Args:
             apply_fn (Callable): The function to apply to the modules.
+
+        Returns:
+            The module instance with the updated submodules.
         """
         module_stack = [("", self)]
         while module_stack:
@@ -428,6 +447,7 @@ class Module(dict):
             module_stack.extend(
                 tree_flatten(mod.children(), prefix=prefix, is_leaf=self.is_module)
             )
+        return self
 
     def modules(self):
         """Return a list with all the modules in this instance.
@@ -464,7 +484,7 @@ class Module(dict):
         recurse: bool = True,
         keys: Optional[Union[str, List[str]]] = None,
         strict: bool = False,
-    ):
+    ) -> Module:
         """Freeze the Module's parameters or some of them. Freezing a parameter means not
         computing gradients for it.
 
@@ -488,6 +508,9 @@ class Module(dict):
                 ``module.freeze(keys="bias")``.
             strict (bool, optional): If set to ``True`` validate that the passed keys exist.
                 Default: ``False``.
+
+        Returns:
+            The module instance with freezed parameters.
         """
 
         def _freeze_impl(_, m):
@@ -508,6 +531,7 @@ class Module(dict):
             self.apply_to_modules(_freeze_impl)
         else:
             _freeze_impl("", self)
+        return self
 
     def unfreeze(
         self,
@@ -515,7 +539,7 @@ class Module(dict):
         recurse: bool = True,
         keys: Optional[Union[str, List[str]]] = None,
         strict: bool = False,
-    ):
+    ) -> Module:
         """Unfreeze the Module's parameters or some of them.
 
         This function is idempotent ie unfreezing a model that is not frozen is
@@ -540,6 +564,9 @@ class Module(dict):
                 ``module.unfreeze(keys="bias")``.
             strict (bool, optional): If set to ``True`` validate that the passed keys exist.
                 Default: ``False``.
+
+        Returns:
+            The module instance with unfreezed parameters.
         """
 
         def _unfreeze_impl(_, m):
@@ -554,8 +581,9 @@ class Module(dict):
             self.apply_to_modules(_unfreeze_impl)
         else:
             _unfreeze_impl("", self)
+        return self
 
-    def train(self, mode: bool = True):
+    def train(self, mode: bool = True) -> Module:
         """Set the model in or out of training mode.
 
         Training mode only applies to certain layers. For example
@@ -565,16 +593,19 @@ class Module(dict):
         Args:
             mode (bool): Indicate if the model should be in training or
                 evaluation mode. Default: ``True``.
+        Returns:
+            The module instance with the updated training mode.
         """
 
         def _set_train(_, m):
             m._training = mode
 
         self.apply_to_modules(_set_train)
+        return self
 
-    def eval(self):
+    def eval(self) -> Module:
         """Set the model to evaluation mode.
 
         See :func:`train`.
         """
-        self.train(False)
+        return self.train(False)
