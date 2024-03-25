@@ -4,6 +4,8 @@
 
 #include "python/src/convert.h"
 
+#include "mlx/utils.h"
+
 namespace nanobind {
 template <>
 struct ndarray_traits<float16_t> {
