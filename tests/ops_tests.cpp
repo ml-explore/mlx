@@ -2950,7 +2950,7 @@ TEST_CASE("test issubdtype") {
   for (const auto& cat : cats) {
     CHECK(issubdtype(cat, cat));
     switch (cat) {
-      case Dtype::Category::Val::complexfloating:
+      case Dtype::Category::complexfloating:
         CHECK(issubdtype(cat, complexfloating));
         CHECK_FALSE(issubdtype(cat, floating));
         CHECK(issubdtype(cat, inexact));
@@ -2960,7 +2960,7 @@ TEST_CASE("test issubdtype") {
         CHECK(issubdtype(cat, number));
         CHECK(issubdtype(cat, generic));
         break;
-      case Dtype::Category::Val::floating:
+      case Dtype::Category::floating:
         CHECK_FALSE(issubdtype(cat, complexfloating));
         CHECK(issubdtype(cat, floating));
         CHECK(issubdtype(cat, inexact));
@@ -2970,7 +2970,7 @@ TEST_CASE("test issubdtype") {
         CHECK(issubdtype(cat, number));
         CHECK(issubdtype(cat, generic));
         break;
-      case Dtype::Category::Val::inexact:
+      case Dtype::Category::inexact:
         CHECK_FALSE(issubdtype(cat, complexfloating));
         CHECK_FALSE(issubdtype(cat, floating));
         CHECK(issubdtype(cat, inexact));
@@ -2980,7 +2980,7 @@ TEST_CASE("test issubdtype") {
         CHECK(issubdtype(cat, number));
         CHECK(issubdtype(cat, generic));
         break;
-      case Dtype::Category::Val::signedinteger:
+      case Dtype::Category::signedinteger:
         CHECK_FALSE(issubdtype(cat, complexfloating));
         CHECK_FALSE(issubdtype(cat, floating));
         CHECK_FALSE(issubdtype(cat, inexact));
@@ -2990,7 +2990,7 @@ TEST_CASE("test issubdtype") {
         CHECK(issubdtype(cat, number));
         CHECK(issubdtype(cat, generic));
         break;
-      case Dtype::Category::Val::unsignedinteger:
+      case Dtype::Category::unsignedinteger:
         CHECK_FALSE(issubdtype(cat, complexfloating));
         CHECK_FALSE(issubdtype(cat, floating));
         CHECK_FALSE(issubdtype(cat, inexact));
@@ -3000,7 +3000,7 @@ TEST_CASE("test issubdtype") {
         CHECK(issubdtype(cat, number));
         CHECK(issubdtype(cat, generic));
         break;
-      case Dtype::Category::Val::integer:
+      case Dtype::Category::integer:
         CHECK_FALSE(issubdtype(cat, complexfloating));
         CHECK_FALSE(issubdtype(cat, floating));
         CHECK_FALSE(issubdtype(cat, inexact));
@@ -3010,7 +3010,7 @@ TEST_CASE("test issubdtype") {
         CHECK(issubdtype(cat, number));
         CHECK(issubdtype(cat, generic));
         break;
-      case Dtype::Category::Val::number:
+      case Dtype::Category::number:
         CHECK_FALSE(issubdtype(cat, complexfloating));
         CHECK_FALSE(issubdtype(cat, floating));
         CHECK_FALSE(issubdtype(cat, inexact));
@@ -3020,7 +3020,7 @@ TEST_CASE("test issubdtype") {
         CHECK(issubdtype(cat, number));
         CHECK(issubdtype(cat, generic));
         break;
-      case Dtype::Category::Val::generic:
+      case Dtype::Category::generic:
         CHECK_FALSE(issubdtype(cat, complexfloating));
         CHECK_FALSE(issubdtype(cat, floating));
         CHECK_FALSE(issubdtype(cat, inexact));

@@ -3690,9 +3690,8 @@ void init_ops(nb::module_& m) {
       ""_a,
       ""_a,
       R"pbdoc(
-        issubdtype(arg1: Union[Dtype, DtypeCategory], arg2: Union[Dtype, DtypeCategory], /) -> bool
-
-        `issubdtype` can be used to check the type of arrays:
+        Check if one :obj:`Dytpe` or :obj:`DtypeCategory` is a subtype
+        of another.
 
         >>> ints = mx.array([1, 2, 3], dtype=mx.int32)
         >>> mx.issubdtype(ints.dtype, mx.integer)
