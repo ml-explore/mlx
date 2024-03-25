@@ -4,6 +4,7 @@
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
 
@@ -122,18 +123,35 @@ void RMSNormVJP::eval_gpu(
   array& gw = outputs[1];
 
   // Allocate space for the outputs
+  bool x_in_gx = false;
+  bool g_in_gx = false;
   if (x.is_donatable()) {
     gx.move_shared_buffer(x);
+    x_in_gx = true;
   } else if (g.is_donatable()) {
     gx.move_shared_buffer(g);
+    g_in_gx = true;
   } else {
     gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
   }
-  array zero(0, gw.dtype());
-  copy_gpu(zero, gw, CopyType::Scalar, s);
 
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
+
+  // Allocate a temporary to store the gradients for w and initialize the
+  // gradient accumulator to 0.
+  array gw_temp({n_rows, x.shape().back()}, gw.dtype(), nullptr, {});
+  bool g_in_gw = false;
+  if (g.is_donatable()) {
+    gw_temp.move_shared_buffer(g);
+    g_in_gw = true;
+  } else {
+    gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
+  }
+  copies.push_back(gw_temp);
+  array zero(0, gw.dtype());
+  copy_gpu(zero, gw, CopyType::Scalar, s);
+
   const int simd_size = 32;
   const int n_reads = RMS_N_READS;
   const int looped_limit = RMS_LOOPED_LIMIT;
@@ -164,18 +182,23 @@ void RMSNormVJP::eval_gpu(
 
     uint32_t w_stride = w.strides()[0];
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(
-        compute_encoder, x.data_shared_ptr() == nullptr ? gx : x, 0);
+    set_array_buffer(compute_encoder, x_in_gx ? gx : x, 0);
     set_array_buffer(compute_encoder, w, 1);
     set_array_buffer(
-        compute_encoder, g.data_shared_ptr() == nullptr ? gx : g, 2);
+        compute_encoder, g_in_gx ? gx : (g_in_gw ? gw_temp : g), 2);
     set_array_buffer(compute_encoder, gx, 3);
-    set_array_buffer(compute_encoder, gw, 4);
+    set_array_buffer(compute_encoder, gw_temp, 4);
     compute_encoder->setBytes(&eps_, sizeof(float), 5);
     compute_encoder->setBytes(&axis_size, sizeof(int), 6);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 7);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
+
+  ReductionPlan plan(
+      ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
+  strided_reduce_general_dispatch(
+      gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
+
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
 }

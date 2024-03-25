@@ -1,10 +1,8 @@
 // Copyright © 2024 Apple Inc.
 
-#include <metal_atomic>
 #include <metal_common>
 #include <metal_simdgroup>
 
-#include "mlx/backend/metal/kernels/atomic.h"
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
@@ -158,7 +156,7 @@ template <typename T, int N_READS = RMS_N_READS>
     const device T* w,
     const device T* g,
     device T* gx,
-    device mlx_atomic<T>* gw,
+    device T* gw,
     constant float& eps,
     constant uint& axis_size,
     constant uint& w_stride,
@@ -236,16 +234,17 @@ template <typename T, int N_READS = RMS_N_READS>
 
   // Write the outputs
   gx += gid * axis_size + lid * N_READS;
+  gw += gid * axis_size + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
       gx[i] = static_cast<T>(thread_g[i] * thread_w[i] * normalizer - thread_x[i] * meangwx * normalizer3);
-      mlx_atomic_fetch_add_explicit(gw, static_cast<T>(thread_g[i] * thread_x[i] * normalizer), lid * N_READS + i);
+      gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
       if ((lid * N_READS + i) < axis_size) {
         gx[i] = static_cast<T>(thread_g[i] * thread_w[i] * normalizer - thread_x[i] * meangwx * normalizer3);
-        mlx_atomic_fetch_add_explicit(gw, static_cast<T>(thread_g[i] * thread_x[i] * normalizer), lid * N_READS + i);
+        gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
       }
     }
   }
@@ -257,7 +256,7 @@ template <typename T, int N_READS = RMS_N_READS>
     const device T* w,
     const device T* g,
     device T* gx,
-    device mlx_atomic<T>* gw,
+    device T* gw,
     constant float& eps,
     constant uint& axis_size,
     constant uint& w_stride,
@@ -335,6 +334,7 @@ template <typename T, int N_READS = RMS_N_READS>
 
   // Write the outputs
   gx += gid * axis_size + lid * N_READS;
+  gw += gid * axis_size + lid * N_READS;
   for (uint r = 0; r < axis_size; r += lsize * N_READS) {
     if (r + lid * N_READS + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {
@@ -343,7 +343,7 @@ template <typename T, int N_READS = RMS_N_READS>
         float gi = g[i + r];
 
         gx[i + r] = static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
-        mlx_atomic_fetch_add_explicit(gw, static_cast<T>(gi * xi * normalizer), lid * N_READS + i + r);
+        gw[i + r] = static_cast<T>(gi * xi * normalizer);
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
@@ -353,7 +353,7 @@ template <typename T, int N_READS = RMS_N_READS>
           float gi = g[i + r];
 
           gx[i + r] = static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
-          mlx_atomic_fetch_add_explicit(gw, static_cast<T>(gi * xi * normalizer), lid * N_READS + i + r);
+          gw[i + r] = static_cast<T>(gi * xi * normalizer);
         }
       }
     }
@@ -383,7 +383,7 @@ template <typename T, int N_READS = RMS_N_READS>
       const device itype* w,                                  \
       const device itype* g,                                  \
       device itype* gx,                                       \
-      device mlx_atomic<itype>* gw,                           \
+      device itype* gw,                                       \
       constant float& eps,                                    \
       constant uint& axis_size,                               \
       constant uint& w_stride,                                \
@@ -415,7 +415,7 @@ template <typename T, int N_READS = RMS_N_READS>
       const device itype* w,                                     \
       const device itype* g,                                     \
       device itype* gx,                                          \
-      device mlx_atomic<itype>* gw,                              \
+      device itype* gw,                                          \
       constant float& eps,                                       \
       constant uint& axis_size,                                  \
       constant uint& w_stride,                                   \

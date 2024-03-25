@@ -6,8 +6,6 @@
 
 namespace mlx::core {
 
-namespace {
-
 enum ReductionOpType {
   // Self-explanatory. Read everything and produce 1 output.
   ContiguousAllReduce,
@@ -37,6 +35,21 @@ enum ReductionOpType {
   // output in order.
   GeneralReduce
 };
+
+struct ReductionPlan {
+  ReductionOpType type;
+  std::vector<int> shape;
+  std::vector<size_t> strides;
+
+  ReductionPlan(
+      ReductionOpType type_,
+      std::vector<int> shape_,
+      std::vector<size_t> strides_)
+      : type(type_), shape(std::move(shape_)), strides(std::move(strides_)) {}
+  ReductionPlan(ReductionOpType type_) : type(type_) {}
+};
+
+namespace {
 
 // Helper for the ndimensional strided loop
 // Should this be in utils?
@@ -108,19 +121,6 @@ struct DefaultContiguousReduce {
       x++;
     }
   }
-};
-
-struct ReductionPlan {
-  ReductionOpType type;
-  std::vector<int> shape;
-  std::vector<size_t> strides;
-
-  ReductionPlan(
-      ReductionOpType type_,
-      std::vector<int> shape_,
-      std::vector<size_t> strides_)
-      : type(type_), shape(std::move(shape_)), strides(std::move(strides_)) {}
-  ReductionPlan(ReductionOpType type_) : type(type_) {}
 };
 
 ReductionPlan get_reduction_plan(const array& x, const std::vector<int> axes) {
