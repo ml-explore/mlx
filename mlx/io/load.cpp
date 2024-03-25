@@ -124,16 +124,13 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
 }
 
 /** Save array to file in .npy format */
-void save(const std::string& file_, array a) {
-  // Open and check file
-  std::string file = file_;
-
+void save(std::string file, array a) {
   // Add .npy to file name if it is not there
   if (file.length() < 4 || file.substr(file.length() - 4, 4) != ".npy")
     file += ".npy";
 
   // Serialize array
-  save(std::make_shared<io::FileWriter>(file), a);
+  save(std::make_shared<io::FileWriter>(std::move(file)), a);
 }
 
 /** Load array from reader in .npy format */
@@ -237,8 +234,8 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
 }
 
 /** Load array from file in .npy format */
-array load(const std::string& file, StreamOrDevice s) {
-  return load(std::make_shared<io::FileReader>(file), s);
+array load(std::string file, StreamOrDevice s) {
+  return load(std::make_shared<io::FileReader>(std::move(file)), s);
 }
 
 } // namespace mlx::core

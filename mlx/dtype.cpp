@@ -153,9 +153,9 @@ std::string dtype_to_array_protocol(const Dtype& t) {
 }
 
 // Dtype from array protocol type string
-Dtype dtype_from_array_protocol(const std::string& t) {
+Dtype dtype_from_array_protocol(std::string_view t) {
   if (t.length() == 2 || t.length() == 3) {
-    std::string r = t.length() == 3 ? t.substr(1, 2) : t;
+    std::string_view r = t.length() == 3 ? t.substr(1, 2) : t;
 
     if (r == "V2") {
       return bfloat16;
@@ -201,7 +201,7 @@ Dtype dtype_from_array_protocol(const std::string& t) {
   }
 
   throw std::invalid_argument(
-      "[from_str] Invalid array protocol type-string: " + t);
+      "[from_str] Invalid array protocol type-string: " + std::string(t));
 }
 
 } // namespace mlx::core

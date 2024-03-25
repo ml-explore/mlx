@@ -96,6 +96,6 @@ struct TypeToDtype {
 // Array protocol typestring for Dtype
 std::string dtype_to_array_protocol(const Dtype& t);
 // Dtype from array protocol type string
-Dtype dtype_from_array_protocol(const std::string& t);
+Dtype dtype_from_array_protocol(std::string_view t);
 
 } // namespace mlx::core
