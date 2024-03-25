@@ -147,6 +147,18 @@ class TestBase(mlx_tests.MLXTestCase):
         m.state["hello"] = "world"
         self.assertEqual(m.state["hello"], "world")
 
+    def test_chaining(self):
+        m = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 1))
+        pre_freeze_num_params = len(m.parameters())
+        m.freeze().unfreeze()
+        self.assertEqual(len(m.parameters()), pre_freeze_num_params)
+        new_params_dict = m.parameters()
+        for key in new_params_dict:
+            new_params_dict[key] = new_params_dict[key] + 1
+
+        self.assertFalse(m.update(new_params_dict).eval()._training)
+        self.assertTrue(m.train()._training)
+
 
 class TestLayers(mlx_tests.MLXTestCase):
     def test_identity(self):
