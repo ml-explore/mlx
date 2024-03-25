@@ -420,12 +420,12 @@ class AsStrided : public UnaryPrimitive {
  public:
   explicit AsStrided(
       Stream stream,
-      const std::vector<int>& shape,
-      const std::vector<size_t>& strides,
+      std::vector<int> shape,
+      std::vector<size_t> strides,
       size_t offset)
       : UnaryPrimitive(stream),
-        shape_(shape),
-        strides_(strides),
+        shape_(std::move(shape)),
+        strides_(std::move(strides)),
         offset_(offset){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
