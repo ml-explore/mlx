@@ -95,6 +95,91 @@ void RMSNorm::eval_gpu(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
 }
 
+void RMSNormVJP::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Ensure row contiguity. We could relax this step by checking that the array
+  // is contiguous (no broadcasts or holes) and that the input strides are the
+  // same as the cotangent strides but for now this is simpler.
+  std::vector<array> copies;
+  auto check_input = [&copies, &s](const array& x) {
+    if (x.flags().row_contiguous) {
+      return x;
+    }
+
+    array x_copy(x.shape(), x.dtype(), nullptr, {});
+    copy_gpu(x, x_copy, CopyType::General, s);
+    copies.push_back(x_copy);
+    return x_copy;
+  };
+  const array& x = check_input(inputs[0]);
+  const array& w = inputs[1];
+  const array& g = inputs[3];
+  array& gx = outputs[0];
+  array& gw = outputs[1];
+
+  // Allocate space for the outputs
+  if (x.is_donatable()) {
+    gx.move_shared_buffer(x);
+  } else if (g.is_donatable()) {
+    gx.move_shared_buffer(g);
+  } else {
+    gx.set_data(allocator::malloc_or_wait(gx.nbytes()));
+  }
+  array zero(0, gw.dtype());
+  copy_gpu(zero, gw, CopyType::Scalar, s);
+
+  auto axis_size = static_cast<uint32_t>(x.shape().back());
+  int n_rows = x.data_size() / axis_size;
+  const int simd_size = 32;
+  const int n_reads = RMS_N_READS;
+  const int looped_limit = RMS_LOOPED_LIMIT;
+  std::string op_name = "vjp_rms";
+  if (axis_size > looped_limit) {
+    op_name += "_looped";
+  }
+  op_name += type_to_name(gx);
+  auto compute_encoder = d.get_command_encoder(s.index);
+  {
+    auto kernel = d.get_kernel(op_name);
+
+    MTL::Size grid_dims, group_dims;
+    if (axis_size <= looped_limit) {
+      size_t threadgroup_needed = (axis_size + n_reads - 1) / n_reads;
+      size_t simds_needed = (threadgroup_needed + simd_size - 1) / simd_size;
+      size_t threadgroup_size = simd_size * simds_needed;
+      assert(threadgroup_size <= kernel->maxTotalThreadsPerThreadgroup());
+      size_t n_threads = n_rows * threadgroup_size;
+      grid_dims = MTL::Size(n_threads, 1, 1);
+      group_dims = MTL::Size(threadgroup_size, 1, 1);
+    } else {
+      size_t threadgroup_size = kernel->maxTotalThreadsPerThreadgroup();
+      size_t n_threads = n_rows * threadgroup_size;
+      grid_dims = MTL::Size(n_threads, 1, 1);
+      group_dims = MTL::Size(threadgroup_size, 1, 1);
+    }
+
+    uint32_t w_stride = w.strides()[0];
+    compute_encoder->setComputePipelineState(kernel);
+    set_array_buffer(
+        compute_encoder, x.data_shared_ptr() == nullptr ? gx : x, 0);
+    set_array_buffer(compute_encoder, w, 1);
+    set_array_buffer(
+        compute_encoder, g.data_shared_ptr() == nullptr ? gx : g, 2);
+    set_array_buffer(compute_encoder, gx, 3);
+    set_array_buffer(compute_encoder, gw, 4);
+    compute_encoder->setBytes(&eps_, sizeof(float), 5);
+    compute_encoder->setBytes(&axis_size, sizeof(int), 6);
+    compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 7);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
+  }
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+}
+
 void LayerNorm::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {

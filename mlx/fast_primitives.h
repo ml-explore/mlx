@@ -62,6 +62,29 @@ class RMSNorm : public Custom {
   float eps_;
 };
 
+class RMSNormVJP : public Custom {
+ public:
+  RMSNormVJP(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float eps)
+      : Custom(stream, fallback), eps_(eps){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  };
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(RMSNormVJP)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+  float eps_;
+};
+
 class LayerNorm : public Custom {
  public:
   LayerNorm(

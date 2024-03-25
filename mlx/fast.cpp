@@ -107,41 +107,63 @@ std::vector<array> RMSNorm::vjp(
   assert(cotangents.size() == 1);
 
   auto s = stream();
-  std::vector<array> vjps;
+  auto fallback = [s](const std::vector<array>& inputs) {
+    auto& x = inputs[0];
+    auto& w = inputs[1];
+    auto& r = inputs[2];
+    auto& g = inputs[3];
 
-  auto& x = primals[0];
-  auto& w = primals[1];
-  auto& r = outputs[0];
-  auto& g = cotangents[0];
+    std::vector<array> vjps;
 
-  auto zero = array(0, x.dtype());
-  auto one_over_x = where(equal(x, zero, s), zero, reciprocal(x, s), s);
-  auto one_over_w = where(equal(w, zero, s), zero, reciprocal(w, s), s);
-  auto gr = multiply(g, r, s);
-  for (auto arg : argnums) {
-    if (arg == 0) {
-      auto t1 = multiply(r, one_over_x, s);
-      auto t2 = multiply(
-          x,
-          mean(
-              multiply(gr, square(multiply(t1, one_over_w, s), s), s),
-              /* axis= */ -1,
-              /* keepdims= */ true,
-              s),
-          s);
-      vjps.push_back(subtract(multiply(g, t1, s), t2, s));
-    } else if (arg == 1) {
-      std::vector<int> axes(gr.ndim() - 1);
-      std::iota(axes.begin(), axes.end(), 0);
-      vjps.push_back(
-          sum(multiply(gr, one_over_w, s), axes, /* keepdims= */ false, s));
-    }
+    auto zero = array(0, x.dtype());
+    auto one_over_x = where(equal(x, zero, s), zero, reciprocal(x, s), s);
+    auto one_over_w = where(equal(w, zero, s), zero, reciprocal(w, s), s);
+    auto gr = multiply(g, r, s);
+
+    // dl/dx
+    auto t1 = multiply(r, one_over_x, s);
+    auto t2 = multiply(
+        x,
+        mean(
+            multiply(gr, square(multiply(t1, one_over_w, s), s), s),
+            /* axis= */ -1,
+            /* keepdims= */ true,
+            s),
+        s);
+    vjps.push_back(subtract(multiply(g, t1, s), t2, s));
+
+    // dl/dw
+    std::vector<int> axes(gr.ndim() - 1);
+    std::iota(axes.begin(), axes.end(), 0);
+    vjps.push_back(
+        sum(multiply(gr, one_over_w, s), axes, /* keepdims= */ false, s));
+
+    return vjps;
+  };
+
+  // TODO: Check that primals, output and cotangents have the same dtype.
+
+  auto vjps = array::make_arrays(
+      {primals[0].shape(), primals[1].shape()},
+      {primals[0].dtype(), primals[1].dtype()},
+      std::make_shared<RMSNormVJP>(s, fallback, eps_),
+      {primals[0], primals[1], outputs[0], cotangents[0]});
+
+  std::vector<array> returned_vjps;
+  for (auto& arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
   }
-  return vjps;
+
+  return returned_vjps;
 }
 
 bool RMSNorm::is_equivalent(const Primitive& other) const {
   const RMSNorm& a_other = static_cast<const RMSNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
+bool RMSNormVJP::is_equivalent(const Primitive& other) const {
+  const RMSNormVJP& a_other = static_cast<const RMSNormVJP&>(other);
   return eps_ == a_other.eps_;
 }
 
