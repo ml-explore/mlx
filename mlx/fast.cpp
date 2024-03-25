@@ -63,7 +63,7 @@ array rms_norm(
         << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  auto out_type = result_type({x, weight});
+  auto out_type = result_type(x, weight);
   if (!is_floating_point(out_type) || is_complex(out_type)) {
     std::ostringstream msg;
     msg << "[rms_norm] Received unsupported type " << out_type << ".";
@@ -87,8 +87,8 @@ array rms_norm(
   if (s.device == Device::gpu) {
     return array(
         x.shape(),
-        x.dtype(),
-        std::make_unique<RMSNorm>(s, fallback, eps),
+        out_type,
+        std::make_shared<RMSNorm>(s, fallback, eps),
         {astype(x, out_type, s), astype(weight, out_type, s)});
   }
   return fallback({x, weight})[0];
@@ -96,6 +96,88 @@ array rms_norm(
 
 bool RMSNorm::is_equivalent(const Primitive& other) const {
   const RMSNorm& a_other = static_cast<const RMSNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
+array layer_norm(
+    const array& x,
+    const std::optional<array>& weight,
+    const std::optional<array>& bias,
+    float eps,
+    StreamOrDevice s_ /* = {} */) {
+  if (x.ndim() == 0) {
+    std::ostringstream msg;
+    msg << "[layer_norm] Input must have at least 1 dimension but got input with "
+           "0 dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (weight.has_value() && (*weight).ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[layer_norm] weight must have 1 dimension but has "
+        << (*weight).ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (bias.has_value() && (*bias).ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[layer_norm] bias must have 1 dimension but has " << (*bias).ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out_type = (weight.has_value())
+      ? ((bias.has_value()) ? result_type(x, *weight, *bias)
+                            : result_type(x, *weight))
+      : x.dtype();
+  if (!is_floating_point(out_type) || is_complex(out_type)) {
+    std::ostringstream msg;
+    msg << "[layer_norm] Received unsupported type " << out_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  bool has_weight = weight.has_value();
+  bool has_bias = bias.has_value();
+  auto fallback = [has_weight, has_bias, eps, out_type, s](
+                      const std::vector<array>& inputs) {
+    auto x = astype(inputs[0], float32, s);
+
+    // Should I not be smart here and leave the double mean to simplify()?
+    auto mu = mean(x, /* axis= */ -1, /* keepdims= */ true, s);
+    auto mu2 = square(mu, s);
+    auto x2 = mean(square(x, s), /* axis= */ -1, /* keepdims= */ true, s);
+    auto v = subtract(x2, mu2, s);
+
+    x = multiply(subtract(x, mu, s), rsqrt(add(v, array(eps, float32), s), s));
+    x = astype(x, out_type, s);
+
+    // If the LN is affine then transform x according to the weight and bias
+    if (has_weight) {
+      x = multiply(x, inputs[1], s);
+    }
+    if (has_bias) {
+      x = add(x, inputs[2], s);
+    }
+
+    return std::vector<array>{x};
+  };
+
+  auto passed_weight =
+      astype((weight.has_value()) ? *weight : array(1, out_type), out_type);
+  auto passed_bias =
+      astype((bias.has_value()) ? *bias : array(0, out_type), out_type);
+
+  if (s.device == Device::gpu) {
+    return array(
+        x.shape(),
+        out_type,
+        std::make_shared<LayerNorm>(s, fallback, eps),
+        {astype(x, out_type, s), passed_weight, passed_bias});
+  }
+  return fallback({x, passed_weight, passed_bias})[0];
+}
+
+bool LayerNorm::is_equivalent(const Primitive& other) const {
+  const LayerNorm& a_other = static_cast<const LayerNorm&>(other);
   return eps_ == a_other.eps_;
 }
 
@@ -162,11 +244,11 @@ array rope(
     }
   };
   auto stream = to_stream(s);
-  if (stream.device == Device::gpu && x.shape(-1) == dims) {
+  if (stream.device == Device::gpu) {
     return array(
         x.shape(),
         x.dtype(),
-        std::make_unique<RoPE>(
+        std::make_shared<RoPE>(
             stream, fallback, dims, traditional, base, scale, offset),
         {x});
   }
@@ -236,7 +318,7 @@ array scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  auto final_type = result_type({queries, keys, values});
+  auto final_type = result_type(queries, keys, values);
   if (!is_floating_point(final_type) || is_complex(final_type)) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] Received unsupported type "
@@ -247,9 +329,6 @@ array scaled_dot_product_attention(
   auto q = astype(queries, final_type, s);
   auto k = astype(keys, final_type, s);
   auto v = astype(values, final_type, s);
-
-  auto out_shape =
-      std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
 
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
@@ -299,10 +378,12 @@ array scaled_dot_product_attention(
   // TODO, update routing conditions post further tuning
   implementation_supports_use_case &= false;
   if (implementation_supports_use_case) {
+    auto out_shape =
+        std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
     auto out = array(
-        out_shape,
+        std::move(out_shape),
         final_type,
-        std::make_unique<ScaledDotProductAttention>(
+        std::make_shared<ScaledDotProductAttention>(
             stream, fallback, scale, false),
         {q, k, v});
     return out;

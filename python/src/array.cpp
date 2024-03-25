@@ -569,11 +569,10 @@ void init_array(nb::module_& m) {
 
             .. note::
 
-               Python in place updates for all array frameworks map to
-               assignment. For instance ``x[idx] += y`` maps to ``x[idx] =
-               x[idx] + y``. As a result, assigning to the same index ignores
-               all but one updates. Using ``x.at[idx].add(y)`` will correctly
-               apply all the updates to all indices.
+               Regular in-place updates map to assignment. For instance ``x[idx] += y``
+               maps to ``x[idx] = x[idx] + y``. As a result, assigning to the
+               same index ignores all but one update. Using ``x.at[idx].add(y)``
+               will correctly apply all updates to all indices.
 
             .. list-table::
                :header-rows: 1
@@ -591,7 +590,18 @@ void init_array(nb::module_& m) {
                * - ``x = x.at[idx].maximum(y)``
                  - ``x[idx] = mx.maximum(x[idx], y)``
                * - ``x = x.at[idx].minimum(y)``
-                - ``x[idx] = mx.minimum(x[idx], y)``
+                 - ``x[idx] = mx.minimum(x[idx], y)``
+
+            Example:
+                >>> a = mx.array([0, 0])
+                >>> idx = mx.array([0, 1, 0, 1])
+                >>> a[idx] += 1
+                >>> a
+                array([1, 1], dtype=int32)
+                >>>
+                >>> a = mx.array([0, 0])
+                >>> a.at[idx].add(1)
+                array([2, 2], dtype=int32)
           )pbdoc")
       .def(
           "__len__",

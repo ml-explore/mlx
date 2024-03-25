@@ -134,9 +134,18 @@ class GenerateStubs(Command):
         pass
 
     def run(self) -> None:
-        subprocess.run(
-            ["python", "-m", "nanobind.stubgen", "-m", "mlx.core", "-r", "-O", "python"]
-        )
+        out_path = "python/mlx/core"
+        stub_cmd = [
+            "python",
+            "-m",
+            "nanobind.stubgen",
+            "-m",
+            "mlx.core",
+        ]
+        subprocess.run(stub_cmd + ["-r", "-O", out_path])
+        # Run again without recursive to specify output file name
+        subprocess.run(["rm", f"{out_path}/mlx.pyi"])
+        subprocess.run(stub_cmd + ["-o", f"{out_path}/__init__.pyi"])
 
 
 # Read the content of README.md
@@ -154,7 +163,7 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.7.0"),
+        version=get_version("0.8.1"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",

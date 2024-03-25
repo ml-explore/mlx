@@ -1127,7 +1127,7 @@ std::pair<std::vector<array>, std::vector<int>> Equal::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{equal(a, b, stream())}, axes};
+  return {{equal(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Equal::vjp(
@@ -1468,7 +1468,7 @@ std::pair<std::vector<array>, std::vector<int>> Greater::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{greater(a, b, stream())}, axes};
+  return {{greater(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Greater::vjp(
@@ -1495,7 +1495,7 @@ std::pair<std::vector<array>, std::vector<int>> GreaterEqual::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{greater_equal(a, b, stream())}, axes};
+  return {{greater_equal(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> GreaterEqual::vjp(
@@ -1522,7 +1522,7 @@ std::pair<std::vector<array>, std::vector<int>> Less::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{less(a, b, stream())}, axes};
+  return {{less(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Less::vjp(
@@ -1549,7 +1549,7 @@ std::pair<std::vector<array>, std::vector<int>> LessEqual::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{less_equal(a, b, stream())}, axes};
+  return {{less_equal(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> LessEqual::vjp(
@@ -2590,8 +2590,11 @@ std::vector<array> Scatter::vjp(
           break;
         case Scatter::Max:
         case Scatter::Min: {
-          auto mask = where(result == values, array({1}), array({0}));
-          vjps.push_back(multiply(cotangents[0], mask));
+          vjps.push_back(where(
+              equal(result, values, stream()),
+              cotangents[0],
+              array(0, cotangents[0].dtype()),
+              stream()));
           break;
         }
         default:

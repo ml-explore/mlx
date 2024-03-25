@@ -131,8 +131,8 @@ class Module(dict):
         return value
 
     def __getattr__(self, key: str):
-        if key in self:
-            return self[key]
+        if (value := self.get(key, None)) is not None:
+            return value
         else:
             super(Module, self).__getattribute__(key)
 

@@ -158,9 +158,7 @@ array expand_dims(
     StreamOrDevice s = {});
 
 /** Add a singleton dimension at the given axis. */
-inline array expand_dims(const array& a, int axis, StreamOrDevice s = {}) {
-  return expand_dims(a, std::vector<int>{axis}, s);
-}
+array expand_dims(const array& a, int axis, StreamOrDevice s = {});
 
 /** Slice an array. */
 array slice(

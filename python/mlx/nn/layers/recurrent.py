@@ -103,12 +103,12 @@ class GRU(Module):
 
     .. math::
 
-        \begin{align*}
+        \begin{aligned}
         r_t &= \sigma (W_{xr}x_t + W_{hr}h_t + b_{r}) \\
         z_t &= \sigma (W_{xz}x_t + W_{hz}h_t + b_{z}) \\
         n_t &= \text{tanh}(W_{xn}x_t + b_{n} + r_t \odot (W_{hn}h_t + b_{hn})) \\
         h_{t + 1} &= (1 - z_t) \odot n_t + z_t \odot h_t
-        \end{align*}
+        \end{aligned}
 
     The hidden state :math:`h` has shape ``NH`` or ``H`` depending on
     whether the input is batched or not. Returns the hidden state at each
@@ -206,14 +206,14 @@ class LSTM(Module):
     Concretely, for each element of the sequence, this layer computes:
 
     .. math::
-        \begin{align*}
+        \begin{aligned}
         i_t &= \sigma (W_{xi}x_t + W_{hi}h_t + b_{i}) \\
         f_t &= \sigma (W_{xf}x_t + W_{hf}h_t + b_{f}) \\
         g_t &= \text{tanh} (W_{xg}x_t + W_{hg}h_t + b_{g}) \\
         o_t &= \sigma (W_{xo}x_t + W_{ho}h_t + b_{o}) \\
         c_{t + 1} &= f_t \odot c_t + i_t \odot g_t \\
         h_{t + 1} &= o_t \text{tanh}(c_{t + 1})
-        \end{align*}
+        \end{aligned}
 
     The hidden state :math:`h` and cell state :math:`c` have shape ``NH``
     or ``H``, depending on whether the input is batched or not.

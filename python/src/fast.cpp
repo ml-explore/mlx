@@ -17,12 +17,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "rms_norm",
-      [](const array& x,
-         const array& weight,
-         float eps,
-         const StreamOrDevice& s /* = {} */) {
-        return fast::rms_norm(x, weight, eps, s);
-      },
+      &fast::rms_norm,
       "x"_a,
       "weight"_a,
       "eps"_a,
@@ -47,16 +42,38 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
+      "layer_norm",
+      &fast::layer_norm,
+      "x"_a,
+      "weight"_a.none(),
+      "bias"_a.none(),
+      "eps"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def layer_norm(x: array, weight: Optional[array], bias: Optional[array], eps: float, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Layer normalization.
+
+        The normalization is with respect to the last axis of the input ``x``.
+
+        Args:
+            x (array): Input array.
+            weight (array, optional): A multiplicative weight to scale the result by.
+              The ``weight`` should be one-dimensional with the same size
+              as the last axis of ``x``. If set to ``None`` then no scaling happens.
+            bias (array, optional): An additive offset to be added to the result.
+              The ``bias`` should be one-dimensional with the same size
+              as the last axis of ``x``. If set to ``None`` then no translation happens.
+            eps (float): A small additive constant for numerical stability.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
+
+  m.def(
       "rope",
-      [](const array& a,
-         int dims,
-         bool traditional,
-         float base,
-         float scale,
-         int offset,
-         const StreamOrDevice& s /* = {} */) {
-        return fast::rope(a, dims, traditional, base, scale, offset, s);
-      },
+      &fast::rope,
       "a"_a,
       "dims"_a,
       nb::kw_only(),
@@ -87,14 +104,7 @@ void init_fast(nb::module_& parent_module) {
 
   m.def(
       "scaled_dot_product_attention",
-      [](const array& q,
-         const array& k,
-         const array& v,
-         const float scale,
-         const std::optional<array>& mask,
-         const StreamOrDevice& s) {
-        return fast::scaled_dot_product_attention(q, k, v, scale, mask, s);
-      },
+      &fast::scaled_dot_product_attention,
       "q"_a,
       "k"_a,
       "v"_a,
@@ -108,12 +118,13 @@ void init_fast(nb::module_& parent_module) {
         A fast implementation of multi-head attention: ``O = softmax(Q @ K.T, dim=-1) @ V``.
 
         Supports:
-        * [Multi-Head Attention](https://arxiv.org/abs/1706.03762)
-        * [Grouped Query Attention](https://arxiv.org/abs/2305.13245)
-        * [Multi-Query Attention](https://arxiv.org/abs/1911.02150).
+
+        * `Multi-Head Attention <https://arxiv.org/abs/1706.03762>`_
+        * `Grouped Query Attention <https://arxiv.org/abs/2305.13245>`_
+        * `Multi-Query Attention <https://arxiv.org/abs/1911.02150>`_
 
         Note: The softmax operation is performed in ``float32`` regardless of
-        input precision.
+        the input precision.
 
         Note: For Grouped Query Attention and Multi-Query Attention, the ``k``
         and ``v`` inputs should not be pre-tiled to match ``q``.

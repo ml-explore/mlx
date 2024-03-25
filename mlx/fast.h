@@ -14,6 +14,13 @@ array rms_norm(
     float eps,
     StreamOrDevice s = {});
 
+array layer_norm(
+    const array& x,
+    const std::optional<array>& weight,
+    const std::optional<array>& bias,
+    float eps,
+    StreamOrDevice s = {});
+
 array rope(
     const array& x,
     int dims,

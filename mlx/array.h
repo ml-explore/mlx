@@ -180,9 +180,9 @@ class array {
       std::vector<array> inputs);
 
   static std::vector<array> make_arrays(
-      const std::vector<std::vector<int>>& shapes,
+      std::vector<std::vector<int>> shapes,
       const std::vector<Dtype>& dtypes,
-      std::shared_ptr<Primitive> primitive,
+      const std::shared_ptr<Primitive>& primitive,
       const std::vector<array>& inputs);
 
   /** A unique identifier for an array. */
@@ -392,6 +392,10 @@ class array {
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
         std::vector<array> inputs);
+
+   private:
+    // Initialize size, strides, and other metadata
+    void init();
   };
 
   // The ArrayDesc contains the details of the materialized array including the

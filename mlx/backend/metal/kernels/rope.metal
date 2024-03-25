@@ -10,6 +10,7 @@ template <typename T, bool traditional>
     const device T *in [[buffer(0)]],
     device T * out [[buffer(1)]],
     constant const size_t strides[3],
+    constant const size_t out_strides[3],
     constant const int& offset,
     constant const float& base,
     constant const float& scale,
@@ -19,13 +20,13 @@ template <typename T, bool traditional>
   uint in_index_1, in_index_2;
   uint out_index_1, out_index_2;
   if (traditional) {
-    out_index_1 = 2 * (pos.x + grid.x * (pos.y + grid.y * pos.z));
+    out_index_1 = 2 * pos.x * out_strides[2] + pos.y * out_strides[1] + pos.z * out_strides[0];
     out_index_2 = out_index_1 + 1;
     in_index_1 = 2 * pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
     in_index_2 = in_index_1 + strides[2];
   } else {
-    out_index_1 = pos.x + 2*(grid.x * (pos.y + grid.y * pos.z));
-    out_index_2 = out_index_1 + grid.x;
+    out_index_1 = pos.x * out_strides[2] + pos.y * out_strides[1] + pos.z * out_strides[0];
+    out_index_2 = out_index_1 + grid.x * out_strides[2];
     in_index_1 = pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
     in_index_2 = in_index_1 + grid.x * strides[2];
   }
@@ -54,6 +55,7 @@ template <typename T, bool traditional>
       const device type* in [[buffer(0)]], \
       device type* out [[buffer(1)]], \
     constant const size_t strides[3], \
+    constant const size_t out_strides[3], \
     constant const int& offset, \
     constant const float& base, \
     constant const float& scale, \
