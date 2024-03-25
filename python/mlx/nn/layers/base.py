@@ -586,12 +586,13 @@ class Module(dict):
             x, mx.floating
         ),
     ):
-        """Set the dtype of the models parameters.
+        """Set the dtype of the module's parameters.
 
         Args:
             dtype (Dtype): The new dtype.
-            predicate (~typing.Callable): A predicate to select parameters to cast. By default, only parameters of type
-                :attr:`~mlx.core.floating` will be updated to avoid updating integer parameters to the new dtype.
+            predicate (Callable): A predicate to select parameters to cast. By
+              default, only parameters of type :attr:`floating` will be
+              updated to avoid casting integer parameters to the new dtype.
         """
         if predicate is None:
 
