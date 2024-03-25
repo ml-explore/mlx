@@ -19,8 +19,6 @@ Array
     array.ndim
     array.shape
     array.size
-    Dtype
-    DtypeCategory
     array.abs
     array.all
     array.any

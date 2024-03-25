@@ -55,6 +55,12 @@ The default floating point type is ``float32`` and the default integer type is
      - 8 
      - 64-bit complex float
 
+
+The full reference for the :obj:`Dtype` class is below.
+
+.. autoclass:: Dtype
+   :members:
+
 Categories
 ----------
 
