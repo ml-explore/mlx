@@ -200,7 +200,7 @@ void init_random(nb::module_& parent_module) {
             cov (array): N x N-dimensional array, the covariance matrix of the distribution.
             shape (list(int), optional): The output shape. Default: ``()``.
             dtype (Dtype, optional): The output type. Default: ``float32``.
-            key (array, optional): A PRNG key. Default: None.
+            key (array, optional): A PRNG key. Default: ``None``.
 
         Returns:
             array: The output array of random values.
