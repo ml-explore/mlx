@@ -208,7 +208,6 @@ void get_shape(T list, std::vector<int>& shape) {
       for (int i = 0; i < arr.ndim(); i++) {
         shape.push_back(check_shape_dim(arr.shape(i)));
       }
-      shape.insert(shape.end(), arr.shape().begin(), arr.shape().end());
       return;
     }
   }
