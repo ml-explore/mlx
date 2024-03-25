@@ -3690,7 +3690,7 @@ void init_ops(nb::module_& m) {
       ""_a,
       ""_a,
       R"pbdoc(
-        Check if one :obj:`Dytpe` or :obj:`DtypeCategory` is a subtype
+        Check if a :obj:`Dytpe` or :obj:`DtypeCategory` is a subtype
         of another.
 
         >>> ints = mx.array([1, 2, 3], dtype=mx.int32)
