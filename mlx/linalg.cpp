@@ -11,7 +11,7 @@
 namespace mlx::core::linalg {
 
 Dtype at_least_float(const Dtype& d) {
-  return is_floating_point(d) ? d : promote_types(d, float32);
+  return issubdtype(d, inexact) ? d : promote_types(d, float32);
 }
 
 inline array l2_norm(
@@ -19,7 +19,7 @@ inline array l2_norm(
     const std::vector<int>& axis,
     bool keepdims,
     StreamOrDevice s) {
-  if (is_complex(a.dtype())) {
+  if (issubdtype(a.dtype(), complexfloating)) {
     return sqrt(sum(abs(a, s) * abs(a, s), axis, keepdims, s), s);
   } else {
     return sqrt(sum(square(a, s), axis, keepdims, s), s);

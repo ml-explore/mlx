@@ -97,7 +97,7 @@ array uniform(
     Dtype dtype /* = float32 */,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
-  if (!is_floating_point(dtype) && !is_complex(dtype)) {
+  if (!issubdtype(dtype, floating)) {
     throw std::invalid_argument(
         "Can only generate uniform numbers with real floating point type.");
   }
@@ -179,7 +179,7 @@ array randint(
     Dtype dtype /* = int32 */,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
-  if (!is_integral(dtype)) {
+  if (issubdtype(dtype, inexact)) {
     throw std::invalid_argument(
         "[randint] randint only accepts integer dtypes and bool.");
   }
@@ -192,7 +192,7 @@ array bernoulli(
     const std::vector<int>& shape,
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
-  if (!is_floating_point(p.dtype())) {
+  if (!issubdtype(p.dtype(), floating)) {
     throw std::invalid_argument(
         "[bernoulli] bernoulli probability `p` must be a float type.");
   }
@@ -228,7 +228,7 @@ array truncated_normal(
   // Same as
   // https://jax.readthedocs.io/en/latest/_modules/jax/_src/random.html#truncated_normal
 
-  if (!is_floating_point(dtype)) {
+  if (!issubdtype(dtype, floating)) {
     throw std::invalid_argument(
         "[trunc_normal] trunc_normal only accepts floating point dtypes.");
   }

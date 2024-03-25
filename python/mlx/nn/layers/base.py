@@ -578,3 +578,26 @@ class Module(dict):
         See :func:`train`.
         """
         self.train(False)
+
+    def set_dtype(
+        self,
+        dtype: mx.Dtype,
+        predicate: Optional[Callable[[mx.Dtype], bool]] = lambda x: mx.issubdtype(
+            x, mx.floating
+        ),
+    ):
+        """Set the dtype of the module's parameters.
+
+        Args:
+            dtype (Dtype): The new dtype.
+            predicate (typing.Callable, optional): A predicate to select
+              parameters to cast. By default, only parameters of type
+              :attr:`floating` will be updated to avoid casting integer
+              parameters to the new dtype.
+        """
+        if predicate is None:
+
+            def predicate(_):
+                return True
+
+        self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)

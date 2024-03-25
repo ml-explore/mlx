@@ -254,7 +254,7 @@ array array_from_list(
         std::vector<uint32_t> vals;
         fill_vector(pl, vals);
         return array(vals.begin(), shape, dtype);
-      } else if (is_floating_point(dtype)) {
+      } else if (issubdtype(dtype, inexact)) {
         std::vector<float> vals;
         fill_vector(pl, vals);
         return array(vals.begin(), shape, dtype);
@@ -439,6 +439,54 @@ void init_array(nb::module_& m) {
   m.attr("float32") = nb::cast(float32);
   m.attr("bfloat16") = nb::cast(bfloat16);
   m.attr("complex64") = nb::cast(complex64);
+  nb::class_<Dtype::Category>(
+      m,
+      "DtypeCategory",
+      R"pbdoc(
+      Type to hold categories of :class:`dtypes <Dtype>`.
+
+      * :attr:`~mlx.core.generic`
+
+        * :ref:`bool_ <data_types>`
+        * :attr:`~mlx.core.number`
+
+          * :attr:`~mlx.core.integer`
+
+            * :attr:`~mlx.core.unsignedinteger`
+
+              * :ref:`uint8 <data_types>`
+              * :ref:`uint16 <data_types>`
+              * :ref:`uint32 <data_types>`
+              * :ref:`uint64 <data_types>`
+
+            * :attr:`~mlx.core.signedinteger`
+
+              * :ref:`int8 <data_types>`
+              * :ref:`int32 <data_types>`
+              * :ref:`int64 <data_types>`
+
+          * :attr:`~mlx.core.inexact`
+
+            * :attr:`~mlx.core.floating`
+
+              * :ref:`float16 <data_types>`
+              * :ref:`bfloat16 <data_types>`
+              * :ref:`float32 <data_types>`
+
+            * :attr:`~mlx.core.complexfloating`
+
+              * :ref:`complex128 <data_types>`
+
+      See also :func:`~mlx.core.issubdtype`.
+      )pbdoc");
+  m.attr("complexfloating") = nb::cast(complexfloating);
+  m.attr("floating") = nb::cast(floating);
+  m.attr("inexact") = nb::cast(inexact);
+  m.attr("signedinteger") = nb::cast(signedinteger);
+  m.attr("unsignedinteger") = nb::cast(unsignedinteger);
+  m.attr("integer") = nb::cast(integer);
+  m.attr("number") = nb::cast(number);
+  m.attr("generic") = nb::cast(generic);
 
   nb::class_<ArrayAt>(
       m,
@@ -700,7 +748,7 @@ void init_array(nb::module_& m) {
       .def(
           "__itruediv__",
           [](array& a, const ScalarOrArray v) -> array& {
-            if (!is_floating_point(a.dtype())) {
+            if (!issubdtype(a.dtype(), inexact)) {
               throw std::invalid_argument(
                   "In place division cannot cast to non-floating point type.");
             }
@@ -852,7 +900,7 @@ void init_array(nb::module_& m) {
       .def(
           "__invert__",
           [](const array& a) {
-            if (is_floating_point(a.dtype())) {
+            if (issubdtype(a.dtype(), inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with or bitwise inversion.");
             }
@@ -866,7 +914,8 @@ void init_array(nb::module_& m) {
           "__and__",
           [](const array& a, const ScalarOrArray v) {
             auto b = to_array(v, a.dtype());
-            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise and.");
             }
@@ -881,7 +930,8 @@ void init_array(nb::module_& m) {
           "__iand__",
           [](array& a, const ScalarOrArray v) -> array& {
             auto b = to_array(v, a.dtype());
-            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise and.");
             }
@@ -898,7 +948,8 @@ void init_array(nb::module_& m) {
           "__or__",
           [](const array& a, const ScalarOrArray v) {
             auto b = to_array(v, a.dtype());
-            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with or bitwise or.");
             }
@@ -913,7 +964,8 @@ void init_array(nb::module_& m) {
           "__ior__",
           [](array& a, const ScalarOrArray v) -> array& {
             auto b = to_array(v, a.dtype());
-            if (is_floating_point(a.dtype()) || is_floating_point(b.dtype())) {
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
               throw std::invalid_argument(
                   "Floating point types not allowed with or bitwise or.");
             }

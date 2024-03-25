@@ -1,7 +1,5 @@
 .. _data_types:
 
-:orphan:
-
 Data Types
 ==========
 
@@ -56,3 +54,15 @@ The default floating point type is ``float32`` and the default integer type is
    * - ``complex64``
      - 8 
      - 64-bit complex float
+
+
+Data type are aranged in a hierarchy. See the :obj:`DtypeCategory` object
+documentation for more information. Use :func:`issubdtype` to determine if one
+``dtype`` (or category) is a subtype of another category.
+
+.. autosummary::
+   :toctree: _autosummary
+
+   Dtype
+   DtypeCategory
+   issubdtype
