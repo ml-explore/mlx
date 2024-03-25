@@ -39,6 +39,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/qrf.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
 )
 

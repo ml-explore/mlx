@@ -36,6 +36,7 @@ set(
   "unary"
   "gather"
   "scatter"
+  "qrf"
 )
 
 function(build_kernel_base TARGET SRCFILE DEPS)

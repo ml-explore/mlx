@@ -91,19 +91,23 @@ std::function<void()> make_task(
     if (p) {
       metal::device(s.device).end_encoding(s.index);
       scheduler::notify_new_task(s);
-      command_buffer->addCompletedHandler(
-          [s, buffers = std::move(buffers), p = std::move(p)](
-              MTL::CommandBuffer* cbuf) {
-            p->set_value();
-            scheduler::notify_task_completion(s);
-            check_error(cbuf);
-          });
+      if (command_buffer->status() < MTL::CommandBufferStatusCommitted) {
+        command_buffer->addCompletedHandler(
+            [s, buffers = std::move(buffers), p = std::move(p)](
+                MTL::CommandBuffer* cbuf) {
+              p->set_value();
+              scheduler::notify_task_completion(s);
+              check_error(cbuf);
+            });
+      }
       metal::device(s.device).commit_command_buffer(s.index);
     } else {
-      command_buffer->addCompletedHandler(
-          [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
-            check_error(cbuf);
-          });
+      if (command_buffer->status() < MTL::CommandBufferStatusCommitted) {
+        command_buffer->addCompletedHandler(
+            [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+              check_error(cbuf);
+            });
+      }
     }
   };
   return task;
