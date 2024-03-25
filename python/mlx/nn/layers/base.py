@@ -590,9 +590,10 @@ class Module(dict):
 
         Args:
             dtype (Dtype): The new dtype.
-            predicate (Callable): A predicate to select parameters to cast. By
-              default, only parameters of type :attr:`floating` will be
-              updated to avoid casting integer parameters to the new dtype.
+            predicate (typing.Callable, optional): A predicate to select
+              parameters to cast. By default, only parameters of type
+              :attr:`floating` will be updated to avoid casting integer
+              parameters to the new dtype.
         """
         if predicate is None:
 
