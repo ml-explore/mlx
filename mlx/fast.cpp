@@ -107,36 +107,31 @@ std::vector<array> RMSNorm::vjp(
   assert(cotangents.size() == 1);
 
   auto s = stream();
-  auto fallback = [s](const std::vector<array>& inputs) {
+  auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
     auto& x = inputs[0];
     auto& w = inputs[1];
-    auto& r = inputs[2];
-    auto& g = inputs[3];
+    auto& g = inputs[2];
 
     std::vector<array> vjps;
 
-    auto zero = array(0, x.dtype());
-    auto one_over_x = where(equal(x, zero, s), zero, reciprocal(x, s), s);
-    auto one_over_w = where(equal(w, zero, s), zero, reciprocal(w, s), s);
-    auto gr = multiply(g, r, s);
-
-    // dl/dx
-    auto t1 = multiply(r, one_over_x, s);
-    auto t2 = multiply(
-        x,
-        mean(
-            multiply(gr, square(multiply(t1, one_over_w, s), s), s),
-            /* axis= */ -1,
-            /* keepdims= */ true,
+    auto n = rsqrt(
+        add(mean(square(x, s), /* axis= */ -1, /* keepdims= */ true, s),
+            array(eps, x.dtype()),
             s),
         s);
-    vjps.push_back(subtract(multiply(g, t1, s), t2, s));
+    auto n3 = power(n, array(3, x.dtype()), s);
 
-    // dl/dw
-    std::vector<int> axes(gr.ndim() - 1);
+    // df/dx
+    auto gw = multiply(g, w, s);
+    auto t = mean(multiply(gw, x, s), /* axis= */ -1, /* keepdims= */ true, s);
+    t = multiply(multiply(x, t, s), n3, s);
+    vjps.push_back(subtract(multiply(gw, n, s), t, s));
+
+    // df/dw
+    std::vector<int> axes(g.ndim() - 1);
     std::iota(axes.begin(), axes.end(), 0);
     vjps.push_back(
-        sum(multiply(gr, one_over_w, s), axes, /* keepdims= */ false, s));
+        sum(multiply(g, multiply(x, n, s), s), axes, /* keepdims= */ true, s));
 
     return vjps;
   };
@@ -147,7 +142,7 @@ std::vector<array> RMSNorm::vjp(
       {primals[0].shape(), primals[1].shape()},
       {primals[0].dtype(), primals[1].dtype()},
       std::make_shared<RMSNormVJP>(s, fallback, eps_),
-      {primals[0], primals[1], outputs[0], cotangents[0]});
+      {primals[0], primals[1], cotangents[0]});
 
   std::vector<array> returned_vjps;
   for (auto& arg : argnums) {

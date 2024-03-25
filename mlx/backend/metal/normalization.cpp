@@ -118,7 +118,7 @@ void RMSNormVJP::eval_gpu(
   };
   const array& x = check_input(inputs[0]);
   const array& w = inputs[1];
-  const array& g = inputs[3];
+  const array& g = inputs[2];
   array& gx = outputs[0];
   array& gw = outputs[1];
 
