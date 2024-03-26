@@ -510,7 +510,7 @@ class Module(dict):
                 Default: ``False``.
 
         Returns:
-            The module instance with freezed parameters.
+            The module instance with frozen parameters.
         """
 
         def _freeze_impl(_, m):
