@@ -239,8 +239,87 @@ array layer_norm(
   return fallback({x, passed_weight, passed_bias})[0];
 }
 
+std::vector<array> LayerNorm::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() == 3);
+  assert(outputs.size() == 1);
+  assert(cotangents.size() == 1);
+
+  auto s = stream();
+  auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
+    auto& x = inputs[0];
+    auto& w = inputs[1];
+    auto& b = inputs[2];
+    auto& g = inputs[3];
+
+    std::vector<array> vjps;
+
+    auto norm = number_of_elements(x, {-1}, true, x.dtype(), s);
+    auto sumx = sum(x, /* axis= */ -1, /* keepdims= */ true, s);
+    auto sumx2 = sum(square(x, s), /* axis= */ -1, /* keepdims= */ true, s);
+    auto mu = multiply(sumx, norm, s);
+    auto mu2 = multiply(sumx2, norm, s);
+    auto var = subtract(mu2, square(mu, s), s);
+    auto n = rsqrt(add(var, array(eps, x.dtype()), s));
+    auto n3 = power(n, array(3, x.dtype()), s);
+    auto x_c = subtract(x, mu, s);
+
+    // df/dx
+    auto wg = multiply(w, g, s);
+    auto sumwg =
+        multiply(sum(wg, /* axis= */ -1, /* keepdims= */ true, s), norm, s);
+    auto sumwgxc = multiply(
+        sum(multiply(wg, x_c, s), /* axis= */ -1, /* keepdims= */ true, s),
+        norm,
+        s);
+    auto t1 = multiply(multiply(x_c, sumwgxc, s), n3, s);
+    auto t2 = multiply(subtract(wg, sumwg, s), n, s);
+    vjps.push_back(subtract(t2, t1, s));
+
+    // df/dw
+    std::vector<int> axes(g.ndim() - 1);
+    std::iota(axes.begin(), axes.end(), 0);
+    if (w.ndim() == 0) {
+      vjps.push_back(zeros_like(w, s));
+    } else {
+      vjps.push_back(sum(
+          multiply(g, multiply(x_c, n, s), s), axes, /* keepdims= */ false, s));
+    }
+
+    // df/db
+    if (b.ndim() == 0) {
+      vjps.push_back(zeros_like(w, s));
+    } else {
+      vjps.push_back(sum(g, axes, /* keepdims= */ false, s));
+    }
+
+    return vjps;
+  };
+
+  auto vjps = array::make_arrays(
+      {primals[0].shape(), primals[1].shape(), primals[2].shape()},
+      {primals[0].dtype(), primals[1].dtype(), primals[2].dtype()},
+      std::make_shared<LayerNormVJP>(s, fallback, eps_),
+      {primals[0], primals[1], primals[2], cotangents[0]});
+
+  std::vector<array> returned_vjps;
+  for (auto& arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+
+  return returned_vjps;
+}
+
 bool LayerNorm::is_equivalent(const Primitive& other) const {
   const LayerNorm& a_other = static_cast<const LayerNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
+bool LayerNormVJP::is_equivalent(const Primitive& other) const {
+  const LayerNormVJP& a_other = static_cast<const LayerNormVJP&>(other);
   return eps_ == a_other.eps_;
 }
 

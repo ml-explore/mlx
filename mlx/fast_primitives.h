@@ -100,7 +100,36 @@ class LayerNorm : public Custom {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
   DEFINE_PRINT(LayerNorm)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+  float eps_;
+};
+
+class LayerNormVJP : public Custom {
+ public:
+  LayerNormVJP(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      float eps)
+      : Custom(stream, fallback), eps_(eps){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  };
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(LayerNormVJP)
   bool is_equivalent(const Primitive& other) const override;
 
  private:

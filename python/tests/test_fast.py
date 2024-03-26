@@ -43,6 +43,20 @@ def rms_norm(x, weight, eps):
     return weight * x.astype(weight.dtype)
 
 
+def layer_norm(x, weight, bias, eps):
+    ot = x.dtype
+    x = x.astype(mx.float32)
+    mean = x.mean(axis=-1, keepdims=True)
+    var = x.var(axis=-1, keepdims=True)
+    x = (x - mean) * mx.rsqrt(var + eps)
+    x = x.astype(ot)
+    if weight is not None:
+        x = x * weight
+    if bias is not None:
+        x = x + bias
+    return x
+
+
 class TestFast(mlx_tests.MLXTestCase):
     def test_rope(self):
         T = 4
@@ -221,19 +235,6 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
     def test_layer_norm(self):
-        def layer_norm(x, weight, bias, eps):
-            ot = x.dtype
-            x = x.astype(mx.float32)
-            mean = x.mean(axis=-1, keepdims=True)
-            var = x.var(axis=-1, keepdims=True)
-            x = (x - mean) * mx.rsqrt(var + eps)
-            x = x.astype(ot)
-            if weight is not None:
-                x = x * weight
-            if bias is not None:
-                x = x + bias
-            return x
-
         # Per dtype absolute tolerance
         tolerances = {mx.float32: 3e-6, mx.float16: 3e-3, mx.bfloat16: 3e-2}
 
@@ -318,6 +319,35 @@ class TestFast(mlx_tests.MLXTestCase):
         rx = layer_norm(x, None, None, eps)
         rx_fast = mx.fast.layer_norm(x, None, None, eps)
         self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+    def test_layer_norm_grad(self):
+        D = 32
+        eps = 1e-5
+        f1 = lambda x, w, b, y: (layer_norm(x, w, b, eps) * y).sum()
+        f2 = lambda x, w, b, y: (mx.fast.layer_norm(x, w, b, eps) * y).sum()
+
+        x = mx.random.uniform(shape=(8, 100, D))
+        w = mx.random.uniform(shape=(D,))
+        b = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(8, 100, D))
+
+        gx1, gw1, gb1 = mx.grad(f1, argnums=(0, 1, 2))(x, w, b, y)
+        gx2, gw2, gb2 = mx.grad(f2, argnums=(0, 1, 2))(x, w, b, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
+
+        D = 8192
+        x = mx.random.uniform(shape=(8, 100, D))
+        w = mx.random.uniform(shape=(D,))
+        b = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(8, 100, D))
+
+        gx1, gw1, gb1 = mx.grad(f1, argnums=(0, 1, 2))(x, w, b, y)
+        gx2, gw2, gb2 = mx.grad(f2, argnums=(0, 1, 2))(x, w, b, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
 
     def test_fast_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))
