@@ -2997,7 +2997,7 @@ array conv_general(
       }
     }
 
-    in = slice(in, starts, stops, s);
+    in = slice(in, std::move(starts), std::move(stops), s);
   }
 
   // Get output shapes
