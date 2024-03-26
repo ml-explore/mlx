@@ -772,78 +772,34 @@ void init_array(nb::module_& m) {
           "__eq__",
           [](const array& a,
              const ScalarOrArray& v) -> std::variant<array, bool> {
-            auto check_for_obj = std::get_if<nb::object>(&v);
-            if (check_for_obj) {
-              // return false in case of object comparison which is not
-              // mlx array
-              if (!isMlxCoreArray(*check_for_obj)) {
-                return false;
-              }
+            bool is_convertable = is_convertable_to_array(v);
+            if (!is_convertable) {
+              return false;
             }
             return equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__lt__",
-          [](const array& a,
-             const ScalarOrArray v) -> std::variant<array, bool> {
-            auto check_for_obj = std::get_if<nb::object>(&v);
-            if (check_for_obj) {
-              // throw an exception in case of object comparison which is not
-              // mlx array
-              if (!isMlxCoreArray(*check_for_obj)) {
-                throw std::invalid_argument(
-                    "Object comparison is not a valid operation on an mlx array.");
-              }
-            }
+          [](const array& a, const ScalarOrArray v) -> array {
             return less(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__le__",
-          [](const array& a,
-             const ScalarOrArray v) -> std::variant<array, bool> {
-            auto check_for_obj = std::get_if<nb::object>(&v);
-            if (check_for_obj) {
-              // throw an exception in case of object comparison which is not
-              // mlx array
-              if (!isMlxCoreArray(*check_for_obj)) {
-                throw std::invalid_argument(
-                    "Object comparison is not a valid operation on an mlx array.");
-              }
-            }
+          [](const array& a, const ScalarOrArray v) -> array {
             return less_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__gt__",
-          [](const array& a,
-             const ScalarOrArray v) -> std::variant<array, bool> {
-            auto check_for_obj = std::get_if<nb::object>(&v);
-            if (check_for_obj) {
-              // throw an exception in case of object comparison which is not
-              // mlx array
-              if (!isMlxCoreArray(*check_for_obj)) {
-                throw std::invalid_argument(
-                    "Object comparison is not a valid operation on an mlx array.");
-              }
-            }
+          [](const array& a, const ScalarOrArray v) -> array {
             return greater(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ge__",
-          [](const array& a,
-             const ScalarOrArray v) -> std::variant<array, bool> {
-            auto check_for_obj = std::get_if<nb::object>(&v);
-            if (check_for_obj) {
-              // throw an exception in case of object comparison which is not
-              // mlx array
-              if (!isMlxCoreArray(*check_for_obj)) {
-                throw std::invalid_argument(
-                    "Object comparison is not a valid operation on an mlx array.");
-              }
-            }
+          [](const array& a, const ScalarOrArray v) -> array {
             return greater_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
@@ -851,12 +807,9 @@ void init_array(nb::module_& m) {
           "__ne__",
           [](const array& a,
              const ScalarOrArray v) -> std::variant<array, bool> {
-            auto check_for_obj = std::get_if<nb::object>(&v);
-            if (check_for_obj) {
-              // return true in case of object inequlity which is not mlx array
-              if (!isMlxCoreArray(*check_for_obj)) {
-                return true;
-              }
+            bool is_convertable = is_convertable_to_array(v);
+            if (!is_convertable) {
+              return true;
             }
             return not_equal(a, to_array(v, a.dtype()));
           },
