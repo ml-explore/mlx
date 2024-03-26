@@ -256,8 +256,7 @@ class array {
     array_desc_->position = position;
   }
 
-  /** The i-th output of the array's primitive (i.e. this array and
-   * its siblings). */
+  /** The i-th output of the array's primitive. */
   const array& output(int i) const {
     if (i == array_desc_->position) {
       return *this;
