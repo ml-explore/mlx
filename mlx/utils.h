@@ -84,6 +84,16 @@ int check_shape_dim(const T dim) {
   return static_cast<int>(dim);
 }
 
+inline bool is_big_endian() {
+  union ByteOrder {
+    int32_t i;
+    uint8_t c[4];
+  };
+  ByteOrder b = {0x01234567};
+
+  return b.c[0] == 0x01;
+}
+
 /**
  * Returns the axis normalized to be in the range [0, ndim).
  * Based on numpy's normalize_axis_index. See
