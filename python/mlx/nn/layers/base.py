@@ -566,7 +566,7 @@ class Module(dict):
                 Default: ``False``.
 
         Returns:
-            The module instance with unfreezed parameters.
+            The module instance with unfrozen parameters.
         """
 
         def _unfreeze_impl(_, m):
