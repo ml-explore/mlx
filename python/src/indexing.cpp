@@ -403,12 +403,6 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
     src = slice(src, starts, ends, strides);
   }
 
-  bool none_exists = false;
-  for (auto idx : remaining_indices) {
-    if (idx.is_none())
-      none_exists = true;
-  }
-
   // Unsqueeze handling
   if (unsqueeze_needed || squeeze_needed) {
     std::vector<int> out_shape;
