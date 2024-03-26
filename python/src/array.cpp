@@ -774,8 +774,8 @@ void init_array(nb::module_& m) {
              const ScalarOrArray& v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx
-              // array
+              // return false in case of object comparison which is not
+              // mlx array
               if (!isMlxCoreArray(*check_for_obj)) {
                 return false;
               }
@@ -789,10 +789,11 @@ void init_array(nb::module_& m) {
              const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx
-              // array
+              // throw an exception in case of object comparison which is not
+              // mlx array
               if (!isMlxCoreArray(*check_for_obj)) {
-                return false;
+                throw std::invalid_argument(
+                    "Object comparison is not a valid operation on an mlx array.");
               }
             }
             return less(a, to_array(v, a.dtype()));
@@ -804,10 +805,11 @@ void init_array(nb::module_& m) {
              const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx
-              // array
+              // throw an exception in case of object comparison which is not
+              // mlx array
               if (!isMlxCoreArray(*check_for_obj)) {
-                return false;
+                throw std::invalid_argument(
+                    "Object comparison is not a valid operation on an mlx array.");
               }
             }
             return less_equal(a, to_array(v, a.dtype()));
@@ -819,10 +821,11 @@ void init_array(nb::module_& m) {
              const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx
-              // array
+              // throw an exception in case of object comparison which is not
+              // mlx array
               if (!isMlxCoreArray(*check_for_obj)) {
-                return false;
+                throw std::invalid_argument(
+                    "Object comparison is not a valid operation on an mlx array.");
               }
             }
             return greater(a, to_array(v, a.dtype()));
@@ -834,10 +837,11 @@ void init_array(nb::module_& m) {
              const ScalarOrArray v) -> std::variant<array, bool> {
             auto check_for_obj = std::get_if<nb::object>(&v);
             if (check_for_obj) {
-              // return false in case of object comparison which is not mlx
-              // array
+              // throw an exception in case of object comparison which is not
+              // mlx array
               if (!isMlxCoreArray(*check_for_obj)) {
-                return false;
+                throw std::invalid_argument(
+                    "Object comparison is not a valid operation on an mlx array.");
               }
             }
             return greater_equal(a, to_array(v, a.dtype()));
