@@ -131,12 +131,10 @@ std::vector<array> RMSNorm::vjp(
     std::vector<int> axes(g.ndim() - 1);
     std::iota(axes.begin(), axes.end(), 0);
     vjps.push_back(
-        sum(multiply(g, multiply(x, n, s), s), axes, /* keepdims= */ true, s));
+        sum(multiply(g, multiply(x, n, s), s), axes, /* keepdims= */ false, s));
 
     return vjps;
   };
-
-  // TODO: Check that primals, output and cotangents have the same dtype.
 
   auto vjps = array::make_arrays(
       {primals[0].shape(), primals[1].shape()},

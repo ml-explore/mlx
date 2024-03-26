@@ -234,6 +234,18 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
 
+        def gf(f):
+            def inner(x, w, y):
+                gx, gw = mx.grad(f, argnums=(0, 1))(x, w, y)
+                return (gx + gw).sum()
+
+            return inner
+
+        gx1, gw1 = mx.grad(gf(f1), argnums=(0, 1))(x, w, y)
+        gx2, gw2 = mx.grad(gf(f2), argnums=(0, 1))(x, w, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+
     def test_layer_norm(self):
         # Per dtype absolute tolerance
         tolerances = {mx.float32: 3e-6, mx.float16: 3e-3, mx.bfloat16: 3e-2}
@@ -348,6 +360,20 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
         self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
         self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
+
+        def gf(f):
+            def inner(x, w, b, y):
+                gx, gw, gb = mx.grad(f, argnums=(0, 1, 2))(x, w, b, y)
+                return ((gx + gw + gb) * y).sum()
+
+            return inner
+
+        gx1, gw1, gb1 = mx.grad(gf(f1), argnums=(0, 1, 2))(x, w, b, y)
+        gx2, gw2, gb2 = mx.grad(gf(f2), argnums=(0, 1, 2))(x, w, b, y)
+        self.assertLess(mx.abs(gx1 - gx2).max() / mx.abs(gx1).mean(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        self.assertLess(mx.abs(gb1).max(), 1e-9)
+        self.assertLess(mx.abs(gb2).max(), 1e-9)
 
     def test_fast_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))
