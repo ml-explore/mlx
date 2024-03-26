@@ -256,6 +256,17 @@ class array {
     array_desc_->position = position;
   }
 
+  /** The i-th output of the array's primitive. */
+  const array& output(int i) const {
+    if (i == array_desc_->position) {
+      return *this;
+    } else if (i < array_desc_->position) {
+      return siblings()[i];
+    } else {
+      return siblings()[i + 1];
+    }
+  };
+
   /** The outputs of the array's primitive (i.e. this array and
    * its siblings) in the order the primitive expects. */
   std::vector<array> outputs() const {
