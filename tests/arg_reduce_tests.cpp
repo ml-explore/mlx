@@ -16,7 +16,7 @@ void test_arg_reduce_small(
     std::vector<int> expected_output) {
   auto s = default_stream(d);
   auto y =
-      array(out_shape, uint32, std::make_unique<ArgReduce>(s, r, axis), {x});
+      array(out_shape, uint32, std::make_shared<ArgReduce>(s, r, axis), {x});
   y.eval();
   const uint32_t* ydata = y.data<uint32_t>();
   for (int i = 0; i < y.size(); i++) {
@@ -32,12 +32,12 @@ void test_arg_reduce_against_cpu(
   auto y1 = array(
       out_shape,
       uint32,
-      std::make_unique<ArgReduce>(default_stream(Device::cpu), r, axis),
+      std::make_shared<ArgReduce>(default_stream(Device::cpu), r, axis),
       {x});
   auto y2 = array(
       out_shape,
       uint32,
-      std::make_unique<ArgReduce>(default_stream(Device::gpu), r, axis),
+      std::make_shared<ArgReduce>(default_stream(Device::gpu), r, axis),
       {x});
   y1.eval();
   y2.eval();
@@ -136,7 +136,7 @@ void test_arg_reduce_small_bool(
       {2, 3, 4});
   x.eval();
   auto y =
-      array(out_shape, uint32, std::make_unique<ArgReduce>(s, r, axis), {x});
+      array(out_shape, uint32, std::make_shared<ArgReduce>(s, r, axis), {x});
   y.eval();
   const uint32_t* ydata = y.data<uint32_t>();
   for (int i = 0; i < y.size(); i++) {
