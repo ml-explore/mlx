@@ -191,7 +191,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       R"pbdoc(
-        Generate N-dimensional jointly normal distributed random numbers with  given mean and covariance. Note that ``cov`` is cast to double for the computation.
+        Generate N-dimensional jointly normal distributed random numbers with  given mean and covariance. Note that ``cov`` is cast to ``float32`` for the computation.
 
         ``cov`` must be a positive semi-definite matrix. If the matrix is not positive semi-definite, the behavior is undefined.
 
