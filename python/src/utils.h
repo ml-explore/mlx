@@ -45,8 +45,7 @@ inline array to_array_with_accessor(nb::object obj) {
 }
 
 inline bool isMlxCoreArray(const nb::object& obj) {
-  std::string type_name = nb::type_name(obj.type()).c_str();
-  return type_name.find("mlx.core.array") != std::string::npos;
+  return nb::hasattr(obj, "__mlx_array__") || nb::isinstance<array>(obj);
 }
 
 inline array to_array(
@@ -66,6 +65,17 @@ inline array to_array(
     return array(static_cast<complex64_t>(*pv), complex64);
   } else {
     return to_array_with_accessor(std::get<nb::object>(v));
+  }
+}
+
+inline std::variant<array, bool> to_array_or_bool(
+    const ScalarOrArray& v,
+    std::optional<Dtype> dtype = std::nullopt) {
+  // try to convert to array, if it fails, return false
+  try {
+    return to_array(v, dtype);
+  } catch (const std::exception& e) {
+    return false;
   }
 }
 
