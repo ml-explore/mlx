@@ -510,4 +510,15 @@ void array::init(It src) {
   }
 }
 
+/* Utilities for determining whether a template parameter is array. */
+template <typename T>
+inline constexpr bool is_array_v =
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, array>;
+
+template <typename... T>
+inline constexpr bool is_arrays_v = (is_array_v<T> && ...);
+
+template <typename... T>
+using enable_for_arrays_t = typename std::enable_if_t<is_arrays_v<T...>>;
+
 } // namespace mlx::core

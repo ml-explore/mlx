@@ -127,7 +127,7 @@ void ScaledDotProductAttention::eval_gpu(
     const std::vector<array>& inputs,
     array& out) {
   assert(inputs.size() >= 3);
-  if (!is_floating_point(out.dtype())) {
+  if (!issubdtype(out.dtype(), floating)) {
     throw std::runtime_error(
         "[ScaledDotProductAttention] Does not yet support non-floating point types.");
   }

@@ -22,7 +22,7 @@ namespace mlx::core {
 void Abs::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  if (is_unsigned(in.dtype())) {
+  if (issubdtype(in.dtype(), unsignedinteger)) {
     // No-op for unsigned types
     out.copy_shared_buffer(in);
   } else {
@@ -37,7 +37,7 @@ void Arange::eval(const std::vector<array>& inputs, array& out) {
 void ArcCos::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::ArcCos());
   } else {
     throw std::invalid_argument(
@@ -49,7 +49,7 @@ void ArcCos::eval(const std::vector<array>& inputs, array& out) {
 void ArcCosh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::ArcCosh());
   } else {
     throw std::invalid_argument(
@@ -61,7 +61,7 @@ void ArcCosh::eval(const std::vector<array>& inputs, array& out) {
 void ArcSin::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::ArcSin());
   } else {
     throw std::invalid_argument(
@@ -73,7 +73,7 @@ void ArcSin::eval(const std::vector<array>& inputs, array& out) {
 void ArcSinh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::ArcSinh());
   } else {
     throw std::invalid_argument(
@@ -85,7 +85,7 @@ void ArcSinh::eval(const std::vector<array>& inputs, array& out) {
 void ArcTan::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::ArcTan());
   } else {
     throw std::invalid_argument(
@@ -97,7 +97,7 @@ void ArcTan::eval(const std::vector<array>& inputs, array& out) {
 void ArcTanh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::ArcTanh());
   } else {
     throw std::invalid_argument(
@@ -171,7 +171,7 @@ void Broadcast::eval(const std::vector<array>& inputs, array& out) {
 void Ceil::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  if (not is_integral(in.dtype())) {
+  if (issubdtype(in.dtype(), inexact)) {
     unary_fp(in, out, detail::Ceil());
   } else {
     // No-op integer types
@@ -211,7 +211,7 @@ void Copy::eval(const std::vector<array>& inputs, array& out) {
 void Cos::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Cos());
   } else {
     throw std::invalid_argument(
@@ -223,7 +223,7 @@ void Cos::eval(const std::vector<array>& inputs, array& out) {
 void Cosh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Cosh());
   } else {
     throw std::invalid_argument(
@@ -350,7 +350,7 @@ void ErfInv::eval(const std::vector<array>& inputs, array& out) {
 void Exp::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Exp());
   } else {
     throw std::invalid_argument(
@@ -362,7 +362,7 @@ void Exp::eval(const std::vector<array>& inputs, array& out) {
 void Floor::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  if (not is_integral(in.dtype())) {
+  if (issubdtype(in.dtype(), inexact)) {
     unary_fp(in, out, detail::Floor());
   } else {
     // No-op integer types
@@ -388,7 +388,7 @@ void Full::eval(const std::vector<array>& inputs, array& out) {
 void Log::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     switch (base_) {
       case Base::e:
         unary_fp(in, out, detail::Log());
@@ -410,7 +410,7 @@ void Log::eval(const std::vector<array>& inputs, array& out) {
 void Log1p::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Log1p());
   } else {
     throw std::invalid_argument(
@@ -597,7 +597,7 @@ void Reshape::eval(const std::vector<array>& inputs, array& out) {
 void Round::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
-  if (not is_integral(in.dtype())) {
+  if (issubdtype(in.dtype(), inexact)) {
     unary_fp(in, out, detail::Round());
   } else {
     // No-op integer types
@@ -608,7 +608,7 @@ void Round::eval(const std::vector<array>& inputs, array& out) {
 void Sigmoid::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Sigmoid());
   } else {
     throw std::invalid_argument(
@@ -630,7 +630,7 @@ void Sign::eval(const std::vector<array>& inputs, array& out) {
 void Sin::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Sin());
   } else {
     throw std::invalid_argument(
@@ -642,7 +642,7 @@ void Sin::eval(const std::vector<array>& inputs, array& out) {
 void Sinh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Sinh());
   } else {
     throw std::invalid_argument(
@@ -850,7 +850,7 @@ void StopGradient::eval(const std::vector<array>& inputs, array& out) {
 void Tan::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Tan());
   } else {
     throw std::invalid_argument(
@@ -862,7 +862,7 @@ void Tan::eval(const std::vector<array>& inputs, array& out) {
 void Tanh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
-  if (is_floating_point(out.dtype())) {
+  if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, detail::Tanh());
   } else {
     throw std::invalid_argument(

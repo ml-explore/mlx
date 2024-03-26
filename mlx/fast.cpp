@@ -64,7 +64,7 @@ array rms_norm(
     throw std::invalid_argument(msg.str());
   }
   auto out_type = result_type(x, weight);
-  if (!is_floating_point(out_type) || is_complex(out_type)) {
+  if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
     msg << "[rms_norm] Received unsupported type " << out_type << ".";
     throw std::invalid_argument(msg.str());
@@ -128,7 +128,7 @@ array layer_norm(
       ? ((bias.has_value()) ? result_type(x, *weight, *bias)
                             : result_type(x, *weight))
       : x.dtype();
-  if (!is_floating_point(out_type) || is_complex(out_type)) {
+  if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
     msg << "[layer_norm] Received unsupported type " << out_type << ".";
     throw std::invalid_argument(msg.str());
@@ -319,7 +319,7 @@ array scaled_dot_product_attention(
   }
 
   auto final_type = result_type(queries, keys, values);
-  if (!is_floating_point(final_type) || is_complex(final_type)) {
+  if (!issubdtype(final_type, floating)) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] Received unsupported type "
         << final_type << ".";
