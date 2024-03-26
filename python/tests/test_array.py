@@ -101,9 +101,12 @@ class TestEquality(mlx_tests.MLXTestCase):
         a = mx.array([1, 2, 3])
         b = 1
         c = 4
-
+        d = 2.5
+        e = mx.array([1, 2.5, 3.25])
         self.assertTrue(mx.any(a == b))
         self.assertFalse(mx.all(a == c))
+        self.assertFalse(mx.all(a == d))
+        self.assertTrue(mx.any(a == e))
 
     def test_list_equals_array(self):
         a = mx.array([1, 2, 3])
