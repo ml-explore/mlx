@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <algorithm>
 
@@ -158,7 +158,8 @@ void multi_block_sort(
   array dev_idxs_in = dev_idxs_0;
   array dev_vals_out = dev_vals_1;
   array dev_idxs_out = dev_idxs_1;
-  for (int merge_tiles = 2; merge_tiles <= n_blocks; merge_tiles *= 2) {
+
+  for (int merge_tiles = 2; (merge_tiles / 2) < n_blocks; merge_tiles *= 2) {
     dev_vals_in = ping ? dev_vals_1 : dev_vals_0;
     dev_idxs_in = ping ? dev_idxs_1 : dev_idxs_0;
     dev_vals_out = ping ? dev_vals_0 : dev_vals_1;
