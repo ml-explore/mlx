@@ -462,6 +462,15 @@ TEST_CASE("test random multivariate_normal") {
         random::multivariate_normal(mean, cov, {1000, 3}, float32),
         std::invalid_argument);
   }
+
+  // Check wrong type
+  {
+    auto mean = zeros({3});
+    auto cov = eye(3);
+    CHECK_THROWS_AS(
+        random::multivariate_normal(mean, cov, {1000, 3}, float16),
+        std::invalid_argument);
+  }
 }
 
 TEST_CASE("test random randint") {

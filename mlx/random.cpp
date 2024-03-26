@@ -182,6 +182,10 @@ array multivariate_normal(
     StreamOrDevice s) {
   auto stream = to_stream(s);
 
+  if (dtype != float32) {
+    throw std::invalid_argument("[multivariate_normal] dtype must be float32.");
+  }
+
   // Check shape and dimensions
   if (mean.ndim() != 1) {
     throw std::invalid_argument(
@@ -208,11 +212,12 @@ array multivariate_normal(
   // Compute the square-root of the covariance matrix, using the SVD
   auto covariance = astype(cov, float32, stream);
   auto SVD = linalg::svd(covariance, stream);
-  auto std = astype(matmul(SVD[0] * sqrt(SVD[1]), SVD[2]), dtype, stream);
+  auto std =
+      astype(matmul(SVD[0] * sqrt(SVD[1]), SVD[2], stream), dtype, stream);
 
   auto standard_normal = normal(output_shape, dtype, 0.0, 1.0, key, stream);
 
-  return add(mean, matmul(standard_normal, std), stream);
+  return add(mean, matmul(standard_normal, std, stream), stream);
 }
 
 array randint(

@@ -107,12 +107,21 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertEqual(a.dtype, mx.float32)
 
         ## Check dtypes
-        for t in [mx.float16, mx.bfloat16, mx.float32]:
+        for t in [mx.float32]:
             a = mx.random.multivariate_normal(
                 mean, cov, dtype=t, key=key, stream=mx.cpu
             )
             self.assertEqual(a.dtype, t)
-        for t in [mx.int8, mx.int32, mx.int64, mx.uint8, mx.uint32, mx.uint64]:
+        for t in [
+            mx.int8,
+            mx.int32,
+            mx.int64,
+            mx.uint8,
+            mx.uint32,
+            mx.uint64,
+            mx.float16,
+            mx.bfloat16,
+        ]:
             with self.assertRaises(ValueError):
                 mx.random.multivariate_normal(
                     mean, cov, dtype=t, key=key, stream=mx.cpu
@@ -143,10 +152,6 @@ class TestRandom(mlx_tests.MLXTestCase):
                 (data - empirical_mean).T @ (data - empirical_mean) / data.shape[0]
             )
             N = data.shape[1]
-            print(f"empirical_mean: {empirical_mean}")
-            print(f"mean: {mean}")
-            print(f"empirical_cov: {empirical_cov}")
-            print(f"cov: {cov}")
             self.assertTrue(
                 mx.allclose(
                     empirical_mean, mean, rtol=0.0, atol=10 * N**2 / math.sqrt(n_test)
