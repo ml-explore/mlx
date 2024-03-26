@@ -141,9 +141,14 @@ class TestInequality(mlx_tests.MLXTestCase):
         a = mx.array([1, 2, 3])
         b = 1
         c = 4
-
+        d = 1.5
+        e = 2.5
+        f = mx.array([1, 2.5, 3.25])
         self.assertFalse(mx.all(a != b))
         self.assertTrue(mx.any(a != c))
+        self.assertTrue(mx.any(a != d))
+        self.assertTrue(mx.any(a != e))
+        self.assertFalse(mx.all(a != f))
 
     def test_list_not_equals_array(self):
         a = mx.array([1, 2, 3])
@@ -164,6 +169,39 @@ class TestInequality(mlx_tests.MLXTestCase):
         # object which is not an mlx array
         self.assertTrue(a != b)
         self.assertTrue(a != c)
+
+    def test_obj_inequality_array(self):
+        str_ = "hello"
+        a = mx.array([1, 2, 3])
+        lst_ = [1, 2, 3]
+        tpl_ = (1, 2, 3)
+
+        # check if object comparison(</>/<=/>=) with mlx array should throw an exception
+        # if not, the tests will fail
+        with self.assertRaises(ValueError):
+            a < str_
+        with self.assertRaises(ValueError):
+            a > str_
+        with self.assertRaises(ValueError):
+            a <= str_
+        with self.assertRaises(ValueError):
+            a >= str_
+        with self.assertRaises(ValueError):
+            a < lst_
+        with self.assertRaises(ValueError):
+            a > lst_
+        with self.assertRaises(ValueError):
+            a <= lst_
+        with self.assertRaises(ValueError):
+            a >= lst_
+        with self.assertRaises(ValueError):
+            a < tpl_
+        with self.assertRaises(ValueError):
+            a > tpl_
+        with self.assertRaises(ValueError):
+            a <= tpl_
+        with self.assertRaises(ValueError):
+            a >= tpl_
 
 
 class TestArray(mlx_tests.MLXTestCase):
