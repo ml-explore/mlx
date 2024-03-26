@@ -90,17 +90,6 @@ inline array to_array(
   }
 }
 
-inline std::variant<array, bool> to_array_or_bool(
-    const ScalarOrArray& v,
-    std::optional<Dtype> dtype = std::nullopt) {
-  // try to convert to array, if it fails, return false
-  try {
-    return to_array(v, dtype);
-  } catch (const std::exception& e) {
-    return false;
-  }
-}
-
 inline std::pair<array, array> to_arrays(
     const ScalarOrArray& a,
     const ScalarOrArray& b) {
