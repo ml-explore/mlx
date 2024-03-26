@@ -138,6 +138,11 @@ class Module(dict):
 
     def __setattr__(self, key: str, val: Any):
         if isinstance(val, (mx.array, dict, list, tuple)):
+            # If attribute was previously set but not in the
+            # dictionary, delete it so we pick it up in future
+            # calls to __getattr__
+            if hasattr(self, key) and key not in self:
+                delattr(self, key)
             self[key] = val
         else:
             super(Module, self).__setattr__(key, val)

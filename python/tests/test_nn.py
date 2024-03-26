@@ -54,6 +54,21 @@ class TestBase(mlx_tests.MLXTestCase):
 
         m.apply_to_modules(assert_training)
 
+    def test_module_attributes(self):
+
+        class Model(nn.Module):
+
+            def __init__(self):
+                super().__init__()
+                self.val = None
+                self.initialize()
+
+            def initialize(self):
+                self.val = mx.array(1.0)
+
+        model = Model()
+        self.assertTrue(mx.array_equal(model.val, mx.array(1.0)))
+
     def test_model_with_dict(self):
         class DictModule(nn.Module):
             def __init__(self):
