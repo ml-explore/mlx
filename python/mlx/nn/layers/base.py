@@ -160,7 +160,7 @@ class Module(dict):
               shapes are not checked. Default: ``True``.
 
         Returns:
-            The model with the updated weights.
+            The module instance after updating the weights.
 
         Example:
 
@@ -334,7 +334,7 @@ class Module(dict):
             parameters (dict): A complete or partial dictionary of the modules
                                parameters.
         Returns:
-            The model with the updated parameters.
+            The module instance after updating the parameters.
         """
 
         def apply(dst, parameters):
@@ -380,7 +380,7 @@ class Module(dict):
                 map (default: :meth:`Module.valid_parameter_filter`).
 
         Returns:
-            The model with the updated parameters.
+            The module instance after updating the parameters.
         """
         filter_fn = filter_fn or Module.valid_parameter_filter
         self.update(self.filter_and_map(filter_fn, map_fn))
