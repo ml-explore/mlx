@@ -62,7 +62,7 @@ class TestFastSDPA(mlx_tests.MLXTestCase):
         B = 1
         H = 32
         dtypes = [np.float32]
-        if not self.is_linux:
+        if self.is_apple_silicon:
             dtypes.append(np.half)
 
         for SEQUENCE_LENGTH in [1, 7, 9, 32, 63, 67, 129, 400, 2000]:

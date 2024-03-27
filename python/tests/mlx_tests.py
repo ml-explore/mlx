@@ -11,8 +11,8 @@ import numpy as np
 
 class MLXTestCase(unittest.TestCase):
     @property
-    def is_linux(self):
-        return platform.system() == "Linux"
+    def is_apple_silicon(self):
+        return platform.machine() == "arm64" and platform.system() == "Darwin"
 
     def setUp(self):
         self.default = mx.default_device()

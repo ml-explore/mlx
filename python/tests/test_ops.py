@@ -1772,8 +1772,8 @@ class TestOps(mlx_tests.MLXTestCase):
         )
 
     def test_tensordot(self):
-        # No fp16 matmuls on linux
-        if self.is_linux:
+        # No fp16 matmuls on common cpu backend
+        if not self.is_apple_silicon:
             dtypes = [mx.float32]
         else:
             dtypes = [mx.float16, mx.float32]
