@@ -136,7 +136,7 @@ SafetensorsLoad load_safetensors(
     auto loaded_array = array(
         shape,
         type,
-        std::make_unique<Load>(
+        std::make_shared<Load>(
             to_stream(s), in_stream, offset + data_offsets.at(0), false),
         std::vector<array>{});
     res.insert({item.key(), loaded_array});

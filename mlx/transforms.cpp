@@ -53,7 +53,7 @@ void eval(std::vector<array> outputs) {
   }
 
   auto synchronizer = array(
-      {}, bool_, std::make_unique<Synchronizer>(stream), std::move(outputs));
+      {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
 
   size_t depth_counter = 0;
   recurse = [&](const array& a) {
@@ -118,7 +118,7 @@ void eval(std::vector<array> outputs) {
     }
     std::shared_ptr<std::promise<void>> p;
     if (auto it = deps.find(arr.output(0).id()); it != deps.end()) {
-      p = std::make_unique<std::promise<void>>();
+      p = std::make_shared<std::promise<void>>();
       ps.push_back(p);
       it->second = p->get_future().share();
     }
