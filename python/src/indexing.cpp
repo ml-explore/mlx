@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <functional>
 #include <numeric>
 #include <sstream>
 
@@ -188,64 +189,79 @@ array mlx_gather_nd(
 
 auto mlx_expand_ellipsis(
     const std::vector<int>& shape,
-    const nb::tuple& entries) {
+    std::variant<
+        std::reference_wrapper<const nb::tuple>,
+        std::reference_wrapper<const nb::list>> entries_variant) {
   std::vector<nb::object> indices;
 
-  // Go over all entries and note the position of ellipsis
-  int non_none_indices_before = 0;
-  int non_none_indices_after = 0;
-  std::vector<nb::object> r_indices;
-  int i = 0;
-  bool has_ellipsis = false;
+  auto process_entries = [&](const auto& entries) {
+    // Go over all entries and note the position of ellipsis
+    int non_none_indices_before = 0;
+    int non_none_indices_after = 0;
+    std::vector<nb::object> r_indices;
+    int i = 0;
+    bool has_ellipsis = false;
 
-  // Start from dimension 0 till we hit an ellipsis
-  for (; i < entries.size(); i++) {
-    auto idx = entries[i];
-    if (!is_valid_index_type(idx)) {
-      throw std::invalid_argument(
-          "Cannot index mlx array using the given type yet");
+    // Start from dimension 0 till we hit an ellipsis
+    for (; i < entries.size(); i++) {
+      auto idx = entries[i];
+      if (!is_valid_index_type(idx)) {
+        throw std::invalid_argument(
+            "Cannot index mlx array using the given type yet");
+      }
+      if (!nb::ellipsis().is(idx)) {
+        indices.push_back(idx);
+        non_none_indices_before += !idx.is_none();
+      } else {
+        has_ellipsis = true;
+        break;
+      }
     }
-    if (!nb::ellipsis().is(idx)) {
-      indices.push_back(idx);
-      non_none_indices_before += !idx.is_none();
-    } else {
-      has_ellipsis = true;
-      break;
+
+    // If we do hit an ellipsis, collect indices from the back
+    for (int j = entries.size() - 1; j > i; j--) {
+      auto idx = entries[j];
+      if (!is_valid_index_type(idx)) {
+        throw std::invalid_argument(
+            "Cannot index mlx array using the given type yet");
+      }
+      if (nb::ellipsis().is(idx)) {
+        throw std::invalid_argument(
+            "An index can only have a single ellipsis (...)");
+      }
+      r_indices.push_back(idx);
+      non_none_indices_after += !idx.is_none();
     }
+
+    // Count up the number of non none indices
+    int non_none_indices = non_none_indices_before + non_none_indices_after;
+
+    // Expand ellipsis
+    if (has_ellipsis) {
+      for (int axis = non_none_indices_before;
+           axis < shape.size() - non_none_indices_after;
+           axis++) {
+        indices.push_back(nb::slice(0, shape[axis], 1));
+        non_none_indices++;
+      }
+    }
+
+    // Insert indices collected after the ellipsis
+    indices.insert(indices.end(), r_indices.rbegin(), r_indices.rend());
+
+    return std::make_pair(non_none_indices, indices);
+  };
+
+  if (auto* entries_tuple =
+          std::get_if<std::reference_wrapper<const nb::tuple>>(
+              &entries_variant)) {
+    return process_entries(entries_tuple->get());
+  } else if (
+      auto* entries_list = std::get_if<std::reference_wrapper<const nb::list>>(
+          &entries_variant)) {
+    return process_entries(entries_list->get());
   }
-
-  // If we do hit an ellipsis, collect indices from the back
-  for (int j = entries.size() - 1; j > i; j--) {
-    auto idx = entries[j];
-    if (!is_valid_index_type(idx)) {
-      throw std::invalid_argument(
-          "Cannot index mlx array using the given type yet");
-    }
-    if (nb::ellipsis().is(idx)) {
-      throw std::invalid_argument(
-          "An index can only have a single ellipsis (...)");
-    }
-    r_indices.push_back(idx);
-    non_none_indices_after += !idx.is_none();
-  }
-
-  // Count up the number of non none indices
-  int non_none_indices = non_none_indices_before + non_none_indices_after;
-
-  // Expand ellipsis
-  if (has_ellipsis) {
-    for (int axis = non_none_indices_before;
-         axis < shape.size() - non_none_indices_after;
-         axis++) {
-      indices.push_back(nb::slice(0, shape[axis], 1));
-      non_none_indices++;
-    }
-  }
-
-  // Insert indices collected after the ellipsis
-  indices.insert(indices.end(), r_indices.rbegin(), r_indices.rend());
-
-  return std::make_pair(non_none_indices, indices);
+  throw std::invalid_argument("Invalid type for entries_variant");
 }
 
 array mlx_get_item_nd(array src, const nb::tuple& entries) {
@@ -426,6 +442,106 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
   return src;
 }
 
+array mlx_get_item_list(const array& src, const nb::list& entries) {
+  // Check input and raise error if 0 dim for parity with np
+  if (src.ndim() == 0) {
+    throw std::invalid_argument(
+        "too many indices for array: array is 0-dimensional");
+  }
+  // Ellipsis handling
+  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
+
+  std::vector<nb::object> remaining_indices;
+  bool have_list = false;
+  {
+    // First check whether the results of gather are going to be 1st or
+    // normally in between.
+    bool have_non_list = false;
+    bool gather_first = false;
+    for (auto& idx : indices) {
+      if (nb::isinstance<nb::list>(idx)) {
+        if (have_list && have_non_list) {
+          gather_first = true;
+          break;
+        }
+        have_list = true;
+      } else {
+        have_non_list |= have_list;
+      }
+    }
+
+    if (have_list) {
+      int last_list;
+      // Then find the last list
+      for (last_list = indices.size() - 1; last_list >= 0; last_list--) {
+        auto& idx = indices[last_list];
+        if (!nb::isinstance<nb::list>(idx)) {
+          break;
+        }
+      }
+
+      std::vector<nb::object> gather_indices;
+      for (int i = 0; i <= last_list; i++) {
+        auto& idx = indices[i];
+        if (nb::isinstance<array>(idx) || nb::isinstance<nb::int_>(idx)) {
+          gather_indices.push_back(idx);
+        } else {
+          remaining_indices.push_back(idx);
+        }
+      }
+
+      int max_dims;
+      src = mlx_gather_nd(src, gather_indices, gather_first, max_dims);
+
+      // Reassemble the indices for the slicing or reshaping if there are any
+      if (gather_first) {
+        for (int i = 0; i < max_dims; i++) {
+          remaining_indices.push_back(
+              nb::slice(nb::none(), nb::none(), nb::none()));
+        }
+        for (int i = 0; i < last_list; i++) {
+          auto& idx = indices[i];
+          if (nb::isinstance<array>(idx) || nb::isinstance<nb::int_>(idx)) {
+            remaining_indices.push_back(
+                nb::slice(nb::none(), nb::none(), nb::none()));
+          } else {
+            remaining_indices.push_back(idx);
+          }
+        }
+        for (int i = last_list + 1; i < indices.size(); i++) {
+          remaining_indices.push_back(indices[i]);
+        }
+      }
+
+      // Reshape the src
+      std::vector<int> out_shape;
+      out_shape.insert(
+          out_shape.end(),
+          src.shape().begin(),
+          src.shape().begin() + max_dims + gather_indices.size());
+      out_shape.insert(
+          out_shape.end(),
+          src.shape().begin() + max_dims + gather_indices.size() + last_list,
+          src.shape().end());
+      src = reshape(src, out_shape);
+
+    } else {
+      for (auto& idx : indices) {
+        remaining_indices.push_back(idx);
+      }
+    }
+
+    // If no indices are left, we can just return the src
+    if (remaining_indices.empty()) {
+      return src;
+    }
+
+    // If only one input idx is mentioned, we set axis=0 in take
+    // for parity with np
+    return take(src, remaining_indices, 0);
+  }
+}
+
 array mlx_get_item(const array& src, const nb::object& obj) {
   if (nb::isinstance<nb::slice>(obj)) {
     return mlx_get_item_slice(src, nb::cast<nb::slice>(obj));
@@ -435,6 +551,8 @@ array mlx_get_item(const array& src, const nb::object& obj) {
     return mlx_get_item_int(src, nb::cast<nb::int_>(obj));
   } else if (nb::isinstance<nb::tuple>(obj)) {
     return mlx_get_item_nd(src, nb::cast<nb::tuple>(obj));
+  } else if (nb::isinstance<nb::list>(obj)) {
+    return mlx_get_item_list(src, nb::cast<nb::list>(obj));
   } else if (nb::isinstance<nb::ellipsis>(obj)) {
     return src;
   } else if (obj.is_none()) {
