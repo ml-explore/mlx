@@ -443,6 +443,21 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
   return src;
 }
 
+array gather_along_dim(const array& src, const array& indices, int axis) {
+  // Check if axis is valid
+  if (axis < 0 || axis >= src.ndim()) {
+    throw std::invalid_argument("Invalid axis for gather_along_dim.");
+  }
+
+  // Prepare the parameters for the gather function
+  std::vector<array> gather_indices = {indices};
+  std::vector<int> axes = {axis};
+  std::vector<int> slice_sizes(src.ndim(), 1);
+
+  // Call the gather function
+  return gather(src, gather_indices, axes, slice_sizes);
+}
+
 array mlx_get_item_list(array src, const nb::list& entries) {
   // Check input and raise error if 0 dim for parity with np
   if (src.ndim() == 0) {
@@ -467,119 +482,23 @@ array mlx_get_item_list(array src, const nb::list& entries) {
     throw std::invalid_argument(msg.str());
   }
 
+  // Prepare the parameters for the gather function
+  std::vector<array> gather_indices;
+  std::vector<int> axes;
+  std::vector<int> slice_sizes(src.ndim(), 1);
+
   // Go through indices and gather the arrays
-  std::vector<nb::object> remaining_indices;
-  bool have_list = false;
+  int axis = 0;
   for (auto& idx : indices) {
     if (nb::isinstance<nb::list>(idx)) {
-      have_list = true;
-      break;
+      auto list_idx = nb::cast<nb::list>(idx);
+      array gather_idx = gather_along_dim(src, list_idx, axis);
+      src = gather_idx;
+      axes.push_back(axis);
+      axis++;
     }
   }
-  if (have_list) {
-    int last_list;
-    // Then find the last list
-    for (last_list = indices.size() - 1; last_list >= 0; last_list--) {
-      auto& idx = indices[last_list];
-      if (nb::isinstance<nb::list>(idx)) {
-        break;
-      }
-    }
-
-    std::vector<nb::object> gather_indices;
-    for (int i = 0; i <= last_list; i++) {
-      auto& idx = indices[i];
-      if (nb::isinstance<nb::list>(idx)) {
-        auto list_idx = nb::cast<nb::list>(idx);
-        std::vector<nb::object> sub_indices;
-        for (const auto& sub_idx : list_idx) {
-          if (!is_valid_index_type(nb::object(sub_idx))) {
-            throw std::invalid_argument(
-                "Cannot index mlx array using the given type yet");
-          }
-          if (!sub_idx.is_none()) {
-            sub_indices.push_back(nb::object(sub_idx));
-          }
-        }
-        gather_indices.push_back(sub_indices);
-      } else {
-        gather_indices.push_back(idx);
-      }
-    }
-    int max_dims;
-    src = mlx_gather_nd(src, gather_indices, false, max_dims);
-
-    // Reassemble the indices for the slicing or reshaping if there are any
-    for (int i = 0; i < last_list; i++) {
-      auto& idx = indices[i];
-      if (nb::isinstance<nb::list>(idx)) {
-        remaining_indices.push_back(
-            nb::slice(nb::none(), nb::none(), nb::none()));
-      } else {
-        remaining_indices.push_back(idx);
-      }
-    }
-    for (int i = last_list + 1; i < indices.size(); i++) {
-      remaining_indices.push_back(indices[i]);
-    }
-  }
-  if (have_list && remaining_indices.empty()) {
-    return src;
-  }
-  if (remaining_indices.empty()) {
-    remaining_indices = indices;
-  }
-
-  // Slice handling
-  {
-    std::vector<int> starts(src.ndim(), 0);
-    std::vector<int> ends = src.shape();
-    std::vector<int> strides(src.ndim(), 1);
-    int axis = 0;
-    for (auto& idx : remaining_indices) {
-      if (!idx.is_none()) {
-        if (nb::isinstance<nb::int_>(idx)) {
-          int st = nb::cast<int>(idx);
-          st = (st < 0) ? st + src.shape(axis) : st;
-
-          starts[axis] = st;
-          ends[axis] = st + 1;
-
-        } else {
-          get_slice_params(
-              starts[axis],
-              ends[axis],
-              strides[axis],
-              nb::cast<nb::slice>(idx),
-              ends[axis]);
-        }
-
-        axis++;
-      }
-    }
-    src = slice(src, starts, ends, strides);
-  }
-
-  // Unsqueeze handling
-  {
-    std::vector<int> out_shape;
-    int axis = 0;
-    for (auto& idx : remaining_indices) {
-      if (idx.is_none()) {
-        out_shape.push_back(1);
-      } else if (nb::isinstance<nb::int_>(idx)) {
-        axis++;
-      } else {
-        out_shape.push_back(src.shape(axis++));
-      }
-    }
-
-    out_shape.insert(
-        out_shape.end(), src.shape().begin() + axis, src.shape().end());
-
-    src = reshape(src, out_shape);
-  }
-
+  src = gather(src, gather_indices, axes, slice_sizes);
   return src;
 }
 
