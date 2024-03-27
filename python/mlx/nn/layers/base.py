@@ -402,7 +402,7 @@ class Module(dict):
             modules (dict): A complete or partial dictionary of the modules
                 submodules.
         Returns:
-            The module instance with the updated submodules.
+            The module instance after updating the submodules.
         """
 
         def apply(dst, modules):
@@ -437,7 +437,7 @@ class Module(dict):
             apply_fn (Callable): The function to apply to the modules.
 
         Returns:
-            The module instance with the updated submodules.
+            The module instance after updating submodules.
         """
         module_stack = [("", self)]
         while module_stack:
@@ -510,7 +510,7 @@ class Module(dict):
                 Default: ``False``.
 
         Returns:
-            The module instance with frozen parameters.
+            The module instance after freezing the parameters.
         """
 
         def _freeze_impl(_, m):
@@ -566,7 +566,7 @@ class Module(dict):
                 Default: ``False``.
 
         Returns:
-            The module instance with unfrozen parameters.
+            The module instance after unfreezing the parameters.
         """
 
         def _unfreeze_impl(_, m):
@@ -594,7 +594,7 @@ class Module(dict):
             mode (bool): Indicate if the model should be in training or
                 evaluation mode. Default: ``True``.
         Returns:
-            The module instance with the updated training mode.
+            The module instance after updating the training mode.
         """
 
         def _set_train(_, m):
