@@ -104,7 +104,7 @@ class Module(dict):
 
     @property
     def state(self):
-        """The module's state dictionary
+        """The module's state dictionary.
 
         The module's state dictionary contains any attribute set on the
         module including parameters in :meth:`Module.parameters`
@@ -152,8 +152,8 @@ class Module(dict):
         file_or_weights: Union[str, List[Tuple[str, mx.array]]],
         strict: bool = True,
     ):
-        """
-        Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
+        """Update the model's weights from a ``.npz``, a ``.safetensors`` file,
+        or a list.
 
         Args:
             file_or_weights (str or list(tuple(str, mx.array))): The path to
@@ -225,8 +225,9 @@ class Module(dict):
         self.update(tree_unflatten(weights))
 
     def save_weights(self, file: str):
-        """
-        Save the model's weights to a file. The saving method is determined by the file extension:
+        """Save the model's weights to a file. The saving method is determined
+        by the file extension:
+
         - ``.npz`` will use :func:`mx.savez`
         - ``.safetensors`` will use :func:`mx.save_safetensors`
         """
@@ -296,13 +297,13 @@ class Module(dict):
         }
 
     def parameters(self):
-        """Recursively return all the :class:`mlx.core.array` members of this Module
-        as a dict of dicts and lists."""
+        """Recursively return all the :class:`mlx.core.array` members of this
+        Module as a dict of dicts and lists."""
         return self.filter_and_map(self.valid_parameter_filter)
 
     def trainable_parameters(self):
-        """Recursively return all the non frozen :class:`mlx.core.array` members of
-        this Module as a dict of dicts and lists."""
+        """Recursively return all the non frozen :class:`mlx.core.array`
+        members of this Module as a dict of dicts and lists."""
         return self.filter_and_map(self.trainable_parameter_filter)
 
     def children(self):
@@ -470,8 +471,8 @@ class Module(dict):
         keys: Optional[Union[str, List[str]]] = None,
         strict: bool = False,
     ):
-        """Freeze the Module's parameters or some of them. Freezing a parameter means not
-        computing gradients for it.
+        """Freeze the Module's parameters or some of them. Freezing a parameter
+        means not computing gradients for it.
 
         This function is idempotent i.e. freezing a frozen model is a no-op.
 

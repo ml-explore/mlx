@@ -2,8 +2,6 @@
 
 # -*- coding: utf-8 -*-
 
-import os
-import subprocess
 
 import mlx.core as mx
 

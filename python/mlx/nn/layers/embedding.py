@@ -7,8 +7,8 @@ from mlx.nn.layers.base import Module
 
 
 class Embedding(Module):
-    """Implements a simple lookup table that maps each input integer to a
-    high-dimensional vector.
+    """Implements a simple lookup table that maps each input integer to a high-
+    dimensional vector.
 
     Typically used to embed discrete tokens for processing by neural networks.
 

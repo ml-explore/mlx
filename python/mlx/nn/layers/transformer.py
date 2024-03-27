@@ -279,8 +279,7 @@ class TransformerDecoder(Module):
 
 
 class Transformer(Module):
-    """
-    Implements a standard Transformer model.
+    """Implements a standard Transformer model.
 
     The implementation is based on `Attention Is All You Need
     <https://arxiv.org/abs/1706.03762>`_.

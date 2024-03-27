@@ -569,7 +569,7 @@ class TestLayers(mlx_tests.MLXTestCase):
 
         data = mx.random.normal((batch_size, num_features))
 
-        normalized_data = batch_norm(data)
+        batch_norm(data)
         means = mx.mean(data, axis=0)
         variances = mx.var(data, axis=0)
         running_mean = (1 - momentum) * running_mean + momentum * means
@@ -584,7 +584,7 @@ class TestLayers(mlx_tests.MLXTestCase):
         running_var = batch_norm.running_var
         data = mx.random.normal((batch_size, h, w, num_features))
 
-        normalized_data = batch_norm(data)
+        batch_norm(data)
         means = mx.mean(data, axis=(0, 1, 2))
         variances = mx.var(data, axis=(0, 1, 2))
         running_mean = (1 - momentum) * running_mean + momentum * means

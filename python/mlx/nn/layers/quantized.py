@@ -9,7 +9,8 @@ from mlx.utils import tree_flatten, tree_map
 
 
 class QuantizedLinear(Module):
-    """Applies an affine transformation to the input using a quantized weight matrix.
+    """Applies an affine transformation to the input using a quantized weight
+    matrix.
 
     It is the quantized equivalent of :class:`mlx.nn.Linear`. For now its
     parameters are frozen and will not be included in any gradient computation

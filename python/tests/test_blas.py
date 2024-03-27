@@ -1,6 +1,5 @@
 # Copyright © 2023 Apple Inc.
 
-import math
 import unittest
 from itertools import permutations
 

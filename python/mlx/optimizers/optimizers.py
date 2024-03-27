@@ -1,6 +1,5 @@
 # Copyright © 2023-2024 Apple Inc.
 
-import math
 from typing import Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
@@ -8,8 +7,10 @@ from mlx.utils import tree_map
 
 
 class Optimizer:
-    """The base class for all optimizers. It allows us to implement an
-    optimizer on a per-parameter basis and apply it to a parameter tree.
+    """The base class for all optimizers.
+
+    It allows us to implement an optimizer on a per-parameter basis and
+    apply it to a parameter tree.
     """
 
     def __init__(self, schedulers=None):
@@ -29,7 +30,7 @@ class Optimizer:
         model.update(self.apply_gradients(gradients, model))
 
     def init(self, parameters: dict):
-        """Initialize the optimizer's state
+        """Initialize the optimizer's state.
 
         This function can be used to initialize optimizers which have state
         (like momentum in :class:`SGD`). Using this method is optional as the
@@ -62,7 +63,8 @@ class Optimizer:
         raise NotImplementedError()
 
     def apply_gradients(self, gradients: dict, parameters: dict):
-        """Apply the gradients to the parameters and return the updated parameters.
+        """Apply the gradients to the parameters and return the updated
+        parameters.
 
         Can be used to update a model via
         ``model.update(opt.apply_gradients(grads, model))`` which is precisely
@@ -88,7 +90,8 @@ class Optimizer:
         return tree_map(self.apply_single, gradients, parameters, self.state)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
-        """To be extended by derived classes to implement the optimizer's update.
+        """To be extended by derived classes to implement the optimizer's
+        update.
 
         Args:
             gradient (mx.array): The ``parameter`` gradient.
@@ -121,9 +124,8 @@ class Optimizer:
     def _maybe_schedule(
         self, name: str, param: Union[float, Callable[[mx.array], mx.array]]
     ):
-        """
-        To be used by derived classes to optionally put a parameter on a schedule.
-        """
+        """To be used by derived classes to optionally put a parameter on a
+        schedule."""
         if isinstance(param, Callable):
             self._schedulers[name] = param
             param = param(self.step)
@@ -171,7 +173,7 @@ class SGD(Optimizer):
         self.nesterov = nesterov
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         state["v"] = mx.zeros_like(parameter)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
@@ -239,11 +241,12 @@ class RMSprop(Optimizer):
             )
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         state["v"] = mx.zeros_like(parameter)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
-        """Performs the RMSprop parameter update and stores :math:`v` in the optimizer state."""
+        """Performs the RMSprop parameter update and stores :math:`v` in the
+        optimizer state."""
         lr = self.learning_rate.astype(gradient.dtype)
         alpha = self.alpha
         eps = self.eps
@@ -290,7 +293,7 @@ class Adagrad(Optimizer):
             )
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         state["v"] = mx.zeros_like(parameter)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
@@ -348,7 +351,7 @@ class AdaDelta(Optimizer):
             )
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         state["v"] = mx.zeros_like(parameter)
         state["u"] = mx.zeros_like(parameter)
 
@@ -409,7 +412,7 @@ class Adam(Optimizer):
         self.eps = eps
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         state["m"] = mx.zeros_like(parameter)
         state["v"] = mx.zeros_like(parameter)
 
@@ -469,8 +472,7 @@ class AdamW(Adam):
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
         """Performs the AdamW parameter update by modifying the parameters
-        passed into Adam.
-        """
+        passed into Adam."""
 
         lr = self.learning_rate.astype(gradient.dtype)
         return super().apply_single(
@@ -515,7 +517,7 @@ class Adamax(Adam):
             )
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         state["m"] = mx.zeros_like(parameter)
         state["v"] = mx.zeros_like(parameter)
 
@@ -577,12 +579,12 @@ class Lion(Optimizer):
         self.weight_decay = weight_decay
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         state["m"] = mx.zeros_like(parameter)
 
     def apply_single(self, gradient: mx.array, parameter: mx.array, state: dict):
-        """Performs the Lion parameter update and stores :math:`m`
-        in the optimizer state."""
+        """Performs the Lion parameter update and stores :math:`m` in the
+        optimizer state."""
         lr = self.learning_rate.astype(gradient.dtype)
         b1, b2 = self.betas
         weight_decay = self.weight_decay
@@ -654,7 +656,7 @@ class Adafactor(Optimizer):
         self.warmup_init = warmup_init
 
     def init_single(self, parameter: mx.array, state: dict):
-        """Initialize optimizer state"""
+        """Initialize optimizer state."""
         if parameter.ndim >= 2:
             shape = parameter.shape
             dtype = parameter.dtype
