@@ -78,12 +78,12 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       in_contiguous.strides(),
       in_contiguous.flags());
 
+  size_t batch = in.size() / in.shape(axes_[0]);
+
   // We use n / 4 threads by default since radix-4
   // is the largest single threaded radix butterfly
   // we currently implement.
   size_t m = n / 4;
-  size_t batch = in.size() / in.shape(axes_[0]);
-
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
     std::ostringstream kname;
