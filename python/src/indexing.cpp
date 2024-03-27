@@ -467,117 +467,68 @@ array mlx_get_item_list(array src, const nb::list& entries) {
     throw std::invalid_argument(msg.str());
   }
 
-  // Gather handling
-  //
-  // Check whether we have arrays or integer indices and delegate to gather_nd
-  // after removing the slices at the end and all Nones.
+  // Go through indices and gather the arrays
   std::vector<nb::object> remaining_indices;
-  bool have_array = false;
-  {
-    // First check whether the results of gather are going to be 1st or
-    // normally in between.
-    bool have_non_array = false;
-    bool gather_first = false;
-    for (auto& idx : indices) {
-      if (nb::isinstance<array>(idx) || (nb::isinstance<nb::int_>(idx))) {
-        if (have_array && have_non_array) {
-          gather_first = true;
-          break;
-        }
-        have_array = true;
-      } else {
-        have_non_array |= have_array;
-      }
-    }
-
-    int n_arr = 0;
-    for (auto& idx : indices) {
-      n_arr += nb::isinstance<array>(idx);
-    }
-
-    have_array &= n_arr > 0;
-
-    if (have_array) {
-      int last_array;
-      // Then find the last array
-      for (last_array = indices.size() - 1; last_array >= 0; last_array--) {
-        auto& idx = indices[last_array];
-        if (nb::isinstance<array>(idx) || nb::isinstance<nb::int_>(idx)) {
-          break;
-        }
-      }
-
-      std::vector<nb::object> gather_indices;
-      for (int i = 0; i <= last_array; i++) {
-        auto& idx = indices[i];
-
-        // Check if the index is a list
-        if (nb::isinstance<nb::list>(idx)) {
-          // If it is, iterate over the list and add the elements to the
-          // gather_indices
-          for (const auto& sub_idx : nb::cast<nb::list>(idx)) {
-            if (!sub_idx.is_none()) {
-              gather_indices.push_back(idx[sub_idx]);
-            }
-          }
-        } else {
-          if (!idx.is_none()) {
-            gather_indices.push_back(idx);
-          }
-        }
-      }
-      int max_dims;
-      src = mlx_gather_nd(src, gather_indices, gather_first, max_dims);
-
-      // Reassemble the indices for the slicing or reshaping if there are any
-      if (gather_first) {
-        for (int i = 0; i < max_dims; i++) {
-          remaining_indices.push_back(
-              nb::slice(nb::none(), nb::none(), nb::none()));
-        }
-        for (int i = 0; i < last_array; i++) {
-          auto& idx = indices[i];
-          if (idx.is_none()) {
-            remaining_indices.push_back(indices[i]);
-          } else if (nb::isinstance<nb::slice>(idx)) {
-            remaining_indices.push_back(
-                nb::slice(nb::none(), nb::none(), nb::none()));
-          }
-        }
-        for (int i = last_array + 1; i < indices.size(); i++) {
-          remaining_indices.push_back(indices[i]);
-        }
-      } else {
-        for (int i = 0; i < indices.size(); i++) {
-          auto& idx = indices[i];
-          if (nb::isinstance<array>(idx) || nb::isinstance<nb::int_>(idx)) {
-            break;
-          } else if (idx.is_none()) {
-            remaining_indices.push_back(idx);
-          } else {
-            remaining_indices.push_back(
-                nb::slice(nb::none(), nb::none(), nb::none()));
-          }
-        }
-        for (int i = 0; i < max_dims; i++) {
-          remaining_indices.push_back(
-              nb::slice(nb::none(), nb::none(), nb::none()));
-        }
-        for (int i = last_array + 1; i < indices.size(); i++) {
-          remaining_indices.push_back(indices[i]);
-        }
-      }
+  bool have_list = false;
+  for (auto& idx : indices) {
+    if (nb::isinstance<nb::list>(idx)) {
+      have_list = true;
+      break;
     }
   }
-  if (have_array && remaining_indices.empty()) {
+  if (have_list) {
+    int last_list;
+    // Then find the last list
+    for (last_list = indices.size() - 1; last_list >= 0; last_list--) {
+      auto& idx = indices[last_list];
+      if (nb::isinstance<nb::list>(idx)) {
+        break;
+      }
+    }
+
+    std::vector<nb::object> gather_indices;
+    for (int i = 0; i <= last_list; i++) {
+      auto& idx = indices[i];
+      if (nb::isinstance<nb::list>(idx)) {
+        auto list_idx = nb::cast<nb::list>(idx);
+        std::vector<nb::object> sub_indices;
+        for (const auto& sub_idx : list_idx) {
+          if (!is_valid_index_type(nb::object(sub_idx))) {
+            throw std::invalid_argument(
+                "Cannot index mlx array using the given type yet");
+          }
+          if (!sub_idx.is_none()) {
+            sub_indices.push_back(nb::object(sub_idx));
+          }
+        }
+        gather_indices.push_back(sub_indices);
+      } else {
+        gather_indices.push_back(idx);
+      }
+    }
+    int max_dims;
+    src = mlx_gather_nd(src, gather_indices, false, max_dims);
+
+    // Reassemble the indices for the slicing or reshaping if there are any
+    for (int i = 0; i < last_list; i++) {
+      auto& idx = indices[i];
+      if (nb::isinstance<nb::list>(idx)) {
+        remaining_indices.push_back(
+            nb::slice(nb::none(), nb::none(), nb::none()));
+      } else {
+        remaining_indices.push_back(idx);
+      }
+    }
+    for (int i = last_list + 1; i < indices.size(); i++) {
+      remaining_indices.push_back(indices[i]);
+    }
+  }
+  if (have_list && remaining_indices.empty()) {
     return src;
   }
   if (remaining_indices.empty()) {
     remaining_indices = indices;
   }
-
-  bool squeeze_needed = false;
-  bool unsqueeze_needed = false;
 
   // Slice handling
   {
@@ -587,14 +538,12 @@ array mlx_get_item_list(array src, const nb::list& entries) {
     int axis = 0;
     for (auto& idx : remaining_indices) {
       if (!idx.is_none()) {
-        if (!have_array && nb::isinstance<nb::int_>(idx)) {
+        if (nb::isinstance<nb::int_>(idx)) {
           int st = nb::cast<int>(idx);
           st = (st < 0) ? st + src.shape(axis) : st;
 
           starts[axis] = st;
           ends[axis] = st + 1;
-
-          squeeze_needed = true;
 
         } else {
           get_slice_params(
@@ -606,21 +555,19 @@ array mlx_get_item_list(array src, const nb::list& entries) {
         }
 
         axis++;
-      } else {
-        unsqueeze_needed = true;
       }
     }
     src = slice(src, starts, ends, strides);
   }
 
   // Unsqueeze handling
-  if (unsqueeze_needed || squeeze_needed) {
+  {
     std::vector<int> out_shape;
     int axis = 0;
     for (auto& idx : remaining_indices) {
-      if (unsqueeze_needed && idx.is_none()) {
+      if (idx.is_none()) {
         out_shape.push_back(1);
-      } else if (squeeze_needed && nb::isinstance<nb::int_>(idx)) {
+      } else if (nb::isinstance<nb::int_>(idx)) {
         axis++;
       } else {
         out_shape.push_back(src.shape(axis++));
