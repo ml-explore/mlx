@@ -4,9 +4,8 @@
 #include <numeric>
 #include <sstream>
 
-#include "python/src/indexing.h"
-
 #include "mlx/ops.h"
+#include "python/src/indexing.h"
 
 bool is_none_slice(const nb::slice& in_slice) {
   return (
@@ -443,21 +442,6 @@ array mlx_get_item_nd(array src, const nb::tuple& entries) {
   return src;
 }
 
-array gather_along_dim(const array& src, const array& indices, int axis) {
-  // Check if axis is valid
-  if (axis < 0 || axis >= src.ndim()) {
-    throw std::invalid_argument("Invalid axis for gather_along_dim.");
-  }
-
-  // Prepare the parameters for the gather function
-  std::vector<array> gather_indices = {indices};
-  std::vector<int> axes = {axis};
-  std::vector<int> slice_sizes(src.ndim(), 1);
-
-  // Call the gather function
-  return gather(src, gather_indices, axes, slice_sizes);
-}
-
 array mlx_get_item_list(array src, const nb::list& entries) {
   // Check input and raise error if 0 dim for parity with np
   if (src.ndim() == 0) {
@@ -488,16 +472,31 @@ array mlx_get_item_list(array src, const nb::list& entries) {
   for (auto& idx : indices) {
     if (nb::isinstance<nb::list>(idx)) {
       auto list_idx = nb::cast<nb::list>(idx);
-      std::vector<int> sub_indices;
-      for (int i = 0; i < list_idx.size(); i++) {
-        sub_indices.push_back(nb::cast<int>(list_idx[i]));
+      std::vector<int> gather_indices;
+
+      for (const auto& lidx : list_idx) {
+        if (nb::isinstance<nb::int_>(lidx)) {
+          gather_indices.push_back(nb::cast<int>(lidx));
+        } else {
+          throw std::invalid_argument(
+              "Cannot index mlx array using the given type yet");
+        }
       }
-      auto idx_arr = array(
-          sub_indices, {static_cast<int>(sub_indices.size())}); // TODO: BUG
-      array gather_idx = gather_along_dim(src, idx_arr, axis);
-      gathered.push_back(gather_idx);
+      auto arr = array({gather_indices.begin(), gather_indices.end()}, uint32);
+      std::vector<int> slice_sizes = {src.shape(axis), 1};
+      gathered.push_back(gather(src, arr, {axis}, slice_sizes));
       axis++;
+    } else {
+      gathered.push_back(mlx_get_item_int(src, nb::cast<nb::int_>(idx)));
     }
+  }
+  printf("gathered size: %d\n", gathered.size());
+  // print each gathered array
+  for (int i = 0; i < gathered.size(); i++) {
+    printf("gathered[%d]:\n", i);
+    std::ostringstream os;
+    os << gathered[i];
+    printf("%s\n", os.str().c_str());
   }
   src = concatenate(gathered, axis);
   return src;
