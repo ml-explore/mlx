@@ -482,23 +482,24 @@ array mlx_get_item_list(array src, const nb::list& entries) {
     throw std::invalid_argument(msg.str());
   }
 
-  // Prepare the parameters for the gather function
-  std::vector<array> gather_indices;
-  std::vector<int> axes;
-  std::vector<int> slice_sizes(src.ndim(), 1);
-
+  std::vector<array> gathered;
   // Go through indices and gather the arrays
   int axis = 0;
   for (auto& idx : indices) {
     if (nb::isinstance<nb::list>(idx)) {
       auto list_idx = nb::cast<nb::list>(idx);
-      array gather_idx = gather_along_dim(src, list_idx, axis);
-      src = gather_idx;
-      axes.push_back(axis);
+      std::vector<int> sub_indices;
+      for (int i = 0; i < list_idx.size(); i++) {
+        sub_indices.push_back(nb::cast<int>(list_idx[i]));
+      }
+      auto idx_arr = array(
+          sub_indices, {static_cast<int>(sub_indices.size())}); // TODO: BUG
+      array gather_idx = gather_along_dim(src, idx_arr, axis);
+      gathered.push_back(gather_idx);
       axis++;
     }
   }
-  src = gather(src, gather_indices, axes, slice_sizes);
+  src = concatenate(gathered, axis);
   return src;
 }
 
