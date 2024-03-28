@@ -66,4 +66,8 @@ std::function<void()> make_task(
     std::vector<std::shared_future<void>> deps,
     std::shared_ptr<std::promise<void>> p);
 
+/** Capture a GPU trace, saving it to an absolute file `path` */
+bool start_capture(std::string path = "");
+void stop_capture();
+
 } // namespace mlx::core::metal

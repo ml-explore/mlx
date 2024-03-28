@@ -39,5 +39,9 @@ size_t set_memory_limit(size_t, bool) {
 size_t set_cache_limit(size_t) {
   return 0;
 }
+bool start_capture(std::string path) {
+  return false;
+}
+void stop_capture() {}
 
 } // namespace mlx::core::metal
