@@ -81,6 +81,7 @@ class TestFFT(mlx_tests.MLXTestCase):
                 np_op = getattr(np.fft, op)
                 self.check_mx_np(mx_op, np_op, x, axes=ax, s=s)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_fft_gpu(self):
         shape = (16, 4, 8)
         # np.fft.fft always uses double precision complex128
