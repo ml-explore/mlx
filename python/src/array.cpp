@@ -884,7 +884,7 @@ void init_array(nb::module_& m) {
              const ScalarOrArray& v) -> std::variant<array, bool> {
             if (!is_comparable_with_array(v)) {
               return false;
-            } // Hi
+            }
             return equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
