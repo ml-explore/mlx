@@ -107,6 +107,7 @@ DEFAULT(Tan)
 DEFAULT(Tanh)
 DEFAULT(Transpose)
 DEFAULT(Inverse)
+DEFAULT(PseudoInverse)
 
 namespace {
 
