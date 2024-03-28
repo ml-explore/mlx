@@ -37,11 +37,17 @@ set(
 )
 
 function(build_kernel_base TARGET SRCFILE DEPS)
+  set(METAL_FLAGS -Wall -Wextra -fno-fast-math)
+  if(MLX_METAL_DEBUG)
+    set(METAL_FLAGS ${METAL_FLAGS}
+        -gline-tables-only
+        -frecord-sources)
+  endif()
   add_custom_command(
-    COMMAND xcrun -sdk macosx metal -Wall -Wextra
-                  -fno-fast-math
-                  -c ${SRCFILE} 
-                  -I${PROJECT_SOURCE_DIR} 
+    COMMAND xcrun -sdk macosx metal
+                  ${METAL_FLAGS}
+                  -c ${SRCFILE}
+                  -I${PROJECT_SOURCE_DIR}
                   -o ${TARGET}.air
     DEPENDS ${SRCFILE} ${DEPS}
     OUTPUT ${TARGET}.air

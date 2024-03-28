@@ -28,7 +28,8 @@ class Synchronizer : public Primitive {
 
   void eval_cpu(const std::vector<array>&, std::vector<array>&) override{};
   void eval_gpu(const std::vector<array>&, std::vector<array>&) override{};
-  void print(std::ostream&) override {}
+
+  DEFINE_PRINT(Synchronize);
 };
 
 // Initialize the static tracing counter from transforms_impl.h .

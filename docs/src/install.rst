@@ -155,6 +155,8 @@ should point to the path to the built metal library.
      - ON
    * - MLX_BUILD_PYTHON_BINDINGS
      - OFF
+   * - MLX_METAL_DEBUG
+     - OFF
 
 
 .. note::

@@ -15,6 +15,7 @@ option(MLX_BUILD_EXAMPLES "Build examples for mlx" ON)
 option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
 option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
+option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
@@ -65,8 +66,14 @@ endif()
 if (MLX_BUILD_METAL AND NOT METAL_LIB)
   message(STATUS "Metal not found. Unable to build GPU")
   set(MLX_BUILD_METAL OFF)
+  set(MLX_METAL_DEBUG OFF)
 elseif (MLX_BUILD_METAL)
   message(STATUS "Building METAL sources")
+
+  if (MLX_METAL_DEBUG)
+    add_compile_definitions(MLX_METAL_DEBUG)
+  endif()
+
   # Throw an error if xcrun not found
   execute_process(COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
                   OUTPUT_VARIABLE MACOS_VERSION

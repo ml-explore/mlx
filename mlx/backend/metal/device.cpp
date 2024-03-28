@@ -12,6 +12,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/mps/gemm.h"
+#include "mlx/backend/metal/utils.h"
 
 namespace fs = std::filesystem;
 
@@ -145,6 +146,7 @@ void Device::new_queue(int index) {
   // We lock this as a critical section for safety
   const std::lock_guard<std::mutex> lock(mtx_);
   auto q = device_->newCommandQueue(MAX_BUFFERS_PER_QUEUE);
+  debug_set_stream_queue_label(q, index);
   if (!q) {
     throw std::runtime_error(
         "[metal::Device] Failed to make new command queue.");

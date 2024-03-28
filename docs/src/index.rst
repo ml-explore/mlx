@@ -82,3 +82,4 @@ are the CPU and GPU.
    :maxdepth: 1
 
    dev/extensions
+   dev/metal_debugger
