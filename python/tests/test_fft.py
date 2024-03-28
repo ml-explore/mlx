@@ -14,7 +14,6 @@ class TestFFT(mlx_tests.MLXTestCase):
         a_mx = mx.array(a_np)
         out_mx = op_mx(a_mx, **kwargs)
         np.testing.assert_allclose(out_np, out_mx, atol=atol, rtol=rtol)
-        self.assertTrue(np.allclose(out_np, out_mx, atol=atol, rtol=rtol))
 
     def test_fft(self):
         with mx.stream(mx.cpu):
@@ -81,8 +80,7 @@ class TestFFT(mlx_tests.MLXTestCase):
                 np_op = getattr(np.fft, op)
                 self.check_mx_np(mx_op, np_op, x, axes=ax, s=s)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
-    def test_fft_gpu(self):
+    def test_fft_powers_of_two(self):
         shape = (16, 4, 8)
         # np.fft.fft always uses double precision complex128
         # mx.fft.fft only supports single precision complex64
@@ -90,20 +88,34 @@ class TestFFT(mlx_tests.MLXTestCase):
         atol = 1e-4
         rtol = 1e-4
         np.random.seed(7)
-        with mx.stream(mx.gpu):
-            for k in range(4, 12):
-                r = np.random.rand(*shape, 2**k).astype(np.float32)
-                i = np.random.rand(*shape, 2**k).astype(np.float32)
-                a_np = r + 1j * i
-                self.check_mx_np(mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol)
-
-            r = np.random.rand(*shape, 32).astype(np.float32)
-            i = np.random.rand(*shape, 32).astype(np.float32)
+        for k in range(4, 12):
+            r = np.random.rand(*shape, 2**k).astype(np.float32)
+            i = np.random.rand(*shape, 2**k).astype(np.float32)
             a_np = r + 1j * i
-            for axis in range(4):
-                self.check_mx_np(
-                    mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol, axis=axis
-                )
+            self.check_mx_np(mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol)
+
+        r = np.random.rand(*shape, 32).astype(np.float32)
+        i = np.random.rand(*shape, 32).astype(np.float32)
+        a_np = r + 1j * i
+        for axis in range(4):
+            self.check_mx_np(
+                mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol, axis=axis
+            )
+
+        r = np.random.rand(4, 8).astype(np.float32)
+        i = np.random.rand(4, 8).astype(np.float32)
+        a_np = r + 1j * i
+        a_mx = mx.array(a_np)
+
+        # non-contiguous in the FFT dim
+        out_mx = mx.fft.fft(a_mx[:, ::2])
+        out_np = np.fft.fft(a_np[:, ::2])
+        np.testing.assert_allclose(out_np, out_mx, atol=1e-5, rtol=1e-5)
+
+        # non-contiguous not in the FFT dim
+        out_mx = mx.fft.fft(a_mx[::2])
+        out_np = np.fft.fft(a_np[::2])
+        np.testing.assert_allclose(out_np, out_mx, atol=1e-5, rtol=1e-5)
 
 
 if __name__ == "__main__":

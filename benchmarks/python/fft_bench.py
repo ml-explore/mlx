@@ -1,4 +1,4 @@
-# Copyright © -2024 Apple Inc.
+# Copyright © 2024 Apple Inc.
 
 import matplotlib
 import mlx.core as mx

@@ -1,5 +1,4 @@
 // Copyright © 2023 Apple Inc.
-
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/mlx.h"
@@ -27,14 +26,15 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
         "GPU FFT is only implemented for the powers of 2 from 4 -> 2048");
   }
 
-  // Make sure that the FFT dimension is contiguous
+  // Make sure that the array is contiguous and has stride 1 in the FFT dim
   std::vector<array> copies;
   auto check_input = [this, &copies, &s](const array& x) {
-    bool no_copy = x.strides()[axes_[0]] == 1;
+    // TODO: Pass the strides to the kernel so
+    // we can avoid the copy when x is not contiguous.
+    bool no_copy = x.strides()[axes_[0]] == 1 && x.flags().contiguous;
     if (no_copy) {
       return x;
     } else {
-      // Set stride at FFT dim to 1 and fill in others
       array x_copy(x.shape(), x.dtype(), nullptr, {});
       std::vector<size_t> strides;
       size_t cur_stride = x.shape(axes_[0]);
@@ -47,7 +47,6 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       }
 
-      // set the contiguity flags
       auto flags = x.flags();
       size_t f_stride = 1;
       size_t b_stride = 1;
@@ -59,7 +58,6 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
         flags.row_contiguous &= (strides[ri] == b_stride || x.shape(ri) == 1);
         b_stride *= x.shape(ri);
       }
-      // FFT dim has stride 1 so there are no gaps
       flags.contiguous = true;
 
       x_copy.set_data(
@@ -78,18 +76,11 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       in_contiguous.strides(),
       in_contiguous.flags());
 
-  // Prod all the non-FFT dims to get the batch size
-  size_t batch = 1;
-  for (int axis = 0; axis < in.ndim(); axis++) {
-    if (axis != axes_[0]) {
-      batch *= in.shape(axis);
-    }
-  }
-
   // We use n / 4 threads by default since radix-4
   // is the largest single threaded radix butterfly
   // we currently implement.
   size_t m = n / 4;
+  size_t batch = in.size() / in.shape(axes_[0]);
 
   auto compute_encoder = d.get_command_encoder(s.index);
   {
