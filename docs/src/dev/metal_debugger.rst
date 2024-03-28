@@ -1,19 +1,15 @@
 Metal Debugger
 ==============
 
-Profiling is a key step during performance optimization. While tracking total
-runtime can be effective, sometimes it's necessary to dive deep into GPU
-compute.
+Profiling is a key step for performance optimization. You can build MLX with
+the ``MLX_METAL_DEBUG`` option to improve the Metal debugging and optimization
+workflow. The ``MLX_METAL_DEBUG`` debug option:
 
-MLX provides a couple mechanisms to improve the Metal debugger workflow. The
-``MLX_METAL_DEBUG`` build option:
-
-* Records source during Metal compilation, making source inspectable while
+* Records source during Metal compilation, for later inspection while
   debugging.
 * Labels Metal objects such as command queues, improving capture readability.
 
-The ``metal::start_capture`` function initiates a capture of all MLX GPU work in
-a convenient manner.
+The ``metal::start_capture`` function initiates a capture of all MLX GPU work.
 
 .. code-block:: C++
 
@@ -29,9 +25,9 @@ a convenient manner.
         metal::stop_capture();
     }
 
-The resulting GPU trace can be opened in Xcode and replayed. The `Dependencies`
-view offers a great overview of all operations. See the `Metal debugger
-documentation`_ for more information about the debugger.
+You can open and replay the GPU trace in Xcode. The ``Dependencies`` view
+has a great overview of all operations. Checkout the `Metal debugger
+documentation`_ for more information.
 
 .. image:: ../_static/metal_debugger/capture.png
     :class: dark-light
@@ -39,8 +35,8 @@ documentation`_ for more information about the debugger.
 Xcode Workflow
 --------------
 
-You can skip saving to a path by running within Xcode. For example, we can
-generate an Xcode project for MLX using CMake.
+You can skip saving to a path by running within Xcode. First, generate an Xcode
+project using CMake.
 
 .. code-block::
 
