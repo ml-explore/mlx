@@ -38,13 +38,13 @@ inline array norm(
 }
 array norm(
     const array& a,
-    const std::string& ord,
+    std::string_view ord,
     const std::optional<std::vector<int>>& axis = std::nullopt,
     bool keepdims = false,
     StreamOrDevice s = {});
 inline array norm(
     const array& a,
-    const std::string& ord,
+    std::string_view ord,
     int axis,
     bool keepdims = false,
     StreamOrDevice s = {}) {

@@ -105,7 +105,7 @@ void gguf_load_quantized(
     weights_per_byte = 1;
   }
 
-  std::string name = std::string(tensor.name, tensor.namelen);
+  std::string name(tensor.name, tensor.namelen);
   std::vector<int> shape = get_shape(tensor);
   const uint64_t weights_per_block = 32;
   if (shape[shape.size() - 1] % weights_per_block != 0) {
@@ -136,9 +136,9 @@ void gguf_load_quantized(
     extract_q8_0_data(tensor, weights, scales, biases);
   }
 
-  a.insert({name, weights});
+  a.emplace(std::move(name), std::move(weights));
 
-  auto check_insert = [](auto inserted) {
+  auto check_insert = [](const auto& inserted) {
     if (!inserted.second) {
       std::ostringstream msg;
       msg << "[load_gguf] Duplicate parameter name " << inserted.first->second
@@ -147,11 +147,11 @@ void gguf_load_quantized(
     }
   };
 
-  const std::string weight_suffix = ".weight";
+  constexpr std::string_view weight_suffix = ".weight";
   const std::string name_prefix =
       name.substr(0, name.length() - weight_suffix.length());
-  check_insert(a.insert({name_prefix + ".scales", scales}));
-  check_insert(a.insert({name_prefix + ".biases", biases}));
+  check_insert(a.emplace(name_prefix + ".scales", std::move(scales)));
+  check_insert(a.emplace(name_prefix + ".biases", std::move(biases)));
 }
 
 } // namespace mlx::core
