@@ -775,7 +775,7 @@ void init_array(nb::module_& m) {
             bool is_convertable = is_convertable_to_array(v);
             if (!is_convertable) {
               return false;
-            }
+            } // Hi
             return equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
