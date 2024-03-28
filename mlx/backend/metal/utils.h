@@ -123,6 +123,10 @@ MTL::Size get_block_dims(int dim0, int dim1, int dim2) {
   return MTL::Size{1ul << pows[0], 1ul << pows[1], 1ul << pows[2]};
 }
 
+bool is_power_of_2(int n) {
+  return ((n & (n - 1)) == 0) && n != 0;
+}
+
 } // namespace
 
 } // namespace mlx::core
