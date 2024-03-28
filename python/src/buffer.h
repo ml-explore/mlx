@@ -60,10 +60,10 @@ struct buffer_info {
   std::vector<ssize_t> strides;
 
   buffer_info(
-      const std::string& format,
+      std::string format,
       std::vector<ssize_t> shape_in,
       std::vector<ssize_t> strides_in)
-      : format(format),
+      : format(std::move(format)),
         shape(std::move(shape_in)),
         strides(std::move(strides_in)) {}
 

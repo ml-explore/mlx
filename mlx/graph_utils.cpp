@@ -23,8 +23,7 @@ const std::string& NodeNamer::get_name(const array& x) {
       letters.push_back('A' + (var_num - 1) % 26);
       var_num = (var_num - 1) / 26;
     }
-    std::string name(letters.rbegin(), letters.rend());
-    names.insert({x.id(), name});
+    names.emplace(x.id(), std::string(letters.rbegin(), letters.rend()));
 
     return get_name(x);
   }
