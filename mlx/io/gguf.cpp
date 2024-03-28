@@ -230,8 +230,8 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   return array_map;
 }
 
-GGUFLoad load_gguf(const std::string& file, StreamOrDevice s) {
-  gguf_ctx* ctx = gguf_open(file.c_str());
+GGUFLoad load_gguf(std::string_view file, StreamOrDevice s) {
+  gguf_ctx* ctx = gguf_open(file.data());
   if (!ctx) {
     throw std::runtime_error("[load_gguf] gguf_init failed");
   }
