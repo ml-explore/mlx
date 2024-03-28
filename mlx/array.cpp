@@ -30,7 +30,7 @@ array::array(
     std::vector<int> shape,
     Dtype dtype,
     std::shared_ptr<Primitive> primitive,
-    std::vector<array> inputs)
+    small_vector<array> inputs)
     : array_desc_(std::make_shared<ArrayDesc>(
           std::move(shape),
           dtype,
@@ -161,7 +161,7 @@ void array::move_shared_buffer(array other) {
   move_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
-void array::ArrayDesc::init() {
+void ArrayDesc::init() {
   strides.resize(shape.size());
   size = 1;
   for (int i = shape.size() - 1; i >= 0; --i) {
@@ -173,16 +173,16 @@ void array::ArrayDesc::init() {
   }
 }
 
-array::ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
+ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
     : shape(std::move(shape)), dtype(dtype) {
   init();
 }
 
-array::ArrayDesc::ArrayDesc(
+ArrayDesc::ArrayDesc(
     std::vector<int> shape,
     Dtype dtype,
     std::shared_ptr<Primitive> primitive,
-    std::vector<array> inputs)
+    small_vector<array> inputs)
     : shape(std::move(shape)),
       dtype(dtype),
       primitive(std::move(primitive)),

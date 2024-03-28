@@ -77,11 +77,11 @@ std::function<void()> make_task(
       // to its inputs so they don't get donated
       std::vector<array> inputs;
       if (arr.is_tracer()) {
-        inputs = arr.inputs();
+        inputs = arr.inputs().as_vector();
       }
 
       debug_set_primitive_buffer_label(command_buffer, arr.primitive());
-      arr.primitive().eval_gpu(arr.inputs(), outputs);
+      arr.primitive().eval_gpu(arr.inputs().as_vector(), outputs);
     }
     std::vector<std::shared_ptr<array::Data>> buffers;
     for (auto& in : arr.inputs()) {

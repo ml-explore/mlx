@@ -140,7 +140,7 @@ void eval(std::vector<array> outputs) {
         }
         scheduler::notify_new_task(stream);
         auto outputs = arr.outputs();
-        arr.primitive().eval_cpu(arr.inputs(), outputs);
+        arr.primitive().eval_cpu(arr.inputs().as_vector(), outputs);
         if (!arr.is_tracer()) {
           arr.detach();
         }
@@ -300,7 +300,8 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       }
     }
 
-    auto vjps = a.primitive().vjp(a.inputs(), cotangents, argnums, outputs);
+    auto vjps =
+        a.primitive().vjp(a.inputs().as_vector(), cotangents, argnums, outputs);
     // Accumulate the vector-jacobian products for each input
     for (int i = 0; i < argnums.size(); ++i) {
       auto in_id = a.inputs()[argnums[i]].id();
@@ -432,7 +433,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       }
     }
 
-    auto jvps = a.primitive().jvp(a.inputs(), tangents, argnums);
+    auto jvps = a.primitive().jvp(a.inputs().as_vector(), tangents, argnums);
     auto outputs = a.outputs();
     for (int i = 0; i < jvps.size(); ++i) {
       tan_map.insert({outputs[i].id(), jvps[i]});

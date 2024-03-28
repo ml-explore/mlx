@@ -70,7 +70,7 @@ void print_graph(std::ostream& os, const std::vector<array>& outputs) {
       outputs);
 
   NodeNamer namer;
-  auto print_arrs = [&namer, &os](std::vector<array> arrs) {
+  auto print_arrs = [&namer, &os](const auto& arrs) {
     for (auto& arr : arrs) {
       os << namer.get_name(arr);
       os << " [" << arr.shape() << ", " << arr.dtype() << "]";

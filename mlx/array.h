@@ -9,10 +9,12 @@
 
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
+#include "mlx/small_vector.h"
 
 namespace mlx::core {
 
 // Forward declaration
+class ArrayDesc;
 class Primitive;
 using deleter_t = std::function<void(allocator::Buffer)>;
 
@@ -80,9 +82,7 @@ class array {
   };
 
   /** The number of elements in the array. */
-  size_t size() const {
-    return array_desc_->size;
-  };
+  size_t size() const;
 
   /** The number of bytes in the array. */
   size_t nbytes() const {
@@ -90,14 +90,10 @@ class array {
   };
 
   /** The number of dimensions of the array. */
-  size_t ndim() const {
-    return array_desc_->shape.size();
-  };
+  size_t ndim() const;
 
   /** The shape of the array as a vector of integers. */
-  const std::vector<int>& shape() const {
-    return array_desc_->shape;
-  };
+  const std::vector<int>& shape() const;
 
   /**
    *  Get the size of the corresponding dimension.
@@ -109,14 +105,10 @@ class array {
   };
 
   /** The strides of the array. */
-  const std::vector<size_t>& strides() const {
-    return array_desc_->strides;
-  };
+  const std::vector<size_t>& strides() const;
 
   /** Get the arrays data type. */
-  Dtype dtype() const {
-    return array_desc_->dtype;
-  };
+  Dtype dtype() const;
 
   /** Evaluate the array. */
   void eval();
@@ -177,7 +169,7 @@ class array {
       std::vector<int> shape,
       Dtype dtype,
       std::shared_ptr<Primitive> primitive,
-      std::vector<array> inputs);
+      small_vector<array> inputs);
 
   static std::vector<array> make_arrays(
       std::vector<std::vector<int>> shapes,
@@ -191,9 +183,7 @@ class array {
   }
 
   /** A unique identifier for an arrays primitive. */
-  std::uintptr_t primitive_id() const {
-    return reinterpret_cast<std::uintptr_t>(array_desc_->primitive.get());
-  }
+  std::uintptr_t primitive_id() const;
 
   struct Data {
     allocator::Buffer buffer;
@@ -218,112 +208,61 @@ class array {
   };
 
   /** The array's primitive. */
-  Primitive& primitive() const {
-    return *(array_desc_->primitive);
-  };
+  Primitive& primitive() const;
 
   /** A shared pointer to the array's primitive. */
-  std::shared_ptr<Primitive>& primitive_ptr() const {
-    return array_desc_->primitive;
-  };
+  std::shared_ptr<Primitive>& primitive_ptr() const;
 
   /** Check if the array has an attached primitive or is a leaf node. */
-  bool has_primitive() const {
-    return array_desc_->primitive != nullptr;
-  };
+  bool has_primitive() const;
 
   /** The array's inputs. */
-  const std::vector<array>& inputs() const {
-    return array_desc_->inputs;
-  };
-
-  std::vector<array>& inputs() {
-    return array_desc_->inputs;
-  }
+  const small_vector<array>& inputs() const;
+  small_vector<array>& inputs();
 
   /** True indicates the arrays buffer is safe to reuse */
-  bool is_donatable() const {
-    return array_desc_.use_count() == 1 && (array_desc_->data.use_count() == 1);
-  }
+  bool is_donatable() const;
 
   /** The array's siblings. */
-  const std::vector<array>& siblings() const {
-    return array_desc_->siblings;
-  };
+  const std::vector<array>& siblings() const;
 
-  void set_siblings(std::vector<array> siblings, uint16_t position) {
-    array_desc_->siblings = std::move(siblings);
-    array_desc_->position = position;
-  }
+  void set_siblings(std::vector<array> siblings, uint16_t position);
 
   /** The i-th output of the array's primitive. */
-  const array& output(int i) const {
-    if (i == array_desc_->position) {
-      return *this;
-    } else if (i < array_desc_->position) {
-      return siblings()[i];
-    } else {
-      return siblings()[i + 1];
-    }
-  };
+  const array& output(int i) const;
 
   /** The outputs of the array's primitive (i.e. this array and
    * its siblings) in the order the primitive expects. */
-  std::vector<array> outputs() const {
-    auto idx = array_desc_->position;
-    std::vector<array> outputs;
-    outputs.reserve(siblings().size() + 1);
-    outputs.insert(outputs.end(), siblings().begin(), siblings().begin() + idx);
-    outputs.push_back(*this);
-    outputs.insert(outputs.end(), siblings().begin() + idx, siblings().end());
-    return outputs;
-  };
+  std::vector<array> outputs() const;
 
   /** Detach the array from the graph. */
   void detach();
 
   /** Get the Flags bit-field. */
-  const Flags& flags() const {
-    return array_desc_->flags;
-  };
+  const Flags& flags() const;
 
   /** The size (in elements) of the underlying buffer the array points to. */
-  size_t data_size() const {
-    return array_desc_->data_size;
-  };
+  size_t data_size() const;
 
-  allocator::Buffer& buffer() {
-    return array_desc_->data->buffer;
-  };
-  const allocator::Buffer& buffer() const {
-    return array_desc_->data->buffer;
-  };
+  allocator::Buffer& buffer();
+  const allocator::Buffer& buffer() const;
 
   // Return a copy of the shared pointer
   // to the array::Data struct
-  std::shared_ptr<Data> data_shared_ptr() const {
-    return array_desc_->data;
-  }
+  std::shared_ptr<Data> data_shared_ptr() const;
+
   // Return a raw pointer to the arrays data
   template <typename T>
-  T* data() {
-    return static_cast<T*>(array_desc_->data_ptr);
-  };
-
+  T* data();
   template <typename T>
-  const T* data() const {
-    return static_cast<T*>(array_desc_->data_ptr);
-  };
+  const T* data() const;
 
   // Check if the array has been evaluated
-  bool is_evaled() const {
-    return array_desc_->data != nullptr;
-  }
+  bool is_evaled() const;
 
   // Mark the array as a tracer array (true) or not.
-  void set_tracer(bool is_tracer) {
-    array_desc_->is_tracer = is_tracer;
-  }
+  void set_tracer(bool is_tracer);
+
   // Check if the array is a tracer array
   bool is_tracer() const;
 
@@ -363,57 +302,57 @@ class array {
   template <typename It>
   void init(const It src);
 
-  struct ArrayDesc {
-    std::vector<int> shape;
-    std::vector<size_t> strides;
-    size_t size;
-    Dtype dtype;
-    std::shared_ptr<Primitive> primitive;
-
-    // Indicates an array is being used in a graph transform
-    // and should not be detached from the graph
-    bool is_tracer{false};
-
-    // This is a shared pointer so that *different* arrays
-    // can share the underlying data buffer.
-    std::shared_ptr<Data> data;
-
-    // Properly offset data pointer
-    void* data_ptr{nullptr};
-
-    // The size in elements of the data buffer the array accesses
-    // This can be different than the actual size of the array if it
-    // has been broadcast or irregularly strided.
-    size_t data_size;
-
-    // Contains useful meta data about the array
-    Flags flags;
-
-    std::vector<array> inputs;
-    // An array to keep track of the siblings from a multi-output
-    // primitive.
-    std::vector<array> siblings;
-    // The arrays position in the output list
-    uint32_t position{0};
-
-    explicit ArrayDesc(std::vector<int> shape, Dtype dtype);
-
-    explicit ArrayDesc(
-        std::vector<int> shape,
-        Dtype dtype,
-        std::shared_ptr<Primitive> primitive,
-        std::vector<array> inputs);
-
-   private:
-    // Initialize size, strides, and other metadata
-    void init();
-  };
-
   // The ArrayDesc contains the details of the materialized array including the
   // shape, strides, the data type. It also includes
   // the primitive which knows how to compute the array's data from its inputs
   // and the list of array's inputs for the primitive.
   std::shared_ptr<ArrayDesc> array_desc_;
+};
+
+struct ArrayDesc {
+  std::vector<int> shape;
+  std::vector<size_t> strides;
+  size_t size;
+  Dtype dtype;
+  std::shared_ptr<Primitive> primitive;
+
+  // Indicates an array is being used in a graph transform
+  // and should not be detached from the graph
+  bool is_tracer{false};
+
+  // This is a shared pointer so that *different* arrays
+  // can share the underlying data buffer.
+  std::shared_ptr<array::Data> data;
+
+  // Properly offset data pointer
+  void* data_ptr{nullptr};
+
+  // The size in elements of the data buffer the array accesses
+  // This can be different than the actual size of the array if it
+  // has been broadcast or irregularly strided.
+  size_t data_size;
+
+  // Contains useful meta data about the array
+  array::Flags flags;
+
+  small_vector<array> inputs;
+  // An array to keep track of the siblings from a multi-output
+  // primitive.
+  std::vector<array> siblings;
+  // The arrays position in the output list
+  uint32_t position{0};
+
+  explicit ArrayDesc(std::vector<int> shape, Dtype dtype);
+
+  explicit ArrayDesc(
+      std::vector<int> shape,
+      Dtype dtype,
+      std::shared_ptr<Primitive> primitive,
+      small_vector<array> inputs);
+
+ private:
+  // Initialize size, strides, and other metadata
+  void init();
 };
 
 template <typename T>
@@ -454,6 +393,26 @@ array::array(
   init(data.begin());
 }
 
+inline size_t array::size() const {
+  return array_desc_->size;
+};
+
+inline size_t array::ndim() const {
+  return array_desc_->shape.size();
+};
+
+inline const std::vector<int>& array::shape() const {
+  return array_desc_->shape;
+};
+
+inline const std::vector<size_t>& array::strides() const {
+  return array_desc_->strides;
+};
+
+inline Dtype array::dtype() const {
+  return array_desc_->dtype;
+};
+
 template <typename T>
 T array::item() {
   if (size() != 1) {
@@ -473,6 +432,103 @@ T array::item() const {
         "item() const can only be called on evaled arrays");
   }
   return *data<T>();
+}
+
+inline std::uintptr_t array::primitive_id() const {
+  return reinterpret_cast<std::uintptr_t>(array_desc_->primitive.get());
+}
+
+inline Primitive& array::primitive() const {
+  return *(array_desc_->primitive);
+};
+
+inline std::shared_ptr<Primitive>& array::primitive_ptr() const {
+  return array_desc_->primitive;
+};
+
+inline bool array::has_primitive() const {
+  return array_desc_->primitive != nullptr;
+};
+
+inline const small_vector<array>& array::inputs() const {
+  return array_desc_->inputs;
+};
+
+inline small_vector<array>& array::inputs() {
+  return array_desc_->inputs;
+}
+
+inline bool array::is_donatable() const {
+  return array_desc_.use_count() == 1 && (array_desc_->data.use_count() == 1);
+}
+
+inline const std::vector<array>& array::siblings() const {
+  return array_desc_->siblings;
+};
+
+inline void array::set_siblings(
+    std::vector<array> siblings,
+    uint16_t position) {
+  array_desc_->siblings = std::move(siblings);
+  array_desc_->position = position;
+}
+
+inline const array& array::output(int i) const {
+  if (i == array_desc_->position) {
+    return *this;
+  } else if (i < array_desc_->position) {
+    return siblings()[i];
+  } else {
+    return siblings()[i + 1];
+  }
+};
+
+inline std::vector<array> array::outputs() const {
+  auto idx = array_desc_->position;
+  std::vector<array> outputs;
+  outputs.reserve(siblings().size() + 1);
+  outputs.insert(outputs.end(), siblings().begin(), siblings().begin() + idx);
+  outputs.push_back(*this);
+  outputs.insert(outputs.end(), siblings().begin() + idx, siblings().end());
+  return outputs;
+};
+
+inline const array::Flags& array::flags() const {
+  return array_desc_->flags;
+};
+
+inline size_t array::data_size() const {
+  return array_desc_->data_size;
+};
+
+inline allocator::Buffer& array::buffer() {
+  return array_desc_->data->buffer;
+};
+
+inline const allocator::Buffer& array::buffer() const {
+  return array_desc_->data->buffer;
+};
+
+inline std::shared_ptr<array::Data> array::data_shared_ptr() const {
+  return array_desc_->data;
+}
+
+template <typename T>
+inline T* array::data() {
+  return static_cast<T*>(array_desc_->data_ptr);
+};
+
+template <typename T>
+inline const T* array::data() const {
+  return static_cast<T*>(array_desc_->data_ptr);
+};
+
+inline bool array::is_evaled() const {
+  return array_desc_->data != nullptr;
+}
+
+inline void array::set_tracer(bool is_tracer) {
+  array_desc_->is_tracer = is_tracer;
 }
 
 template <typename It>
