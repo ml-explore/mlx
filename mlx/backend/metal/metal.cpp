@@ -5,6 +5,7 @@
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"
 
@@ -15,6 +16,9 @@ bool is_available() {
 }
 
 int max_ops_per_buffer() {
+#ifdef MLX_METAL_DEBUG
+  return 1;
+#else
   auto get_val = []() {
     if (const char* buff_str = std::getenv("MLX_MAX_OPS_PER_BUFFER")) {
       return atoi(buff_str);
@@ -24,6 +28,7 @@ int max_ops_per_buffer() {
   };
   static int max_ops_per_buffer_ = get_val();
   return max_ops_per_buffer_;
+#endif
 }
 
 #define MAX_OPS_PER_BUFFER max_ops_per_buffer()
@@ -74,6 +79,8 @@ std::function<void()> make_task(
       if (arr.is_tracer()) {
         inputs = arr.inputs();
       }
+
+      debug_set_primitive_buffer_label(command_buffer, arr.primitive());
       arr.primitive().eval_gpu(arr.inputs(), outputs);
     }
     std::vector<std::shared_ptr<array::Data>> buffers;
@@ -106,6 +113,33 @@ std::function<void()> make_task(
     }
   };
   return task;
+}
+
+bool start_capture(std::string path, id object) {
+  auto pool = new_scoped_memory_pool();
+
+  auto descriptor = MTL::CaptureDescriptor::alloc()->init();
+  descriptor->setCaptureObject(object);
+
+  if (path.length() > 0) {
+    auto string = NS::String::string(path.c_str(), NS::UTF8StringEncoding);
+    auto url = NS::URL::fileURLWithPath(string);
+    descriptor->setDestination(MTL::CaptureDestinationGPUTraceDocument);
+    descriptor->setOutputURL(url);
+  }
+
+  auto manager = MTL::CaptureManager::sharedCaptureManager();
+  return manager->startCapture(descriptor, nullptr);
+}
+
+bool start_capture(std::string path) {
+  auto& device = metal::device(mlx::core::Device::gpu);
+  return start_capture(path, device.mtl_device());
+}
+
+void stop_capture() {
+  auto manager = MTL::CaptureManager::sharedCaptureManager();
+  manager->stopCapture();
 }
 
 } // namespace mlx::core::metal
