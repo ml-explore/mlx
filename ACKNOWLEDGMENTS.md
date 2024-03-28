@@ -15,7 +15,7 @@ MLX was developed with contributions from the following individuals:
 - Hinrik Snær Guðmundsson: Added `atleast_1d`, `atleast_2d`, `atleast_3d` ops.
 - Luca Arnaboldi: Added `Ceil` and `Floor` ops; implemented pickling, copy and deepcopy for mlx arrays.
 - Brian Keene & Atila Orhon, with Argmax Inc.: Added `fast.scaled_dot_product_attention`
-- AmirHossein Razlighi: Some Debug and Enhancements in `mlx.core.array`
+- AmirHossein Razlighi: Added chaining support for some of the ops in `nn.Module`, Some Debug and Enhancements in `mlx.core.array`
 <a href="https://github.com/ml-explore/mlx/graphs/contributors">
   <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
 </a>

@@ -73,7 +73,7 @@ inline array to_array(
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
     auto out_t = dtype.value_or(float32);
     return array(
-        nb::cast<float>(*pv), is_floating_point(out_t) ? out_t : float32);
+        nb::cast<float>(*pv), issubdtype(out_t, floating) ? out_t : float32);
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return array(static_cast<complex64_t>(*pv), complex64);
   } else {

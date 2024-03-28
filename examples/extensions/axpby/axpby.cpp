@@ -61,7 +61,7 @@ array axpby(
       /* const std::vector<int>& shape = */ out_shape,
       /* Dtype dtype = */ out_dtype,
       /* std::unique_ptr<Primitive> primitive = */
-      std::make_unique<Axpby>(to_stream(s), alpha, beta),
+      std::make_shared<Axpby>(to_stream(s), alpha, beta),
       /* const std::vector<array>& inputs = */ broadcasted_inputs);
 }
 

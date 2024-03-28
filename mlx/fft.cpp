@@ -95,7 +95,7 @@ array fft_impl(
   return array(
       out_shape,
       out_type,
-      std::make_unique<FFT>(to_stream(s), valid_axes, inverse, real),
+      std::make_shared<FFT>(to_stream(s), valid_axes, inverse, real),
       {astype(in, in_type, s)});
 }
 

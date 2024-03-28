@@ -89,9 +89,8 @@ collapse_contiguous_dims(const std::vector<array>& xs) {
   return collapse_contiguous_dims(xs[0].shape(), strides);
 }
 
-template <typename... Arrays>
-inline std::tuple<std::vector<int>, std::vector<std::vector<size_t>>>
-collapse_contiguous_dims(Arrays... xs) {
+template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
+inline auto collapse_contiguous_dims(Arrays&&... xs) {
   return collapse_contiguous_dims(
       std::vector<array>{std::forward<Arrays>(xs)...});
 }

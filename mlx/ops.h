@@ -41,40 +41,33 @@ array linspace(
     StreamOrDevice s = {});
 
 /** Convert an array to the given data type. */
-array astype(const array& a, Dtype dtype, StreamOrDevice s = {});
+array astype(array a, Dtype dtype, StreamOrDevice s = {});
 
 /** Create a view of an array with the given shape and strides. */
 array as_strided(
-    const array& a,
+    array a,
     std::vector<int> shape,
     std::vector<size_t> strides,
     size_t offset,
     StreamOrDevice s = {});
 
 /** Copy another array. */
-array copy(const array& a, StreamOrDevice s = {});
+array copy(array a, StreamOrDevice s = {});
 
 /** Fill an array of the given shape with the given value(s). */
 array full(
-    const std::vector<int>& shape,
-    const array& vals,
+    std::vector<int> shape,
+    array vals,
     Dtype dtype,
     StreamOrDevice s = {});
-array full(
-    const std::vector<int>& shape,
-    const array& vals,
-    StreamOrDevice s = {});
+array full(std::vector<int> shape, array vals, StreamOrDevice s = {});
 template <typename T>
-array full(
-    const std::vector<int>& shape,
-    T val,
-    Dtype dtype,
-    StreamOrDevice s = {}) {
-  return full(shape, array(val, dtype), to_stream(s));
+array full(std::vector<int> shape, T val, Dtype dtype, StreamOrDevice s = {}) {
+  return full(std::move(shape), array(val, dtype), to_stream(s));
 }
 template <typename T>
-array full(const std::vector<int>& shape, T val, StreamOrDevice s = {}) {
-  return full(shape, array(val), to_stream(s));
+array full(std::vector<int> shape, T val, StreamOrDevice s = {}) {
+  return full(std::move(shape), array(val), to_stream(s));
 }
 
 /** Fill an array of the given shape with zeros. */

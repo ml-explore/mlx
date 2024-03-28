@@ -4,10 +4,10 @@
 #include <cassert>
 #include <sstream>
 
-#include "mlx/backend/common/reduce.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -17,8 +17,6 @@ namespace mlx::core {
 //////////////////////////////////////////////////////////////////////
 // Case wise reduce dispatch
 //////////////////////////////////////////////////////////////////////
-
-namespace {
 
 inline auto safe_div(size_t n, size_t m) {
   return m == 0 ? 0 : (n + m - 1) / m;
@@ -533,8 +531,6 @@ void strided_reduce_general_dispatch(
         });
   }
 }
-
-} // namespace
 
 //////////////////////////////////////////////////////////////////////
 // Main reduce dispatch

@@ -63,7 +63,8 @@ void RoPE::eval_gpu(
   out_strides[2] = out.strides()[ndim - 1];
 
   std::ostringstream kname;
-  kname << "rope_" << (traditional_ ? "traditional_" : "") << type_to_name(in);
+  kname << "rope_" << (forward_ ? "" : "vjp_")
+        << (traditional_ ? "traditional_" : "") << type_to_name(in);
   auto kernel = d.get_kernel(kname.str());
   auto compute_encoder = d.get_command_encoder(s.index);
 

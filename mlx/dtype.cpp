@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cstdint>
 #include <sstream>
@@ -12,6 +12,7 @@ namespace mlx::core {
 namespace {
 
 constexpr int num_types = 13;
+constexpr int num_cats = 8;
 
 constexpr Dtype::Kind type_kinds[num_types] = {
     Dtype::Kind::b, // bool_,
@@ -49,17 +50,36 @@ constexpr Dtype type_rules[num_types][num_types] = {
   {complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64, complex64}, // complex64
 };
 
+
+constexpr bool subcategory_to_category[num_cats][num_cats] = {
+// complexfloating floating inexact signedinteger unsignedinteger integer number generic
+  {true,           false,   true,   false,        false,          false,  true,  true}, // complexfloating
+  {false,          true,    true,   false,        false,          false,  true,  true}, // floating
+  {false,          false,   true,   false,        false,          false,  true,  true}, // inexact
+  {false,          false,   false,  true,         false,          true,   true,  true}, // signedinteger
+  {false,          false,   false,  false,        true,           true,   true,  true}, // unsignedinteger
+  {false,          false,   false,  false,        false,          true,   true,  true}, // integer
+  {false,          false,   false,  false,        false,          false,  true,  true}, // number
+  {false,          false,   false,  false,        false,          false,  false, true}, // generic
+};
+
+constexpr Dtype::Category type_to_category[num_types] = {
+    Dtype::Category::generic, // bool_,
+    Dtype::Category::unsignedinteger, // uint8,
+    Dtype::Category::unsignedinteger, // uint16,
+    Dtype::Category::unsignedinteger, // uint32,
+    Dtype::Category::unsignedinteger, // uint64,
+    Dtype::Category::signedinteger, // int8,
+    Dtype::Category::signedinteger, // int16,
+    Dtype::Category::signedinteger, // int32,
+    Dtype::Category::signedinteger, // int64,
+    Dtype::Category::floating, // float16,
+    Dtype::Category::floating, // float32,
+    Dtype::Category::floating, // bfloat16,
+    Dtype::Category::complexfloating, // complex64,
+};
+
 // clang-format on
-
-inline bool is_big_endian() {
-  union ByteOrder {
-    int32_t i;
-    uint8_t c[4];
-  };
-  ByteOrder b = {0x01234567};
-
-  return b.c[0] == 0x01;
-}
 
 } // namespace
 
@@ -139,6 +159,23 @@ TypeToDtype<bfloat16_t>::operator Dtype() {
 template <>
 TypeToDtype<complex64_t>::operator Dtype() {
   return complex64;
+}
+
+bool issubdtype(const Dtype& a, const Dtype& b) {
+  return a == b;
+}
+
+bool issubdtype(const Dtype::Category& cat, const Dtype& type) {
+  return false;
+}
+
+bool issubdtype(const Dtype& type, const Dtype::Category& cat) {
+  return issubdtype(type_to_category[static_cast<uint32_t>(type.val)], cat);
+}
+
+bool issubdtype(const Dtype::Category& a, const Dtype::Category& b) {
+  return subcategory_to_category[static_cast<uint32_t>(a)]
+                                [static_cast<uint32_t>(b)];
 }
 
 // Array protocol typestring for Dtype

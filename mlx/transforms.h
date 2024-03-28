@@ -8,7 +8,7 @@ namespace mlx::core {
 
 void eval(std::vector<array> outputs);
 
-template <typename... Arrays>
+template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>
 void eval(Arrays&&... outputs) {
   eval(std::vector<array>{std::forward<Arrays>(outputs)...});
 }

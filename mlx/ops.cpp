@@ -47,7 +47,7 @@ std::pair<std::vector<int>, std::vector<int>> compute_reduce_shape(
 }
 
 Dtype at_least_float(const Dtype& d) {
-  return is_floating_point(d) ? d : promote_types(d, float32);
+  return issubdtype(d, inexact) ? d : promote_types(d, float32);
 }
 
 } // namespace
@@ -158,50 +158,64 @@ array linspace(
       to_stream(s));
 }
 
-array astype(const array& a, Dtype dtype, StreamOrDevice s /* = {} */) {
+array astype(array a, Dtype dtype, StreamOrDevice s /* = {} */) {
   if (dtype == a.dtype()) {
-    return a;
+    return std::move(a);
   }
+  auto copied_shape = a.shape(); // |a| will be moved
   return array(
-      a.shape(), dtype, std::make_shared<AsType>(to_stream(s), dtype), {a});
+      std::move(copied_shape),
+      dtype,
+      std::make_shared<AsType>(to_stream(s), dtype),
+      {std::move(a)});
 }
 
 array as_strided(
-    const array& a,
+    array a,
     std::vector<int> shape,
     std::vector<size_t> strides,
     size_t offset,
     StreamOrDevice s /* = {} */) {
-  // Force the input array to be contiguous
-  auto x = reshape(a, {-1}, s);
+  auto copied_shape = shape; // |shape| will be moved
+  auto dtype = a.dtype(); // |a| will be moved
   return array(
-      shape,
-      a.dtype(),
-      std::make_shared<AsStrided>(to_stream(s), shape, strides, offset),
-      {x});
+      std::move(copied_shape),
+      dtype,
+      std::make_shared<AsStrided>(
+          to_stream(s), std::move(shape), std::move(strides), offset),
+      // Force the input array to be contiguous.
+      {reshape(std::move(a), {-1}, s)});
 }
 
-array copy(const array& a, StreamOrDevice s /* = {} */) {
-  return array(a.shape(), a.dtype(), std::make_shared<Copy>(to_stream(s)), {a});
+array copy(array a, StreamOrDevice s /* = {} */) {
+  auto copied_shape = a.shape(); // |a| will be moved
+  auto dtype = a.dtype();
+  return array(
+      std::move(copied_shape),
+      dtype,
+      std::make_shared<Copy>(to_stream(s)),
+      {std::move(a)});
 }
 
 array full(
-    const std::vector<int>& shape,
-    const array& vals,
+    std::vector<int> shape,
+    array vals,
     Dtype dtype,
     StreamOrDevice s /* = {} */) {
-  if (std::any_of(shape.begin(), shape.end(), [](auto i) { return i < 0; })) {
+  if (std::any_of(shape.begin(), shape.end(), [](int i) { return i < 0; })) {
     throw std::invalid_argument("[full] Negative dimensions not allowed.");
   }
-  auto in = broadcast_to(astype(vals, dtype, s), shape, s);
-  return array(shape, dtype, std::make_shared<Full>(to_stream(s)), {in});
+  auto copied_shape = shape; // |shape| will be moved
+  return array(
+      std::move(copied_shape),
+      dtype,
+      std::make_shared<Full>(to_stream(s)),
+      {broadcast_to(astype(std::move(vals), dtype, s), std::move(shape), s)});
 }
 
-array full(
-    const std::vector<int>& shape,
-    const array& vals,
-    StreamOrDevice s /* = {} */) {
-  return full(shape, vals, vals.dtype(), to_stream(s));
+array full(std::vector<int> shape, array vals, StreamOrDevice s /* = {} */) {
+  auto dtype = vals.dtype(); // |vals| will be moved
+  return full(std::move(shape), std::move(vals), dtype, to_stream(s));
 }
 
 array zeros(
@@ -1140,7 +1154,7 @@ array array_equal(
     return array(false);
   } else {
     auto dtype = promote_types(a.dtype(), b.dtype());
-    equal_nan &= is_floating_point(dtype);
+    equal_nan &= issubdtype(dtype, inexact);
     return all(
         array(
             a.shape(),
@@ -1153,7 +1167,7 @@ array array_equal(
 }
 
 array isnan(const array& a, StreamOrDevice s /* = {} */) {
-  if (is_integral(a.dtype())) {
+  if (issubdtype(a.dtype(), integer) || a.dtype() == bool_) {
     return full(a.shape(), false, bool_, s);
   }
   return not_equal(a, a, s);
@@ -1164,14 +1178,14 @@ array isinf(const array& a, StreamOrDevice s /* = {} */) {
 }
 
 array isposinf(const array& a, StreamOrDevice s /* = {} */) {
-  if (is_integral(a.dtype())) {
+  if (issubdtype(a.dtype(), integer) || a.dtype() == bool_) {
     return full(a.shape(), false, bool_, s);
   }
   return equal(a, array(std::numeric_limits<float>::infinity(), a.dtype()), s);
 }
 
 array isneginf(const array& a, StreamOrDevice s /* = {} */) {
-  if (is_integral(a.dtype())) {
+  if (issubdtype(a.dtype(), integer) || a.dtype() == bool_) {
     return full(a.shape(), false, bool_, s);
   }
   return equal(a, array(-std::numeric_limits<float>::infinity(), a.dtype()), s);
@@ -1929,7 +1943,7 @@ array floor_divide(
     const array& b,
     StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  if (is_floating_point(dtype)) {
+  if (issubdtype(dtype, inexact)) {
     return floor(divide(a, b, s), s);
   }
 
@@ -1957,7 +1971,7 @@ array operator%(const array& a, const array& b) {
 std::vector<array>
 divmod(const array& a, const array& b, StreamOrDevice s /* = {} */) {
   auto dtype = promote_types(a.dtype(), b.dtype());
-  if (is_complex(dtype)) {
+  if (issubdtype(dtype, complexfloating)) {
     throw std::invalid_argument("[divmod] Complex type not supported.");
   }
   auto inputs =
@@ -2220,7 +2234,7 @@ array matmul(
   }
   // Type promotion
   auto out_type = promote_types(a.dtype(), b.dtype());
-  if (!is_floating_point(out_type) || is_complex(out_type)) {
+  if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
     msg << "[matmul] Only real floating point types are supported but "
         << a.dtype() << " and " << b.dtype() << " were provided which results"
@@ -2330,7 +2344,7 @@ array gather(
 
   // Promote indices to the same type
   auto dtype = result_type(indices);
-  if (!is_integral(dtype)) {
+  if (issubdtype(dtype, inexact)) {
     throw std::invalid_argument(
         "[gather] Got indices with invalid dtype. Indices must be integral.");
   }
@@ -2521,7 +2535,7 @@ array scatter(
 
   // Promote indices to the same type
   auto dtype = result_type(indices);
-  if (!is_integral(dtype)) {
+  if (issubdtype(dtype, inexact)) {
     throw std::invalid_argument(
         "[scatter] Got indices with invalid dtype. Indices must be integral.");
   }
@@ -2834,7 +2848,7 @@ inline std::vector<int> conv_out_shape(
 }
 
 inline void run_conv_checks(const array& in, const array& wt, int n_dim) {
-  if (!is_floating_point(in.dtype()) && kindof(in.dtype()) != Dtype::Kind::c) {
+  if (!issubdtype(in.dtype(), floating)) {
     std::ostringstream msg;
     msg << "[conv] Invalid input array with type " << in.dtype() << "."
         << " Convolution currently only supports floating point types";
@@ -2971,6 +2985,35 @@ array conv_general(
     input_dilation = std::vector<int>(spatial_dims, input_dilation_int);
   }
 
+  // Check for negative padding
+  bool has_neg_padding = false;
+  for (auto& pd : padding_lo) {
+    has_neg_padding = (pd < 0);
+  }
+  for (auto& pd : padding_hi) {
+    has_neg_padding = (pd < 0);
+  }
+
+  // Handle negative padding
+  if (has_neg_padding) {
+    std::vector<int> starts(in.ndim(), 0);
+    std::vector<int> stops = in.shape();
+
+    for (int i = 0; i < spatial_dims; i++) {
+      if (padding_lo[i] < 0) {
+        starts[i + 1] -= padding_lo[i];
+        padding_lo[i] = 0;
+      }
+
+      if (padding_hi[i] < 0) {
+        stops[i + 1] += padding_hi[i];
+        padding_hi[i] = 0;
+      }
+    }
+
+    in = slice(in, std::move(starts), std::move(stops), s);
+  }
+
   // Get output shapes
   std::vector<int> out_shape = conv_out_shape(
       in.shape(),
@@ -3062,7 +3105,7 @@ array quantized_matmul(
   }
 
   auto dtype = result_type(x, scales, biases);
-  if (!is_floating_point(dtype) || is_complex(dtype)) {
+  if (!issubdtype(dtype, floating)) {
     std::ostringstream msg;
     msg << "[quantized_matmul] Only real floating types are supported but "
         << "the passed types where x.dtype() == " << x.dtype()
@@ -3364,7 +3407,7 @@ array addmm(
 
   // Type promotion
   auto out_type = result_type(a, b, c);
-  if (!is_floating_point(out_type) || is_complex(out_type)) {
+  if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
     msg << "[addmm] Only real floating point types are supported but "
         << c.dtype() << ", " << a.dtype() << " and " << b.dtype()

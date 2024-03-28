@@ -256,6 +256,17 @@ class array {
     array_desc_->position = position;
   }
 
+  /** The i-th output of the array's primitive. */
+  const array& output(int i) const {
+    if (i == array_desc_->position) {
+      return *this;
+    } else if (i < array_desc_->position) {
+      return siblings()[i];
+    } else {
+      return siblings()[i + 1];
+    }
+  };
+
   /** The outputs of the array's primitive (i.e. this array and
    * its siblings) in the order the primitive expects. */
   std::vector<array> outputs() const {
@@ -509,5 +520,16 @@ void array::init(It src) {
       break;
   }
 }
+
+/* Utilities for determining whether a template parameter is array. */
+template <typename T>
+inline constexpr bool is_array_v =
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, array>;
+
+template <typename... T>
+inline constexpr bool is_arrays_v = (is_array_v<T> && ...);
+
+template <typename... T>
+using enable_for_arrays_t = typename std::enable_if_t<is_arrays_v<T...>>;
 
 } // namespace mlx::core

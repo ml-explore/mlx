@@ -19,7 +19,6 @@ Array
     array.ndim
     array.shape
     array.size
-    Dtype
     array.abs
     array.all
     array.any
@@ -32,7 +31,6 @@ Array
     array.cumsum
     array.diag
     array.diagonal
-    array.dtype
     array.exp
     array.flatten
     array.log

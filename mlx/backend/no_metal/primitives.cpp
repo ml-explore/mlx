@@ -103,7 +103,9 @@ NO_GPU(Inverse)
 
 namespace fast {
 NO_GPU_MULTI(LayerNorm)
+NO_GPU_MULTI(LayerNormVJP)
 NO_GPU_MULTI(RMSNorm)
+NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_MULTI(RoPE)
 NO_GPU(ScaledDotProductAttention)
 } // namespace fast

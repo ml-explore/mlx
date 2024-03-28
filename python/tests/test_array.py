@@ -649,6 +649,14 @@ class TestArray(mlx_tests.MLXTestCase):
 
             self.assertEqual(b_npy.dtype, np_dtype)
 
+    def test_array_np_shape_dim_check(self):
+        a_npy = np.empty(2**31, dtype=np.bool_)
+        with self.assertRaises(ValueError) as e:
+            mx.array(a_npy)
+        self.assertEqual(
+            str(e.exception), "Shape dimension falls outside supported `int` range."
+        )
+
     def test_dtype_promotion(self):
         dtypes_list = [
             (mx.bool_, np.bool_),
@@ -869,6 +877,10 @@ class TestArray(mlx_tests.MLXTestCase):
         a_sliced_mlx = a_mlx[None]
         a_sliced_npy = np.asarray(a_sliced_mlx)
         self.assertTrue(np.array_equal(a_sliced_npy, a_npy[None]))
+
+        a_sliced_mlx = a_mlx[:, None]
+        a_sliced_npy = np.asarray(a_sliced_mlx)
+        self.assertTrue(np.array_equal(a_sliced_npy, a_npy[:, None]))
 
         # Multi dim indexing, all ints
         self.assertEqual(a_mlx[0, 0].item(), 0)

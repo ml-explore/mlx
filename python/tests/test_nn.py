@@ -54,6 +54,21 @@ class TestBase(mlx_tests.MLXTestCase):
 
         m.apply_to_modules(assert_training)
 
+    def test_module_attributes(self):
+
+        class Model(nn.Module):
+
+            def __init__(self):
+                super().__init__()
+                self.val = None
+                self.initialize()
+
+            def initialize(self):
+                self.val = mx.array(1.0)
+
+        model = Model()
+        self.assertTrue(mx.array_equal(model.val, mx.array(1.0)))
+
     def test_model_with_dict(self):
         class DictModule(nn.Module):
             def __init__(self):
@@ -146,6 +161,16 @@ class TestBase(mlx_tests.MLXTestCase):
         m = nn.Linear(10, 1)
         m.state["hello"] = "world"
         self.assertEqual(m.state["hello"], "world")
+
+    def test_chaining(self):
+        m = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 1))
+        pre_freeze_num_params = len(m.parameters())
+        m.freeze().unfreeze()
+        self.assertEqual(len(m.parameters()), pre_freeze_num_params)
+        params_dict = m.parameters()
+
+        self.assertFalse(m.update(params_dict).eval()._training)
+        self.assertTrue(m.train()._training)
 
 
 class TestLayers(mlx_tests.MLXTestCase):
@@ -1491,6 +1516,29 @@ class TestLayers(mlx_tests.MLXTestCase):
             str(nn.AvgPool2d(kernel_size=(1, 2), stride=2, padding=(1, 2))),
             "AvgPool2d(kernel_size=(1, 2), stride=(2, 2), padding=(1, 2))",
         )
+
+    def test_set_dtype(self):
+        def assert_dtype(layer, dtype):
+            for k, v in tree_flatten(layer.parameters()):
+                self.assertEqual(v.dtype, dtype, f"dtype mismatch for {k}")
+
+        layer = nn.Linear(input_dims=4, output_dims=8, bias=True)
+        assert_dtype(layer, mx.float32)
+
+        layer.set_dtype(mx.bfloat16)
+        assert_dtype(layer, mx.bfloat16)
+
+        layer.set_dtype(mx.float32, lambda x: False)
+        assert_dtype(layer, mx.bfloat16)
+
+        layer.set_dtype(mx.int32, lambda x: True)
+        assert_dtype(layer, mx.int32)
+
+        layer.set_dtype(mx.int64, predicate=None)
+        assert_dtype(layer, mx.int64)
+
+        layer.set_dtype(mx.int16, lambda x: mx.issubdtype(x, mx.integer))
+        assert_dtype(layer, mx.int16)
 
     def test_rnn(self):
         layer = nn.RNN(input_size=5, hidden_size=12, bias=True)
