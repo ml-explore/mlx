@@ -822,10 +822,9 @@ void init_array(nb::module_& m) {
           "__eq__",
           [](const array& a,
              const ScalarOrArray& v) -> std::variant<array, bool> {
-            bool is_convertable = is_convertable_to_array(v);
-            if (!is_convertable) {
+            if (!is_convertable_to_array(v)) {
               return false;
-            } // Hi
+            }
             return equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
@@ -857,8 +856,7 @@ void init_array(nb::module_& m) {
           "__ne__",
           [](const array& a,
              const ScalarOrArray v) -> std::variant<array, bool> {
-            bool is_convertable = is_convertable_to_array(v);
-            if (!is_convertable) {
+            if (!is_convertable_to_array(v)) {
               return true;
             }
             return not_equal(a, to_array(v, a.dtype()));

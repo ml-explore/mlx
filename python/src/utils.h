@@ -56,7 +56,7 @@ inline bool is_convertable_to_array(const ScalarOrArray& v) {
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return true;
   } else if (auto pv = std::get_if<nb::object>(&v); pv) {
-    return nb::hasattr(*pv, "__mlx_array__") || nb::isinstance<array>(*pv);
+    return nb::isinstance<array>(*pv) || nb::hasattr(*pv, "__mlx_array__");
   }
   return false;
 }
