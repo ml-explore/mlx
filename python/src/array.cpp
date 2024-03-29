@@ -683,6 +683,11 @@ void init_array(nb::module_& m) {
       .def(
           "__add__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot add an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             auto b = to_array(v, a.dtype());
             return add(a, b);
           },
@@ -690,6 +695,12 @@ void init_array(nb::module_& m) {
       .def(
           "__iadd__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace_add an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             a.overwrite_descriptor(add(a, to_array(v, a.dtype())));
             return a;
           },
@@ -698,18 +709,35 @@ void init_array(nb::module_& m) {
       .def(
           "__radd__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot add an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return add(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__sub__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot subtract an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return subtract(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__isub__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace subtract an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             a.overwrite_descriptor(subtract(a, to_array(v, a.dtype())));
             return a;
           },
@@ -718,18 +746,36 @@ void init_array(nb::module_& m) {
       .def(
           "__rsub__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot subtract an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return subtract(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__mul__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot multiply an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return multiply(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__imul__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace multiply an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             a.overwrite_descriptor(multiply(a, to_array(v, a.dtype())));
             return a;
           },
@@ -738,18 +784,35 @@ void init_array(nb::module_& m) {
       .def(
           "__rmul__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot multiply an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return multiply(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__truediv__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot divide an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return divide(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__itruediv__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace divide an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             if (!issubdtype(a.dtype(), inexact)) {
               throw std::invalid_argument(
                   "In place division cannot cast to non-floating point type.");
@@ -762,30 +825,56 @@ void init_array(nb::module_& m) {
       .def(
           "__rtruediv__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot divide an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return divide(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__div__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot divide an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return divide(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__rdiv__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot divide an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return divide(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__floordiv__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot divide an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return floor_divide(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ifloordiv__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace divide an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             a.overwrite_descriptor(floor_divide(a, to_array(v, a.dtype())));
             return a;
           },
@@ -794,6 +883,11 @@ void init_array(nb::module_& m) {
       .def(
           "__rfloordiv__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot divide an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             auto b = to_array(v, a.dtype());
             return floor_divide(b, a);
           },
@@ -801,12 +895,23 @@ void init_array(nb::module_& m) {
       .def(
           "__mod__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot mod an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return remainder(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__imod__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace mod an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             a.overwrite_descriptor(remainder(a, to_array(v, a.dtype())));
             return a;
           },
@@ -815,6 +920,11 @@ void init_array(nb::module_& m) {
       .def(
           "__rmod__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot mod an mlx.core.array and " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return remainder(to_array(v, a.dtype()), a);
           },
           "other"_a)
@@ -831,24 +941,48 @@ void init_array(nb::module_& m) {
       .def(
           "__lt__",
           [](const array& a, const ScalarOrArray v) -> array {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot compare an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return less(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__le__",
           [](const array& a, const ScalarOrArray v) -> array {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot compare an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return less_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__gt__",
           [](const array& a, const ScalarOrArray v) -> array {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot compare an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return greater(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ge__",
           [](const array& a, const ScalarOrArray v) -> array {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot compare an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return greater_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
@@ -890,18 +1024,34 @@ void init_array(nb::module_& m) {
       .def(
           "__pow__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot raise an mlx.core.array to " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return power(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__rpow__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot raise an mlx.core.array to " << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             return power(to_array(v, a.dtype()), a);
           },
           "other"_a)
       .def(
           "__ipow__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace raise an mlx.core.array to "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             a.overwrite_descriptor(power(a, to_array(v, a.dtype())));
             return a;
           },
@@ -923,6 +1073,12 @@ void init_array(nb::module_& m) {
       .def(
           "__and__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot bitwise and an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             auto b = to_array(v, a.dtype());
             if (issubdtype(a.dtype(), inexact) ||
                 issubdtype(b.dtype(), inexact)) {
@@ -939,6 +1095,12 @@ void init_array(nb::module_& m) {
       .def(
           "__iand__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace bitwise and an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             auto b = to_array(v, a.dtype());
             if (issubdtype(a.dtype(), inexact) ||
                 issubdtype(b.dtype(), inexact)) {
@@ -957,6 +1119,12 @@ void init_array(nb::module_& m) {
       .def(
           "__or__",
           [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot bitwise or an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             auto b = to_array(v, a.dtype());
             if (issubdtype(a.dtype(), inexact) ||
                 issubdtype(b.dtype(), inexact)) {
@@ -973,6 +1141,12 @@ void init_array(nb::module_& m) {
       .def(
           "__ior__",
           [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              std::ostringstream msg;
+              msg << "Cannot inplace bitwise or an mlx.core.array and "
+                  << typeid(v).name();
+              throw std::invalid_argument(msg.str());
+            }
             auto b = to_array(v, a.dtype());
             if (issubdtype(a.dtype(), inexact) ||
                 issubdtype(b.dtype(), inexact)) {
