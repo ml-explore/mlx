@@ -206,28 +206,37 @@ array multivariate_normal(
     throw std::invalid_argument("[multivariate_normal] dtype must be float32.");
   }
 
-  // Check shape and dimensions
-  if (mean.ndim() != 1) {
+  auto n = *(mean.shape().end() - 1);
+
+  // Check shapes comatibility of mean and cov
+  if (n != *(cov.shape().end() - 2)) {
     throw std::invalid_argument(
-        "[multivariate_normal] mean must be a 1D array.");
+        "[multivariate_normal] last two dimensions of cov must be equal.");
   }
-  if (cov.ndim() != 2) {
-    throw std::invalid_argument(
-        "[multivariate_normal] cov must be a 2D array.");
-  }
-  if (cov.shape()[0] != cov.shape()[1]) {
-    throw std::invalid_argument(
-        "[multivariate_normal] cov must be a square matrix.");
-  }
-  if (mean.shape()[0] != cov.shape()[0]) {
+  if (*(mean.shape().end() - 1) != *(cov.shape().end() - 1)) {
     throw std::invalid_argument(
         "[multivariate_normal] mean and cov must have compatible shapes.");
   }
 
   // Compute output shape
-  auto N = mean.shape()[0];
-  std::vector<int> output_shape = shape;
-  output_shape.push_back(N);
+  std::vector<int> truncated_output_shape;
+  try {
+    auto truncated_mean_shape =
+        std::vector<int>(mean.shape().begin(), mean.shape().end() - 1);
+    auto truncated_cov_shape =
+        std::vector<int>(cov.shape().begin(), cov.shape().end() - 2);
+    auto trucated_inferred_shape =
+        broadcast_shapes(truncated_cov_shape, truncated_cov_shape);
+    truncated_output_shape = broadcast_shapes(trucated_inferred_shape, shape);
+  } catch (const std::invalid_argument& e) {
+    throw std::invalid_argument(
+        "[multivariate_normal] mean, cov and shape must have compatible shapes.");
+  }
+  std::vector<int> output_shape = {n};
+  output_shape.insert(
+      output_shape.begin(),
+      truncated_output_shape.begin(),
+      truncated_output_shape.end());
 
   // Compute the square-root of the covariance matrix, using the SVD
   auto covariance = astype(cov, float32, stream);
@@ -235,8 +244,8 @@ array multivariate_normal(
   auto std =
       astype(matmul(SVD[0] * sqrt(SVD[1]), SVD[2], stream), dtype, stream);
 
+  // Generate standard the samples
   auto standard_normal = normal(output_shape, dtype, 0.0, 1.0, key, stream);
-
   return add(mean, matmul(standard_normal, std, stream), stream);
 }
 

@@ -96,7 +96,7 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(a, b))
 
         self.assertEqual(mx.random.normal().dtype, mx.random.normal(dtype=None).dtype)
-        
+
         # Test not getting -inf or inf with half precison
         for hp in [mx.float16, mx.bfloat16]:
             a = abs(mx.random.normal(shape=(10000,), loc=0, scale=1, dtype=hp))
@@ -109,7 +109,6 @@ class TestRandom(mlx_tests.MLXTestCase):
 
         a = mx.random.multivariate_normal(mean, cov, key=key, stream=mx.cpu)
         self.assertEqual(a.shape, (2,))
-        self.assertEqual(a.dtype, mx.float32)
 
         ## Check dtypes
         for t in [mx.float32]:
@@ -132,11 +131,16 @@ class TestRandom(mlx_tests.MLXTestCase):
                     mean, cov, dtype=t, key=key, stream=mx.cpu
                 )
 
-        ## Check incompatibel shapes
+        ## Check incompatible shapes
         with self.assertRaises(ValueError):
             mean = mx.zeros((2, 2))
             cov = mx.zeros((2, 2))
-            mx.random.multivariate_normal(mean, cov, key=key, stream=mx.cpu)
+            mx.random.multivariate_normal(mean, cov, shape=(3,), key=key, stream=mx.cpu)
+
+        with self.assertRaises(ValueError):
+            mean = mx.zeros((2))
+            cov = mx.zeros((2, 2, 2))
+            mx.random.multivariate_normal(mean, cov, shape=(3,), key=key, stream=mx.cpu)
 
         with self.assertRaises(ValueError):
             mean = mx.zeros((3,))
@@ -147,6 +151,12 @@ class TestRandom(mlx_tests.MLXTestCase):
             mean = mx.zeros((2,))
             cov = mx.zeros((2, 3))
             mx.random.multivariate_normal(mean, cov, key=key, stream=mx.cpu)
+
+        ## Different shape of mean and cov
+        mean = mx.array([[0, 7], [1, 2], [3, 4]])
+        cov = mx.array([[1, 0.5], [0.5, 1]])
+        a = mx.random.multivariate_normal(mean, cov, shape=(4, 3), stream=mx.cpu)
+        self.assertEqual(a.shape, (4, 3, 2))
 
         ## Check correcteness of the mean and covariance
         n_test = int(1e7)

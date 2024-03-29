@@ -444,16 +444,21 @@ TEST_CASE("test random multivariate_normal") {
     auto mean = zeros({3, 1});
     auto cov = eye(3);
     CHECK_THROWS_AS(
-        random::multivariate_normal(mean, cov, {1000, 3}, float32),
+        random::multivariate_normal(
+            mean,
+            cov,
+            {
+                1000,
+            },
+            float32),
         std::invalid_argument);
   }
   {
     auto mean = zeros({3});
-    auto cov = eye(3);
+    auto cov = zeros({2, 3});
     cov = reshape(cov, {1, 3, 3});
-    CHECK_THROWS_AS(
-        random::multivariate_normal(mean, cov, {1000, 3}, float32),
-        std::invalid_argument);
+    auto x = random::multivariate_normal(mean, cov, {1000, 2}, float32);
+    CHECK_EQ(x.shape(), std::vector<int>({1000, 2, 3}));
   }
   {
     auto mean = zeros({3});
