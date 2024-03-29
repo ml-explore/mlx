@@ -911,19 +911,13 @@ void init_array(nb::module_& m) {
           [](const array& a, const ScalarOrArray v) -> array {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("greater than", v);
-            }
             return greater(a, to_array(v, a.dtype()));
-          },
-          "other"_a)
       .def(
           "__ge__",
           [](const array& a, const ScalarOrArray v) -> array {
             if (!is_comparable_with_array(v)) {
               throw_invalid_operation("greater than or equal", v);
-            }
             return greater_equal(a, to_array(v, a.dtype()));
-          },
-          "other"_a)
       .def(
           "__ne__",
           [](const array& a,
