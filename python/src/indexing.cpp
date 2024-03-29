@@ -482,8 +482,12 @@ array mlx_get_item_list(array src, const nb::list& entries) {
               "Cannot index mlx array using the given type yet");
         }
       }
-      auto arr = array({gather_indices.begin(), gather_indices.end()}, uint32);
-      std::vector<int> slice_sizes = {src.shape(axis), 1};
+      auto arr = array(
+          gather_indices.begin(),
+          {static_cast<int>(gather_indices.size())},
+          uint32);
+      std::vector<int> slice_sizes = src.shape();
+      std::fill(slice_sizes.begin(), slice_sizes.end(), 1);
       gathered.push_back(gather(src, arr, {axis}, slice_sizes));
       axis++;
     } else {
@@ -498,7 +502,7 @@ array mlx_get_item_list(array src, const nb::list& entries) {
     os << gathered[i];
     printf("%s\n", os.str().c_str());
   }
-  src = concatenate(gathered, axis);
+  src = stack(gathered, 0);
   return src;
 }
 
