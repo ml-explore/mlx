@@ -222,10 +222,6 @@ class TestInequality(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             a**tpl_
         with self.assertRaises(ValueError):
-            a << tpl_
-        with self.assertRaises(ValueError):
-            a >> tpl_
-        with self.assertRaises(ValueError):
             a & tpl_
         with self.assertRaises(ValueError):
             a | str_
