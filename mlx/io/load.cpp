@@ -26,16 +26,6 @@ constexpr uint8_t MAGIC[] = {
     0x59,
 };
 
-inline bool is_big_endian_() {
-  union ByteOrder {
-    int32_t i;
-    uint8_t c[4];
-  };
-  ByteOrder b = {0x01234567};
-
-  return b.c[0] == 0x01;
-}
-
 } // namespace
 
 /** Save array to out stream in .npy format */
@@ -94,7 +84,7 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
     uint16_t v1_header_len = header.tellp();
     const char* len_bytes = reinterpret_cast<const char*>(&v1_header_len);
 
-    if (!is_big_endian_()) {
+    if (!is_big_endian()) {
       magic_ver_len.write(len_bytes, 2);
     } else {
       magic_ver_len.write(len_bytes + 1, 1);
@@ -106,7 +96,7 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
     uint32_t v2_header_len = header.tellp();
     const char* len_bytes = reinterpret_cast<const char*>(&v2_header_len);
 
-    if (!is_big_endian_()) {
+    if (!is_big_endian()) {
       magic_ver_len.write(len_bytes, 4);
     } else {
       magic_ver_len.write(len_bytes + 3, 1);
@@ -124,16 +114,13 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
 }
 
 /** Save array to file in .npy format */
-void save(const std::string& file_, array a) {
-  // Open and check file
-  std::string file = file_;
-
+void save(std::string file, array a) {
   // Add .npy to file name if it is not there
   if (file.length() < 4 || file.substr(file.length() - 4, 4) != ".npy")
     file += ".npy";
 
   // Serialize array
-  save(std::make_shared<io::FileWriter>(file), a);
+  save(std::make_shared<io::FileWriter>(std::move(file)), a);
 }
 
 /** Load array from reader in .npy format */
@@ -219,7 +206,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   // Build primitive
 
   size_t offset = 8 + header_len_size + header.length();
-  bool swap_endianness = read_is_big_endian != is_big_endian_();
+  bool swap_endianness = read_is_big_endian != is_big_endian();
 
   if (col_contiguous) {
     std::reverse(shape.begin(), shape.end());
@@ -227,7 +214,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
   auto loaded_array = array(
       shape,
       dtype,
-      std::make_unique<Load>(to_stream(s), in_stream, offset, swap_endianness),
+      std::make_shared<Load>(to_stream(s), in_stream, offset, swap_endianness),
       std::vector<array>{});
   if (col_contiguous) {
     loaded_array = transpose(loaded_array, s);
@@ -237,8 +224,8 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
 }
 
 /** Load array from file in .npy format */
-array load(const std::string& file, StreamOrDevice s) {
-  return load(std::make_shared<io::FileReader>(file), s);
+array load(std::string file, StreamOrDevice s) {
+  return load(std::make_shared<io::FileReader>(std::move(file)), s);
 }
 
 } // namespace mlx::core

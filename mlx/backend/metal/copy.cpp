@@ -12,8 +12,15 @@ namespace mlx::core {
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   if (ctype == CopyType::Vector) {
+    // If the input is donateable, we are doing a vector copy and the types
+    // have the same size, then the input buffer can hold the output.
     if (in.is_donatable() && in.itemsize() == out.itemsize()) {
       out.move_shared_buffer(in);
+      // If the output has the same type as the input then there is nothing to
+      // copy, just use the buffer.
+      if (in.dtype() == out.dtype()) {
+        return;
+      }
     } else {
       out.set_data(
           allocator::malloc_or_wait(in.data_size() * out.itemsize()),

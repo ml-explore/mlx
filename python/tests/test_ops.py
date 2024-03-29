@@ -1597,6 +1597,16 @@ class TestOps(mlx_tests.MLXTestCase):
                     self.assertTrue(np.array_equal(d_np, d_mx))
                     self.assertEqual(c_mx.dtype, mx.uint32)
 
+        # Test multi-block sort
+        a_np = np.random.normal(size=(32769,)).astype(np.float32)
+        a_mx = mx.array(a_np)
+
+        b_np = np.sort(a_np)
+        b_mx = mx.sort(a_mx)
+
+        self.assertTrue(np.array_equal(b_np, b_mx))
+        self.assertEqual(b_mx.dtype, a_mx.dtype)
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
@@ -1762,8 +1772,8 @@ class TestOps(mlx_tests.MLXTestCase):
         )
 
     def test_tensordot(self):
-        # No fp16 matmuls on linux
-        if self.is_linux:
+        # No fp16 matmuls on common cpu backend
+        if not self.is_apple_silicon:
             dtypes = [mx.float32]
         else:
             dtypes = [mx.float16, mx.float32]
@@ -2025,6 +2035,40 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(mx_res.shape, np_res.shape)
             self.assertEqual(mx_res.ndim, np_res.ndim)
             self.assertTrue(mx.all(mx.equal(mx_res, atleast_arrays[i])))
+
+    def test_issubdtype(self):
+        self.assertTrue(mx.issubdtype(mx.bfloat16, mx.inexact))
+
+        cats = [
+            "complexfloating",
+            "floating",
+            "inexact",
+            "signedinteger",
+            "unsignedinteger",
+            "integer",
+            "number",
+            "generic",
+            "bool_",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "float16",
+            "float32",
+            "complex64",
+        ]
+
+        for a in cats:
+            for b in cats:
+                self.assertEqual(
+                    mx.issubdtype(getattr(mx, a), getattr(mx, b)),
+                    np.issubdtype(getattr(np, a), getattr(np, b)),
+                    f"mx and np don't aggree on {a}, {b}",
+                )
 
 
 if __name__ == "__main__":

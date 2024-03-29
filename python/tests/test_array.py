@@ -89,6 +89,121 @@ class TestDtypes(mlx_tests.MLXTestCase):
                 self.assertListEqual(list(z.shape), list(y.shape))
 
 
+class TestEquality(mlx_tests.MLXTestCase):
+    def test_array_eq_array(self):
+        a = mx.array([1, 2, 3])
+        b = mx.array([1, 2, 3])
+        c = mx.array([1, 2, 4])
+        self.assertTrue(mx.all(a == b))
+        self.assertFalse(mx.all(a == c))
+
+    def test_array_eq_scalar(self):
+        a = mx.array([1, 2, 3])
+        b = 1
+        c = 4
+        d = 2.5
+        e = mx.array([1, 2.5, 3.25])
+        self.assertTrue(mx.any(a == b))
+        self.assertFalse(mx.all(a == c))
+        self.assertFalse(mx.all(a == d))
+        self.assertTrue(mx.any(a == e))
+
+    def test_list_equals_array(self):
+        a = mx.array([1, 2, 3])
+        b = [1, 2, 3]
+        c = [1, 2, 4]
+
+        # mlx array equality returns false if is compared with any kind of
+        # object which is not an mlx array
+        self.assertFalse(a == b)
+        self.assertFalse(a == c)
+
+    def test_tuple_equals_array(self):
+        a = mx.array([1, 2, 3])
+        b = (1, 2, 3)
+        c = (1, 2, 4)
+
+        # mlx array equality returns false if is compared with any kind of
+        # object which is not an mlx array
+        self.assertFalse(a == b)
+        self.assertFalse(a == c)
+
+
+class TestInequality(mlx_tests.MLXTestCase):
+    def test_array_ne_array(self):
+        a = mx.array([1, 2, 3])
+        b = mx.array([1, 2, 3])
+        c = mx.array([1, 2, 4])
+        self.assertFalse(mx.any(a != b))
+        self.assertTrue(mx.any(a != c))
+
+    def test_array_ne_scalar(self):
+        a = mx.array([1, 2, 3])
+        b = 1
+        c = 4
+        d = 1.5
+        e = 2.5
+        f = mx.array([1, 2.5, 3.25])
+        self.assertFalse(mx.all(a != b))
+        self.assertTrue(mx.any(a != c))
+        self.assertTrue(mx.any(a != d))
+        self.assertTrue(mx.any(a != e))
+        self.assertFalse(mx.all(a != f))
+
+    def test_list_not_equals_array(self):
+        a = mx.array([1, 2, 3])
+        b = [1, 2, 3]
+        c = [1, 2, 4]
+
+        # mlx array inequality returns true if is compared with any kind of
+        # object which is not an mlx array
+        self.assertTrue(a != b)
+        self.assertTrue(a != c)
+
+    def test_tuple_not_equals_array(self):
+        a = mx.array([1, 2, 3])
+        b = (1, 2, 3)
+        c = (1, 2, 4)
+
+        # mlx array inequality returns true if is compared with any kind of
+        # object which is not an mlx array
+        self.assertTrue(a != b)
+        self.assertTrue(a != c)
+
+    def test_obj_inequality_array(self):
+        str_ = "hello"
+        a = mx.array([1, 2, 3])
+        lst_ = [1, 2, 3]
+        tpl_ = (1, 2, 3)
+
+        # check if object comparison(</>/<=/>=) with mlx array should throw an exception
+        # if not, the tests will fail
+        with self.assertRaises(ValueError):
+            a < str_
+        with self.assertRaises(ValueError):
+            a > str_
+        with self.assertRaises(ValueError):
+            a <= str_
+        with self.assertRaises(ValueError):
+            a >= str_
+        with self.assertRaises(ValueError):
+            a < lst_
+        with self.assertRaises(ValueError):
+            a > lst_
+        with self.assertRaises(ValueError):
+            a <= lst_
+        with self.assertRaises(ValueError):
+            a >= lst_
+        with self.assertRaises(ValueError):
+            a < tpl_
+        with self.assertRaises(ValueError):
+            a > tpl_
+        with self.assertRaises(ValueError):
+            a <= tpl_
+        with self.assertRaises(ValueError):
+            a >= tpl_
+
+
 class TestArray(mlx_tests.MLXTestCase):
     def test_array_basics(self):
         x = mx.array(1)
@@ -534,6 +649,14 @@ class TestArray(mlx_tests.MLXTestCase):
 
             self.assertEqual(b_npy.dtype, np_dtype)
 
+    def test_array_np_shape_dim_check(self):
+        a_npy = np.empty(2**31, dtype=np.bool_)
+        with self.assertRaises(ValueError) as e:
+            mx.array(a_npy)
+        self.assertEqual(
+            str(e.exception), "Shape dimension falls outside supported `int` range."
+        )
+
     def test_dtype_promotion(self):
         dtypes_list = [
             (mx.bool_, np.bool_),
@@ -754,6 +877,10 @@ class TestArray(mlx_tests.MLXTestCase):
         a_sliced_mlx = a_mlx[None]
         a_sliced_npy = np.asarray(a_sliced_mlx)
         self.assertTrue(np.array_equal(a_sliced_npy, a_npy[None]))
+
+        a_sliced_mlx = a_mlx[:, None]
+        a_sliced_npy = np.asarray(a_sliced_mlx)
+        self.assertTrue(np.array_equal(a_sliced_npy, a_npy[:, None]))
 
         # Multi dim indexing, all ints
         self.assertEqual(a_mlx[0, 0].item(), 0)
@@ -1057,6 +1184,29 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.zeros((5, 5), mx.int32)
         a[2:-2, 2:-2] = 4
         self.assertEqual(a[2, 2].item(), 4)
+
+        # Check slice array slice
+        check_slices(
+            np.zeros((5, 4, 4)),
+            np.arange(4 * 2 * 3).reshape(4, 2, 3),
+            slice(0, 4),
+            np.array([1, 3]),
+            slice(None, -1),
+        )
+        check_slices(
+            np.zeros((5, 4, 4)),
+            np.arange(4 * 2 * 2).reshape(4, 2, 2),
+            slice(0, 4),
+            np.array([1, 3]),
+            slice(0, 4, 2),
+        )
+
+        check_slices(
+            np.zeros((1, 10, 4)),
+            np.arange(2 * 4).reshape(1, 2, 4),
+            slice(None, None, None),
+            np.array([1, 3]),
+        )
 
     def test_array_at(self):
         a = mx.array(1)

@@ -96,6 +96,11 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(a, b))
 
         self.assertEqual(mx.random.normal().dtype, mx.random.normal(dtype=None).dtype)
+        
+        # Test not getting -inf or inf with half precison
+        for hp in [mx.float16, mx.bfloat16]:
+            a = abs(mx.random.normal(shape=(10000,), loc=0, scale=1, dtype=hp))
+            self.assertTrue(mx.all(a < mx.inf))
 
     def test_multivariate_normal(self):
         key = mx.random.key(0)

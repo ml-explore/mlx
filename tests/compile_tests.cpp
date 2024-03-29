@@ -214,9 +214,10 @@ TEST_CASE("test simplify multi output") {
   // is respected in simplification
   {
     auto e = compile(multi_three)({})[0];
+    CHECK_EQ(e.inputs().size(), 4);
+    CHECK_EQ(e.inputs().at(0).id(), e.inputs().at(2).id());
+    CHECK_EQ(e.inputs().at(1).id(), e.inputs().at(3).id());
     CHECK(array_equal(e, array({0.0f, 1.0f, 0.0f, 1.0f})).item<bool>());
-    CHECK_EQ(e.inputs()[0].id(), e.inputs()[2].id());
-    CHECK_EQ(e.inputs()[1].id(), e.inputs()[3].id());
   }
   set_compile_mode(CompileMode::enabled);
 }

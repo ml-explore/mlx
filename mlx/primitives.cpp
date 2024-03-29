@@ -1127,7 +1127,7 @@ std::pair<std::vector<array>, std::vector<int>> Equal::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{equal(a, b, stream())}, axes};
+  return {{equal(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Equal::vjp(
@@ -1267,7 +1267,7 @@ std::pair<std::vector<array>, std::vector<int>> FFT::vmap(
       {array(
           out_shape,
           real_ && inverse_ ? float32 : complex64,
-          std::make_unique<FFT>(stream(), fft_axes, inverse_, real_),
+          std::make_shared<FFT>(stream(), fft_axes, inverse_, real_),
           {in})},
       {ax}};
 }
@@ -1377,7 +1377,7 @@ std::pair<std::vector<array>, std::vector<int>> Full::vmap(
   assert(axes.size() == 1);
   auto& in = inputs[0];
   auto out =
-      array(in.shape(), in.dtype(), std::make_unique<Full>(stream()), {in});
+      array(in.shape(), in.dtype(), std::make_shared<Full>(stream()), {in});
   return {{out}, axes};
 }
 
@@ -1468,7 +1468,7 @@ std::pair<std::vector<array>, std::vector<int>> Greater::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{greater(a, b, stream())}, axes};
+  return {{greater(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Greater::vjp(
@@ -1495,7 +1495,7 @@ std::pair<std::vector<array>, std::vector<int>> GreaterEqual::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{greater_equal(a, b, stream())}, axes};
+  return {{greater_equal(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> GreaterEqual::vjp(
@@ -1522,7 +1522,7 @@ std::pair<std::vector<array>, std::vector<int>> Less::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{less(a, b, stream())}, axes};
+  return {{less(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> Less::vjp(
@@ -1549,7 +1549,7 @@ std::pair<std::vector<array>, std::vector<int>> LessEqual::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
-  return {{less_equal(a, b, stream())}, axes};
+  return {{less_equal(a, b, stream())}, {to_ax}};
 }
 
 std::vector<array> LessEqual::vjp(
@@ -1604,7 +1604,7 @@ std::pair<std::vector<array>, std::vector<int>> Log::vmap(
       {array(
           in.shape(),
           in.dtype(),
-          std::make_unique<Log>(stream(), base_),
+          std::make_shared<Log>(stream(), base_),
           {in})},
       axes};
 }
@@ -2259,7 +2259,7 @@ std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
   auto out = array(
       shape,
       get_dtype(),
-      std::make_unique<RandomBits>(stream(), shape, width_),
+      std::make_shared<RandomBits>(stream(), shape, width_),
       {key});
   return {{out}, {kax}};
 }
@@ -2493,7 +2493,7 @@ std::pair<std::vector<array>, std::vector<int>> Scan::vmap(
       {array(
           in.shape(),
           out_dtype,
-          std::make_unique<Scan>(
+          std::make_shared<Scan>(
               stream(), reduce_type_, axis_ + axis_left, reverse_, inclusive_),
           {in})},
       axes};
@@ -2590,8 +2590,11 @@ std::vector<array> Scatter::vjp(
           break;
         case Scatter::Max:
         case Scatter::Min: {
-          auto mask = where(result == values, array({1}), array({0}));
-          vjps.push_back(multiply(cotangents[0], mask));
+          vjps.push_back(where(
+              equal(result, values, stream()),
+              cotangents[0],
+              array(0, cotangents[0].dtype()),
+              stream()));
           break;
         }
         default:
@@ -3300,7 +3303,7 @@ std::pair<std::vector<array>, std::vector<int>> NumberOfElements::vmap(
   array out = array(
       std::vector<int>{},
       dtype_,
-      std::make_unique<NumberOfElements>(stream(), new_axes, inverted_, dtype_),
+      std::make_shared<NumberOfElements>(stream(), new_axes, inverted_, dtype_),
       inputs);
 
   return {{out}, {-1}};

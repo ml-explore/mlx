@@ -16,11 +16,14 @@ def rope_orig(x, dims, traditional, base, scale, offset):
     theta = mx.reshape(positions, (-1, 1)) * mx.reshape(freqs, (1, -1))
     costheta, sintheta = mx.cos(theta), mx.sin(theta)
     if traditional:
-        x1 = x[..., ::2]
-        x2 = x[..., 1::2]
+        x1 = x[..., :dims:2]
+        x2 = x[..., 1:dims:2]
         rx1 = x1 * costheta - x2 * sintheta
         rx2 = x1 * sintheta + x2 * costheta
         rx = mx.concatenate([rx1[..., None], rx2[..., None]], axis=-1)
+        if dims < x.shape[-1]:
+            rx = mx.reshape(rx, (*x.shape[:-1], dims))
+            rx = mx.concatenate([rx, x[..., dims:]], axis=-1)
         return mx.reshape(rx, x.shape)
     else:
         x1 = x[..., : dims // 2]
@@ -32,6 +35,26 @@ def rope_orig(x, dims, traditional, base, scale, offset):
         else:
             rx = mx.concatenate([rx1, rx2], axis=-1)
         return rx
+
+
+def rms_norm(x, weight, eps):
+    x = x.astype(mx.float32)
+    x = x * mx.rsqrt(x.square().mean(-1, keepdims=True) + eps)
+    return weight * x.astype(weight.dtype)
+
+
+def layer_norm(x, weight, bias, eps):
+    ot = x.dtype
+    x = x.astype(mx.float32)
+    mean = x.mean(axis=-1, keepdims=True)
+    var = x.var(axis=-1, keepdims=True)
+    x = (x - mean) * mx.rsqrt(var + eps)
+    x = x.astype(ot)
+    if weight is not None:
+        x = x * weight
+    if bias is not None:
+        x = x + bias
+    return x
 
 
 class TestFast(mlx_tests.MLXTestCase):
@@ -114,6 +137,243 @@ class TestFast(mlx_tests.MLXTestCase):
                     offset=offset,
                 )
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+    def test_rope_grad(self):
+        D = 32
+        defaults = (D, 10000.0, 1.0, 0, False)
+        for dims in (D, D // 2):
+            for traditional in (True, False):
+                _, base, scale, offset, _ = defaults
+                f1 = lambda x, y: (
+                    rope_orig(x, dims, traditional, base, scale, offset) * y
+                ).sum()
+                f2 = lambda x, y: (
+                    mx.fast.rope(
+                        x,
+                        dims,
+                        traditional=traditional,
+                        base=base,
+                        scale=scale,
+                        offset=offset,
+                    )
+                    * y
+                ).sum()
+
+                x = mx.random.uniform(shape=(2, 100, D))
+                y = mx.random.uniform(shape=(2, 100, D))
+                g1 = mx.grad(f1)(x, y)
+                g2 = mx.grad(f2)(x, y)
+                self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
+
+    def test_rms_norm(self):
+        # Per dtype absolute tolerance
+        tolerances = {mx.float32: 1e-6, mx.float16: 1e-3, mx.bfloat16: 1e-2}
+
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        epss = [1e-3, 1e-5]
+        dimss = [31, 32, 33]
+        defaults = (mx.float32, 1e-5, 32)
+
+        for dtype in dtypes:
+            _, eps, dims = defaults
+            x = mx.random.uniform(
+                shape=(
+                    2,
+                    dims,
+                )
+            ).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = rms_norm(x, weight, eps)
+            rx_fast = mx.fast.rms_norm(x, weight, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        for eps in epss:
+            dtype, _, dims = defaults
+            x = mx.random.uniform(shape=(2, dims)).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = rms_norm(x, weight, eps)
+            rx_fast = mx.fast.rms_norm(x, weight, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        for dims in dimss:
+            dtype, eps, _ = defaults
+            x = mx.random.uniform(shape=(2, dims)).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = rms_norm(x, weight, eps)
+            rx_fast = mx.fast.rms_norm(x, weight, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        # Test > 4096
+        dims, dtype, eps = 4099, mx.float32, 1e-5
+        x = mx.random.uniform(shape=(dims,)).astype(dtype)
+        weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+        rx = rms_norm(x, weight, eps)
+        rx_fast = mx.fast.rms_norm(x, weight, eps)
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-6)
+
+    def test_rms_norm_grad(self):
+        D = 32
+        eps = 1e-5
+        f1 = lambda x, w, y: (rms_norm(x, w, eps) * y).sum()
+        f2 = lambda x, w, y: (mx.fast.rms_norm(x, w, eps) * y).sum()
+
+        x = mx.random.uniform(shape=(8, 100, D))
+        w = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(8, 100, D))
+        gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
+        gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+
+        D = 8192
+        x = mx.random.uniform(shape=(2, 2, D))
+        w = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(2, 2, D))
+        gx1, gw1 = mx.grad(f1, argnums=(0, 1))(x, w, y)
+        gx2, gw2 = mx.grad(f2, argnums=(0, 1))(x, w, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+
+        def gf(f):
+            def inner(x, w, y):
+                gx, gw = mx.grad(f, argnums=(0, 1))(x, w, y)
+                return (gx + gw).sum()
+
+            return inner
+
+        gx1, gw1 = mx.grad(gf(f1), argnums=(0, 1))(x, w, y)
+        gx2, gw2 = mx.grad(gf(f2), argnums=(0, 1))(x, w, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+
+    def test_layer_norm(self):
+        # Per dtype absolute tolerance
+        tolerances = {mx.float32: 3e-6, mx.float16: 3e-3, mx.bfloat16: 3e-2}
+
+        dtypes = [mx.float32, mx.float16, mx.bfloat16]
+        epss = [1e-3, 1e-5]
+        dimss = [31, 32, 33]
+        defaults = (mx.float32, 1e-5, 32)
+
+        for dtype in dtypes:
+            _, eps, dims = defaults
+            x = mx.random.uniform(
+                shape=(
+                    2,
+                    dims,
+                )
+            ).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            bias = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = layer_norm(x, weight, bias, eps)
+            rx_fast = mx.fast.layer_norm(x, weight, bias, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, weight, None, eps)
+            rx_fast = mx.fast.layer_norm(x, weight, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, None, bias, eps)
+            rx_fast = mx.fast.layer_norm(x, None, bias, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, None, None, eps)
+            rx_fast = mx.fast.layer_norm(x, None, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        for eps in epss:
+            dtype, _, dims = defaults
+            x = mx.random.uniform(shape=(2, dims)).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            bias = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = layer_norm(x, weight, bias, eps)
+            rx_fast = mx.fast.layer_norm(x, weight, bias, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, weight, None, eps)
+            rx_fast = mx.fast.layer_norm(x, weight, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, None, bias, eps)
+            rx_fast = mx.fast.layer_norm(x, None, bias, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, None, None, eps)
+            rx_fast = mx.fast.layer_norm(x, None, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        for dims in dimss:
+            dtype, eps, _ = defaults
+            x = mx.random.uniform(shape=(2, dims)).astype(dtype)
+            weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+            bias = mx.random.uniform(shape=(dims,)).astype(dtype)
+            rx = layer_norm(x, weight, bias, eps)
+            rx_fast = mx.fast.layer_norm(x, weight, bias, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, weight, None, eps)
+            rx_fast = mx.fast.layer_norm(x, weight, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, None, bias, eps)
+            rx_fast = mx.fast.layer_norm(x, None, bias, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+            rx = layer_norm(x, None, None, eps)
+            rx_fast = mx.fast.layer_norm(x, None, None, eps)
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        # Test > 4096
+        dims, dtype, eps = 4099, mx.float32, 1e-5
+        x = mx.random.uniform(shape=(dims,)).astype(dtype)
+        weight = mx.random.uniform(shape=(dims,)).astype(dtype)
+        bias = mx.random.uniform(shape=(dims,)).astype(dtype)
+        rx = layer_norm(x, weight, bias, eps)
+        rx_fast = mx.fast.layer_norm(x, weight, bias, eps)
+        self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+        rx = layer_norm(x, weight, None, eps)
+        rx_fast = mx.fast.layer_norm(x, weight, None, eps)
+        self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+        rx = layer_norm(x, None, bias, eps)
+        rx_fast = mx.fast.layer_norm(x, None, bias, eps)
+        self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+        rx = layer_norm(x, None, None, eps)
+        rx_fast = mx.fast.layer_norm(x, None, None, eps)
+        self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+    def test_layer_norm_grad(self):
+        D = 32
+        eps = 1e-5
+        f1 = lambda x, w, b, y: (layer_norm(x, w, b, eps) * y).sum()
+        f2 = lambda x, w, b, y: (mx.fast.layer_norm(x, w, b, eps) * y).sum()
+
+        x = mx.random.uniform(shape=(8, 100, D))
+        w = mx.random.uniform(shape=(D,))
+        b = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(8, 100, D))
+
+        gx1, gw1, gb1 = mx.grad(f1, argnums=(0, 1, 2))(x, w, b, y)
+        gx2, gw2, gb2 = mx.grad(f2, argnums=(0, 1, 2))(x, w, b, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
+
+        D = 8192
+        x = mx.random.uniform(shape=(8, 100, D))
+        w = mx.random.uniform(shape=(D,))
+        b = mx.random.uniform(shape=(D,))
+        y = mx.random.uniform(shape=(8, 100, D))
+
+        gx1, gw1, gb1 = mx.grad(f1, argnums=(0, 1, 2))(x, w, b, y)
+        gx2, gw2, gb2 = mx.grad(f2, argnums=(0, 1, 2))(x, w, b, y)
+        self.assertLess(mx.abs(gx1 - gx2).max(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        self.assertLess(mx.abs(gb1 - gb2).max() / mx.abs(gb1).mean(), 1e-5)
+
+        def gf(f):
+            def inner(x, w, b, y):
+                gx, gw, gb = mx.grad(f, argnums=(0, 1, 2))(x, w, b, y)
+                return ((gx + gw + gb) * y).sum()
+
+            return inner
+
+        gx1, gw1, gb1 = mx.grad(gf(f1), argnums=(0, 1, 2))(x, w, b, y)
+        gx2, gw2, gb2 = mx.grad(gf(f2), argnums=(0, 1, 2))(x, w, b, y)
+        self.assertLess(mx.abs(gx1 - gx2).max() / mx.abs(gx1).mean(), 1e-5)
+        self.assertLess(mx.abs(gw1 - gw2).max() / mx.abs(gw1).mean(), 1e-5)
+        self.assertLess(mx.abs(gb1).max(), 1e-9)
+        self.assertLess(mx.abs(gb2).max(), 1e-9)
 
     def test_fast_transforms(self):
         x = mx.random.uniform(shape=(2, 2, 8))

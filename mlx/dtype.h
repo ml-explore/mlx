@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -38,6 +38,17 @@ struct Dtype {
     V, /* void - used for brain float */
   };
 
+  enum class Category {
+    complexfloating,
+    floating,
+    inexact,
+    signedinteger,
+    unsignedinteger,
+    integer,
+    number,
+    generic
+  };
+
   Val val;
   const uint8_t size;
   constexpr explicit Dtype(Val val, uint8_t size) : val(val), size(size){};
@@ -63,6 +74,22 @@ inline constexpr Dtype float32{Dtype::Val::float32, sizeof(float)};
 inline constexpr Dtype bfloat16{Dtype::Val::bfloat16, sizeof(uint16_t)};
 inline constexpr Dtype complex64{Dtype::Val::complex64, sizeof(complex64_t)};
 
+inline constexpr Dtype::Category complexfloating =
+    Dtype::Category::complexfloating;
+inline constexpr Dtype::Category floating = Dtype::Category::floating;
+inline constexpr Dtype::Category inexact = Dtype::Category::inexact;
+inline constexpr Dtype::Category signedinteger = Dtype::Category::signedinteger;
+inline constexpr Dtype::Category unsignedinteger =
+    Dtype::Category::unsignedinteger;
+inline constexpr Dtype::Category integer = Dtype::Category::integer;
+inline constexpr Dtype::Category number = Dtype::Category::number;
+inline constexpr Dtype::Category generic = Dtype::Category::generic;
+
+bool issubdtype(const Dtype& a, const Dtype& b);
+bool issubdtype(const Dtype::Category& a, const Dtype& b);
+bool issubdtype(const Dtype& a, const Dtype::Category& b);
+bool issubdtype(const Dtype::Category& a, const Dtype::Category& b);
+
 Dtype promote_types(const Dtype& t1, const Dtype& t2);
 
 inline uint8_t size_of(const Dtype& t) {
@@ -70,23 +97,6 @@ inline uint8_t size_of(const Dtype& t) {
 }
 
 Dtype::Kind kindof(const Dtype& t);
-
-inline bool is_unsigned(const Dtype& t) {
-  return kindof(t) == Dtype::Kind::u || kindof(t) == Dtype::Kind::b;
-}
-
-inline bool is_floating_point(const Dtype& t) {
-  return kindof(t) == Dtype::Kind::f || kindof(t) == Dtype::Kind::V ||
-      kindof(t) == Dtype::Kind::c;
-}
-
-inline bool is_complex(const Dtype& t) {
-  return kindof(t) == Dtype::Kind::c;
-}
-
-inline bool is_integral(const Dtype& t) {
-  return !(is_floating_point(t));
-}
 
 template <typename T>
 struct TypeToDtype {
@@ -96,6 +106,6 @@ struct TypeToDtype {
 // Array protocol typestring for Dtype
 std::string dtype_to_array_protocol(const Dtype& t);
 // Dtype from array protocol type string
-Dtype dtype_from_array_protocol(const std::string& t);
+Dtype dtype_from_array_protocol(std::string_view t);
 
 } // namespace mlx::core

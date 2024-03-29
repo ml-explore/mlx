@@ -301,7 +301,7 @@ void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
     set_unary_output_data(in, out);
     auto size = in.data_size();
     vvexpf(out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-  } else if (is_floating_point(out.dtype())) {
+  } else if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, [](auto x) { return std::exp(x); });
   } else {
     throw std::invalid_argument(
@@ -355,7 +355,7 @@ void Log1p::eval_cpu(const std::vector<array>& inputs, array& out) {
     auto size = in.data_size();
     vvlog1pf(
         out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-  } else if (is_floating_point(out.dtype())) {
+  } else if (issubdtype(out.dtype(), inexact)) {
     unary_fp(in, out, [](auto x) { return std::log1p(x); });
   } else {
     throw std::invalid_argument(

@@ -15,31 +15,33 @@ option(MLX_BUILD_EXAMPLES "Build examples for mlx" ON)
 option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
 option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
+option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
+option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.7.0)
+  set(MLX_VERSION 0.9.0)
 endif()
 
 # --------------------- Processor tests -------------------------
 
-message(STATUS "Building MLX for ${CMAKE_HOST_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}")
+message(STATUS "Building MLX for ${CMAKE_SYSTEM_PROCESSOR} processor on ${CMAKE_SYSTEM_NAME}")
 
 set(MLX_BUILD_ARM OFF)
 
 if (${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  if (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64" AND ${CMAKE_HOST_APPLE})
-    message(FATAL_ERROR
-      "Building for x86_64 on macOS is not supported."
-      " If you are on an Apple silicon system, check the build"
-      " documentation for possible fixes: "
-      "https://ml-explore.github.io/mlx/build/html/install.html#build-from-source")
-  elseif (${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "x86_64")
-    message(WARNING
-      "Building for x86_64 on macOS is not supported."
-      " If you are on an Apple silicon system, "
-      " make sure you are building for arm64.")
-  elseif(${CMAKE_HOST_SYSTEM_PROCESSOR} MATCHES "arm64")
+  if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "x86_64")
+    if(NOT MLX_ENABLE_X64_MAC)
+      message(FATAL_ERROR
+        "Building for x86_64 on macOS is not supported."
+        " If you are on an Apple silicon system, check the build"
+        " documentation for possible fixes: "
+        "https://ml-explore.github.io/mlx/build/html/install.html#build-from-source")
+    else()
+      message(WARNING "Building for x86_64 arch is not officially supported.")
+    endif()
+    set(MLX_BUILD_METAL OFF)
+  elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
     set(MLX_BUILD_ARM ON)
   endif()
 
@@ -64,8 +66,14 @@ endif()
 if (MLX_BUILD_METAL AND NOT METAL_LIB)
   message(STATUS "Metal not found. Unable to build GPU")
   set(MLX_BUILD_METAL OFF)
+  set(MLX_METAL_DEBUG OFF)
 elseif (MLX_BUILD_METAL)
   message(STATUS "Building METAL sources")
+
+  if (MLX_METAL_DEBUG)
+    add_compile_definitions(MLX_METAL_DEBUG)
+  endif()
+
   # Throw an error if xcrun not found
   execute_process(COMMAND zsh "-c" "/usr/bin/xcrun -sdk macosx --show-sdk-version"
                   OUTPUT_VARIABLE MACOS_VERSION
@@ -108,7 +116,27 @@ if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
 else()
   message(STATUS "Accelerate or arm neon not found, using default backend.")
   set(MLX_BUILD_ACCELERATE OFF)
-  #set(BLA_VENDOR Generic)
+  if(${CMAKE_HOST_APPLE})
+    # The blas shipped in macOS SDK is not supported, search homebrew for
+    # openblas instead.
+    set(BLA_VENDOR OpenBLAS)
+    set(LAPACK_ROOT "${LAPACK_ROOT};$ENV{LAPACK_ROOT};/usr/local/opt/openblas")
+  endif()
+  # Search and link with lapack.
+  find_package(LAPACK REQUIRED)
+  if (NOT LAPACK_FOUND)
+    message(FATAL_ERROR "Must have LAPACK installed")
+  endif()
+  find_path(LAPACK_INCLUDE_DIRS lapacke.h
+    /usr/include
+    /usr/local/include
+    /usr/local/opt/openblas/include)
+  message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
+  message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
+  target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+  target_link_libraries(mlx ${LAPACK_LIBRARIES})
+  # List blas after lapack otherwise we may accidentally incldue an old version
+  # of lapack.h from the include dirs of blas.
   find_package(BLAS REQUIRED)
   if (NOT BLAS_FOUND)
     message(FATAL_ERROR "Must have BLAS installed")
@@ -122,17 +150,6 @@ else()
   message(STATUS "Blas include " ${BLAS_INCLUDE_DIRS})
   target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
   target_link_libraries(mlx ${BLAS_LIBRARIES})
-  find_package(LAPACK REQUIRED)
-  if (NOT LAPACK_FOUND)
-      message(FATAL_ERROR "Must have LAPACK installed")
-  endif()
-  find_path(LAPACK_INCLUDE_DIRS lapacke.h
-    /usr/include
-    /usr/local/include)
-  message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
-  message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
-  target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
-  target_link_libraries(mlx ${LAPACK_LIBRARIES})
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)

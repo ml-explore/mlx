@@ -179,18 +179,16 @@ void LogAddExp::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
-  if (is_floating_point(out.dtype())) {
-    if (out.dtype() == float32) {
-      binary_op<float>(a, b, out, detail::LogAddExp());
-    } else if (out.dtype() == float16) {
-      binary_op<float16_t>(a, b, out, detail::LogAddExp());
-    } else if (out.dtype() == bfloat16) {
-      binary_op<bfloat16_t>(a, b, out, detail::LogAddExp());
-    } else {
-      std::ostringstream err;
-      err << "[logaddexp] Does not support " << out.dtype();
-      throw std::invalid_argument(err.str());
-    }
+  if (out.dtype() == float32) {
+    binary_op<float>(a, b, out, detail::LogAddExp());
+  } else if (out.dtype() == float16) {
+    binary_op<float16_t>(a, b, out, detail::LogAddExp());
+  } else if (out.dtype() == bfloat16) {
+    binary_op<bfloat16_t>(a, b, out, detail::LogAddExp());
+  } else if (issubdtype(out.dtype(), inexact)) {
+    std::ostringstream err;
+    err << "[logaddexp] Does not support " << out.dtype();
+    throw std::invalid_argument(err.str());
   } else {
     throw std::invalid_argument(
         "[logaddexp] Cannot compute logaddexp for arrays with"

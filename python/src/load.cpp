@@ -121,7 +121,7 @@ class PyFileReader : public io::Reader {
     return out;
   }
 
-  size_t tell() const override {
+  size_t tell() override {
     size_t out;
     {
       nb::gil_scoped_acquire gil;
@@ -334,7 +334,7 @@ class PyFileWriter : public io::Writer {
     return out;
   }
 
-  size_t tell() const override {
+  size_t tell() override {
     size_t out;
     {
       nb::gil_scoped_acquire gil;

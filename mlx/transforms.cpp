@@ -28,7 +28,8 @@ class Synchronizer : public Primitive {
 
   void eval_cpu(const std::vector<array>&, std::vector<array>&) override{};
   void eval_gpu(const std::vector<array>&, std::vector<array>&) override{};
-  void print(std::ostream&) override {}
+
+  DEFINE_PRINT(Synchronize);
 };
 
 // Initialize the static tracing counter from transforms_impl.h .
@@ -37,7 +38,7 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation.
 int detail::InTracing::tracing_counter{0};
 
-void eval(const std::vector<array>& outputs) {
+void eval(std::vector<array> outputs) {
   std::function<void(const array&)> recurse;
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;
@@ -52,8 +53,8 @@ void eval(const std::vector<array>& outputs) {
     }
   }
 
-  auto synchronizer =
-      array({}, bool_, std::make_unique<Synchronizer>(stream), outputs);
+  auto synchronizer = array(
+      {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
 
   size_t depth_counter = 0;
   recurse = [&](const array& a) {
@@ -76,7 +77,7 @@ void eval(const std::vector<array>& outputs) {
         // If the input is being computed on a different stream, we need to
         // manage the dependency.
         if (a.primitive().stream() != in.primitive().stream()) {
-          deps.insert({in.primitive_id(), std::shared_future<void>{}});
+          deps.insert({in.output(0).id(), std::shared_future<void>{}});
         }
       }
     }
@@ -96,8 +97,7 @@ void eval(const std::vector<array>& outputs) {
   };
 
   recurse(synchronizer);
-  uintptr_t synch_id = synchronizer.primitive_id();
-  deps.insert({synch_id, std::shared_future<void>{}});
+  deps.insert({synchronizer.id(), std::shared_future<void>{}});
 
   std::vector<std::shared_ptr<std::promise<void>>> ps;
   while (!tape.empty()) {
@@ -113,14 +113,13 @@ void eval(const std::vector<array>& outputs) {
     auto stream = arr.primitive().stream();
     std::vector<std::shared_future<void>> arr_deps;
     for (auto& in : arr.inputs()) {
-      // TODO that's a bug
-      if (auto it = deps.find(in.primitive_id()); it != deps.end()) {
+      if (auto it = deps.find(in.output(0).id()); it != deps.end()) {
         arr_deps.push_back(it->second);
       }
     }
     std::shared_ptr<std::promise<void>> p;
-    if (auto it = deps.find(arr.primitive_id()); it != deps.end()) {
-      p = std::make_unique<std::promise<void>>();
+    if (auto it = deps.find(arr.output(0).id()); it != deps.end()) {
+      p = std::make_shared<std::promise<void>>();
       ps.push_back(p);
       it->second = p->get_future().share();
     }
@@ -154,7 +153,7 @@ void eval(const std::vector<array>& outputs) {
     }
   }
 
-  deps[synch_id].wait();
+  deps[synchronizer.id()].wait();
 }
 
 std::pair<std::vector<array>, std::vector<array>> vjp(
@@ -655,6 +654,7 @@ std::vector<array> vmap_replace(
     }
 
     auto [v_outputs, v_out_axes] = a.primitive().vmap(v_inputs, v_axes);
+
     // For each primitive's outputs add its id, the vout id and the vax
     auto outputs = a.outputs();
     for (int i = 0; i < v_outputs.size(); ++i) {
@@ -781,7 +781,7 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
     }
 
     return array::make_arrays(
-        shapes,
+        std::move(shapes),
         dtypes,
         std::make_shared<CustomVJP>(to_stream(s), fun_vjp),
         inputs);

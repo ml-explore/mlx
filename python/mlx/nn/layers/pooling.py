@@ -20,6 +20,22 @@ def _value_or_list(x, n, msg):
     return [x] * n
 
 
+def _non_overlapping_sliding_windows(x, shape, window_shape):
+    # Compute the intermediate shape
+    new_shape = [shape[0]]
+    for s, w in zip(shape[1:], window_shape):
+        new_shape.append(s // w)
+        new_shape.append(w)
+    new_shape.append(shape[-1])
+
+    last_axis = len(new_shape) - 1
+    axis_order = [0, *range(1, last_axis, 2), *range(2, last_axis, 2), last_axis]
+
+    x = x.reshape(new_shape)
+    x = x.transpose(axis_order)
+    return x
+
+
 def _sliding_windows(x, window_shape, window_strides):
     if x.ndim < 3:
         raise ValueError(
@@ -37,6 +53,12 @@ def _sliding_windows(x, window_shape, window_strides):
         )
 
     shape = x.shape
+    if all(
+        window == stride and size % window == 0
+        for size, window, stride in zip(spatial_dims, window_shape, window_strides)
+    ):
+        return _non_overlapping_sliding_windows(x, shape, window_shape)
+
     strides = list(reversed(list(accumulate(reversed(shape + (1,)), operator.mul))))[1:]
 
     # Compute the output shape
@@ -144,7 +166,7 @@ class MaxPool1d(_Pool1d):
                     \text{input}(N_i, \text{stride} \times t + m, C_j),
 
     where :math:`L_{out} = \left\lfloor \frac{L + 2 \times \text{padding} -
-    \text{kernel_size}}{\text{stride}}\right\rfloor + 1`.
+    \text{kernel\_size}}{\text{stride}}\right\rfloor + 1`.
 
     Args:
         kernel_size (int or tuple(int)): The size of the pooling window kernel.
@@ -183,7 +205,7 @@ class AvgPool1d(_Pool1d):
                     \text{input}(N_i, \text{stride} \times t + m, C_j),
 
     where :math:`L_{out} = \left\lfloor \frac{L + 2 \times \text{padding} -
-    \text{kernel_size}}{\text{stride}}\right\rfloor + 1`.
+    \text{kernel\_size}}{\text{stride}}\right\rfloor + 1`.
 
     Args:
         kernel_size (int or tuple(int)): The size of the pooling window kernel.
@@ -224,8 +246,8 @@ class MaxPool2d(_Pool2d):
                                                 \text{stride[1]} \times w + n, C_j),
         \end{aligned}
 
-    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
-    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
+    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
+    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
     The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
 
@@ -273,8 +295,8 @@ class AvgPool2d(_Pool2d):
                                                 \text{stride[1]} \times w + n, C_j),
         \end{aligned}
 
-    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
-    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
+    where :math:`H_{out} = \left\lfloor\frac{H + 2 * \text{padding[0]} - \text{kernel\_size[0]}}{\text{stride[0]}}\right\rfloor + 1`,
+    :math:`W_{out} = \left\lfloor\frac{W + 2 * \text{padding[1]} - \text{kernel\_size[1]}}{\text{stride[1]}}\right\rfloor + 1`.
 
     The parameters ``kernel_size``, ``stride``, ``padding``, can either be:
 

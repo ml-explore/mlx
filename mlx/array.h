@@ -180,9 +180,9 @@ class array {
       std::vector<array> inputs);
 
   static std::vector<array> make_arrays(
-      const std::vector<std::vector<int>>& shapes,
+      std::vector<std::vector<int>> shapes,
       const std::vector<Dtype>& dtypes,
-      std::shared_ptr<Primitive> primitive,
+      const std::shared_ptr<Primitive>& primitive,
       const std::vector<array>& inputs);
 
   /** A unique identifier for an array. */
@@ -255,6 +255,17 @@ class array {
     array_desc_->siblings = std::move(siblings);
     array_desc_->position = position;
   }
+
+  /** The i-th output of the array's primitive. */
+  const array& output(int i) const {
+    if (i == array_desc_->position) {
+      return *this;
+    } else if (i < array_desc_->position) {
+      return siblings()[i];
+    } else {
+      return siblings()[i + 1];
+    }
+  };
 
   /** The outputs of the array's primitive (i.e. this array and
    * its siblings) in the order the primitive expects. */
@@ -392,6 +403,10 @@ class array {
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
         std::vector<array> inputs);
+
+   private:
+    // Initialize size, strides, and other metadata
+    void init();
   };
 
   // The ArrayDesc contains the details of the materialized array including the
@@ -505,5 +520,16 @@ void array::init(It src) {
       break;
   }
 }
+
+/* Utilities for determining whether a template parameter is array. */
+template <typename T>
+inline constexpr bool is_array_v =
+    std::is_same_v<std::remove_cv_t<std::remove_reference_t<T>>, array>;
+
+template <typename... T>
+inline constexpr bool is_arrays_v = (is_array_v<T> && ...);
+
+template <typename... T>
+using enable_for_arrays_t = typename std::enable_if_t<is_arrays_v<T...>>;
 
 } // namespace mlx::core

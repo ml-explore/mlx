@@ -16,18 +16,24 @@ void RoPE::eval_gpu(
   if (in.ndim() < 3) {
     throw std::runtime_error("[RoPE] Input must have at least 3 dimensions");
   }
-  if (dims_ != in.shape(-1)) {
-    throw std::runtime_error("[RoPE] Partial RoPE application not supported");
-  }
 
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 
   size_t strides[3];
+  size_t out_strides[3];
   bool donated = false;
   int ndim = in.ndim();
-  size_t mat_size = in.shape()[ndim - 2] * in.shape()[ndim - 1];
-  if (in.flags().row_contiguous) {
+  size_t mat_size = in.shape(-2) * in.shape(-1);
+  if (dims_ < in.shape(-1)) {
+    donated = true;
+    auto ctype =
+        (in.flags().row_contiguous) ? CopyType::Vector : CopyType::General;
+    copy_gpu(in, out, ctype, s);
+    strides[0] = mat_size;
+    strides[1] = out.strides()[ndim - 2];
+    strides[2] = out.strides()[ndim - 1];
+  } else if (in.flags().row_contiguous) {
     if (in.is_donatable()) {
       donated = true;
       out.move_shared_buffer(in);
@@ -52,9 +58,13 @@ void RoPE::eval_gpu(
     strides[1] = out.strides()[ndim - 2];
     strides[2] = out.strides()[ndim - 1];
   }
+  out_strides[0] = mat_size;
+  out_strides[1] = out.strides()[ndim - 2];
+  out_strides[2] = out.strides()[ndim - 1];
 
   std::ostringstream kname;
-  kname << "rope_" << (traditional_ ? "traditional_" : "") << type_to_name(in);
+  kname << "rope_" << (forward_ ? "" : "vjp_")
+        << (traditional_ ? "traditional_" : "") << type_to_name(in);
   auto kernel = d.get_kernel(kname.str());
   auto compute_encoder = d.get_command_encoder(s.index);
 
@@ -63,12 +73,13 @@ void RoPE::eval_gpu(
   set_array_buffer(compute_encoder, donated ? out : in, 0);
   set_array_buffer(compute_encoder, out, 1);
   compute_encoder->setBytes(&strides, 3 * sizeof(size_t), 2);
-  compute_encoder->setBytes(&offset_, sizeof(int), 3);
-  compute_encoder->setBytes(&base, sizeof(float), 4);
-  compute_encoder->setBytes(&scale_, sizeof(float), 5);
+  compute_encoder->setBytes(&out_strides, 3 * sizeof(size_t), 3);
+  compute_encoder->setBytes(&offset_, sizeof(int), 4);
+  compute_encoder->setBytes(&base, sizeof(float), 5);
+  compute_encoder->setBytes(&scale_, sizeof(float), 6);
 
-  int dim0 = in.shape()[ndim - 1] / 2;
-  int dim1 = in.shape()[ndim - 2];
+  int dim0 = dims_ / 2;
+  int dim1 = in.shape(-2);
   int dim2 = in.size() / mat_size;
   auto group_dims = get_block_dims(dim0, dim1, dim2);
   auto grid_dims = MTL::Size(dim0, dim1, dim2);

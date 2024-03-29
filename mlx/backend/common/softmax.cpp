@@ -67,11 +67,15 @@ void Softmax::eval(const std::vector<array>& inputs, array& out) {
     }
   };
   array in = check_input(std::move(inputs[0]));
-  out.set_data(
-      allocator::malloc_or_wait(in.data_size() * in.itemsize()),
-      in.data_size(),
-      in.strides(),
-      in.flags());
+  if (in.is_donatable()) {
+    out.copy_shared_buffer(in);
+  } else {
+    out.set_data(
+        allocator::malloc_or_wait(in.data_size() * in.itemsize()),
+        in.data_size(),
+        in.strides(),
+        in.flags());
+  }
 
   switch (in.dtype()) {
     case bool_:

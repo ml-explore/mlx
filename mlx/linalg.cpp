@@ -11,7 +11,7 @@
 namespace mlx::core::linalg {
 
 Dtype at_least_float(const Dtype& d) {
-  return is_floating_point(d) ? d : promote_types(d, float32);
+  return issubdtype(d, inexact) ? d : promote_types(d, float32);
 }
 
 inline array l2_norm(
@@ -19,7 +19,7 @@ inline array l2_norm(
     const std::vector<int>& axis,
     bool keepdims,
     StreamOrDevice s) {
-  if (is_complex(a.dtype())) {
+  if (issubdtype(a.dtype(), complexfloating)) {
     return sqrt(sum(abs(a, s) * abs(a, s), axis, keepdims, s), s);
   } else {
     return sqrt(sum(square(a, s), axis, keepdims, s), s);
@@ -96,7 +96,7 @@ inline array matrix_norm(
 
 inline array matrix_norm(
     const array& a,
-    const std::string& ord,
+    std::string_view ord,
     const std::vector<int>& axis,
     bool keepdims,
     StreamOrDevice s) {
@@ -153,7 +153,7 @@ array norm(
 
 array norm(
     const array& a,
-    const std::string& ord,
+    std::string_view ord,
     const std::optional<std::vector<int>>& axis /* = std::nullopt */,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {} */) {
@@ -195,7 +195,7 @@ std::pair<array, array> qr(const array& a, StreamOrDevice s /* = {} */) {
   auto out = array::make_arrays(
       {a.shape(), a.shape()},
       {a.dtype(), a.dtype()},
-      std::make_unique<QRF>(to_stream(s)),
+      std::make_shared<QRF>(to_stream(s)),
       {astype(a, a.dtype(), s)});
   return std::make_pair(out[0], out[1]);
 }
@@ -234,7 +234,7 @@ std::vector<array> svd(const array& a, StreamOrDevice s /* = {} */) {
   return array::make_arrays(
       {u_shape, s_shape, vt_shape},
       {a.dtype(), a.dtype(), a.dtype()},
-      std::make_unique<SVD>(to_stream(s)),
+      std::make_shared<SVD>(to_stream(s)),
       {a});
 }
 
@@ -258,7 +258,7 @@ array inv(const array& a, StreamOrDevice s /* = {} */) {
   }
 
   return array(
-      a.shape(), a.dtype(), std::make_unique<Inverse>(to_stream(s)), {a});
+      a.shape(), a.dtype(), std::make_shared<Inverse>(to_stream(s)), {a});
 }
 
 } // namespace mlx::core::linalg

@@ -23,13 +23,13 @@ using SafetensorsLoad = std::pair<
 void save(std::shared_ptr<io::Writer> out_stream, array a);
 
 /** Save array to file in .npy format */
-void save(const std::string& file, array a);
+void save(std::string file, array a);
 
 /** Load array from reader in .npy format */
 array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
 
 /** Load array from file in .npy format */
-array load(const std::string& file, StreamOrDevice s = {});
+array load(std::string file, StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */
 SafetensorsLoad load_safetensors(
@@ -44,13 +44,13 @@ void save_safetensors(
     std::unordered_map<std::string, array>,
     std::unordered_map<std::string, std::string> metadata = {});
 void save_safetensors(
-    const std::string& file,
+    std::string file,
     std::unordered_map<std::string, array>,
     std::unordered_map<std::string, std::string> metadata = {});
 
 /** Load array map and metadata from .gguf file format */
 
-GGUFLoad load_gguf(const std::string& file, StreamOrDevice s = {});
+GGUFLoad load_gguf(std::string_view file, StreamOrDevice s = {});
 
 void save_gguf(
     std::string file,

@@ -1,5 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <cassert>
+#include <numeric>
+
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
@@ -46,6 +49,278 @@ std::pair<std::vector<array>, std::vector<int>> Custom::vmap(
   return {outputs, out_axes};
 }
 
+array rms_norm(
+    const array& x,
+    const array& weight,
+    float eps,
+    StreamOrDevice s_ /* = {} */) {
+  if (x.ndim() == 0) {
+    std::ostringstream msg;
+    msg << "[rms_norm] Input must have at least 1 dimension but got input with "
+           "0 dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (weight.ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[rms_norm] weight must have 1 dimension but has " << weight.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto out_type = result_type(x, weight);
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[rms_norm] Received unsupported type " << out_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  auto fallback = [eps, out_type, s](const std::vector<array>& inputs) {
+    auto x = astype(inputs[0], float32, s);
+    x = multiply(
+        x,
+        rsqrt(
+            add(mean(square(x, s), -1, /* keepdims */ true, s),
+                array(eps, float32),
+                s),
+            s),
+        s);
+    x = astype(x, out_type, s);
+    return std::vector<array>{multiply(inputs[1], x, s)};
+  };
+  if (s.device == Device::gpu) {
+    return array(
+        x.shape(),
+        out_type,
+        std::make_shared<RMSNorm>(s, fallback, eps),
+        {astype(x, out_type, s), astype(weight, out_type, s)});
+  }
+  return fallback({x, weight})[0];
+}
+
+std::vector<array> RMSNorm::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() == 2);
+  assert(outputs.size() == 1);
+  assert(cotangents.size() == 1);
+
+  auto s = stream();
+  auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
+    auto& x = inputs[0];
+    auto& w = inputs[1];
+    auto& g = inputs[2];
+
+    std::vector<array> vjps;
+
+    auto n = rsqrt(
+        add(mean(square(x, s), /* axis= */ -1, /* keepdims= */ true, s),
+            array(eps, x.dtype()),
+            s),
+        s);
+    auto n3 = power(n, array(3, x.dtype()), s);
+
+    // df/dx
+    auto gw = multiply(g, w, s);
+    auto t = mean(multiply(gw, x, s), /* axis= */ -1, /* keepdims= */ true, s);
+    t = multiply(multiply(x, t, s), n3, s);
+    vjps.push_back(subtract(multiply(gw, n, s), t, s));
+
+    // df/dw
+    std::vector<int> axes(g.ndim() - 1);
+    std::iota(axes.begin(), axes.end(), 0);
+    vjps.push_back(
+        sum(multiply(g, multiply(x, n, s), s), axes, /* keepdims= */ false, s));
+
+    return vjps;
+  };
+
+  auto vjps = array::make_arrays(
+      {primals[0].shape(), primals[1].shape()},
+      {primals[0].dtype(), primals[1].dtype()},
+      std::make_shared<RMSNormVJP>(s, fallback, eps_),
+      {primals[0], primals[1], cotangents[0]});
+
+  std::vector<array> returned_vjps;
+  for (auto& arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+
+  return returned_vjps;
+}
+
+bool RMSNorm::is_equivalent(const Primitive& other) const {
+  const RMSNorm& a_other = static_cast<const RMSNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
+bool RMSNormVJP::is_equivalent(const Primitive& other) const {
+  const RMSNormVJP& a_other = static_cast<const RMSNormVJP&>(other);
+  return eps_ == a_other.eps_;
+}
+
+array layer_norm(
+    const array& x,
+    const std::optional<array>& weight,
+    const std::optional<array>& bias,
+    float eps,
+    StreamOrDevice s_ /* = {} */) {
+  if (x.ndim() == 0) {
+    std::ostringstream msg;
+    msg << "[layer_norm] Input must have at least 1 dimension but got input with "
+           "0 dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (weight.has_value() && (*weight).ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[layer_norm] weight must have 1 dimension but has "
+        << (*weight).ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (bias.has_value() && (*bias).ndim() != 1) {
+    std::ostringstream msg;
+    msg << "[layer_norm] bias must have 1 dimension but has " << (*bias).ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out_type = (weight.has_value())
+      ? ((bias.has_value()) ? result_type(x, *weight, *bias)
+                            : result_type(x, *weight))
+      : x.dtype();
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[layer_norm] Received unsupported type " << out_type << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  bool has_weight = weight.has_value();
+  bool has_bias = bias.has_value();
+  auto fallback = [has_weight, has_bias, eps, out_type, s](
+                      const std::vector<array>& inputs) {
+    auto x = astype(inputs[0], float32, s);
+
+    // Should I not be smart here and leave the double mean to simplify()?
+    auto mu = mean(x, /* axis= */ -1, /* keepdims= */ true, s);
+    auto mu2 = square(mu, s);
+    auto x2 = mean(square(x, s), /* axis= */ -1, /* keepdims= */ true, s);
+    auto v = subtract(x2, mu2, s);
+
+    x = multiply(subtract(x, mu, s), rsqrt(add(v, array(eps, float32), s), s));
+    x = astype(x, out_type, s);
+
+    // If the LN is affine then transform x according to the weight and bias
+    if (has_weight) {
+      x = multiply(x, inputs[1], s);
+    }
+    if (has_bias) {
+      x = add(x, inputs[2], s);
+    }
+
+    return std::vector<array>{x};
+  };
+
+  auto passed_weight =
+      astype((weight.has_value()) ? *weight : array(1, out_type), out_type);
+  auto passed_bias =
+      astype((bias.has_value()) ? *bias : array(0, out_type), out_type);
+
+  if (s.device == Device::gpu) {
+    return array(
+        x.shape(),
+        out_type,
+        std::make_shared<LayerNorm>(s, fallback, eps),
+        {astype(x, out_type, s), passed_weight, passed_bias});
+  }
+  return fallback({x, passed_weight, passed_bias})[0];
+}
+
+std::vector<array> LayerNorm::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() == 3);
+  assert(outputs.size() == 1);
+  assert(cotangents.size() == 1);
+
+  auto s = stream();
+  auto fallback = [eps = eps_, s](const std::vector<array>& inputs) {
+    auto& x = inputs[0];
+    auto& w = inputs[1];
+    auto& b = inputs[2];
+    auto& g = inputs[3];
+
+    std::vector<array> vjps;
+
+    auto norm = number_of_elements(x, {-1}, true, x.dtype(), s);
+    auto sumx = sum(x, /* axis= */ -1, /* keepdims= */ true, s);
+    auto sumx2 = sum(square(x, s), /* axis= */ -1, /* keepdims= */ true, s);
+    auto mu = multiply(sumx, norm, s);
+    auto mu2 = multiply(sumx2, norm, s);
+    auto var = subtract(mu2, square(mu, s), s);
+    auto n = rsqrt(add(var, array(eps, x.dtype()), s));
+    auto n3 = power(n, array(3, x.dtype()), s);
+    auto x_c = subtract(x, mu, s);
+
+    // df/dx
+    auto wg = multiply(w, g, s);
+    auto sumwg =
+        multiply(sum(wg, /* axis= */ -1, /* keepdims= */ true, s), norm, s);
+    auto sumwgxc = multiply(
+        sum(multiply(wg, x_c, s), /* axis= */ -1, /* keepdims= */ true, s),
+        norm,
+        s);
+    auto t1 = multiply(multiply(x_c, sumwgxc, s), n3, s);
+    auto t2 = multiply(subtract(wg, sumwg, s), n, s);
+    vjps.push_back(subtract(t2, t1, s));
+
+    // df/dw
+    std::vector<int> axes(g.ndim() - 1);
+    std::iota(axes.begin(), axes.end(), 0);
+    if (w.ndim() == 0) {
+      vjps.push_back(zeros_like(w, s));
+    } else {
+      vjps.push_back(sum(
+          multiply(g, multiply(x_c, n, s), s), axes, /* keepdims= */ false, s));
+    }
+
+    // df/db
+    if (b.ndim() == 0) {
+      vjps.push_back(zeros_like(w, s));
+    } else {
+      vjps.push_back(sum(g, axes, /* keepdims= */ false, s));
+    }
+
+    return vjps;
+  };
+
+  auto vjps = array::make_arrays(
+      {primals[0].shape(), primals[1].shape(), primals[2].shape()},
+      {primals[0].dtype(), primals[1].dtype(), primals[2].dtype()},
+      std::make_shared<LayerNormVJP>(s, fallback, eps_),
+      {primals[0], primals[1], primals[2], cotangents[0]});
+
+  std::vector<array> returned_vjps;
+  for (auto& arg : argnums) {
+    returned_vjps.push_back(std::move(vjps[arg]));
+  }
+
+  return returned_vjps;
+}
+
+bool LayerNorm::is_equivalent(const Primitive& other) const {
+  const LayerNorm& a_other = static_cast<const LayerNorm&>(other);
+  return eps_ == a_other.eps_;
+}
+
+bool LayerNormVJP::is_equivalent(const Primitive& other) const {
+  const LayerNormVJP& a_other = static_cast<const LayerNormVJP&>(other);
+  return eps_ == a_other.eps_;
+}
+
 array rope(
     const array& x,
     int dims,
@@ -53,19 +328,16 @@ array rope(
     float base,
     float scale,
     int offset,
-    StreamOrDevice s /* = {} */) {
+    bool forward,
+    StreamOrDevice s) {
   if (x.ndim() < 3) {
     std::ostringstream msg;
     msg << "[rope] Input must have at least 3 dimensions but got input with "
         << x.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  if (traditional && x.shape(-1) != dims) {
-    throw std::invalid_argument(
-        "[rope] Does not support partial traditional application.");
-  }
 
-  auto fallback = [dims, traditional, base, scale, offset, s](
+  auto fallback = [dims, traditional, base, scale, offset, forward, s](
                       const std::vector<array>& inputs) {
     auto& shape = inputs[0].shape();
     int ndim = shape.size();
@@ -82,16 +354,39 @@ array rope(
     auto coss = cos(theta, s);
     auto sins = sin(theta, s);
 
-    if (traditional) {
-      auto x1 = slice(x, {0, 0, 0}, x.shape(), {1, 1, 2}, s);
-      auto x2 = slice(x, {0, 0, 1}, x.shape(), {1, 1, 2}, s);
+    auto apply_rope = [forward, s](
+                          const array& x1,
+                          const array& x2,
+                          const array& coss,
+                          const array& sins) {
       std::vector<array> outs;
-      outs.push_back(subtract(multiply(x1, coss, s), multiply(x2, sins, s), s));
-      outs.push_back(add(multiply(x1, sins, s), multiply(x2, coss, s), s));
+      if (forward) {
+        outs.push_back(
+            subtract(multiply(x1, coss, s), multiply(x2, sins, s), s));
+        outs.push_back(add(multiply(x1, sins, s), multiply(x2, coss, s), s));
+      } else {
+        outs.push_back(add(multiply(x2, sins, s), multiply(x1, coss, s), s));
+        outs.push_back(
+            subtract(multiply(x2, coss, s), multiply(x1, sins, s), s));
+      }
+      return outs;
+    };
+
+    if (traditional) {
+      auto x1 =
+          slice(x, {0, 0, 0}, {x.shape(0), x.shape(1), dims}, {1, 1, 2}, s);
+      auto x2 =
+          slice(x, {0, 0, 1}, {x.shape(0), x.shape(1), dims}, {1, 1, 2}, s);
+      auto outs = apply_rope(x1, x2, coss, sins);
       for (auto& o : outs) {
         o = expand_dims(o, 3, s);
       }
-      return std::vector<array>{reshape(concatenate(outs, 3, s), shape, s)};
+      auto out = concatenate(outs, 3, s);
+      if (dims < x.shape(-1)) {
+        out = reshape(out, {x.shape(0), x.shape(1), dims});
+        out = concatenate({out, slice(x, {0, 0, dims}, x.shape(), s)}, 2, s);
+      }
+      return std::vector<array>{reshape(out, shape, s)};
     } else {
       auto out_s = x.shape();
       out_s.back() = half_dims;
@@ -99,9 +394,7 @@ array rope(
       out_s.back() = dims;
       auto x2 = slice(x, {0, 0, half_dims}, out_s, s);
 
-      std::vector<array> outs;
-      outs.push_back(subtract(multiply(x1, coss, s), multiply(x2, sins, s), s));
-      outs.push_back(add(multiply(x1, sins, s), multiply(x2, coss, s), s));
+      auto outs = apply_rope(x1, x2, coss, sins);
       if (dims < x.shape(-1)) {
         outs.push_back(slice(x, {0, 0, dims}, x.shape(), s));
       }
@@ -109,15 +402,51 @@ array rope(
     }
   };
   auto stream = to_stream(s);
-  if (stream.device == Device::gpu && x.shape(-1) == dims) {
+  if (stream.device == Device::gpu) {
     return array(
         x.shape(),
         x.dtype(),
-        std::make_unique<RoPE>(
-            stream, fallback, dims, traditional, base, scale, offset),
+        std::make_shared<RoPE>(
+            stream, fallback, dims, traditional, base, scale, offset, forward),
         {x});
   }
   return fallback({x})[0];
+}
+
+array rope(
+    const array& x,
+    int dims,
+    bool traditional,
+    float base,
+    float scale,
+    int offset,
+    StreamOrDevice s /* = {} */) {
+  return rope(x, dims, traditional, base, scale, offset, true, s);
+}
+
+std::vector<array> RoPE::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  auto s = stream();
+  auto fallback = [dims = dims_,
+                   traditional = traditional_,
+                   base = base_,
+                   scale = scale_,
+                   offset = offset_,
+                   forward = forward_,
+                   s](std::vector<array> inputs) {
+    return std::vector<array>{
+        rope(inputs[0], dims, traditional, base, scale, offset, !forward, s)};
+  };
+
+  return {array(
+      cotangents[0].shape(),
+      cotangents[0].dtype(),
+      std::make_shared<RoPE>(
+          s, fallback, dims_, traditional_, base_, scale_, offset_, !forward_),
+      cotangents)};
 }
 
 bool RoPE::is_equivalent(const Primitive& other) const {
@@ -125,7 +454,7 @@ bool RoPE::is_equivalent(const Primitive& other) const {
   return (
       dims_ == a_other.dims_ && base_ == a_other.base_ &&
       scale_ == a_other.scale_ && traditional_ == a_other.traditional_ &&
-      offset_ == a_other.offset_);
+      offset_ == a_other.offset_ && forward_ == a_other.forward_);
 }
 
 /** Computes: O = softmax(Q @ K.T) @ V **/
@@ -183,8 +512,8 @@ array scaled_dot_product_attention(
     throw std::invalid_argument(msg.str());
   }
 
-  auto final_type = result_type({queries, keys, values});
-  if (!is_floating_point(final_type) || is_complex(final_type)) {
+  auto final_type = result_type(queries, keys, values);
+  if (!issubdtype(final_type, floating)) {
     std::ostringstream msg;
     msg << "[scaled_dot_product_attention] Received unsupported type "
         << final_type << ".";
@@ -194,9 +523,6 @@ array scaled_dot_product_attention(
   auto q = astype(queries, final_type, s);
   auto k = astype(keys, final_type, s);
   auto v = astype(values, final_type, s);
-
-  auto out_shape =
-      std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
 
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
@@ -246,10 +572,12 @@ array scaled_dot_product_attention(
   // TODO, update routing conditions post further tuning
   implementation_supports_use_case &= false;
   if (implementation_supports_use_case) {
+    auto out_shape =
+        std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
     auto out = array(
-        out_shape,
+        std::move(out_shape),
         final_type,
-        std::make_unique<ScaledDotProductAttention>(
+        std::make_shared<ScaledDotProductAttention>(
             stream, fallback, scale, false),
         {q, k, v});
     return out;

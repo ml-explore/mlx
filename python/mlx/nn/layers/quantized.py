@@ -81,15 +81,15 @@ class QuantizedLinear(Module):
     def __call__(self, x):
         x = mx.quantized_matmul(
             x,
-            self.weight,
-            scales=self.scales,
-            biases=self.biases,
+            self["weight"],
+            scales=self["scales"],
+            biases=self["biases"],
             transpose=True,
             group_size=self.group_size,
             bits=self.bits,
         )
         if "bias" in self:
-            x = x + self.bias
+            x = x + self["bias"]
         return x
 
     @classmethod

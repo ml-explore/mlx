@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-#include <metal_atomic>
 #include <metal_common>
 #include <metal_simdgroup>
 
@@ -224,5 +223,6 @@ template <typename T, int N_READS = SOFTMAX_N_READS>
   instantiate_softmax_single_row(name, itype) \
       instantiate_softmax_looped(name, itype)
 
-instantiate_softmax(float32, float) instantiate_softmax(float16, half)
-    instantiate_softmax(bfloat16, bfloat16_t)
+instantiate_softmax(float32, float)
+instantiate_softmax(float16, half)
+instantiate_softmax(bfloat16, bfloat16_t)

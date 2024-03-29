@@ -60,7 +60,7 @@ std::string dtype_to_safetensor_str(Dtype t) {
   }
 }
 
-Dtype dtype_from_safetensor_str(std::string str) {
+Dtype dtype_from_safetensor_str(std::string_view str) {
   if (str == ST_F32) {
     return float32;
   } else if (str == ST_F16) {
@@ -88,7 +88,8 @@ Dtype dtype_from_safetensor_str(std::string str) {
   } else if (str == ST_C64) {
     return complex64;
   } else {
-    throw std::runtime_error("[safetensor] unsupported dtype " + str);
+    throw std::runtime_error(
+        "[safetensor] unsupported dtype " + std::string(str));
   }
 }
 
@@ -129,14 +130,14 @@ SafetensorsLoad load_safetensors(
       }
       continue;
     }
-    std::string dtype = item.value().at("dtype");
-    std::vector<int> shape = item.value().at("shape");
-    std::vector<size_t> data_offsets = item.value().at("data_offsets");
+    const std::string& dtype = item.value().at("dtype");
+    const std::vector<int>& shape = item.value().at("shape");
+    const std::vector<size_t>& data_offsets = item.value().at("data_offsets");
     Dtype type = dtype_from_safetensor_str(dtype);
     auto loaded_array = array(
         shape,
         type,
-        std::make_unique<Load>(
+        std::make_shared<Load>(
             to_stream(s), in_stream, offset + data_offsets.at(0), false),
         std::vector<array>{});
     res.insert({item.key(), loaded_array});
@@ -207,19 +208,17 @@ void save_safetensors(
 }
 
 void save_safetensors(
-    const std::string& file_,
+    std::string file,
     std::unordered_map<std::string, array> a,
     std::unordered_map<std::string, std::string> metadata /* = {} */) {
-  // Open and check file
-  std::string file = file_;
-
   // Add .safetensors to file name if it is not there
   if (file.length() < 12 ||
       file.substr(file.length() - 12, 12) != ".safetensors")
     file += ".safetensors";
 
   // Serialize array
-  save_safetensors(std::make_shared<io::FileWriter>(file), a, metadata);
+  save_safetensors(
+      std::make_shared<io::FileWriter>(std::move(file)), a, metadata);
 }
 
 } // namespace mlx::core

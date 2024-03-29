@@ -6,11 +6,9 @@
 
 #include "array.h"
 #include "device.h"
-#include "stream.h"
+#include "utils.h"
 
 namespace mlx::core::fft {
-
-using StreamOrDevice = std::variant<std::monostate, Stream, Device>;
 
 /** Compute the n-dimensional Fourier Transform. */
 array fftn(

@@ -44,6 +44,18 @@ inline array to_array_with_accessor(nb::object obj) {
   }
 }
 
+inline bool is_comparable_with_array(const ScalarOrArray& v) {
+  // Checks if the value can be compared to an array (or is already an
+  // mlx array)
+  if (auto pv = std::get_if<nb::object>(&v); pv) {
+    return nb::isinstance<array>(*pv) || nb::hasattr(*pv, "__mlx_array__");
+  } else {
+    // If it's not an object, it's a scalar (nb::int_, nb::float_, etc.)
+    // and can be compared to an array
+    return true;
+  }
+}
+
 inline array to_array(
     const ScalarOrArray& v,
     std::optional<Dtype> dtype = std::nullopt) {
@@ -56,7 +68,7 @@ inline array to_array(
   } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
     auto out_t = dtype.value_or(float32);
     return array(
-        nb::cast<float>(*pv), is_floating_point(out_t) ? out_t : float32);
+        nb::cast<float>(*pv), issubdtype(out_t, floating) ? out_t : float32);
   } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
     return array(static_cast<complex64_t>(*pv), complex64);
   } else {
