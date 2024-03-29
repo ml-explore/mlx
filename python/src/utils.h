@@ -2,6 +2,7 @@
 #pragma once
 #include <numeric>
 #include <optional>
+#include <string>
 #include <variant>
 
 #include <nanobind/nanobind.h>
@@ -54,6 +55,19 @@ inline bool is_comparable_with_array(const ScalarOrArray& v) {
     // and can be compared to an array
     return true;
   }
+}
+
+inline nb::handle get_handle_of_object(const ScalarOrArray& v) {
+  return std::get<nb::object>(v).ptr();
+}
+
+inline void throw_invalid_operation(
+    const std::string& operation,
+    const ScalarOrArray operand) {
+  std::ostringstream msg;
+  msg << "Cannot perform " << operation << " on an mlx.core.array and "
+      << nb::type_name(get_handle_of_object(operand).type()).c_str();
+  throw std::invalid_argument(msg.str());
 }
 
 inline array to_array(
