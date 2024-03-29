@@ -44,21 +44,16 @@ inline array to_array_with_accessor(nb::object obj) {
   }
 }
 
-inline bool is_convertable_to_array(const ScalarOrArray& v) {
-  // Checks if the value can be converted to an array (or is already an
+inline bool is_comparable_with_array(const ScalarOrArray& v) {
+  // Checks if the value can be compared to an array (or is already an
   // mlx array)
-  if (auto pv = std::get_if<nb::bool_>(&v); pv) {
-    return true;
-  } else if (auto pv = std::get_if<nb::int_>(&v); pv) {
-    return true;
-  } else if (auto pv = std::get_if<nb::float_>(&v); pv) {
-    return true;
-  } else if (auto pv = std::get_if<std::complex<float>>(&v); pv) {
-    return true;
-  } else if (auto pv = std::get_if<nb::object>(&v); pv) {
+  if (auto pv = std::get_if<nb::object>(&v); pv) {
     return nb::isinstance<array>(*pv) || nb::hasattr(*pv, "__mlx_array__");
+  } else {
+    // If it's not an object, it's a scalar (nb::int_, nb::float_, etc.)
+    // and can be compared to an array
+    return true;
   }
-  return false;
 }
 
 inline array to_array(
