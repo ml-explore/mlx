@@ -697,7 +697,7 @@ void init_array(nb::module_& m) {
           [](array& a, const ScalarOrArray v) -> array& {
             if (!is_comparable_with_array(v)) {
               std::ostringstream msg;
-              msg << "Cannot inplace_add an mlx.core.array and "
+              msg << "Cannot inplace add an mlx.core.array and "
                   << typeid(v).name();
               throw std::invalid_argument(msg.str());
             }
