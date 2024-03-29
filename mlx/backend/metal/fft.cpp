@@ -12,14 +12,12 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& in = inputs[0];
 
-  if (axes_.size() == 0 || axes_.size() > 1 || inverse_ ||
-      in.dtype() != complex64 || out.dtype() != complex64) {
+  if (axes_.size() == 0 || axes_.size() > 1) {
     // Could also fallback to CPU implementation here.
-    throw std::runtime_error(
-        "GPU FFT is only implemented for 1D, forward, complex FFTs.");
+    throw std::runtime_error("GPU FFT is only implemented for 1D FFTs.");
   }
 
-  size_t n = in.shape(axes_[0]);
+  size_t n = out.dtype() == float32 ? out.shape(axes_[0]) : in.shape(axes_[0]);
 
   if (!is_power_of_2(n) || n > 2048 || n < 4) {
     throw std::runtime_error(
@@ -71,11 +69,22 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
   const array& in_contiguous = check_input(inputs[0]);
 
+  // real to complex: n -> (n/2)+1
+  // complex to real: (n/2)+1 -> n
+  auto out_strides = in_contiguous.strides();
+  if (in.dtype() != out.dtype()) {
+    for (int i = 0; i < out_strides.size(); i++) {
+      if (out_strides[i] != 1) {
+        out_strides[i] =
+            out_strides[i] / in.shape(axes_[0]) * out.shape(axes_[0]);
+      }
+    }
+  }
   // TODO: allow donation here
   out.set_data(
       allocator::malloc_or_wait(out.nbytes()),
-      in_contiguous.data_size(),
-      in_contiguous.strides(),
+      out.data_size(),
+      out_strides,
       in_contiguous.flags());
 
   size_t batch = in.size() / in.shape(axes_[0]);
@@ -87,7 +96,18 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
     std::ostringstream kname;
-    kname << "fft_" << n;
+    if (out.dtype() == float32) {
+      kname << "irfft_" << n;
+    } else if (in.dtype() == float32) {
+      kname << "rfft_" << n;
+    } else {
+      kname << "fft_" << n << "_inv_";
+      if (inverse_) {
+        kname << "true";
+      } else {
+        kname << "false";
+      }
+    }
     auto kernel = d.get_kernel(kname.str());
 
     bool donated = in.data_shared_ptr() == nullptr;

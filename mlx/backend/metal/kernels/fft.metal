@@ -9,11 +9,12 @@
 #include <metal_math>
 #include <metal_common>
 
-
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 using namespace metal;
+
+#define MAX_RADIX_SIZE 4
 
 float2 complex_mul(float2 a, float2 b) {
   float2 c;
@@ -33,6 +34,10 @@ float2 get_twiddle(int k, int p) {
 
 // single threaded radix2 implemetation
 void radix2(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
+  // i: the index in the overall DFT that we're processing.
+  // p: the size of the DFTs we're merging at this step.
+  // m: how many threads are working on this DFT.
+
   float2 x_0 = read_buf[i];
   float2 x_1 = read_buf[i + m];
 
@@ -94,6 +99,45 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   write_buf[j + 3*p] = y_3;
 }
 
+threadgroup float2* perform_fft(
+    int i,
+    int m,
+    int radix_2_steps,
+    int radix_4_steps,
+    threadgroup float2* read_buf,
+    threadgroup float2* write_buf) {
+
+  threadgroup float2* tmp;
+
+  int p = 1;
+
+  for (int r = 0; r < radix_2_steps; r++) {
+    radix2(i, p, m*2, read_buf, write_buf);
+    radix2(i + m, p, m*2, read_buf, write_buf);
+    p *= 2;
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Stockham switch of buffers
+    tmp = write_buf;
+    write_buf = read_buf;
+    read_buf = tmp;
+  }
+
+  for (int r = 0; r < radix_4_steps; r++) {
+    radix4(i, p, m, read_buf, write_buf);
+    p *= 4;
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Stockham switch of buffers
+    tmp = write_buf;
+    write_buf = read_buf;
+    read_buf = tmp;
+  }
+
+  return read_buf;
+}
 
 // Each FFT is computed entirely in shared GPU memory.
 //
@@ -105,10 +149,10 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
 //
 // We provide the number of radix-2 and radix-4
 // steps at compile time for a ~20% performance boost.
-template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
+template <size_t n, bool inv, size_t radix_2_steps, size_t radix_4_steps>
 [[kernel]] void fft(
-    const device float2 *in [[buffer(0)]],
-    device float2 * out [[buffer(1)]],
+    const device float2* in [[buffer(0)]],
+    device float2* out [[buffer(1)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 threads_per_grid [[threads_per_grid]]) {
 
@@ -127,69 +171,171 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
   // Pointers to facilitate Stockham buffer swapping
   threadgroup float2* read_buf = shared_in;
   threadgroup float2* write_buf = shared_out;
-  threadgroup float2* tmp;
 
   // Copy input into shared memory
-  shared_in[i] = in[batch_idx + i];
-  shared_in[i + m] = in[batch_idx + i + m];
-  shared_in[i + 2*m] = in[batch_idx + i + 2*m];
-  shared_in[i + 3*m] = in[batch_idx + i + 3*m];
+  for (int t = 0; t < MAX_RADIX_SIZE; t++) {
+    shared_in[i + t * m] = in[batch_idx + i + t * m];
+  }
+
+  // ifft(x) = (1/n)conj(fft(conj(x)))
+  if (inv) {
+    for (int t = 0; t < MAX_RADIX_SIZE; t++) {
+      shared_in[i + t * m].y = -in[batch_idx + i + t * m].y;
+    }
+  }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  int p = 1;
+  threadgroup float2* out_buf = perform_fft(i, m, radix_2_steps, radix_4_steps, read_buf, write_buf);
 
-  for (size_t r = 0; r < radix_2_steps; r++) {
-    radix2(i, p, m*2, read_buf, write_buf);
-    radix2(i + m, p, m*2, read_buf, write_buf);
-    p *= 2;
+  if (inv) {
+    float2 inv_factor;
+    inv_factor.x = 1.0f / n;
+    inv_factor.y = -1.0f / n;
 
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Stockham switch of buffers
-    tmp = write_buf;
-    write_buf = read_buf;
-    read_buf = tmp;
+    for (int t = 0; t < MAX_RADIX_SIZE; t++) {
+      out_buf[i + t * m] *= inv_factor;
+    }
   }
 
-  for (size_t r = 0; r < radix_4_steps; r++) {
-    radix4(i, p, m, read_buf, write_buf);
-    p *= 4;
-
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Stockham switch of buffers
-    tmp = write_buf;
-    write_buf = read_buf;
-    read_buf = tmp;
+  // Copy everything in the complex case
+  for (int t = 0; t < MAX_RADIX_SIZE; t++) {
+    out[batch_idx + i + t * m] = out_buf[i + t * m];
   }
 
-  // Copy shared memory to output
-  out[batch_idx + i] = read_buf[i];
-  out[batch_idx + i + m] = read_buf[i + m];
-  out[batch_idx + i + 2*m] = read_buf[i + 2*m];
-  out[batch_idx + i + 3*m] = read_buf[i + 3*m];
 }
 
-#define instantiate_fft(name, n, radix_2_steps, radix_4_steps) \
-  template [[host_name("fft_" #name)]] \
-  [[kernel]] void fft<n, radix_2_steps, radix_4_steps>( \
+template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
+[[kernel]] void rfft(
+    const device float* in [[buffer(0)]],
+    device float2* out [[buffer(1)]],
+    uint3 thread_position_in_grid [[thread_position_in_grid]],
+    uint3 threads_per_grid [[threads_per_grid]]) {
+
+  int batch_idx = thread_position_in_grid.x * n;
+  int batch_idx_out = thread_position_in_grid.x * ((n/2) + 1);
+
+  int i = thread_position_in_grid.y;
+  int m = threads_per_grid.y;
+ 
+  threadgroup float2 shared_in[n];
+  threadgroup float2 shared_out[n];
+  threadgroup float2* read_buf = shared_in;
+  threadgroup float2* write_buf = shared_out;
+
+  // Copy input into shared memory
+  for (int t = 0; t < MAX_RADIX_SIZE; t++) {
+    shared_in[i + t * m].x = in[batch_idx + i + t * m];
+  // Fill in the empty complex part in the shared buffer
+    shared_in[i + t * m].y = 0;
+  }
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  threadgroup float2* out_buf = perform_fft(i, m, radix_2_steps, radix_4_steps, read_buf, write_buf);
+
+  // For real to complex, we only need the first (n/2) + 1 terms
+  // since the output is guaranteed to be hermitian symmetric
+  for (int t = 0; t < MAX_RADIX_SIZE / 2; t++) {
+    out[batch_idx_out + i + t * m] = out_buf[i + t * m];
+  }
+  // add on the +1 in (n/2) + 1
+  if (i == 0) {
+    out[batch_idx_out + MAX_RADIX_SIZE / 2 * m] = out_buf[MAX_RADIX_SIZE / 2 * m];
+  }
+
+}
+
+template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
+[[kernel]] void irfft(
+    const device float2* in [[buffer(0)]],
+    device float* out [[buffer(1)]],
+    uint3 thread_position_in_grid [[thread_position_in_grid]],
+    uint3 threads_per_grid [[threads_per_grid]]) {
+
+  int batch_idx = thread_position_in_grid.x * ((n/2) + 1);
+  int batch_idx_out = thread_position_in_grid.x * n;
+
+  int i = thread_position_in_grid.y;
+  int m = threads_per_grid.y;
+
+  threadgroup float2 shared_in[n];
+  threadgroup float2 shared_out[n];
+  threadgroup float2* read_buf = shared_in;
+  threadgroup float2* write_buf = shared_out;
+
+  // Copy the first n/2 + 1 inputs
+  for (int t = 0; t < MAX_RADIX_SIZE / 2; t++) {
+    shared_in[i + t * m] = in[batch_idx + i + t * m];
+    // Conjugate since this is an inverse fft
+    shared_in[i + t * m].y = -shared_in[i + t * m].y;
+  }
+  // add on the +1 in (n/2) + 1
+  if (i == 0) {
+    shared_in[MAX_RADIX_SIZE / 2 * m] = in[batch_idx + MAX_RADIX_SIZE / 2 * m];
+  }
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  // Entries (n/2) + 1: are the reversed conjugates of the first half of the array
+  for (int t = 0; t < MAX_RADIX_SIZE / 2; t++) {
+    int index = i + t * m;
+    shared_in[n - 1 - index] = shared_in[index + 1];
+    shared_in[n - 1 - index].y = -shared_in[n - 1 - index].y;
+  }
+
+  threadgroup_barrier(mem_flags::mem_threadgroup);
+
+  threadgroup float2* out_buf = perform_fft(i, m, radix_2_steps, radix_4_steps, read_buf, write_buf);
+
+  for (int t = 0; t < MAX_RADIX_SIZE; t++) {
+    out[batch_idx_out + i + t * m] = out_buf[i + t * m].x / n;
+  }
+
+}
+
+
+#define instantiate_fft(name, n, inv, radix_2_steps, radix_4_steps) \
+  template [[host_name("fft_" #name "_inv_" #inv)]] \
+  [[kernel]] void fft<n, inv, radix_2_steps, radix_4_steps>( \
       const device float2* in [[buffer(0)]], \
       device float2* out [[buffer(1)]], \
     uint3 thread_position_in_grid [[thread_position_in_grid]], \
     uint3 threads_per_grid [[threads_per_grid]]);
 
+#define instantiate_rfft(name, n, radix_2_steps, radix_4_steps) \
+  template [[host_name("rfft_" #name)]] \
+  [[kernel]] void rfft<n, radix_2_steps, radix_4_steps>( \
+      const device float* in [[buffer(0)]], \
+      device float2* out [[buffer(1)]], \
+    uint3 thread_position_in_grid [[thread_position_in_grid]], \
+    uint3 threads_per_grid [[threads_per_grid]]);
+
+#define instantiate_irfft(name, n, radix_2_steps, radix_4_steps) \
+  template [[host_name("irfft_" #name)]] \
+  [[kernel]] void irfft<n, radix_2_steps, radix_4_steps>( \
+      const device float2* in [[buffer(0)]], \
+      device float* out [[buffer(1)]], \
+    uint3 thread_position_in_grid [[thread_position_in_grid]], \
+    uint3 threads_per_grid [[threads_per_grid]]);
+
+#define instantiate_ffts(name, n, radix_2_steps, radix_4_steps) \
+    instantiate_fft(name, n, false, radix_2_steps, radix_4_steps) \
+    instantiate_fft(name, n, true, radix_2_steps, radix_4_steps) \
+    instantiate_rfft(name, n, radix_2_steps, radix_4_steps) \
+    instantiate_irfft(name, n, radix_2_steps, radix_4_steps) \
+
 
 // Explicitly define kernels for each power of 2.
-instantiate_fft(4, /* n= */ 4, /* radix_2_steps= */ 0, /* radix_4_steps= */ 1)
-instantiate_fft(8, 8, 1, 1)
-instantiate_fft(16, 16, 0, 2)
-instantiate_fft(32, 32, 1, 2)
-instantiate_fft(64, 64, 0, 3)
-instantiate_fft(128, 128, 1, 3)
-instantiate_fft(256, 256, 0, 4)
-instantiate_fft(512, 512, 1, 4)
-instantiate_fft(1024, 1024, 0, 5)
+instantiate_ffts(4, /* n= */ 4, /* radix_2_steps= */ 0, /* radix_4_steps= */ 1)
+instantiate_ffts(8, 8, 1, 1)
+instantiate_ffts(16, 16, 0, 2)
+instantiate_ffts(32, 32, 1, 2)
+instantiate_ffts(64, 64, 0, 3)
+instantiate_ffts(128, 128, 1, 3)
+instantiate_ffts(256, 256, 0, 4)
+instantiate_ffts(512, 512, 1, 4)
+instantiate_ffts(1024, 1024, 0, 5)
 // 2048 is the max that will fit into 32KB of threadgroup memory.
 // TODO: implement 4 step FFT for larger n.
-instantiate_fft(2048, 2048, 1, 5)
+instantiate_ffts(2048, 2048, 1, 5)

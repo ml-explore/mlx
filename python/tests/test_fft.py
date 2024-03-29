@@ -81,25 +81,50 @@ class TestFFT(mlx_tests.MLXTestCase):
                 self.check_mx_np(mx_op, np_op, x, axes=ax, s=s)
 
     def test_fft_powers_of_two(self):
-        shape = (16, 4, 8)
         # np.fft.fft always uses double precision complex128
         # mx.fft.fft only supports single precision complex64
         # hence the fairly tolerant equality checks.
         atol = 1e-4
         rtol = 1e-4
         np.random.seed(7)
+
+        shape = (16, 4, 8)
         for k in range(4, 12):
             r = np.random.rand(*shape, 2**k).astype(np.float32)
             i = np.random.rand(*shape, 2**k).astype(np.float32)
             a_np = r + 1j * i
             self.check_mx_np(mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol)
+            self.check_mx_np(mx.fft.ifft, np.fft.ifft, a_np, atol=atol, rtol=rtol)
+
+            self.check_mx_np(mx.fft.rfft, np.fft.rfft, r, atol=atol, rtol=rtol)
+
+            r = np.random.rand(*shape, 2 ** (k - 1) + 1).astype(np.float32)
+            i = np.random.rand(*shape, 2 ** (k - 1) + 1).astype(np.float32)
+            a_np_ir = r + 1j * i
+            self.check_mx_np(mx.fft.irfft, np.fft.irfft, a_np_ir, atol=atol, rtol=rtol)
 
         r = np.random.rand(*shape, 32).astype(np.float32)
         i = np.random.rand(*shape, 32).astype(np.float32)
         a_np = r + 1j * i
+
         for axis in range(4):
             self.check_mx_np(
                 mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol, axis=axis
+            )
+            self.check_mx_np(
+                mx.fft.ifft, np.fft.ifft, a_np, atol=atol, rtol=rtol, axis=axis
+            )
+            self.check_mx_np(
+                mx.fft.rfft, np.fft.rfft, r, atol=atol, rtol=rtol, axis=axis
+            )
+
+        # irfft
+        r = np.random.rand(9, 3, 5, 17).astype(np.float32)
+        i = np.random.rand(9, 3, 5, 17).astype(np.float32)
+        a_np = r + 1j * i
+        for axis in range(4):
+            self.check_mx_np(
+                mx.fft.irfft, np.fft.irfft, r, atol=atol, rtol=rtol, axis=axis
             )
 
         r = np.random.rand(4, 8).astype(np.float32)
