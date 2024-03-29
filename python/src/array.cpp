@@ -820,37 +820,45 @@ void init_array(nb::module_& m) {
           "other"_a)
       .def(
           "__eq__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a,
+             const ScalarOrArray& v) -> std::variant<array, bool> {
+            if (!is_comparable_with_array(v)) {
+              return false;
+            }
             return equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__lt__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> array {
             return less(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__le__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> array {
             return less_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__gt__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> array {
             return greater(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ge__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a, const ScalarOrArray v) -> array {
             return greater_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
       .def(
           "__ne__",
-          [](const array& a, const ScalarOrArray v) {
+          [](const array& a,
+             const ScalarOrArray v) -> std::variant<array, bool> {
+            if (!is_comparable_with_array(v)) {
+              return true;
+            }
             return not_equal(a, to_array(v, a.dtype()));
           },
           "other"_a)
