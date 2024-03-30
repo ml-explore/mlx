@@ -671,6 +671,24 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = cmean(x)
         self.assertTrue(mx.allclose(out, mean(x)))
 
+    def test_compile_broadcast_only(self):
+        def fn(a):
+            a = mx.broadcast_to(a, (1,))
+            return a + a
+        out = mx.compile(fn)(mx.array(2.0))
+        # TODO debug crash here
+        repr(out)
+        self.assertTrue(mx.array_equal(out, mx.array([4.0])))
+
+    def test_compile_with_long_name(self):
+        def fn(a, b):
+            for _ in range(10):
+                a = a - 1.0
+                b = b - 1.0
+            return a + b
+        out = mx.compile(fn)(mx.array(10.0), mx.array(20.0))
+        self.assertEqual(out.item(), 10.0)
+
 
 if __name__ == "__main__":
     unittest.main()
