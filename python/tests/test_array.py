@@ -226,7 +226,6 @@ class TestInequality(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             a | str_
 
-
 class TestArray(mlx_tests.MLXTestCase):
     def test_array_basics(self):
         x = mx.array(1)
