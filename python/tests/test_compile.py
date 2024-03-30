@@ -677,8 +677,8 @@ class TestCompile(mlx_tests.MLXTestCase):
             return a + a
 
         out = mx.compile(fn)(mx.array(2.0))
-        # TODO debug crash here
-        repr(out)
+        # Make sure repr can be called
+        self.assertTrue(repr(out) is not None)
         self.assertTrue(mx.array_equal(out, mx.array([4.0])))
 
     def test_compile_with_long_name(self):
