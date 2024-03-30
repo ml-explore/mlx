@@ -471,36 +471,67 @@ array mlx_get_item_list(array src, const nb::list& entries) {
 
   // Go through indices and gather the arrays
   int axis = 0;
-  for (auto& idx : indices) {
-    if (nb::isinstance<nb::list>(idx)) {
-      auto list_idx = nb::cast<nb::list>(idx);
-      std::vector<int> gather_indices;
 
-      for (const auto& lidx : list_idx) {
-        if (nb::isinstance<nb::int_>(lidx)) {
-          gather_indices.push_back(nb::cast<int>(lidx));
-        } else {
-          throw std::invalid_argument(
-              "Cannot index mlx array using the given type yet");
-        }
+  // If only one input array is mentioned, we set axis=0 and use take
+  if (num_lists == 1) {
+    std::vector<int> gather_indices;
+    for (const auto& idx : indices[0]) {
+      if (nb::isinstance<nb::int_>(idx)) {
+        gather_indices.push_back(nb::cast<int>(idx));
+      } else {
+        throw std::invalid_argument(
+            "Cannot index mlx array using the given type yet");
       }
-      auto arr = array(
-          gather_indices.begin(),
-          {static_cast<int>(gather_indices.size())},
-          uint32);
-      gather_indices_vec.push_back(arr);
-      axes_vec.push_back(axis);
-      axis++;
-    } else {
-      gather_indices_vec.push_back(
-          mlx_get_item_int(src, nb::cast<nb::int_>(idx)));
     }
+    auto idx = array(
+        gather_indices.begin(),
+        {static_cast<int>(gather_indices.size())},
+        uint32);
+    src = take(src, idx, axis);
   }
-  if (!gather_indices_vec.empty()) {
-    std::vector<int> slice_sizes(src.ndim(), 1);
-    std::fill(slice_sizes.begin(), slice_sizes.end(), 1);
-    src = gather(src, gather_indices_vec, axes_vec, slice_sizes);
-    src = squeeze(src);
+  // If multiple arrays are mentioned, we gather them
+  else {
+    for (auto& idx : indices) {
+      if (nb::isinstance<nb::list>(idx)) {
+        auto list_idx = nb::cast<nb::list>(idx);
+        std::vector<int> gather_indices;
+
+        for (const auto& lidx : list_idx) {
+          if (nb::isinstance<nb::int_>(lidx)) {
+            int sub_ = nb::cast<int>(lidx);
+            // check if the index is greater than the dimension of array in this
+            // specific dimension
+            if (sub_ >= src.shape(axis)) {
+              std::ostringstream msg;
+              msg << "Index " << sub_ << " is out of bounds for dimension "
+                  << axis << " with size " << src.shape(axis);
+              throw std::invalid_argument(msg.str());
+            }
+            gather_indices.push_back(sub_);
+          } else {
+            throw std::invalid_argument(
+                "Cannot index mlx array using the given type yet");
+          }
+        }
+        auto arr = array(
+            gather_indices.begin(),
+            {static_cast<int>(gather_indices.size())},
+            uint32);
+        gather_indices_vec.push_back(arr);
+        axes_vec.push_back(axis);
+        axis++;
+      } else {
+        gather_indices_vec.push_back(
+            mlx_get_item_int(src, nb::cast<nb::int_>(idx)));
+      }
+    }
+    if (!gather_indices_vec.empty()) {
+      std::vector<int> slice_sizes(src.ndim(), 1);
+      std::fill(slice_sizes.begin(), slice_sizes.end(), 1);
+      src = gather(src, gather_indices_vec, axes_vec, slice_sizes);
+      // squeeze the dimensions to make final shape correct
+      src = squeeze(src);
+    }
   }
   return src;
 }
