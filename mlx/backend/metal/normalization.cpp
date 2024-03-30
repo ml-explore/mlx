@@ -146,9 +146,11 @@ void RMSNormVJP::eval_gpu(
     gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
   }
   copies.push_back(gw_temp);
-  array zero(0, gw.dtype());
-  copies.push_back(zero);
-  copy_gpu(zero, gw, CopyType::Scalar, s);
+  {
+    array zero(0, gw.dtype());
+    copy_gpu(zero, gw, CopyType::Scalar, s);
+    copies.push_back(std::move(zero));
+  }
 
   const int simd_size = 32;
   const int n_reads = RMS_N_READS;
@@ -308,7 +310,7 @@ void LayerNormVJP::eval_gpu(
   const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
   const array& w = inputs[1];
   const array& b = inputs[2];
-  const array& g = check_input(inputs[2]) ? copies.back() : inputs[2];
+  const array& g = check_input(inputs[3]) ? copies.back() : inputs[3];
   array& gx = outputs[0];
   array& gw = outputs[1];
   array& gb = outputs[2];
@@ -340,10 +342,12 @@ void LayerNormVJP::eval_gpu(
     gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
   }
   copies.push_back(gw_temp);
-  array zero(0, gw.dtype());
-  copies.push_back(zero);
-  copy_gpu(zero, gw, CopyType::Scalar, s);
-  copy_gpu(zero, gb, CopyType::Scalar, s);
+  {
+    array zero(0, gw.dtype());
+    copy_gpu(zero, gw, CopyType::Scalar, s);
+    copy_gpu(zero, gb, CopyType::Scalar, s);
+    copies.push_back(std::move(zero));
+  }
 
   // Finish with the gradient for b in case we had a b
   auto compute_encoder = d.get_command_encoder(s.index);
