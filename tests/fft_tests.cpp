@@ -3,6 +3,7 @@
 #include "doctest/doctest.h"
 
 #include <iostream>
+#include "benchmarks/cpp/time_utils.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
@@ -11,14 +12,19 @@ TEST_CASE("test fft basics") {
   auto device = default_device();
   set_default_device(Device::gpu);
   // array x(1.0);
-  // array x({0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3}, {4, 4});
-  array x = random::normal({4, 16, 65});
+  // array x = arange(573);
+  array x = arange(8);
+  // array x = random::normal({1, 8});
   x = astype(x, complex64);
-  auto y = fft::irfftn(x, {1, 0, 2});
+  auto y = fft::ifft(x);
+  // auto bench_fft = [&x]() { return fft::fft(x); };
+  // TIME(bench_fft);
   std::cout << "y " << y << std::endl;
 
   set_default_device(Device::cpu);
-  y = fft::irfftn(x, {1, 0, 2});
+  y = fft::ifft(x);
+
+  // std::cout << sum(abs(y - y_cpu)) << std::endl;
   std::cout << "y " << y << std::endl;
   // CHECK_THROWS(fft::fft(x));
   // CHECK_THROWS(fft::ifft(x));

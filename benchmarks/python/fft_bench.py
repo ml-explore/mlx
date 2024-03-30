@@ -18,59 +18,64 @@ def bandwidth_gb(runtime_ms, system_size):
     return system_size * bytes_per_fft / runtime_ms * ms_per_s / bytes_per_gb
 
 
-def run_bench(system_size):
+def run_bench(system_size, fft_sizes):
     def fft(x):
         out = mx.fft.fft(x)
         mx.eval(out)
         return out
 
     bandwidths = []
-    for k in range(4, 12):
-        n = 2**k
+    for n in fft_sizes:
         x = mx.random.uniform(shape=(system_size // n, n)).astype(mx.float32)
         x = x.astype(mx.complex64)
         mx.eval(x)
         runtime_ms = measure_runtime(fft, x=x)
-        bandwidths.append(bandwidth_gb(runtime_ms, system_size))
+        bandwidth = bandwidth_gb(runtime_ms, system_size // n * n)
+        print("bandwidth", n, bandwidth)
+        bandwidths.append(bandwidth)
 
     return bandwidths
 
 
-def run_bench_mps(system_size):
+def run_bench_mps(system_size, fft_sizes):
     def fft(x):
         out = torch.fft.fft(x)
         torch.mps.synchronize()
         return out
 
     bandwidths = []
-    for n in tqdm(range(1, 512)):
-        # for k in range(4, 12):
+    # for n in tqdm(range(1, 512)):
+    # for k in range(4, 12):
+    for n in fft_sizes:
         # n = 2**k
         x_np = np.random.uniform(size=(system_size // n, n)).astype(np.complex64)
         x = torch.tensor(x_np, device="mps")
 
         runtime_ms = measure_runtime(fft, x=x)
-        bandwidths.append(bandwidth_gb(runtime_ms, system_size // n * n))
+        bandwidth = bandwidth_gb(runtime_ms, system_size // n * n)
+        print("bandwidth", n, bandwidth)
+        bandwidths.append(bandwidth)
 
     return bandwidths
 
 
 def time_fft():
-    mps_bandwidths = run_bench_mps(system_size=int(2**24))
+    x = range(4, 257)
+    system_size = int(2**24)
+
+    mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
     # print('mps_bandwidths', mps_bandwidths)
 
     # with mx.stream(mx.cpu):
     #     cpu_bandwidths = run_bench(system_size=int(2**22))
+    # x = list(range(4, 1025))
 
-    # with mx.stream(mx.gpu):
-    #     gpu_bandwidths = run_bench(system_size=int(2**24))
-    #     print('gpu_bandwidths', gpu_bandwidths)
+    with mx.stream(mx.gpu):
+        gpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
     # plot bandwidths
-    # x = [2**k for k in range(4, 12)]
-    x = list(range(1, 512))
-    # plt.scatter(x, gpu_bandwidths, color="green", label="GPU")
-    np.save("mps_bandwidths", mps_bandwidths)
+    plt.scatter(x, gpu_bandwidths, color="green", label="GPU")
+    # np.save("mps_bandwidths", mps_bandwidths)
     plt.scatter(x, mps_bandwidths, color="blue", label="MPS")
     # plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
     plt.title("MLX FFT Benchmark")

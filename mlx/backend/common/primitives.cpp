@@ -149,6 +149,10 @@ void AsStrided::eval(const std::vector<array>& inputs, array& out) {
   return out.copy_shared_buffer(in, strides_, flags, data_size, offset_);
 }
 
+void BluesteinFFTSetup::eval(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {}
+
 void Broadcast::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];

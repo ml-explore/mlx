@@ -10,6 +10,8 @@
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
 
+#include <iostream>
+
 namespace mlx::core {
 
 // Forward declaration

@@ -81,6 +81,14 @@ class TestFFT(mlx_tests.MLXTestCase):
                 self.check_mx_np(mx_op, np_op, x, axes=ax, s=s)
 
     def test_fft_powers_of_two(self):
+        for num in range(4, 1025):
+            print("num", num)
+            r = np.random.rand(num).astype(np.float32)
+            i = np.random.rand(num).astype(np.float32)
+            a_np = r + 1j * i
+            self.check_mx_np(mx.fft.fft, np.fft.fft, a_np, atol=1e-4, rtol=1e-4)
+        return
+
         # np.fft.fft always uses double precision complex128
         # mx.fft.fft only supports single precision complex64
         # hence the fairly tolerant equality checks.

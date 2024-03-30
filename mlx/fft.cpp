@@ -12,6 +12,14 @@
 
 namespace mlx::core::fft {
 
+bool is_power_of_2(int n) {
+  return ((n & (n - 1)) == 0) && n != 0;
+}
+
+int next_power_of_2(int n) {
+  return pow(2, std::ceil(std::log2(n)));
+}
+
 array fft_impl(
     const array& a,
     std::vector<int> n,
@@ -101,7 +109,8 @@ array fft_impl(
       // Opposite order for fft vs ifft
       int index = inverse ? axes.size() - i - 1 : i;
       int axis = axes[index];
-      // Mirror np.fft.rfftn and perform a real transform only on the final axis
+      // Mirror np.fft.(i)rfftn and perform a real transform only on the final
+      // axis
       bool step_real = (real && index == axes.size() - 1);
       int step_shape = inverse ? out_shape[axis] : in.shape(axis);
       out = fft_impl(out, {step_shape}, {axis}, step_real, inverse, s);
@@ -111,11 +120,27 @@ array fft_impl(
 
   auto in_type = real && !inverse ? float32 : complex64;
   auto out_type = real && inverse ? float32 : complex64;
-  return array(
-      out_shape,
-      out_type,
-      std::make_shared<FFT>(stream, valid_axes, inverse, real),
-      {astype(in, in_type, s)});
+  if (stream.device == Device::gpu && !is_power_of_2(n.back())) {
+    int fast_n = next_power_of_2(n.back() * 2 - 1);
+    auto blue_outputs = array::make_arrays(
+        {{fast_n}, {n.back()}},
+        {{complex64, complex64}},
+        std::make_shared<BluesteinFFTSetup>(to_stream(Device::cpu), n.back()),
+        {});
+    array w_q = blue_outputs[0];
+    array w_k = blue_outputs[1];
+    return array(
+        out_shape,
+        out_type,
+        std::make_shared<FFT>(stream, valid_axes, inverse, real),
+        {astype(in, in_type, s), w_q, w_k});
+  } else {
+    return array(
+        out_shape,
+        out_type,
+        std::make_shared<FFT>(stream, valid_axes, inverse, real),
+        {astype(in, in_type, s)});
+  }
 }
 
 array fft_impl(

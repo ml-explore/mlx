@@ -3,6 +3,9 @@
 #include "mlx/backend/metal/utils.h"
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
+#include "mlx/utils.h"
+
+#include <iostream>
 
 namespace mlx::core {
 
@@ -12,21 +15,19 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto& in = inputs[0];
 
-  if (axes_.size() == 0 || axes_.size() > 1) {
-    // Could also fallback to CPU implementation here.
-    throw std::runtime_error("GPU FFT is only implemented for 1D FFTs.");
+  if (axes_.size() == 0) {
+    throw std::runtime_error("GPU FFT is not implemented for 0D transforms.");
   }
 
-  size_t n = out.dtype() == float32 ? out.shape(axes_[0]) : in.shape(axes_[0]);
+  int n = out.dtype() == float32 ? out.shape(axes_[0]) : in.shape(axes_[0]);
 
-  if (!is_power_of_2(n) || n > 2048 || n < 4) {
-    throw std::runtime_error(
-        "GPU FFT is only implemented for the powers of 2 from 4 -> 2048");
+  if (n > 2048 || n < 4) {
+    throw std::runtime_error("GPU FFT is only implemented from 3 -> 2048");
   }
 
   // Make sure that the array is contiguous and has stride 1 in the FFT dim
   std::vector<array> copies;
-  auto check_input = [this, &copies, &s](const array& x) {
+  auto check_input = [this, &copies, &s](const array& x) -> const array& {
     // TODO: Pass the strides to the kernel so
     // we can avoid the copy when x is not contiguous.
     bool no_copy = x.strides()[axes_[0]] == 1 && x.flags().row_contiguous ||
@@ -34,7 +35,6 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (no_copy) {
       return x;
     } else {
-      array x_copy(x.shape(), x.dtype(), nullptr, {});
       std::vector<size_t> strides;
       size_t cur_stride = x.shape(axes_[0]);
       for (int axis = 0; axis < x.ndim(); axis++) {
@@ -60,11 +60,11 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       // This is probably over-conservative
       flags.contiguous = false;
 
-      x_copy.set_data(
+      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
+      copies.back().set_data(
           allocator::malloc_or_wait(x.nbytes()), x.data_size(), strides, flags);
-      copy_gpu_inplace(x, x_copy, CopyType::GeneralGeneral, s);
-      copies.push_back(x_copy);
-      return x_copy;
+      copy_gpu_inplace(x, copies.back(), CopyType::GeneralGeneral, s);
+      return copies.back();
     }
   };
   const array& in_contiguous = check_input(inputs[0]);
@@ -88,6 +88,11 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       in_contiguous.flags());
 
   size_t batch = in.size() / in.shape(axes_[0]);
+  // Bluestein's algorithm transforms to an FFT of
+  // the first power of 2 after (2 * n + 1)
+  int bluestein_n = next_power_of_2(2 * n - 1);
+
+  int m = is_power_of_2(n) ? n : bluestein_n;
 
   // We use n / 4 threads by default since radix-4
   // is the largest single threaded radix butterfly
@@ -96,7 +101,9 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
     std::ostringstream kname;
-    if (out.dtype() == float32) {
+    if (!is_power_of_2(n)) {
+      kname << "bluestein_" << bluestein_n;
+    } else if (out.dtype() == float32) {
       kname << "irfft_" << n;
     } else if (in.dtype() == float32) {
       kname << "rfft_" << n;
@@ -114,6 +121,14 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setComputePipelineState(kernel);
     compute_encoder.set_input_array(in_contiguous, 0);
     compute_encoder.set_output_array(out, 1);
+    if (!is_power_of_2(n)) {
+      // Bluestein requires extra pre-computed inputs
+      auto& w_q = inputs[1];
+      auto& w_k = inputs[2];
+      set_array_buffer(compute_encoder, w_q, 2);
+      set_array_buffer(compute_encoder, w_k, 3);
+      compute_encoder->setBytes(&n, sizeof(int), 4);
+    }
 
     auto group_dims = MTL::Size(1, m, 1);
     auto grid_dims = MTL::Size(batch, m, 1);

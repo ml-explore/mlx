@@ -235,7 +235,6 @@ class ArcCos : public UnaryPrimitive {
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcCos)
@@ -441,6 +440,24 @@ class AsStrided : public UnaryPrimitive {
   size_t offset_;
 
   void eval(const std::vector<array>& inputs, array& out);
+};
+
+// TODO: replace with native operations once we have CPU float64 support
+class BluesteinFFTSetup : public Primitive {
+ public:
+  explicit BluesteinFFTSetup(Stream stream, int n) : Primitive(stream), n_(n){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(BluesteinFFTSetup)
+
+ private:
+  int n_;
+
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 class Broadcast : public UnaryPrimitive {

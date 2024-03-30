@@ -533,6 +533,13 @@ void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void BluesteinFFTSetup::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error(
+      "No GPU impl for Bluestein FFT since it requires fp64");
+}
+
 void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }

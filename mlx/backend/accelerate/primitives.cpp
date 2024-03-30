@@ -2,10 +2,12 @@
 
 #include <cassert>
 #include <cmath>
+#include <numeric>
 
 #include <vecLib/vDSP.h>
 #include <vecLib/vForce.h>
 
+#include "mlx/3rdparty/pocketfft.h"
 #include "mlx/allocator.h"
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/copy.h"
@@ -230,6 +232,97 @@ void AsType::eval_cpu(const std::vector<array>& inputs, array& out) {
     }
   }
   eval(inputs, out);
+}
+
+void BluesteinFFTSetup::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  // We need to calculate the Bluestein twiddle factors
+  // in double precision for the overall numerical stability
+  // of Bluestein's FFT algorithm to be acceptable.
+  //
+  // MLX currently support float64, so instead we
+  // manually implement the required operations using accelerate.
+  //
+  // In numpy:
+  // w_k = np.exp(-1j * np.pi / N * (np.arange(-N + 1, N) ** 2))
+  // w_q = np.fft.fft(1/w_k)
+  // return w_k, w_q
+  //
+  assert(inputs.size() == 0);
+
+  auto& w_q = outputs[0];
+  auto& w_k = outputs[1];
+
+  size_t fft_size = w_q.shape(0);
+
+  int length = 2 * n_ - 1;
+
+  std::vector<double> x(length);
+  std::vector<double> y(length);
+
+  std::iota(x.begin(), x.end(), -n_ + 1);
+  vDSP_vsqD(x.data(), 1, y.data(), 1, x.size());
+  double theta = (double)1.0 / (double)n_;
+  vDSP_vsmulD(y.data(), 1, &theta, x.data(), 1, x.size());
+
+  std::vector<double> real_part(length);
+  std::vector<double> imag_part(length);
+  vvcospi(real_part.data(), x.data(), &length);
+  vvsinpi(imag_part.data(), x.data(), &length);
+
+  double minus_1 = -1.0;
+  vDSP_vsmulD(x.data(), 1, &minus_1, y.data(), 1, x.size());
+
+  // compute w_k
+  std::vector<double> real_part_w_k(n_);
+  std::vector<double> imag_part_w_k(n_);
+  vvcospi(real_part_w_k.data(), y.data() + length - n_, &n_);
+  vvsinpi(imag_part_w_k.data(), y.data() + length - n_, &n_);
+
+  auto convert_float = [](double real, double imag) {
+    return std::complex<float>(real, imag);
+  };
+
+  // convert back to float now we've done the sincos
+  std::vector<std::complex<float>> w_k_input(n_, 0.0);
+  std::transform(
+      real_part_w_k.begin(),
+      real_part_w_k.end(),
+      imag_part_w_k.begin(),
+      w_k_input.begin(),
+      convert_float);
+
+  w_k.set_data(allocator::malloc_or_wait(w_k.nbytes()));
+
+  auto w_k_ptr =
+      reinterpret_cast<std::complex<float>*>(w_k.data<complex64_t>());
+  memcpy(w_k_ptr, w_k_input.data(), n_ * w_k.itemsize());
+
+  // convert back to float now we've done the sincos
+  std::vector<std::complex<float>> fft_input(fft_size, 0.0);
+  std::transform(
+      real_part.begin(),
+      real_part.end(),
+      imag_part.begin(),
+      fft_input.begin(),
+      convert_float);
+
+  w_q.set_data(allocator::malloc_or_wait(w_q.nbytes()));
+  auto w_q_ptr =
+      reinterpret_cast<std::complex<float>*>(w_q.data<complex64_t>());
+
+  std::ptrdiff_t item_size = w_q.itemsize();
+
+  pocketfft::c2c(
+      /* shape= */ {fft_size},
+      /* stride_in= */ {item_size},
+      /* stride_out= */ {item_size},
+      /* axes= */ {0},
+      /* forward= */ true,
+      /* data_in= */ fft_input.data(),
+      /* data_out= */ w_q_ptr,
+      /* scale= */ 1.0f);
 }
 
 void Cos::eval_cpu(const std::vector<array>& inputs, array& out) {

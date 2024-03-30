@@ -8,6 +8,8 @@
 #include "device.h"
 #include "utils.h"
 
+#include <iostream>
+
 namespace mlx::core::fft {
 
 /** Compute the n-dimensional Fourier Transform. */
