@@ -90,6 +90,17 @@ inline array to_array(
   }
 }
 
+inline void throw_if_invalid_index(const array& src, int sub_, int axis) {
+  // check if the index is greater than the dimension of array in this
+  // specific dimension
+  if (sub_ >= src.shape(axis)) {
+    std::ostringstream msg;
+    msg << "Index " << sub_ << " is out of bounds for dimension " << axis
+        << " with size " << src.shape(axis);
+    throw std::invalid_argument(msg.str());
+  }
+}
+
 inline std::pair<array, array> to_arrays(
     const ScalarOrArray& a,
     const ScalarOrArray& b) {
