@@ -6,6 +6,7 @@
 
 #include "mlx/ops.h"
 #include "python/src/indexing.h"
+#include "utils.h"
 
 bool is_none_slice(const nb::slice& in_slice) {
   return (
@@ -453,14 +454,21 @@ array mlx_get_item_list(array src, const nb::list& entries) {
 
   // Calculate number of lists inside the indices
   int num_lists = 0;
+  int num_ints = 0;
   for (auto& idx : indices) {
     if (nb::isinstance<nb::list>(idx)) {
       num_lists++;
+    } else if (nb::isinstance<nb::int_>(idx)) {
+      num_ints++;
+    } else {
+      throw std::invalid_argument(
+          "Cannot index mlx array using the given type yet");
     }
   }
 
   // Check for the number of indices passed
-  if (num_lists > src.ndim()) {
+  // and compare with the number of dimensions in the array
+  if ((num_lists + num_ints) > src.ndim()) {
     std::ostringstream msg;
     msg << "Too many indices for array with " << src.ndim() << "dimensions.";
     throw std::invalid_argument(msg.str());
@@ -472,8 +480,8 @@ array mlx_get_item_list(array src, const nb::list& entries) {
   // Go through indices and gather the arrays
   int axis = 0;
 
-  // If only one input array is mentioned, we set axis=0 and use take
-  if (num_lists == 1) {
+  // If only one input array is mentioned, we use axis=0 and pass it to `take`
+  if ((num_lists + num_ints) == 1) {
     std::vector<int> gather_indices;
     for (const auto& idx : indices[0]) {
       if (nb::isinstance<nb::int_>(idx)) {
@@ -499,14 +507,7 @@ array mlx_get_item_list(array src, const nb::list& entries) {
         for (const auto& lidx : list_idx) {
           if (nb::isinstance<nb::int_>(lidx)) {
             int sub_ = nb::cast<int>(lidx);
-            // check if the index is greater than the dimension of array in this
-            // specific dimension
-            if (sub_ >= src.shape(axis)) {
-              std::ostringstream msg;
-              msg << "Index " << sub_ << " is out of bounds for dimension "
-                  << axis << " with size " << src.shape(axis);
-              throw std::invalid_argument(msg.str());
-            }
+            throw_if_invalid_index(src, sub_, axis);
             gather_indices.push_back(sub_);
           } else {
             throw std::invalid_argument(
@@ -518,12 +519,16 @@ array mlx_get_item_list(array src, const nb::list& entries) {
             {static_cast<int>(gather_indices.size())},
             uint32);
         gather_indices_vec.push_back(arr);
-        axes_vec.push_back(axis);
-        axis++;
+      } else if (nb::isinstance<nb::int_>(idx)) {
+        int sub_ = nb::cast<int>(idx);
+        throw_if_invalid_index(src, sub_, axis);
+        gather_indices_vec.push_back(get_int_index(idx, src.shape(axis)));
       } else {
-        gather_indices_vec.push_back(
-            mlx_get_item_int(src, nb::cast<nb::int_>(idx)));
+        throw std::invalid_argument(
+            "Cannot index mlx array using the given type yet");
       }
+      axes_vec.push_back(axis);
+      axis++;
     }
     if (!gather_indices_vec.empty()) {
       std::vector<int> slice_sizes(src.ndim(), 1);
