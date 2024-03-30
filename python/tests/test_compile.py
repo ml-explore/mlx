@@ -675,6 +675,7 @@ class TestCompile(mlx_tests.MLXTestCase):
         def fn(a):
             a = mx.broadcast_to(a, (1,))
             return a + a
+
         out = mx.compile(fn)(mx.array(2.0))
         # TODO debug crash here
         repr(out)
@@ -686,6 +687,7 @@ class TestCompile(mlx_tests.MLXTestCase):
                 a = a - 1.0
                 b = b - 1.0
             return a + b
+
         out = mx.compile(fn)(mx.array(10.0), mx.array(20.0))
         self.assertEqual(out.item(), 10.0)
 
