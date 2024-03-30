@@ -80,7 +80,6 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setComputePipelineState(kernel);
     set_array_buffer(
         compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
-    set_array_buffer(compute_encoder, in, 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&axis_size, sizeof(int), 2);
     compute_encoder->setThreadgroupMemoryLength(simd_size * in.itemsize(), 0);
