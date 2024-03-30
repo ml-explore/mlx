@@ -180,7 +180,7 @@ template <size_t n, bool inv, size_t radix_2_steps, size_t radix_4_steps>
   // ifft(x) = (1/n)conj(fft(conj(x)))
   if (inv) {
     for (int t = 0; t < MAX_RADIX_SIZE; t++) {
-      shared_in[i + t * m].y = -in[batch_idx + i + t * m].y;
+      shared_in[i + t * m].y = -shared_in[i + t * m].y;
     }
   }
 

@@ -118,6 +118,26 @@ class TestFFT(mlx_tests.MLXTestCase):
                 mx.fft.rfft, np.fft.rfft, r, atol=atol, rtol=rtol, axis=axis
             )
 
+        # fftn
+        for axes in [(0, 1, 2), (1, 0, 2), (2, 1, 0)]:
+            self.check_mx_np(
+                mx.fft.fftn, np.fft.fftn, a_np, atol=atol, rtol=rtol, axes=axes
+            )
+            self.check_mx_np(
+                mx.fft.ifftn, np.fft.ifftn, a_np, atol=atol, rtol=rtol, axes=axes
+            )
+            self.check_mx_np(
+                mx.fft.rfftn, np.fft.rfftn, r, atol=atol, rtol=rtol, axes=axes
+            )
+
+        # irfftn
+        r = np.random.rand(16, 5, 8, 32).astype(np.float32)
+        i = np.random.rand(16, 5, 8, 32).astype(np.float32)
+        a_np = r + 1j * i
+        self.check_mx_np(
+            mx.fft.irfftn, np.fft.irfftn, a_np, atol=atol, rtol=rtol, axes=(0, 2, 1)
+        )
+
         # irfft
         r = np.random.rand(9, 3, 5, 17).astype(np.float32)
         i = np.random.rand(9, 3, 5, 17).astype(np.float32)

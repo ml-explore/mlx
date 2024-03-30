@@ -8,6 +8,8 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
+#include <iostream>
+
 namespace mlx::core::fft {
 
 array fft_impl(
@@ -90,12 +92,29 @@ array fft_impl(
     out_shape[ax] = inverse ? n.back() : out_shape[ax] / 2 + 1;
   }
 
+  auto stream = to_stream(s);
+
+  if (stream.device == Device::gpu && valid_axes.size() > 1) {
+    // Perform ND FFT on GPU as a series of 1D FFTs
+    auto out = in;
+    for (int i = axes.size() - 1; i >= 0; i--) {
+      // Opposite order for fft vs ifft
+      int index = inverse ? axes.size() - i - 1 : i;
+      int axis = axes[index];
+      // Mirror np.fft.rfftn and perform a real transform only on the final axis
+      bool step_real = (real && index == axes.size() - 1);
+      int step_shape = inverse ? out_shape[axis] : in.shape(axis);
+      out = fft_impl(out, {step_shape}, {axis}, step_real, inverse, s);
+    }
+    return out;
+  }
+
   auto in_type = real && !inverse ? float32 : complex64;
   auto out_type = real && inverse ? float32 : complex64;
   return array(
       out_shape,
       out_type,
-      std::make_shared<FFT>(to_stream(s), valid_axes, inverse, real),
+      std::make_shared<FFT>(stream, valid_axes, inverse, real),
       {astype(in, in_type, s)});
 }
 

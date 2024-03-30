@@ -3,7 +3,9 @@
 import matplotlib
 import mlx.core as mx
 import numpy as np
+import torch
 from time_utils import measure_runtime
+from tqdm import tqdm
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -34,18 +36,43 @@ def run_bench(system_size):
     return bandwidths
 
 
+def run_bench_mps(system_size):
+    def fft(x):
+        out = torch.fft.fft(x)
+        torch.mps.synchronize()
+        return out
+
+    bandwidths = []
+    for n in tqdm(range(1, 512)):
+        # for k in range(4, 12):
+        # n = 2**k
+        x_np = np.random.uniform(size=(system_size // n, n)).astype(np.complex64)
+        x = torch.tensor(x_np, device="mps")
+
+        runtime_ms = measure_runtime(fft, x=x)
+        bandwidths.append(bandwidth_gb(runtime_ms, system_size // n * n))
+
+    return bandwidths
+
+
 def time_fft():
+    mps_bandwidths = run_bench_mps(system_size=int(2**24))
+    # print('mps_bandwidths', mps_bandwidths)
 
-    with mx.stream(mx.cpu):
-        cpu_bandwidths = run_bench(system_size=int(2**22))
+    # with mx.stream(mx.cpu):
+    #     cpu_bandwidths = run_bench(system_size=int(2**22))
 
-    with mx.stream(mx.gpu):
-        gpu_bandwidths = run_bench(system_size=int(2**29))
+    # with mx.stream(mx.gpu):
+    #     gpu_bandwidths = run_bench(system_size=int(2**24))
+    #     print('gpu_bandwidths', gpu_bandwidths)
 
     # plot bandwidths
-    x = [2**k for k in range(4, 12)]
-    plt.scatter(x, gpu_bandwidths, color="green", label="GPU")
-    plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
+    # x = [2**k for k in range(4, 12)]
+    x = list(range(1, 512))
+    # plt.scatter(x, gpu_bandwidths, color="green", label="GPU")
+    np.save("mps_bandwidths", mps_bandwidths)
+    plt.scatter(x, mps_bandwidths, color="blue", label="MPS")
+    # plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
     plt.title("MLX FFT Benchmark")
     plt.xlabel("N")
     plt.ylabel("Bandwidth (GB/s)")
