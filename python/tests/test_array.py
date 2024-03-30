@@ -1042,6 +1042,10 @@ class TestArray(mlx_tests.MLXTestCase):
         idx = [0, 2, 4]
         self.assertTrue(np.array_equal(a[[idx]], np.array([[0, 1], [4, 5], [8, 9]])))
 
+        a = mx.array([[1, 2], [3, 4]])
+        idx = [[0, 1], 1]
+        self.assertTrue(np.array_equal(a[idx], np.array([2, 4])))
+
     def test_setitem(self):
         a = mx.array(0)
         a[None] = 1
