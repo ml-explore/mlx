@@ -466,7 +466,9 @@ array mlx_get_item_list(array src, const nb::list& entries) {
     throw std::invalid_argument(msg.str());
   }
 
-  std::vector<array> gathered;
+  std::vector<array> gather_indices_vec;
+  std::vector<int> axes_vec;
+
   // Go through indices and gather the arrays
   int axis = 0;
   for (auto& idx : indices) {
@@ -486,23 +488,20 @@ array mlx_get_item_list(array src, const nb::list& entries) {
           gather_indices.begin(),
           {static_cast<int>(gather_indices.size())},
           uint32);
-      std::vector<int> slice_sizes = src.shape();
-      std::fill(slice_sizes.begin(), slice_sizes.end(), 1);
-      gathered.push_back(gather(src, arr, {axis}, slice_sizes));
+      gather_indices_vec.push_back(arr);
+      axes_vec.push_back(axis);
       axis++;
     } else {
-      gathered.push_back(mlx_get_item_int(src, nb::cast<nb::int_>(idx)));
+      gather_indices_vec.push_back(
+          mlx_get_item_int(src, nb::cast<nb::int_>(idx)));
     }
   }
-  printf("gathered size: %d\n", gathered.size());
-  // print each gathered array
-  for (int i = 0; i < gathered.size(); i++) {
-    printf("gathered[%d]:\n", i);
-    std::ostringstream os;
-    os << gathered[i];
-    printf("%s\n", os.str().c_str());
+  if (!gather_indices_vec.empty()) {
+    std::vector<int> slice_sizes(src.ndim(), 1);
+    std::fill(slice_sizes.begin(), slice_sizes.end(), 1);
+    src = gather(src, gather_indices_vec, axes_vec, slice_sizes);
+    src = squeeze(src);
   }
-  src = stack(gathered, 0);
   return src;
 }
 
