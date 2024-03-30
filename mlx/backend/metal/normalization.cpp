@@ -1,4 +1,5 @@
 // Copyright © 2024 Apple Inc.
+#include <iostream> // TODO
 #include <algorithm>
 
 #include "mlx/backend/metal/copy.h"
@@ -19,24 +20,25 @@ void RMSNorm::eval_gpu(
 
   // Make sure that the last dimension is contiguous
   std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) {
+  auto check_input = [&copies, &s](const array& x) -> const array& {
     bool no_copy = x.strides()[x.ndim() - 1] == 1;
     if (x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
-      return false;
+      return x;
     } else {
       copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
       copy_gpu(x, copies.back(), CopyType::General, s);
-      return true;
+      return copies.back();
     }
   };
-  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
+  const array& x = check_input(inputs[0]);
   const array& w = inputs[1];
 
   if (x.is_donatable()) {
+    std::cout << "DONATING? " <<std::endl;
     out.move_shared_buffer(x);
   } else {
     out.set_data(
@@ -105,17 +107,17 @@ void RMSNormVJP::eval_gpu(
   // is contiguous (no broadcasts or holes) and that the input strides are the
   // same as the cotangent strides but for now this is simpler.
   std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) {
+  auto check_input = [&copies, &s](const array& x) -> const array& {
     if (x.flags().row_contiguous) {
-      return false;
+      return x;
     }
     copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
     copy_gpu(x, copies.back(), CopyType::General, s);
-    return true;
+    return copies.back();
   };
-  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
+  const array& x = check_input(inputs[0]);
   const array& w = inputs[1];
-  const array& g = check_input(inputs[2]) ? copies.back() : inputs[2];
+  const array& g = check_input(inputs[2]);
   array& gx = outputs[0];
   array& gw = outputs[1];
 
@@ -212,21 +214,21 @@ void LayerNorm::eval_gpu(
 
   // Make sure that the last dimension is contiguous
   std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) {
+  auto check_input = [&copies, &s](const array& x) -> const array& {
     bool no_copy = x.strides()[x.ndim() - 1] == 1;
     if (x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
-      return false;
+      return x;
     } else {
       copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
       copy_gpu(x, copies.back(), CopyType::General, s);
-      return true;
+      return copies.back();
     }
   };
-  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
+  const array& x = check_input(inputs[0]);
   const array& w = inputs[1];
   const array& b = inputs[2];
 
@@ -299,18 +301,18 @@ void LayerNormVJP::eval_gpu(
   // is contiguous (no broadcasts or holes) and that the input strides are the
   // same as the cotangent strides but for now this is simpler.
   std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) {
+  auto check_input = [&copies, &s](const array& x) -> const array& {
     if (x.flags().row_contiguous) {
-      return false;
+      return x;
     }
     copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
     copy_gpu(x, copies.back(), CopyType::General, s);
-    return true;
+    return copies.back();
   };
-  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
+  const array& x = check_input(inputs[0]);
   const array& w = inputs[1];
   const array& b = inputs[2];
-  const array& g = check_input(inputs[3]) ? copies.back() : inputs[3];
+  const array& g = check_input(inputs[3]);
   array& gx = outputs[0];
   array& gw = outputs[1];
   array& gb = outputs[2];
