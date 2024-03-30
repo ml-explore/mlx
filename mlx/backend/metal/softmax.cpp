@@ -21,7 +21,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Make sure that the last dimension is contiguous
   std::vector<array> copies;
-  auto check_input = [&copies, &s](const array& x) {
+  auto check_input = [&copies, &s](const array& x) -> const array& {
     bool no_copy = x.strides()[x.ndim() - 1] == 1;
     if (x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
@@ -30,10 +30,9 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (no_copy) {
       return x;
     } else {
-      array x_copy(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
-      copies.push_back(x_copy);
-      return x_copy;
+      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
+      copy_gpu(x, copies.back(), CopyType::General, s);
+      return copies.back();
     }
   };
   const array& in = check_input(inputs[0]);
@@ -81,7 +80,6 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setComputePipelineState(kernel);
     set_array_buffer(
         compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
-    set_array_buffer(compute_encoder, in, 0);
     set_array_buffer(compute_encoder, out, 1);
     compute_encoder->setBytes(&axis_size, sizeof(int), 2);
     compute_encoder->setThreadgroupMemoryLength(simd_size * in.itemsize(), 0);
