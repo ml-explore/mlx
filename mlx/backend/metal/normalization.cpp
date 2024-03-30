@@ -26,15 +26,14 @@ void RMSNorm::eval_gpu(
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
-      return x;
+      return false;
     } else {
-      array x_copy(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
-      copies.push_back(x_copy);
-      return x_copy;
+      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
+      copy_gpu(x, copies.back(), CopyType::General, s);
+      return true;
     }
   };
-  const array& x = check_input(inputs[0]);
+  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
   const array& w = inputs[1];
 
   if (x.is_donatable()) {
@@ -108,17 +107,15 @@ void RMSNormVJP::eval_gpu(
   std::vector<array> copies;
   auto check_input = [&copies, &s](const array& x) {
     if (x.flags().row_contiguous) {
-      return x;
+      return false;
     }
-
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
-    copies.push_back(x_copy);
-    return x_copy;
+    copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
+    copy_gpu(x, copies.back(), CopyType::General, s);
+    return true;
   };
-  const array& x = check_input(inputs[0]);
+  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
   const array& w = inputs[1];
-  const array& g = check_input(inputs[2]);
+  const array& g = check_input(inputs[2]) ? copies.back() : inputs[2];
   array& gx = outputs[0];
   array& gw = outputs[1];
 
@@ -150,6 +147,7 @@ void RMSNormVJP::eval_gpu(
   }
   copies.push_back(gw_temp);
   array zero(0, gw.dtype());
+  copies.push_back(zero);
   copy_gpu(zero, gw, CopyType::Scalar, s);
 
   const int simd_size = 32;
@@ -219,15 +217,14 @@ void LayerNorm::eval_gpu(
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
-      return x;
+      return false;
     } else {
-      array x_copy(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
-      copies.push_back(x_copy);
-      return x_copy;
+      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
+      copy_gpu(x, copies.back(), CopyType::General, s);
+      return true;
     }
   };
-  const array& x = check_input(inputs[0]);
+  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
   const array& w = inputs[1];
   const array& b = inputs[2];
 
@@ -302,18 +299,16 @@ void LayerNormVJP::eval_gpu(
   std::vector<array> copies;
   auto check_input = [&copies, &s](const array& x) {
     if (x.flags().row_contiguous) {
-      return x;
+      return false;
     }
-
-    array x_copy(x.shape(), x.dtype(), nullptr, {});
-    copy_gpu(x, x_copy, CopyType::General, s);
-    copies.push_back(x_copy);
-    return x_copy;
+    copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
+    copy_gpu(x, copies.back(), CopyType::General, s);
+    return true;
   };
-  const array& x = check_input(inputs[0]);
+  const array& x = check_input(inputs[0]) ? copies.back() : inputs[0];
   const array& w = inputs[1];
   const array& b = inputs[2];
-  const array& g = check_input(inputs[3]);
+  const array& g = check_input(inputs[2]) ? copies.back() : inputs[2];
   array& gx = outputs[0];
   array& gw = outputs[1];
   array& gb = outputs[2];
@@ -346,6 +341,7 @@ void LayerNormVJP::eval_gpu(
   }
   copies.push_back(gw_temp);
   array zero(0, gw.dtype());
+  copies.push_back(zero);
   copy_gpu(zero, gw, CopyType::Scalar, s);
   copy_gpu(zero, gb, CopyType::Scalar, s);
 

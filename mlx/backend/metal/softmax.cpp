@@ -28,15 +28,14 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
       no_copy &= (s == 0 || s == x.shape().back());
     }
     if (no_copy) {
-      return x;
+      return false;
     } else {
-      array x_copy(x.shape(), x.dtype(), nullptr, {});
-      copy_gpu(x, x_copy, CopyType::General, s);
-      copies.push_back(x_copy);
-      return x_copy;
+      copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
+      copy_gpu(x, copies.back(), CopyType::General, s);
+      return true;
     }
   };
-  const array& in = check_input(inputs[0]);
+  const array& in = check_input(inputs[0]) ? copies.back() : inputs[0];
   if (in.is_donatable()) {
     out.move_shared_buffer(in);
   } else {
