@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-#include <iostream> // TODO
 #include <algorithm>
 
 #include "mlx/backend/metal/copy.h"
@@ -38,7 +37,6 @@ void RMSNorm::eval_gpu(
   const array& w = inputs[1];
 
   if (x.is_donatable()) {
-    std::cout << "DONATING? " <<std::endl;
     out.move_shared_buffer(x);
   } else {
     out.set_data(
