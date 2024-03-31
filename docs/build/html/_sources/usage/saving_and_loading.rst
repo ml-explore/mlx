@@ -49,7 +49,7 @@ it will be added. You can load the array with:
 
 .. code-block:: shell
 
-   >>> mx.load("array.npy", a)
+   >>> mx.load("array.npy")
    array([1], dtype=float32)
 
 Here's an example of saving several arrays to a single file:
