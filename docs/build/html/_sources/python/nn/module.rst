@@ -30,6 +30,7 @@ Module
       Module.named_modules
       Module.parameters
       Module.save_weights
+      Module.set_dtype
       Module.train
       Module.trainable_parameters
       Module.unfreeze

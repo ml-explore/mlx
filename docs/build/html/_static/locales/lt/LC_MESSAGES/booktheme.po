@@ -8,50 +8,26 @@ msgstr ""
 "Language: lt\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "suggest edit"
-msgstr "pasiūlyti redaguoti"
+msgid "Theme by the"
+msgstr "Tema"
 
-msgid "Last updated on"
-msgstr "Paskutinį kartą atnaujinta"
+msgid "Open an issue"
+msgstr "Atidarykite problemą"
 
-msgid "Edit this page"
-msgstr "Redaguoti šį puslapį"
-
-msgid "Launch"
-msgstr "Paleiskite"
-
-msgid "Print to PDF"
-msgstr "Spausdinti į PDF"
-
-msgid "open issue"
-msgstr "atviras klausimas"
+msgid "Contents"
+msgstr "Turinys"
 
 msgid "Download notebook file"
 msgstr "Atsisiųsti nešiojamojo kompiuterio failą"
 
-msgid "Toggle navigation"
-msgstr "Perjungti naršymą"
-
-msgid "Source repository"
-msgstr "Šaltinio saugykla"
-
-msgid "By the"
-msgstr "Prie"
-
-msgid "next page"
-msgstr "Kitas puslapis"
-
-msgid "repository"
-msgstr "saugykla"
-
 msgid "Sphinx Book Theme"
 msgstr "Sfinkso knygos tema"
 
-msgid "Download source file"
-msgstr "Atsisiųsti šaltinio failą"
+msgid "Fullscreen mode"
+msgstr "Pilno ekrano režimas"
 
-msgid "Contents"
-msgstr "Turinys"
+msgid "Edit this page"
+msgstr "Redaguoti šį puslapį"
 
 msgid "By"
 msgstr "Iki"
@@ -59,17 +35,41 @@ msgstr "Iki"
 msgid "Copyright"
 msgstr "Autorių teisės"
 
-msgid "Fullscreen mode"
-msgstr "Pilno ekrano režimas"
-
-msgid "Open an issue"
-msgstr "Atidarykite problemą"
+msgid "Source repository"
+msgstr "Šaltinio saugykla"
 
 msgid "previous page"
 msgstr "Ankstesnis puslapis"
 
+msgid "next page"
+msgstr "Kitas puslapis"
+
+msgid "Toggle navigation"
+msgstr "Perjungti naršymą"
+
+msgid "repository"
+msgstr "saugykla"
+
+msgid "suggest edit"
+msgstr "pasiūlyti redaguoti"
+
+msgid "open issue"
+msgstr "atviras klausimas"
+
+msgid "Launch"
+msgstr "Paleiskite"
+
+msgid "Print to PDF"
+msgstr "Spausdinti į PDF"
+
+msgid "By the"
+msgstr "Prie"
+
+msgid "Last updated on"
+msgstr "Paskutinį kartą atnaujinta"
+
+msgid "Download source file"
+msgstr "Atsisiųsti šaltinio failą"
+
 msgid "Download this page"
 msgstr "Atsisiųskite šį puslapį"
-
-msgid "Theme by the"
-msgstr "Tema"
