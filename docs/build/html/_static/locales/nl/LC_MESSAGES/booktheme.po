@@ -8,50 +8,26 @@ msgstr ""
 "Language: nl\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "suggest edit"
-msgstr "suggereren bewerken"
+msgid "Theme by the"
+msgstr "Thema door de"
 
-msgid "Last updated on"
-msgstr "Laatst geupdate op"
+msgid "Open an issue"
+msgstr "Open een probleem"
 
-msgid "Edit this page"
-msgstr "bewerk deze pagina"
-
-msgid "Launch"
-msgstr "Lancering"
-
-msgid "Print to PDF"
-msgstr "Afdrukken naar pdf"
-
-msgid "open issue"
-msgstr "open probleem"
+msgid "Contents"
+msgstr "Inhoud"
 
 msgid "Download notebook file"
 msgstr "Download notebookbestand"
 
-msgid "Toggle navigation"
-msgstr "Schakel navigatie"
-
-msgid "Source repository"
-msgstr "Bronopslagplaats"
-
-msgid "By the"
-msgstr "Door de"
-
-msgid "next page"
-msgstr "volgende bladzijde"
-
-msgid "repository"
-msgstr "repository"
-
 msgid "Sphinx Book Theme"
 msgstr "Sphinx-boekthema"
 
-msgid "Download source file"
-msgstr "Download het bronbestand"
+msgid "Fullscreen mode"
+msgstr "Volledig scherm"
 
-msgid "Contents"
-msgstr "Inhoud"
+msgid "Edit this page"
+msgstr "bewerk deze pagina"
 
 msgid "By"
 msgstr "Door"
@@ -59,17 +35,41 @@ msgstr "Door"
 msgid "Copyright"
 msgstr "auteursrechten"
 
-msgid "Fullscreen mode"
-msgstr "Volledig scherm"
-
-msgid "Open an issue"
-msgstr "Open een probleem"
+msgid "Source repository"
+msgstr "Bronopslagplaats"
 
 msgid "previous page"
 msgstr "vorige pagina"
 
+msgid "next page"
+msgstr "volgende bladzijde"
+
+msgid "Toggle navigation"
+msgstr "Schakel navigatie"
+
+msgid "repository"
+msgstr "repository"
+
+msgid "suggest edit"
+msgstr "suggereren bewerken"
+
+msgid "open issue"
+msgstr "open probleem"
+
+msgid "Launch"
+msgstr "Lancering"
+
+msgid "Print to PDF"
+msgstr "Afdrukken naar pdf"
+
+msgid "By the"
+msgstr "Door de"
+
+msgid "Last updated on"
+msgstr "Laatst geupdate op"
+
+msgid "Download source file"
+msgstr "Download het bronbestand"
+
 msgid "Download this page"
 msgstr "Download deze pagina"
-
-msgid "Theme by the"
-msgstr "Thema door de"
