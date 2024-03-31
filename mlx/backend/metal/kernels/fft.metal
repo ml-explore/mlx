@@ -17,18 +17,20 @@ using namespace metal;
 #define MAX_RADIX_SIZE 4
 
 float2 complex_mul(float2 a, float2 b) {
-  float2 c;
-  c.x = a.x * b.x - a.y * b.y;
-  c.y = a.x * b.y + a.y * b.x;
+  float2 c = {
+    a.x * b.x - a.y * b.y,
+    a.x * b.y + a.y * b.x
+  };
   return c;
 }
 
 float2 get_twiddle(int k, int p) {
   float theta = -1.0f * k * M_PI_F / p;
 
-  float2 twiddle;
-  twiddle.x = metal::fast::cos(theta);
-  twiddle.y = metal::fast::sin(theta);
+  float2 twiddle = {
+      metal::fast::cos(theta),
+      metal::fast::sin(theta)
+  };
   return twiddle;
 }
 
@@ -76,9 +78,7 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   x_2 = complex_mul(x_2, twiddle_2);
   x_3 = complex_mul(x_3, twiddle_3);
 
-  float2 minus_i;
-  minus_i.x = 0;
-  minus_i.y = -1;
+  float2 minus_i = {0, -1};
 
   // Hard coded twiddle factors for DFT4
   float2 z_0 = x_0 + x_2;
@@ -187,10 +187,7 @@ template <size_t n, bool inv, size_t radix_2_steps, size_t radix_4_steps>
   perform_fft(i, m, radix_2_steps, radix_4_steps, &read_buf, &write_buf);
 
   if (inv) {
-    float2 inv_factor;
-    inv_factor.x = 1.0f / n;
-    inv_factor.y = -1.0f / n;
-
+    float2 inv_factor = {1.0f / n, -1.0f / n};
     for (int t = 0; t < MAX_RADIX_SIZE; t++) {
       read_buf[i + t * m] *= inv_factor;
     }
@@ -292,7 +289,7 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
 
 }
 
-template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
+template <size_t n, bool inv, size_t radix_2_steps, size_t radix_4_steps>
 [[kernel]] void bluestein_fft(
     const device float2* in [[buffer(0)]],
     device float2* out [[buffer(1)]],
@@ -302,7 +299,7 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 threads_per_grid [[threads_per_grid]]) {
   // In numpy:
-  // w_k * np.fft.ifft(np.fft.fft(w_k * in, n) * w_q)
+  // out = w_k * np.fft.ifft(np.fft.fft(w_k * in, n) * w_q)
   //
   // Where w_k and w_q are precomputed on CPU in high precision as:
   // w_k = np.exp(-1j * np.pi / n * (np.arange(-n + 1, n) ** 2))
@@ -322,6 +319,9 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
     int index = i + t * m;
     if (index < length) {
       float2 elem = in[batch_idx + index];
+      if (inv) {
+        elem.y = -elem.y;
+      }
       shared_in[index] = complex_mul(elem, w_k[index]);
     } else {
       shared_in[index] = 0.0;
@@ -339,28 +339,27 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
+  // ifft
   for (int t = 0; t < MAX_RADIX_SIZE; t++) {
     read_buf[i + t * m].y = -read_buf[i + t * m].y;
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  // ifft
   perform_fft(i, m, radix_2_steps, radix_4_steps, &read_buf, &write_buf);
 
-  float2 inv_factor;
-  inv_factor.x = 1.0f / n;
-  inv_factor.y = -1.0f / n;
-
-  for (int t = 0; t < MAX_RADIX_SIZE; t++) {
-    read_buf[i + t * m] *= inv_factor;
-  }
+  float2 inv_factor = {1.0f / n, -1.0f / n};
+  float2 inv_factor_overall = {1.0f / length, -1.0f / length};
 
   for (int t = 0; t < MAX_RADIX_SIZE; t++) {
     int index = i + t * m;
     if (index < length) {
-      float2 elem  = read_buf[index + length - 1];
-      out[batch_idx + index] = complex_mul(elem, w_k[index]);
+      float2 elem  = read_buf[index + length - 1] * inv_factor;
+      elem = complex_mul(elem, w_k[index]);
+      if (inv) {
+        elem *= inv_factor_overall;
+      }
+      out[batch_idx + index] = elem;
     }
   }
 
@@ -391,9 +390,9 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
     uint3 thread_position_in_grid [[thread_position_in_grid]], \
     uint3 threads_per_grid [[threads_per_grid]]);
 
-#define instantiate_bluestein(name, n, radix_2_steps, radix_4_steps) \
-  template [[host_name("bluestein_" #name)]] \
-  [[kernel]] void bluestein_fft<n, radix_2_steps, radix_4_steps>( \
+#define instantiate_bluestein(name, n, inv, radix_2_steps, radix_4_steps) \
+  template [[host_name("bluestein_" #name "_inv_" #inv)]] \
+  [[kernel]] void bluestein_fft<n, inv, radix_2_steps, radix_4_steps>( \
       const device float2* in [[buffer(0)]], \
       device float2* out [[buffer(1)]], \
       const device float2* w_q [[buffer(2)]], \
@@ -407,7 +406,8 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
     instantiate_fft(name, n, true, radix_2_steps, radix_4_steps) \
     instantiate_rfft(name, n, radix_2_steps, radix_4_steps) \
     instantiate_irfft(name, n, radix_2_steps, radix_4_steps) \
-    instantiate_bluestein(name, n, radix_2_steps, radix_4_steps) \
+    instantiate_bluestein(name, n, false, radix_2_steps, radix_4_steps) \
+    instantiate_bluestein(name, n, true, radix_2_steps, radix_4_steps) \
 
 
 // Explicitly define kernels for each power of 2.

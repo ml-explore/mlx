@@ -44,10 +44,7 @@ def run_bench_mps(system_size, fft_sizes):
         return out
 
     bandwidths = []
-    # for n in tqdm(range(1, 512)):
-    # for k in range(4, 12):
     for n in fft_sizes:
-        # n = 2**k
         x_np = np.random.uniform(size=(system_size // n, n)).astype(np.complex64)
         x = torch.tensor(x_np, device="mps")
 
@@ -60,8 +57,8 @@ def run_bench_mps(system_size, fft_sizes):
 
 
 def time_fft():
-    x = range(4, 257)
-    system_size = int(2**24)
+    x = [2048]
+    system_size = int(2**26)
 
     mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
     # print('mps_bandwidths', mps_bandwidths)

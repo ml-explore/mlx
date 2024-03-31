@@ -101,19 +101,16 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
     std::ostringstream kname;
+    std::string inv_string = inverse_ ? "true" : "false";
+    // std::cout << "inverse_ " << inv_string << std::endl;
     if (!is_power_of_2(n)) {
-      kname << "bluestein_" << bluestein_n;
+      kname << "bluestein_" << bluestein_n << "_inv_" << inv_string;
     } else if (out.dtype() == float32) {
       kname << "irfft_" << n;
     } else if (in.dtype() == float32) {
       kname << "rfft_" << n;
     } else {
-      kname << "fft_" << n << "_inv_";
-      if (inverse_) {
-        kname << "true";
-      } else {
-        kname << "false";
-      }
+      kname << "fft_" << n << "_inv_" << inv_string;
     }
     auto kernel = d.get_kernel(kname.str());
 
