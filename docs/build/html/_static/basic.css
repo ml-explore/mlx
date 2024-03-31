@@ -4,7 +4,7 @@
  *
  * Sphinx stylesheet -- basic theme.
  *
- * :copyright: Copyright 2007-2022 by the Sphinx team, see AUTHORS.
+ * :copyright: Copyright 2007-2023 by the Sphinx team, see AUTHORS.
  * :license: BSD, see LICENSE for details.
  *
  */
@@ -237,6 +237,10 @@ a.headerlink {
     visibility: hidden;
 }
 
+a:visited {
+    color: #551A8B;
+}
+
 h1:hover > a.headerlink,
 h2:hover > a.headerlink,
 h3:hover > a.headerlink,
@@ -324,17 +328,17 @@ aside.sidebar {
 p.sidebar-title {
     font-weight: bold;
 }
+
 nav.contents,
 aside.topic,
-
 div.admonition, div.topic, blockquote {
     clear: left;
 }
 
 /* -- topics ---------------------------------------------------------------- */
+
 nav.contents,
 aside.topic,
-
 div.topic {
     border: 1px solid #ccc;
     padding: 7px;
@@ -375,7 +379,6 @@ div.sidebar > :last-child,
 aside.sidebar > :last-child,
 nav.contents > :last-child,
 aside.topic > :last-child,
-
 div.topic > :last-child,
 div.admonition > :last-child {
     margin-bottom: 0;
@@ -385,7 +388,6 @@ div.sidebar::after,
 aside.sidebar::after,
 nav.contents::after,
 aside.topic::after,
-
 div.topic::after,
 div.admonition::after,
 blockquote::after {
@@ -611,25 +613,6 @@ ul.simple p {
     margin-bottom: 0;
 }
 
-/* Docutils 0.17 and older (footnotes & citations) */
-dl.footnote > dt,
-dl.citation > dt {
-    float: left;
-    margin-right: 0.5em;
-}
-
-dl.footnote > dd,
-dl.citation > dd {
-    margin-bottom: 0em;
-}
-
-dl.footnote > dd:after,
-dl.citation > dd:after {
-    content: "";
-    clear: both;
-}
-
-/* Docutils 0.18+ (footnotes & citations) */
 aside.footnote > span,
 div.citation > span {
     float: left;
@@ -654,8 +637,6 @@ div.citation > p:last-of-type:after {
     clear: both;
 }
 
-/* Footnotes & citations ends */
-
 dl.field-list {
     display: grid;
     grid-template-columns: fit-content(30%) auto;
@@ -666,10 +647,6 @@ dl.field-list > dt {
     word-break: break-word;
     padding-left: 0.5em;
     padding-right: 5px;
-}
-
-dl.field-list > dt:after {
-    content: ":";
 }
 
 dl.field-list > dd {
@@ -695,6 +672,16 @@ dd {
     margin-top: 3px;
     margin-bottom: 10px;
     margin-left: 30px;
+}
+
+.sig dd {
+    margin-top: 0px;
+    margin-bottom: 0px;
+}
+
+.sig dl {
+    margin-top: 0px;
+    margin-bottom: 0px;
 }
 
 dl > dd:last-child,
@@ -763,6 +750,14 @@ dl.glossary dt {
 abbr, acronym {
     border-bottom: dotted 1px;
     cursor: help;
+}
+
+.translated {
+    background-color: rgba(207, 255, 207, 0.2)
+}
+
+.untranslated {
+    background-color: rgba(255, 207, 207, 0.2)
 }
 
 /* -- code displays --------------------------------------------------------- */
