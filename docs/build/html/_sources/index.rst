@@ -58,10 +58,12 @@ are the CPU and GPU.
    :maxdepth: 1
 
    python/array
+   python/data_types
    python/devices_and_streams
    python/ops
    python/random
    python/transforms
+   python/fast
    python/fft
    python/linalg
    python/metal
@@ -80,3 +82,4 @@ are the CPU and GPU.
    :maxdepth: 1
 
    dev/extensions
+   dev/metal_debugger

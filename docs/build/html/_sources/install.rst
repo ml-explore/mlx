@@ -70,16 +70,13 @@ To build and install the MLX python library from source, first, clone MLX from
 
    git clone git@github.com:ml-explore/mlx.git mlx && cd mlx
 
-Make sure that you have `pybind11 <https://pybind11.readthedocs.io/en/stable/index.html>`_
-installed. You can install ``pybind11`` with ``pip``, ``brew`` or ``conda`` as follows:
+Install `nanobind <https://nanobind.readthedocs.io/en/latest/>`_ with:
 
 .. code-block:: shell
 
-    pip install "pybind11[global]"
-    conda install pybind11
-    brew install pybind11
+    pip install git+https://github.com/wjakob/nanobind.git
 
-Then simply build and install it using pip:
+Then simply build and install MLX using pip:
 
 .. code-block:: shell
 
@@ -157,6 +154,8 @@ should point to the path to the built metal library.
    * - MLX_BUILD_METAL
      - ON
    * - MLX_BUILD_PYTHON_BINDINGS
+     - OFF
+   * - MLX_METAL_DEBUG
      - OFF
 
 

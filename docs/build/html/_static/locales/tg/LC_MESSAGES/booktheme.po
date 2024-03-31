@@ -8,50 +8,26 @@ msgstr ""
 "Language: tg\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "suggest edit"
-msgstr "пешниҳод вироиш"
+msgid "Theme by the"
+msgstr "Мавзӯъи аз"
 
-msgid "Last updated on"
-msgstr "Last навсозӣ дар"
+msgid "Open an issue"
+msgstr "Масъаларо кушоед"
 
-msgid "Edit this page"
-msgstr "Ин саҳифаро таҳрир кунед"
-
-msgid "Launch"
-msgstr "Оғоз"
-
-msgid "Print to PDF"
-msgstr "Чоп ба PDF"
-
-msgid "open issue"
-msgstr "барориши кушод"
+msgid "Contents"
+msgstr "Мундариҷа"
 
 msgid "Download notebook file"
 msgstr "Файли дафтарро зеркашӣ кунед"
 
-msgid "Toggle navigation"
-msgstr "Гузаришро иваз кунед"
-
-msgid "Source repository"
-msgstr "Анбори манбаъ"
-
-msgid "By the"
-msgstr "Бо"
-
-msgid "next page"
-msgstr "саҳифаи оянда"
-
-msgid "repository"
-msgstr "анбор"
-
 msgid "Sphinx Book Theme"
 msgstr "Сфинкс Мавзӯи китоб"
 
-msgid "Download source file"
-msgstr "Файли манбаъро зеркашӣ кунед"
+msgid "Fullscreen mode"
+msgstr "Ҳолати экрани пурра"
 
-msgid "Contents"
-msgstr "Мундариҷа"
+msgid "Edit this page"
+msgstr "Ин саҳифаро таҳрир кунед"
 
 msgid "By"
 msgstr "Бо"
@@ -59,17 +35,41 @@ msgstr "Бо"
 msgid "Copyright"
 msgstr "Ҳуқуқи муаллиф"
 
-msgid "Fullscreen mode"
-msgstr "Ҳолати экрани пурра"
-
-msgid "Open an issue"
-msgstr "Масъаларо кушоед"
+msgid "Source repository"
+msgstr "Анбори манбаъ"
 
 msgid "previous page"
 msgstr "саҳифаи қаблӣ"
 
+msgid "next page"
+msgstr "саҳифаи оянда"
+
+msgid "Toggle navigation"
+msgstr "Гузаришро иваз кунед"
+
+msgid "repository"
+msgstr "анбор"
+
+msgid "suggest edit"
+msgstr "пешниҳод вироиш"
+
+msgid "open issue"
+msgstr "барориши кушод"
+
+msgid "Launch"
+msgstr "Оғоз"
+
+msgid "Print to PDF"
+msgstr "Чоп ба PDF"
+
+msgid "By the"
+msgstr "Бо"
+
+msgid "Last updated on"
+msgstr "Last навсозӣ дар"
+
+msgid "Download source file"
+msgstr "Файли манбаъро зеркашӣ кунед"
+
 msgid "Download this page"
 msgstr "Ин саҳифаро зеркашӣ кунед"
-
-msgid "Theme by the"
-msgstr "Мавзӯъи аз"

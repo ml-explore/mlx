@@ -8,50 +8,26 @@ msgstr ""
 "Language: hr\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "suggest edit"
-msgstr "predloži uređivanje"
+msgid "Theme by the"
+msgstr "Tema autora"
 
-msgid "Last updated on"
-msgstr "Posljednje ažuriranje:"
+msgid "Open an issue"
+msgstr "Otvorite izdanje"
 
-msgid "Edit this page"
-msgstr "Uredite ovu stranicu"
-
-msgid "Launch"
-msgstr "Pokrenite"
-
-msgid "Print to PDF"
-msgstr "Ispis u PDF"
-
-msgid "open issue"
-msgstr "otvoreno izdanje"
+msgid "Contents"
+msgstr "Sadržaj"
 
 msgid "Download notebook file"
 msgstr "Preuzmi datoteku bilježnice"
 
-msgid "Toggle navigation"
-msgstr "Uključi / isključi navigaciju"
-
-msgid "Source repository"
-msgstr "Izvorno spremište"
-
-msgid "By the"
-msgstr "Od strane"
-
-msgid "next page"
-msgstr "sljedeća stranica"
-
-msgid "repository"
-msgstr "spremište"
-
 msgid "Sphinx Book Theme"
 msgstr "Tema knjige Sphinx"
 
-msgid "Download source file"
-msgstr "Preuzmi izvornu datoteku"
+msgid "Fullscreen mode"
+msgstr "Način preko cijelog zaslona"
 
-msgid "Contents"
-msgstr "Sadržaj"
+msgid "Edit this page"
+msgstr "Uredite ovu stranicu"
 
 msgid "By"
 msgstr "Po"
@@ -59,17 +35,41 @@ msgstr "Po"
 msgid "Copyright"
 msgstr "Autorska prava"
 
-msgid "Fullscreen mode"
-msgstr "Način preko cijelog zaslona"
-
-msgid "Open an issue"
-msgstr "Otvorite izdanje"
+msgid "Source repository"
+msgstr "Izvorno spremište"
 
 msgid "previous page"
 msgstr "Prethodna stranica"
 
+msgid "next page"
+msgstr "sljedeća stranica"
+
+msgid "Toggle navigation"
+msgstr "Uključi / isključi navigaciju"
+
+msgid "repository"
+msgstr "spremište"
+
+msgid "suggest edit"
+msgstr "predloži uređivanje"
+
+msgid "open issue"
+msgstr "otvoreno izdanje"
+
+msgid "Launch"
+msgstr "Pokrenite"
+
+msgid "Print to PDF"
+msgstr "Ispis u PDF"
+
+msgid "By the"
+msgstr "Od strane"
+
+msgid "Last updated on"
+msgstr "Posljednje ažuriranje:"
+
+msgid "Download source file"
+msgstr "Preuzmi izvornu datoteku"
+
 msgid "Download this page"
 msgstr "Preuzmite ovu stranicu"
-
-msgid "Theme by the"
-msgstr "Tema autora"
