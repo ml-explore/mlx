@@ -1,15 +1,14 @@
 
-
 <!DOCTYPE html>
 
 
-<html lang="en" data-content_root="" >
+<html lang="en" data-content_root="../" >
 
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>LLM inference &#8212; MLX 0.7.0 documentation</title>
+    <title>LLM inference &#8212; MLX 0.9.0 documentation</title>
   
   
   
@@ -29,20 +28,18 @@
 <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2" />
 <link rel="preload" as="font" type="font/woff2" crossorigin href="../_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2" />
 
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
-    <link rel="stylesheet" href="../_static/styles/sphinx-book-theme.css?digest=14f4ca6b54d191a8c7657f6c759bf11a5fb86285" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=fa44fd50" />
+    <link rel="stylesheet" type="text/css" href="../_static/styles/sphinx-book-theme.css?v=384b581d" />
   
   <!-- Pre-loaded scripts that we'll load fully later -->
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=5b4479735964841361fd" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-    <script src="../_static/jquery.js"></script>
-    <script src="../_static/underscore.js"></script>
-    <script src="../_static/_sphinx_javascript_frameworks_compat.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/scripts/sphinx-book-theme.js?digest=5a5c038af52cf7bc1a1ec88eea08e6366ee68824"></script>
+    <script src="../_static/documentation_options.js?v=2a76c96f"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'examples/llama-inference';</script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -134,12 +131,23 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.7.0 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.7.0 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.9.0 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.9.0 documentation - Home"/>`);</script>
   
   
 </a></div>
-        <div class="sidebar-primary-item"><nav class="bd-links" id="bd-docs-nav" aria-label="Main">
+        <div class="sidebar-primary-item">
+
+ <script>
+ document.write(`
+   <button class="btn navbar-btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <span class="search-button__default-text">Search</span>
+    <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+   </button>
+ `);
+ </script></div>
+        <div class="sidebar-primary-item"><nav class="bd-links bd-docs-nav" aria-label="Main">
     <div class="bd-toc-item navbar-nav active">
         <p aria-level="2" class="caption" role="heading"><span class="caption-text">Install</span></p>
 <ul class="nav bd-sidenav">
@@ -168,27 +176,38 @@
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/array.html">Array</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-1"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.html">mlx.core.array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.astype.html">mlx.core.array.astype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.at.html">mlx.core.array.at</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.item.html">mlx.core.array.item</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.tolist.html">mlx.core.array.tolist</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.dtype.html">mlx.core.array.dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.itemsize.html">mlx.core.array.itemsize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.nbytes.html">mlx.core.array.nbytes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.ndim.html">mlx.core.array.ndim</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.shape.html">mlx.core.array.shape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.size.html">mlx.core.array.size</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.Dtype.html">mlx.core.Dtype</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.abs.html">mlx.core.array.abs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.all.html">mlx.core.array.all</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.any.html">mlx.core.array.any</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.argmax.html">mlx.core.array.argmax</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.argmin.html">mlx.core.array.argmin</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.cos.html">mlx.core.array.cos</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.dtype.html">mlx.core.array.dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.cummax.html">mlx.core.array.cummax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.cummin.html">mlx.core.array.cummin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.cumprod.html">mlx.core.array.cumprod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.cumsum.html">mlx.core.array.cumsum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.diag.html">mlx.core.array.diag</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.diagonal.html">mlx.core.array.diagonal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.exp.html">mlx.core.array.exp</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.flatten.html">mlx.core.array.flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.log.html">mlx.core.array.log</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.log10.html">mlx.core.array.log10</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.log1p.html">mlx.core.array.log1p</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.log2.html">mlx.core.array.log2</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.logsumexp.html">mlx.core.array.logsumexp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.max.html">mlx.core.array.max</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.mean.html">mlx.core.array.mean</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.min.html">mlx.core.array.min</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.moveaxis.html">mlx.core.array.moveaxis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.prod.html">mlx.core.array.prod</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.reciprocal.html">mlx.core.array.reciprocal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.reshape.html">mlx.core.array.reshape</a></li>
@@ -198,13 +217,21 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.split.html">mlx.core.array.split</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.sqrt.html">mlx.core.array.sqrt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.square.html">mlx.core.array.square</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.squeeze.html">mlx.core.array.squeeze</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.swapaxes.html">mlx.core.array.swapaxes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.sum.html">mlx.core.array.sum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.transpose.html">mlx.core.array.transpose</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.T.html">mlx.core.array.T</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.array.var.html">mlx.core.array.var</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/devices_and_streams.html">Devices and Streams</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-2"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/data_types.html">Data Types</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-2"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.Dtype.html">mlx.core.Dtype</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.DtypeCategory.html">mlx.core.DtypeCategory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.issubdtype.html">mlx.core.issubdtype</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/devices_and_streams.html">Devices and Streams</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-3"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.Device.html">mlx.core.Device</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/stream_class.html">mlx.core.Stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.default_device.html">mlx.core.default_device</a></li>
@@ -215,7 +242,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.stream.html">mlx.core.stream</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/ops.html">Operations</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-3"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/ops.html">Operations</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.abs.html">mlx.core.abs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.add.html">mlx.core.add</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.all.html">mlx.core.all</a></li>
@@ -246,6 +273,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.conv_general.html">mlx.core.conv_general</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.cos.html">mlx.core.cos</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.cosh.html">mlx.core.cosh</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.cummax.html">mlx.core.cummax</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.cummin.html">mlx.core.cummin</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.cumprod.html">mlx.core.cumprod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.cumsum.html">mlx.core.cumsum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.dequantize.html">mlx.core.dequantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.diag.html">mlx.core.diag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.diagonal.html">mlx.core.diagonal</a></li>
@@ -266,10 +297,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.inner.html">mlx.core.inner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isclose.html">mlx.core.isclose</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isnan.html">mlx.core.isnan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isposinf.html">mlx.core.isposinf</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isneginf.html">mlx.core.isneginf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isinf.html">mlx.core.isinf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isnan.html">mlx.core.isnan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isneginf.html">mlx.core.isneginf</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.isposinf.html">mlx.core.isposinf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.less.html">mlx.core.less</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.less_equal.html">mlx.core.less_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linspace.html">mlx.core.linspace</a></li>
@@ -342,7 +373,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.zeros_like.html">mlx.core.zeros_like</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/random.html">Random</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/random.html">Random</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.random.bernoulli.html">mlx.core.random.bernoulli</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.random.categorical.html">mlx.core.random.categorical</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.random.gumbel.html">mlx.core.random.gumbel</a></li>
@@ -355,7 +386,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.eval.html">mlx.core.eval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.compile.html">mlx.core.compile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.disable_compile.html">mlx.core.disable_compile</a></li>
@@ -367,7 +398,14 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.vmap.html">mlx.core.vmap</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/fast.html">Fast</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-7"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.rms_norm.html">mlx.core.fast.rms_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fft.fft.html">mlx.core.fft.fft</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fft.ifft.html">mlx.core.fft.ifft</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fft.fft2.html">mlx.core.fft.fft2</a></li>
@@ -382,12 +420,12 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fft.irfftn.html">mlx.core.fft.irfftn</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/linalg.html">Linear Algebra</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-7"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/linalg.html">Linear Algebra</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.norm.html">mlx.core.linalg.norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.qr.html">mlx.core.linalg.qr</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/metal.html">Metal</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/metal.html">Metal</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.metal.is_available.html">mlx.core.metal.is_available</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.metal.get_active_memory.html">mlx.core.metal.get_active_memory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.metal.get_peak_memory.html">mlx.core.metal.get_peak_memory</a></li>
@@ -396,9 +434,9 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.metal.set_cache_limit.html">mlx.core.metal.set_cache_limit</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/nn.html">Neural Networks</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/nn.html">Neural Networks</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-11"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/module.html">Module</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/module.html">Module</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-12"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.training.html">mlx.nn.Module.training</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.state.html">mlx.nn.Module.state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.apply.html">mlx.nn.Module.apply</a></li>
@@ -413,6 +451,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.named_modules.html">mlx.nn.Module.named_modules</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.parameters.html">mlx.nn.Module.parameters</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.save_weights.html">mlx.nn.Module.save_weights</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.set_dtype.html">mlx.nn.Module.set_dtype</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.train.html">mlx.nn.Module.train</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.trainable_parameters.html">mlx.nn.Module.trainable_parameters</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.unfreeze.html">mlx.nn.Module.unfreeze</a></li>
@@ -420,7 +459,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Module.update_modules.html">mlx.nn.Module.update_modules</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/layers.html">Layers</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-11"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/layers.html">Layers</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-13"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.ALiBi.html">mlx.nn.ALiBi</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.AvgPool1d.html">mlx.nn.AvgPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.AvgPool2d.html">mlx.nn.AvgPool2d</a></li>
@@ -458,7 +497,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Upsample.html">mlx.nn.Upsample</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/functions.html">Functions</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-12"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/functions.html">Functions</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-14"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.elu.html">mlx.nn.elu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.gelu.html">mlx.nn.gelu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
@@ -482,7 +521,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.tanh.html">mlx.nn.tanh</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/losses.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-13"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/losses.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.cosine_similarity_loss.html">mlx.nn.losses.cosine_similarity_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
@@ -499,7 +538,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary_functions/mlx.nn.losses.triplet_loss.html">mlx.nn.losses.triplet_loss</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/init.html">Initializers</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-14"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/nn/init.html">Initializers</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-16"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.init.constant.html">mlx.nn.init.constant</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.init.normal.html">mlx.nn.init.normal</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/nn/_autosummary/mlx.nn.init.uniform.html">mlx.nn.init.uniform</a></li>
@@ -512,15 +551,15 @@
 </li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/optimizer.html">Optimizer</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-16"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-17"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/optimizer.html">Optimizer</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-18"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.state.html">mlx.optimizers.Optimizer.state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.apply_gradients.html">mlx.optimizers.Optimizer.apply_gradients</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.init.html">mlx.optimizers.Optimizer.init</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Optimizer.update.html">mlx.optimizers.Optimizer.update</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/common_optimizers.html">Common Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-17"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/common_optimizers.html">Common Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-19"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.SGD.html">mlx.optimizers.SGD</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.RMSprop.html">mlx.optimizers.RMSprop</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Adagrad.html">mlx.optimizers.Adagrad</a></li>
@@ -532,7 +571,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.Lion.html">mlx.optimizers.Lion</a></li>
 </ul>
 </li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/schedulers.html">Schedulers</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-18"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../python/optimizers/schedulers.html">Schedulers</a><input class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-20"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.cosine_decay.html">mlx.optimizers.cosine_decay</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.exponential_decay.html">mlx.optimizers.exponential_decay</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../python/optimizers/_autosummary/mlx.optimizers.join_schedules.html">mlx.optimizers.join_schedules</a></li>
@@ -542,7 +581,7 @@
 </li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-19"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-21"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>
@@ -556,6 +595,7 @@
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Further Reading</span></p>
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../dev/extensions.html">Developer Documentation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dev/metal_debugger.html">Metal Debugger</a></li>
 </ul>
 
     </div>
@@ -742,17 +782,17 @@ document.write(`
                 <article class="bd-article" role="main">
                   
   <section id="llm-inference">
-<h1>LLM inference<a class="headerlink" href="#llm-inference" title="Permalink to this heading">#</a></h1>
+<h1>LLM inference<a class="headerlink" href="#llm-inference" title="Link to this heading">#</a></h1>
 <p>MLX enables efficient inference of large-ish transformers on Apple silicon
 without compromising on ease of use. In this example we will create an
 inference script for the Llama family of transformer models in which the model
 is defined in less than 200 lines of python.</p>
 <section id="implementing-the-model">
-<h2>Implementing the model<a class="headerlink" href="#implementing-the-model" title="Permalink to this heading">#</a></h2>
+<h2>Implementing the model<a class="headerlink" href="#implementing-the-model" title="Link to this heading">#</a></h2>
 <p>We will use the neural network building blocks defined in the <code class="xref py py-mod docutils literal notranslate"><span class="pre">mlx.nn</span></code>
 module to concisely define the model architecture.</p>
 <section id="attention-layer">
-<h3>Attention layer<a class="headerlink" href="#attention-layer" title="Permalink to this heading">#</a></h3>
+<h3>Attention layer<a class="headerlink" href="#attention-layer" title="Link to this heading">#</a></h3>
 <p>We will start with the llama attention layer which notably uses the RoPE
 positional encoding. <a class="footnote-reference brackets" href="#id4" id="id1" role="doc-noteref"><span class="fn-bracket">[</span>1<span class="fn-bracket">]</span></a> In addition, our attention layer will optionally use a
 key/value cache that will be concatenated with the provided keys and values to
@@ -813,7 +853,7 @@ support efficient inference.</p>
 </div>
 </section>
 <section id="encoder-layer">
-<h3>Encoder layer<a class="headerlink" href="#encoder-layer" title="Permalink to this heading">#</a></h3>
+<h3>Encoder layer<a class="headerlink" href="#encoder-layer" title="Link to this heading">#</a></h3>
 <p>The other component of the Llama model is the encoder layer which uses RMS
 normalization <a class="footnote-reference brackets" href="#id5" id="id2" role="doc-noteref"><span class="fn-bracket">[</span>2<span class="fn-bracket">]</span></a> and SwiGLU. <a class="footnote-reference brackets" href="#id6" id="id3" role="doc-noteref"><span class="fn-bracket">[</span>3<span class="fn-bracket">]</span></a> For RMS normalization we will use
 <a class="reference internal" href="../python/nn/_autosummary/mlx.nn.RMSNorm.html#mlx.nn.RMSNorm" title="mlx.nn.RMSNorm"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.nn.RMSNorm</span></code></a> that is already provided in <code class="xref py py-mod docutils literal notranslate"><span class="pre">mlx.nn</span></code>.</p>
@@ -847,7 +887,7 @@ normalization <a class="footnote-reference brackets" href="#id5" id="id2" role="
 </div>
 </section>
 <section id="full-model">
-<h3>Full model<a class="headerlink" href="#full-model" title="Permalink to this heading">#</a></h3>
+<h3>Full model<a class="headerlink" href="#full-model" title="Link to this heading">#</a></h3>
 <p>To implement any Llama model we simply have to combine <code class="docutils literal notranslate"><span class="pre">LlamaEncoderLayer</span></code>
 instances with an <a class="reference internal" href="../python/nn/_autosummary/mlx.nn.Embedding.html#mlx.nn.Embedding" title="mlx.nn.Embedding"><code class="xref py py-class docutils literal notranslate"><span class="pre">mlx.nn.Embedding</span></code></a> to embed the input tokens.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span> <span class="nc">Llama</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
@@ -878,7 +918,7 @@ instances with an <a class="reference internal" href="../python/nn/_autosummary/
 layers but using <code class="docutils literal notranslate"><span class="pre">model.parameters()</span></code> will still consider these layers.</p>
 </section>
 <section id="generation">
-<h3>Generation<a class="headerlink" href="#generation" title="Permalink to this heading">#</a></h3>
+<h3>Generation<a class="headerlink" href="#generation" title="Link to this heading">#</a></h3>
 <p>Our <code class="docutils literal notranslate"><span class="pre">Llama</span></code> module can be used for training but not inference as the
 <code class="docutils literal notranslate"><span class="pre">__call__</span></code> method above processes one input, completely ignores the cache and
 performs no sampling whatsoever. In the rest of this subsection, we will
@@ -936,7 +976,7 @@ prompt and then autoregressively yields tokens one at a time.</p>
 </div>
 </section>
 <section id="putting-it-all-together">
-<h3>Putting it all together<a class="headerlink" href="#putting-it-all-together" title="Permalink to this heading">#</a></h3>
+<h3>Putting it all together<a class="headerlink" href="#putting-it-all-together" title="Link to this heading">#</a></h3>
 <p>We now have everything we need to create a Llama model and sample tokens from
 it. In the following code, we randomly initialize a small Llama model, process
 6 tokens of prompt and generate 10 tokens.</p>
@@ -966,7 +1006,7 @@ it. In the following code, we randomly initialize a small Llama model, process
 </section>
 </section>
 <section id="converting-the-weights">
-<h2>Converting the weights<a class="headerlink" href="#converting-the-weights" title="Permalink to this heading">#</a></h2>
+<h2>Converting the weights<a class="headerlink" href="#converting-the-weights" title="Link to this heading">#</a></h2>
 <p>This section assumes that you have access to the original Llama weights and the
 SentencePiece model that comes with them. We will write a small script to
 convert the PyTorch weights to MLX compatible ones and write them in a NPZ file
@@ -1020,7 +1060,7 @@ that can be loaded directly by MLX.</p>
 </div>
 </section>
 <section id="weight-loading-and-benchmarking">
-<h2>Weight loading and benchmarking<a class="headerlink" href="#weight-loading-and-benchmarking" title="Permalink to this heading">#</a></h2>
+<h2>Weight loading and benchmarking<a class="headerlink" href="#weight-loading-and-benchmarking" title="Link to this heading">#</a></h2>
 <p>After converting the weights to be compatible to our implementation, all that is
 left is to load them from disk and we can finally use the LLM to generate text.
 We can load numpy format files using the <a class="reference internal" href="../python/_autosummary/mlx.core.load.html#mlx.core.load" title="mlx.core.load"><code class="xref py py-func docutils literal notranslate"><span class="pre">mlx.core.load()</span></code></a> operation.</p>
@@ -1043,15 +1083,15 @@ will be replaced in the future with direct loading to MLX.</p>
 existence of <code class="docutils literal notranslate"><span class="pre">weights.pth</span></code> and <code class="docutils literal notranslate"><span class="pre">tokenizer.model</span></code> in the current working
 directory we can play around with our inference script as follows (the timings
 are representative of an M1 Ultra and the 7B parameter Llama model):</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ python convert.py weights.pth llama-7B.mlx.npz
-$ python llama.py llama-7B.mlx.npz tokenizer.model <span class="s1">&#39;Call me Ishmael. Some years ago never mind how long precisely&#39;</span>
-<span class="o">[</span>INFO<span class="o">]</span> Loading model from disk: <span class="m">5</span>.247 s
-Press enter to start generation
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>python<span class="w"> </span>convert.py<span class="w"> </span>weights.pth<span class="w"> </span>llama-7B.mlx.npz
+$<span class="w"> </span>python<span class="w"> </span>llama.py<span class="w"> </span>llama-7B.mlx.npz<span class="w"> </span>tokenizer.model<span class="w"> </span><span class="s1">&#39;Call me Ishmael. Some years ago never mind how long precisely&#39;</span>
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Loading<span class="w"> </span>model<span class="w"> </span>from<span class="w"> </span>disk:<span class="w"> </span><span class="m">5</span>.247<span class="w"> </span>s
+Press<span class="w"> </span>enter<span class="w"> </span>to<span class="w"> </span>start<span class="w"> </span>generation
 ------
-, having little or no money <span class="k">in</span> my purse, and nothing of greater consequence <span class="k">in</span> my mind, I happened to be walking down Gower Street <span class="k">in</span> the afternoon, <span class="k">in</span> the heavy rain, and I saw a few steps off, a man <span class="k">in</span> rags, who sat upon his bundle and looked hard into the wet as <span class="k">if</span> he were going to cry. I watched him attentively <span class="k">for</span> some time, and could not but observe that, though a numerous crowd was hurrying up and down,
+,<span class="w"> </span>having<span class="w"> </span>little<span class="w"> </span>or<span class="w"> </span>no<span class="w"> </span>money<span class="w"> </span><span class="k">in</span><span class="w"> </span>my<span class="w"> </span>purse,<span class="w"> </span>and<span class="w"> </span>nothing<span class="w"> </span>of<span class="w"> </span>greater<span class="w"> </span>consequence<span class="w"> </span><span class="k">in</span><span class="w"> </span>my<span class="w"> </span>mind,<span class="w"> </span>I<span class="w"> </span>happened<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>walking<span class="w"> </span>down<span class="w"> </span>Gower<span class="w"> </span>Street<span class="w"> </span><span class="k">in</span><span class="w"> </span>the<span class="w"> </span>afternoon,<span class="w"> </span><span class="k">in</span><span class="w"> </span>the<span class="w"> </span>heavy<span class="w"> </span>rain,<span class="w"> </span>and<span class="w"> </span>I<span class="w"> </span>saw<span class="w"> </span>a<span class="w"> </span>few<span class="w"> </span>steps<span class="w"> </span>off,<span class="w"> </span>a<span class="w"> </span>man<span class="w"> </span><span class="k">in</span><span class="w"> </span>rags,<span class="w"> </span>who<span class="w"> </span>sat<span class="w"> </span>upon<span class="w"> </span>his<span class="w"> </span>bundle<span class="w"> </span>and<span class="w"> </span>looked<span class="w"> </span>hard<span class="w"> </span>into<span class="w"> </span>the<span class="w"> </span>wet<span class="w"> </span>as<span class="w"> </span><span class="k">if</span><span class="w"> </span>he<span class="w"> </span>were<span class="w"> </span>going<span class="w"> </span>to<span class="w"> </span>cry.<span class="w"> </span>I<span class="w"> </span>watched<span class="w"> </span>him<span class="w"> </span>attentively<span class="w"> </span><span class="k">for</span><span class="w"> </span>some<span class="w"> </span>time,<span class="w"> </span>and<span class="w"> </span>could<span class="w"> </span>not<span class="w"> </span>but<span class="w"> </span>observe<span class="w"> </span>that,<span class="w"> </span>though<span class="w"> </span>a<span class="w"> </span>numerous<span class="w"> </span>crowd<span class="w"> </span>was<span class="w"> </span>hurrying<span class="w"> </span>up<span class="w"> </span>and<span class="w"> </span>down,
 ------
-<span class="o">[</span>INFO<span class="o">]</span> Prompt processing: <span class="m">0</span>.437 s
-<span class="o">[</span>INFO<span class="o">]</span> Full generation: <span class="m">4</span>.330 s
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Prompt<span class="w"> </span>processing:<span class="w"> </span><span class="m">0</span>.437<span class="w"> </span>s
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Full<span class="w"> </span>generation:<span class="w"> </span><span class="m">4</span>.330<span class="w"> </span>s
 </pre></div>
 </div>
 <p>We observe that 4.3 seconds are required to generate 100 tokens and 0.4 seconds
@@ -1059,31 +1099,32 @@ of those are spent processing the prompt. This amounts to a little over <strong>
 per token</strong>.</p>
 <p>By running with a much bigger prompt we can see that the per token generation
 time as well as the prompt processing time remains almost constant.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$ python llama.py llama-7B.mlx.npz tokenizer.model <span class="s1">&#39;Call me Ishmael. Some years ago never mind how long precisely, having little or no money in my purse, and nothing of greater consequence in my mind, I happened to be walking down Gower Street in the afternoon, in the heavy rain, and I saw a few steps off, a man in rags, who sat upon his bundle and looked hard into the wet as if he were going to cry. I watched him attentively for some time, and could not but observe that, though a numerous crowd was hurrying up and down, nobody took the least notice of him. I stopped at last, at a little distance, as if I had been in doubt, and after looking on a few minutes, walked straight up to him. He slowly raised his eyes, and fixed them upon me for a moment, without speaking, and then resumed his place and posture as before. I stood looking at him for a while, feeling very much pain at heart, and then said to him, “What are you doing there?” Something like a smile passed over his face, as he said slowly, “I am waiting for someone; but it has been three quarters of an hour now, and he has not come.” “What is it you are waiting for?” said I. Still he made no immediate reply, but again put his face down upon his hands, and did not&#39;</span>
-<span class="o">[</span>INFO<span class="o">]</span> Loading model from disk: <span class="m">5</span>.247 s
-Press enter to start generation
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>$<span class="w"> </span>python<span class="w"> </span>llama.py<span class="w"> </span>llama-7B.mlx.npz<span class="w"> </span>tokenizer.model<span class="w"> </span><span class="s1">&#39;Call me Ishmael. Some years ago never mind how long precisely, having little or no money in my purse, and nothing of greater consequence in my mind, I happened to be walking down Gower Street in the afternoon, in the heavy rain, and I saw a few steps off, a man in rags, who sat upon his bundle and looked hard into the wet as if he were going to cry. I watched him attentively for some time, and could not but observe that, though a numerous crowd was hurrying up and down, nobody took the least notice of him. I stopped at last, at a little distance, as if I had been in doubt, and after looking on a few minutes, walked straight up to him. He slowly raised his eyes, and fixed them upon me for a moment, without speaking, and then resumed his place and posture as before. I stood looking at him for a while, feeling very much pain at heart, and then said to him, “What are you doing there?” Something like a smile passed over his face, as he said slowly, “I am waiting for someone; but it has been three quarters of an hour now, and he has not come.” “What is it you are waiting for?” said I. Still he made no immediate reply, but again put his face down upon his hands, and did not&#39;</span>
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Loading<span class="w"> </span>model<span class="w"> </span>from<span class="w"> </span>disk:<span class="w"> </span><span class="m">5</span>.247<span class="w"> </span>s
+Press<span class="w"> </span>enter<span class="w"> </span>to<span class="w"> </span>start<span class="w"> </span>generation
 ------
-take his eyes from the ground. “What is it you are waiting <span class="k">for</span>?” said I. “I am not accustomed to be thus questioned,” said he. “You look like a reasonable man—tell me, <span class="k">then</span>, what are you waiting <span class="k">for</span>?” “You would not understand,” he replied<span class="p">;</span> “and how could you <span class="nb">help</span> me, <span class="k">if</span> I were to tell you?” “I should not only understand, but would <span class="k">do</span> all that I could,” said I. He did not
+take<span class="w"> </span>his<span class="w"> </span>eyes<span class="w"> </span>from<span class="w"> </span>the<span class="w"> </span>ground.<span class="w"> </span>“What<span class="w"> </span>is<span class="w"> </span>it<span class="w"> </span>you<span class="w"> </span>are<span class="w"> </span>waiting<span class="w"> </span><span class="k">for</span>?”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>“I<span class="w"> </span>am<span class="w"> </span>not<span class="w"> </span>accustomed<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>thus<span class="w"> </span>questioned,”<span class="w"> </span>said<span class="w"> </span>he.<span class="w"> </span>“You<span class="w"> </span>look<span class="w"> </span>like<span class="w"> </span>a<span class="w"> </span>reasonable<span class="w"> </span>man—tell<span class="w"> </span>me,<span class="w"> </span><span class="k">then</span>,<span class="w"> </span>what<span class="w"> </span>are<span class="w"> </span>you<span class="w"> </span>waiting<span class="w"> </span><span class="k">for</span>?”<span class="w"> </span>“You<span class="w"> </span>would<span class="w"> </span>not<span class="w"> </span>understand,”<span class="w"> </span>he<span class="w"> </span>replied<span class="p">;</span><span class="w"> </span>“and<span class="w"> </span>how<span class="w"> </span>could<span class="w"> </span>you<span class="w"> </span><span class="nb">help</span><span class="w"> </span>me,<span class="w"> </span><span class="k">if</span><span class="w"> </span>I<span class="w"> </span>were<span class="w"> </span>to<span class="w"> </span>tell<span class="w"> </span>you?”<span class="w"> </span>“I<span class="w"> </span>should<span class="w"> </span>not<span class="w"> </span>only<span class="w"> </span>understand,<span class="w"> </span>but<span class="w"> </span>would<span class="w"> </span><span class="k">do</span><span class="w"> </span>all<span class="w"> </span>that<span class="w"> </span>I<span class="w"> </span>could,”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>He<span class="w"> </span>did<span class="w"> </span>not
 ------
-<span class="o">[</span>INFO<span class="o">]</span> Prompt processing: <span class="m">0</span>.579 s
-<span class="o">[</span>INFO<span class="o">]</span> Full generation: <span class="m">4</span>.690 s
-$ python llama.py --num-tokens <span class="m">500</span> llama-7B.mlx.npz tokenizer.model <span class="s1">&#39;Call me Ishmael. Some years ago never mind how long precisely, having little or no money in my purse, and nothing of greater consequence in my mind, I happened to be walking down Gower Street in the afternoon, in the heavy rain, and I saw a few steps off, a man in rags, who sat upon his bundle and looked hard into the wet as if he were going to cry. I watched him attentively for some time, and could not but observe that, though a numerous crowd was hurrying up and down, nobody took the least notice of him. I stopped at last, at a little distance, as if I had been in doubt, and after looking on a few minutes, walked straight up to him. He slowly raised his eyes, and fixed them upon me for a moment, without speaking, and then resumed his place and posture as before. I stood looking at him for a while, feeling very much pain at heart, and then said to him, “What are you doing there?” Something like a smile passed over his face, as he said slowly, “I am waiting for someone; but it has been three quarters of an hour now, and he has not come.” “What is it you are waiting for?” said I. Still he made no immediate reply, but again put his face down upon his hands, and did not&#39;</span>
-<span class="o">[</span>INFO<span class="o">]</span> Loading model from disk: <span class="m">5</span>.628 s
-Press enter to start generation
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Prompt<span class="w"> </span>processing:<span class="w"> </span><span class="m">0</span>.579<span class="w"> </span>s
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Full<span class="w"> </span>generation:<span class="w"> </span><span class="m">4</span>.690<span class="w"> </span>s
+$<span class="w"> </span>python<span class="w"> </span>llama.py<span class="w"> </span>--num-tokens<span class="w"> </span><span class="m">500</span><span class="w"> </span>llama-7B.mlx.npz<span class="w"> </span>tokenizer.model<span class="w"> </span><span class="s1">&#39;Call me Ishmael. Some years ago never mind how long precisely, having little or no money in my purse, and nothing of greater consequence in my mind, I happened to be walking down Gower Street in the afternoon, in the heavy rain, and I saw a few steps off, a man in rags, who sat upon his bundle and looked hard into the wet as if he were going to cry. I watched him attentively for some time, and could not but observe that, though a numerous crowd was hurrying up and down, nobody took the least notice of him. I stopped at last, at a little distance, as if I had been in doubt, and after looking on a few minutes, walked straight up to him. He slowly raised his eyes, and fixed them upon me for a moment, without speaking, and then resumed his place and posture as before. I stood looking at him for a while, feeling very much pain at heart, and then said to him, “What are you doing there?” Something like a smile passed over his face, as he said slowly, “I am waiting for someone; but it has been three quarters of an hour now, and he has not come.” “What is it you are waiting for?” said I. Still he made no immediate reply, but again put his face down upon his hands, and did not&#39;</span>
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Loading<span class="w"> </span>model<span class="w"> </span>from<span class="w"> </span>disk:<span class="w"> </span><span class="m">5</span>.628<span class="w"> </span>s
+Press<span class="w"> </span>enter<span class="w"> </span>to<span class="w"> </span>start<span class="w"> </span>generation
 ------
-take his eyes from the ground. “What is it you are waiting <span class="k">for</span>?” said I. “I am not accustomed to be thus questioned,” said he. “You look like a reasonable man—tell me, <span class="k">then</span>, what are you waiting <span class="k">for</span>?” “You would not understand,” he replied<span class="p">;</span> “and how could you <span class="nb">help</span> me, <span class="k">if</span> I were to tell you?” “I should not only understand, but would <span class="k">do</span> all that I could,” said I. He did not reply, but still went on looking at the ground, and took hold of his bundle with a nervous trembling. I waited some time, and <span class="k">then</span> resumed. “It is of no use to say you would not understand, <span class="k">if</span> I were to tell you,” said he. “I have not told you why I am waiting <span class="k">for</span> him,” said I. “And I am sure I should not understand,” replied he. “I will tell you <span class="k">then</span>,” said I, “and, perhaps, you would not be surprised.” “No matter,” said he, “I shall be surprised anyhow<span class="p">;</span> so tell me why you are waiting <span class="k">for</span> him.” “He is my friend,” said I. “Yes,” said he, with a slight smile, “I know.” “He has been kind to me,” said I, “and I am waiting <span class="k">for</span> him. I want to see him, and could have waited as I am now, <span class="k">for</span> a much longer time.” “He will not soon come,” said he. “Unless he sees you here, he will not know of your having waited, and he will be very unlikely to come.” “No matter,” said I, “I shall <span class="nb">wait</span> <span class="k">for</span> him.” “This is a strange thing,” said he, still with the same amused smile. “How did you know,” said I, “that he was coming? How should you be waiting?” “That is my secret,” said he. “And you expect him?” “Yes,” said I. “Are you disappointed <span class="k">then</span>, <span class="k">if</span> he does not come?” “No,” said I, “it is his secret, not mine.” “If he comes,” said he, “do you mean to go straight away?” “Yes,” said I, “I cannot be happy <span class="k">if</span> I <span class="k">do</span> not go straight away after him.” “Did you know this place before?” asked he. “Yes,” said I. “Is there any shop to buy food here?” “
+take<span class="w"> </span>his<span class="w"> </span>eyes<span class="w"> </span>from<span class="w"> </span>the<span class="w"> </span>ground.<span class="w"> </span>“What<span class="w"> </span>is<span class="w"> </span>it<span class="w"> </span>you<span class="w"> </span>are<span class="w"> </span>waiting<span class="w"> </span><span class="k">for</span>?”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>“I<span class="w"> </span>am<span class="w"> </span>not<span class="w"> </span>accustomed<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>thus<span class="w"> </span>questioned,”<span class="w"> </span>said<span class="w"> </span>he.<span class="w"> </span>“You<span class="w"> </span>look<span class="w"> </span>like<span class="w"> </span>a<span class="w"> </span>reasonable<span class="w"> </span>man—tell<span class="w"> </span>me,<span class="w"> </span><span class="k">then</span>,<span class="w"> </span>what<span class="w"> </span>are<span class="w"> </span>you<span class="w"> </span>waiting<span class="w"> </span><span class="k">for</span>?”<span class="w"> </span>“You<span class="w"> </span>would<span class="w"> </span>not<span class="w"> </span>understand,”<span class="w"> </span>he<span class="w"> </span>replied<span class="p">;</span><span class="w"> </span>“and<span class="w"> </span>how<span class="w"> </span>could<span class="w"> </span>you<span class="w"> </span><span class="nb">help</span><span class="w"> </span>me,<span class="w"> </span><span class="k">if</span><span class="w"> </span>I<span class="w"> </span>were<span class="w"> </span>to<span class="w"> </span>tell<span class="w"> </span>you?”<span class="w"> </span>“I<span class="w"> </span>should<span class="w"> </span>not<span class="w"> </span>only<span class="w"> </span>understand,<span class="w"> </span>but<span class="w"> </span>would<span class="w"> </span><span class="k">do</span><span class="w"> </span>all<span class="w"> </span>that<span class="w"> </span>I<span class="w"> </span>could,”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>He<span class="w"> </span>did<span class="w"> </span>not<span class="w"> </span>reply,<span class="w"> </span>but<span class="w"> </span>still<span class="w"> </span>went<span class="w"> </span>on<span class="w"> </span>looking<span class="w"> </span>at<span class="w"> </span>the<span class="w"> </span>ground,<span class="w"> </span>and<span class="w"> </span>took<span class="w"> </span>hold<span class="w"> </span>of<span class="w"> </span>his<span class="w"> </span>bundle<span class="w"> </span>with<span class="w"> </span>a<span class="w"> </span>nervous<span class="w"> </span>trembling.<span class="w"> </span>I<span class="w"> </span>waited<span class="w"> </span>some<span class="w"> </span>time,<span class="w"> </span>and<span class="w"> </span><span class="k">then</span><span class="w"> </span>resumed.<span class="w"> </span>“It<span class="w"> </span>is<span class="w"> </span>of<span class="w"> </span>no<span class="w"> </span>use<span class="w"> </span>to<span class="w"> </span>say<span class="w"> </span>you<span class="w"> </span>would<span class="w"> </span>not<span class="w"> </span>understand,<span class="w"> </span><span class="k">if</span><span class="w"> </span>I<span class="w"> </span>were<span class="w"> </span>to<span class="w"> </span>tell<span class="w"> </span>you,”<span class="w"> </span>said<span class="w"> </span>he.<span class="w"> </span>“I<span class="w"> </span>have<span class="w"> </span>not<span class="w"> </span>told<span class="w"> </span>you<span class="w"> </span>why<span class="w"> </span>I<span class="w"> </span>am<span class="w"> </span>waiting<span class="w"> </span><span class="k">for</span><span class="w"> </span>him,”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>“And<span class="w"> </span>I<span class="w"> </span>am<span class="w"> </span>sure<span class="w"> </span>I<span class="w"> </span>should<span class="w"> </span>not<span class="w"> </span>understand,”<span class="w"> </span>replied<span class="w"> </span>he.<span class="w"> </span>“I<span class="w"> </span>will<span class="w"> </span>tell<span class="w"> </span>you<span class="w"> </span><span class="k">then</span>,”<span class="w"> </span>said<span class="w"> </span>I,<span class="w"> </span>“and,<span class="w"> </span>perhaps,<span class="w"> </span>you<span class="w"> </span>would<span class="w"> </span>not<span class="w"> </span>be<span class="w"> </span>surprised.”<span class="w"> </span>“No<span class="w"> </span>matter,”<span class="w"> </span>said<span class="w"> </span>he,<span class="w"> </span>“I<span class="w"> </span>shall<span class="w"> </span>be<span class="w"> </span>surprised<span class="w"> </span>anyhow<span class="p">;</span><span class="w"> </span>so<span class="w"> </span>tell<span class="w"> </span>me<span class="w"> </span>why<span class="w"> </span>you<span class="w"> </span>are<span class="w"> </span>waiting<span class="w"> </span><span class="k">for</span><span class="w"> </span>him.”<span class="w"> </span>“He<span class="w"> </span>is<span class="w"> </span>my<span class="w"> </span>friend,”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>“Yes,”<span class="w"> </span>said<span class="w"> </span>he,<span class="w"> </span>with<span class="w"> </span>a<span class="w"> </span>slight<span class="w"> </span>smile,<span class="w"> </span>“I<span class="w"> </span>know.”<span class="w"> </span>“He<span class="w"> </span>has<span class="w"> </span>been<span class="w"> </span>kind<span class="w"> </span>to<span class="w"> </span>me,”<span class="w"> </span>said<span class="w"> </span>I,<span class="w"> </span>“and<span class="w"> </span>I<span class="w"> </span>am<span class="w"> </span>waiting<span class="w"> </span><span class="k">for</span><span class="w"> </span>him.<span class="w"> </span>I<span class="w"> </span>want<span class="w"> </span>to<span class="w"> </span>see<span class="w"> </span>him,<span class="w"> </span>and<span class="w"> </span>could<span class="w"> </span>have<span class="w"> </span>waited<span class="w"> </span>as<span class="w"> </span>I<span class="w"> </span>am<span class="w"> </span>now,<span class="w"> </span><span class="k">for</span><span class="w"> </span>a<span class="w"> </span>much<span class="w"> </span>longer<span class="w"> </span>time.”<span class="w"> </span>“He<span class="w"> </span>will<span class="w"> </span>not<span class="w"> </span>soon<span class="w"> </span>come,”<span class="w"> </span>said<span class="w"> </span>he.<span class="w"> </span>“Unless<span class="w"> </span>he<span class="w"> </span>sees<span class="w"> </span>you<span class="w"> </span>here,<span class="w"> </span>he<span class="w"> </span>will<span class="w"> </span>not<span class="w"> </span>know<span class="w"> </span>of<span class="w"> </span>your<span class="w"> </span>having<span class="w"> </span>waited,<span class="w"> </span>and<span class="w"> </span>he<span class="w"> </span>will<span class="w"> </span>be<span class="w"> </span>very<span class="w"> </span>unlikely<span class="w"> </span>to<span class="w"> </span>come.”<span class="w"> </span>“No<span class="w"> </span>matter,”<span class="w"> </span>said<span class="w"> </span>I,<span class="w"> </span>“I<span class="w"> </span>shall<span class="w"> </span><span class="nb">wait</span><span class="w"> </span><span class="k">for</span><span class="w"> </span>him.”<span class="w"> </span>“This<span class="w"> </span>is<span class="w"> </span>a<span class="w"> </span>strange<span class="w"> </span>thing,”<span class="w"> </span>said<span class="w"> </span>he,<span class="w"> </span>still<span class="w"> </span>with<span class="w"> </span>the<span class="w"> </span>same<span class="w"> </span>amused<span class="w"> </span>smile.<span class="w"> </span>“How<span class="w"> </span>did<span class="w"> </span>you<span class="w"> </span>know,”<span class="w"> </span>said<span class="w"> </span>I,<span class="w"> </span>“that<span class="w"> </span>he<span class="w"> </span>was<span class="w"> </span>coming?<span class="w"> </span>How<span class="w"> </span>should<span class="w"> </span>you<span class="w"> </span>be<span class="w"> </span>waiting?”<span class="w"> </span>“That<span class="w"> </span>is<span class="w"> </span>my<span class="w"> </span>secret,”<span class="w"> </span>said<span class="w"> </span>he.<span class="w"> </span>“And<span class="w"> </span>you<span class="w"> </span>expect<span class="w"> </span>him?”<span class="w"> </span>“Yes,”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>“Are<span class="w"> </span>you<span class="w"> </span>disappointed<span class="w"> </span><span class="k">then</span>,<span class="w"> </span><span class="k">if</span><span class="w"> </span>he<span class="w"> </span>does<span class="w"> </span>not<span class="w"> </span>come?”<span class="w"> </span>“No,”<span class="w"> </span>said<span class="w"> </span>I,<span class="w"> </span>“it<span class="w"> </span>is<span class="w"> </span>his<span class="w"> </span>secret,<span class="w"> </span>not<span class="w"> </span>mine.”<span class="w"> </span>“If<span class="w"> </span>he<span class="w"> </span>comes,”<span class="w"> </span>said<span class="w"> </span>he,<span class="w"> </span>“do<span class="w"> </span>you<span class="w"> </span>mean<span class="w"> </span>to<span class="w"> </span>go<span class="w"> </span>straight<span class="w"> </span>away?”<span class="w"> </span>“Yes,”<span class="w"> </span>said<span class="w"> </span>I,<span class="w"> </span>“I<span class="w"> </span>cannot<span class="w"> </span>be<span class="w"> </span>happy<span class="w"> </span><span class="k">if</span><span class="w"> </span>I<span class="w"> </span><span class="k">do</span><span class="w"> </span>not<span class="w"> </span>go<span class="w"> </span>straight<span class="w"> </span>away<span class="w"> </span>after<span class="w"> </span>him.”<span class="w"> </span>“Did<span class="w"> </span>you<span class="w"> </span>know<span class="w"> </span>this<span class="w"> </span>place<span class="w"> </span>before?”<span class="w"> </span>asked<span class="w"> </span>he.<span class="w"> </span>“Yes,”<span class="w"> </span>said<span class="w"> </span>I.<span class="w"> </span>“Is<span class="w"> </span>there<span class="w"> </span>any<span class="w"> </span>shop<span class="w"> </span>to<span class="w"> </span>buy<span class="w"> </span>food<span class="w"> </span>here?”<span class="w"> </span>“
 ------
-<span class="o">[</span>INFO<span class="o">]</span> Prompt processing: <span class="m">0</span>.633 s
-<span class="o">[</span>INFO<span class="o">]</span> Full generation: <span class="m">21</span>.475 s
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Prompt<span class="w"> </span>processing:<span class="w"> </span><span class="m">0</span>.633<span class="w"> </span>s
+<span class="o">[</span>INFO<span class="o">]</span><span class="w"> </span>Full<span class="w"> </span>generation:<span class="w"> </span><span class="m">21</span>.475<span class="w"> </span>s
 </pre></div>
 </div>
 </section>
 <section id="scripts">
-<h2>Scripts<a class="headerlink" href="#scripts" title="Permalink to this heading">#</a></h2>
+<h2>Scripts<a class="headerlink" href="#scripts" title="Link to this heading">#</a></h2>
 <div class="admonition-download-the-code admonition">
 <p class="admonition-title">Download the code</p>
 <p>The full example code is available in <a class="reference external" href="https://github.com/ml-explore/mlx-examples/tree/main/llms/llama">mlx-examples</a>.</p>
 </div>
+<aside class="footnote-list brackets">
 <aside class="footnote brackets" id="id4" role="note">
 <span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id1">1</a><span class="fn-bracket">]</span></span>
 <p>Su, J., Lu, Y., Pan, S., Murtadha, A., Wen, B. and Liu, Y., 2021.
@@ -1099,6 +1140,7 @@ Advances in Neural Information Processing Systems, 32.</p>
 <span class="label"><span class="fn-bracket">[</span><a role="doc-backlink" href="#id3">3</a><span class="fn-bracket">]</span></span>
 <p>Shazeer, N., 2020. Glu variants improve transformer. arXiv preprint
 arXiv:2002.05202.</p>
+</aside>
 </aside>
 </section>
 </section>

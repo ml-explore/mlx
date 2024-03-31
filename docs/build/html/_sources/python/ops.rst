@@ -38,6 +38,10 @@ Operations
    conv_general
    cos
    cosh
+   cummax
+   cummin
+   cumprod
+   cumsum
    dequantize
    diag
    diagonal
@@ -58,10 +62,10 @@ Operations
    identity
    inner
    isclose
-   isnan
-   isposinf
-   isneginf
    isinf
+   isnan
+   isneginf
+   isposinf
    less
    less_equal
    linspace

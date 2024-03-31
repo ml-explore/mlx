@@ -8,50 +8,26 @@ msgstr ""
 "Language: ru\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "suggest edit"
-msgstr "предложить редактировать"
+msgid "Theme by the"
+msgstr "Тема от"
 
-msgid "Last updated on"
-msgstr "Последнее обновление"
+msgid "Open an issue"
+msgstr "Открыть вопрос"
 
-msgid "Edit this page"
-msgstr "Редактировать эту страницу"
-
-msgid "Launch"
-msgstr "Запуск"
-
-msgid "Print to PDF"
-msgstr "Распечатать в PDF"
-
-msgid "open issue"
-msgstr "открытый вопрос"
+msgid "Contents"
+msgstr "Содержание"
 
 msgid "Download notebook file"
 msgstr "Скачать файл записной книжки"
 
-msgid "Toggle navigation"
-msgstr "Переключить навигацию"
-
-msgid "Source repository"
-msgstr "Исходный репозиторий"
-
-msgid "By the"
-msgstr "Посредством"
-
-msgid "next page"
-msgstr "Следующая страница"
-
-msgid "repository"
-msgstr "хранилище"
-
 msgid "Sphinx Book Theme"
 msgstr "Тема книги Сфинкс"
 
-msgid "Download source file"
-msgstr "Скачать исходный файл"
+msgid "Fullscreen mode"
+msgstr "Полноэкранный режим"
 
-msgid "Contents"
-msgstr "Содержание"
+msgid "Edit this page"
+msgstr "Редактировать эту страницу"
 
 msgid "By"
 msgstr "По"
@@ -59,17 +35,41 @@ msgstr "По"
 msgid "Copyright"
 msgstr "авторское право"
 
-msgid "Fullscreen mode"
-msgstr "Полноэкранный режим"
-
-msgid "Open an issue"
-msgstr "Открыть вопрос"
+msgid "Source repository"
+msgstr "Исходный репозиторий"
 
 msgid "previous page"
 msgstr "Предыдущая страница"
 
+msgid "next page"
+msgstr "Следующая страница"
+
+msgid "Toggle navigation"
+msgstr "Переключить навигацию"
+
+msgid "repository"
+msgstr "хранилище"
+
+msgid "suggest edit"
+msgstr "предложить редактировать"
+
+msgid "open issue"
+msgstr "открытый вопрос"
+
+msgid "Launch"
+msgstr "Запуск"
+
+msgid "Print to PDF"
+msgstr "Распечатать в PDF"
+
+msgid "By the"
+msgstr "Посредством"
+
+msgid "Last updated on"
+msgstr "Последнее обновление"
+
+msgid "Download source file"
+msgstr "Скачать исходный файл"
+
 msgid "Download this page"
 msgstr "Загрузите эту страницу"
-
-msgid "Theme by the"
-msgstr "Тема от"

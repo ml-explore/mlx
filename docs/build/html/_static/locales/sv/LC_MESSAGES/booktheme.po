@@ -8,68 +8,68 @@ msgstr ""
 "Language: sv\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "suggest edit"
-msgstr "föreslå redigering"
+msgid "Theme by the"
+msgstr "Tema av"
 
-msgid "Last updated on"
-msgstr "Senast uppdaterad den"
-
-msgid "Edit this page"
-msgstr "Redigera den här sidan"
-
-msgid "Launch"
-msgstr "Lansera"
-
-msgid "Print to PDF"
-msgstr "Skriv ut till PDF"
-
-msgid "open issue"
-msgstr "öppet problem"
-
-msgid "Download notebook file"
-msgstr "Ladda ner anteckningsbokfilen"
-
-msgid "Toggle navigation"
-msgstr "Växla navigering"
-
-msgid "Source repository"
-msgstr "Källförvar"
-
-msgid "By the"
-msgstr "Vid"
-
-msgid "next page"
-msgstr "nästa sida"
-
-msgid "repository"
-msgstr "förvar"
-
-msgid "Sphinx Book Theme"
-msgstr "Sphinx boktema"
-
-msgid "Download source file"
-msgstr "Ladda ner källfil"
+msgid "Open an issue"
+msgstr "Öppna en problemrapport"
 
 msgid "Contents"
 msgstr "Innehåll"
 
-msgid "By"
-msgstr "Förbi"
+msgid "Download notebook file"
+msgstr "Ladda ner notebook-fil"
 
-msgid "Copyright"
-msgstr "upphovsrätt"
+msgid "Sphinx Book Theme"
+msgstr "Sphinx Boktema"
 
 msgid "Fullscreen mode"
 msgstr "Fullskärmsläge"
 
-msgid "Open an issue"
-msgstr "Öppna ett problem"
+msgid "Edit this page"
+msgstr "Redigera den här sidan"
+
+msgid "By"
+msgstr "Av"
+
+msgid "Copyright"
+msgstr "Upphovsrätt"
+
+msgid "Source repository"
+msgstr "Källkodsrepositorium"
 
 msgid "previous page"
 msgstr "föregående sida"
 
+msgid "next page"
+msgstr "nästa sida"
+
+msgid "Toggle navigation"
+msgstr "Växla navigering"
+
+msgid "repository"
+msgstr "repositorium"
+
+msgid "suggest edit"
+msgstr "föreslå ändring"
+
+msgid "open issue"
+msgstr "öppna problemrapport"
+
+msgid "Launch"
+msgstr "Öppna"
+
+msgid "Print to PDF"
+msgstr "Skriv ut till PDF"
+
+msgid "By the"
+msgstr "Av den"
+
+msgid "Last updated on"
+msgstr "Senast uppdaterad den"
+
+msgid "Download source file"
+msgstr "Ladda ner källfil"
+
 msgid "Download this page"
 msgstr "Ladda ner den här sidan"
-
-msgid "Theme by the"
-msgstr "Tema av"
