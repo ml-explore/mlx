@@ -17,7 +17,7 @@ bool is_available() {
 
 int max_ops_per_buffer() {
 #ifdef MLX_METAL_DEBUG
-  return 0;
+  return 1;
 #else
   auto get_val = []() {
     if (const char* buff_str = std::getenv("MLX_MAX_OPS_PER_BUFFER")) {
