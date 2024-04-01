@@ -7,6 +7,9 @@
 namespace nb = nanobind;
 using namespace mlx::core;
 
+void tree_visit(
+    const std::vector<nb::object>& trees,
+    std::function<void(const std::vector<nb::object>&)> visitor);
 void tree_visit(nb::object tree, std::function<void(nb::handle)> visitor);
 
 nb::object tree_map(
