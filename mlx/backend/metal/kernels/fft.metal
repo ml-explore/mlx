@@ -14,7 +14,7 @@
 
 using namespace metal;
 
-// Specialize for a particular value of n at runtime
+// Specialize for a particular value of N at runtime
 constant bool inv_ [[function_constant(0)]];
 constant bool is_power_of_2_ [[function_constant(1)]];
 constant int elems_per_thread_ [[function_constant(2)]];
@@ -147,15 +147,12 @@ void stockham_switch(threadgroup float2** read_buf, threadgroup float2** write_b
     *read_buf = tmp;
 }
 
-
 void perform_fft(
     int i,  // thread index
     int n,  // overall fft size
     int m,  // total threads we have access to
     threadgroup float2** read_buf,
     threadgroup float2** write_buf) {
-
-
   int p = 1;
 
   int radix = 2;
@@ -165,7 +162,10 @@ void perform_fft(
   for (int s = 0; s < radix_2_steps_; s++) {
     for (int t = 0; t < max_radices_per_thread; t++) {
       int index = i + t * m;
-      if (index < m_r) {
+      // Compiler will optimize this condition out for powers of 2 :)
+      if (is_power_of_2_) {
+        radix2(index, p, m_r, *read_buf, *write_buf);
+      } else if (index < m_r) {
         radix2(index, p, m_r, *read_buf, *write_buf);
       }
     }
@@ -197,7 +197,9 @@ void perform_fft(
   for (int s = 0; s < radix_4_steps_; s++) {
     for (int t = 0; t < max_radices_per_thread; t++) {
       int index = i + t * m;
-      if (index < m_r) {
+      if (is_power_of_2_) {
+        radix4(index, p, m_r, *read_buf, *write_buf);
+      } else if (index < m_r) {
         radix4(index, p, m_r, *read_buf, *write_buf);
       }
     }
@@ -438,7 +440,7 @@ template <int tg_mem_size>
 
 
 #define instantiate_fft(tg_mem_size) \
-  template [[host_name("fft_" #tg_mem_size)]] \
+  template [[host_name("fft_mem_" #tg_mem_size)]] \
   [[kernel]] void fft<tg_mem_size>( \
       const device float2* in [[buffer(0)]], \
       device float2* out [[buffer(1)]], \
@@ -447,7 +449,7 @@ template <int tg_mem_size>
     uint3 threads_per_grid [[threads_per_grid]]);
 
 #define instantiate_rfft(tg_mem_size) \
-  template [[host_name("rfft_" #tg_mem_size)]] \
+  template [[host_name("rfft_mem_" #tg_mem_size)]] \
   [[kernel]] void rfft<tg_mem_size>( \
       const device float* in [[buffer(0)]], \
       device float2* out [[buffer(1)]], \
@@ -456,7 +458,7 @@ template <int tg_mem_size>
     uint3 threads_per_grid [[threads_per_grid]]);
 
 #define instantiate_irfft(tg_mem_size) \
-  template [[host_name("irfft_" #tg_mem_size)]] \
+  template [[host_name("irfft_mem_" #tg_mem_size)]] \
   [[kernel]] void irfft<tg_mem_size>( \
       const device float2* in [[buffer(0)]], \
       device float* out [[buffer(1)]], \
@@ -465,7 +467,7 @@ template <int tg_mem_size>
     uint3 threads_per_grid [[threads_per_grid]]);
 
 #define instantiate_bluestein(tg_mem_size) \
-  template [[host_name("bluestein_" #tg_mem_size)]] \
+  template [[host_name("bluestein_fft_mem_" #tg_mem_size)]] \
   [[kernel]] void bluestein_fft<tg_mem_size>( \
       const device float2* in [[buffer(0)]], \
       device float2* out [[buffer(1)]], \

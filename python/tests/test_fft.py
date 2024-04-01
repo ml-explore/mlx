@@ -88,9 +88,9 @@ class TestFFT(mlx_tests.MLXTestCase):
         rtol = 1e-4
         np.random.seed(7)
 
-        for num in range(4, 1025):
-            r = np.random.rand(num).astype(np.float32)
-            i = np.random.rand(num).astype(np.float32)
+        for num in range(3, 1025):
+            r = np.random.rand(4, num).astype(np.float32)
+            i = np.random.rand(4, num).astype(np.float32)
             a_np = r + 1j * i
             self.check_mx_np(mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol)
 

@@ -109,8 +109,8 @@ array fft_impl(
       // Opposite order for fft vs ifft
       int index = inverse ? axes.size() - i - 1 : i;
       int axis = axes[index];
-      // Mirror np.fft.(i)rfftn and perform a real transform only on the final
-      // axis
+      // Mirror np.fft.(i)rfftn and perform a real transform
+      // only on the final axis.
       bool step_real = (real && index == axes.size() - 1);
       int step_shape = inverse ? out_shape[axis] : in.shape(axis);
       out = fft_impl(out, {step_shape}, {axis}, step_real, inverse, s);
@@ -120,28 +120,30 @@ array fft_impl(
 
   auto in_type = real && !inverse ? float32 : complex64;
   auto out_type = real && inverse ? float32 : complex64;
-  // if (stream.device == Device::gpu && !is_power_of_2(n.back())) {
-  //   int fast_n = next_power_of_2(n.back() * 2 - 1);
-  //   auto blue_outputs = array::make_arrays(
-  //       {{fast_n}, {n.back()}},
-  //       {{complex64, complex64}},
-  //       std::make_shared<BluesteinFFTSetup>(to_stream(Device::cpu),
-  //       n.back()),
-  //       {});
-  //   array w_q = blue_outputs[0];
-  //   array w_k = blue_outputs[1];
-  //   return array(
-  //       out_shape,
-  //       out_type,
-  //       std::make_shared<FFT>(stream, valid_axes, inverse, real),
-  //       {astype(in, in_type, s), w_q, w_k});
-  // } else {
-  return array(
-      out_shape,
-      out_type,
-      std::make_shared<FFT>(stream, valid_axes, inverse, real),
-      {astype(in, in_type, s)});
-  // }
+
+  auto [fast_n, _] = FFT::next_fast_n(n.back());
+  if (stream.device == Device::gpu && fast_n > n.back()) {
+    // Precompute twiddle factors in high precision for Bluestein's
+    auto [bluestein_n, _] = FFT::next_fast_n(2 * n.back() - 1);
+    auto blue_outputs = array::make_arrays(
+        {{bluestein_n}, {n.back()}},
+        {{complex64, complex64}},
+        std::make_shared<BluesteinFFTSetup>(to_stream(Device::cpu), n.back()),
+        {});
+    array w_q = blue_outputs[0];
+    array w_k = blue_outputs[1];
+    return array(
+        out_shape,
+        out_type,
+        std::make_shared<FFT>(stream, valid_axes, inverse, real),
+        {astype(in, in_type, s), w_q, w_k});
+  } else {
+    return array(
+        out_shape,
+        out_type,
+        std::make_shared<FFT>(stream, valid_axes, inverse, real),
+        {astype(in, in_type, s)});
+  }
 }
 
 array fft_impl(

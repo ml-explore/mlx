@@ -13,30 +13,22 @@ using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
 
 #define MAX_SINGLE_FFT_SIZE 2048
 
-bool is_fast(int n, const std::vector<int>& supported_radices) {
-  for (auto radix : supported_radices) {
-    if (n % radix == 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
-int next_fast_n(int n, const std::vector<int>& supported_radices) {
-  while (n < MAX_SINGLE_FFT_SIZE) {
-    if (is_fast(n, supported_radices)) {
-      return n;
+std::pair<int, std::vector<int>> FFT::next_fast_n(int n) {
+  while (n <= MAX_SINGLE_FFT_SIZE) {
+    auto plan = plan_stockham_fft(n);
+    if (plan.size() > 0) {
+      return std::make_pair(n, plan);
     }
     n += 1;
   }
-  return MAX_SINGLE_FFT_SIZE;
+  throw std::runtime_error(
+      "Next fast FFT size is larger than the maximum that fits in shared memory.");
 }
 
 // Plan the sequence of radices
-std::vector<int> plan_stockham_fft(
-    int n,
-    const std::vector<int>& supported_radices) {
+std::vector<int> FFT::plan_stockham_fft(int n) {
   // prefer larger radices since we do fewer expensive twiddles
+  const std::vector<int> supported_radices = {4, 3, 2};
   std::vector<int> plan(supported_radices.size());
   for (int i = 0; i < supported_radices.size(); i++) {
     int radix = supported_radices[i];
@@ -48,8 +40,8 @@ std::vector<int> plan_stockham_fft(
       }
     }
   }
-  throw std::runtime_error(
-      "n should be decomposable into the supported radices.");
+  // return an empty vector if unplannable
+  return std::vector<int>();
 }
 
 void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -130,15 +122,16 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       out_strides,
       in_contiguous.flags());
 
-  const std::vector<int> supported_radices = {4, 3, 2};
+  int bluestein_n = -1;
+  auto plan = plan_stockham_fft(n);
+  if (plan.size() == 0) {
+    // Bluestein's algorithm transforms an FFT to
+    // a convolution of size > 2n + 1.
+    // We solve that conv via FFT wth the convolution theorem.
+    std::tie(bluestein_n, plan) = next_fast_n(2 * n - 1);
+  }
 
-  // Bluestein's algorithm transforms to an FFT of
-  // the first power of 2 after (2 * n + 1)
-  int bluestein_n = next_fast_n(2 * n - 1, supported_radices);
-
-  int fft_size = is_fast(n, supported_radices) ? n : bluestein_n;
-
-  size_t batch = in.size() / in.shape(axes_[0]);
+  int fft_size = bluestein_n > 0 ? bluestein_n : n;
 
   auto make_int = [](int* a, int i) {
     return std::make_tuple(a, MTL::DataType::DataTypeInt, i);
@@ -146,15 +139,15 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto make_bool = [](bool* a, int i) {
     return std::make_tuple(a, MTL::DataType::DataTypeBool, i);
   };
-
+  // Pass this as a function constant so we can specialize
+  // the kernel for powers of 2.
   bool power_of_2 = is_power_of_2(fft_size);
 
   std::vector<MTLFC> func_consts = {
       make_bool(&inverse_, 0), make_bool(&power_of_2, 1)};
 
-  auto plan = plan_stockham_fft(n, supported_radices);
+  const std::vector<int> supported_radices = {4, 3, 2};
   int index = 3;
-  // based on the max radix size used
   int elems_per_thread = 0;
   for (int i = 0; i < plan.size(); i++) {
     func_consts.push_back(make_int(&plan[i], index));
@@ -166,39 +159,47 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   func_consts.push_back(make_int(&elems_per_thread, 2));
 
   int threads_per_fft = fft_size / elems_per_thread;
-  int threadgroup_mem_size = next_power_of_2(n);
+  int threadgroup_mem_size = next_power_of_2(fft_size);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
     std::ostringstream kname;
     std::string inv_string = inverse_ ? "true" : "false";
-    if (!is_fast(n, supported_radices)) {
-      kname << "bluestein_fft_" << next_power_of_2(bluestein_n);
+    if (bluestein_n > 0) {
+      kname << "bluestein_fft_mem_" << threadgroup_mem_size;
     } else if (out.dtype() == float32) {
-      kname << "irfft_" << threadgroup_mem_size;
+      kname << "irfft_mem_" << threadgroup_mem_size;
     } else if (in.dtype() == float32) {
-      kname << "rfft_" << threadgroup_mem_size;
+      kname << "rfft_mem_" << threadgroup_mem_size;
     } else {
-      kname << "fft_" << threadgroup_mem_size;
+      kname << "fft_mem_" << threadgroup_mem_size;
     }
-    auto kernel = d.get_kernel(kname.str(), "mlx", "", func_consts);
+    std::string base_name = kname.str();
+    // We use a specialized kernel for each FFT size
+    kname << "_n_" << fft_size << "_inv_" << inverse_;
+    std::string hash_name = kname.str();
+    auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
 
     bool donated = in.data_shared_ptr() == nullptr;
     compute_encoder->setComputePipelineState(kernel);
     compute_encoder.set_input_array(in_contiguous, 0);
     compute_encoder.set_output_array(out, 1);
-    if (!is_fast(n, supported_radices)) {
-      // Bluestein requires extra pre-computed inputs
+
+    if (bluestein_n > 0) {
+      // std::cout << "bluestein_n " << bluestein_n << std::endl;
+      // std::cout << "n " << n << std::endl;
+      // Precomputed twiddle factors for Bluestein's
       auto& w_q = inputs[1];
       auto& w_k = inputs[2];
-      set_array_buffer(compute_encoder, w_q, 2);
-      set_array_buffer(compute_encoder, w_k, 3);
+      compute_encoder.set_input_array(w_q, 2); // w_q
+      compute_encoder.set_input_array(w_k, 3); // w_k
       compute_encoder->setBytes(&n, sizeof(int), 4);
       compute_encoder->setBytes(&bluestein_n, sizeof(int), 5);
     } else {
       compute_encoder->setBytes(&n, sizeof(int), 2);
     }
 
+    size_t batch = in.size() / in.shape(axes_[0]);
     auto group_dims = MTL::Size(1, threads_per_fft, 1);
     auto grid_dims = MTL::Size(batch, threads_per_fft, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);

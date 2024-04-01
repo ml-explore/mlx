@@ -47,6 +47,7 @@ def run_bench_mps(system_size, fft_sizes):
     for n in fft_sizes:
         x_np = np.random.uniform(size=(system_size // n, n)).astype(np.complex64)
         x = torch.tensor(x_np, device="mps")
+        torch.mps.synchronize()
 
         runtime_ms = measure_runtime(fft, x=x)
         bandwidth = bandwidth_gb(runtime_ms, system_size // n * n)
@@ -57,8 +58,8 @@ def run_bench_mps(system_size, fft_sizes):
 
 
 def time_fft():
-    x = [2048]
-    system_size = int(2**26)
+    x = range(4, 32)
+    system_size = int(2**24)
 
     mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
     # print('mps_bandwidths', mps_bandwidths)

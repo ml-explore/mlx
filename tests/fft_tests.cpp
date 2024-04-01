@@ -8,24 +8,28 @@
 
 using namespace mlx::core;
 
+// Get Bluestein working again
+// Run a benchmark against MPS
+// Implement 4 step FFT
+// Add radix 5,7,8,11,13
+
 TEST_CASE("test fft basics") {
   auto device = default_device();
   set_default_device(Device::gpu);
   // array x(1.0);
   // array x = arange(573);
-  // array x = arange(648);
+  array x = random::normal({32, 513});
   // array x = array({1, 4, 7});
   random::seed(7);
-  array x = random::normal({131072 * 2, 512});
-  x = astype(x, complex64);
-  auto y = fft::fft(x);
-  auto bench_fft = [&x]() { return fft::fft(x); };
-  TIME(bench_fft);
+  array y = fft::ifft(x);
   std::cout << "y " << y << std::endl;
-  // std::cout << "y " << reshape(y, {4, 3}) << std::endl;
+
+  // auto bench_fft = [&x]() { return fft::fft(x); };
+  // TIME(bench_fft);
+  // std::cout << "y " << y << std::endl;
 
   set_default_device(Device::cpu);
-  y = fft::fft(x);
+  y = fft::ifft(x);
   // // // TIME(bench_fft);
 
   std::cout << "y " << y << std::endl;

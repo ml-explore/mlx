@@ -888,10 +888,18 @@ class FFT : public UnaryPrimitive {
 
   bool is_equivalent(const Primitive& other) const override;
 
+  // GPU FFT planning
+  static std::pair<int, std::vector<int>> next_fast_n(int n);
+  static std::vector<int> plan_stockham_fft(int n);
+
  private:
   std::vector<size_t> axes_;
   bool inverse_;
   bool real_;
+
+  // Ordered by preference in decomposition. Typically largest->smallest is
+  // best.
+  const std::vector<int> gpu_radices_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };
