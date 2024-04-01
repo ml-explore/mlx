@@ -606,8 +606,12 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_nd(
 
         auto slice = nb::cast<nb::slice>(idx);
         int stride = get_slice_int(nb::getattr(slice, "step"), 1);
-        num_strided_slices += (stride != 1);
-        num_simple_slices_post += (stride == 1);
+        if (stride != 1) {
+          num_strided_slices++;
+          num_simple_slices_post = 0;
+        } else {
+          num_simple_slices_post++;
+        }
 
       } else if (nb::isinstance<array>(idx)) {
         have_array = true;
