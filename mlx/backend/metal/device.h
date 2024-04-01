@@ -48,8 +48,9 @@ class Device {
   void new_queue(int index);
   MTL::CommandBuffer* new_command_buffer(int index);
   MTL::CommandBuffer* get_command_buffer(int index);
-  int get_command_buffer_ops(int index);
-  void increment_command_buffer_ops(int index);
+  // Total ops and big ops
+  std::pair<int, int> get_command_buffer_ops(int index);
+  void increment_command_buffer_ops(int index, bool big_op);
   void commit_command_buffer(int index);
   MTL::ComputeCommandEncoder* get_command_encoder(int index);
   void end_encoding(int index);
@@ -131,7 +132,10 @@ class Device {
 
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
-  std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
+  std::unordered_map<
+      int32_t,
+      std::pair<std::pair<int, int>, MTL::CommandBuffer*>>
+      buffer_map_;
   std::unordered_map<int32_t, MTL::ComputeCommandEncoder*> encoder_map_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
   std::unordered_map<std::string, MTL::Library*> library_map_;

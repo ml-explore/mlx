@@ -154,14 +154,16 @@ void Device::new_queue(int index) {
   queue_map_.insert({index, q});
 }
 
-int Device::get_command_buffer_ops(int index) {
+std::pair<int, int> Device::get_command_buffer_ops(int index) {
   auto bit = buffer_map_.find(index);
   return bit->second.first;
 }
 
-void Device::increment_command_buffer_ops(int index) {
+void Device::increment_command_buffer_ops(int index, bool big_op) {
   auto bit = buffer_map_.find(index);
-  bit->second.first++;
+  auto& [op_count, big_op_count] = bit->second.first;
+  op_count++;
+  big_op_count += big_op;
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
@@ -186,7 +188,7 @@ MTL::CommandBuffer* Device::new_command_buffer(int index) {
   // Increment ref count so the buffer is not garbage collected
   cb->retain();
 
-  return buffer_map_.insert({index, {0, cb}}).first->second.second;
+  return buffer_map_.insert({index, {{0, 0}, cb}}).first->second.second;
 }
 
 void Device::commit_command_buffer(int index) {

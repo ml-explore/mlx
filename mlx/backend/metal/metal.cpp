@@ -17,13 +17,13 @@ bool is_available() {
 
 int max_ops_per_buffer() {
 #ifdef MLX_METAL_DEBUG
-  return 1;
+  return 0;
 #else
   auto get_val = []() {
     if (const char* buff_str = std::getenv("MLX_MAX_OPS_PER_BUFFER")) {
       return atoi(buff_str);
     } else {
-      return 10;
+      return 50;
     }
   };
   static int max_ops_per_buffer_ = get_val();
@@ -31,13 +31,19 @@ int max_ops_per_buffer() {
 #endif
 }
 
+constexpr size_t small_size = 1 << 15;
+
+#define MAX_BIG_OPS_PER_BUFFER 10
 #define MAX_OPS_PER_BUFFER max_ops_per_buffer()
 
-MTL::CommandBuffer* increment_command_buffer(Stream s) {
+MTL::CommandBuffer* increment_command_buffer(Stream s, bool big_op) {
   auto& d = metal::device(s.device);
+  auto commit_condition = [&d, &s]() {
+    auto [ops, big_ops] = d.get_command_buffer_ops(s.index);
+    return (ops >= MAX_OPS_PER_BUFFER || big_ops >= MAX_BIG_OPS_PER_BUFFER);
+  };
   auto command_buffer = d.get_command_buffer(s.index);
-  if (command_buffer == nullptr ||
-      d.get_command_buffer_ops(s.index) >= MAX_OPS_PER_BUFFER) {
+  if (command_buffer == nullptr || commit_condition()) {
     if (command_buffer != nullptr) {
       d.end_encoding(s.index);
       scheduler::notify_new_task(s);
@@ -47,7 +53,7 @@ MTL::CommandBuffer* increment_command_buffer(Stream s) {
     }
     command_buffer = d.new_command_buffer(s.index);
   }
-  d.increment_command_buffer_ops(s.index);
+  d.increment_command_buffer_ops(s.index, big_op);
   return command_buffer;
 }
 
@@ -70,8 +76,19 @@ std::function<void()> make_task(
       d.wait();
     }
     auto s = arr.primitive().stream();
-    auto command_buffer = increment_command_buffer(s);
+
     auto outputs = arr.outputs();
+
+    // Compute if this op is a big op
+    bool big_op =
+        std::any_of(arr.inputs().begin(), arr.inputs().end(), [](auto& in) {
+          return in.nbytes() >= small_size;
+        });
+    big_op |= std::any_of(outputs.begin(), outputs.end(), [](auto& o) {
+      return o.nbytes() >= small_size;
+    });
+    auto command_buffer = increment_command_buffer(s, big_op);
+
     {
       // If the array is a tracer hold a reference
       // to its inputs so they don't get donated
