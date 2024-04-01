@@ -16,10 +16,11 @@ using namespace metal;
 
 // Specialize for a particular value of n at runtime
 constant bool inv_ [[function_constant(0)]];
-constant int elems_per_thread_ [[function_constant(1)]];
-constant int radix_4_steps_ [[function_constant(2)]];
-constant int radix_3_steps_ [[function_constant(3)]];
-constant int radix_2_steps_ [[function_constant(4)]];
+constant bool is_power_of_2_ [[function_constant(1)]];
+constant int elems_per_thread_ [[function_constant(2)]];
+constant int radix_4_steps_ [[function_constant(3)]];
+constant int radix_3_steps_ [[function_constant(4)]];
+constant int radix_2_steps_ [[function_constant(5)]];
 
 float2 complex_mul(float2 a, float2 b) {
   float2 c = {
@@ -97,8 +98,13 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   float2 x_2 = read_buf[i + 2*m];
   float2 x_3 = read_buf[i + 3*m];
 
-  // The index within this sub-DFT
-  int k = i & (p - 1);
+  // We use faster bit shifting ops when n is a power of 2
+  int k;
+  if (is_power_of_2_) {
+    k = i & (p - 1);
+  } else {
+    k = i % p;
+  }
 
   float2 twiddle = get_twiddle(k, 4*p);
   // e^a * e^b = e^(a + b)
@@ -122,7 +128,12 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   float2 y_2 = z_0 - z_2;
   float2 y_3 = z_1 - z_3;
 
-  int j = ((i - k) << 2) + k;
+  int j;
+  if (is_power_of_2_) {
+    j = ((i - k) << 2) + k;
+  } else {
+    j = (i / p) * 4 * p + k;
+  }
 
   write_buf[j] = y_0;
   write_buf[j + p] = y_1;
@@ -130,39 +141,70 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   write_buf[j + 3*p] = y_3;
 }
 
+void stockham_switch(threadgroup float2** read_buf, threadgroup float2** write_buf) {
+    threadgroup float2* tmp = *write_buf;
+    *write_buf = *read_buf;
+    *read_buf = tmp;
+}
+
+
 void perform_fft(
-    int i,
-    int m,
+    int i,  // thread index
+    int n,  // overall fft size
+    int m,  // total threads we have access to
     threadgroup float2** read_buf,
     threadgroup float2** write_buf) {
 
-  threadgroup float2* tmp;
 
   int p = 1;
 
-  for (int r = 0; r < radix_2_steps_; r++) {
-    radix2(i, p, m*2, *read_buf, *write_buf);
-    radix2(i + m, p, m*2, *read_buf, *write_buf);
-    p *= 2;
+  int radix = 2;
+  int m_r = n / radix;
+  // ceil divide
+  int max_radices_per_thread = (elems_per_thread_ + radix - 1) / radix;
+  for (int s = 0; s < radix_2_steps_; s++) {
+    for (int t = 0; t < max_radices_per_thread; t++) {
+      int index = i + t * m;
+      if (index < m_r) {
+        radix2(index, p, m_r, *read_buf, *write_buf);
+      }
+    }
+    p *= radix;
 
+    stockham_switch(read_buf, write_buf);
     threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Stockham switch of buffers
-    tmp = *write_buf;
-    *write_buf = *read_buf;
-    *read_buf = tmp;
   }
 
-  for (int r = 0; r < radix_4_steps_; r++) {
-    radix4(i, p, m, *read_buf, *write_buf);
-    p *= 4;
+  radix = 3;
+  m_r = n / radix;
+  max_radices_per_thread = (elems_per_thread_ + radix - 1) / radix;
+  for (int s = 0; s < radix_3_steps_; s++) {
+    for (int t = 0; t < max_radices_per_thread; t++) {
+      int index = i + t * m;
+      if (index < m_r) {
+        radix3(index, p, m_r, *read_buf, *write_buf);
+      }
+    }
+    p *= radix;
 
+    stockham_switch(read_buf, write_buf);
     threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
 
-    // Stockham switch of buffers
-    tmp = *write_buf;
-    *write_buf = *read_buf;
-    *read_buf = tmp;
+  radix = 4;
+  m_r = n / radix;
+  max_radices_per_thread = (elems_per_thread_ + radix - 1) / radix;
+  for (int s = 0; s < radix_4_steps_; s++) {
+    for (int t = 0; t < max_radices_per_thread; t++) {
+      int index = i + t * m;
+      if (index < m_r) {
+        radix4(index, p, m_r, *read_buf, *write_buf);
+      }
+    }
+    p *= radix;
+
+    stockham_switch(read_buf, write_buf);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 }
 
@@ -211,7 +253,7 @@ template <int tg_mem_size>
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, m, &read_buf, &write_buf);
+  perform_fft(i, n, m, &read_buf, &write_buf);
 
   if (inv_) {
     float2 inv_factor = {1.0f / n, -1.0f / n};
@@ -254,7 +296,7 @@ template <int tg_mem_size>
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, m, &read_buf, &write_buf);
+  perform_fft(i, n, m, &read_buf, &write_buf);
 
   // For real to complex, we only need the first (n/2) + 1 terms
   // since the output is guaranteed to be hermitian symmetric
@@ -309,7 +351,7 @@ template <int tg_mem_size>
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, m, &read_buf, &write_buf);
+  perform_fft(i, n, m, &read_buf, &write_buf);
 
   for (int t = 0; t < elems_per_thread_; t++) {
     out[batch_idx_out + i + t * m] = read_buf[i + t * m].x / n;
@@ -360,7 +402,7 @@ template <int tg_mem_size>
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, m, &read_buf, &write_buf);
+  perform_fft(i, n, m, &read_buf, &write_buf);
 
   for (int t = 0; t < elems_per_thread_; t++) {
     int index = i + t * m;
@@ -376,7 +418,7 @@ template <int tg_mem_size>
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, m, &read_buf, &write_buf);
+  perform_fft(i, n, m, &read_buf, &write_buf);
 
   float2 inv_factor = {1.0f / n, -1.0f / n};
   float2 inv_factor_overall = {1.0f / length, -1.0f / length};

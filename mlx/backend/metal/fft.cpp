@@ -147,10 +147,13 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
     return std::make_tuple(a, MTL::DataType::DataTypeBool, i);
   };
 
-  std::vector<MTLFC> func_consts = {make_bool(&inverse_, 0)};
+  bool power_of_2 = is_power_of_2(fft_size);
+
+  std::vector<MTLFC> func_consts = {
+      make_bool(&inverse_, 0), make_bool(&power_of_2, 1)};
 
   auto plan = plan_stockham_fft(n, supported_radices);
-  int index = 2;
+  int index = 3;
   // based on the max radix size used
   int elems_per_thread = 0;
   for (int i = 0; i < plan.size(); i++) {
@@ -160,7 +163,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       elems_per_thread = std::max(elems_per_thread, supported_radices[i]);
     }
   }
-  func_consts.push_back(make_int(&elems_per_thread, 1));
+  func_consts.push_back(make_int(&elems_per_thread, 2));
 
   int threads_per_fft = fft_size / elems_per_thread;
   int threadgroup_mem_size = next_power_of_2(n);
