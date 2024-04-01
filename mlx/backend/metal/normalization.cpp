@@ -355,7 +355,14 @@ void LayerNormVJP::eval_gpu(
     ReductionPlan plan(
         ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});
     strided_reduce_general_dispatch(
-        g, gb, "sum", plan, {0}, compute_encoder, d, s);
+        g_in_gx ? gx : (g_in_gw ? gw_temp : g),
+        gb,
+        "sum",
+        plan,
+        {0},
+        compute_encoder,
+        d,
+        s);
   }
 
   const int simd_size = 32;
