@@ -265,13 +265,7 @@ void Compiled::eval_cpu(
 
   // Figure out which kernel we are using
   auto& shape = outputs[0].shape();
-  bool contiguous = true;
-  for (auto& x : inputs) {
-    if ((!x.flags().row_contiguous || x.shape() != shape) && !is_scalar(x)) {
-      contiguous = false;
-      break;
-    }
-  }
+  bool contiguous = compiled_check_contiguity(inputs, shape);
 
   // Handle all broadcasting and collect function input arguments
   std::vector<void*> args;
@@ -344,28 +338,8 @@ void Compiled::eval_cpu(
     fn_ptr = compile(kernel_name, kernel.str());
   }
 
-  // Allocate space for the outputs possibly with input donation
-  {
-    int o = 0;
-    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
-      auto& in = inputs[i];
-      // Conditions for donation
-      // - Row contiguous
-      // - Donatable
-      // - Correct size
-      // - Not a constant
-      if (in.flags().row_contiguous && in.nbytes() == outputs[o].nbytes() &&
-          in.is_donatable() &&
-          constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
-        outputs[o].copy_shared_buffer(
-            in, outputs[o].strides(), in.flags(), in.data_size());
-        o++;
-      }
-    }
-    for (; o < outputs.size(); ++o) {
-      outputs[o].set_data(allocator::malloc_or_wait(outputs[o].nbytes()));
-    }
-  }
+  compiled_allocate_outputs(
+      inputs, outputs, inputs_, constant_ids_, contiguous, false);
 
   for (auto& x : outputs) {
     args.push_back(x.data<void>());
