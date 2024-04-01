@@ -9,6 +9,49 @@
 
 namespace mlx::core {
 
+using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
+
+#define MAX_SINGLE_FFT_SIZE 2048
+
+bool is_fast(int n, const std::vector<int>& supported_radices) {
+  for (auto radix : supported_radices) {
+    if (n % radix == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+int next_fast_n(int n, const std::vector<int>& supported_radices) {
+  while (n < MAX_SINGLE_FFT_SIZE) {
+    if (is_fast(n, supported_radices)) {
+      return n;
+    }
+    n += 1;
+  }
+  return MAX_SINGLE_FFT_SIZE;
+}
+
+// Plan the sequence of radices
+std::vector<int> plan_stockham_fft(
+    int n,
+    const std::vector<int>& supported_radices) {
+  // prefer larger radices since we do fewer expensive twiddles
+  std::vector<int> plan(supported_radices.size());
+  for (int i = 0; i < supported_radices.size(); i++) {
+    int radix = supported_radices[i];
+    while (n % radix == 0) {
+      plan[i] += 1;
+      n /= radix;
+      if (n == 1) {
+        return plan;
+      }
+    }
+  }
+  throw std::runtime_error(
+      "n should be decomposable into the supported radices.");
+}
+
 void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
@@ -21,7 +64,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int n = out.dtype() == float32 ? out.shape(axes_[0]) : in.shape(axes_[0]);
 
-  if (n > 2048 || n < 4) {
+  if (n > MAX_SINGLE_FFT_SIZE || n < 3) {
     throw std::runtime_error("GPU FFT is only implemented from 3 -> 2048");
   }
 
@@ -87,48 +130,74 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       out_strides,
       in_contiguous.flags());
 
-  size_t batch = in.size() / in.shape(axes_[0]);
+  const std::vector<int> supported_radices = {4, 3, 2};
+
   // Bluestein's algorithm transforms to an FFT of
   // the first power of 2 after (2 * n + 1)
-  int bluestein_n = next_power_of_2(2 * n - 1);
+  int bluestein_n = next_fast_n(2 * n - 1, supported_radices);
 
-  int m = is_power_of_2(n) ? n : bluestein_n;
+  int fft_size = is_fast(n, supported_radices) ? n : bluestein_n;
 
-  // We use n / 4 threads by default since radix-4
-  // is the largest single threaded radix butterfly
-  // we currently implement.
-  size_t m = n / 4;
+  size_t batch = in.size() / in.shape(axes_[0]);
+
+  auto make_int = [](int* a, int i) {
+    return std::make_tuple(a, MTL::DataType::DataTypeInt, i);
+  };
+  auto make_bool = [](bool* a, int i) {
+    return std::make_tuple(a, MTL::DataType::DataTypeBool, i);
+  };
+
+  std::vector<MTLFC> func_consts = {make_bool(&inverse_, 0)};
+
+  auto plan = plan_stockham_fft(n, supported_radices);
+  int index = 2;
+  // based on the max radix size used
+  int elems_per_thread = 0;
+  for (int i = 0; i < plan.size(); i++) {
+    func_consts.push_back(make_int(&plan[i], index));
+    index += 1;
+    if (plan[i] > 0) {
+      elems_per_thread = std::max(elems_per_thread, supported_radices[i]);
+    }
+  }
+  func_consts.push_back(make_int(&elems_per_thread, 1));
+
+  int threads_per_fft = fft_size / elems_per_thread;
+  int threadgroup_mem_size = next_power_of_2(n);
+
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
     std::ostringstream kname;
     std::string inv_string = inverse_ ? "true" : "false";
-    // std::cout << "inverse_ " << inv_string << std::endl;
-    if (!is_power_of_2(n)) {
-      kname << "bluestein_" << bluestein_n << "_inv_" << inv_string;
+    if (!is_fast(n, supported_radices)) {
+      kname << "bluestein_fft_" << next_power_of_2(bluestein_n);
     } else if (out.dtype() == float32) {
-      kname << "irfft_" << n;
+      kname << "irfft_" << threadgroup_mem_size;
     } else if (in.dtype() == float32) {
-      kname << "rfft_" << n;
+      kname << "rfft_" << threadgroup_mem_size;
     } else {
-      kname << "fft_" << n << "_inv_" << inv_string;
+      kname << "fft_" << threadgroup_mem_size;
     }
-    auto kernel = d.get_kernel(kname.str());
+    auto kernel = d.get_kernel(kname.str(), "mlx", "", func_consts);
 
     bool donated = in.data_shared_ptr() == nullptr;
     compute_encoder->setComputePipelineState(kernel);
     compute_encoder.set_input_array(in_contiguous, 0);
     compute_encoder.set_output_array(out, 1);
-    if (!is_power_of_2(n)) {
+    if (!is_fast(n, supported_radices)) {
       // Bluestein requires extra pre-computed inputs
       auto& w_q = inputs[1];
       auto& w_k = inputs[2];
       set_array_buffer(compute_encoder, w_q, 2);
       set_array_buffer(compute_encoder, w_k, 3);
       compute_encoder->setBytes(&n, sizeof(int), 4);
+      compute_encoder->setBytes(&bluestein_n, sizeof(int), 5);
+    } else {
+      compute_encoder->setBytes(&n, sizeof(int), 2);
     }
 
-    auto group_dims = MTL::Size(1, m, 1);
-    auto grid_dims = MTL::Size(batch, m, 1);
+    auto group_dims = MTL::Size(1, threads_per_fft, 1);
+    auto grid_dims = MTL::Size(batch, threads_per_fft, 1);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
   d.get_command_buffer(s.index)->addCompletedHandler(

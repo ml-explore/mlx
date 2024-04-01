@@ -344,7 +344,6 @@ MTL::Function* Device::get_function_(
   }
 
   mtl_func_consts->release();
-  desc->release();
 
   return mtl_function;
 }
