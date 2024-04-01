@@ -1210,6 +1210,23 @@ class TestArray(mlx_tests.MLXTestCase):
             np.array([1, 3]),
         )
 
+        check_slices(
+            np.zeros((3, 4, 5, 3)),
+            np.arange(2 * 4 * 3 * 3).reshape(2, 4, 3, 3),
+            np.array([2, 1]),
+            slice(None, None, None),
+            slice(None, None, 2),
+            slice(None, None, None),
+        )
+
+        check_slices(
+            np.zeros((3, 4, 5, 3)),
+            np.arange(2 * 4 * 3 * 3).reshape(2, 4, 3, 3),
+            np.array([2, 1]),
+            slice(None, None, None),
+            slice(None, None, 2),
+        )
+
     def test_array_at(self):
         a = mx.array(1)
         a = a.at[None].add(1)
