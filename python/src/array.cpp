@@ -162,14 +162,6 @@ PyScalarT validate_shape(
           shape,
           idx + 1,
           all_python_primitive_elements);
-    } else if (nb::isinstance<nb::bool_>(l)) {
-      t = pybool;
-    } else if (nb::isinstance<nb::int_>(l)) {
-      t = pyint;
-    } else if (nb::isinstance<nb::float_>(l)) {
-      t = pyfloat;
-    } else if (PyComplex_Check(l.ptr())) {
-      t = pycomplex;
     } else if (nb::isinstance<array>(l)) {
       all_python_primitive_elements = false;
       auto arr = nb::cast<array>(l);
@@ -184,10 +176,25 @@ PyScalarT validate_shape(
             "Initialization encountered non-uniform length.");
       }
     } else {
-      std::ostringstream msg;
-      msg << "Invalid type  " << nb::type_name(l.type()).c_str()
-          << " received in array initialization.";
-      throw std::invalid_argument(msg.str());
+      if (nb::isinstance<nb::bool_>(l)) {
+        t = pybool;
+      } else if (nb::isinstance<nb::int_>(l)) {
+        t = pyint;
+      } else if (nb::isinstance<nb::float_>(l)) {
+        t = pyfloat;
+      } else if (PyComplex_Check(l.ptr())) {
+        t = pycomplex;
+      } else {
+        std::ostringstream msg;
+        msg << "Invalid type  " << nb::type_name(l.type()).c_str()
+            << " received in array initialization.";
+        throw std::invalid_argument(msg.str());
+      }
+
+      if (idx + 1 != shape.size()) {
+        throw std::invalid_argument(
+            "Initialization encountered non-uniform length.");
+      }
     }
     type = std::max(type, t);
   }

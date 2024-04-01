@@ -391,7 +391,9 @@ class TestArray(mlx_tests.MLXTestCase):
         # shape check from `stack()`
         with self.assertRaises(ValueError) as e:
             mx.array([x, 1.0])
-        self.assertEqual(str(e.exception), "All arrays must have the same shape")
+        self.assertEqual(
+            str(e.exception), "Initialization encountered non-uniform length."
+        )
 
         # shape check from `validate_shape`
         with self.assertRaises(ValueError) as e:
