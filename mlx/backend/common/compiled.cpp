@@ -169,11 +169,12 @@ void compiled_allocate_outputs(
     for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
       auto& in = inputs[i];
       // Conditions for donation
-      // - Contiguous
-      // - Donatable
       // - Correct size
+      // - Not a scalar
+      // - Donatable
       // - Not a constant
-      if (in.flags().contiguous && !is_scalar(in) && in.is_donatable() &&
+      if (in.itemsize() == outputs[o].itemsize() && !is_scalar(in) &&
+          in.is_donatable() &&
           constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
         if (move_buffers) {
           outputs[o++].move_shared_buffer(in);
