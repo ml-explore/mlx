@@ -729,7 +729,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
           const device uint32_t * w_local = w + offset_row * N_w + offset_col;
           threadgroup T * Ws_local = Ws + offset_row * BN + offset_col * el_per_int;
 
-          if (y_row + offset_row < K) {
+          if (k + offset_row < K) {
             uint32_t wi = *w_local;
             T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
             T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
