@@ -38,10 +38,14 @@ void slow_conv_1D(
 
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const int iH = 1 + in_dilation[0] * (in.shape(1) - 1); // Input spatial dim
+  const int C = in.shape(2); // Input channels
   const int oH = out.shape(1); // Output spatial dim
   const int O = wt.shape(0); // Out channels
-  const int C = wt.shape(2); // In channels
   const int wH = wt.shape(1); // Weight spatial dim
+
+  const int groups = C / wt.shape(2);
+  const int C_per_group = wt.shape(2);
+  const int O_per_group = O / groups;
 
   const size_t in_stride_N = in.strides()[0];
   const size_t in_stride_H = in.strides()[1];
@@ -57,35 +61,36 @@ void slow_conv_1D(
 
   for (int n = 0; n < N; ++n) {
     for (int oh = 0; oh < oH; ++oh) {
-      for (int o = 0; o < O; ++o) {
-        const T* filter_wt_ptr = start_wt_ptr + o * wt_stride_O;
-        float r = 0.;
+      for (int g = 0; g < groups; ++g) {
+        for (int o = g * O_per_group; o < (g + 1) * O_per_group; ++o) {
+          const T* filter_wt_ptr = start_wt_ptr + o * wt_stride_O;
+          float r = 0.;
 
-        for (int wh = 0; wh < wH; ++wh) {
-          const T* wt_ptr = filter_wt_ptr + wh * wt_stride_H;
+          for (int wh = 0; wh < wH; ++wh) {
+            const T* wt_ptr = filter_wt_ptr + wh * wt_stride_H;
 
-          int wh_flip = flip ? (wH - wh - 1) : wh;
-          int ih = oh * wt_strides[0] - padding[0] + wh_flip * wt_dilation[0];
+            int wh_flip = flip ? (wH - wh - 1) : wh;
+            int ih = oh * wt_strides[0] - padding[0] + wh_flip * wt_dilation[0];
 
-          auto ih_div = std::div(ih, in_dilation[0]);
+            auto ih_div = std::div(ih, in_dilation[0]);
 
-          if (ih >= 0 && ih < iH && ih_div.rem == 0) {
-            for (int c = 0; c < C; ++c) {
-              r += static_cast<float>(
-                       in_ptr[ih_div.quot * in_stride_H + c * in_stride_C]) *
-                  static_cast<float>(wt_ptr[c * wt_stride_C]);
-            } // c
+            if (ih >= 0 && ih < iH && ih_div.rem == 0) {
+              for (int c = g * C_per_group; c < (g + 1) * C_per_group; ++c) {
+                r += static_cast<float>(
+                         in_ptr[ih_div.quot * in_stride_H + c * in_stride_C]) *
+                    static_cast<float>(wt_ptr[(c % C_per_group) * wt_stride_C]);
+              } // c
 
-          } // ih check
-        } // wh
+            } // ih check
+          } // wh
 
-        out_ptr[oh * out_stride_H + o * out_stride_O] = static_cast<T>(r);
-      } // o
+          out_ptr[oh * out_stride_H + o * out_stride_O] = static_cast<T>(r);
+        } // o
+      } // g
     } // oh
 
     in_ptr += in_stride_N;
     out_ptr += out_stride_N;
-
   } // n
 }
 
@@ -366,10 +371,14 @@ void explicit_gemm_conv_1D_cpu(
     const std::vector<int>& wt_dilation) {
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const int iH = in.shape(1); // Input spatial dim
+  const int C = in.shape(2); // Input channels
   const int oH = out.shape(1); // Output spatial dim
   const int O = wt.shape(0); // Out channels
-  const int C = wt.shape(2); // In channels
   const int wH = wt.shape(1); // Weight spatial dim
+
+  const int groups = C / wt.shape(2);
+  const int C_per_group = wt.shape(2);
+  const int O_per_group = O / groups;
 
   auto conv_dtype = float32;
 
@@ -394,13 +403,13 @@ void explicit_gemm_conv_1D_cpu(
   copy_inplace(in, in_padded_slice, CopyType::GeneralGeneral);
 
   // Make strided view
-  std::vector<int> strided_shape = {N, oH, wH, C};
+  std::vector<int> strided_shape = {N, oH, C, wH};
 
   std::vector<size_t> strided_strides = {
       in_padded.strides()[0],
       in_padded.strides()[1] * wt_strides[0],
-      in_padded.strides()[1],
-      in_padded.strides()[2]};
+      in_padded.strides()[2],
+      in_padded.strides()[1]};
   auto flags = in_padded.flags();
 
   array in_strided_view(strided_shape, in_padded.dtype(), nullptr, {});
@@ -408,47 +417,66 @@ void explicit_gemm_conv_1D_cpu(
       in_padded, strided_strides, flags, in_strided_view.size(), 0);
 
   // Materialize strided view
-  std::vector<int> strided_reshape = {N * oH, wH * C};
+  std::vector<int> strided_reshape = {N * oH, C * wH};
   array in_strided(strided_reshape, in_strided_view.dtype(), nullptr, {});
   copy(in_strided_view, in_strided, CopyType::General);
 
-  // Check wt dtype and prepare
-  auto gemm_wt = wt;
+  // Transpose kernels weights (O, wH, C_per_group) -> (O, C_per_group, wH) to
+  // align with the input.
+  array wt_transpose(
+      {wt.shape(0), wt.shape(2), wt.shape(1)}, wt.dtype(), nullptr, {});
+  wt_transpose.copy_shared_buffer(
+      wt,
+      {wt.strides(0), wt.strides(2), wt.strides(1)},
+      {0, 0, 0}, // Flags
+      wt.size(),
+      0);
+  auto gemm_wt = array(wt_transpose.shape(), float32, nullptr, {});
+
+  // Ensure contiguity
+  copy(wt_transpose, gemm_wt, CopyType::General);
+
+  const float* in_ptr = in_strided.data<float>();
+  const float* wt_ptr = gemm_wt.data<float>();
+
   auto gemm_out = out;
-
-  if (wt.dtype() != float32 || !wt.flags().row_contiguous) {
-    auto ctype =
-        wt.flags().row_contiguous ? CopyType::Vector : CopyType::General;
-    gemm_wt = array(wt.shape(), float32, nullptr, {});
-    copy(wt, gemm_wt, ctype);
-  }
-
-  if (out.dtype() != float32) {
-    gemm_out = array(out.shape(), float32, nullptr, {});
+  if (out.dtype() != float32 || groups > 1) {
+    gemm_out = array({N, oH, O_per_group}, float32, nullptr, {});
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
   }
 
-  // Perform gemm
-  cblas_sgemm(
-      CblasRowMajor,
-      CblasNoTrans, // no trans A
-      CblasTrans, // transB
-      strided_reshape[0], // M
-      O, // N
-      strided_reshape[1], // K
-      1.0f, // alpha
-      in_strided.data<float>(),
-      strided_reshape[1], // lda
-      gemm_wt.data<float>(),
-      strided_reshape[1], // ldb
-      0.0f, // beta
-      gemm_out.data<float>(),
-      O // ldc
-  );
+  for (int g = 0; g < groups; ++g) {
+    // Perform gemm
+    cblas_sgemm(
+        CblasRowMajor,
+        CblasNoTrans, // no trans A
+        CblasTrans, // transB
+        strided_reshape[0], // M
+        O_per_group, // N
+        C_per_group * wH, // K
+        1.0f, // alpha
+        in_ptr + (g * C_per_group * wH), // input group
+        wH * C, // lda
+        wt_ptr + (g * O_per_group * C_per_group * wH), // filters group
+        wH * C_per_group, // ldb
+        0.0f, // beta
+        gemm_out.data<float>(), // output group
+        O_per_group // ldc
+    );
 
-  // Copy results if needed
-  if (out.dtype() != float32) {
-    copy(gemm_out, out, CopyType::Vector);
+    // Copy results if needed
+    if (out.dtype() != float32 || groups > 1) {
+      array out_slice(gemm_out.shape(), out.dtype(), nullptr, {});
+      out_slice.copy_shared_buffer(
+          out,
+          out.strides(),
+          out.flags(),
+          gemm_out.size(),
+          g * O_per_group /* offset */);
+
+      // Copy the result of one grouped convolution into the slice.
+      copy_inplace(gemm_out, out_slice, CopyType::GeneralGeneral);
+    }
   }
 }
 
