@@ -17,40 +17,40 @@ inline T softmax_exp(T x) {
   return fast::exp(x);
 }
 
-template <typename T, int N_READS = SOFTMAX_N_READS>
+template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
 [[kernel]] void softmax_single_row(
     const device T* in,
     device T* out,
     constant int& axis_size,
-    threadgroup T* local_max [[threadgroup(0)]],
-    threadgroup T* local_normalizer [[threadgroup(1)]],
+    threadgroup AccT* local_max [[threadgroup(0)]],
+    threadgroup AccT* local_normalizer [[threadgroup(1)]],
     uint gid [[threadgroup_position_in_grid]],
     uint _lid [[thread_position_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   int lid = _lid;
 
-  T ld[N_READS];
+  AccT ld[N_READS];
 
   in += gid * axis_size + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i=0; i<N_READS; i++) {
-        ld[i] = in[i];
+        ld[i] = AccT(in[i]);
     }
   } else {
       for (int i = 0; i < N_READS; i++) {
         ld[i] =
-            ((lid * N_READS + i) < axis_size) ? in[i] : T(Limits<T>::finite_min);
+            ((lid * N_READS + i) < axis_size) ? AccT(in[i]) : Limits<AccT>::finite_min;
       }
   }
   if (simd_group_id == 0) {
-    local_max[simd_lane_id] = Limits<T>::finite_min;
+    local_max[simd_lane_id] = Limits<AccT>::finite_min;
     local_normalizer[simd_lane_id] = 0;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
   // Get the max
-  T maxval = Limits<T>::finite_min;
+  AccT maxval = Limits<AccT>::finite_min;
   for (int i = 0; i < N_READS; i++) {
     maxval = (maxval < ld[i]) ? ld[i] : maxval;
   }
@@ -69,9 +69,9 @@ template <typename T, int N_READS = SOFTMAX_N_READS>
   maxval = local_max[0];
 
   // Compute exp(x_i - maxval) and store the partial sums in local_normalizer
-  T normalizer = 0;
+  AccT normalizer = 0;
   for (int i = 0; i < N_READS; i++) {
-    T exp_x = softmax_exp(ld[i] - maxval);
+    AccT exp_x = softmax_exp(ld[i] - maxval);
     ld[i] = exp_x;
     normalizer += exp_x;
   }
@@ -93,24 +93,24 @@ template <typename T, int N_READS = SOFTMAX_N_READS>
   out += gid * axis_size + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i=0; i<N_READS; i++) {
-        out[i] = ld[i] * normalizer;
+        out[i] = T(ld[i] * normalizer);
     }
   } else {
       for (int i = 0; i < N_READS; i++) {
         if ((lid * N_READS + i) < axis_size) {
-          out[i] = ld[i] * normalizer;
+          out[i] = T(ld[i] * normalizer);
         }
       }
   }
 }
 
-template <typename T, int N_READS = SOFTMAX_N_READS>
+template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
 [[kernel]] void softmax_looped(
     const device T* in,
     device T* out,
     constant int& axis_size,
-    threadgroup T* local_max [[threadgroup(0)]],
-    threadgroup T* local_normalizer [[threadgroup(1)]],
+    threadgroup AccT* local_max [[threadgroup(0)]],
+    threadgroup AccT* local_normalizer [[threadgroup(1)]],
     uint gid [[threadgroup_position_in_grid]],
     uint lid [[thread_position_in_threadgroup]],
     uint lsize [[threads_per_threadgroup]],
@@ -119,21 +119,21 @@ template <typename T, int N_READS = SOFTMAX_N_READS>
   in += gid * axis_size;
 
   // Get the max and the normalizer in one go
-  T prevmax;
-  T maxval = Limits<T>::finite_min;
-  T normalizer = 0;
+  AccT prevmax;
+  AccT maxval = Limits<AccT>::finite_min;
+  AccT normalizer = 0;
   for (int r = 0; r < static_cast<int>(ceildiv(axis_size, N_READS * lsize));
        r++) {
     int offset = r * lsize * N_READS + lid * N_READS;
-    T vals[N_READS];
+    AccT vals[N_READS];
     if (offset + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {
-        vals[i] = in[offset + i];
+        vals[i] = AccT(in[offset + i]);
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
         vals[i] =
-            (offset + i < axis_size) ? in[offset + i] : T(Limits<T>::finite_min);
+            (offset + i < axis_size) ? AccT(in[offset + i]) : Limits<AccT>::finite_min;
       }
     }
     prevmax = maxval;
@@ -180,19 +180,20 @@ template <typename T, int N_READS = SOFTMAX_N_READS>
     int offset = r * lsize * N_READS + lid * N_READS;
     if (offset + N_READS <= axis_size) {
       for (int i=0; i<N_READS; i++) {
-        out[offset + i] = softmax_exp(in[offset + i] - maxval) * normalizer;
+        out[offset + i] = T(softmax_exp(in[offset + i] - maxval) * normalizer);
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
         if (offset + i < axis_size) {
-          out[offset + i] = softmax_exp(in[offset + i] - maxval) * normalizer;
+          out[offset + i] = T(softmax_exp(in[offset + i] - maxval) * normalizer);
         }
       }
     }
   }
 }
 
-#define instantiate_softmax_single_row(name, itype)           \
+// clang-format off
+#define instantiate_softmax(name, itype)  \
   template [[host_name("softmax_" #name)]] [[kernel]] void    \
   softmax_single_row<itype>(                                  \
       const device itype* in,                                 \
@@ -203,9 +204,7 @@ template <typename T, int N_READS = SOFTMAX_N_READS>
       uint gid [[thread_position_in_grid]],                   \
       uint _lid [[thread_position_in_threadgroup]],           \
       uint simd_lane_id [[thread_index_in_simdgroup]],        \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-#define instantiate_softmax_looped(name, itype)                   \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]]); \
   template [[host_name("softmax_looped_" #name)]] [[kernel]] void \
   softmax_looped<itype>(                                          \
       const device itype* in,                                     \
@@ -219,10 +218,34 @@ template <typename T, int N_READS = SOFTMAX_N_READS>
       uint simd_lane_id [[thread_index_in_simdgroup]],            \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
-#define instantiate_softmax(name, itype)      \
-  instantiate_softmax_single_row(name, itype) \
-      instantiate_softmax_looped(name, itype)
+#define instantiate_softmax_precise(name, itype)                   \
+  template [[host_name("softmax_precise_" #name)]] [[kernel]] void \
+  softmax_single_row<itype, float>(                                \
+      const device itype* in,                                      \
+      device itype* out,                                           \
+      constant int& axis_size,                                     \
+      threadgroup float* local_max [[threadgroup(0)]],             \
+      threadgroup float* local_normalizer [[threadgroup(1)]],      \
+      uint gid [[thread_position_in_grid]],                        \
+      uint _lid [[thread_position_in_threadgroup]],                \
+      uint simd_lane_id [[thread_index_in_simdgroup]],             \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]]);      \
+  template [[host_name("softmax_looped_precise_" #name)]] [[kernel]] void \
+  softmax_looped<itype, float>(                                           \
+      const device itype* in,                                             \
+      device itype* out,                                                  \
+      constant int& axis_size,                                            \
+      threadgroup float* local_max [[threadgroup(0)]],                    \
+      threadgroup float* local_normalizer [[threadgroup(1)]],             \
+      uint gid [[threadgroup_position_in_grid]],                          \
+      uint lid [[thread_position_in_threadgroup]],                        \
+      uint lsize [[threads_per_threadgroup]],                             \
+      uint simd_lane_id [[thread_index_in_simdgroup]],                    \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
 instantiate_softmax(float32, float)
 instantiate_softmax(float16, half)
 instantiate_softmax(bfloat16, bfloat16_t)
+instantiate_softmax_precise(float16, half)
+instantiate_softmax_precise(bfloat16, bfloat16_t)
+// clang-format on

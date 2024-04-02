@@ -550,10 +550,7 @@ array scaled_dot_product_attention(
     if (needs_mask) {
       scores = add(scores, inputs[3], s);
     }
-    scores = astype(
-        softmax(astype(scores, float32, s), std::vector<int>{-1}, s),
-        final_type,
-        s);
+    scores = softmax(scores, std::vector<int>{-1}, true, s);
     auto out = matmul(scores, v, s);
     if (n_repeats > 1) {
       out = reshape(out, {B, n_q_heads, L, -1}, s);

@@ -1430,6 +1430,12 @@ class TestOps(mlx_tests.MLXTestCase):
         out = mx.softmax(y[:, 0:2], axis=-1)
         self.assertAlmostEqual(out.sum().item(), 8.0, 5)
 
+        # Precise
+        a = (10 * mx.random.uniform(shape=(1024,))).astype(mx.float16)
+        out_expect = mx.softmax(a.astype(mx.float32)).astype(mx.float16)
+        out = mx.softmax(a, axis=-1, precise=True)
+        self.assertTrue(mx.allclose(out_expect, out))
+
     def test_concatenate(self):
         a_npy = np.random.randn(32, 32, 32)
         b_npy = np.random.randn(32, 32, 32)

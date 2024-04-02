@@ -1702,7 +1702,8 @@ class SliceUpdate : public UnaryPrimitive {
 
 class Softmax : public UnaryPrimitive {
  public:
-  explicit Softmax(Stream stream) : UnaryPrimitive(stream){};
+  explicit Softmax(Stream stream, bool precise)
+      : UnaryPrimitive(stream), precise_(precise){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1715,6 +1716,7 @@ class Softmax : public UnaryPrimitive {
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
+  bool precise_;
 };
 
 class Sort : public UnaryPrimitive {

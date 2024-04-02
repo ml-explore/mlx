@@ -2430,12 +2430,13 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "softmax",
-      [](const array& a, const IntOrVec& axis, StreamOrDevice s) {
-        return softmax(a, get_reduce_axes(axis, a.ndim()), s);
+      [](const array& a, const IntOrVec& axis, bool precise, StreamOrDevice s) {
+        return softmax(a, get_reduce_axes(axis, a.ndim()), precise, s);
       },
       nb::arg(),
       "axis"_a = nb::none(),
       nb::kw_only(),
+      "precise"_a = false,
       "stream"_a = nb::none(),
       nb::sig(
           "def softmax(a: array, /, axis: Union[None, int, Sequence[int]] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
