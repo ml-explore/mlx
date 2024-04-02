@@ -106,6 +106,7 @@ void gguf_load_quantized(
   }
 
   std::string name(tensor.name, tensor.namelen);
+
   std::vector<int> shape = get_shape(tensor);
   const uint64_t weights_per_block = 32;
   if (shape[shape.size() - 1] % weights_per_block != 0) {
@@ -136,7 +137,7 @@ void gguf_load_quantized(
     extract_q8_0_data(tensor, weights, scales, biases);
   }
 
-  a.emplace(std::move(name), std::move(weights));
+  a.emplace(name, std::move(weights));
 
   auto check_insert = [](const auto& inserted) {
     if (!inserted.second) {

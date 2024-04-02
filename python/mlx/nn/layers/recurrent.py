@@ -186,9 +186,11 @@ class GRU(Module):
                 n = n + r * h_proj_n
             n = mx.tanh(n)
 
-            hidden = (1 - z) * n
             if hidden is not None:
-                hidden = hidden + z * hidden
+                hidden = (1 - z) * n + z * hidden
+            else:
+                hidden = (1 - z) * n
+
             all_hidden.append(hidden)
 
         return mx.stack(all_hidden, axis=-2)
