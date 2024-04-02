@@ -691,6 +691,19 @@ class TestCompile(mlx_tests.MLXTestCase):
         out = mx.compile(fn)(mx.array(10.0), mx.array(20.0))
         self.assertEqual(out.item(), 10.0)
 
+    def test_compile_multi_output(self):
+        def fn(x):
+            ys = [x]
+            for i in range(5):
+                ys.append(ys[-1] + x)
+            return ys, mx.sum(ys[-1])
+
+        x = mx.ones(1, dtype=mx.int32)
+        y1 = mx.compile(fn)(x)[1]
+        y2 = fn(x)[1]
+        self.assertEqual(y1.item(), y2.item())
+        self.assertEqual(y1.item(), 6)
+
 
 if __name__ == "__main__":
     unittest.main()
