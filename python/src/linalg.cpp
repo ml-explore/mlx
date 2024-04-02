@@ -290,4 +290,25 @@ void init_linalg(nb::module_& parent_module) {
           that ``dot(L, L.T) = a``.  If ``upper = True``, it returns an upper triangular
           ``U`` matrix such that ``dot(U.T, U) = a``.
       )pbdoc");
+  m.def(
+      "pinv",
+      &pinv,
+      "a"_a,
+      py::kw_only(),
+      "stream"_a = none,
+      R"pbdoc(
+        pinv(a: array, *, stream: Union[None, Stream, Device] = None) -> array
+
+        Compute the Moore-Penrose pseudo inverse of a matrix.
+
+        // TODO: Description details
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: ``aplus`` such that ``a @ aplus @ a = a``
+      )pbdoc");
 }
