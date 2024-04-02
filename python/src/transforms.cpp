@@ -269,9 +269,11 @@ auto py_vmap(
                                 const nb::object& axes,
                                 bool output_axes) {
       std::vector<int> flat_axes;
+      bool encountered_tuple = false;
       tree_visit(
           {tree, axes},
-          [&flat_axes, output_axes](const std::vector<nb::object>& inputs) {
+          [&flat_axes, &encountered_tuple, output_axes](
+              const std::vector<nb::object>& inputs) {
             if (nb::isinstance<array>(inputs[0])) {
               if (inputs[1].is_none()) {
                 flat_axes.push_back(-1);
@@ -289,6 +291,27 @@ auto py_vmap(
                   throw std::invalid_argument(msg.str());
                 }
                 flat_axes.push_back(axis);
+              } else if (nb::isinstance<nb::tuple>(inputs[1])) {
+                encountered_tuple = true;
+                auto l = nb::cast<nb::tuple>(inputs[1]);
+                if (l.size() == 1 && nb::isinstance<nb::int_>(l[0])) {
+                  int axis = nb::cast<int>(nb::cast<nb::int_>(l[0]));
+                  const array& x = nb::cast<array>(inputs[0]);
+                  if (axis < 0) {
+                    axis += x.ndim() + output_axes;
+                  }
+                  if (axis < 0 || axis >= (x.ndim() + output_axes)) {
+                    std::ostringstream msg;
+                    msg << "[vmap] Invalid" << (output_axes ? " output " : " ")
+                        << "vectorization axis " << axis
+                        << " for array with shape " << x.shape();
+                    throw std::invalid_argument(msg.str());
+                  }
+                  flat_axes.push_back(axis);
+                } else {
+                  throw std::invalid_argument(
+                      "[vmap] axis must be int or None.");
+                }
               } else {
                 throw std::invalid_argument("[vmap] axis must be int or None.");
               }
@@ -297,12 +320,16 @@ auto py_vmap(
                   "[vmap] The arguments should contain only arrays");
             }
           });
+      if (encountered_tuple && !nb::isinstance<array>(tree)) {
+        throw std::invalid_argument("[vmap] axis must be int or None.");
+      }
       return flat_axes;
     };
 
     // Inputs must be array or tree of arrays
     auto inputs = tree_flatten(args, true);
-    auto flat_in_axes = axes_to_flat_tree(args, in_axes, false);
+    auto flat_in_axes =
+        axes_to_flat_tree((args.size() == 1) ? args[0] : args, in_axes, false);
 
     // py_value_out will hold the output of the python function in order to be
     // able to reconstruct the python tree of extra return values

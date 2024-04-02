@@ -122,15 +122,12 @@ class TestVmap(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(out, my_fun(tree)))
 
         with self.assertRaises(ValueError):
-            mx.vmap(my_fun, in_axes={"a": 0, "b": 0}, out_axes=0)(tree)
-
-        with self.assertRaises(ValueError):
             mx.vmap(my_fun, in_axes={"a": 0, "b": ((0, 0), 0)}, out_axes=0)(tree)
 
-        out = mx.vmap(my_fun, in_axes=({"a": 0, "b": 0},), out_axes=0)(tree)
+        out = mx.vmap(my_fun, in_axes={"a": 0, "b": 0}, out_axes=0)(tree)
         self.assertTrue(mx.array_equal(out, my_fun(tree)))
 
-        out = mx.vmap(my_fun, in_axes=({"a": 0, "b": (0, 0)},), out_axes=0)(tree)
+        out = mx.vmap(my_fun, in_axes={"a": 0, "b": (0, 0)}, out_axes=0)(tree)
         self.assertTrue(mx.array_equal(out, my_fun(tree)))
 
         tree = {
@@ -140,7 +137,7 @@ class TestVmap(mlx_tests.MLXTestCase):
                 mx.random.uniform(shape=(4, 2)),
             ),
         }
-        out = mx.vmap(my_fun, in_axes=({"a": 0, "b": (1, 1)},), out_axes=0)(tree)
+        out = mx.vmap(my_fun, in_axes={"a": 0, "b": (1, 1)}, out_axes=0)(tree)
         expected = (tree["a"] + tree["b"][0].T) * tree["b"][1].T
         self.assertTrue(mx.array_equal(out, expected))
 
