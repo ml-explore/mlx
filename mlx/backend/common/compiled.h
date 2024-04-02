@@ -53,4 +53,18 @@ inline bool is_scalar(const array& x) {
   return x.ndim() == 0;
 }
 
+// Check if we can use a contiguous operation given inputs and the output shape
+bool compiled_check_contiguity(
+    const std::vector<array>& inputs,
+    const std::vector<int>& shape);
+
+// Allocate space for the outputs possibly with input donation
+void compiled_allocate_outputs(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs,
+    const std::vector<array>& inputs_,
+    const std::unordered_set<uintptr_t>& constant_ids_,
+    bool contiguous,
+    bool move_buffers = false);
+
 } // namespace mlx::core

@@ -126,4 +126,102 @@ std::string build_lib_name(
   return os.str();
 }
 
+bool compiled_check_contiguity(
+    const std::vector<array>& inputs,
+    const std::vector<int>& shape) {
+  bool contiguous = true;
+  bool all_contig = true;
+  bool all_row_contig = true;
+  bool all_col_contig = true;
+  int non_scalar_inputs = 0;
+  for (const auto& x : inputs) {
+    if (is_scalar(x)) {
+      continue;
+    }
+    non_scalar_inputs++;
+    bool shape_eq = x.shape() == shape;
+    all_contig &= (x.flags().contiguous && shape_eq);
+    all_row_contig &= (x.flags().row_contiguous && shape_eq);
+    all_col_contig &= (x.flags().col_contiguous && shape_eq);
+  }
+  if (non_scalar_inputs > 1 && !all_row_contig && !all_col_contig) {
+    contiguous = false;
+  } else if (non_scalar_inputs == 1 && !all_contig) {
+    contiguous = false;
+  } else if (non_scalar_inputs == 0 && !shape.empty()) {
+    contiguous = false;
+  }
+  return contiguous;
+}
+
+void compiled_allocate_outputs(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs,
+    const std::vector<array>& inputs_,
+    const std::unordered_set<uintptr_t>& constant_ids_,
+    bool contiguous,
+    bool move_buffers /* = false */) {
+  if (contiguous) {
+    int o = 0;
+    std::vector<size_t> strides;
+    size_t data_size;
+    array::Flags flags;
+    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
+      auto& in = inputs[i];
+      // Conditions for donation
+      // - Correct size
+      // - Not a scalar
+      // - Donatable
+      // - Not a constant
+      if (in.itemsize() == outputs[o].itemsize() && !is_scalar(in) &&
+          in.is_donatable() &&
+          constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
+        if (move_buffers) {
+          outputs[o++].move_shared_buffer(in);
+        } else {
+          outputs[o++].copy_shared_buffer(in);
+        }
+      }
+      // Get representative input flags to properly set non-donated outputs
+      if (strides.empty() && in.size() == outputs[0].size()) {
+        strides = in.strides();
+        flags = in.flags();
+        data_size = in.data_size();
+      }
+    }
+    for (; o < outputs.size(); ++o) {
+      outputs[o].set_data(
+          allocator::malloc_or_wait(data_size * outputs[o].itemsize()),
+          data_size,
+          strides,
+          flags);
+    }
+  } else {
+    int o = 0;
+    for (int i = 0; i < inputs.size() && o < outputs.size(); ++i) {
+      auto& in = inputs[i];
+      // Conditions for donation
+      // - Row contiguous
+      // - Donatable
+      // - Correct size
+      // - Not a constant
+      if (in.flags().row_contiguous && in.nbytes() == outputs[o].nbytes() &&
+          in.is_donatable() &&
+          constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
+        if (move_buffers) {
+          outputs[o].move_shared_buffer(
+              in, outputs[o].strides(), in.flags(), in.data_size());
+        } else {
+          outputs[o].copy_shared_buffer(
+              in, outputs[o].strides(), in.flags(), in.data_size());
+        }
+        o++;
+      }
+    }
+    for (; o < outputs.size(); ++o) {
+      outputs[o].set_data(allocator::malloc_or_wait(outputs[o].nbytes()));
+    }
+  }
+}
+
 } // namespace mlx::core
