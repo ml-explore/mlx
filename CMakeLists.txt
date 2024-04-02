@@ -164,11 +164,11 @@ target_include_directories(
 if (MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
   find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
-  execute_process(
-    COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-    OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE NB_DIR)
-  list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
-  find_package(nanobind CONFIG REQUIRED)
+  FetchContent_Declare(nanobind
+    GIT_REPOSITORY https://github.com/wjakob/nanobind.git
+    GIT_TAG        4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
+    )
+  FetchContent_MakeAvailable(nanobind)
   add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/python/src)
 endif()
 
