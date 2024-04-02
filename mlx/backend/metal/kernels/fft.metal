@@ -141,6 +141,49 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   write_buf[j + 3*p] = y_3;
 }
 
+// void radix5(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
+//   float2 x_0 = read_buf[i];
+//   float2 x_1 = read_buf[i + m];
+//   float2 x_2 = read_buf[i + 2*m];
+//   float2 x_3 = read_buf[i + 3*m];
+//   float2 x_4 = read_buf[i + 4*m];
+
+//   // We use faster bit shifting ops when n is a power of 2
+//   int k = i % p;
+
+//   float2 twiddle = get_twiddle(k, 5*p);
+//   // e^a * e^b = e^(a + b)
+//   float2 twiddle_2 = complex_mul(twiddle, twiddle);
+//   float2 twiddle_3 = complex_mul(twiddle, twiddle_2);
+//   float2 twiddle_4 = complex_mul(twiddle, twiddle_3);
+
+//   x_1 = complex_mul(x_1, twiddle);
+//   x_2 = complex_mul(x_2, twiddle_2);
+//   x_3 = complex_mul(x_3, twiddle_3);
+//   x_4 = complex_mul(x_3, twiddle_4);
+
+//   float2 minus_i = {0, -1};
+
+//   // Hard coded twiddle factors for DFT4
+//   float2 z_0 = x_0 + x_2;
+//   float2 z_1 = x_0 - x_2;
+//   float2 z_2 = x_1 + x_3;
+//   float2 z_3 = complex_mul(x_1 - x_3, minus_i);
+
+//   float2 y_0 = z_0 + z_2;
+//   float2 y_1 = z_1 + z_3;
+//   float2 y_2 = z_0 - z_2;
+//   float2 y_3 = z_1 - z_3;
+
+//   int j = (i / p) * 4 * p + k;
+
+//   write_buf[j] = y_0;
+//   write_buf[j + p] = y_1;
+//   write_buf[j + 2*p] = y_2;
+//   write_buf[j + 3*p] = y_3;
+//   write_buf[j + 4*p] = y_4;
+// }
+
 void stockham_switch(threadgroup float2** read_buf, threadgroup float2** write_buf) {
     threadgroup float2* tmp = *write_buf;
     *write_buf = *read_buf;
@@ -225,49 +268,50 @@ template <int tg_mem_size>
     const device float2* in [[buffer(0)]],
     device float2* out [[buffer(1)]],
     constant const int& n,
+    constant const int& batch_size,
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 threads_per_grid [[threads_per_grid]]) {
 
-  // Index of the DFT in batch
-  int batch_idx = thread_position_in_grid.x * n;
-  // The index in the DFT we're working on
-  int i = thread_position_in_grid.y;
-  // The number of the threads we're using for each DFT
-  int m = threads_per_grid.y;
+  int fft_idx = thread_position_in_grid.z;
+  int tg_idx = thread_position_in_grid.y * n;
+  int batch_idx = thread_position_in_grid.x * threads_per_grid.y * n + tg_idx;
 
-  // Pick the closest shared memory size that we degine
+  // The number of the threads we're using for each DFT
+  int m = threads_per_grid.z;
+
+  // the thread group memory will be too big
   threadgroup float2 shared_in[tg_mem_size];
   threadgroup float2 shared_out[tg_mem_size];
-  threadgroup float2* read_buf = shared_in;
-  threadgroup float2* write_buf = shared_out;
+  threadgroup float2* read_buf = &shared_in[tg_idx];
+  threadgroup float2* write_buf = &shared_out[tg_idx];
+
+  // Account for possible extra threadgroups
+  int overall_batch = thread_position_in_grid.x * threads_per_grid.y + thread_position_in_grid.y;
+  if (overall_batch >= batch_size) {
+    return;
+  }
 
   // Copy input into shared memory
   for (int t = 0; t < elems_per_thread_; t++) {
-    read_buf[i + t * m] = in[batch_idx + i + t * m];
-  }
-
-  // ifft(x) = (1/n)conj(fft(conj(x)))
-  if (inv_) {
-    for (int t = 0; t < elems_per_thread_; t++) {
-      read_buf[i + t * m].y = -read_buf[i + t * m].y;
+    int index = fft_idx + t * m;
+    read_buf[index] = in[batch_idx + index];
+    if (inv_) {
+      read_buf[index].y = -read_buf[index].y;
     }
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, n, m, &read_buf, &write_buf);
+  perform_fft(fft_idx, n, m, &read_buf, &write_buf);
 
-  if (inv_) {
-    float2 inv_factor = {1.0f / n, -1.0f / n};
-    for (int t = 0; t < elems_per_thread_; t++) {
-      read_buf[i + t * m] *= inv_factor;
-    }
-  }
-
+  float2 inv_factor = {1.0f / n, -1.0f / n};
   for (int t = 0; t < elems_per_thread_; t++) {
-    out[batch_idx + i + t * m] = read_buf[i + t * m];
+    int index = fft_idx + t * m;
+    if (inv_) {
+      read_buf[index] *= inv_factor;
+    }
+    out[batch_idx + index] = read_buf[index];
   }
-
 }
 
 template <int tg_mem_size>
@@ -277,6 +321,11 @@ template <int tg_mem_size>
     constant const int& n,
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 threads_per_grid [[threads_per_grid]]) {
+
+
+  // perform two at once
+  // read two sequences from the input
+  // this does mean we need
 
   int batch_idx = thread_position_in_grid.x * n;
   int batch_idx_out = thread_position_in_grid.x * ((n/2) + 1);
@@ -369,6 +418,7 @@ template <int tg_mem_size>
     const device float2* w_k [[buffer(3)]],
     constant const int& length,
     constant const int& n,
+    constant const int& batch_size,
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 threads_per_grid [[threads_per_grid]]) {
   // Computes arbitrary length FFTs with Bluestein's algorithm
@@ -379,35 +429,44 @@ template <int tg_mem_size>
   // w_k = np.exp(-1j * np.pi / n * (np.arange(-n + 1, n) ** 2))
   // w_q = np.fft.fft(1/w_k[-n:])
 
-  int batch_idx = thread_position_in_grid.x * length;
-  int i = thread_position_in_grid.y;
-  int m = threads_per_grid.y;
+  int fft_idx = thread_position_in_grid.z;
+  int tg_idx = thread_position_in_grid.y * n;
+  int batch_idx = thread_position_in_grid.x * threads_per_grid.y * length + thread_position_in_grid.y * length;
+
+  // Is this right? Should be if it's 9  3/
+  int m = threads_per_grid.z;
 
   threadgroup float2 shared_in[tg_mem_size];
   threadgroup float2 shared_out[tg_mem_size];
-  threadgroup float2* read_buf = shared_in;
-  threadgroup float2* write_buf = shared_out;
+  threadgroup float2* read_buf = &shared_in[tg_idx];
+  threadgroup float2* write_buf = &shared_out[tg_idx];
+
+  // Account for possible extra threadgroups
+  int overall_batch = thread_position_in_grid.x * threads_per_grid.y + thread_position_in_grid.y;
+  if (overall_batch >= batch_size) {
+    return;
+  }
 
   // load input into shared memory
   for (int t = 0; t < elems_per_thread_; t++) {
-    int index = i + t * m;
+    int index = fft_idx + t * m;
     if (index < length) {
       float2 elem = in[batch_idx + index];
       if (inv_) {
         elem.y = -elem.y;
       }
-      shared_in[index] = complex_mul(elem, w_k[index]);
+      read_buf[index] = complex_mul(elem, w_k[index]);
     } else {
-      shared_in[index] = 0.0;
+      read_buf[index] = 0.0;
     }
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, n, m, &read_buf, &write_buf);
+  perform_fft(fft_idx, n, m, &read_buf, &write_buf);
 
   for (int t = 0; t < elems_per_thread_; t++) {
-    int index = i + t * m;
+    int index = fft_idx + t * m;
     read_buf[index] = complex_mul(read_buf[index], w_q[index]);
   }
 
@@ -415,18 +474,18 @@ template <int tg_mem_size>
 
   // ifft
   for (int t = 0; t < elems_per_thread_; t++) {
-    read_buf[i + t * m].y = -read_buf[i + t * m].y;
+    read_buf[fft_idx + t * m].y = -read_buf[fft_idx + t * m].y;
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, n, m, &read_buf, &write_buf);
+  perform_fft(fft_idx, n, m, &read_buf, &write_buf);
 
   float2 inv_factor = {1.0f / n, -1.0f / n};
   float2 inv_factor_overall = {1.0f / length, -1.0f / length};
 
   for (int t = 0; t < elems_per_thread_; t++) {
-    int index = i + t * m;
+    int index = fft_idx + t * m;
     if (index < length) {
       float2 elem  = read_buf[index + length - 1] * inv_factor;
       elem = complex_mul(elem, w_k[index]);
@@ -445,6 +504,7 @@ template <int tg_mem_size>
       const device float2* in [[buffer(0)]], \
       device float2* out [[buffer(1)]], \
     constant const int& n, \
+    constant const int& batch_size, \
     uint3 thread_position_in_grid [[thread_position_in_grid]], \
     uint3 threads_per_grid [[threads_per_grid]]);
 
@@ -475,6 +535,7 @@ template <int tg_mem_size>
       const device float2* w_k [[buffer(2)]], \
     constant const int& length, \
     constant const int& n, \
+    constant const int& batch_size, \
     uint3 thread_position_in_grid [[thread_position_in_grid]], \
     uint3 threads_per_grid [[threads_per_grid]]);
 

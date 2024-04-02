@@ -58,8 +58,11 @@ def run_bench_mps(system_size, fft_sizes):
 
 
 def time_fft():
-    x = range(4, 32)
+    x = range(4, 512)
     system_size = int(2**24)
+
+    with mx.stream(mx.gpu):
+        gpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
     mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
     # print('mps_bandwidths', mps_bandwidths)
@@ -67,9 +70,6 @@ def time_fft():
     # with mx.stream(mx.cpu):
     #     cpu_bandwidths = run_bench(system_size=int(2**22))
     # x = list(range(4, 1025))
-
-    with mx.stream(mx.gpu):
-        gpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
     # plot bandwidths
     plt.scatter(x, gpu_bandwidths, color="green", label="GPU")
