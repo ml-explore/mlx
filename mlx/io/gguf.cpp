@@ -206,7 +206,7 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   std::unordered_map<std::string, array> array_map;
   gguf_tensor tensor;
 
-  auto check_insert = [](auto inserted) {
+  auto check_insert = [](const auto& inserted) {
     if (!inserted.second) {
       std::ostringstream msg;
       msg << "[load_gguf] Duplicate parameter name " << inserted.first->second
@@ -216,6 +216,7 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   };
 
   while (gguf_get_tensor(ctx, &tensor)) {
+    std::string name(tensor.name, tensor.namelen);
     if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
         tensor.type == GGUF_TYPE_Q8_0) {
       gguf_load_quantized(array_map, tensor);
@@ -224,7 +225,7 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
 
       const auto& [data, dtype] = extract_tensor_data(&tensor);
       array loaded_array = array(data, get_shape(tensor), dtype);
-      array_map.insert({name, loaded_array});
+      check_insert(array_map.insert({name, loaded_array}));
     }
   }
   return array_map;
