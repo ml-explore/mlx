@@ -3005,6 +3005,11 @@ std::vector<array> Softmax::jvp(
       multiply(s, sum(sv, std::vector<int>{-1}, true, stream()), stream()))};
 }
 
+bool Softmax::is_equivalent(const Primitive& other) const {
+  const Softmax& s_other = static_cast<const Softmax&>(other);
+  return precise_ == s_other.precise_;
+}
+
 std::pair<std::vector<array>, std::vector<int>> Sort::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

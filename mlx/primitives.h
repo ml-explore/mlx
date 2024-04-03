@@ -1711,8 +1711,9 @@ class Softmax : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Softmax)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
+
+  bool is_equivalent(const Primitive& other) const override;
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
