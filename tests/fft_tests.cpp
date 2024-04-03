@@ -17,9 +17,10 @@ TEST_CASE("test fft basics") {
   auto device = default_device();
   set_default_device(Device::gpu);
   // array x(1.0);
-  // array x = tile(reshape(arange(4), {1, 4}), {256, 1});
+  // array x = tile(reshape(arange(13), {1, 13}), {1, 1});
+  // array x = arange(11);
   random::seed(7);
-  array x = random::normal({131072, 729});
+  array x = random::normal({131072 * 4, 169});
   x = astype(x, complex64);
   array y = fft::fft(x);
   std::cout << "y " << y << std::endl;

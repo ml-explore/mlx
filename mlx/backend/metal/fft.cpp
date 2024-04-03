@@ -31,7 +31,7 @@ std::pair<int, std::vector<int>> FFT::next_fast_n(int n) {
 // Plan the sequence of radices
 std::vector<int> FFT::plan_stockham_fft(int n) {
   // prefer larger radices since we do fewer expensive twiddles
-  const std::vector<int> supported_radices = {4, 3, 2};
+  const std::vector<int> supported_radices = {13, 11, 7, 5, 4, 3, 2};
   std::vector<int> plan(supported_radices.size());
   for (int i = 0; i < supported_radices.size(); i++) {
     int radix = supported_radices[i];
@@ -127,6 +127,9 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int bluestein_n = -1;
   auto plan = plan_stockham_fft(n);
+  // for (int p: plan) {
+  //   std::cout << "plan " << p << std::endl;
+  // }
   if (plan.size() == 0) {
     // Bluestein's algorithm transforms an FFT to
     // a convolution of size > 2n + 1.
@@ -149,7 +152,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::vector<MTLFC> func_consts = {
       make_bool(&inverse_, 0), make_bool(&power_of_2, 1)};
 
-  const std::vector<int> supported_radices = {4, 3, 2};
+  const std::vector<int> supported_radices = {13, 11, 7, 5, 4, 3, 2};
   int index = 3;
   int elems_per_thread = 0;
   for (int i = 0; i < plan.size(); i++) {
@@ -177,11 +180,11 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // std::cout << "batch_size " << batch_size << std::endl;
   // std::cout << "threadgroup_batch_size " << threadgroup_batch_size <<
-  // std::endl; std::cout << "threads_per_fft " << threads_per_fft << std::endl;
-  // std::cout << "total_batch_size " << total_batch_size << std::endl;
-  // std::cout << "n " << n << std::endl;
-  // std::cout << "bluestein_n " << bluestein_n << std::endl;
-  // std::cout << "elems_per_thread " << elems_per_thread << std::endl;
+  // std::endl; std::endl; std::cout << "threads_per_fft " << threads_per_fft <<
+  // std::endl; std::cout << "total_batch_size " << total_batch_size <<
+  // std::endl; std::cout << "n " << n << std::endl; std::cout << "bluestein_n "
+  // << bluestein_n << std::endl; std::cout << "elems_per_thread " <<
+  // elems_per_thread << std::endl;
 
   int out_buffer_size = out.size();
 
@@ -224,6 +227,8 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
 
     // std::cout << "input shape " << in.shape(0) << " " << in.shape(1) <<
+    // std::endl;
+    // std::cout << "out shape " << out.shape(0) << " " << out.shape(1) <<
     // std::endl;
 
     auto group_dims = MTL::Size(1, threadgroup_batch_size, threads_per_fft);

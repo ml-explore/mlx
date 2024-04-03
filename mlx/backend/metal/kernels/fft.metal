@@ -18,9 +18,13 @@ using namespace metal;
 constant bool inv_ [[function_constant(0)]];
 constant bool is_power_of_2_ [[function_constant(1)]];
 constant int elems_per_thread_ [[function_constant(2)]];
-constant int radix_4_steps_ [[function_constant(3)]];
-constant int radix_3_steps_ [[function_constant(4)]];
-constant int radix_2_steps_ [[function_constant(5)]];
+constant int radix_13_steps_ [[function_constant(3)]];
+constant int radix_11_steps_ [[function_constant(4)]];
+constant int radix_7_steps_ [[function_constant(5)]];
+constant int radix_5_steps_ [[function_constant(6)]];
+constant int radix_4_steps_ [[function_constant(7)]];
+constant int radix_3_steps_ [[function_constant(8)]];
+constant int radix_2_steps_ [[function_constant(9)]];
 
 float2 complex_mul(float2 a, float2 b) {
   float2 c = {
@@ -65,30 +69,29 @@ void radix2(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
 }
 
 void radix3(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
-  // Hardcoded twiddle factor for DFT3
-  float2 w_1 = {-0.5f, -0.8660254037844387f};
-  float2 w_2 = {-0.5f, 0.8660254037844387f};
+  float2 w_0 = {1.0, 0.0};
+  float2 w_1 = {-0.49999999999999983, -0.8660254037844387};
+  float2 w_2 = {-0.5000000000000004, 0.8660254037844384};
 
   float2 x_0 = read_buf[i];
-  float2 x_1 = read_buf[i + m];
+  float2 x_1 = read_buf[i + 1*m];
   float2 x_2 = read_buf[i + 2*m];
 
   int k = i % p;
+  int j = (i / p) * 3 * p + k;
 
-  float2 twiddle = get_twiddle(k, 3*p);
-  float2 twiddle_2 = complex_mul(twiddle, twiddle);
+  float2 twiddle_1 = get_twiddle(k, 3*p);
+  float2 twiddle_2 = complex_mul(twiddle_1, twiddle_1);
 
-  x_1 = complex_mul(x_1, twiddle);
+  x_1 = complex_mul(x_1, twiddle_1);
   x_2 = complex_mul(x_2, twiddle_2);
 
-  float2 y_0 = x_0 + x_1 + x_2;
+  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0);
   float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2);
   float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_1);
 
-  int j = (i / p) * 3 * p + k;
-
   write_buf[j] = y_0;
-  write_buf[j + p] = y_1;
+  write_buf[j + 1*p] = y_1;
   write_buf[j + 2*p] = y_2;
 }
 
@@ -141,48 +144,257 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   write_buf[j + 3*p] = y_3;
 }
 
-// void radix5(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
-//   float2 x_0 = read_buf[i];
-//   float2 x_1 = read_buf[i + m];
-//   float2 x_2 = read_buf[i + 2*m];
-//   float2 x_3 = read_buf[i + 3*m];
-//   float2 x_4 = read_buf[i + 4*m];
+void radix5(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
+  float2 w_0 = {1.0, 0.0};
+  float2 w_1 = {0.30901699437494745, -0.9510565162951535};
+  float2 w_2 = {-0.8090169943749473, -0.5877852522924732};
+  float2 w_3 = {-0.8090169943749475, 0.587785252292473};
+  float2 w_4 = {0.30901699437494723, 0.9510565162951536};
 
-//   // We use faster bit shifting ops when n is a power of 2
-//   int k = i % p;
+  float2 x_0 = read_buf[i];
+  float2 x_1 = read_buf[i + 1*m];
+  float2 x_2 = read_buf[i + 2*m];
+  float2 x_3 = read_buf[i + 3*m];
+  float2 x_4 = read_buf[i + 4*m];
 
-//   float2 twiddle = get_twiddle(k, 5*p);
-//   // e^a * e^b = e^(a + b)
-//   float2 twiddle_2 = complex_mul(twiddle, twiddle);
-//   float2 twiddle_3 = complex_mul(twiddle, twiddle_2);
-//   float2 twiddle_4 = complex_mul(twiddle, twiddle_3);
+  int k = i % p;
+  int j = (i / p) * 5 * p + k;
 
-//   x_1 = complex_mul(x_1, twiddle);
-//   x_2 = complex_mul(x_2, twiddle_2);
-//   x_3 = complex_mul(x_3, twiddle_3);
-//   x_4 = complex_mul(x_3, twiddle_4);
+  float2 twiddle_1 = get_twiddle(k, 5*p);
+  float2 twiddle_2 = complex_mul(twiddle_1, twiddle_1);
+  float2 twiddle_3 = complex_mul(twiddle_1, twiddle_2);
+  float2 twiddle_4 = complex_mul(twiddle_1, twiddle_3);
 
-//   float2 minus_i = {0, -1};
+  x_1 = complex_mul(x_1, twiddle_1);
+  x_2 = complex_mul(x_2, twiddle_2);
+  x_3 = complex_mul(x_3, twiddle_3);
+  x_4 = complex_mul(x_4, twiddle_4);
 
-//   // Hard coded twiddle factors for DFT4
-//   float2 z_0 = x_0 + x_2;
-//   float2 z_1 = x_0 - x_2;
-//   float2 z_2 = x_1 + x_3;
-//   float2 z_3 = complex_mul(x_1 - x_3, minus_i);
+  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0) + complex_mul(x_3, w_0) + complex_mul(x_4, w_0);
+  float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2) + complex_mul(x_3, w_3) + complex_mul(x_4, w_4);
+  float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_4) + complex_mul(x_3, w_1) + complex_mul(x_4, w_3);
+  float2 y_3 = x_0 + complex_mul(x_1, w_3) + complex_mul(x_2, w_1) + complex_mul(x_3, w_4) + complex_mul(x_4, w_2);
+  float2 y_4 = x_0 + complex_mul(x_1, w_4) + complex_mul(x_2, w_3) + complex_mul(x_3, w_2) + complex_mul(x_4, w_1);
 
-//   float2 y_0 = z_0 + z_2;
-//   float2 y_1 = z_1 + z_3;
-//   float2 y_2 = z_0 - z_2;
-//   float2 y_3 = z_1 - z_3;
+  write_buf[j] = y_0;
+  write_buf[j + 1*p] = y_1;
+  write_buf[j + 2*p] = y_2;
+  write_buf[j + 3*p] = y_3;
+  write_buf[j + 4*p] = y_4;
+}
 
-//   int j = (i / p) * 4 * p + k;
+void radix7(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
+  float2 w_0 = {1.0, 0.0};
+  float2 w_1 = {0.6234898018587336, -0.7818314824680298};
+  float2 w_2 = {-0.22252093395631434, -0.9749279121818236};
+  float2 w_3 = {-0.900968867902419, -0.43388373911755823};
+  float2 w_4 = {-0.9009688679024191, 0.433883739117558};
+  float2 w_5 = {-0.2225209339563146, 0.9749279121818236};
+  float2 w_6 = {0.6234898018587334, 0.7818314824680299};
 
-//   write_buf[j] = y_0;
-//   write_buf[j + p] = y_1;
-//   write_buf[j + 2*p] = y_2;
-//   write_buf[j + 3*p] = y_3;
-//   write_buf[j + 4*p] = y_4;
-// }
+  float2 x_0 = read_buf[i];
+  float2 x_1 = read_buf[i + 1*m];
+  float2 x_2 = read_buf[i + 2*m];
+  float2 x_3 = read_buf[i + 3*m];
+  float2 x_4 = read_buf[i + 4*m];
+  float2 x_5 = read_buf[i + 5*m];
+  float2 x_6 = read_buf[i + 6*m];
+
+  int k = i % p;
+  int j = (i / p) * 7 * p + k;
+
+  float2 twiddle_1 = get_twiddle(k, 7*p);
+  float2 twiddle_2 = complex_mul(twiddle_1, twiddle_1);
+  float2 twiddle_3 = complex_mul(twiddle_1, twiddle_2);
+  float2 twiddle_4 = complex_mul(twiddle_1, twiddle_3);
+  float2 twiddle_5 = complex_mul(twiddle_1, twiddle_4);
+  float2 twiddle_6 = complex_mul(twiddle_1, twiddle_5);
+
+  x_1 = complex_mul(x_1, twiddle_1);
+  x_2 = complex_mul(x_2, twiddle_2);
+  x_3 = complex_mul(x_3, twiddle_3);
+  x_4 = complex_mul(x_4, twiddle_4);
+  x_5 = complex_mul(x_5, twiddle_5);
+  x_6 = complex_mul(x_6, twiddle_6);
+
+  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0) + complex_mul(x_3, w_0) + complex_mul(x_4, w_0) + complex_mul(x_5, w_0) + complex_mul(x_6, w_0);
+  float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2) + complex_mul(x_3, w_3) + complex_mul(x_4, w_4) + complex_mul(x_5, w_5) + complex_mul(x_6, w_6);
+  float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_4) + complex_mul(x_3, w_6) + complex_mul(x_4, w_1) + complex_mul(x_5, w_3) + complex_mul(x_6, w_5);
+  float2 y_3 = x_0 + complex_mul(x_1, w_3) + complex_mul(x_2, w_6) + complex_mul(x_3, w_2) + complex_mul(x_4, w_5) + complex_mul(x_5, w_1) + complex_mul(x_6, w_4);
+  float2 y_4 = x_0 + complex_mul(x_1, w_4) + complex_mul(x_2, w_1) + complex_mul(x_3, w_5) + complex_mul(x_4, w_2) + complex_mul(x_5, w_6) + complex_mul(x_6, w_3);
+  float2 y_5 = x_0 + complex_mul(x_1, w_5) + complex_mul(x_2, w_3) + complex_mul(x_3, w_1) + complex_mul(x_4, w_6) + complex_mul(x_5, w_4) + complex_mul(x_6, w_2);
+  float2 y_6 = x_0 + complex_mul(x_1, w_6) + complex_mul(x_2, w_5) + complex_mul(x_3, w_4) + complex_mul(x_4, w_3) + complex_mul(x_5, w_2) + complex_mul(x_6, w_1);
+
+  write_buf[j] = y_0;
+  write_buf[j + 1*p] = y_1;
+  write_buf[j + 2*p] = y_2;
+  write_buf[j + 3*p] = y_3;
+  write_buf[j + 4*p] = y_4;
+  write_buf[j + 5*p] = y_5;
+  write_buf[j + 6*p] = y_6;
+}
+
+void radix11(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
+  float2 w_0 = {1.0, 0.0};
+  float2 w_1 = {0.8412535328311812, -0.5406408174555976};
+  float2 w_2 = {0.41541501300188644, -0.9096319953545183};
+  float2 w_3 = {-0.142314838273285, -0.9898214418809328};
+  float2 w_4 = {-0.6548607339452851, -0.7557495743542583};
+  float2 w_5 = {-0.9594929736144974, -0.28173255684142967};
+  float2 w_6 = {-0.9594929736144975, 0.2817325568414294};
+  float2 w_7 = {-0.6548607339452852, 0.7557495743542582};
+  float2 w_8 = {-0.14231483827328523, 0.9898214418809327};
+  float2 w_9 = {0.41541501300188605, 0.9096319953545186};
+  float2 w_10 = {0.8412535328311812, 0.5406408174555976};
+
+  float2 x_0 = read_buf[i];
+  float2 x_1 = read_buf[i + 1*m];
+  float2 x_2 = read_buf[i + 2*m];
+  float2 x_3 = read_buf[i + 3*m];
+  float2 x_4 = read_buf[i + 4*m];
+  float2 x_5 = read_buf[i + 5*m];
+  float2 x_6 = read_buf[i + 6*m];
+  float2 x_7 = read_buf[i + 7*m];
+  float2 x_8 = read_buf[i + 8*m];
+  float2 x_9 = read_buf[i + 9*m];
+  float2 x_10 = read_buf[i + 10*m];
+
+  int k = i % p;
+  int j = (i / p) * 11 * p + k;
+
+  float2 twiddle_1 = get_twiddle(k, 11*p);
+  float2 twiddle_2 = complex_mul(twiddle_1, twiddle_1);
+  float2 twiddle_3 = complex_mul(twiddle_1, twiddle_2);
+  float2 twiddle_4 = complex_mul(twiddle_1, twiddle_3);
+  float2 twiddle_5 = complex_mul(twiddle_1, twiddle_4);
+  float2 twiddle_6 = complex_mul(twiddle_1, twiddle_5);
+  float2 twiddle_7 = complex_mul(twiddle_1, twiddle_6);
+  float2 twiddle_8 = complex_mul(twiddle_1, twiddle_7);
+  float2 twiddle_9 = complex_mul(twiddle_1, twiddle_8);
+  float2 twiddle_10 = complex_mul(twiddle_1, twiddle_9);
+
+  x_1 = complex_mul(x_1, twiddle_1);
+  x_2 = complex_mul(x_2, twiddle_2);
+  x_3 = complex_mul(x_3, twiddle_3);
+  x_4 = complex_mul(x_4, twiddle_4);
+  x_5 = complex_mul(x_5, twiddle_5);
+  x_6 = complex_mul(x_6, twiddle_6);
+  x_7 = complex_mul(x_7, twiddle_7);
+  x_8 = complex_mul(x_8, twiddle_8);
+  x_9 = complex_mul(x_9, twiddle_9);
+  x_10 = complex_mul(x_10, twiddle_10);
+
+  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0) + complex_mul(x_3, w_0) + complex_mul(x_4, w_0) + complex_mul(x_5, w_0) + complex_mul(x_6, w_0) + complex_mul(x_7, w_0) + complex_mul(x_8, w_0) + complex_mul(x_9, w_0) + complex_mul(x_10, w_0);
+  float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2) + complex_mul(x_3, w_3) + complex_mul(x_4, w_4) + complex_mul(x_5, w_5) + complex_mul(x_6, w_6) + complex_mul(x_7, w_7) + complex_mul(x_8, w_8) + complex_mul(x_9, w_9) + complex_mul(x_10, w_10);
+  float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_4) + complex_mul(x_3, w_6) + complex_mul(x_4, w_8) + complex_mul(x_5, w_10) + complex_mul(x_6, w_1) + complex_mul(x_7, w_3) + complex_mul(x_8, w_5) + complex_mul(x_9, w_7) + complex_mul(x_10, w_9);
+  float2 y_3 = x_0 + complex_mul(x_1, w_3) + complex_mul(x_2, w_6) + complex_mul(x_3, w_9) + complex_mul(x_4, w_1) + complex_mul(x_5, w_4) + complex_mul(x_6, w_7) + complex_mul(x_7, w_10) + complex_mul(x_8, w_2) + complex_mul(x_9, w_5) + complex_mul(x_10, w_8);
+  float2 y_4 = x_0 + complex_mul(x_1, w_4) + complex_mul(x_2, w_8) + complex_mul(x_3, w_1) + complex_mul(x_4, w_5) + complex_mul(x_5, w_9) + complex_mul(x_6, w_2) + complex_mul(x_7, w_6) + complex_mul(x_8, w_10) + complex_mul(x_9, w_3) + complex_mul(x_10, w_7);
+  float2 y_5 = x_0 + complex_mul(x_1, w_5) + complex_mul(x_2, w_10) + complex_mul(x_3, w_4) + complex_mul(x_4, w_9) + complex_mul(x_5, w_3) + complex_mul(x_6, w_8) + complex_mul(x_7, w_2) + complex_mul(x_8, w_7) + complex_mul(x_9, w_1) + complex_mul(x_10, w_6);
+  float2 y_6 = x_0 + complex_mul(x_1, w_6) + complex_mul(x_2, w_1) + complex_mul(x_3, w_7) + complex_mul(x_4, w_2) + complex_mul(x_5, w_8) + complex_mul(x_6, w_3) + complex_mul(x_7, w_9) + complex_mul(x_8, w_4) + complex_mul(x_9, w_10) + complex_mul(x_10, w_5);
+  float2 y_7 = x_0 + complex_mul(x_1, w_7) + complex_mul(x_2, w_3) + complex_mul(x_3, w_10) + complex_mul(x_4, w_6) + complex_mul(x_5, w_2) + complex_mul(x_6, w_9) + complex_mul(x_7, w_5) + complex_mul(x_8, w_1) + complex_mul(x_9, w_8) + complex_mul(x_10, w_4);
+  float2 y_8 = x_0 + complex_mul(x_1, w_8) + complex_mul(x_2, w_5) + complex_mul(x_3, w_2) + complex_mul(x_4, w_10) + complex_mul(x_5, w_7) + complex_mul(x_6, w_4) + complex_mul(x_7, w_1) + complex_mul(x_8, w_9) + complex_mul(x_9, w_6) + complex_mul(x_10, w_3);
+  float2 y_9 = x_0 + complex_mul(x_1, w_9) + complex_mul(x_2, w_7) + complex_mul(x_3, w_5) + complex_mul(x_4, w_3) + complex_mul(x_5, w_1) + complex_mul(x_6, w_10) + complex_mul(x_7, w_8) + complex_mul(x_8, w_6) + complex_mul(x_9, w_4) + complex_mul(x_10, w_2);
+  float2 y_10 = x_0 + complex_mul(x_1, w_10) + complex_mul(x_2, w_9) + complex_mul(x_3, w_8) + complex_mul(x_4, w_7) + complex_mul(x_5, w_6) + complex_mul(x_6, w_5) + complex_mul(x_7, w_4) + complex_mul(x_8, w_3) + complex_mul(x_9, w_2) + complex_mul(x_10, w_1);
+
+  write_buf[j] = y_0;
+  write_buf[j + 1*p] = y_1;
+  write_buf[j + 2*p] = y_2;
+  write_buf[j + 3*p] = y_3;
+  write_buf[j + 4*p] = y_4;
+  write_buf[j + 5*p] = y_5;
+  write_buf[j + 6*p] = y_6;
+  write_buf[j + 7*p] = y_7;
+  write_buf[j + 8*p] = y_8;
+  write_buf[j + 9*p] = y_9;
+  write_buf[j + 10*p] = y_10;
+}
+
+void radix13(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
+  float2 w_0 = {1.0, 0.0};
+  float2 w_1 = {0.8854560256532099, -0.4647231720437685};
+  float2 w_2 = {0.5680647467311558, -0.8229838658936564};
+  float2 w_3 = {0.12053668025532323, -0.992708874098054};
+  float2 w_4 = {-0.35460488704253545, -0.9350162426854148};
+  float2 w_5 = {-0.7485107481711009, -0.6631226582407955};
+  float2 w_6 = {-0.9709418174260519, -0.2393156642875581};
+  float2 w_7 = {-0.9709418174260521, 0.23931566428755743};
+  float2 w_8 = {-0.7485107481711013, 0.663122658240795};
+  float2 w_9 = {-0.3546048870425359, 0.9350162426854147};
+  float2 w_10 = {0.12053668025532233, 0.9927088740980541};
+  float2 w_11 = {0.5680647467311556, 0.8229838658936566};
+  float2 w_12 = {0.8854560256532096, 0.4647231720437692};
+
+  float2 x_0 = read_buf[i];
+  float2 x_1 = read_buf[i + 1*m];
+  float2 x_2 = read_buf[i + 2*m];
+  float2 x_3 = read_buf[i + 3*m];
+  float2 x_4 = read_buf[i + 4*m];
+  float2 x_5 = read_buf[i + 5*m];
+  float2 x_6 = read_buf[i + 6*m];
+  float2 x_7 = read_buf[i + 7*m];
+  float2 x_8 = read_buf[i + 8*m];
+  float2 x_9 = read_buf[i + 9*m];
+  float2 x_10 = read_buf[i + 10*m];
+  float2 x_11 = read_buf[i + 11*m];
+  float2 x_12 = read_buf[i + 12*m];
+
+  int k = i % p;
+  int j = (i / p) * 13 * p + k;
+
+  float2 twiddle_1 = get_twiddle(k, 13*p);
+  float2 twiddle_2 = complex_mul(twiddle_1, twiddle_1);
+  float2 twiddle_3 = complex_mul(twiddle_1, twiddle_2);
+  float2 twiddle_4 = complex_mul(twiddle_1, twiddle_3);
+  float2 twiddle_5 = complex_mul(twiddle_1, twiddle_4);
+  float2 twiddle_6 = complex_mul(twiddle_1, twiddle_5);
+  float2 twiddle_7 = complex_mul(twiddle_1, twiddle_6);
+  float2 twiddle_8 = complex_mul(twiddle_1, twiddle_7);
+  float2 twiddle_9 = complex_mul(twiddle_1, twiddle_8);
+  float2 twiddle_10 = complex_mul(twiddle_1, twiddle_9);
+  float2 twiddle_11 = complex_mul(twiddle_1, twiddle_10);
+  float2 twiddle_12 = complex_mul(twiddle_1, twiddle_11);
+
+  x_1 = complex_mul(x_1, twiddle_1);
+  x_2 = complex_mul(x_2, twiddle_2);
+  x_3 = complex_mul(x_3, twiddle_3);
+  x_4 = complex_mul(x_4, twiddle_4);
+  x_5 = complex_mul(x_5, twiddle_5);
+  x_6 = complex_mul(x_6, twiddle_6);
+  x_7 = complex_mul(x_7, twiddle_7);
+  x_8 = complex_mul(x_8, twiddle_8);
+  x_9 = complex_mul(x_9, twiddle_9);
+  x_10 = complex_mul(x_10, twiddle_10);
+  x_11 = complex_mul(x_11, twiddle_11);
+  x_12 = complex_mul(x_12, twiddle_12);
+
+  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0) + complex_mul(x_3, w_0) + complex_mul(x_4, w_0) + complex_mul(x_5, w_0) + complex_mul(x_6, w_0) + complex_mul(x_7, w_0) + complex_mul(x_8, w_0) + complex_mul(x_9, w_0) + complex_mul(x_10, w_0) + complex_mul(x_11, w_0) + complex_mul(x_12, w_0);
+  float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2) + complex_mul(x_3, w_3) + complex_mul(x_4, w_4) + complex_mul(x_5, w_5) + complex_mul(x_6, w_6) + complex_mul(x_7, w_7) + complex_mul(x_8, w_8) + complex_mul(x_9, w_9) + complex_mul(x_10, w_10) + complex_mul(x_11, w_11) + complex_mul(x_12, w_12);
+  float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_4) + complex_mul(x_3, w_6) + complex_mul(x_4, w_8) + complex_mul(x_5, w_10) + complex_mul(x_6, w_12) + complex_mul(x_7, w_1) + complex_mul(x_8, w_3) + complex_mul(x_9, w_5) + complex_mul(x_10, w_7) + complex_mul(x_11, w_9) + complex_mul(x_12, w_11);
+  float2 y_3 = x_0 + complex_mul(x_1, w_3) + complex_mul(x_2, w_6) + complex_mul(x_3, w_9) + complex_mul(x_4, w_12) + complex_mul(x_5, w_2) + complex_mul(x_6, w_5) + complex_mul(x_7, w_8) + complex_mul(x_8, w_11) + complex_mul(x_9, w_1) + complex_mul(x_10, w_4) + complex_mul(x_11, w_7) + complex_mul(x_12, w_10);
+  float2 y_4 = x_0 + complex_mul(x_1, w_4) + complex_mul(x_2, w_8) + complex_mul(x_3, w_12) + complex_mul(x_4, w_3) + complex_mul(x_5, w_7) + complex_mul(x_6, w_11) + complex_mul(x_7, w_2) + complex_mul(x_8, w_6) + complex_mul(x_9, w_10) + complex_mul(x_10, w_1) + complex_mul(x_11, w_5) + complex_mul(x_12, w_9);
+  float2 y_5 = x_0 + complex_mul(x_1, w_5) + complex_mul(x_2, w_10) + complex_mul(x_3, w_2) + complex_mul(x_4, w_7) + complex_mul(x_5, w_12) + complex_mul(x_6, w_4) + complex_mul(x_7, w_9) + complex_mul(x_8, w_1) + complex_mul(x_9, w_6) + complex_mul(x_10, w_11) + complex_mul(x_11, w_3) + complex_mul(x_12, w_8);
+  float2 y_6 = x_0 + complex_mul(x_1, w_6) + complex_mul(x_2, w_12) + complex_mul(x_3, w_5) + complex_mul(x_4, w_11) + complex_mul(x_5, w_4) + complex_mul(x_6, w_10) + complex_mul(x_7, w_3) + complex_mul(x_8, w_9) + complex_mul(x_9, w_2) + complex_mul(x_10, w_8) + complex_mul(x_11, w_1) + complex_mul(x_12, w_7);
+  float2 y_7 = x_0 + complex_mul(x_1, w_7) + complex_mul(x_2, w_1) + complex_mul(x_3, w_8) + complex_mul(x_4, w_2) + complex_mul(x_5, w_9) + complex_mul(x_6, w_3) + complex_mul(x_7, w_10) + complex_mul(x_8, w_4) + complex_mul(x_9, w_11) + complex_mul(x_10, w_5) + complex_mul(x_11, w_12) + complex_mul(x_12, w_6);
+  float2 y_8 = x_0 + complex_mul(x_1, w_8) + complex_mul(x_2, w_3) + complex_mul(x_3, w_11) + complex_mul(x_4, w_6) + complex_mul(x_5, w_1) + complex_mul(x_6, w_9) + complex_mul(x_7, w_4) + complex_mul(x_8, w_12) + complex_mul(x_9, w_7) + complex_mul(x_10, w_2) + complex_mul(x_11, w_10) + complex_mul(x_12, w_5);
+  float2 y_9 = x_0 + complex_mul(x_1, w_9) + complex_mul(x_2, w_5) + complex_mul(x_3, w_1) + complex_mul(x_4, w_10) + complex_mul(x_5, w_6) + complex_mul(x_6, w_2) + complex_mul(x_7, w_11) + complex_mul(x_8, w_7) + complex_mul(x_9, w_3) + complex_mul(x_10, w_12) + complex_mul(x_11, w_8) + complex_mul(x_12, w_4);
+  float2 y_10 = x_0 + complex_mul(x_1, w_10) + complex_mul(x_2, w_7) + complex_mul(x_3, w_4) + complex_mul(x_4, w_1) + complex_mul(x_5, w_11) + complex_mul(x_6, w_8) + complex_mul(x_7, w_5) + complex_mul(x_8, w_2) + complex_mul(x_9, w_12) + complex_mul(x_10, w_9) + complex_mul(x_11, w_6) + complex_mul(x_12, w_3);
+  float2 y_11 = x_0 + complex_mul(x_1, w_11) + complex_mul(x_2, w_9) + complex_mul(x_3, w_7) + complex_mul(x_4, w_5) + complex_mul(x_5, w_3) + complex_mul(x_6, w_1) + complex_mul(x_7, w_12) + complex_mul(x_8, w_10) + complex_mul(x_9, w_8) + complex_mul(x_10, w_6) + complex_mul(x_11, w_4) + complex_mul(x_12, w_2);
+  float2 y_12 = x_0 + complex_mul(x_1, w_12) + complex_mul(x_2, w_11) + complex_mul(x_3, w_10) + complex_mul(x_4, w_9) + complex_mul(x_5, w_8) + complex_mul(x_6, w_7) + complex_mul(x_7, w_6) + complex_mul(x_8, w_5) + complex_mul(x_9, w_4) + complex_mul(x_10, w_3) + complex_mul(x_11, w_2) + complex_mul(x_12, w_1);
+
+  write_buf[j] = y_0;
+  write_buf[j + 1*p] = y_1;
+  write_buf[j + 2*p] = y_2;
+  write_buf[j + 3*p] = y_3;
+  write_buf[j + 4*p] = y_4;
+  write_buf[j + 5*p] = y_5;
+  write_buf[j + 6*p] = y_6;
+  write_buf[j + 7*p] = y_7;
+  write_buf[j + 8*p] = y_8;
+  write_buf[j + 9*p] = y_9;
+  write_buf[j + 10*p] = y_10;
+  write_buf[j + 11*p] = y_11;
+  write_buf[j + 12*p] = y_12;
+}
 
 void stockham_switch(threadgroup float2** read_buf, threadgroup float2** write_buf) {
     threadgroup float2* tmp = *write_buf;
@@ -245,6 +457,62 @@ void perform_fft(
       } else if (index < m_r) {
         radix4(index, p, m_r, *read_buf, *write_buf);
       }
+    }
+    p *= radix;
+
+    stockham_switch(read_buf, write_buf);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  radix = 5;
+  m_r = n / radix;
+  max_radices_per_thread = (elems_per_thread_ + radix - 1) / radix;
+  for (int s = 0; s < radix_5_steps_; s++) {
+    for (int t = 0; t < max_radices_per_thread; t++) {
+      int index = i + t * m;
+      radix5(index, p, m_r, *read_buf, *write_buf);
+    }
+    p *= radix;
+
+    stockham_switch(read_buf, write_buf);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  radix = 7;
+  m_r = n / radix;
+  max_radices_per_thread = (elems_per_thread_ + radix - 1) / radix;
+  for (int s = 0; s < radix_7_steps_; s++) {
+    for (int t = 0; t < max_radices_per_thread; t++) {
+      int index = i + t * m;
+      radix7(index, p, m_r, *read_buf, *write_buf);
+    }
+    p *= radix;
+
+    stockham_switch(read_buf, write_buf);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  radix = 11;
+  m_r = n / radix;
+  max_radices_per_thread = (elems_per_thread_ + radix - 1) / radix;
+  for (int s = 0; s < radix_11_steps_; s++) {
+    for (int t = 0; t < max_radices_per_thread; t++) {
+      int index = i + t * m;
+      radix11(index, p, m_r, *read_buf, *write_buf);
+    }
+    p *= radix;
+
+    stockham_switch(read_buf, write_buf);
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+  }
+
+  radix = 13;
+  m_r = n / radix;
+  max_radices_per_thread = (elems_per_thread_ + radix - 1) / radix;
+  for (int s = 0; s < radix_13_steps_; s++) {
+    for (int t = 0; t < max_radices_per_thread; t++) {
+      int index = i + t * m;
+      radix13(index, p, m_r, *read_buf, *write_buf);
     }
     p *= radix;
 
@@ -319,46 +587,62 @@ template <int tg_mem_size>
     const device float* in [[buffer(0)]],
     device float2* out [[buffer(1)]],
     constant const int& n,
+    constant const int& batch_size,
     uint3 thread_position_in_grid [[thread_position_in_grid]],
     uint3 threads_per_grid [[threads_per_grid]]) {
 
+  int n_over_2 = (n/2) + 1;
+  int fft_idx = thread_position_in_grid.z;
+  int tg_idx = thread_position_in_grid.y * 2 * n;
+  int batch_idx = thread_position_in_grid.x * threads_per_grid.y * 2 * n + tg_idx;
+  int batch_idx_out = thread_position_in_grid.x * threads_per_grid.y * 
+      2 * n_over_2 + thread_position_in_grid.y * 2 * n_over_2;
 
-  // perform two at once
-  // read two sequences from the input
-  // this does mean we need
-
-  int batch_idx = thread_position_in_grid.x * n;
-  int batch_idx_out = thread_position_in_grid.x * ((n/2) + 1);
-
-  int i = thread_position_in_grid.y;
   int m = threads_per_grid.y;
+
+  // Plan
+  // - Fast RFFT (IRFFT can be slower for now)
+
+  // Account for possible extra threadgroups
+  int overall_batch = thread_position_in_grid.x * threads_per_grid.y + thread_position_in_grid.y;
+  if (overall_batch >= batch_size) {
+    return;
+  }
  
   threadgroup float2 shared_in[tg_mem_size];
   threadgroup float2 shared_out[tg_mem_size];
   threadgroup float2* read_buf = shared_in;
   threadgroup float2* write_buf = shared_out;
 
-  // Copy input into shared memory
-  for (int t = 0; t < elems_per_thread_; t++) {
-    shared_in[i + t * m].x = in[batch_idx + i + t * m];
-  // Fill in the empty complex part in the shared buffer
-    shared_in[i + t * m].y = 0;
+  // For rfft, interleave batches of two real sequences into one complex one (z).
+  // Then compute the output as:
+  // x_k = (Z_k + Z_k*) / 2
+  // y_k = -j * ((Z_k - Z_k*) / 2)
+  for (int t = 0; t < 1; t++) {
+    int index = fft_idx + t * m;
+    read_buf[index].x = in[batch_idx + index];
+    // TODO: this needs to be padding if there's nothing here
+    read_buf[index].y = in[batch_idx + index + n];
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  perform_fft(i, n, m, &read_buf, &write_buf);
+  // perform_fft(fft_idx, n, m, &read_buf, &write_buf);
 
-  // For real to complex, we only need the first (n/2) + 1 terms
-  // since the output is guaranteed to be hermitian symmetric
-  for (int t = 0; t < elems_per_thread_ / 2; t++) {
-    out[batch_idx_out + i + t * m] = read_buf[i + t * m];
+  float2 conj = {0, -1};
+  for (int t = 0; t < 1; t++) {
+    int index = fft_idx + t * m;
+    // if (index == 0) {
+    //   out[batch_idx_out + index] = read_buf[index].x;
+    //   out[batch_idx_out + index + n] = read_buf[index].y;
+    // }
+    // float2 x_k = read_buf[index];
+    // float2 x_n_minus_k = read_buf[n - index] * conj;
+    out[batch_idx_out + index] = batch_idx_out + index;
+    // out[batch_idx_out + index + n_over_2] = 9;
+    // out[batch_idx_out + index] = (x_k + x_n_minus_k) / 2;
+    // out[batch_idx_out + index + n_over_2] = (x_k + x_n_minus_k) / 2;
   }
-  // add on the +1 in (n/2) + 1
-  if (i == 0) {
-    out[batch_idx_out + elems_per_thread_ / 2 * m] = read_buf[elems_per_thread_ / 2 * m];
-  }
-
 }
 
 template <int tg_mem_size>
@@ -514,6 +798,7 @@ template <int tg_mem_size>
       const device float* in [[buffer(0)]], \
       device float2* out [[buffer(1)]], \
     constant const int& n, \
+    constant const int& batch_size, \
     uint3 thread_position_in_grid [[thread_position_in_grid]], \
     uint3 threads_per_grid [[threads_per_grid]]);
 
