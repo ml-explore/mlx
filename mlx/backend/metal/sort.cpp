@@ -131,7 +131,7 @@ void multi_block_sort(
       dev_vals_0, dev_vals_1, dev_idxs_0, dev_idxs_1, block_partitions};
 
   // Prepare command encoder
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto compute_encoder = d.get_command_encoder(s.index, true);
 
   // Do blockwise sort
   {
