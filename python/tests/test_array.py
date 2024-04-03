@@ -203,6 +203,29 @@ class TestInequality(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             a >= tpl_
 
+    def test_invalid_op_on_array(self):
+        str_ = "hello"
+        a = mx.array([1, 2.5, 3.25])
+        lst_ = [1, 2.1, 3.25]
+        tpl_ = (1, 2.5, 3.25)
+
+        with self.assertRaises(ValueError):
+            a * str_
+        with self.assertRaises(ValueError):
+            a *= str_
+        with self.assertRaises(ValueError):
+            a /= lst_
+        with self.assertRaises(ValueError):
+            a // lst_
+        with self.assertRaises(ValueError):
+            a % lst_
+        with self.assertRaises(ValueError):
+            a**tpl_
+        with self.assertRaises(ValueError):
+            a & tpl_
+        with self.assertRaises(ValueError):
+            a | str_
+
 
 class TestArray(mlx_tests.MLXTestCase):
     def test_array_basics(self):
