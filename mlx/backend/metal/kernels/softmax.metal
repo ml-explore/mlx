@@ -11,9 +11,8 @@ using namespace metal;
 
 template <typename T>
 inline T softmax_exp(T x) {
-  // Softmax doesn't need high precision exponential cause it is gonna be x
-  // will be in (-oo, 0] anyway and subsequently it will be divided by
-  // sum(exp(x_i)).
+  // Softmax doesn't need high precision exponential cause x is gonna be in
+  // (-oo, 0] anyway and subsequently it will be divided by sum(exp(x_i)).
   return fast::exp(x);
 }
 
@@ -22,13 +21,16 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
     const device T* in,
     device T* out,
     constant int& axis_size,
-    threadgroup AccT* local_max [[threadgroup(0)]],
-    threadgroup AccT* local_normalizer [[threadgroup(1)]],
     uint gid [[threadgroup_position_in_grid]],
     uint _lid [[thread_position_in_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   int lid = _lid;
+
+  constexpr int SIMD_SIZE = 32;
+
+  threadgroup AccT local_max[SIMD_SIZE];
+  threadgroup AccT local_normalizer[SIMD_SIZE];
 
   AccT ld[N_READS];
 
@@ -109,14 +111,17 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
     const device T* in,
     device T* out,
     constant int& axis_size,
-    threadgroup AccT* local_max [[threadgroup(0)]],
-    threadgroup AccT* local_normalizer [[threadgroup(1)]],
     uint gid [[threadgroup_position_in_grid]],
     uint lid [[thread_position_in_threadgroup]],
     uint lsize [[threads_per_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   in += gid * axis_size;
+
+  constexpr int SIMD_SIZE = 32;
+
+  threadgroup AccT local_max[SIMD_SIZE];
+  threadgroup AccT local_normalizer[SIMD_SIZE];
 
   // Get the max and the normalizer in one go
   AccT prevmax;
@@ -199,8 +204,6 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
       const device itype* in,                                 \
       device itype* out,                                      \
       constant int& axis_size,                                \
-      threadgroup itype* local_max [[threadgroup(0)]],        \
-      threadgroup itype* local_normalizer [[threadgroup(1)]], \
       uint gid [[thread_position_in_grid]],                   \
       uint _lid [[thread_position_in_threadgroup]],           \
       uint simd_lane_id [[thread_index_in_simdgroup]],        \
@@ -210,8 +213,6 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
       const device itype* in,                                     \
       device itype* out,                                          \
       constant int& axis_size,                                    \
-      threadgroup itype* local_max [[threadgroup(0)]],            \
-      threadgroup itype* local_normalizer [[threadgroup(1)]],     \
       uint gid [[threadgroup_position_in_grid]],                  \
       uint lid [[thread_position_in_threadgroup]],                \
       uint lsize [[threads_per_threadgroup]],                     \
@@ -224,8 +225,6 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
       const device itype* in,                                      \
       device itype* out,                                           \
       constant int& axis_size,                                     \
-      threadgroup float* local_max [[threadgroup(0)]],             \
-      threadgroup float* local_normalizer [[threadgroup(1)]],      \
       uint gid [[thread_position_in_grid]],                        \
       uint _lid [[thread_position_in_threadgroup]],                \
       uint simd_lane_id [[thread_index_in_simdgroup]],             \
@@ -235,8 +234,6 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
       const device itype* in,                                             \
       device itype* out,                                                  \
       constant int& axis_size,                                            \
-      threadgroup float* local_max [[threadgroup(0)]],                    \
-      threadgroup float* local_normalizer [[threadgroup(1)]],             \
       uint gid [[threadgroup_position_in_grid]],                          \
       uint lid [[thread_position_in_threadgroup]],                        \
       uint lsize [[threads_per_threadgroup]],                             \
