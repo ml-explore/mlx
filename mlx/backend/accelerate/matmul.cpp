@@ -217,4 +217,11 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   return matmul_bnns_general(inputs[0], inputs[1], out, alpha_, beta_);
 }
 
+void TileMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  if (out.dtype() == float32) {
+    return matmul_cblas(inputs[0], inputs[1], out);
+  }
+  return matmul_bnns(inputs[0], inputs[1], out);
+}
+
 } // namespace mlx::core

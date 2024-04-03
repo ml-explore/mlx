@@ -3646,6 +3646,42 @@ void init_ops(nb::module_& m) {
             array: ``alpha * (a @ b)  + beta * c``
       )pbdoc");
   m.def(
+      "tile_masked_mm",
+      [](array a,
+         array b,
+         int tile_sz,
+         std::optional<array> mask_out,
+         std::optional<array> mask_lhs,
+         std::optional<array> mask_rhs,
+         StreamOrDevice s) {
+        return tile_masked_mm(a, b, tile_sz, mask_out, mask_lhs, mask_rhs, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::arg(),
+      "mask_out"_a = nb::none(),
+      "mask_lhs"_a = nb::none(),
+      "mask_rhs"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def tile_masked_mm(a: array, b: array, tile_size: int, /, mask_out: array, mask_lhs: array, mask_rhs: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Matrix multiplication with tile level masking.
+
+        Perform the (possibly batched) matrix multiplication of two arrays and with tiles
+        optionally masked out.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+            tile_size (int): Mask tile size.
+            mask_out (array, optional): Mask for output tiles.
+            mask_lhs (array, optional): Mask for a.
+            mask_rhs (array, optional): Mask for b.
+
+      )pbdoc");
+  m.def(
       "diagonal",
       &diagonal,
       "a"_a,

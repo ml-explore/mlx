@@ -1888,6 +1888,27 @@ class Tanh : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class TileMaskedMM : public UnaryPrimitive {
+ public:
+  explicit TileMaskedMM(Stream stream, int tile_size)
+      : UnaryPrimitive(stream), tile_size_(tile_size){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  // std::vector<array> vjp(
+  //     const std::vector<array>& primals,
+  //     const std::vector<array>& cotangents,
+  //     const std::vector<int>& argnums,
+  //     const std::vector<array>& outputs) override;
+
+  // DEFINE_VMAP()
+  DEFINE_PRINT(TileMaskedMM)
+
+ private:
+  int tile_size_;
+};
+
 class Uniform : public UnaryPrimitive {
  public:
   explicit Uniform(Stream stream) : UnaryPrimitive(stream){};

@@ -190,4 +190,13 @@ void AddMM::eval_cpu(const std::vector<array>& inputs, array& out) {
   return matmul_common_general(inputs[0], inputs[1], out, alpha_, beta_);
 }
 
+void TileMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
+  if (out.dtype() != float32) {
+    throw std::runtime_error(
+        "[TileMaskedMM::eval_cpu] Currently only supports float32.");
+  }
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  return matmul_common_general(inputs[0], inputs[1], out);
+}
+
 } // namespace mlx::core

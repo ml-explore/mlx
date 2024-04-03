@@ -1185,6 +1185,38 @@ array addmm(
     const float& beta = 1.f,
     StreamOrDevice s = {});
 
+/** Compute matrix product with tile-level masking */
+array tile_masked_mm(
+    array a,
+    array b,
+    int tile_size,
+    std::optional<array> mask_out = std::nullopt,
+    std::optional<array> mask_lhs = std::nullopt,
+    std::optional<array> mask_rhs = std::nullopt,
+    StreamOrDevice s = {});
+
+/** Compute matrix product with tile-level masking */
+inline array tile_masked_mm(
+    array a,
+    array b,
+    int tile_size,
+    array mask_out,
+    StreamOrDevice s = {}) {
+  return tile_masked_mm(
+      a, b, tile_size, mask_out, std::nullopt, std::nullopt, s);
+}
+
+/** Compute matrix product with tile-level masking */
+inline array tile_masked_mm(
+    array a,
+    array b,
+    int tile_size,
+    array mask_lhs,
+    array mask_rhs,
+    StreamOrDevice s = {}) {
+  return tile_masked_mm(a, b, tile_size, std::nullopt, mask_lhs, mask_rhs, s);
+}
+
 /** Extract a diagonal or construct a diagonal array */
 array diagonal(
     const array& a,

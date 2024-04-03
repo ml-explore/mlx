@@ -3572,6 +3572,193 @@ array addmm(
   return out;
 }
 
+/** Compute matrix product with tile-level masking */
+array tile_masked_mm(
+    array a,
+    array b,
+    int tile_size,
+    std::optional<array> mask_out /* = std::nullopt */,
+    std::optional<array> mask_lhs /* = std::nullopt */,
+    std::optional<array> mask_rhs /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  // If no masks, just perform regular matmul
+  if (!mask_out && !mask_lhs && !mask_rhs) {
+    return matmul(a, b, s);
+  }
+
+  bool has_out_mask = !!mask_out;
+  bool has_operand_mask = !(!mask_out && !mask_rhs);
+
+  // Check valid tile sizes
+  // TODO: Add support for 16x16 tile
+  if (tile_size != 32 && tile_size != 64) {
+    std::ostringstream msg;
+    msg << "[tile_masked_mm] Only tile_sizes 32, 64 are supported."
+        << "Got tile size " << tile_size << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Do shape checks for operands
+  int in_a_ndim = a.ndim();
+  int in_b_ndim = b.ndim();
+
+  if (a.ndim() == 0 || b.ndim() == 0) {
+    throw std::invalid_argument(
+        "[addmm] Got 0 dimension input. Inputs must "
+        "have at least one dimension.");
+  }
+
+  if (a.ndim() == 1) {
+    // Insert a singleton dim in the beginning
+    a = reshape(a, {1, -1}, s);
+  }
+  if (b.ndim() == 1) {
+    // Insert a singleton dim at the end
+    b = reshape(b, {-1, 1}, s);
+  }
+
+  if (a.shape(-1) != b.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[tile_masked_mm] Last dimension of first input with shape "
+        << a.shape() << " must match second to last dimension of"
+        << " second input with shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Type promotion
+  auto out_type = result_type(a, b);
+  if (!issubdtype(out_type, floating)) {
+    std::ostringstream msg;
+    msg << "[tile_masked_mm] Only real floating point types are supported but "
+        << a.dtype() << " and " << b.dtype()
+        << " were provided which results in " << out_type
+        << ", which is not a real floating point type.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  a = astype(a, out_type, s);
+  b = astype(b, out_type, s);
+
+  // Handle broadcasting
+  std::vector<int> bsx_a(a.shape().begin(), a.shape().end() - 2);
+  std::vector<int> bsx_b(b.shape().begin(), b.shape().end() - 2);
+  auto bsx_shape = broadcast_shapes(bsx_a, bsx_b);
+
+  bsx_shape.push_back(1);
+  bsx_shape.push_back(1);
+  int nd = bsx_shape.size();
+
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  // Prepare A
+  bsx_shape[nd - 2] = M;
+  bsx_shape[nd - 1] = K;
+  a = broadcast_to(a, bsx_shape, s);
+
+  // Prepare B
+  bsx_shape[nd - 2] = K;
+  bsx_shape[nd - 1] = N;
+  b = broadcast_to(b, bsx_shape, s);
+
+  // Get output shape
+  auto out_shape = bsx_shape;
+  out_shape[nd - 2] = M;
+  out_shape[nd - 1] = N;
+
+  // Determine mask shape requirments
+  int tm = (M + tile_size - 1) / tile_size;
+  int tn = (N + tile_size - 1) / tile_size;
+  int tk = (K + tile_size - 1) / tile_size;
+
+  // Pull masks
+  array mask_out_p = mask_out.value_or(array({true}));
+  array mask_lhs_p = mask_lhs.value_or(array({true}));
+  array mask_rhs_p = mask_rhs.value_or(array({true}));
+
+  // Broadcast and astype mask
+
+  // Out mask
+  bsx_shape[nd - 2] = tm;
+  bsx_shape[nd - 1] = tn;
+  mask_out_p = astype(mask_out_p, bool_, s);
+  mask_out_p = broadcast_to(mask_out_p, bsx_shape, s);
+
+  // LHS mask
+  bsx_shape[nd - 2] = tm;
+  bsx_shape[nd - 1] = tk;
+  mask_lhs_p = astype(mask_lhs_p, bool_, s);
+  mask_lhs_p = broadcast_to(mask_lhs_p, bsx_shape, s);
+
+  // RHS mask
+  bsx_shape[nd - 2] = tk;
+  bsx_shape[nd - 1] = tn;
+  mask_rhs_p = astype(mask_rhs_p, bool_, s);
+  mask_rhs_p = broadcast_to(mask_rhs_p, bsx_shape, s);
+
+  // Do calculation
+
+  // Expand masks
+  int nd_expand = mask_out_p.ndim() + 2;
+  std::vector<int> starts(a.ndim(), 0);
+
+  // Out mask
+  mask_out_p = expand_dims(mask_out_p, {-3, -1}, s);
+  auto out_mask_shape_exp = mask_out_p.shape();
+  out_mask_shape_exp[nd_expand - 3] = tile_size;
+  out_mask_shape_exp[nd_expand - 1] = tile_size;
+  mask_out_p = broadcast_to(mask_out_p, out_mask_shape_exp, s);
+
+  // Reshape
+  bsx_shape[nd - 2] = tm * tile_size;
+  bsx_shape[nd - 1] = tn * tile_size;
+  mask_out_p = reshape(mask_out_p, bsx_shape, s);
+  mask_out_p = slice(mask_out_p, starts, out_shape, s);
+
+  // LHS mask
+  mask_lhs_p = expand_dims(mask_lhs_p, {-3, -1}, s);
+  auto lhs_mask_shape_exp = mask_lhs_p.shape();
+  lhs_mask_shape_exp[nd_expand - 3] = tile_size;
+  lhs_mask_shape_exp[nd_expand - 1] = tile_size;
+  mask_lhs_p = broadcast_to(mask_lhs_p, lhs_mask_shape_exp, s);
+
+  // Reshape
+  bsx_shape[nd - 2] = tm * tile_size;
+  bsx_shape[nd - 1] = tk * tile_size;
+  mask_lhs_p = reshape(mask_lhs_p, bsx_shape, s);
+  mask_lhs_p = slice(mask_lhs_p, starts, a.shape(), s);
+
+  // RHS mask
+  mask_rhs_p = expand_dims(mask_rhs_p, {-3, -1}, s);
+  auto rhs_mask_shape_exp = mask_rhs_p.shape();
+  rhs_mask_shape_exp[nd_expand - 3] = tile_size;
+  rhs_mask_shape_exp[nd_expand - 1] = tile_size;
+  mask_rhs_p = broadcast_to(mask_rhs_p, rhs_mask_shape_exp, s);
+
+  // Reshape
+  bsx_shape[nd - 2] = tk * tile_size;
+  bsx_shape[nd - 1] = tn * tile_size;
+  mask_rhs_p = reshape(mask_rhs_p, bsx_shape, s);
+  mask_rhs_p = slice(mask_rhs_p, starts, b.shape(), s);
+
+  // Caculate array
+  a = multiply(a, mask_lhs_p, s);
+  b = multiply(b, mask_rhs_p, s);
+  auto out = matmul(a, b);
+  out = multiply(out, mask_out_p, s);
+
+  // Remove the possibly inserted singleton dimensions
+  if (in_a_ndim == 1 || in_b_ndim == 1) {
+    out_shape.erase(
+        out_shape.end() - ((in_a_ndim == 1) ? 2 : 1),
+        out_shape.end() - ((in_b_ndim == 1) ? 0 : 1));
+    out = reshape(out, out_shape, s);
+  }
+
+  return out;
+}
+
 array diagonal(
     const array& a,
     int offset /* = 0 */,

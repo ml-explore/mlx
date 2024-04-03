@@ -1064,4 +1064,144 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   return;
 }
 
+void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  using namespace mlx::steel;
+  // assert(inputs.size() == 2);
+  if (!issubdtype(out.dtype(), floating)) {
+    throw std::runtime_error(
+        "[matmul] Does not yet support non-floating point types.");
+  }
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  // Return 0s if either input is empty
+  if (a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero = array(0, a_pre.dtype());
+    copy_gpu(zero, out, CopyType::Scalar, s);
+    auto command_buffer = d.get_command_buffer(s.index);
+    command_buffer->addCompletedHandler([zero](MTL::CommandBuffer*) {});
+    return;
+  }
+
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Init checks and prep
+
+  // Keep a vector with copies to be cleared in the completed buffer to release
+  // the arrays
+  std::vector<array> copies;
+  auto check_transpose = [&copies, &s](const array& arr) {
+    auto stx = arr.strides()[arr.ndim() - 2];
+    auto sty = arr.strides()[arr.ndim() - 1];
+    if (sty == 1) {
+      return std::make_tuple(false, stx, arr);
+    } else if (stx == 1) {
+      return std::make_tuple(true, sty, arr);
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy_gpu(arr, arr_copy, CopyType::General, s);
+      copies.push_back(arr_copy);
+      size_t stx = arr.shape(-1);
+      return std::make_tuple(false, stx, arr_copy);
+    }
+  };
+
+  auto [transpose_a, a_cols, a] = check_transpose(a_pre);
+  auto [transpose_b, b_cols, b] = check_transpose(b_pre);
+
+  int lda = a_cols;
+  int ldb = b_cols;
+
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Check and collapse batch dimensions
+
+  auto [batch_shape, A_batch_stride, B_batch_stride] = collapse_batches(a, b);
+
+  auto batch_size_out = out.size() / (M * N);
+  int matrix_stride_out = M * N;
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Regular kernel dispatch
+
+  // Determine dispatch kernel
+  int bm = tile_size_, bn = tile_size_, bk = 16;
+  int wm = 2, wn = 2;
+
+  // Prepare kernel name
+  std::ostringstream kname;
+  kname << "steel_gemm_" << (transpose_a ? 't' : 'n')
+        << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
+        << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
+        << "_wm" << wm << "_wn" << wn << "_MN_"
+        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
+        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+
+  // Encode and dispatch kernel
+  auto compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Use problem size to determine threadblock swizzle
+  int tn = (N + bn - 1) / bn;
+  int tm = (M + bm - 1) / bm;
+
+  // TODO: Explore device-based tuning for swizzle
+  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+
+  // Prepare steel matmul params
+  GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ ldb,
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const int batch_stride_a = */ int(A_batch_stride.back()),
+      /* const int batch_stride_b = */ int(B_batch_stride.back()),
+      /* const int batch_stride_d = */ matrix_stride_out,
+      /* const int swizzle_log = */ swizzle_log,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ int(batch_shape.size())};
+
+  // Prepare launch grid params
+  int tile = 1 << swizzle_log;
+  tm = (tm + tile - 1) / tile;
+  tn = tn * tile;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
+
+  std::vector<size_t> batch_strides = A_batch_stride;
+  batch_strides.insert(
+      batch_strides.end(), B_batch_stride.begin(), B_batch_stride.end());
+
+  // Launch kernel
+  set_array_buffer(compute_encoder, a, 0);
+  set_array_buffer(compute_encoder, b, 1);
+  set_array_buffer(compute_encoder, out, 3);
+
+  compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
+
+  compute_encoder->setBytes(
+      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
+  compute_encoder->setBytes(
+      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+
+  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+
+  // Clear copies
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  return;
+}
+
 } // namespace mlx::core
