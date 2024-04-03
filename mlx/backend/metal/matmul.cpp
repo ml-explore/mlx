@@ -907,7 +907,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
 
     // Encode and dispatch gemm kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto compute_encoder = d.get_command_encoder(s.index, true);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 

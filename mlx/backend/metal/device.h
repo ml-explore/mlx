@@ -51,7 +51,9 @@ class Device {
   int get_command_buffer_ops(int index);
   void increment_command_buffer_ops(int index);
   void commit_command_buffer(int index);
-  MTL::ComputeCommandEncoder* get_command_encoder(int index);
+  MTL::ComputeCommandEncoder* get_command_encoder(
+      int index,
+      bool serial = false);
   void end_encoding(int index);
 
   void register_library(
