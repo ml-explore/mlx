@@ -31,7 +31,7 @@ std::pair<int, std::vector<int>> FFT::next_fast_n(int n) {
 // Plan the sequence of radices
 std::vector<int> FFT::plan_stockham_fft(int n) {
   // prefer larger radices since we do fewer expensive twiddles
-  const std::vector<int> supported_radices = {13, 11, 7, 5, 4, 3, 2};
+  const std::vector<int> supported_radices = {7, 5, 4, 3, 2};
   std::vector<int> plan(supported_radices.size());
   for (int i = 0; i < supported_radices.size(); i++) {
     int radix = supported_radices[i];
@@ -59,7 +59,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   size_t n = out.dtype() == float32 ? out.shape(axes_[0]) : in.shape(axes_[0]);
 
-  if (n > MAX_SINGLE_FFT_SIZE || n < 3) {
+  if (n > MAX_SINGLE_FFT_SIZE || n < 2) {
     throw std::runtime_error("GPU FFT is only implemented from 3 -> 2048");
   }
 
@@ -152,7 +152,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   std::vector<MTLFC> func_consts = {
       make_bool(&inverse_, 0), make_bool(&power_of_2, 1)};
 
-  const std::vector<int> supported_radices = {13, 11, 7, 5, 4, 3, 2};
+  const std::vector<int> supported_radices = {7, 5, 4, 3, 2};
   int index = 3;
   int elems_per_thread = 0;
   for (int i = 0; i < plan.size(); i++) {
