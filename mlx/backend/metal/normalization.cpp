@@ -160,7 +160,7 @@ void RMSNormVJP::eval_gpu(
     op_name += "_looped";
   }
   op_name += type_to_name(gx);
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto compute_encoder = d.get_command_encoder(s.index, true);
   {
     auto kernel = d.get_kernel(op_name);
 
@@ -350,7 +350,7 @@ void LayerNormVJP::eval_gpu(
   }
 
   // Finish with the gradient for b in case we had a b
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto compute_encoder = d.get_command_encoder(s.index, true);
   if (gb.ndim() == 1 && gb.size() == axis_size) {
     ReductionPlan plan(
         ReductionOpType::ContiguousStridedReduce, {n_rows}, {axis_size});

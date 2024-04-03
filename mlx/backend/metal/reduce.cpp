@@ -573,8 +573,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Initialize output
   auto& s = stream();
   auto& d = metal::device(s.device);
-  auto compute_encoder = d.get_command_encoder(s.index);
   {
+    auto compute_encoder = d.get_command_encoder(s.index, true);
     auto kernel = d.get_kernel("i" + op_name + type_to_name(out));
     size_t nthreads = out.size();
     MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
@@ -602,6 +602,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       in = in_copy;
       plan = get_reduction_plan(in, axes_);
     }
+    auto compute_encoder = d.get_command_encoder(s.index, true);
 
     // Reducing over everything and the data is all there no broadcasting or
     // slicing etc.
