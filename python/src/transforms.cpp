@@ -308,6 +308,8 @@ auto py_vmap(
                     throw std::invalid_argument(msg.str());
                   }
                   flat_axes.push_back(axis);
+                } else if (l.size() == 1 && l[0].is_none()) {
+                  flat_axes.push_back(-1);
                 } else {
                   throw std::invalid_argument(
                       "[vmap] axis must be int or None.");
