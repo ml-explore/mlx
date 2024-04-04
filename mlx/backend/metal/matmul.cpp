@@ -1136,7 +1136,7 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_gemm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_tile_masked_gemm_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_"
@@ -1184,6 +1184,15 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   batch_strides.insert(
       batch_strides.end(), B_batch_stride.begin(), B_batch_stride.end());
 
+  auto& out_mask = inputs[2];
+  int out_mask_stride_1 = *(out_mask.strides().end() - 2);
+  int out_mask_stride_0 = *(out_mask.strides().end() - 1);
+
+  batch_strides.insert(
+      batch_strides.end(),
+      out_mask.strides().begin(),
+      out_mask.strides().end() - 2);
+
   // Launch kernel
   set_array_buffer(compute_encoder, a, 0);
   set_array_buffer(compute_encoder, b, 1);
@@ -1195,6 +1204,10 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
   compute_encoder->setBytes(
       batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+
+  set_array_buffer(compute_encoder, out_mask, 10);
+  compute_encoder->setBytes(&out_mask_stride_1, sizeof(int), 11);
+  compute_encoder->setBytes(&out_mask_stride_0, sizeof(int), 12);
 
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 

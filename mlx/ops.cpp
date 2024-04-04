@@ -3672,81 +3672,81 @@ array tile_masked_mm(
   int tn = (N + tile_size - 1) / tile_size;
   int tk = (K + tile_size - 1) / tile_size;
 
-  // Pull masks
-  array mask_out_p = mask_out.value_or(array({true}));
-  array mask_lhs_p = mask_lhs.value_or(array({true}));
-  array mask_rhs_p = mask_rhs.value_or(array({true}));
-
   // Broadcast and astype mask
-
-  // Out mask
-  bsx_shape[nd - 2] = tm;
-  bsx_shape[nd - 1] = tn;
-  mask_out_p = astype(mask_out_p, bool_, s);
-  mask_out_p = broadcast_to(mask_out_p, bsx_shape, s);
-
-  // LHS mask
-  bsx_shape[nd - 2] = tm;
-  bsx_shape[nd - 1] = tk;
-  mask_lhs_p = astype(mask_lhs_p, bool_, s);
-  mask_lhs_p = broadcast_to(mask_lhs_p, bsx_shape, s);
-
-  // RHS mask
-  bsx_shape[nd - 2] = tk;
-  bsx_shape[nd - 1] = tn;
-  mask_rhs_p = astype(mask_rhs_p, bool_, s);
-  mask_rhs_p = broadcast_to(mask_rhs_p, bsx_shape, s);
-
-  // Do calculation
+  auto broadcast_mask = [](array mask,
+                           std::vector<int>& bs_shape,
+                           int y,
+                           int x,
+                           StreamOrDevice s) {
+    int nd_bsx = bs_shape.size();
+    bs_shape[nd_bsx - 2] = y;
+    bs_shape[nd_bsx - 1] = x;
+    mask = astype(mask, bool_, s);
+    return broadcast_to(mask, bs_shape, s);
+  };
 
   // Expand masks
-  int nd_expand = mask_out_p.ndim() + 2;
-  std::vector<int> starts(a.ndim(), 0);
+  auto expand_mask =
+      [](array mask, int tile_size, int Y, int X, StreamOrDevice s) {
+        mask = expand_dims(mask, {-3, -1}, s);
+        auto mask_shape = mask.shape();
+        int nd_expand = mask_shape.size();
+        mask_shape[nd_expand - 1] = tile_size;
+        mask_shape[nd_expand - 3] = tile_size;
+
+        mask = broadcast_to(mask, mask_shape, s);
+        std::vector<int> mask_reshape{mask_shape.begin(), mask_shape.end() - 4};
+        std::vector<int> stops = mask_reshape;
+        mask_reshape.push_back(mask.shape(-4) * tile_size);
+        mask_reshape.push_back(mask.shape(-2) * tile_size);
+
+        mask = reshape(mask, mask_reshape, s);
+        std::vector<int> starts(mask.ndim(), 0);
+        stops.push_back(Y);
+        stops.push_back(X);
+        return slice(mask, starts, stops, s);
+      };
+
+  std::vector<array> mask_list;
 
   // Out mask
-  mask_out_p = expand_dims(mask_out_p, {-3, -1}, s);
-  auto out_mask_shape_exp = mask_out_p.shape();
-  out_mask_shape_exp[nd_expand - 3] = tile_size;
-  out_mask_shape_exp[nd_expand - 1] = tile_size;
-  mask_out_p = broadcast_to(mask_out_p, out_mask_shape_exp, s);
+  array mask_out_p = mask_out.value_or(array({true}));
+  mask_out_p = broadcast_mask(mask_out_p, bsx_shape, tm, tn, s);
 
-  // Reshape
-  bsx_shape[nd - 2] = tm * tile_size;
-  bsx_shape[nd - 1] = tn * tile_size;
-  mask_out_p = reshape(mask_out_p, bsx_shape, s);
-  mask_out_p = slice(mask_out_p, starts, out_shape, s);
+  mask_list.push_back(mask_out_p);
 
-  // LHS mask
-  mask_lhs_p = expand_dims(mask_lhs_p, {-3, -1}, s);
-  auto lhs_mask_shape_exp = mask_lhs_p.shape();
-  lhs_mask_shape_exp[nd_expand - 3] = tile_size;
-  lhs_mask_shape_exp[nd_expand - 1] = tile_size;
-  mask_lhs_p = broadcast_to(mask_lhs_p, lhs_mask_shape_exp, s);
+  if (has_operand_mask) {
+    // LHS mask
+    array mask_lhs_p = mask_lhs.value_or(array({true}));
+    mask_lhs_p = broadcast_mask(mask_lhs_p, bsx_shape, tm, tk, s);
+    mask_lhs_p = expand_mask(mask_lhs_p, tile_size, M, K, s);
 
-  // Reshape
-  bsx_shape[nd - 2] = tm * tile_size;
-  bsx_shape[nd - 1] = tk * tile_size;
-  mask_lhs_p = reshape(mask_lhs_p, bsx_shape, s);
-  mask_lhs_p = slice(mask_lhs_p, starts, a.shape(), s);
+    // RHS mask
+    array mask_rhs_p = mask_rhs.value_or(array({true}));
+    mask_rhs_p = broadcast_mask(mask_rhs_p, bsx_shape, tk, tn, s);
+    mask_rhs_p = expand_mask(mask_rhs_p, tile_size, K, N, s);
 
-  // RHS mask
-  mask_rhs_p = expand_dims(mask_rhs_p, {-3, -1}, s);
-  auto rhs_mask_shape_exp = mask_rhs_p.shape();
-  rhs_mask_shape_exp[nd_expand - 3] = tile_size;
-  rhs_mask_shape_exp[nd_expand - 1] = tile_size;
-  mask_rhs_p = broadcast_to(mask_rhs_p, rhs_mask_shape_exp, s);
+    a = multiply(a, mask_lhs_p, s);
+    b = multiply(b, mask_rhs_p, s);
 
-  // Reshape
-  bsx_shape[nd - 2] = tk * tile_size;
-  bsx_shape[nd - 1] = tn * tile_size;
-  mask_rhs_p = reshape(mask_rhs_p, bsx_shape, s);
-  mask_rhs_p = slice(mask_rhs_p, starts, b.shape(), s);
+    mask_list.push_back(mask_lhs_p);
+    mask_list.push_back(mask_rhs_p);
+  }
+
+  std::vector<array> inputs = {a, b};
+  inputs.insert(inputs.end(), mask_list.begin(), mask_list.end());
 
   // Caculate array
-  a = multiply(a, mask_lhs_p, s);
-  b = multiply(b, mask_rhs_p, s);
-  auto out = matmul(a, b);
-  out = multiply(out, mask_out_p, s);
+  auto out = array(
+      out_shape,
+      out_type,
+      std::make_shared<TileMaskedMM>(to_stream(s), tile_size),
+      inputs);
+
+  if (has_out_mask && to_stream(s).device != Device::gpu) {
+    auto mask_out_p = expand_mask(mask_list.front(), tile_size, M, N, s);
+    out = multiply(out, mask_out_p, s);
+  }
 
   // Remove the possibly inserted singleton dimensions
   if (in_a_ndim == 1 || in_b_ndim == 1) {
