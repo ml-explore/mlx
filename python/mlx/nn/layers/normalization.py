@@ -1,6 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
-from typing import Tuple
+from typing import Tuple, Union, Sequence
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -91,11 +91,11 @@ class LayerNorm(Module):
     """
 
     def __init__(
-        self, dims: int, eps: float = 1e-5, affine: bool = True, bias: bool = True
+        self, dims: Union[int, Sequence[int]], eps: float = 1e-5, affine: bool = True, bias: bool = True
     ):
         super().__init__()
         if affine:
-            self.weight = mx.ones((dims,))
+            self.weight = mx.ones((dims,)) if isinstance(dims, int) else mx.ones(dims)
             if bias:
                 self.bias = mx.zeros((dims,))
         self.eps = eps
