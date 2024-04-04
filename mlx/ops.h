@@ -976,14 +976,16 @@ array rsqrt(const array& a, StreamOrDevice s = {});
 array softmax(
     const array& a,
     const std::vector<int>& axes,
+    bool precise = false,
     StreamOrDevice s = {});
 
 /** Softmax of an array. */
-array softmax(const array& a, StreamOrDevice s = {});
+array softmax(const array& a, bool precise = false, StreamOrDevice s = {});
 
 /** Softmax of an array. */
-inline array softmax(const array& a, int axis, StreamOrDevice s = {}) {
-  return softmax(a, std::vector<int>{axis}, s);
+inline array
+softmax(const array& a, int axis, bool precise = false, StreamOrDevice s = {}) {
+  return softmax(a, std::vector<int>{axis}, precise, s);
 }
 
 /** Raise elements of a to the power of b element-wise */

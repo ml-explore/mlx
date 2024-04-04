@@ -1702,7 +1702,8 @@ class SliceUpdate : public UnaryPrimitive {
 
 class Softmax : public UnaryPrimitive {
  public:
-  explicit Softmax(Stream stream) : UnaryPrimitive(stream){};
+  explicit Softmax(Stream stream, bool precise)
+      : UnaryPrimitive(stream), precise_(precise){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1710,11 +1711,13 @@ class Softmax : public UnaryPrimitive {
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(Softmax)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
+
+  bool is_equivalent(const Primitive& other) const override;
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
+  bool precise_;
 };
 
 class Sort : public UnaryPrimitive {

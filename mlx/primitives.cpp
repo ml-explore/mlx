@@ -2975,7 +2975,7 @@ std::pair<std::vector<array>, std::vector<int>> Softmax::vmap(
   } else {
     softmax_axes.push_back(-2);
   }
-  return {{softmax(inputs[0], softmax_axes, stream())}, axes};
+  return {{softmax(inputs[0], softmax_axes, precise_, stream())}, axes};
 }
 
 std::vector<array> Softmax::vjp(
@@ -2998,11 +2998,16 @@ std::vector<array> Softmax::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 1);
   assert(tangents.size() == 1);
-  auto s = softmax(primals[0], std::vector<int>{-1}, stream());
+  auto s = softmax(primals[0], std::vector<int>{-1}, precise_, stream());
   auto sv = multiply(s, tangents[0], stream());
   return {subtract(
       sv,
       multiply(s, sum(sv, std::vector<int>{-1}, true, stream()), stream()))};
+}
+
+bool Softmax::is_equivalent(const Primitive& other) const {
+  const Softmax& s_other = static_cast<const Softmax&>(other);
+  return precise_ == s_other.precise_;
 }
 
 std::pair<std::vector<array>, std::vector<int>> Sort::vmap(
