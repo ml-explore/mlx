@@ -1,5 +1,6 @@
 # Copyright © 2023 Apple Inc.
 
+from functools import partial
 from typing import Sequence, Tuple, Union
 
 import mlx.core as mx
@@ -66,6 +67,39 @@ class InstanceNorm(Module):
         return (self.weight * x + self.bias) if "weight" in self else x
 
 
+@partial(mx.compile, shapeless=True)
+def ln_norm(x, eps, weight=None, bias=None):
+    """
+    Layer normalization for input tensor x.
+
+    Args:
+        x (np.ndarray): Input tensor.
+        eps (float, optional): Small value to avoid division by zero.
+        weight (np.ndarray, optional): Weight tensor for normalization.
+        bias (np.ndarray, optional): Bias tensor for normalization.
+
+    Returns:
+        np.ndarray: Normalized tensor.
+    """
+    t = x.dtype
+    x = x.astype(mx.float32)
+
+    # Compute mean and variance along the last dimension
+    means = mx.mean(x, axis=-1, keepdims=True)
+    var = mx.var(x, axis=-1, keepdims=True)
+
+    # Normalize the input tensor
+    x = (x - means) * mx.rsqrt(var + eps)
+    x = x.astype(t)
+
+    # Apply weight and bias if provided
+    if weight is not None:
+        x = x * weight
+    if bias is not None:
+        x = x + bias
+    return x
+
+
 class LayerNorm(Module):
     r"""Applies layer normalization [1] on the inputs.
 
@@ -104,6 +138,7 @@ class LayerNorm(Module):
                 self.bias = mx.zeros((dims,))
         self.eps = eps
         self.dims = dims
+        self.affine = affine
 
     def _extra_repr(self):
         return f"{self.dims}, eps={self.eps}, affine={'weight' in self}"
@@ -111,7 +146,17 @@ class LayerNorm(Module):
     def __call__(self, x):
         weight = self.weight if "weight" in self else None
         bias = self.bias if "bias" in self else None
-        return mx.fast.layer_norm(x, weight, bias, self.eps)
+
+        if len(weight.shape) == 1:
+            return mx.fast.layer_norm(x, weight, bias, self.eps)
+        else:
+            if self.affine:
+                if bias is not None:
+                    return ln_norm(x, self.eps, weight, bias)
+                else:
+                    return ln_norm(x, self.eps, weight)
+            else:
+                return ln_norm(x, self.eps)
 
 
 class RMSNorm(Module):

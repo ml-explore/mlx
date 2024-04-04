@@ -1606,6 +1606,19 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertEqual(h_out.shape, (44, 12))
         self.assertEqual(c_out.shape, (44, 12))
 
+    def test_layer_norm(self):
+        # Test with a scalar dimension
+        layer_norm = nn.LayerNorm(dims=5, eps=1e-6, affine=True, bias=False)
+        input_data = mx.random.normal((2, 3, 5))
+        output = layer_norm(input_data)
+        self.assertEqual(output.shape, (2, 3, 5))
+
+        # Test with a sequence of dimensions
+        layer_norm = nn.LayerNorm(dims=(2, 3, 5), eps=1e-6, affine=True, bias=False)
+        input_data = mx.random.normal((2, 3, 5))
+        output = layer_norm(input_data)
+        self.assertEqual(output.shape, (2, 3, 5))
+
 
 if __name__ == "__main__":
     unittest.main()
