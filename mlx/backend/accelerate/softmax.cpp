@@ -355,6 +355,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
       break;
     case float16:
       if (precise_) {
+        std::cout << "PRECISE SMAX? " << std::endl;
         softmax<
             float16_t,
             float,
