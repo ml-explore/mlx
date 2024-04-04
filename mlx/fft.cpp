@@ -136,16 +136,16 @@ array fft_impl(
     // Guarranteed to be 1D now
     int n_1d = n.back();
 
-    // If n is larger than the maximum size, do a 4 step FFT
-    if (n_1d > 2048) {
-      return four_step_fft(in, n.back(), valid_axes[0], real, inverse, s);
-    }
-
     // Check if n can be done with the Stockham algorithm
-    auto [fast_n, _] = FFT::next_fast_n(n_1d);
-    if (fast_n > n_1d) {
-      // Precompute twiddle factors in high precision for Bluestein's
+    auto plan = FFT::plan_stockham_fft(n_1d);
+    if (plan.size() == 0 || n_1d > MAX_STOCKHAM_FFT_SIZE) {
+      // If n is larger than the maximum size, do a 4 step FFT
+      if (n_1d > MAX_BLUESTEIN_FFT_SIZE) {
+        return four_step_fft(in, n_1d, valid_axes[0], real, inverse, s);
+      }
+      // Otherwise we can use Bluestein's algorithm
       auto [bluestein_n, _] = FFT::next_fast_n(2 * n_1d - 1);
+      // Precompute twiddle factors in high precision for Bluestein's
       auto blue_outputs = array::make_arrays(
           {{bluestein_n}, {n_1d}},
           {{complex64, complex64}},

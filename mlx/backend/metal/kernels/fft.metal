@@ -73,9 +73,8 @@ void radix2(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
 }
 
 void radix3(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
-  float2 w_0 = {1.0, 0.0};
-  float2 w_1 = {-0.49999999999999983, -0.8660254037844387};
-  float2 w_2 = {-0.5000000000000004, 0.8660254037844384};
+  float2 w_1 = {-0.5, -0.8660254037844387};
+  float2 w_2 = {-0.5, 0.8660254037844384};
 
   float2 x_0 = read_buf[i];
   float2 x_1 = read_buf[i + 1*m];
@@ -90,7 +89,7 @@ void radix3(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   x_1 = complex_mul(x_1, twiddle_1);
   x_2 = complex_mul(x_2, twiddle_2);
 
-  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0);
+  float2 y_0 = x_0 + x_1 + x_2;
   float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2);
   float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_1);
 
@@ -149,7 +148,6 @@ void radix4(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
 }
 
 void radix5(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
-  float2 w_0 = {1.0, 0.0};
   float2 w_1 = {0.30901699437494745, -0.9510565162951535};
   float2 w_2 = {-0.8090169943749473, -0.5877852522924732};
   float2 w_3 = {-0.8090169943749475, 0.587785252292473};
@@ -174,7 +172,7 @@ void radix5(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   x_3 = complex_mul(x_3, twiddle_3);
   x_4 = complex_mul(x_4, twiddle_4);
 
-  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0) + complex_mul(x_3, w_0) + complex_mul(x_4, w_0);
+  float2 y_0 = x_0 + x_1 + x_2 + x_3 + x_4;
   float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2) + complex_mul(x_3, w_3) + complex_mul(x_4, w_4);
   float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_4) + complex_mul(x_3, w_1) + complex_mul(x_4, w_3);
   float2 y_3 = x_0 + complex_mul(x_1, w_3) + complex_mul(x_2, w_1) + complex_mul(x_3, w_4) + complex_mul(x_4, w_2);
@@ -188,7 +186,6 @@ void radix5(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
 }
 
 void radix7(int i, int p, int m, threadgroup float2* read_buf, threadgroup float2* write_buf) {
-  float2 w_0 = {1.0, 0.0};
   float2 w_1 = {0.6234898018587336, -0.7818314824680298};
   float2 w_2 = {-0.22252093395631434, -0.9749279121818236};
   float2 w_3 = {-0.900968867902419, -0.43388373911755823};
@@ -221,7 +218,7 @@ void radix7(int i, int p, int m, threadgroup float2* read_buf, threadgroup float
   x_5 = complex_mul(x_5, twiddle_5);
   x_6 = complex_mul(x_6, twiddle_6);
 
-  float2 y_0 = x_0 + complex_mul(x_1, w_0) + complex_mul(x_2, w_0) + complex_mul(x_3, w_0) + complex_mul(x_4, w_0) + complex_mul(x_5, w_0) + complex_mul(x_6, w_0);
+  float2 y_0 = x_0 + x_1 + x_2 + x_3 + x_4 + x_5 + x_6;
   float2 y_1 = x_0 + complex_mul(x_1, w_1) + complex_mul(x_2, w_2) + complex_mul(x_3, w_3) + complex_mul(x_4, w_4) + complex_mul(x_5, w_5) + complex_mul(x_6, w_6);
   float2 y_2 = x_0 + complex_mul(x_1, w_2) + complex_mul(x_2, w_4) + complex_mul(x_3, w_6) + complex_mul(x_4, w_1) + complex_mul(x_5, w_3) + complex_mul(x_6, w_5);
   float2 y_3 = x_0 + complex_mul(x_1, w_3) + complex_mul(x_2, w_6) + complex_mul(x_3, w_2) + complex_mul(x_4, w_5) + complex_mul(x_5, w_1) + complex_mul(x_6, w_4);
@@ -351,15 +348,15 @@ template <int tg_mem_size>
     device float2* out [[buffer(1)]],
     constant const int& n,
     constant const int& batch_size,
-    uint3 thread_position_in_grid [[thread_position_in_grid]],
-    uint3 threads_per_grid [[threads_per_grid]]) {
+    uint3 elem [[thread_position_in_grid]],
+    uint3 grid [[threads_per_grid]]) {
 
-  int fft_idx = thread_position_in_grid.z;
-  int tg_idx = thread_position_in_grid.y * n;
-  int batch_idx = thread_position_in_grid.x * threads_per_grid.y * n + tg_idx;
+  int fft_idx = elem.z;
+  int tg_idx = elem.y * n;
+  int batch_idx = elem.x * grid.y * n + tg_idx;
 
   // The number of the threads we're using for each DFT
-  int m = threads_per_grid.z;
+  int m = grid.z;
 
   // the thread group memory will be too big
   threadgroup float2 shared_in[tg_mem_size];
@@ -368,8 +365,8 @@ template <int tg_mem_size>
   threadgroup float2* write_buf = &shared_out[tg_idx];
 
   // Account for possible extra threadgroups
-  int overall_batch = thread_position_in_grid.x * threads_per_grid.y + thread_position_in_grid.y;
-  if (overall_batch >= batch_size) {
+  int grid_index = elem.x * grid.y + elem.y;
+  if (grid_index >= batch_size) {
     return;
   }
 
@@ -396,66 +393,89 @@ template <int tg_mem_size>
   }
 }
 
+
 template <int tg_mem_size>
 [[kernel]] void rfft(
     const device float* in [[buffer(0)]],
     device float2* out [[buffer(1)]],
     constant const int& n,
     constant const int& batch_size,
-    uint3 thread_position_in_grid [[thread_position_in_grid]],
-    uint3 threads_per_grid [[threads_per_grid]]) {
+    uint3 elem [[thread_position_in_grid]],
+    uint3 grid [[threads_per_grid]]) {
+
+  // For rfft, we interleave batches of two real sequences into one complex one:
+  // z_k = x_k + j.y_k
+  // X_k = (Z_k + Z_(N-k)*) / 2
+  // Y_k = -j * ((Z_k - Z_(N-k)*) / 2)
 
   int n_over_2 = (n/2) + 1;
-  int fft_idx = thread_position_in_grid.z;
-  int tg_idx = thread_position_in_grid.y * 2 * n;
-  int batch_idx = thread_position_in_grid.x * threads_per_grid.y * 2 * n + tg_idx;
-  int batch_idx_out = thread_position_in_grid.x * threads_per_grid.y * 
-      2 * n_over_2 + thread_position_in_grid.y * 2 * n_over_2;
 
-  int m = threads_per_grid.y;
+  int fft_idx = elem.z;
+  int tg_idx = elem.y * n;
+  int batch_idx = elem.x * grid.y * 2 * n + elem.y * 2 * n;
+  int batch_idx_out = elem.x * grid.y * 2 * n_over_2 + elem.y * 2 * n_over_2;
 
-  // Plan
-  // - Fast RFFT (IRFFT can be slower for now)
+  int m = grid.z;
 
   // Account for possible extra threadgroups
-  int overall_batch = thread_position_in_grid.x * threads_per_grid.y + thread_position_in_grid.y;
-  if (overall_batch >= batch_size) {
+  int grid_index = elem.x * grid.y + elem.y;
+  if (grid_index * 2 >= batch_size) {
     return;
   }
- 
+
+  int next_in = n;
+  int next_out = n_over_2;
+  // No out of bounds accesses when batch_size == 1
+  if (batch_size == 1) {
+    next_in = 0;
+    next_out = 0;
+  }
+
   threadgroup float2 shared_in[tg_mem_size];
   threadgroup float2 shared_out[tg_mem_size];
-  threadgroup float2* read_buf = shared_in;
-  threadgroup float2* write_buf = shared_out;
+  threadgroup float2* read_buf = &shared_in[tg_idx];
+  threadgroup float2* write_buf = &shared_out[tg_idx];
 
   // For rfft, interleave batches of two real sequences into one complex one (z).
   // Then compute the output as:
-  // x_k = (Z_k + Z_k*) / 2
-  // y_k = -j * ((Z_k - Z_k*) / 2)
-  for (int t = 0; t < 1; t++) {
+  // x_k = (Z_k + Z_(N-k)*) / 2
+  // y_k = -j * ((Z_k - Z_(N-k)*) / 2)
+  for (int t = 0; t < elems_per_thread_; t++) {
     int index = fft_idx + t * m;
     read_buf[index].x = in[batch_idx + index];
-    // TODO: this needs to be padding if there's nothing here
-    read_buf[index].y = in[batch_idx + index + n];
+    read_buf[index].y = in[batch_idx + index + next_in];
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  // perform_fft(fft_idx, n, m, &read_buf, &write_buf);
+  perform_fft(fft_idx, n, m, &read_buf, &write_buf);
 
-  float2 conj = {0, -1};
-  for (int t = 0; t < 1; t++) {
+  float2 conj = {1, -1};
+  float2 minus_j = {0, -1};
+  // int num_elems = ceildiv(elems_per_thread_, 2);
+  for (int t = 0; t < elems_per_thread_ / 2; t++) {
     int index = fft_idx + t * m;
-    // if (index == 0) {
-    //   out[batch_idx_out + index] = read_buf[index].x;
-    //   out[batch_idx_out + index + n] = read_buf[index].y;
-    // }
-    // float2 x_k = read_buf[index];
-    // float2 x_n_minus_k = read_buf[n - index] * conj;
-    out[batch_idx_out + index] = 9;
-    // out[batch_idx_out + index + n_over_2] = 9;
-    // out[batch_idx_out + index] = (x_k + x_n_minus_k) / 2;
-    // out[batch_idx_out + index + n_over_2] = (x_k + x_n_minus_k) / 2;
+    // Special case for first index of FFT
+    // x_0 = z_0.real
+    // y_0 = z_0.imag
+    if (index == 0) {
+      out[batch_idx_out + index].x = read_buf[index].x;
+      out[batch_idx_out + index + next_out].x = read_buf[index].y;
+    } else {
+      float2 x_k = read_buf[index];
+      float2 x_n_minus_k = read_buf[n - index] * conj;
+      out[batch_idx_out + index] = (x_k + x_n_minus_k) / 2;
+      out[batch_idx_out + index + next_out] = complex_mul(((x_k - x_n_minus_k) / 2), minus_j);
+    }
+  }
+  // Add in elements up to n/2 + 1
+  int num_left = n_over_2 - (elems_per_thread_ / 2 * m);
+  if (fft_idx < num_left) {
+    int index = fft_idx + elems_per_thread_ / 2 * m;
+    float2 x_k = read_buf[index];
+    float2 x_n_minus_k = read_buf[n - index] * conj;
+    out[batch_idx_out + index] = (x_k + x_n_minus_k) / 2;
+    out[batch_idx_out + index + next_out] = complex_mul(((x_k - x_n_minus_k) / 2), minus_j);
   }
 }
 
@@ -464,48 +484,81 @@ template <int tg_mem_size>
     const device float2* in [[buffer(0)]],
     device float* out [[buffer(1)]],
     constant const int& n,
-    uint3 thread_position_in_grid [[thread_position_in_grid]],
-    uint3 threads_per_grid [[threads_per_grid]]) {
+    constant const int& batch_size,
+    uint3 elem [[thread_position_in_grid]],
+    uint3 grid [[threads_per_grid]]) {
 
-  int batch_idx = thread_position_in_grid.x * ((n/2) + 1);
-  int batch_idx_out = thread_position_in_grid.x * n;
+  // For irfft, we can also perform two at once:
+  // Z_k = X_k + j.Y_k
+  // x_k = z_k.real
+  // y_k = z_k.imag
 
-  int i = thread_position_in_grid.y;
-  int m = threads_per_grid.y;
+  int n_over_2 = (n/2) + 1;
+
+  int fft_idx = elem.z;
+  int tg_idx = elem.y * n;
+  int batch_idx = elem.x * grid.y * 2 * n_over_2 + elem.y * 2 * n_over_2;
+  int batch_idx_out = elem.x * grid.y * 2 * n + elem.y * 2 * n;
+
+  int m = grid.z;
+
+  // Account for possible extra threadgroups
+  int grid_index = elem.x * grid.y + elem.y;
+  if (grid_index * 2 >= batch_size) {
+    return;
+  }
+
+  int next_in = n_over_2;
+  int next_out = n;
+  // No out of bounds accesses when batch_size == 1
+  if (batch_size == 1) {
+    next_in = 0;
+    next_out = 0;
+  }
 
   threadgroup float2 shared_in[tg_mem_size];
   threadgroup float2 shared_out[tg_mem_size];
-  threadgroup float2* read_buf = shared_in;
-  threadgroup float2* write_buf = shared_out;
+  threadgroup float2* read_buf = &shared_in[tg_idx];
+  threadgroup float2* write_buf = &shared_out[tg_idx];
 
   // Copy the first n/2 + 1 inputs
+  float2 plus_j = {0, 1};
+  float2 conj = {1, -1};
+
   for (int t = 0; t < elems_per_thread_ / 2; t++) {
-    shared_in[i + t * m] = in[batch_idx + i + t * m];
-    // Conjugate since this is an inverse fft
-    shared_in[i + t * m].y = -shared_in[i + t * m].y;
+    int index = fft_idx + t * m;
+    float2 x = in[batch_idx + index];
+    float2 y = in[batch_idx + index + next_in];
+    read_buf[index] = x + complex_mul(y, plus_j);
+    // conjugate for ifft
+    read_buf[index].y = -read_buf[index].y;
+    if (index > 0) {
+      read_buf[n - index] = (x * conj) + complex_mul(y * conj, plus_j);
+      read_buf[n - index].y = -read_buf[n - index].y;
+    }
   }
-  // add on the +1 in (n/2) + 1
-  if (i == 0) {
-    shared_in[elems_per_thread_ / 2 * m] = in[batch_idx + elems_per_thread_ / 2 * m];
+  // Add on the rest of the elements
+  int num_left = n - ((elems_per_thread_ / 2) * 2 * m) + 1;
+  if (fft_idx < num_left) {
+    int index = fft_idx + elems_per_thread_ / 2 * m;
+    float2 x = in[batch_idx + index];
+    float2 y = in[batch_idx + index + next_in];
+    // conjugate for ifft
+    read_buf[index] = x + complex_mul(y, plus_j);
+    read_buf[index].y = -read_buf[index].y;
+    read_buf[n - index] = (x * conj) + complex_mul(y * conj, plus_j);
+    read_buf[n - index].y = -read_buf[n - index].y;
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  // Entries (n/2) + 1: are the reversed conjugates of the first half of the array
-  for (int t = 0; t < elems_per_thread_ / 2; t++) {
-    int index = i + t * m;
-    shared_in[n - 1 - index] = shared_in[index + 1];
-    shared_in[n- 1 - index].y = -shared_in[n - 1 - index].y;
-  }
-
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-
-  perform_fft(i, n, m, &read_buf, &write_buf);
+  perform_fft(fft_idx, n, m, &read_buf, &write_buf);
 
   for (int t = 0; t < elems_per_thread_; t++) {
-    out[batch_idx_out + i + t * m] = read_buf[i + t * m].x / n;
+    int index = fft_idx + t * m;
+    out[batch_idx_out + index] = read_buf[index].x / n;
+    out[batch_idx_out + index + next_out] = read_buf[index].y / -n;
   }
-
 }
 
 template <int tg_mem_size>
@@ -517,22 +570,22 @@ template <int tg_mem_size>
     constant const int& length,
     constant const int& n,
     constant const int& batch_size,
-    uint3 thread_position_in_grid [[thread_position_in_grid]],
-    uint3 threads_per_grid [[threads_per_grid]]) {
+    uint3 elem [[thread_position_in_grid]],
+    uint3 grid [[threads_per_grid]]) {
   // Computes arbitrary length FFTs with Bluestein's algorithm
+  //
   // In numpy:
-  // out = w_k * np.fft.ifft(np.fft.fft(w_k * in, n) * w_q)
+  //   out = w_k * np.fft.ifft(np.fft.fft(w_k * in, n) * w_q)
   //
   // Where w_k and w_q are precomputed on CPU in high precision as:
-  // w_k = np.exp(-1j * np.pi / n * (np.arange(-n + 1, n) ** 2))
-  // w_q = np.fft.fft(1/w_k[-n:])
+  //   w_k = np.exp(-1j * np.pi / n * (np.arange(-n + 1, n) ** 2))
+  //   w_q = np.fft.fft(1/w_k[-n:])
 
-  int fft_idx = thread_position_in_grid.z;
-  int tg_idx = thread_position_in_grid.y * n;
-  int batch_idx = thread_position_in_grid.x * threads_per_grid.y * length + thread_position_in_grid.y * length;
+  int fft_idx = elem.z;
+  int tg_idx = elem.y * n;
+  int batch_idx = elem.x * grid.y * length + elem.y * length;
 
-  // Is this right? Should be if it's 9  3/
-  int m = threads_per_grid.z;
+  int m = grid.z;
 
   threadgroup float2 shared_in[tg_mem_size];
   threadgroup float2 shared_out[tg_mem_size];
@@ -540,8 +593,8 @@ template <int tg_mem_size>
   threadgroup float2* write_buf = &shared_out[tg_idx];
 
   // Account for possible extra threadgroups
-  int overall_batch = thread_position_in_grid.x * threads_per_grid.y + thread_position_in_grid.y;
-  if (overall_batch >= batch_size) {
+  int grid_index = elem.x * grid.y + elem.y;
+  if (grid_index >= batch_size) {
     return;
   }
 
@@ -603,8 +656,8 @@ template <int tg_mem_size>
       device float2* out [[buffer(1)]], \
     constant const int& n, \
     constant const int& batch_size, \
-    uint3 thread_position_in_grid [[thread_position_in_grid]], \
-    uint3 threads_per_grid [[threads_per_grid]]);
+    uint3 elem [[thread_position_in_grid]], \
+    uint3 grid [[threads_per_grid]]);
 
 #define instantiate_rfft(tg_mem_size) \
   template [[host_name("rfft_mem_" #tg_mem_size)]] \
@@ -613,8 +666,8 @@ template <int tg_mem_size>
       device float2* out [[buffer(1)]], \
     constant const int& n, \
     constant const int& batch_size, \
-    uint3 thread_position_in_grid [[thread_position_in_grid]], \
-    uint3 threads_per_grid [[threads_per_grid]]);
+    uint3 elem [[thread_position_in_grid]], \
+    uint3 grid [[threads_per_grid]]);
 
 #define instantiate_irfft(tg_mem_size) \
   template [[host_name("irfft_mem_" #tg_mem_size)]] \
@@ -622,8 +675,9 @@ template <int tg_mem_size>
       const device float2* in [[buffer(0)]], \
       device float* out [[buffer(1)]], \
     constant const int& n, \
-    uint3 thread_position_in_grid [[thread_position_in_grid]], \
-    uint3 threads_per_grid [[threads_per_grid]]);
+    constant const int& batch_size, \
+    uint3 elem [[thread_position_in_grid]], \
+    uint3 grid [[threads_per_grid]]);
 
 #define instantiate_bluestein(tg_mem_size) \
   template [[host_name("bluestein_fft_mem_" #tg_mem_size)]] \
@@ -635,8 +689,8 @@ template <int tg_mem_size>
     constant const int& length, \
     constant const int& n, \
     constant const int& batch_size, \
-    uint3 thread_position_in_grid [[thread_position_in_grid]], \
-    uint3 threads_per_grid [[threads_per_grid]]);
+    uint3 elem [[thread_position_in_grid]], \
+    uint3 grid [[threads_per_grid]]);
 
 #define instantiate_ffts(tg_mem_size) \
     instantiate_fft(tg_mem_size) \

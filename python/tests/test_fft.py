@@ -95,6 +95,12 @@ class TestFFT(mlx_tests.MLXTestCase):
             a_np = r + 1j * i
             self.check_mx_np(mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol)
 
+        for large_num in [1024 * 16, 1037, 3**7]:
+            r = np.random.rand(large_num).astype(np.float32)
+            i = np.random.rand(large_num).astype(np.float32)
+            a_np = r + 1j * i
+            self.check_mx_np(mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol)
+
         shape = (5, 7, 8)
         for k in range(4, 12):
             r = np.random.rand(*shape, 2**k).astype(np.float32)

@@ -84,23 +84,9 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
         }
       }
 
-      auto flags = x.flags();
-      size_t f_stride = 1;
-      size_t b_stride = 1;
-      flags.col_contiguous = true;
-      flags.row_contiguous = true;
-      for (int i = 0, ri = x.ndim() - 1; i < x.ndim(); ++i, --ri) {
-        flags.col_contiguous &= (strides[i] == f_stride || x.shape(i) == 1);
-        f_stride *= x.shape(i);
-        flags.row_contiguous &= (strides[ri] == b_stride || x.shape(ri) == 1);
-        b_stride *= x.shape(ri);
-      }
-      // This is probably over-conservative
-      flags.contiguous = false;
-
       copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
       copies.back().set_data(
-          allocator::malloc_or_wait(x.nbytes()), x.data_size(), strides, flags);
+          allocator::malloc_or_wait(x.nbytes()), x.data_size(), strides, {});
       copy_gpu_inplace(x, copies.back(), CopyType::GeneralGeneral, s);
       return copies.back();
     }
@@ -123,7 +109,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       allocator::malloc_or_wait(out.nbytes()),
       out.data_size(),
       out_strides,
-      in_contiguous.flags());
+      {});
 
   int bluestein_n = -1;
   auto plan = plan_stockham_fft(n);
@@ -172,19 +158,24 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   // We batch among threadgroups for improved efficiency when n is small
   int threadgroup_batch_size = std::max(MIN_THREADGROUP_MEM_SIZE / fft_size, 1);
   int threadgroup_mem_size = next_power_of_2(threadgroup_batch_size * fft_size);
-  // std::cout << "threadgroup_mem_size " << threadgroup_mem_size << std::endl;
 
   // ceil divide
   int batch_size =
       (total_batch_size + threadgroup_batch_size - 1) / threadgroup_batch_size;
 
-  // std::cout << "batch_size " << batch_size << std::endl;
-  // std::cout << "threadgroup_batch_size " << threadgroup_batch_size <<
-  // std::endl; std::endl; std::cout << "threads_per_fft " << threads_per_fft <<
-  // std::endl; std::cout << "total_batch_size " << total_batch_size <<
-  // std::endl; std::cout << "n " << n << std::endl; std::cout << "bluestein_n "
-  // << bluestein_n << std::endl; std::cout << "elems_per_thread " <<
-  // elems_per_thread << std::endl;
+  std::cout << "batch size " << batch_size << std::endl;
+  std::cout << "threadgroup_batch_size" << threadgroup_batch_size << std::endl;
+
+  if (real_) {
+    // We can perform 2 RFFTs or IRFFTs at once so the batch size is halved.
+    batch_size = (batch_size + 2 - 1) / 2;
+  }
+  std::cout << "batch size " << batch_size << std::endl;
+  std::cout << "threadgroup_batch_size " << threadgroup_batch_size << std::endl;
+  std::cout << "total batch size" << total_batch_size << std::endl;
+  std::cout << "elems per thread " << elems_per_thread << std::endl;
+  std::cout << "threads per fft " << threads_per_fft << std::endl;
+  std::cout << "n " << n << std::endl;
 
   int out_buffer_size = out.size();
 
@@ -225,11 +216,6 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&n, sizeof(int), 2);
       compute_encoder->setBytes(&total_batch_size, sizeof(int), 3);
     }
-
-    // std::cout << "input shape " << in.shape(0) << " " << in.shape(1) <<
-    // std::endl;
-    // std::cout << "out shape " << out.shape(0) << " " << out.shape(1) <<
-    // std::endl;
 
     auto group_dims = MTL::Size(1, threadgroup_batch_size, threads_per_fft);
     auto grid_dims =
