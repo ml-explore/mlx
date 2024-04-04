@@ -2622,22 +2622,11 @@ array softmax(
     bool precise /* = false */,
     StreamOrDevice s /* = {}*/) {
   if (axes.size() == 1 && (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
-    auto stream = to_stream(s);
     auto dtype = at_least_float(a.dtype());
-    if (stream.device == Device::cpu && precise) {
-      return astype(
-          array(
-              a.shape(),
-              float32,
-              std::make_shared<Softmax>(stream, false),
-              {astype(a, float32, s)}),
-          dtype,
-          s);
-    }
     return array(
         a.shape(),
         dtype,
-        std::make_shared<Softmax>(stream, precise),
+        std::make_shared<Softmax>(to_stream(s), precise),
         {astype(a, dtype, s)});
   } else {
     auto in = a;
