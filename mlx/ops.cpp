@@ -3056,7 +3056,7 @@ array quantized_matmul(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
-  auto x = in_x;
+  array x = in_x;
   if (w.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[quantized_matmul] The weight matrix should be uint32 "
