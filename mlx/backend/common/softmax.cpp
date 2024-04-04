@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 #include <cmath>
@@ -22,9 +22,10 @@ void softmax(const array& in, array& out) {
   for (int i = 0; i < M; i++, in_ptr += N, out_ptr += N) {
     // Find the maximum
     current_in_ptr = in_ptr;
-    T maximum = *current_in_ptr;
+    AccT maximum = *current_in_ptr;
     for (int j = 0; j < N; j++, current_in_ptr++) {
-      maximum = (maximum < *current_in_ptr) ? *current_in_ptr : maximum;
+      maximum = (maximum < *current_in_ptr) ? static_cast<AccT>(*current_in_ptr)
+                                            : maximum;
     }
 
     // Compute the normalizer and the exponentials
@@ -32,22 +33,24 @@ void softmax(const array& in, array& out) {
     current_out_ptr = out_ptr;
     current_in_ptr = in_ptr;
     for (int j = 0; j < N; j++, current_out_ptr++, current_in_ptr++) {
-      AccT expv = std::exp(static_cast<AccT>(*current_in_ptr) - maximum);
+      AccT expv = std::exp(*current_in_ptr - maximum);
       normalizer += expv;
-      if (std::is_same<T, AccT>::value) {
+      if constexpr (std::is_same<T, AccT>::value) {
         *current_out_ptr = expv;
       }
     }
     normalizer = 1 / normalizer;
 
     // Normalize
+    current_in_ptr = in_ptr;
     current_out_ptr = out_ptr;
     for (int j = 0; j < N; j++, current_out_ptr++) {
-      if (std::is_same<T, AccT>::value) {
-        *current_out_ptr *= static_cast<T>(normalizer);
+      if constexpr (std::is_same<T, AccT>::value) {
+        *current_out_ptr *= normalizer;
       } else {
-        auto v = std::exp(static_cast<AccT>(*current_in_ptr) - maximum);
+        auto v = std::exp(*current_in_ptr - maximum);
         *current_out_ptr = static_cast<T>(v * normalizer);
+        current_in_ptr++;
       }
     }
   }

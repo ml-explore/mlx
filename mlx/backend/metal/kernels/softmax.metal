@@ -36,14 +36,14 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
 
   in += gid * axis_size + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
-    for (int i=0; i<N_READS; i++) {
-        ld[i] = AccT(in[i]);
+    for (int i = 0; i < N_READS; i++) {
+      ld[i] = AccT(in[i]);
     }
   } else {
-      for (int i = 0; i < N_READS; i++) {
-        ld[i] =
-            ((lid * N_READS + i) < axis_size) ? AccT(in[i]) : Limits<AccT>::finite_min;
-      }
+    for (int i = 0; i < N_READS; i++) {
+      ld[i] = ((lid * N_READS + i) < axis_size) ? AccT(in[i])
+                                                : Limits<AccT>::finite_min;
+    }
   }
   if (simd_group_id == 0) {
     local_max[simd_lane_id] = Limits<AccT>::finite_min;
@@ -94,15 +94,15 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
   // Normalize and write to the output
   out += gid * axis_size + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
-    for (int i=0; i<N_READS; i++) {
-        out[i] = T(ld[i] * normalizer);
+    for (int i = 0; i < N_READS; i++) {
+      out[i] = T(ld[i] * normalizer);
     }
   } else {
-      for (int i = 0; i < N_READS; i++) {
-        if ((lid * N_READS + i) < axis_size) {
-          out[i] = T(ld[i] * normalizer);
-        }
+    for (int i = 0; i < N_READS; i++) {
+      if ((lid * N_READS + i) < axis_size) {
+        out[i] = T(ld[i] * normalizer);
       }
+    }
   }
 }
 
@@ -137,8 +137,8 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
-        vals[i] =
-            (offset + i < axis_size) ? AccT(in[offset + i]) : Limits<AccT>::finite_min;
+        vals[i] = (offset + i < axis_size) ? AccT(in[offset + i])
+                                           : Limits<AccT>::finite_min;
       }
     }
     prevmax = maxval;
@@ -184,13 +184,14 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
        r++) {
     int offset = r * lsize * N_READS + lid * N_READS;
     if (offset + N_READS <= axis_size) {
-      for (int i=0; i<N_READS; i++) {
+      for (int i = 0; i < N_READS; i++) {
         out[offset + i] = T(softmax_exp(in[offset + i] - maxval) * normalizer);
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
         if (offset + i < axis_size) {
-          out[offset + i] = T(softmax_exp(in[offset + i] - maxval) * normalizer);
+          out[offset + i] =
+              T(softmax_exp(in[offset + i] - maxval) * normalizer);
         }
       }
     }

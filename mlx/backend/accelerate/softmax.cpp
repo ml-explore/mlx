@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 #include <limits>
@@ -242,7 +242,15 @@ void softmax(const array& in, array& out) {
     current_in_ptr = in_ptr;
     s = M;
     while (s >= N) {
-      VT vexp = ops.exp(ops.sub(*(VT*)current_in_ptr, maximum));
+      VT vexp;
+      if constexpr (std::is_same<T, AccT>::value) {
+        vexp = ops.load(current_in_ptr);
+      } else {
+        for (int i = 0; i < N; ++i) {
+          vexp[i] = static_cast<AccT>(current_in_ptr[i]);
+        }
+      }
+      vexp = ops.exp(ops.sub(vexp, maximum));
       if constexpr (std::is_same<T, AccT>::value) {
         ops.store(current_out_ptr, vexp);
       }
@@ -265,6 +273,7 @@ void softmax(const array& in, array& out) {
 
     // Normalize
     current_out_ptr = out_ptr;
+    current_in_ptr = in_ptr;
     s = M;
     while (s >= N) {
       if constexpr (std::is_same<T, AccT>::value) {
@@ -274,20 +283,22 @@ void softmax(const array& in, array& out) {
         for (int i = 0; i < N; ++i) {
           vexp[i] = static_cast<AccT>(current_in_ptr[i]);
         }
-        vexp = ops.exp(ops.sub(vexp, maximum));
+        vexp = ops.mul(ops.exp(ops.sub(vexp, maximum)), normalizer);
         for (int i = 0; i < N; ++i) {
           current_out_ptr[i] = vexp[i];
         }
+        current_in_ptr += N;
       }
       current_out_ptr += N;
       s -= N;
     }
     while (s-- > 0) {
-      if (std::is_same<T, AccT>::value) {
+      if constexpr (std::is_same<T, AccT>::value) {
         *current_out_ptr *= normalizer;
       } else {
         AccT _exp = std::exp(*current_in_ptr - maximum);
         *current_out_ptr = static_cast<T>(_exp * normalizer);
+        current_in_ptr++;
       }
       current_out_ptr++;
     }
@@ -344,6 +355,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
       break;
     case float16:
       if (precise_) {
+        std::cout << "PRECISE SMAX? " << std::endl;
         softmax<
             float16_t,
             float,
