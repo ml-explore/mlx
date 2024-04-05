@@ -11,8 +11,12 @@ option(BUILD_SHARED_LIBS "Build extensions as a shared library" ON)
 
 # ----------------------------- Dependencies -----------------------------
 find_package(MLX CONFIG REQUIRED)
-find_package(Python COMPONENTS Interpreter Development)
-find_package(pybind11 CONFIG REQUIRED)
+find_package(Python 3.8 COMPONENTS Interpreter Development.Module REQUIRED)
+execute_process(
+  COMMAND "${Python_EXECUTABLE}" -m nanobind --cmake_dir
+  OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE NB_DIR)
+list(APPEND CMAKE_PREFIX_PATH "${NB_DIR}")
+find_package(nanobind CONFIG REQUIRED)
 
 # ----------------------------- Extensions -----------------------------
 
@@ -54,9 +58,11 @@ if(MLX_BUILD_METAL)
 
 endif()
 
-# ----------------------------- Pybind -----------------------------
-pybind11_add_module(
-  mlx_sample_extensions
+# ----------------------------- Python Bindings -----------------------------
+nanobind_add_module(
+  core
+  NB_STATIC STABLE_ABI LTO NOMINSIZE
+  NB_DOMAIN mlx_extension
   ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
 )
 target_link_libraries(mlx_sample_extensions PRIVATE mlx_ext)
