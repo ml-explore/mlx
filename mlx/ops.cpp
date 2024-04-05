@@ -1015,19 +1015,30 @@ array transpose(
   for (auto& ax : axes) {
     ax = ax < 0 ? ax + a.ndim() : ax;
   }
-  std::set dims(axes.begin(), axes.end());
-  if (dims.size() != axes.size()) {
-    throw std::invalid_argument("Repeat axes not allowed in transpose.");
+  if (axes.size() != a.ndim()) {
+    std::ostringstream msg;
+    msg << "[transpose] Recived " << axes.size() << " axes for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
   }
-  if (dims.size() != a.ndim() ||
-      a.ndim() > 0 &&
-          (*dims.begin() != 0 || *dims.rbegin() != (a.ndim() - 1))) {
-    throw std::invalid_argument("Transpose axes don't match array dimensions.");
+
+  // Check in bounds and for duplicates
+  std::vector<int> shape(axes.size(), 0);
+  for (auto& ax : axes) {
+    if (ax < 0 || ax >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[transpose] Invalid axis (" << ax << ") for array with "
+          << a.ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (shape[ax] != 0) {
+      throw std::invalid_argument("[transpose] Repeat axes not allowed.");
+    }
+    shape[ax] = 1;
   }
-  std::vector<int> shape;
-  shape.reserve(axes.size());
-  for (auto ax : axes) {
-    shape.push_back(a.shape()[ax]);
+
+  for (int i = 0; i < axes.size(); ++i) {
+    shape[i] = a.shape()[axes[i]];
   }
   return array(
       std::move(shape),

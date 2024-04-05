@@ -33,10 +33,10 @@ inline std::vector<int> get_reduce_axes(const IntOrVec& v, int dims) {
 }
 
 inline array to_array_with_accessor(nb::object obj) {
-  if (nb::hasattr(obj, "__mlx_array__")) {
-    return nb::cast<array>(obj.attr("__mlx_array__")());
-  } else if (nb::isinstance<array>(obj)) {
+  if (nb::isinstance<array>(obj)) {
     return nb::cast<array>(obj);
+  } else if (nb::hasattr(obj, "__mlx_array__")) {
+    return nb::cast<array>(obj.attr("__mlx_array__")());
   } else {
     std::ostringstream msg;
     msg << "Invalid type  " << nb::type_name(obj.type()).c_str()
