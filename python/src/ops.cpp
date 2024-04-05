@@ -2515,6 +2515,40 @@ void init_ops(nb::module_& m) {
             array: The resulting stacked array.
       )pbdoc");
   m.def(
+      "meshgrid",
+      [](nb::args arrays_,
+         bool copy,
+         bool sparse,
+         std::string indexing,
+         StreamOrDevice s) {
+        std::vector<array> arrays = nb::cast<std::vector<array>>(arrays_);
+        return meshgrid(arrays, copy, sparse, indexing, s);
+      },
+      "arrays"_a,
+      "copy"_a = true,
+      "sparse"_a = false,
+      "indexing"_a = "xy",
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def meshgrid(*arrays: array, copy: Optional[bool] = true, sparse: Optional[bool] = false, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Generate multidimensional coordinate grids from 1-D coordinate arrays
+
+        Args:
+            arrays (array): Input arrays.
+            copy (bool, optional): If ``True``, the returned arrays are copies. If ``False``,
+              a view into the original arrays are returned in order to conserve memory. 
+              Defaults to ``True``.
+            sparse (bool, optional): If ``True``, a sparse grid is returned in which each output
+              array has a single non-zero element. If ``False``, a dense grid is returned.
+              Defaults to ``False``.
+            indexing (str, optional): Cartesian ('xy') or matrix ('ij') indexing of the output arrays.
+              Defaults to ``'xy'``.
+
+        Returns:
+            list(array): The output arrays.
+      )pbdoc");
+  m.def(
       "repeat",
       [](const array& array,
          int repeats,

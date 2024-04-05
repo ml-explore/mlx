@@ -83,6 +83,7 @@ Operations
    max
    maximum
    mean
+   meshgrid
    min
    minimum
    moveaxis

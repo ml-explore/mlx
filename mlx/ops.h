@@ -197,6 +197,14 @@ std::vector<array> split(
 std::vector<array>
 split(const array& a, const std::vector<int>& indices, StreamOrDevice s = {});
 
+/** A vector of coordinate arrays from coordinate vectors. */
+std::vector<array> meshgrid(
+    std::vector<array>& arrays,
+    const bool copy = true,
+    const bool sparse = false,
+    const std::string& indexing = "xy",
+    StreamOrDevice s = {});
+
 /**
  * Clip (limit) the values in an array.
  */

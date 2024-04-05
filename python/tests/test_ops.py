@@ -1448,6 +1448,56 @@ class TestOps(mlx_tests.MLXTestCase):
             b = mx.array([1, 2])
             mx.concatenate([a, b], axis=0)
 
+    def test_meshgrid(self):
+        x = mx.array([1, 2, 3], dtype=mx.int32)
+        y = np.array([1, 2, 3], dtype=np.int32)
+
+        # test single input
+        a_mlx = mx.meshgrid(x)
+        a_np = np.meshgrid(y)
+        self.assertEqualArray(a_mlx[0], mx.array(a_np[0]))
+
+        # test sparse
+        a_mlx, b_mlx, c_mlx = mx.meshgrid(x, x, x, sparse=True)
+        a_np, b_np, c_np = np.meshgrid(y, y, y, sparse=True)
+        self.assertEqualArray(a_mlx, mx.array(a_np))
+        self.assertEqualArray(b_mlx, mx.array(b_np))
+        self.assertEqualArray(c_mlx, mx.array(c_np))
+
+        # test different lengths
+        x = mx.array([1, 2], dtype=mx.int32)
+        y = mx.array([1, 2, 3], dtype=mx.int32)
+        z = np.array([1, 2], dtype=np.int32)
+        w = np.array([1, 2, 3], dtype=np.int32)
+        a_mlx, b_mlx = mx.meshgrid(x, y)
+        a_np, b_np = np.meshgrid(z, w)
+        self.assertEqualArray(a_mlx, mx.array(a_np))
+        self.assertEqualArray(b_mlx, mx.array(b_np))
+
+        # test empty input
+        x = mx.array([], dtype=mx.int32)
+        y = np.array([], dtype=np.int32)
+        a_mlx = mx.meshgrid(x)
+        a_np = np.meshgrid(y)
+        self.assertEqualArray(a_mlx[0], mx.array(a_np[0]))
+
+        # test float input
+        x = mx.array([1.1, 2.2, 3.3], dtype=mx.float32)
+        y = np.array([1.1, 2.2, 3.3], dtype=np.float32)
+        a_mlx = mx.meshgrid(x, x, x)
+        a_np = np.meshgrid(y, y, y)
+        self.assertEqualArray(a_mlx[0], mx.array(a_np[0]))
+        self.assertEqualArray(a_mlx[1], mx.array(a_np[1]))
+        self.assertEqualArray(a_mlx[2], mx.array(a_np[2]))
+
+        # test indexing
+        x = mx.array([1.1, 2.2, 3.3, 4.4, 5.5], dtype=mx.float32)
+        y = np.array([1.1, 2.2, 3.3, 4.4, 5.5], dtype=np.float32)
+        a_mlx = mx.meshgrid(x, x, indexing="ij")
+        a_np = np.meshgrid(y, y, indexing="ij")
+        self.assertEqualArray(a_mlx[0], mx.array(a_np[0]))
+        self.assertEqualArray(a_mlx[1], mx.array(a_np[1]))
+
     def test_pad(self):
         pad_width_and_values = [
             ([(1, 1), (1, 1), (1, 1)], 0),
@@ -1730,7 +1780,7 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = mx.array(np.linspace(0, 1))
         self.assertEqualArray(a, expected)
 
-        # Test int32 dtype
+        # Test int64 dtype
         b = mx.linspace(0, 10, 5, mx.int64)
         expected = mx.array(np.linspace(0, 10, 5, dtype=int))
         self.assertEqualArray(b, expected)

@@ -3142,3 +3142,27 @@ TEST_CASE("test topk") {
     CHECK(array_equal(y, array({5, 6, 7, 8, 9}, {1, 5})).item<bool>());
   }
 }
+
+TEST_CASE("test meshgrid") {
+  auto x = array({1, 2, 3}, {3});
+  auto in = std::vector<array>{x, x};
+
+  // test default
+  auto out = meshgrid(in);
+  auto expected_zero = array({1, 2, 3, 1, 2, 3, 1, 2, 3}, {3, 3});
+  auto expected_one = array({1, 1, 1, 2, 2, 2, 3, 3, 3}, {3, 3});
+  CHECK(array_equal(out[0], expected_zero).item<bool>());
+  CHECK(array_equal(out[1], expected_one).item<bool>());
+
+  // test sparse true
+  out = meshgrid(in, true, true);
+  expected_zero = array({1, 2, 3}, {1, 3});
+  expected_one = array({1, 2, 3}, {3, 1});
+  CHECK(array_equal(out[0], expected_zero).item<bool>());
+  CHECK(array_equal(out[1], expected_one).item<bool>());
+
+  // test copy false
+  out = meshgrid(in, false);
+  CHECK(array_equal(out[0], in[0]).item<bool>());
+  CHECK(array_equal(out[1], in[1]).item<bool>());
+}
