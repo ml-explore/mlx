@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 #include <cmath>
@@ -10,7 +10,7 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T>
+template <typename T, typename AccT>
 void softmax(const array& in, array& out) {
   const T* in_ptr = in.data<T>();
   T* out_ptr = out.data<T>();
@@ -22,26 +22,36 @@ void softmax(const array& in, array& out) {
   for (int i = 0; i < M; i++, in_ptr += N, out_ptr += N) {
     // Find the maximum
     current_in_ptr = in_ptr;
-    T maximum = *current_in_ptr;
+    AccT maximum = *current_in_ptr;
     for (int j = 0; j < N; j++, current_in_ptr++) {
-      maximum = (maximum < *current_in_ptr) ? *current_in_ptr : maximum;
+      maximum = (maximum < *current_in_ptr) ? static_cast<AccT>(*current_in_ptr)
+                                            : maximum;
     }
 
     // Compute the normalizer and the exponentials
-    T normalizer = 0;
+    AccT normalizer = 0;
     current_out_ptr = out_ptr;
     current_in_ptr = in_ptr;
     for (int j = 0; j < N; j++, current_out_ptr++, current_in_ptr++) {
-      T expv = std::exp(*current_in_ptr - maximum);
+      AccT expv = std::exp(*current_in_ptr - maximum);
       normalizer += expv;
-      *current_out_ptr = expv;
+      if constexpr (std::is_same<T, AccT>::value) {
+        *current_out_ptr = expv;
+      }
     }
     normalizer = 1 / normalizer;
 
     // Normalize
+    current_in_ptr = in_ptr;
     current_out_ptr = out_ptr;
     for (int j = 0; j < N; j++, current_out_ptr++) {
-      *current_out_ptr *= normalizer;
+      if constexpr (std::is_same<T, AccT>::value) {
+        *current_out_ptr *= normalizer;
+      } else {
+        auto v = std::exp(*current_in_ptr - maximum);
+        *current_out_ptr = static_cast<T>(v * normalizer);
+        current_in_ptr++;
+      }
     }
   }
 }
@@ -91,13 +101,21 @@ void Softmax::eval(const std::vector<array>& inputs, array& out) {
           "Softmax is defined only for floating point types");
       break;
     case float32:
-      softmax<float>(in, out);
+      softmax<float, float>(in, out);
       break;
     case float16:
-      softmax<float16_t>(in, out);
+      if (precise_) {
+        softmax<float16_t, float>(in, out);
+      } else {
+        softmax<float16_t, float16_t>(in, out);
+      }
       break;
     case bfloat16:
-      softmax<bfloat16_t>(in, out);
+      if (precise_) {
+        softmax<bfloat16_t, float>(in, out);
+      } else {
+        softmax<bfloat16_t, bfloat16_t>(in, out);
+      }
       break;
     case complex64:
       throw std::invalid_argument(

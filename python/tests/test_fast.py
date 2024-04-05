@@ -375,6 +375,17 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertLess(mx.abs(gb1).max(), 1e-9)
         self.assertLess(mx.abs(gb2).max(), 1e-9)
 
+    def test_layer_norm_grad_no_params(self):
+        eps = 1e-5
+        f1 = lambda x: layer_norm(x, None, None, eps).sum()
+        f2 = lambda x: mx.fast.layer_norm(x, None, None, eps).sum()
+        x = mx.random.normal(shape=(2, 2, 8))
+        mx.eval(x)
+
+        gx1 = mx.grad(f1)(x)
+        gx2 = mx.grad(f2)(x)
+        self.assertTrue(mx.allclose(gx1, gx2, atol=1e-6))
+
     def test_layer_norm_grad_params(self):
         eps = 1e-5
         f1 = lambda params, x: (layer_norm(x, params[0], params[1], eps)).sum()
