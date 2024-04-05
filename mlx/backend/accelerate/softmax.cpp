@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 #include <limits>
@@ -201,7 +201,7 @@ struct NeonFp16SimdOps {
   }
 };
 
-template <typename T, typename VT, typename Ops, int N>
+template <typename T, typename AccT, typename VT, typename Ops, int N>
 void softmax(const array& in, array& out) {
   Ops ops;
 
@@ -218,13 +218,21 @@ void softmax(const array& in, array& out) {
     VT vmaximum = ops.init(-std::numeric_limits<float>::infinity());
     size_t s = M;
     while (s >= N) {
-      vmaximum = ops.max(ops.load(current_in_ptr), vmaximum);
+      VT vals;
+      if constexpr (std::is_same<T, AccT>::value) {
+        vals = ops.load(current_in_ptr);
+      } else {
+        for (int i = 0; i < N; ++i) {
+          vals[i] = static_cast<AccT>(current_in_ptr[i]);
+        }
+      }
+      vmaximum = ops.max(vals, vmaximum);
       current_in_ptr += N;
       s -= N;
     }
-    T maximum = ops.reduce_max(vmaximum);
+    AccT maximum = ops.reduce_max(vmaximum);
     while (s-- > 0) {
-      maximum = std::max(maximum, *current_in_ptr);
+      maximum = std::max(maximum, static_cast<AccT>(*current_in_ptr));
       current_in_ptr++;
     }
 
@@ -234,18 +242,29 @@ void softmax(const array& in, array& out) {
     current_in_ptr = in_ptr;
     s = M;
     while (s >= N) {
-      VT vexp = ops.exp(ops.sub(*(VT*)current_in_ptr, maximum));
-      ops.store(current_out_ptr, vexp);
-      *(VT*)current_out_ptr = vexp;
+      VT vexp;
+      if constexpr (std::is_same<T, AccT>::value) {
+        vexp = ops.load(current_in_ptr);
+      } else {
+        for (int i = 0; i < N; ++i) {
+          vexp[i] = static_cast<AccT>(current_in_ptr[i]);
+        }
+      }
+      vexp = ops.exp(ops.sub(vexp, maximum));
+      if constexpr (std::is_same<T, AccT>::value) {
+        ops.store(current_out_ptr, vexp);
+      }
       vnormalizer = ops.add(vnormalizer, vexp);
       current_in_ptr += N;
       current_out_ptr += N;
       s -= N;
     }
-    T normalizer = ops.reduce_add(vnormalizer);
+    AccT normalizer = ops.reduce_add(vnormalizer);
     while (s-- > 0) {
-      T _exp = std::exp(*current_in_ptr - maximum);
-      *current_out_ptr = _exp;
+      AccT _exp = std::exp(*current_in_ptr - maximum);
+      if (std::is_same<T, AccT>::value) {
+        *current_out_ptr = _exp;
+      }
       normalizer += _exp;
       current_in_ptr++;
       current_out_ptr++;
@@ -254,14 +273,33 @@ void softmax(const array& in, array& out) {
 
     // Normalize
     current_out_ptr = out_ptr;
+    current_in_ptr = in_ptr;
     s = M;
     while (s >= N) {
-      ops.store(current_out_ptr, ops.mul(*(VT*)current_out_ptr, normalizer));
+      if constexpr (std::is_same<T, AccT>::value) {
+        ops.store(current_out_ptr, ops.mul(*(VT*)current_out_ptr, normalizer));
+      } else {
+        VT vexp;
+        for (int i = 0; i < N; ++i) {
+          vexp[i] = static_cast<AccT>(current_in_ptr[i]);
+        }
+        vexp = ops.mul(ops.exp(ops.sub(vexp, maximum)), normalizer);
+        for (int i = 0; i < N; ++i) {
+          current_out_ptr[i] = vexp[i];
+        }
+        current_in_ptr += N;
+      }
       current_out_ptr += N;
       s -= N;
     }
     while (s-- > 0) {
-      *current_out_ptr *= normalizer;
+      if constexpr (std::is_same<T, AccT>::value) {
+        *current_out_ptr *= normalizer;
+      } else {
+        AccT _exp = std::exp(*current_in_ptr - maximum);
+        *current_out_ptr = static_cast<T>(_exp * normalizer);
+        current_in_ptr++;
+      }
       current_out_ptr++;
     }
   }
@@ -308,15 +346,29 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
           "Softmax is defined only for floating point types");
       break;
     case float32:
-      softmax<float, simd_float16, AccelerateSimdOps<float, simd_float16>, 16>(
-          in, out);
+      softmax<
+          float,
+          float,
+          simd_float16,
+          AccelerateSimdOps<float, simd_float16>,
+          16>(in, out);
       break;
     case float16:
-      softmax<
-          float16_t,
-          float16x8_t,
-          NeonFp16SimdOps<float16_t, float16x8_t>,
-          8>(in, out);
+      if (precise_) {
+        softmax<
+            float16_t,
+            float,
+            simd_float16,
+            AccelerateSimdOps<float, simd_float16>,
+            16>(in, out);
+      } else {
+        softmax<
+            float16_t,
+            float16_t,
+            float16x8_t,
+            NeonFp16SimdOps<float16_t, float16x8_t>,
+            8>(in, out);
+      }
       break;
     case bfloat16:
       eval(inputs, out);
