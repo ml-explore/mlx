@@ -42,7 +42,6 @@ target_link_libraries(mlx_ext PUBLIC mlx)
 
 # Build metallib
 if(MLX_BUILD_METAL)
-
   mlx_build_metallib(
     TARGET mlx_ext_metallib
     TITLE mlx_ext
@@ -60,9 +59,9 @@ endif()
 
 # ----------------------------- Python Bindings -----------------------------
 nanobind_add_module(
-  core
+  mlx_sample_extensions
   NB_STATIC STABLE_ABI LTO NOMINSIZE
-  NB_DOMAIN mlx_extension
+  NB_DOMAIN mlx 
   ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
 )
 target_link_libraries(mlx_sample_extensions PRIVATE mlx_ext)

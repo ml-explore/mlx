@@ -42,9 +42,9 @@ class Axpby : public Primitive {
    * To avoid unnecessary allocations, the evaluation function
    * is responsible for allocating space for the array.
    */
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& out)
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
-  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& out)
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
   /** The Jacobian-vector product. */
@@ -83,7 +83,7 @@ class Axpby : public Primitive {
   float beta_;
 
   /** Fall back implementation for evaluation on CPU */
-  void eval(const std::vector<array>& inputs, std::vector<array>& out);
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 } // namespace mlx::core

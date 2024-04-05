@@ -132,7 +132,7 @@ to be more concrete:
             std::vector<array>& outputs) override;
 
         /** The Jacobian-vector product. */
-        array jvp(
+        std::vector<array> jvp(
             const std::vector<array>& primals,
             const std::vector<array>& tangents,
             const std::vector<int>& argnums) override;
@@ -420,9 +420,9 @@ GPU kernels in MLX are written using metal.
     * Documentation for metal shading language: `Metal Specification`_
     * Using metal from C++: `Metal-cpp`_
 
-Let's keep the GPU algorithm simple. We will launch exactly as many threads
-as there are elements in the output. Each thread will pick the element it needs
-from ``x`` and ``y``, do the pointwise operation, and then update its assigned
+Let's keep the GPU kernel simple. We will launch exactly as many threads as
+there are elements in the output. Each thread will pick the element it needs
+from ``x`` and ``y``, do the pointwise operation, and update its assigned
 element in the output.
 
 .. code-block:: C++
@@ -473,29 +473,21 @@ each data type.
     instantiate_axpby(bfloat16, bfloat16_t);
     instantiate_axpby(complex64, complex64_t);
 
-This kernel will be compiled into a metal library ``mlx_ext.metallib`` as we
-will see later in :ref:`Building with CMake`. In the following example, we
-assume that the library ``mlx_ext.metallib`` will always be co-located with
-the executable/ shared-library calling the :meth:`register_library` function.
-The :meth:`register_library` function takes the library's name and potential
-path (or in this case, a function that can produce the path of the metal
-library) and tries to load that library if it hasn't already been registered
-by the relevant static :class:`mlx::core::metal::Device` object. This is why,
-it is important to package your C++ library with the metal library. We will
-go over this process in more detail later.
-
-The logic to determine the kernel, set the inputs, resolve the grid dimensions
-and dispatch it to the GPU are contained in :meth:`Axpby::eval_gpu` as shown
+The logic to determine the kernel, set the inputs, resolve the grid dimensions,
+and dispatch to the GPU are contained in :meth:`Axpby::eval_gpu` as shown
 below.
 
 .. code-block:: C++
 
     /** Evaluate primitive on GPU */
-    void Axpby::eval_gpu(const std::vector<array>& inputs, array& out) {
+    void Axpby::eval_gpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) {
         // Prepare inputs
         assert(inputs.size() == 2);
-        auto& x = inputs[0];
-        auto& y = inputs[1];
+        const auto& x = inputs[0];
+        const auto& y = inputs[1];
+        auto& out = outputs[0];
 
         // Each primitive carries the stream it should execute on
         // and each stream carries its device identifiers
@@ -506,7 +498,7 @@ below.
         // Allocate output memory
         out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
-        // Resolve name of kernel (corresponds to axpby.metal)
+        // Resolve name of kernel
         std::ostringstream kname;
         kname << "axpby_" << "general_" << type_to_name(out);
 
@@ -560,28 +552,25 @@ below.
 
 We can now call the :meth:`axpby` operation on both the CPU and the GPU!
 
-A few things to note about MLX and metal before moving on. MLX keeps track
-of the active ``compute_encoder``. We rely on :meth:`d.get_command_encoder`
-to give us the active metal compute command encoder instead of building a
-new one and calling :meth:`compute_encoder->end_encoding` at the end.
-MLX keeps adding kernels (compute pipelines) to the active command encoder
-until some specified limit is hit or the compute encoder needs to be flushed
-for synchronization. MLX also handles enqueuing and committing the associated
-command buffers as needed. We suggest taking a deeper dive into
-:class:`metal::Device` if you would like to study this routine further.
+A few things to note about MLX and metal before moving on. MLX keeps track of
+the active ``command_buffer`` and the ``MTLCommandBuffer`` to which it is
+associated. We rely on :meth:`d.get_command_encoder` to give us the active
+metal compute command encoder instead of building a new one and calling
+:meth:`compute_encoder->end_encoding` at the end. MLX adds kernels (compute
+pipelines) to the active command buffer until some specified limit is hit or
+the command buffer needs to be flushed for synchronization.
 
 Primitive Transforms
 ^^^^^^^^^^^^^^^^^^^^^
 
-Now that we have come this far, let's also learn how to add implementations to
+Now that we have come this far, let's also see how to add implementations to
 transformations in a :class:`Primitive`. These transformations can be built on
-top of our operations, including the one we just defined now. Which then gives
-us the following :meth:`Axpby::jvp` and :meth:`Axpby::vjp` implementations.
+top of our operations, including the one we just defined now:
 
 .. code-block:: C++
 
     /** The Jacobian-vector product. */
-    array Axpby::jvp(
+    std::vector<array> Axpby::jvp(
             const std::vector<array>& primals,
             const std::vector<array>& tangents,
             const std::vector<int>& argnums) {
@@ -596,12 +585,12 @@ us the following :meth:`Axpby::jvp` and :meth:`Axpby::vjp` implementations.
         if (argnums.size() > 1) {
             auto scale = argnums[0] == 0 ? alpha_ : beta_;
             auto scale_arr = array(scale, tangents[0].dtype());
-            return multiply(scale_arr, tangents[0], stream());
+            return {multiply(scale_arr, tangents[0], stream())};
         }
         // If, argnums = {0, 1}, we take contributions from both
         // which gives us jvp = tangent_x * alpha + tangent_y * beta
         else {
-            return axpby(tangents[0], tangents[1], alpha_, beta_, stream());
+            return {axpby(tangents[0], tangents[1], alpha_, beta_, stream())};
         }
     }
 
@@ -610,28 +599,29 @@ us the following :meth:`Axpby::jvp` and :meth:`Axpby::vjp` implementations.
     /** The vector-Jacobian product. */
     std::vector<array> Axpby::vjp(
             const std::vector<array>& primals,
-            const array& cotan,
-            const std::vector<int>& argnums) {
+            const std::vector<array>& cotangents,
+            const std::vector<int>& argnums,
+            const std::vector<int>& /* unused */) {
         // Reverse mode diff
         std::vector<array> vjps;
         for (auto arg : argnums) {
             auto scale = arg == 0 ? alpha_ : beta_;
-            auto scale_arr = array(scale, cotan.dtype());
-            vjps.push_back(multiply(scale_arr, cotan, stream()));
+            auto scale_arr = array(scale, cotangents[0].dtype());
+            vjps.push_back(multiply(scale_arr, cotangents[0], stream()));
         }
         return vjps;
     }
 
-Finally, you need not have a transformation fully defined to start using your
+Note, you need not have a transformation fully defined to start using your
 own :class:`Primitive`.
 
 .. code-block:: C++
 
     /** Vectorize primitive along given axis */
-    std::pair<array, int> Axpby::vmap(
+    std::pair<std::vector<array>, std::vector<int>> Axpby::vmap(
             const std::vector<array>& inputs,
             const std::vector<int>& axes) {
-        throw std::runtime_error("Axpby has no vmap implementation.");
+        throw std::runtime_error("[Axpby] vmap not implemented.");
     }
 
 Building and Binding
@@ -662,13 +652,17 @@ Let's look at the overall directory structure first.
 Binding to Python
 ^^^^^^^^^^^^^^^^^^
 
-We use PyBind11_ to build a Python API for the C++ library. Since bindings for
+We use nanobind_ to build a Python API for the C++ library. Since bindings for
 components such as :class:`mlx.core.array`, :class:`mlx.core.stream`, etc. are
 already provided, adding our :meth:`axpby` is simple!
 
 .. code-block:: C++
 
-    PYBIND11_MODULE(mlx_sample_extensions, m) {
+   #include <nanobind/nanobind.h>
+
+   namespace nb = nanobind;
+
+   NB_MODULE(mlx_sample_extensions, m) {
         m.doc() = "Sample C++ and metal extensions for MLX";
 
         m.def(
@@ -676,12 +670,11 @@ already provided, adding our :meth:`axpby` is simple!
             &axpby,
             "x"_a,
             "y"_a,
-            py::pos_only(),
             "alpha"_a,
             "beta"_a,
-            py::kw_only(),
-            "stream"_a = py::none(),
-            R"pbdoc(
+            nb::kw_only(),
+            "stream"_a = nb::none(),
+            R"(
                 Scale and sum two vectors element-wise
                 ``z = alpha * x + beta * y``
 
@@ -696,7 +689,7 @@ already provided, adding our :meth:`axpby` is simple!
 
                 Returns:
                     array: ``alpha * x + beta * y``
-            )pbdoc");
+            )");
     }
 
 Most of the complexity in the above example comes from additional bells and
@@ -705,7 +698,7 @@ whistles such as the literal names and doc-strings.
 .. warning::
 
     :mod:`mlx.core` needs to be imported before importing
-    :mod:`mlx_sample_extensions` as defined by the pybind11 module above to
+    :mod:`mlx_sample_extensions` as defined by the nanobind module above to
     ensure that the casters for :mod:`mlx.core` components like
     :class:`mlx.core.array` are available.
 
@@ -764,18 +757,20 @@ Here is what that looks like in practice!
 
     endif()
 
-Finally, we build the Pybind11_ bindings
+Finally, we build the nanobind_ bindings
 
 .. code-block:: cmake
 
-    pybind11_add_module(
-        mlx_sample_extensions
-        ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
+    nanobind_add_module(
+      core
+      NB_STATIC STABLE_ABI LTO NOMINSIZE
+      NB_DOMAIN mlx_extension
+      ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
     )
     target_link_libraries(mlx_sample_extensions PRIVATE mlx_ext)
 
     if(BUILD_SHARED_LIBS)
-        target_link_options(mlx_sample_extensions PRIVATE -Wl,-rpath,@loader_path)
+      target_link_options(mlx_sample_extensions PRIVATE -Wl,-rpath,@loader_path)
     endif()
 
 Building with ``setuptools``
@@ -807,7 +802,7 @@ build utilities defined in :mod:`mlx.extension` for a simple build process.
     We treat ``extensions/mlx_sample_extensions`` as the package directory
     even though it only contains a ``__init__.py`` to ensure the following:
 
-    * :mod:`mlx.core` is always imported before importing  :mod:`mlx_sample_extensions`
+    * :mod:`mlx.core` is always imported before importing :mod:`mlx_sample_extensions`
     * The C++ extension library and the metal library are co-located with the python
       bindings and copied together if the package is installed
 
@@ -859,7 +854,7 @@ Output:
     c correctness: True
 
 Results
-^^^^^^^^^^^^^^^^
+^^^^^^^
 
 Let's run a quick benchmark and see how our new ``axpby`` operation compares
 with the naive :meth:`simple_axpby` we defined at first on the CPU.
@@ -883,7 +878,7 @@ with the naive :meth:`simple_axpby` we defined at first on the CPU.
     alpha = 4.0
     beta = 2.0
 
-    mx.eval((x, y))
+    mx.eval(x, y)
 
     def bench(f):
         # Warm up
@@ -930,4 +925,4 @@ Scripts
 .. _Metal-cpp: https://developer.apple.com/metal/cpp/
 .. _`Metal Specification`: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
 .. _`Metal Example`: https://developer.apple.com/documentation/metal/performing_calculations_on_a_gpu?language=objc
-.. _PyBind11: https://pybind11.readthedocs.io/en/stable/
+.. _nanobind: https://nanobind.readthedocs.io/en/latest/
