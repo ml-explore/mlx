@@ -1141,7 +1141,8 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_"
         << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned"
+        << "_op_mask_" << (inputs.size() > 3 ? "T" : "N");
 
   // Encode and dispatch kernel
   auto compute_encoder = d.get_command_encoder(s.index);
@@ -1184,14 +1185,40 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   batch_strides.insert(
       batch_strides.end(), B_batch_stride.begin(), B_batch_stride.end());
 
+  std::vector<int> mask_strides;
+
   auto& out_mask = inputs[2];
-  int out_mask_stride_1 = *(out_mask.strides().end() - 2);
-  int out_mask_stride_0 = *(out_mask.strides().end() - 1);
+  mask_strides.push_back(*(out_mask.strides().end() - 1));
+  mask_strides.push_back(*(out_mask.strides().end() - 2));
 
   batch_strides.insert(
       batch_strides.end(),
       out_mask.strides().begin(),
       out_mask.strides().end() - 2);
+
+  if (inputs.size() > 3) {
+    auto& lhs_mask = inputs[3];
+    mask_strides.push_back(*(lhs_mask.strides().end() - 1));
+    mask_strides.push_back(*(lhs_mask.strides().end() - 2));
+
+    batch_strides.insert(
+        batch_strides.end(),
+        lhs_mask.strides().begin(),
+        lhs_mask.strides().end() - 2);
+
+    set_array_buffer(compute_encoder, lhs_mask, 11);
+
+    auto& rhs_mask = inputs[4];
+    mask_strides.push_back(*(rhs_mask.strides().end() - 1));
+    mask_strides.push_back(*(rhs_mask.strides().end() - 2));
+
+    batch_strides.insert(
+        batch_strides.end(),
+        rhs_mask.strides().begin(),
+        rhs_mask.strides().end() - 2);
+
+    set_array_buffer(compute_encoder, rhs_mask, 12);
+  }
 
   // Launch kernel
   set_array_buffer(compute_encoder, a, 0);
@@ -1200,14 +1227,11 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
 
-  compute_encoder->setBytes(
-      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
-  compute_encoder->setBytes(
-      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
 
   set_array_buffer(compute_encoder, out_mask, 10);
-  compute_encoder->setBytes(&out_mask_stride_1, sizeof(int), 11);
-  compute_encoder->setBytes(&out_mask_stride_0, sizeof(int), 12);
+  set_vector_bytes(compute_encoder, mask_strides, 13);
 
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 

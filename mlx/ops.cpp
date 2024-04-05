@@ -3707,30 +3707,31 @@ array tile_masked_mm(
         return slice(mask, starts, stops, s);
       };
 
-  std::vector<array> mask_list;
-
   // Out mask
   array mask_out_p = mask_out.value_or(array({true}));
   mask_out_p = broadcast_mask(mask_out_p, bsx_shape, tm, tn, s);
 
-  mask_list.push_back(mask_out_p);
+  std::vector<array> mask_list = {mask_out_p};
 
+  // Operand masks
   if (has_operand_mask) {
     // LHS mask
     array mask_lhs_p = mask_lhs.value_or(array({true}));
     mask_lhs_p = broadcast_mask(mask_lhs_p, bsx_shape, tm, tk, s);
-    mask_lhs_p = expand_mask(mask_lhs_p, tile_size, M, K, s);
 
     // RHS mask
     array mask_rhs_p = mask_rhs.value_or(array({true}));
     mask_rhs_p = broadcast_mask(mask_rhs_p, bsx_shape, tk, tn, s);
-    mask_rhs_p = expand_mask(mask_rhs_p, tile_size, K, N, s);
-
-    a = multiply(a, mask_lhs_p, s);
-    b = multiply(b, mask_rhs_p, s);
 
     mask_list.push_back(mask_lhs_p);
     mask_list.push_back(mask_rhs_p);
+
+    if (to_stream(s).device != Device::gpu) {
+      mask_lhs_p = expand_mask(mask_lhs_p, tile_size, M, K, s);
+      mask_rhs_p = expand_mask(mask_rhs_p, tile_size, K, N, s);
+      a = multiply(a, mask_lhs_p, s);
+      b = multiply(b, mask_rhs_p, s);
+    }
   }
 
   std::vector<array> inputs = {a, b};
@@ -3743,7 +3744,7 @@ array tile_masked_mm(
       std::make_shared<TileMaskedMM>(to_stream(s), tile_size),
       inputs);
 
-  if (has_out_mask && to_stream(s).device != Device::gpu) {
+  if (to_stream(s).device != Device::gpu) {
     auto mask_out_p = expand_mask(mask_list.front(), tile_size, M, N, s);
     out = multiply(out, mask_out_p, s);
   }

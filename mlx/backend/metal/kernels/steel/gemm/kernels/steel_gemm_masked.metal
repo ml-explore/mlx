@@ -20,7 +20,8 @@ template <typename T,
           bool transpose_a, 
           bool transpose_b,
           bool MN_aligned,
-          bool K_aligned>
+          bool K_aligned, 
+          bool has_operand_mask=false>
 [[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void tile_masked_gemm(
     const device T *A [[buffer(0)]],
     const device T *B [[buffer(1)]],
@@ -29,12 +30,16 @@ template <typename T,
     const constant int* batch_shape [[buffer(6)]],
     const constant size_t* batch_strides [[buffer(7)]],
     const device bool *out_mask [[buffer(10)]],
-    const constant int& out_mask_stride_1 [[buffer(11)]],
-    const constant int& out_mask_stride_0 [[buffer(12)]],
+    const device bool *lhs_mask [[buffer(11)]],
+    const device bool *rhs_mask [[buffer(12)]],
+    const constant int* mask_strides [[buffer(13)]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]]) { 
+
+    // Appease the compiler
+    (void)lid;
     
     using gemm_kernel = GEMMKernel<T, T, BM, BN, BK, WM, WN, transpose_a, transpose_b, MN_aligned, K_aligned>;
     
@@ -47,22 +52,20 @@ template <typename T,
     }
 
     if(params->batch_ndim > 1) {
-      const constant size_t* mask_strides = batch_strides + 2 * params->batch_ndim;
-      out_mask += elem_to_loc(tid.z, batch_shape, mask_strides, params->batch_ndim);
+      const constant size_t* mask_batch_strides = batch_strides + 2 * params->batch_ndim;
+      out_mask += elem_to_loc(tid.z, batch_shape, mask_batch_strides, params->batch_ndim);
 
-      // if(has_operand_mask) {
-      //   const constant size_t* mask_strides_lhs = mask_strides + params->batch_ndim;
-      //   const constant size_t* mask_strides_rhs = mask_strides_lhs + params->batch_ndim;
+      if(has_operand_mask) {
+        const constant size_t* mask_strides_lhs = mask_batch_strides + params->batch_ndim;
+        const constant size_t* mask_strides_rhs = mask_strides_lhs + params->batch_ndim;
 
-      //   ulong2 batch_offsets = elem_to_loc_broadcast(
-      //       tid.z, batch_shape, mask_strides_lhs, mask_strides_rhs, params->batch_ndim);
+        ulong2 batch_offsets = elem_to_loc_broadcast(
+            tid.z, batch_shape, mask_strides_lhs, mask_strides_rhs, params->batch_ndim);
 
-      //   lhs_mask += batch_offsets.x;
-      //   rhs_mask += batch_offsets.y;
-      // }
+        lhs_mask += batch_offsets.x;
+        rhs_mask += batch_offsets.y;
+      }
     }
-
-    bool mask_out = out_mask[tid_y * out_mask_stride_1 + tid_x * out_mask_stride_0];
 
     threadgroup T As[gemm_kernel::tgp_mem_size_a];
     threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
@@ -95,35 +98,48 @@ template <typename T,
     B += transpose_b ? c_col * params->ldb : c_col;
     D += c_row * params->ldd + c_col;
 
-    // Prepare threadgroup loading operations
-    thread typename gemm_kernel::loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
-    thread typename gemm_kernel::loader_b_t loader_b(B, params->ldb, Bs, simd_group_id, simd_lane_id);
-
     // Prepare threadgroup mma operation
     thread typename gemm_kernel::mma_t mma_op(simd_group_id, simd_lane_id);
 
     int gemm_k_iterations = params->gemm_k_iterations_aligned;
 
+    bool mask_out = out_mask[tid_y * mask_strides[1] + tid_x * mask_strides[0]];
     if(!mask_out) {
       short tgp_bm = min(BM, params->M - c_row);
       short tgp_bn = min(BN, params->N - c_col);
-      mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
+      if (MN_aligned) {
+        mma_op.store_result(D, params->ldd);
+      } else {
+        mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
+      }
+      
       return;
     }
+
+    // Prepare threadgroup loading operations
+    thread typename gemm_kernel::loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
+    thread typename gemm_kernel::loader_b_t loader_b(B, params->ldb, Bs, simd_group_id, simd_lane_id);
 
     ///////////////////////////////////////////////////////////////////////////////
     // MNK aligned loop
     if (MN_aligned) {
       for (int k = 0; k < gemm_k_iterations; k++) {
         threadgroup_barrier(mem_flags::mem_threadgroup);
-        // Load elements into threadgroup
-        loader_a.load_unsafe();
-        loader_b.load_unsafe();
 
-        threadgroup_barrier(mem_flags::mem_threadgroup);
+        if(!has_operand_mask || 
+            (lhs_mask[tid_y * mask_strides[3] + ((k * BK) / BM) * mask_strides[2]] && 
+             rhs_mask[((k * BK) / BM) * mask_strides[5] + tid_x * mask_strides[4]])) {
 
-        // Multiply and accumulate threadgroup elements
-        mma_op.mma(As, Bs);
+          // Load elements into threadgroup
+          loader_a.load_unsafe();
+          loader_b.load_unsafe();
+
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+
+          // Multiply and accumulate threadgroup elements
+          mma_op.mma(As, Bs);
+
+        }
 
         // Prepare for next iteration
         loader_a.next();
@@ -134,16 +150,23 @@ template <typename T,
 
       // Loop tail
       if (!K_aligned) {
-        int lbk = params->K - params->gemm_k_iterations_aligned * BK;
-        short2 tile_dims_A = transpose_a ? short2(BM, lbk) : short2(lbk, BM);
-        short2 tile_dims_B = transpose_b ? short2(lbk, BN) : short2(BN, lbk);
 
-        loader_a.load_safe(tile_dims_A);
-        loader_b.load_safe(tile_dims_B);
+        if(!has_operand_mask || 
+            (lhs_mask[tid_y * mask_strides[3] + (params->K / BM) * mask_strides[2]] && 
+             rhs_mask[(params->K / BM) * mask_strides[5] + tid_x * mask_strides[4]])) {
 
-        threadgroup_barrier(mem_flags::mem_threadgroup);
+          int lbk = params->K - params->gemm_k_iterations_aligned * BK;
+          short2 tile_dims_A = transpose_a ? short2(BM, lbk) : short2(lbk, BM);
+          short2 tile_dims_B = transpose_b ? short2(lbk, BN) : short2(BN, lbk);
 
-        mma_op.mma(As, Bs);
+          loader_a.load_safe(tile_dims_A);
+          loader_b.load_safe(tile_dims_B);
+
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+
+          mma_op.mma(As, Bs);
+
+        }
       }
 
       // Store results to device memory
@@ -156,71 +179,71 @@ template <typename T,
     else { // Loop over K - unaligned case
       short tgp_bm = min(BM, params->M - c_row);
       short tgp_bn = min(BN, params->N - c_col);
-      short leftover_bk = params->K - params->gemm_k_iterations_aligned * BK;
+      short lbk = params->K - params->gemm_k_iterations_aligned * BK;
 
-      if (tgp_bm == BM && tgp_bn == BN) {
-        gemm_kernel::gemm_loop(
-            As,
-            Bs,
-            gemm_k_iterations,
-            loader_a,
-            loader_b,
-            mma_op,
-            tgp_bm,
-            tgp_bn,
-            leftover_bk,
-            LoopAlignment<true, true, K_aligned>{});
+      bool M_aligned = (tgp_bm == BM);
+      bool N_aligned = (tgp_bn == BN);
 
+      short2 tile_dims_A = transpose_a ? short2(tgp_bm, BK) : short2(BK, tgp_bm);
+      short2 tile_dims_B = transpose_b ? short2(BK, tgp_bn) : short2(tgp_bn, BK);
+
+      for (int k = 0; k < gemm_k_iterations; k++) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        if(!has_operand_mask || 
+            (lhs_mask[tid_y * mask_strides[3] + ((k * BK) / BM) * mask_strides[2]] && 
+             rhs_mask[((k * BK) / BM) * mask_strides[5] + tid_x * mask_strides[4]])) {
+
+          // Load elements into threadgroup
+          if (M_aligned) {
+            loader_a.load_unsafe();
+          } else {
+            loader_a.load_safe(tile_dims_A);
+          }
+
+          if (N_aligned) {
+            loader_b.load_unsafe();
+          } else {
+            loader_b.load_safe(tile_dims_B);
+          }
+
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+
+          // Multiply and accumulate threadgroup elements
+          mma_op.mma(As, Bs);
+
+        }
+
+        // Prepare for next iteration
+        loader_a.next();
+        loader_b.next();
+      }
+
+      if (!K_aligned) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+
+        if(!has_operand_mask || 
+            (lhs_mask[tid_y * mask_strides[3] + (params->K / BM) * mask_strides[2]] && 
+             rhs_mask[(params->K / BM) * mask_strides[5] + tid_x * mask_strides[4]])) {
+
+          short2 tile_dims_A_last =
+              transpose_a ? short2(tgp_bm, lbk) : short2(lbk, tgp_bm);
+          short2 tile_dims_B_last =
+              transpose_b ? short2(lbk, tgp_bn) : short2(tgp_bn, lbk);
+
+          loader_a.load_safe(tile_dims_A_last);
+          loader_b.load_safe(tile_dims_B_last);
+
+          threadgroup_barrier(mem_flags::mem_threadgroup);
+
+          mma_op.mma(As, Bs);
+
+        }
+      }
+
+      if(M_aligned && N_aligned) {
         mma_op.store_result(D, params->ldd);
-        return;
-
-      } else if (tgp_bn == BN) {
-        gemm_kernel::gemm_loop(
-            As,
-            Bs,
-            gemm_k_iterations,
-            loader_a,
-            loader_b,
-            mma_op,
-            tgp_bm,
-            tgp_bn,
-            leftover_bk,
-            LoopAlignment<false, true, K_aligned>{});
-
-        mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
-        return;
-
-      } else if (tgp_bm == BM) {
-        gemm_kernel::gemm_loop(
-            As,
-            Bs,
-            gemm_k_iterations,
-            loader_a,
-            loader_b,
-            mma_op,
-            tgp_bm,
-            tgp_bn,
-            leftover_bk,
-            LoopAlignment<true, false, K_aligned>{});
-
-        mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
-        return;
-
       } else {
-        gemm_kernel::gemm_loop(
-            As,
-            Bs,
-            gemm_k_iterations,
-            loader_a,
-            loader_b,
-            mma_op,
-            tgp_bm,
-            tgp_bn,
-            leftover_bk,
-            LoopAlignment<false, false, K_aligned>{});
-
         mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
-        return;
       }
     }
 }
@@ -229,9 +252,9 @@ template <typename T,
 // GEMM kernel initializations
 ///////////////////////////////////////////////////////////////////////////////
 
-#define instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned) \
-  template [[host_name("steel_tile_masked_gemm_" #tname "_"  #iname "_" #oname "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_MN_" #aname "_K_" #kname)]] \
-  [[kernel]] void tile_masked_gemm<itype, bm, bn, bk, wm, wn, trans_a, trans_b, mn_aligned, k_aligned>( \
+#define instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned, omname, op_mask) \
+  template [[host_name("steel_tile_masked_gemm_" #tname "_"  #iname "_" #oname "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_MN_" #aname "_K_" #kname "_op_mask_" #omname)]] \
+  [[kernel]] void tile_masked_gemm<itype, bm, bn, bk, wm, wn, trans_a, trans_b, mn_aligned, k_aligned, op_mask>( \
       const device itype *A [[buffer(0)]], \
       const device itype *B [[buffer(1)]], \
       device itype *D [[buffer(3)]], \
@@ -239,18 +262,23 @@ template <typename T,
       const constant int* batch_shape [[buffer(6)]], \
       const constant size_t* batch_strides [[buffer(7)]], \
       const device bool *out_mask [[buffer(10)]], \
-      const constant int& out_mask_stride_1 [[buffer(11)]], \
-      const constant int& out_mask_stride_0 [[buffer(12)]], \
+      const device bool *lhs_mask [[buffer(11)]], \
+      const device bool *rhs_mask [[buffer(12)]], \
+      const constant int* mask_strides [[buffer(13)]], \
       uint simd_lane_id [[thread_index_in_simdgroup]], \
       uint simd_group_id [[simdgroup_index_in_threadgroup]], \
       uint3 tid [[threadgroup_position_in_grid]], \
       uint3 lid [[thread_position_in_threadgroup]]);
 
+#define instantiate_gemm_mask_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned) \
+  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned, N, false) \
+  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned, T, true)
+
 #define instantiate_gemm_aligned_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
-  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, taligned, true, taligned, true) \
-  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, taligned, true, naligned, false) \
-  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, naligned, false, taligned, true) \
-  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, naligned, false, naligned, false)
+  instantiate_gemm_mask_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, taligned, true, taligned, true) \
+  instantiate_gemm_mask_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, taligned, true, naligned, false) \
+  instantiate_gemm_mask_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, naligned, false, taligned, true) \
+  instantiate_gemm_mask_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, naligned, false, naligned, false)
 
 #define instantiate_gemm_transpose_helper(iname, itype, oname, otype, bm, bn, bk, wm, wn) \
     instantiate_gemm_aligned_helper(nn, false, false, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
