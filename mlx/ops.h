@@ -199,10 +199,9 @@ split(const array& a, const std::vector<int>& indices, StreamOrDevice s = {});
 
 /** A vector of coordinate arrays from coordinate vectors. */
 std::vector<array> meshgrid(
-    std::vector<array>& arrays,
-    const bool copy = true,
-    const bool sparse = false,
-    const std::string& indexing = "xy",
+    const std::vector<array>& arrays,
+    bool sparse = false,
+    std::string_view indexing = "xy",
     StreamOrDevice s = {});
 
 /**

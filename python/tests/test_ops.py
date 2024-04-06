@@ -1459,19 +1459,19 @@ class TestOps(mlx_tests.MLXTestCase):
         x = mx.array([1, 2, 3], dtype=mx.int32)
         y = np.array([1, 2, 3], dtype=np.int32)
 
-        # test single input
+        # Test single input
         a_mlx = mx.meshgrid(x)
         a_np = np.meshgrid(y)
         self.assertEqualArray(a_mlx[0], mx.array(a_np[0]))
 
-        # test sparse
+        # Test sparse
         a_mlx, b_mlx, c_mlx = mx.meshgrid(x, x, x, sparse=True)
         a_np, b_np, c_np = np.meshgrid(y, y, y, sparse=True)
         self.assertEqualArray(a_mlx, mx.array(a_np))
         self.assertEqualArray(b_mlx, mx.array(b_np))
         self.assertEqualArray(c_mlx, mx.array(c_np))
 
-        # test different lengths
+        # Test different lengths
         x = mx.array([1, 2], dtype=mx.int32)
         y = mx.array([1, 2, 3], dtype=mx.int32)
         z = np.array([1, 2], dtype=np.int32)
@@ -1481,14 +1481,14 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqualArray(a_mlx, mx.array(a_np))
         self.assertEqualArray(b_mlx, mx.array(b_np))
 
-        # test empty input
+        # Test empty input
         x = mx.array([], dtype=mx.int32)
         y = np.array([], dtype=np.int32)
         a_mlx = mx.meshgrid(x)
         a_np = np.meshgrid(y)
         self.assertEqualArray(a_mlx[0], mx.array(a_np[0]))
 
-        # test float input
+        # Test float32 input
         x = mx.array([1.1, 2.2, 3.3], dtype=mx.float32)
         y = np.array([1.1, 2.2, 3.3], dtype=np.float32)
         a_mlx = mx.meshgrid(x, x, x)
@@ -1497,13 +1497,26 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqualArray(a_mlx[1], mx.array(a_np[1]))
         self.assertEqualArray(a_mlx[2], mx.array(a_np[2]))
 
-        # test indexing
+        # Test ij indexing
         x = mx.array([1.1, 2.2, 3.3, 4.4, 5.5], dtype=mx.float32)
         y = np.array([1.1, 2.2, 3.3, 4.4, 5.5], dtype=np.float32)
         a_mlx = mx.meshgrid(x, x, indexing="ij")
         a_np = np.meshgrid(y, y, indexing="ij")
         self.assertEqualArray(a_mlx[0], mx.array(a_np[0]))
         self.assertEqualArray(a_mlx[1], mx.array(a_np[1]))
+
+        # Test different lengths, sparse, and ij indexing
+        a = mx.array([1, 2], dtype=mx.int64)
+        b = mx.array([1, 2, 3], dtype=mx.int64)
+        c = mx.array([1, 2, 3, 4], dtype=mx.int64)
+        x = np.array([1, 2], dtype=np.int64)
+        y = np.array([1, 2, 3], dtype=np.int64)
+        z = np.array([1, 2, 3, 4], dtype=np.int64)
+        a_mlx, b_mlx, c_mlx = mx.meshgrid(a, b, c, sparse=True, indexing="ij")
+        a_np, b_np, c_np = np.meshgrid(x, y, z, sparse=True, indexing="ij")
+        self.assertEqualArray(a_mlx, mx.array(a_np))
+        self.assertEqualArray(b_mlx, mx.array(b_np))
+        self.assertEqualArray(c_mlx, mx.array(c_np))
 
     def test_pad(self):
         pad_width_and_values = [

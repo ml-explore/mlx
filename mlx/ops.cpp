@@ -697,51 +697,38 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
 }
 
 std::vector<array> meshgrid(
-    std::vector<array>& arrays,
-    const bool copy /* = true */,
-    const bool sparse /* = false */,
-    const std::string& indexing /* = "xy" */,
+    const std::vector<array>& arrays,
+    bool sparse /* = false */,
+    std::string_view indexing /* = "xy" */,
     StreamOrDevice s /* = {} */) {
-  std::vector<std::string> valid = {"xy", "ij"};
-  if (std::find(valid.begin(), valid.end(), indexing) == valid.end()) {
+  if (indexing != "xy" && indexing != "ij") {
     throw std::invalid_argument(
         "[meshgrid] Invalid indexing value. Valid values are 'xy' and 'ij'.");
   }
 
-  const int ndim = arrays.size();
-
-  std::vector<array>& output = copy ? *new std::vector<array> : arrays;
-  if (copy) {
-    for (auto& a : arrays) {
-      output.push_back(mlx::core::copy(a, s));
-    }
-  } else {
-    output = arrays;
-  }
-
+  auto ndim = arrays.size();
+  std::vector<array> outputs;
   for (int i = 0; i < ndim; ++i) {
     std::vector<int> shape(ndim, 1);
     shape[i] = -1;
-    output[i] = reshape(output[i], shape, s);
+    outputs.push_back(reshape(arrays[i], shape, s));
   }
 
   if (indexing == "xy" and ndim > 1) {
-    std::vector<int> suf = std::vector<int>(ndim - 2, 1);
+    std::vector<int> shape(ndim, 1);
 
-    std::vector<int> pre = {1, -1};
-    pre.insert(pre.end(), suf.begin(), suf.end());
-    output[0] = reshape(output[0], pre, s);
-
-    pre = {-1, 1};
-    pre.insert(pre.end(), suf.begin(), suf.end());
-    output[1] = reshape(output[1], pre, s);
+    shape[1] = arrays[0].size();
+    outputs[0] = reshape(arrays[0], shape);
+    shape[1] = 1;
+    shape[0] = arrays[1].size();
+    outputs[1] = reshape(arrays[1], shape);
   }
 
   if (!sparse) {
-    output = broadcast_arrays(output, s);
+    outputs = broadcast_arrays(outputs, s);
   }
 
-  return output;
+  return outputs;
 }
 
 array clip(

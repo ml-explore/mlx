@@ -3144,25 +3144,26 @@ TEST_CASE("test topk") {
 }
 
 TEST_CASE("test meshgrid") {
+  // Test default
   auto x = array({1, 2, 3}, {3});
-  auto in = std::vector<array>{x, x};
-
-  // test default
+  auto in = std::vector<array>{x};
   auto out = meshgrid(in);
-  auto expected_zero = array({1, 2, 3, 1, 2, 3, 1, 2, 3}, {3, 3});
-  auto expected_one = array({1, 1, 1, 2, 2, 2, 3, 3, 3}, {3, 3});
+  CHECK(array_equal(out[0], x).item<bool>());
+
+  // Test different lengths
+  auto y = array({4, 5}, {2});
+  in = std::vector<array>{x, y};
+  out = meshgrid(in);
+  auto expected_zero = array({1, 2, 3, 1, 2, 3}, {2, 3});
+  auto expected_one = array({4, 4, 4, 5, 5, 5}, {2, 3});
   CHECK(array_equal(out[0], expected_zero).item<bool>());
   CHECK(array_equal(out[1], expected_one).item<bool>());
 
-  // test sparse true
-  out = meshgrid(in, true, true);
+  // Test sparse true
+  in = std::vector<array>{x, x};
+  out = meshgrid(in, true);
   expected_zero = array({1, 2, 3}, {1, 3});
   expected_one = array({1, 2, 3}, {3, 1});
   CHECK(array_equal(out[0], expected_zero).item<bool>());
   CHECK(array_equal(out[1], expected_one).item<bool>());
-
-  // test copy false
-  out = meshgrid(in, false);
-  CHECK(array_equal(out[0], in[0]).item<bool>());
-  CHECK(array_equal(out[1], in[1]).item<bool>());
 }
