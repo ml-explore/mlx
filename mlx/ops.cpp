@@ -711,17 +711,17 @@ std::vector<array> meshgrid(
   for (int i = 0; i < ndim; ++i) {
     std::vector<int> shape(ndim, 1);
     shape[i] = -1;
-    outputs.push_back(reshape(arrays[i], shape, s));
+    outputs.push_back(reshape(arrays[i], std::move(shape), s));
   }
 
   if (indexing == "xy" and ndim > 1) {
     std::vector<int> shape(ndim, 1);
 
     shape[1] = arrays[0].size();
-    outputs[0] = reshape(arrays[0], shape);
+    outputs[0] = reshape(arrays[0], shape, s);
     shape[1] = 1;
     shape[0] = arrays[1].size();
-    outputs[1] = reshape(arrays[1], shape);
+    outputs[1] = reshape(arrays[1], std::move(shape), s);
   }
 
   if (!sparse) {
