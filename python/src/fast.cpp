@@ -135,7 +135,6 @@ void init_fast(nb::module_& parent_module) {
             v (array): Input values array.
             scale (float): Scale for queries (typically ``1.0 / sqrt(q.shape(-1)``)
             mask (array, optional): An additive mask to apply to the query-key scores.
-
         Returns:
             array: The output array.
       )pbdoc");

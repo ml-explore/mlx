@@ -19,6 +19,97 @@
 namespace mlx::core::fast {
 
 namespace {
+void sdpa_full_self_attention_metal(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const float alpha,
+    array& out,
+    std::vector<array>& temporaries) {
+  std::ostringstream kname_self_attention;
+  kname_self_attention << "fast_inference_self_attention_";
+
+  std::string delimiter = "_";
+
+  for (const auto& arr : {k, v, out}) {
+    if (arr.dtype() != q.dtype()) {
+      throw std::runtime_error(
+          "[ScaledDotProductAttention::eval_gpu]: expected matching dtypes for q,k,v,o");
+    }
+  }
+
+  if (q.dtype() == float32) {
+    kname_self_attention << "float" + delimiter;
+  } else if (q.dtype() == float16) {
+    kname_self_attention << "half" + delimiter;
+  } else {
+    throw std::runtime_error(
+        "[ScaledDotProductAttention::eval_gpu]: unexpected dtype found for queries: expected either float32 or float16.");
+  }
+
+  // supported sizes: 64, 80, 128.
+  uint hidden_dim = q.shape(-1);
+  std::string kname_hidden_dim_suffix = std::to_string(hidden_dim) + delimiter;
+  kname_self_attention << kname_hidden_dim_suffix;
+
+  uint qseq = q.shape(-2);
+  uint qheads = q.shape(-3);
+  std::string kname_max_seq_suffix = "4096";
+  if (qseq <= 4096) {
+    kname_self_attention << kname_max_seq_suffix;
+  } else if (qseq <= 8192) {
+    kname_max_seq_suffix = "8192";
+    kname_self_attention << kname_max_seq_suffix;
+  } else if (qseq <= 16384) {
+    kname_max_seq_suffix = "16384";
+    kname_self_attention << kname_max_seq_suffix;
+  } else {
+    throw std::runtime_error(
+        "[ScaledDotProductAttention::eval_gpu]: NYI: sequence length > 16384");
+  }
+
+  constexpr const uint nsimd = 16;
+  constexpr const uint rows_per_tgroup = 16;
+  const int tgp_y_indices = ((int(qseq) - 1) / rows_per_tgroup) + 1;
+
+  auto compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname_self_attention.str());
+  compute_encoder->setComputePipelineState(kernel);
+
+  constexpr const uint batch = 1;
+  MTL::Size grid_dims = MTL::Size(qheads, tgp_y_indices, batch);
+  MTL::Size group_dims = MTL::Size(32, nsimd, 1);
+
+  const uint64_t KV_sequence_length = k.shape(-2);
+  const uint query_sequence_length = q.shape(-2);
+  const uint n_q_heads = q.shape(1);
+  const uint n_kv_heads = k.shape(1);
+
+  MLXScaledDotProductAttentionParams params{
+      query_sequence_length,
+      n_q_heads,
+      n_kv_heads,
+      1 /* self attention: unused */,
+      alpha};
+
+  set_array_buffer(compute_encoder, q, 0);
+  set_array_buffer(compute_encoder, k, 1);
+  set_array_buffer(compute_encoder, v, 2);
+  compute_encoder->setBytes(&KV_sequence_length, sizeof(KV_sequence_length), 3);
+  compute_encoder->setBytes(
+      &params, sizeof(MLXScaledDotProductAttentionParams), 4);
+  set_array_buffer(compute_encoder, out, 5);
+
+  constexpr const uint tgroupMemorySize = 32768;
+  compute_encoder->setThreadgroupMemoryLength(tgroupMemorySize, 0);
+  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [temporaries](MTL::CommandBuffer*) mutable { temporaries.clear(); });
+  return;
+}
 
 void sdpa_metal(
     const Stream& s,
@@ -170,6 +261,12 @@ void ScaledDotProductAttention::eval_gpu(
   auto v = check_transpose(v_pre);
 
   const int heads = q.shape(-3);
+
+  uint query_sequence_length = q.shape(-2);
+  if (query_sequence_length >= 16) {
+    return sdpa_full_self_attention_metal(
+        s, d, q, k, v, scale_, out, temporaries);
+  }
   int tile_size = 64;
   const int kv_seq_len = k.shape(-2);
   if (kv_seq_len > 8000) {

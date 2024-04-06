@@ -32,6 +32,80 @@ def mlx_primitives_sdpa_with_gqa(q, k, v, scale):
     return mlx_primitives_sdpa(q, k, v, scale)
 
 
+class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
+    def test_fast_sdpa(self):
+
+        # Not yet supported:
+        # * K pre-transposed in kernel, V pre-transposed in kernel
+        np.random.seed(0)
+        R = 43
+        L = R
+        Dk = 128
+        scale = float(1.0 / np.sqrt(128.0))
+        q_npy = np.random.normal(0.0, 1.0, (1, 32, R, Dk)).astype(np.float32)
+        k_npy = np.random.normal(0.0, 1.0, (1, 32, L, Dk)).astype(np.float32)
+        v_npy = np.random.normal(0.0, 1.0, (1, 32, L, Dk)).astype(np.float32)
+
+        q_mlx = mx.array(q_npy)
+        k_mlx = mx.array(k_npy)
+        v_mlx = mx.array(v_npy)
+
+        reference = mlx_primitives_sdpa(q_mlx, k_mlx, v_mlx, scale)
+
+        o_mlx = mx.fast.scaled_dot_product_attention(
+            q_mlx, k_mlx, v_mlx, scale=scale, mask=None
+        )
+
+        self.assertListEqual(list(reference.shape), list(o_mlx.shape))
+        self.assertTrue(mx.allclose(o_mlx, reference, atol=1e-4))
+
+        B = 1
+        H = 16
+        dtypes = [np.float32]
+
+        Dk = 64
+
+        if self.is_apple_silicon:
+            dtypes.append(np.half)
+
+        for SEQUENCE_LENGTH in [1, 7, 9, 32, 63, 67, 129, 400, 2000, 4096, 7000, 9000]:
+            for DO_GQA in [0, 1]:
+                for DTYPE in dtypes:
+                    if DTYPE == np.float32 and SEQUENCE_LENGTH > 8192:
+                        continue
+                    n_kv_heads = 8 if DO_GQA else H
+                    q_npy = np.random.normal(
+                        0.0, 1.0, (B, H, SEQUENCE_LENGTH, Dk)
+                    ).astype(DTYPE)
+                    k_npy = np.random.normal(
+                        0.0, 1.0, (B, n_kv_heads, SEQUENCE_LENGTH, Dk)
+                    ).astype(DTYPE)
+                    v_npy = np.random.normal(
+                        0.0, 1.0, (B, n_kv_heads, SEQUENCE_LENGTH, Dk)
+                    ).astype(DTYPE)
+
+                    q_mlx = mx.array(q_npy)
+                    k_mlx = mx.array(k_npy)
+                    v_mlx = mx.array(v_npy)
+
+                    reference = mlx_primitives_sdpa_with_gqa(q_mlx, k_mlx, v_mlx, scale)
+                    o_mlx = mx.fast.scaled_dot_product_attention(
+                        q_mlx, k_mlx, v_mlx, scale=scale
+                    )
+
+                    self.assertListEqual(list(reference.shape), list(o_mlx.shape))
+                    rtol = 1e-5
+                    atol = 1e-1
+
+                    if SEQUENCE_LENGTH > 500:
+                        rtol = 1e-2
+
+                    if DTYPE == np.half:
+                        rtol = 1e-2
+
+                    self.assertTrue(mx.allclose(o_mlx, reference, rtol=rtol, atol=atol))
+
+
 class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_fast_sdpa(self):
 
