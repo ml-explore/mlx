@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.27)
 
-project(mlx_sample_extensions LANGUAGES CXX)
+project(_ext LANGUAGES CXX)
 
 # ----------------------------- Setup -----------------------------
 set(CMAKE_CXX_STANDARD 17)
@@ -59,13 +59,13 @@ endif()
 
 # ----------------------------- Python Bindings -----------------------------
 nanobind_add_module(
-  mlx_sample_extensions
+  _ext
   NB_STATIC STABLE_ABI LTO NOMINSIZE
   NB_DOMAIN mlx 
   ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
 )
-target_link_libraries(mlx_sample_extensions PRIVATE mlx_ext)
+target_link_libraries(_ext PRIVATE mlx_ext)
 
 if(BUILD_SHARED_LIBS)
-  target_link_options(mlx_sample_extensions PRIVATE -Wl,-rpath,@loader_path)
+  target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)
 endif()

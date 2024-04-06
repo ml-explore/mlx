@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 from setuptools import setup
 
@@ -9,10 +9,11 @@ if __name__ == "__main__":
         name="mlx_sample_extensions",
         version="0.0.0",
         description="Sample C++ and Metal extensions for MLX primitives.",
-        ext_modules=[extension.CMakeExtension("mlx_sample_extensions")],
+        ext_modules=[extension.CMakeExtension("mlx_sample_extensions._ext")],
         cmdclass={"build_ext": extension.CMakeBuild},
         packages=["mlx_sample_extensions"],
         package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
+        extras_require={"dev": []},
         zip_safe=False,
         python_requires=">=3.8",
     )

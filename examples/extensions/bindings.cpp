@@ -10,7 +10,7 @@ using namespace nb::literals;
 
 using namespace mlx::core;
 
-NB_MODULE(mlx_sample_extensions, m) {
+NB_MODULE(_ext, m) {
   m.doc() = "Sample C++ and metal extensions for MLX";
 
   m.def(

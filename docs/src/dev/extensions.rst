@@ -300,8 +300,8 @@ Accordingly, we add dispatches for ``float32``, ``float16``, ``bfloat16`` and
     void Axpby::eval(
       const std::vector<array>& inputs,
       const std::vector<array>& outputs) {
-        const auto& x = inputs[0];
-        const auto& y = inputs[1];
+        auto& x = inputs[0];
+        auto& y = inputs[1];
         auto& out = outputs[0];
 
         // Dispatch to the correct dtype
@@ -383,8 +383,8 @@ mind, let's finish our :meth:`Axpby::eval_cpu`.
       const std::vector<array>& inputs,
       const std::vector<array>& outputs) {
         assert(inputs.size() == 2);
-        const auto& x = inputs[0];
-        const auto& y = inputs[1];
+        auto& x = inputs[0];
+        auto& y = inputs[1];
         auto& out = outputs[0];
 
         // Accelerate specialization for contiguous single precision float arrays
@@ -485,8 +485,8 @@ below.
       std::vector<array>& outputs) {
         // Prepare inputs
         assert(inputs.size() == 2);
-        const auto& x = inputs[0];
-        const auto& y = inputs[1];
+        auto& x = inputs[0];
+        auto& y = inputs[1];
         auto& out = outputs[0];
 
         // Each primitive carries the stream it should execute on
@@ -658,11 +658,7 @@ already provided, adding our :meth:`axpby` is simple!
 
 .. code-block:: C++
 
-   #include <nanobind/nanobind.h>
-
-   namespace nb = nanobind;
-
-   NB_MODULE(mlx_sample_extensions, m) {
+   NB_MODULE(_ext, m) {
         m.doc() = "Sample C++ and metal extensions for MLX";
 
         m.def(
@@ -762,15 +758,15 @@ Finally, we build the nanobind_ bindings
 .. code-block:: cmake
 
     nanobind_add_module(
-      core
+      _ext
       NB_STATIC STABLE_ABI LTO NOMINSIZE
-      NB_DOMAIN mlx_extension
+      NB_DOMAIN mlx
       ${CMAKE_CURRENT_LIST_DIR}/bindings.cpp
     )
-    target_link_libraries(mlx_sample_extensions PRIVATE mlx_ext)
+    target_link_libraries(_ext PRIVATE mlx_ext)
 
     if(BUILD_SHARED_LIBS)
-      target_link_options(mlx_sample_extensions PRIVATE -Wl,-rpath,@loader_path)
+      target_link_options(_ext PRIVATE -Wl,-rpath,@loader_path)
     endif()
 
 Building with ``setuptools``
@@ -789,40 +785,42 @@ build utilities defined in :mod:`mlx.extension` for a simple build process.
             name="mlx_sample_extensions",
             version="0.0.0",
             description="Sample C++ and Metal extensions for MLX primitives.",
-            ext_modules=[extension.CMakeExtension("mlx_sample_extensions")],
+            ext_modules=[extension.CMakeExtension("mlx_sample_extensions._ext")],
             cmdclass={"build_ext": extension.CMakeBuild},
-            packages = ["mlx_sample_extensions"],
-            package_dir = {"": "mlx_sample_extensions"},
-            package_data = {"mlx_sample_extensions" : ["*.so", "*.dylib", "*.metallib"]},
+            packages=["mlx_sample_extensions"],
+            package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
+            extras_require={"dev":[]},
             zip_safe=False,
-            python_requires=">=3.7",
+            python_requires=">=3.8",
         )
 
 .. note::
     We treat ``extensions/mlx_sample_extensions`` as the package directory
     even though it only contains a ``__init__.py`` to ensure the following:
 
-    * :mod:`mlx.core` is always imported before importing :mod:`mlx_sample_extensions`
+    * :mod:`mlx.core` must be imported before importing :mod:`_ext`
     * The C++ extension library and the metal library are co-located with the python
       bindings and copied together if the package is installed
 
-You can build inplace for development using
+To build the package, first install the build dependencies with ``pip install
+-r requirements.txt``.  You can then build inplace for development using
 ``python setup.py build_ext -j8 --inplace`` (in ``extensions/``)
 
-This will result in a directory structure as follows:
+This results in the directory structure:
 
 | extensions
 | ├── mlx_sample_extensions
 | │   ├── __init__.py
 | │   ├── libmlx_ext.dylib # C++ extension library
 | │   ├── mlx_ext.metallib # Metal library
-| │   └── mlx_sample_extensions.cpython-3x-darwin.so # Python Binding
+| │   └── _ext.cpython-3x-darwin.so # Python Binding
 | ...
 
-When you try to install using the command ``python -m pip install .``
-(in ``extensions/``), the package will be installed with the same structure as
+When you try to install using the command ``python -m pip install .`` (in
+``extensions/``), the package will be installed with the same structure as
 ``extensions/mlx_sample_extensions`` and the C++ and metal library will be
-copied along with the python binding since they are specified as ``package_data``.
+copied along with the python binding since they are specified as
+``package_data``.
 
 Usage
 -----
