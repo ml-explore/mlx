@@ -16,7 +16,7 @@ except ImportError as e:
     has_torch = False
 
 
-class TestConv(mlx_tests.MLXTestCase):
+class TestUpsample(mlx_tests.MLXTestCase):
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_upsample(self):
         def run_upsample(
