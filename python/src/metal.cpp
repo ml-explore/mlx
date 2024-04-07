@@ -2,6 +2,7 @@
 
 #include "mlx/backend/metal/metal.h"
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/string.h>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -87,5 +88,25 @@ void init_metal(nb::module_& m) {
 
       Returns:
         int: The previous cache limit in bytes.
+      )pbdoc");
+  metal.def(
+      "start_capture",
+      &metal::start_capture,
+      "path"_a,
+      R"pbdoc(
+      Start a Metal capture.
+
+      Args:
+        path (str): The path to save the capture which should have
+          the extension ``.gputrace``.
+
+      Returns:
+        bool: Whether the capture was successfully started.
+      )pbdoc");
+  metal.def(
+      "stop_capture",
+      &metal::stop_capture,
+      R"pbdoc(
+      Stop a Metal capture.
       )pbdoc");
 }

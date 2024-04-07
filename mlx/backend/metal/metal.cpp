@@ -1,7 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <cstdlib>
 #include <future>
+#include <iostream>
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
@@ -16,9 +16,6 @@ bool is_available() {
 }
 
 int max_ops_per_buffer() {
-#ifdef MLX_METAL_DEBUG
-  return 1;
-#else
   auto get_val = []() {
     if (const char* buff_str = std::getenv("MLX_MAX_OPS_PER_BUFFER")) {
       return atoi(buff_str);
@@ -28,7 +25,6 @@ int max_ops_per_buffer() {
   };
   static int max_ops_per_buffer_ = get_val();
   return max_ops_per_buffer_;
-#endif
 }
 
 #define MAX_OPS_PER_BUFFER max_ops_per_buffer()

@@ -2,15 +2,11 @@
 
 #pragma once
 
-#include <future>
-#include <memory>
-#include <vector>
-
 #include "mlx/array.h"
-#include "mlx/stream.h"
 
 namespace mlx::core::metal {
 
+/* Check if the Metal backend is available. */
 bool is_available();
 
 /* Get the actively used memory in bytes.
@@ -57,14 +53,6 @@ size_t set_memory_limit(size_t limit, bool relaxed = true);
  * Returns the previous cache limit.
  * */
 size_t set_cache_limit(size_t limit);
-
-void new_stream(Stream stream);
-std::shared_ptr<void> new_scoped_memory_pool();
-
-std::function<void()> make_task(
-    array& arr,
-    std::vector<std::shared_future<void>> deps,
-    std::shared_ptr<std::promise<void>> p);
 
 /** Capture a GPU trace, saving it to an absolute file `path` */
 bool start_capture(std::string path = "");

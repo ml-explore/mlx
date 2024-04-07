@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "mlx/backend/metal/metal.h"
+#include "mlx/backend/metal/metal_impl.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/scheduler.h"

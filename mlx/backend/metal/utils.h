@@ -142,6 +142,9 @@ inline void debug_set_primitive_buffer_label(
     Primitive& primitive) {
 #ifdef MLX_METAL_DEBUG
   std::ostringstream label;
+  if (auto cbuf_label = command_buffer->label(); cbuf_label) {
+    label << cbuf_label->utf8String();
+  }
   primitive.print(label);
   command_buffer->setLabel(make_string(label));
 #endif
