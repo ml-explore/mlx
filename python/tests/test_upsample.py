@@ -40,10 +40,7 @@ class TestConv(mlx_tests.MLXTestCase):
                 np_dtype = getattr(np, dtype)
                 np.random.seed(0)
                 iH, iW = idim
-                # in_np = np.random.normal(-1.0, 1.0, (N, iH, iW, C)).astype(np_dtype)
-                in_np = (
-                    np.arange(N * iH * iW * C).reshape(N, iH, iW, C).astype(np_dtype)
-                )
+                in_np = np.random.normal(-1.0, 1.0, (N, iH, iW, C)).astype(np_dtype)
 
                 in_mx = mx.array(in_np)
                 in_pt = torch.from_numpy(in_np.transpose(0, 3, 1, 2)).to("cpu")
@@ -79,6 +76,8 @@ class TestConv(mlx_tests.MLXTestCase):
                     ((4, 4), (0.5, 0.5)),
                     ((7, 7), (2.0, 2.0)),
                     ((10, 10), (0.2, 0.2)),
+                    ((11, 21), (3.0, 3.0)),
+                    ((11, 21), (3.0, 2.0)),
                 ):
                     # only test linear and cubic interpolation
                     # there will be numerical difference in nearest
