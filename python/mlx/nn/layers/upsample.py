@@ -3,7 +3,7 @@
 import operator
 from functools import reduce
 from itertools import product
-from typing import Literal, Tuple, Union
+from typing import Callable, Literal, Tuple, Union
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
@@ -17,7 +17,7 @@ def _scaled_indices(N, scale, align_corners, dim, ndims):
         step = 1 / scale
         start = ((M - 1) * step - N + 1) / 2
         indices = mx.arange(M, dtype=mx.float32) * step - start
-        indices = mx.clip(indices, 0, N - 1)
+
     shape = [1] * ndims
     shape[dim] = -1
 
@@ -35,9 +35,53 @@ def _linear_indices(N, scale, align_corners, dim, ndims):
     weight = indices - indices_l
     weight = mx.expand_dims(weight, -1)
 
+    # padding with border value
+    indices_l = mx.clip(indices_l, a_min=0, a_max=N - 1)
+    indices_r = mx.clip(indices_r, a_min=0, a_max=N - 1)
+
     return (
         (indices_l.astype(mx.int32), 1 - weight),
         (indices_r.astype(mx.int32), weight),
+    )
+
+
+def _cubic_indices(N, scale, align_corners, dim, ndims):
+    indices = _scaled_indices(N, scale, align_corners, dim, ndims)
+    indices_l1 = mx.floor(indices)
+    indices_r1 = mx.ceil(indices)
+    indices_r1 = mx.where(indices == indices_r1, indices_r1 + 1, indices_r1)
+    indices_l2 = indices_l1 - 1
+    indices_r2 = indices_r1 + 1
+
+    def _get_weight(ind, grid, dist):
+        # PyTorch uses -0.5 for antialiasing=true (compatibility with PIL)
+        # and uses -0.75 for antialiasing=false (compatibility with OpenCV)
+        a = -0.75
+        x = mx.abs(ind - grid)
+        if dist == 1:
+            weight = ((a + 2.0) * x - (a + 3.0)) * x * x + 1
+        elif dist == 2:
+            weight = (((x - 5) * x + 8) * x - 4) * a
+        else:
+            raise Exception("dist must be 1 or 2")
+        return weight[..., None]
+
+    weight_l1 = _get_weight(indices, indices_l1, dist=1)
+    weight_r1 = _get_weight(indices, indices_r1, dist=1)
+    weight_l2 = _get_weight(indices, indices_l2, dist=2)
+    weight_r2 = _get_weight(indices, indices_r2, dist=2)
+
+    # padding with border value
+    indices_l1 = mx.clip(indices_l1, a_min=0, a_max=N - 1)
+    indices_r1 = mx.clip(indices_r1, a_min=0, a_max=N - 1)
+    indices_l2 = mx.clip(indices_l2, a_min=0, a_max=N - 1)
+    indices_r2 = mx.clip(indices_r2, a_min=0, a_max=N - 1)
+
+    return (
+        (indices_l1.astype(mx.int32), weight_l1),
+        (indices_r1.astype(mx.int32), weight_r1),
+        (indices_l2.astype(mx.int32), weight_l2),
+        (indices_r2.astype(mx.int32), weight_r2),
     )
 
 
@@ -71,7 +115,9 @@ def upsample_nearest(x: mx.array, scale_factor: Tuple):
         return x[indices]
 
 
-def upsample_linear(x: mx.array, scale_factor: Tuple, align_corners: bool = False):
+def _interpolate(
+    x: mx.array, scale_factor: Tuple, indices_fn: Callable, align_corners: bool = False
+):
     dims = x.ndim - 2
     if dims != len(scale_factor):
         raise ValueError("A scale needs to be provided for each spatial dimension")
@@ -81,7 +127,7 @@ def upsample_linear(x: mx.array, scale_factor: Tuple, align_corners: bool = Fals
     # Compute the sampling grid
     indices = []
     for i, (n, s) in enumerate(zip(N, scale_factor)):
-        indices.append(_linear_indices(n, s, align_corners, i, dims))
+        indices.append(indices_fn(n, s, align_corners, i, dims))
 
     # Sample and compute the weights
     samples = []
@@ -93,6 +139,24 @@ def upsample_linear(x: mx.array, scale_factor: Tuple, align_corners: bool = Fals
 
     # Interpolate
     return sum(wi * xi for wi, xi in zip(weights, samples))
+
+
+def upsample_linear(x: mx.array, scale_factor: Tuple, align_corners: bool = False):
+    return _interpolate(
+        x=x,
+        scale_factor=scale_factor,
+        indices_fn=_linear_indices,
+        align_corners=align_corners,
+    )
+
+
+def upsample_cubic(x: mx.array, scale_factor: Tuple, align_corners: bool = False):
+    return _interpolate(
+        x=x,
+        scale_factor=scale_factor,
+        indices_fn=_cubic_indices,
+        align_corners=align_corners,
+    )
 
 
 class Upsample(Module):
@@ -154,6 +218,18 @@ class Upsample(Module):
                [1.66667, 2, 2.33333, 2.66667],
                [2.33333, 2.66667, 3, 3.33333],
                [3, 3.33333, 3.66667, 4]], dtype=float32)
+        >>> b = nn.Upsample(scale_factor=2, mode='cubic')
+        >>> b(x).squeeze()
+        array([[0.683594, 1.01562, 1.5625, 1.89453],
+              [1.34766, 1.67969, 2.22656, 2.55859],
+              [2.44141, 2.77344, 3.32031, 3.65234],
+              [3.10547, 3.4375, 3.98438, 4.31641]], dtype=float32)
+        >>> b = nn.Upsample(scale_factor=2, mode='cubic', align_corners=True)
+        >>> b(x).squeeze()
+        array([[1, 1.31482, 1.68519, 2],
+               [1.62963, 1.94445, 2.31482, 2.62963],
+               [2.37037, 2.68519, 3.05556, 3.37037],
+               [3, 3.31482, 3.68519, 4]], dtype=float32)
     """
 
     def __init__(
@@ -163,7 +239,7 @@ class Upsample(Module):
         align_corners: bool = False,
     ):
         super().__init__()
-        if mode not in ["nearest", "linear"]:
+        if mode not in ["nearest", "linear", "cubic"]:
             raise ValueError(f"[Upsample] Got unsupported upsampling algorithm: {mode}")
         if isinstance(scale_factor, (list, tuple)):
             self.scale_factor = tuple(map(float, scale_factor))
@@ -200,6 +276,9 @@ class Upsample(Module):
 
         if self.mode == "nearest":
             return upsample_nearest(x, scale_factor)
-
-        else:
+        elif self.mode == "linear":
             return upsample_linear(x, scale_factor, self.align_corners)
+        elif self.mode == "cubic":
+            return upsample_cubic(x, scale_factor, self.align_corners)
+        else:
+            raise Exception(f"Unknown interpolation mode: {self.mode}")
