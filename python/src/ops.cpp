@@ -773,6 +773,25 @@ void init_ops(nb::module_& m) {
             array: The exponential of ``a``.
       )pbdoc");
   m.def(
+      "expm1",
+      &mlx::core::expm1,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def expm1(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise exponential minus 1.
+
+        Computes ``exp(x) - 1`` with greater precision for small ``x``.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The expm1 of ``a``.
+      )pbdoc");
+  m.def(
       "erf",
       &mlx::core::erf,
       nb::arg(),
@@ -2149,6 +2168,40 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The output array of variances.
+      )pbdoc");
+  m.def(
+      "std",
+      [](const array& a,
+         const IntOrVec& axis,
+         bool keepdims,
+         int ddof,
+         StreamOrDevice s) {
+        return mlx::core::std(
+            a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+      },
+      nb::arg(),
+      "axis"_a = nb::none(),
+      "keepdims"_a = false,
+      "ddof"_a = 0,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def std(a: array, /, axis: Union[None, int, Sequence[int]] = None, keepdims: bool = False, ddof: int = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the standard deviation(s) over the given axes.
+
+        Args:
+            a (array): Input array.
+            axis (int or list(int), optional): Optional axis or
+              axes to reduce over. If unspecified this defaults
+              to reducing over the entire array.
+            keepdims (bool, optional): Keep reduced axes as
+              singleton dimensions, defaults to `False`.
+            ddof (int, optional): The divisor to compute the variance
+              is ``N - ddof``, defaults to 0.
+
+        Returns:
+            array: The output array of standard deviations.
       )pbdoc");
   m.def(
       "split",

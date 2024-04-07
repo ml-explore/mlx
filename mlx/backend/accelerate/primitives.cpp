@@ -310,6 +310,19 @@ void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Expm1::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (out.dtype() == float32 && in.flags().contiguous) {
+    set_unary_output_data(in, out);
+    auto size = in.data_size();
+    vvexpm1f(
+        out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
+  } else {
+    eval(inputs, out);
+  }
+}
+
 void Full::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];

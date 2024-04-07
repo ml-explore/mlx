@@ -241,6 +241,13 @@ struct Exp {
   }
 };
 
+struct Expm1 {
+  template <typename T>
+  T operator()(T x) {
+    return expm1(x);
+  };
+};
+
 struct Floor {
   template <typename T>
   T operator()(T x) {
