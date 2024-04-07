@@ -1,9 +1,11 @@
 Metal Debugger
 ==============
 
+.. currentmodule:: mlx.core
+
 Profiling is a key step for performance optimization. You can build MLX with
-the ``MLX_METAL_DEBUG`` option to improve the Metal debugging and optimization
-workflow. The ``MLX_METAL_DEBUG`` debug option:
+the ``MLX_METAL_DEBUG`` option to improve the Metal debugging and
+optimization workflow. The ``MLX_METAL_DEBUG`` debug option:
 
 * Records source during Metal compilation, for later inspection while
   debugging.
@@ -12,7 +14,8 @@ workflow. The ``MLX_METAL_DEBUG`` debug option:
 To build with debugging enabled in Python prepend
 ``CMAKE_ARGS="-DMLX_METAL_DEBUG=ON"`` to the build call.
 
-The :func:``mx.metal.start_capture`` function initiates a capture of all MLX GPU work.
+The :func:`metal.start_capture` function initiates a capture of all MLX GPU
+work.
 
 .. note::
 
@@ -49,8 +52,8 @@ documentation`_ for more information.
 Xcode Workflow
 --------------
 
-You can skip saving to a path by running within Xcode. First, generate an Xcode
-project using CMake.
+You can skip saving to a path by running within Xcode. First, generate an
+Xcode project using CMake.
 
 .. code-block::
 
