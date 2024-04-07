@@ -2,9 +2,12 @@
 
 #pragma once
 
+#include <future>
 #include "mlx/array.h"
 
 namespace mlx::core {
+
+std::shared_future<void> async_eval(std::vector<array> outputs);
 
 void eval(std::vector<array> outputs);
 
