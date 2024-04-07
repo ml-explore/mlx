@@ -225,6 +225,8 @@ template <typename T, int group_size, int bits, int packs_per_thread>
 
   thread U x_thread[values_per_thread];
   thread U result[results_per_simdgroup] = {0};
+  U sacles_local[results_per_simdgroup];
+  U biases_local[results_per_simdgroup];
 
   // Adjust positions
   const int in_vec_size_w = in_vec_size / pack_factor;
@@ -237,21 +239,27 @@ template <typename T, int group_size, int bits, int packs_per_thread>
   y += tid.z * out_vec_size + out_row;
 
   for (int k = 0; k < in_vec_size; k += block_size) {
-    U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
+    static_assert(results_per_simdgroup==4, "when results_per_simdgroup changed, below code should be changed too");
+    sacles_local[0] = *scales;
+    sacles_local[1] = *(scales + in_vec_size_g);
+    sacles_local[2] = *(scales + in_vec_size_g * 2);
+    sacles_local[3] = *(scales + in_vec_size_g * 3);
+    scales += block_size / group_size;
 
+    biases_local[0] = *biases;
+    biases_local[1] = *(biases + in_vec_size_g);
+    biases_local[2] = *(biases + in_vec_size_g * 2);
+    biases_local[3] = *(biases + in_vec_size_g * 3);
+    biases += block_size / group_size;
+
+    U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
     for (int row = 0; row < results_per_simdgroup; row++) {
       const device uint8_t* wl = (const device uint8_t *)(w + row * in_vec_size_w);
-      const device T* sl = scales + row * in_vec_size_g;
-      const device T* bl = biases + row * in_vec_size_g;
-
-      U s = sl[0];
-      U b = bl[0];
-      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s, b, sum);
+      result[row] += qdot<U, values_per_thread, bits>(
+        wl, x_thread, sacles_local[row], biases_local[row], sum);
     }
 
     w += block_size / pack_factor;
-    scales += block_size / group_size;
-    biases += block_size / group_size;
     x += block_size;
   }
 
