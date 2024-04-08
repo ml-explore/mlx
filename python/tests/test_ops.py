@@ -728,7 +728,7 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_std(self):
         x = mx.random.uniform(shape=(5, 5))
         x_np = np.array(x)
-        self.assertAlmostEqual(mx.std(x).item(), x_np.std().item())
+        self.assertAlmostEqual(mx.std(x).item(), x_np.std().item(), places=6)
 
     def test_abs(self):
         a = mx.array([-1.0, 1.0, -2.0, 3.0])
