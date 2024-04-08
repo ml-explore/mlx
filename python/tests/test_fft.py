@@ -107,6 +107,12 @@ class TestFFT(mlx_tests.MLXTestCase):
         a_np = r + 1j * i
         a_mx = mx.array(a_np)
 
+    def test_fft_contiguity(self):
+        r = np.random.rand(4, 8).astype(np.float32)
+        i = np.random.rand(4, 8).astype(np.float32)
+        a_np = r + 1j * i
+        a_mx = mx.array(a_np)
+
         # non-contiguous in the FFT dim
         out_mx = mx.fft.fft(a_mx[:, ::2])
         out_np = np.fft.fft(a_np[:, ::2])
@@ -116,6 +122,19 @@ class TestFFT(mlx_tests.MLXTestCase):
         out_mx = mx.fft.fft(a_mx[::2])
         out_np = np.fft.fft(a_np[::2])
         np.testing.assert_allclose(out_np, out_mx, atol=1e-5, rtol=1e-5)
+
+        out_mx = mx.broadcast_to(mx.reshape(mx.transpose(a_mx), (4, 8, 1)), (4, 8, 16))
+        out_np = np.broadcast_to(np.reshape(np.transpose(a_np), (4, 8, 1)), (4, 8, 16))
+        np.testing.assert_allclose(out_np, out_mx, atol=1e-5, rtol=1e-5)
+
+        out2_mx = mx.fft.fft(mx.abs(out_mx) + 4)
+        out2_np = np.fft.fft(np.abs(out_np) + 4)
+        np.testing.assert_allclose(out2_mx, out2_np, atol=1e-5, rtol=1e-5)
+
+        b_np = np.array([[0, 1, 2, 3]])
+        out_mx = mx.abs(mx.fft.fft(mx.tile(mx.reshape(mx.array(b_np), (1, 4)), (4, 1))))
+        out_np = np.abs(np.fft.fft(np.tile(np.reshape(np.array(b_np), (1, 4)), (4, 1))))
+        np.testing.assert_allclose(out_mx, out_np, atol=1e-5, rtol=1e-5)
 
 
 if __name__ == "__main__":

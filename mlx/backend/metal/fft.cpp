@@ -31,7 +31,8 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto check_input = [this, &copies, &s](const array& x) {
     // TODO: Pass the strides to the kernel so
     // we can avoid the copy when x is not contiguous.
-    bool no_copy = x.strides()[axes_[0]] == 1 && x.flags().contiguous;
+    bool no_copy = x.strides()[axes_[0]] == 1 && x.flags().row_contiguous ||
+        x.flags().col_contiguous;
     if (no_copy) {
       return x;
     } else {
@@ -58,7 +59,8 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
         flags.row_contiguous &= (strides[ri] == b_stride || x.shape(ri) == 1);
         b_stride *= x.shape(ri);
       }
-      flags.contiguous = true;
+      // This is probably over-conservative
+      flags.contiguous = false;
 
       x_copy.set_data(
           allocator::malloc_or_wait(x.nbytes()), x.data_size(), strides, flags);
