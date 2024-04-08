@@ -359,6 +359,18 @@ void Exp::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Expm1::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (issubdtype(out.dtype(), inexact)) {
+    unary_fp(in, out, detail::Expm1());
+  } else {
+    throw std::invalid_argument(
+        "[expm1] Cannot exponentiate elements in array"
+        " with non floating point type.");
+  }
+}
+
 void Floor::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];

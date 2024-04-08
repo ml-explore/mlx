@@ -1092,6 +1092,20 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK(allclose(exp(x), expected).item<bool>());
   }
 
+  // Test expm1
+  {
+    array x(-1.0f);
+    CHECK_EQ(expm1(x).item<float>(), doctest::Approx(std::expm1(-1.0f)));
+
+    x = array(1.0f);
+    CHECK_EQ(expm1(x).item<float>(), doctest::Approx(std::expm1(1.0f)));
+
+    // Integer input type
+    x = array(1);
+    CHECK_EQ(expm1(x).dtype(), float32);
+    CHECK_EQ(expm1(x).item<float>(), doctest::Approx(std::expm1(1.0f)));
+  }
+
   // Test sine
   {
     array x(0.0);

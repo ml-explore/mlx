@@ -837,6 +837,22 @@ class Exp : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Expm1 : public UnaryPrimitive {
+ public:
+  explicit Expm1(Stream stream) : UnaryPrimitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Expm1)
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class FFT : public UnaryPrimitive {
  public:
   explicit FFT(
