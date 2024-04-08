@@ -15,17 +15,9 @@ using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
 // Threadgroup memory batching improves throughput for small n
 #define MIN_THREADGROUP_MEM_SIZE 64
 
-std::pair<int, std::vector<int>> FFT::next_fast_n(int n) {
-  while (n <= MAX_SINGLE_FFT_SIZE) {
-    // Powers of 2 are so fast that it's worth skipping the composites
-    if (is_power_of_2(n)) {
-      auto plan = plan_stockham_fft(n);
-      return std::make_pair(n, plan);
-    }
-    n += 1;
-  }
-  throw std::runtime_error(
-      "Next fast FFT size is larger than the maximum that fits in shared memory.");
+int FFT::next_fast_n(int n) {
+  // Next power of 2
+  return pow(2, std::ceil(std::log2(n)));
 }
 
 // Plan the sequence of radices
@@ -120,7 +112,8 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Bluestein's algorithm transforms an FFT to
     // a convolution of size > 2n + 1.
     // We solve that conv via FFT wth the convolution theorem.
-    std::tie(bluestein_n, plan) = next_fast_n(2 * n - 1);
+    bluestein_n = next_fast_n(2 * n - 1);
+    plan = plan_stockham_fft(bluestein_n);
   }
 
   int fft_size = bluestein_n > 0 ? bluestein_n : n;

@@ -3762,4 +3762,9 @@ array number_of_elements(
       {a}));
 }
 
+array conjugate(const array& a, StreamOrDevice s /* = {} */) {
+  return array(
+      a.shape(), a.dtype(), std::make_shared<Conjugate>(to_stream(s)), {a});
+}
+
 } // namespace mlx::core

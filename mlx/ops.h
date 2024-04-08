@@ -1230,4 +1230,6 @@ array number_of_elements(
     Dtype dtype = int32,
     StreamOrDevice s = {});
 
+array conjugate(const array& a, StreamOrDevice s = {});
+
 } // namespace mlx::core

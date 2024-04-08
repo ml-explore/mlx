@@ -22,17 +22,19 @@ TEST_CASE("test fft basics") {
   random::seed(7);
   // array x = array({complex64_t{6, 0}, complex64_t{-2, 2}, complex64_t{-2,
   // 0}}); x = tile(reshape(x, {1, 3}), {2, 1});
-  array x = random::normal({17, 65});
-  x = astype(x, complex64);
+  // array x = random::normal({1, 13});
+  array x = reshape(arange(1259), {1, 1259});
+  // array xi = complex64_t{0, 1} * random::normal({17, 17});
+  // x = x + xi;
   std::cout << "x " << x << std::endl;
-  array y = fft::irfft(x);
+  array y = fft::fft(x);
   std::cout << "y " << y << std::endl;
 
   // auto bench_fft = [&x]() { return fft::irfft(x); };
   // TIME(bench_fft);
 
   set_default_device(Device::cpu);
-  y = fft::irfft(x);
+  y = fft::fft(x);
   // // // TIME(bench_fft);
 
   std::cout << "y " << y << std::endl;

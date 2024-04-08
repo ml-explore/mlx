@@ -558,6 +558,19 @@ class Concatenate : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Conjugate : public UnaryPrimitive {
+ public:
+  explicit Conjugate(Stream stream) : UnaryPrimitive(stream){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_PRINT(Conjugate)
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Convolution : public UnaryPrimitive {
  public:
   explicit Convolution(
@@ -889,7 +902,7 @@ class FFT : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
 
   // GPU FFT planning
-  static std::pair<int, std::vector<int>> next_fast_n(int n);
+  static int next_fast_n(int n);
   static std::vector<int> plan_stockham_fft(int n);
 
  private:

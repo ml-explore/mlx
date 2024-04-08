@@ -571,6 +571,17 @@ void Concatenate::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Conjugate::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (out.dtype() == complex64) {
+    unary_op(inputs, out, "conj");
+  } else {
+    throw std::invalid_argument(
+        "[conjugate] conjugate must be called on complex input.");
+  }
+}
+
 void Copy::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }

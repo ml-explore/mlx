@@ -16,8 +16,7 @@ using namespace metal;
 
 // OK so here's the plan:
 // - Fix RFFT
-// - Basic 4 step implementation
-// - Optimize 7/11/13
+// - Add 11/13 radices
 // - Clean up and prepare PR
 
 // Specialize for a particular value of N at runtime
@@ -339,9 +338,6 @@ void perform_fft(
 //
 // At each step we use n / 4 threads, each performing
 // a single-threaded radix-4 or radix-2 DFT.
-//
-// We provide the number of radix-2 and radix-4
-// steps at compile time for a ~20% performance boost.
 template <int tg_mem_size>
 [[kernel]] void fft(
     const device float2* in [[buffer(0)]],

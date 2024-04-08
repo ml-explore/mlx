@@ -92,6 +92,7 @@ instantiate_unary_float(tanh, Tanh)
 instantiate_unary_float(round, Round)
 
 instantiate_unary_all(abs, complex64, complex64_t, Abs)
+instantiate_unary_all(conj, complex64, complex64_t, Conjugate)
 instantiate_unary_all(cos, complex64, complex64_t, Cos)
 instantiate_unary_all(cosh, complex64, complex64_t, Cosh)
 instantiate_unary_all(exp, complex64, complex64_t, Exp)
