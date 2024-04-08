@@ -204,7 +204,7 @@ void init_random(nb::module_& parent_module) {
         Args:
             mean (array): array of shape ``(...,n)``, the mean of the distribution.
             cov (array): array  of shape ``(...,n,n)``, the covariance matrix of the distribution. The batch shape ``...`` must be broadcast-compatible with that of ``mean``. 
-            shape (list(int), optional): The output shape.Must be broadcast-compatible with ``mean.shape[:-1]`` and ``cov.shape[:-2]``. If empty produces a result batch shape by broadcasting together the batch shapes of mean and cov.
+            shape (list(int), optional): The output shape must be broadcast-compatible with ``mean.shape[:-1]`` and ``cov.shape[:-2]``. If empty, the result shape is determined by broadcasting the batch shapes of ``mean`` and ``cov``.
             dtype (Dtype, optional): The output type. Default: ``float32``.
             key (array, optional): A PRNG key. Default: ``None``.
 
