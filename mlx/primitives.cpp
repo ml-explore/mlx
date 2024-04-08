@@ -1244,7 +1244,10 @@ std::vector<array> Expm1::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  return {multiply(cotangents[0], outputs[0], stream())};
+  return {multiply(
+      cotangents[0],
+      add(outputs[0], array(1.0f, outputs[0].dtype()), stream()),
+      stream())};
 }
 
 std::vector<array> Expm1::jvp(
