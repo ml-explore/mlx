@@ -198,7 +198,7 @@ array multivariate_normal(
     const array& cov,
     const std::vector<int>& shape,
     Dtype dtype,
-    const std::optional<array>& key,
+    const std::optional<array>& key /* = nullopt */,
     StreamOrDevice s) {
   auto stream = to_stream(s);
 
