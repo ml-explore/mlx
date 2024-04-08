@@ -8,9 +8,10 @@
 using namespace mlx::core;
 
 int main() {
-  // Enable the MLX_METAL_DEBUG CMake option to enhance the capture with groups,
-  // labels, etc.
-  assert(metal::start_capture());
+  // To use Metal debugging and profiling:
+  // 1. Build with the MLX_METAL_DEBUG CMake option (i.e. -DMLX_METAL_DEBUG=ON).
+  // 2. Run with MTL_CAPTURE_ENABLED=1.
+  assert(metal::start_capture("mlx_trace.gputrace"));
 
   // Start at index two because the default GPU and CPU streams have indices
   // zero and one, respectively. This naming matches the label assigned to each

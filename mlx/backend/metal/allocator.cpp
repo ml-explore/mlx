@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include "mlx/backend/metal/allocator.h"
 #include "mlx/backend/metal/metal.h"
+#include "mlx/backend/metal/metal_impl.h"
 
 #include <mach/vm_page_size.h>
 #include <unistd.h>

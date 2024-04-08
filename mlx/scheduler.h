@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "mlx/backend/metal/metal.h"
+#include "mlx/backend/metal/metal_impl.h"
 #include "mlx/device.h"
 #include "mlx/stream.h"
 
