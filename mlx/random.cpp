@@ -206,6 +206,16 @@ array multivariate_normal(
     throw std::invalid_argument("[multivariate_normal] dtype must be float32.");
   }
 
+  if (mean.ndim() < 1) {
+    throw std::invalid_argument(
+        "[multivariate_normal] mean must have at least one dimension.");
+  }
+
+  if (cov.ndim() < 2) {
+    throw std::invalid_argument(
+        "[multivariate_normal] cov must have at least two dimensions.");
+  }
+
   auto n = mean.shape(-1);
 
   // Check shapes comatibility of mean and cov
