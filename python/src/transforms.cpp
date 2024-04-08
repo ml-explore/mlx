@@ -599,6 +599,7 @@ void init_transforms(nb::module_& m) {
       m,
       "Synchronizer",
       R"pbdoc(
+      A synchronization object returned by :func:`async_eval`.
       )pbdoc")
       .def("wait", [](const std::shared_future<void>& f) { f.wait(); });
 
@@ -636,10 +637,13 @@ void init_transforms(nb::module_& m) {
       R"pbdoc(
         Asynchronously evaluate an :class:`array` or tree of :class:`array`.
 
-        You must call ``wait`` on the returned synchronization object before
-        using any arrays that are asynchronously evaluated.
+        .. warning::
 
-        Note:
+          You must call ``wait`` on the returned synchronization object before
+          using any arrays that are asynchronously evaluated.
+
+        .. note::
+
           This is an experimental API and may change in future versions.
 
         Args:
