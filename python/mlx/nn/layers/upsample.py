@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 import operator
-from functools import reduce
+from functools import partial, reduce
 from itertools import product
 from typing import Callable, Literal, Tuple, Union
 
@@ -30,14 +30,11 @@ def _nearest_indices(N, scale, dim, ndims):
 
 def _linear_indices(N, scale, align_corners, dim, ndims):
     indices = _scaled_indices(N, scale, align_corners, dim, ndims)
+    indices = mx.clip(indices, a_min=0, a_max=N - 1)
     indices_l = mx.floor(indices)
     indices_r = mx.ceil(indices)
     weight = indices - indices_l
     weight = mx.expand_dims(weight, -1)
-
-    # padding with border value
-    indices_l = mx.clip(indices_l, a_min=0, a_max=N - 1)
-    indices_r = mx.clip(indices_r, a_min=0, a_max=N - 1)
 
     return (
         (indices_l.astype(mx.int32), 1 - weight),
@@ -48,11 +45,11 @@ def _linear_indices(N, scale, align_corners, dim, ndims):
 def _cubic_indices(N, scale, align_corners, dim, ndims):
     indices = _scaled_indices(N, scale, align_corners, dim, ndims)
     indices_l1 = mx.floor(indices)
-    indices_r1 = mx.ceil(indices)
-    indices_r1 = mx.where(indices == indices_r1, indices_r1 + 1, indices_r1)
+    indices_r1 = mx.floor(indices + 1)
     indices_l2 = indices_l1 - 1
     indices_r2 = indices_r1 + 1
 
+    @partial(mx.compile, shapeless=True)
     def _get_weight(ind, grid, dist):
         # PyTorch uses -0.5 for antialiasing=true (compatibility with PIL)
         # and uses -0.75 for antialiasing=false (compatibility with OpenCV)
@@ -60,16 +57,14 @@ def _cubic_indices(N, scale, align_corners, dim, ndims):
         x = mx.abs(ind - grid)
         if dist == 1:
             weight = ((a + 2.0) * x - (a + 3.0)) * x * x + 1
-        elif dist == 2:
-            weight = (((x - 5) * x + 8) * x - 4) * a
         else:
-            raise Exception("dist must be 1 or 2")
-        return weight[..., None]
+            weight = (((x - 5) * x + 8) * x - 4) * a
+        return weight
 
-    weight_l1 = _get_weight(indices, indices_l1, dist=1)
-    weight_r1 = _get_weight(indices, indices_r1, dist=1)
-    weight_l2 = _get_weight(indices, indices_l2, dist=2)
-    weight_r2 = _get_weight(indices, indices_r2, dist=2)
+    weight_l1 = _get_weight(indices, indices_l1, dist=1)[..., None]
+    weight_r1 = _get_weight(indices, indices_r1, dist=1)[..., None]
+    weight_l2 = _get_weight(indices, indices_l2, dist=2)[..., None]
+    weight_r2 = _get_weight(indices, indices_r2, dist=2)[..., None]
 
     # padding with border value
     indices_l1 = mx.clip(indices_l1, a_min=0, a_max=N - 1)
@@ -185,8 +180,8 @@ class Upsample(Module):
             If a ``float`` is provided, it is the multiplier for all spatial dimensions.
             Otherwise, the number of scale factors provided must match the
             number of spatial dimensions.
-        mode (str, optional): The upsampling algorithm, either ``"nearest"`` or
-            ``"linear"``. Default: ``"nearest"``.
+        mode (str, optional): The upsampling algorithm, either ``"nearest"``,
+            ``"linear"`` or ``cubic``. Default: ``"nearest"``.
         align_corners (bool, optional): Changes the way the corners are treated
             during ``"linear"`` upsampling.  See the note above and the
             examples below for more details.  Default: ``False``.
@@ -218,18 +213,6 @@ class Upsample(Module):
                [1.66667, 2, 2.33333, 2.66667],
                [2.33333, 2.66667, 3, 3.33333],
                [3, 3.33333, 3.66667, 4]], dtype=float32)
-        >>> b = nn.Upsample(scale_factor=2, mode='cubic')
-        >>> b(x).squeeze()
-        array([[0.683594, 1.01562, 1.5625, 1.89453],
-              [1.34766, 1.67969, 2.22656, 2.55859],
-              [2.44141, 2.77344, 3.32031, 3.65234],
-              [3.10547, 3.4375, 3.98438, 4.31641]], dtype=float32)
-        >>> b = nn.Upsample(scale_factor=2, mode='cubic', align_corners=True)
-        >>> b(x).squeeze()
-        array([[1, 1.31482, 1.68519, 2],
-               [1.62963, 1.94445, 2.31482, 2.62963],
-               [2.37037, 2.68519, 3.05556, 3.37037],
-               [3, 3.31482, 3.68519, 4]], dtype=float32)
     """
 
     def __init__(
