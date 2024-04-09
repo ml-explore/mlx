@@ -244,13 +244,21 @@ array multivariate_normal(
   auto covariance = astype(cov, float32, stream);
   auto SVD = linalg::svd(covariance, stream);
   auto std = astype(
-      matmul(multiply(SVD[0], sqrt(SVD[1], stream), stream), SVD[2], stream),
+      matmul(
+          multiply(
+              SVD[0], expand_dims(sqrt(SVD[1], stream), -2, stream), stream),
+          SVD[2],
+          stream),
       dtype,
       stream);
 
   // Generate standard the samples
   auto standard_normal = normal(output_shape, dtype, 0.0, 1.0, key, stream);
-  return add(mean, matmul(standard_normal, std, stream), stream);
+  auto scaled_out = squeeze(
+      matmul(expand_dims(standard_normal, -2, stream), std, stream),
+      -2,
+      stream);
+  return add(mean, scaled_out, stream);
 }
 
 array randint(

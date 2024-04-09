@@ -455,8 +455,7 @@ TEST_CASE("test random multivariate_normal") {
   }
   {
     auto mean = zeros({3});
-    auto cov = zeros({2, 3});
-    cov = reshape(cov, {1, 3, 3});
+    auto cov = zeros({1, 2, 3, 3});
     auto x = random::multivariate_normal(mean, cov, {1000, 2}, float32);
     CHECK_EQ(x.shape(), std::vector<int>({1000, 2, 3}));
   }
