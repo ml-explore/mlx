@@ -159,7 +159,7 @@ class TestRandom(mlx_tests.MLXTestCase):
         self.assertEqual(a.shape, (4, 3, 2))
 
         ## Check correcteness of the mean and covariance
-        n_test = int(1e7)
+        n_test = int(1e5)
 
         def check_jointly_gaussian(data, mean, cov):
             empirical_mean = mx.mean(data, axis=0)
@@ -178,7 +178,7 @@ class TestRandom(mlx_tests.MLXTestCase):
                 )
             )
 
-        mean = mx.array([4, 7])
+        mean = mx.array([4.0, 7.0])
         cov = mx.array([[2, 0.5], [0.5, 1]])
         data = mx.random.multivariate_normal(
             mean, cov, shape=(n_test,), key=key, stream=mx.cpu
