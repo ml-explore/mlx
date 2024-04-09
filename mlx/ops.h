@@ -201,7 +201,7 @@ split(const array& a, const std::vector<int>& indices, StreamOrDevice s = {});
 std::vector<array> meshgrid(
     const std::vector<array>& arrays,
     bool sparse = false,
-    std::string_view indexing = "xy",
+    std::string indexing = "xy",
     StreamOrDevice s = {});
 
 /**

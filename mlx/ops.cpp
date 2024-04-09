@@ -699,7 +699,7 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
 std::vector<array> meshgrid(
     const std::vector<array>& arrays,
     bool sparse /* = false */,
-    std::string_view indexing /* = "xy" */,
+    std::string indexing /* = "xy" */,
     StreamOrDevice s /* = {} */) {
   if (indexing != "xy" && indexing != "ij") {
     throw std::invalid_argument(
