@@ -7,6 +7,7 @@
 
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/erf.h"
+#include "mlx/backend/metal/kernels/expm1f.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
 namespace {
@@ -181,6 +182,13 @@ struct Exp {
     auto m = metal::precise::exp(x.real);
     return {m * metal::precise::cos(x.imag), m * metal::precise::sin(x.imag)};
   }
+};
+
+struct Expm1 {
+  template <typename T>
+  T operator()(T x) {
+    return static_cast<T>(expm1f(static_cast<float>(x)));
+  };
 };
 
 struct Floor {

@@ -1239,6 +1239,34 @@ std::pair<std::vector<array>, std::vector<int>> Exp::vmap(
   return {{exp(inputs[0], stream())}, axes};
 }
 
+std::vector<array> Expm1::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  return {multiply(
+      cotangents[0],
+      add(outputs[0], array(1.0f, outputs[0].dtype()), stream()),
+      stream())};
+}
+
+std::vector<array> Expm1::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {multiply(tangents[0], exp(primals[0], stream()), stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> Expm1::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{expm1(inputs[0], stream())}, axes};
+}
+
 bool FFT::is_equivalent(const Primitive& other) const {
   const FFT& r_other = static_cast<const FFT&>(other);
   return axes_ == r_other.axes_ && inverse_ == r_other.inverse_ &&

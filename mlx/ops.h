@@ -514,13 +514,14 @@ array mean(
     bool keepdims = false,
     StreamOrDevice s = {});
 
-/** Computes the mean of the elements of an array. */
+/** Computes the variance of the elements of an array. */
 array var(const array& a, bool keepdims, int ddof = 0, StreamOrDevice s = {});
 inline array var(const array& a, StreamOrDevice s = {}) {
   return var(a, false, 0, to_stream(s));
 }
 
-/** Computes the var of the elements of an array along the given axes */
+/** Computes the variance of the elements of an array along the given
+ * axes */
 array var(
     const array& a,
     const std::vector<int>& axes,
@@ -528,8 +529,33 @@ array var(
     int ddof = 0,
     StreamOrDevice s = {});
 
-/** Computes the var of the elements of an array along the given axis */
+/** Computes the variance of the elements of an array along the given
+ * axis */
 array var(
+    const array& a,
+    int axis,
+    bool keepdims = false,
+    int ddof = 0,
+    StreamOrDevice s = {});
+
+/** Computes the standard deviation of the elements of an array. */
+array std(const array& a, bool keepdims, int ddof = 0, StreamOrDevice s = {});
+inline array std(const array& a, StreamOrDevice s = {}) {
+  return std(a, false, 0, to_stream(s));
+}
+
+/** Computes the standard deviatoin of the elements of an array along the given
+ * axes */
+array std(
+    const array& a,
+    const std::vector<int>& axes,
+    bool keepdims = false,
+    int ddof = 0,
+    StreamOrDevice s = {});
+
+/** Computes the standard deviation of the elements of an array along the given
+ * axis */
+array std(
     const array& a,
     int axis,
     bool keepdims = false,
@@ -848,6 +874,9 @@ array erf(const array& a, StreamOrDevice s = {});
 
 /** Computes the inverse error function of the elements of an array. */
 array erfinv(const array& a, StreamOrDevice s = {});
+
+/** Computes the expm1 function of the elements of an array. */
+array expm1(const array& a, StreamOrDevice s = {});
 
 /** Stop the flow of gradients. */
 array stop_gradient(const array& a, StreamOrDevice s = {});

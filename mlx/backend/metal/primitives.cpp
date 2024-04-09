@@ -615,6 +615,10 @@ void Exp::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "exp");
 }
 
+void Expm1::eval_gpu(const std::vector<array>& inputs, array& out) {
+  unary_op(inputs, out, "expm1");
+}
+
 void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto in = inputs[0];
   CopyType ctype;
