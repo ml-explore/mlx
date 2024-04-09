@@ -428,7 +428,7 @@ void explicit_gemm_conv_1D_cpu(
   wt_transpose.copy_shared_buffer(
       wt,
       {wt.strides(0), wt.strides(2), wt.strides(1)},
-      {0, 0, 0}, // Flags
+      wt.flags(),
       wt.size(),
       0);
   auto gemm_wt = array(wt_transpose.shape(), float32, nullptr, {});

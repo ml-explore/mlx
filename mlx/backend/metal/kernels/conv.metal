@@ -33,7 +33,7 @@ template <typename T, int N>
   // Set out 
   out += gid.z * filter_size + gid.y * (params->C);
 
-  // Corrdinates in input
+  // Coordinates in input
   int is[N] = {0};
 
   // gid.z: N oS (Batch and row in unfolded output)
