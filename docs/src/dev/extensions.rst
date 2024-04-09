@@ -1,16 +1,16 @@
 Developer Documentation
 =======================
 
-You can extend MLX with custom operatoins on the CPU or GPU. This guide
+You can extend MLX with custom operations on the CPU or GPU. This guide
 explains how to do that with a simple example.
 
 Introducing the Example
 -----------------------
 
-Let's say that you would like an operation that takes in two arrays,
-``x`` and ``y``, scales them both by coefficients ``alpha`` and ``beta``
-respectively, and then adds them together to get the result
-``z = alpha * x + beta * y``.  You can easily do that in MLX:
+Let's say you would like an operation that takes in two arrays, ``x`` and
+``y``, scales them both by coefficients ``alpha`` and ``beta`` respectively,
+and then adds them together to get the result ``z = alpha * x + beta * y``.
+You can do that in MLX directly:
 
 .. code-block:: python
 
@@ -19,43 +19,35 @@ respectively, and then adds them together to get the result
     def simple_axpby(x: mx.array, y: mx.array, alpha: float, beta: float) -> mx.array:
         return alpha * x + beta * y
 
-This function performs that operation while leaving the implementations and
-differentiation to MLX.
+This function performs that operation while leaving the implementation and
+function transformations to MLX.
 
-However, you work with vector math libraries often and realize that the
-``axpby`` routine defines the same operation ``Y = (alpha * X) + (beta * Y)``.
-You would really like the part of your applications that does this operation
-on the CPU to be very fast - so you decide that you want it to rely on the
-``axpby`` routine provided by the Accelerate_ framework. Let's also assume that
-you want to learn how to add your own implementation for the gradients of your
-new operation while going over the ins-and-outs of the MLX framework.
+However you may need to customize the underlying implementation, perhaps to
+make it faster or for custom differentiation. In this tutorial we will go
+through adding custom extensions. It will cover:
 
-Well, what a coincidence! You are in the right place. Over the course of this
-example, we will learn:
-
-* The structure of the MLX library from the frontend API to the backend implementations.
-* How to implement your own CPU backend that redirects to Accelerate_ when appropriate (and a fallback if needed).
-* How to implement your own GPU implementation using metal.
-* How to add your own ``vjp`` and ``jvp``.
-* How to build your implementations, link them to MLX, and bind them to python.
+* The structure of the MLX library.
+* Implementing a CPU operation that redirects to Accelerate_ when appropriate.
+* Implementing a GPU operation using metal.
+* Adding the ``vjp`` and ``jvp`` function transformation.
+* Building a custom extension and binding it to python.
 
 Operations and Primitives
 -------------------------
 
-In one sentence, operations in MLX build the computation graph, and primitives
-provide the rules for evaluation and transformations of said graph. Let's start
-by discussing operations in more detail.
+Operations in MLX build the computation graph. Primitives provide the rules for
+evaluating and transforming the graph. Let's start by discussing operations in
+more detail.
 
 Operations
 ^^^^^^^^^^^
 
-Operations are the frontend functions that operate on arrays. They are defined
-in the C++ API (:ref:`cpp_ops`) and then we provide bindings to these
-operations in the Python API (:ref:`ops`).
+Operations are the front-end functions that operate on arrays. They are defined
+in the C++ API (:ref:`cpp_ops`), and the Python API (:ref:`ops`) binds them.
 
-We would like an operation, :meth:`axpby` that takes in two arrays ``x`` and ``y``,
-and two scalars, ``alpha`` and ``beta``. This is how we would define it in the
-C++ API:
+We would like an operation, :meth:`axpby` that takes in two arrays ``x`` and
+``y``, and two scalars, ``alpha`` and ``beta``. This is how to define it in
+C++:
 
 .. code-block:: C++
 
@@ -74,9 +66,7 @@ C++ API:
         StreamOrDevice s = {} // Stream on which to schedule the operation
     );
 
-
-This operation itself can call other operations within it if needed. The
-simplest way to implement this operation is in terms of existing operations:
+The simplest way to this operation is in terms of existing operations:
 
 .. code-block:: C++
 
@@ -95,20 +85,18 @@ simplest way to implement this operation is in terms of existing operations:
         return add(ax, by, s);
     }
 
-However, as we discussed earlier, this is not our goal. The operations themselves
-do not contain the implementations that act on the data, nor do they contain the
-rules of transformations. Rather, they are an easy to use interface that build
-on top of the building blocks we call :class:`Primitive`.
+The operations themselves do not contain the implementations that act on the
+data, nor do they contain the rules of transformations. Rather, they are an
+easy to use interface that use :class:`Primitive` building blocks.
 
 Primitives
 ^^^^^^^^^^^
 
 A :class:`Primitive` is part of the computation graph of an :class:`array`. It
-defines how to create an output given a set of input :class:`array`. Further, a
-:class:`Primitive` is a class that contains rules on how it is evaluated on the
-CPU or GPU, and how it acts under transformations such as ``vjp`` and ``jvp``.
-These words on their own can be a bit abstract, so lets go back to our example
-to be more concrete:
+defines how to create outputs arrays given a input arrays. Further, a
+:class:`Primitive` has methods to run on the CPU or GPU and for function
+transformations such as ``vjp`` and ``jvp``.  Lets go back to our example to be
+more concrete:
 
 .. code-block:: C++
 
@@ -172,20 +160,20 @@ to be more concrete:
 
 The :class:`Axpby` class derives from the base :class:`Primitive` class. The
 :class:`Axpby` treats ``alpha`` and ``beta`` as parameters. It then provides
-implementations of how the array ``out`` is produced given ``inputs`` through
-:meth:`Axpby::eval_cpu` and :meth:`Axpby::eval_gpu`. Further, it provides rules
+implementations of how the output array is produced given the inputs through
+:meth:`Axpby::eval_cpu` and :meth:`Axpby::eval_gpu`. It also provides rules
 of transformations in :meth:`Axpby::jvp`, :meth:`Axpby::vjp`, and
 :meth:`Axpby::vmap`.
 
-Using the Primitives
-^^^^^^^^^^^^^^^^^^^^^
+Using the Primitive
+^^^^^^^^^^^^^^^^^^^
 
 Operations can use this :class:`Primitive` to add a new :class:`array` to the
 computation graph. An :class:`array` can be constructed by providing its data
 type, shape, the :class:`Primitive` that computes it, and the :class:`array`
 inputs that are passed to the primitive.
 
-Let's re-implement our operation now in terms of our :class:`Axpby` primitive.
+Let's reimplement our operation now in terms of our :class:`Axpby` primitive.
 
 .. code-block:: C++
 
@@ -241,9 +229,9 @@ the execution of the computation graph, and calls :meth:`Axpby::eval_cpu` or
 .. warning::
     When :meth:`Primitive::eval_cpu` or :meth:`Primitive::eval_gpu` are called,
     no memory has been allocated for the output array. It falls on the implementation
-    of these functions to allocate memory as needed
+    of these functions to allocate memory as needed.
 
-Implementing the CPU Backend
+Implementing the CPU Back-end
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Let's start by implementing a naive and generic version of
@@ -252,7 +240,7 @@ Let's start by implementing a naive and generic version of
 
 Our naive method will go over each element of the output array, find the
 corresponding input elements of ``x`` and ``y`` and perform the operation
-pointwise. This is captured in the templated function :meth:`axpby_impl`.
+point-wise. This is captured in the templated function :meth:`axpby_impl`.
 
 .. code-block:: C++
 
@@ -319,23 +307,22 @@ Accordingly, we add dispatches for ``float32``, ``float16``, ``bfloat16`` and
         }
     }
 
-We have a fallback implementation! Now, to do what we are really here to do.
-Remember we wanted to use the ``axpby`` routine provided by the Accelerate_
-framework? Well, there are 3 complications to keep in mind:
+This is good as a fallback implementation. We can use the ``axpby`` routine
+provided by the Accelerate_ framework for a faster implementation in certain
+cases:
 
 #.  Accelerate does not provide implementations of ``axpby`` for half precision
-    floats. We can only use it for ``float32`` types
-#.  Accelerate assumes the inputs ``x`` and ``y`` are contiguous and all elements
-    have fixed strides between them. Since we aren't guaranteed that the inputs
-    fit this requirement, we only direct to Accelerate if both ``x`` and ``y``
-    are row contiguous or column contiguous.
-#.  Accelerate performs the routine ``Y = (alpha * X) + (beta * Y)`` inplace.
-    MLX expects to write out the answer to a new array. We must copy the elements
-    of ``y`` into the output and use that as an input to ``axpby``
+    floats. We can only use it for ``float32`` types.
+#.  Accelerate assumes the inputs ``x`` and ``y`` are contiguous and all
+    elements have fixed strides between them. We only direct to Accelerate
+    if both ``x`` and ``y`` are row contiguous or column contiguous.
+#.  Accelerate performs the routine ``Y = (alpha * X) + (beta * Y)`` in-place.
+    MLX expects to write the output to a new array. We must copy the elements
+    of ``y`` into the output and use that as an input to ``axpby``.
 
-Let's write out an implementation that uses Accelerate in the right conditions.
+Let's write an implementation that uses Accelerate in the right conditions.
 It allocates data for the output, copies ``y`` into it, and then calls the
-:meth:`catlas_saxpby` from accelerate.
+:func:`catlas_saxpby` from accelerate.
 
 .. code-block:: C++
 
@@ -372,9 +359,9 @@ It allocates data for the output, copies ``y`` into it, and then calls the
             /* INCY = */ 1);
     }
 
-Great! But what about the inputs that do not fit the criteria for accelerate?
-Luckily, we can fall back to :meth:`Axpby::eval`. With this in
-mind, let's finish our :meth:`Axpby::eval_cpu`.
+For inputs that do not fit the criteria for accelerate, we fall back to
+:meth:`Axpby::eval`. With this in mind, let's finish our
+:meth:`Axpby::eval_cpu`.
 
 .. code-block:: C++
 
@@ -395,26 +382,24 @@ mind, let's finish our :meth:`Axpby::eval_cpu`.
             return;
         }
 
-        // Fall back to common backend if specializations are not available
+        // Fall back to common back-end if specializations are not available
         eval(inputs, outputs);
     }
 
-We have now hit a milestone! Just this much is enough to run the operation
-:meth:`axpby` on a CPU stream!
-
-If you do not plan on running the operation on the GPU or using transforms on
+Just this much is enough to run the operation :meth:`axpby` on a CPU stream! If
+you do not plan on running the operation on the GPU or using transforms on
 computation graphs that contain :class:`Axpby`, you can stop implementing the
 primitive here and enjoy the speed-ups you get from the Accelerate library.
 
-Implementing the GPU Backend
+Implementing the GPU Back-end
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Apple silicon devices address their GPUs using the Metal_ shading language, and
-GPU kernels in MLX are written using metal.
+GPU kernels in MLX are written using Metal.
 
 .. note::
 
-    Here are some helpful resources if you are new to metal!
+    Here are some helpful resources if you are new to Metal:
 
     * A walkthrough of the metal compute pipeline: `Metal Example`_
     * Documentation for metal shading language: `Metal Specification`_
@@ -422,7 +407,7 @@ GPU kernels in MLX are written using metal.
 
 Let's keep the GPU kernel simple. We will launch exactly as many threads as
 there are elements in the output. Each thread will pick the element it needs
-from ``x`` and ``y``, do the pointwise operation, and update its assigned
+from ``x`` and ``y``, do the point-wise operation, and update its assigned
 element in the output.
 
 .. code-block:: C++
@@ -449,8 +434,7 @@ element in the output.
     }
 
 We then need to instantiate this template for all floating point types and give
-each instantiation a unique host name so we can identify the right kernel for
-each data type.
+each instantiation a unique host name so we can identify it.
 
 .. code-block:: C++
 
@@ -552,7 +536,7 @@ below.
 
 We can now call the :meth:`axpby` operation on both the CPU and the GPU!
 
-A few things to note about MLX and metal before moving on. MLX keeps track of
+A few things to note about MLX and Metal before moving on. MLX keeps track of
 the active ``command_buffer`` and the ``MTLCommandBuffer`` to which it is
 associated. We rely on :meth:`d.get_command_encoder` to give us the active
 metal compute command encoder instead of building a new one and calling
@@ -563,9 +547,9 @@ the command buffer needs to be flushed for synchronization.
 Primitive Transforms
 ^^^^^^^^^^^^^^^^^^^^^
 
-Now that we have come this far, let's also see how to add implementations to
-transformations in a :class:`Primitive`. These transformations can be built on
-top of our operations, including the one we just defined now:
+Next, let's add implementations for transformations in a :class:`Primitive`.
+These transformations can be built on top of other operations, including the
+one we just defined:
 
 .. code-block:: C++
 
@@ -612,8 +596,8 @@ top of our operations, including the one we just defined now:
         return vjps;
     }
 
-Note, you need not have a transformation fully defined to start using your
-own :class:`Primitive`.
+Note, a transformation does not need to be fully defined to start using
+the :class:`Primitive`.
 
 .. code-block:: C++
 
@@ -642,24 +626,24 @@ Let's look at the overall directory structure first.
 
 * ``extensions/axpby/`` defines the C++ extension library
 * ``extensions/mlx_sample_extensions`` sets out the structure for the
-  associated python package
-* ``extensions/bindings.cpp`` provides python bindings for our operation
+  associated Python package
+* ``extensions/bindings.cpp`` provides Python bindings for our operation
 * ``extensions/CMakeLists.txt`` holds CMake rules to build the library and
-  python bindings
+  Python bindings
 * ``extensions/setup.py`` holds the ``setuptools`` rules to build and install
-  the python package
+  the Python package
 
 Binding to Python
 ^^^^^^^^^^^^^^^^^^
 
 We use nanobind_ to build a Python API for the C++ library. Since bindings for
 components such as :class:`mlx.core.array`, :class:`mlx.core.stream`, etc. are
-already provided, adding our :meth:`axpby` is simple!
+already provided, adding our :meth:`axpby` is simple.
 
 .. code-block:: C++
 
    NB_MODULE(_ext, m) {
-        m.doc() = "Sample C++ and metal extensions for MLX";
+        m.doc() = "Sample extension for MLX";
 
         m.def(
             "axpby",
@@ -693,7 +677,7 @@ whistles such as the literal names and doc-strings.
 
 .. warning::
 
-    :mod:`mlx.core` needs to be imported before importing
+    :mod:`mlx.core` must be imported before importing
     :mod:`mlx_sample_extensions` as defined by the nanobind module above to
     ensure that the casters for :mod:`mlx.core` components like
     :class:`mlx.core.array` are available.
@@ -703,8 +687,8 @@ whistles such as the literal names and doc-strings.
 Building with CMake
 ^^^^^^^^^^^^^^^^^^^^
 
-Building the C++ extension library itself is simple, it only requires that you
-``find_package(MLX CONFIG)`` and then link it to your library.
+Building the C++ extension library only requires that you ``find_package(MLX
+CONFIG)`` and then link it to your library.
 
 .. code-block:: cmake
 
@@ -726,12 +710,12 @@ Building the C++ extension library itself is simple, it only requires that you
     # Link to mlx
     target_link_libraries(mlx_ext PUBLIC mlx)
 
-We also need to build the attached metal library. For convenience, we provide a
+We also need to build the attached Metal library. For convenience, we provide a
 :meth:`mlx_build_metallib` function that builds a ``.metallib`` target given
 sources, headers, destinations, etc. (defined in ``cmake/extension.cmake`` and
 automatically imported with MLX package).
 
-Here is what that looks like in practice!
+Here is what that looks like in practice:
 
 .. code-block:: cmake
 
@@ -770,10 +754,10 @@ Finally, we build the nanobind_ bindings
     endif()
 
 Building with ``setuptools``
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Once we have set out the CMake build rules as described above, we can use the
-build utilities defined in :mod:`mlx.extension` for a simple build process.
+build utilities defined in :mod:`mlx.extension`:
 
 .. code-block:: python
 
@@ -818,17 +802,17 @@ This results in the directory structure:
 
 When you try to install using the command ``python -m pip install .`` (in
 ``extensions/``), the package will be installed with the same structure as
-``extensions/mlx_sample_extensions`` and the C++ and metal library will be
-copied along with the python binding since they are specified as
+``extensions/mlx_sample_extensions`` and the C++ and Metal library will be
+copied along with the Python binding since they are specified as
 ``package_data``.
 
 Usage
 -----
 
 After installing the extension as described above, you should be able to simply
-import the python package and play with it as you would any other MLX operation!
+import the Python package and play with it as you would any other MLX operation.
 
-Let's looks at a simple script and it's results!
+Let's look at a simple script and its results:
 
 .. code-block:: python
 
@@ -855,7 +839,7 @@ Results
 ^^^^^^^
 
 Let's run a quick benchmark and see how our new ``axpby`` operation compares
-with the naive :meth:`simple_axpby` we defined at first on the CPU.
+with the naive :meth:`simple_axpby` we first defined on the CPU.
 
 .. code-block:: python
 
@@ -897,26 +881,19 @@ with the naive :meth:`simple_axpby` we defined at first on the CPU.
 
     print(f"Simple axpby: {simple_time:.3f} s | Custom axpby: {custom_time:.3f} s")
 
-Results:
-
-.. code-block::
-
-    Simple axpby: 0.114 s | Custom axpby: 0.109 s
-
-We see some modest improvements right away!
+The results are ``Simple axpby: 0.114 s | Custom axpby: 0.109 s``. We see
+modest improvements right away!
 
 This operation is now good to be used to build other operations, in
 :class:`mlx.nn.Module` calls, and also as a part of graph transformations like
-:meth:`grad`!
+:meth:`grad`.
 
 Scripts
 -------
 
 .. admonition:: Download the code
 
-   The full example code is available in `mlx <code>`_.
-
-.. code: `https://github.com/ml-explore/mlx/tree/main/examples/extensions/`_
+   The full example code is available in `mlx <https://github.com/ml-explore/mlx/tree/main/examples/extensions/>`_.
 
 .. _Accelerate: https://developer.apple.com/documentation/accelerate/blas?language=objc
 .. _Metal: https://developer.apple.com/documentation/metal?language=objc

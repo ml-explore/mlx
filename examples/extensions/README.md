@@ -2,7 +2,7 @@
 ## Build the extensions
 
 ```
-python -m pip install --editable .
+pip install -e .
 ```
 
 For faster builds during development, you can also pre-install the requirements:

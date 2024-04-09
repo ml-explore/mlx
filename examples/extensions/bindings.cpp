@@ -11,7 +11,7 @@ using namespace nb::literals;
 using namespace mlx::core;
 
 NB_MODULE(_ext, m) {
-  m.doc() = "Sample C++ and metal extensions for MLX";
+  m.doc() = "Sample extension for MLX";
 
   m.def(
       "axpby",
