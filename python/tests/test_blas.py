@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 import math
 import unittest
@@ -717,23 +717,36 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out = out * out_mask
             return out
 
-        def test_shape(M, N, K, tile_size, np_dtype=np.float32):
-            with self.subTest(M=M, N=N, K=K, tile_size=tile_size, np_dtype=np_dtype):
+        def test_shape(M, N, K, tile_size, transpose=False, np_dtype=np.float32):
+            with self.subTest(
+                M=M,
+                N=N,
+                K=K,
+                tile_size=tile_size,
+                np_dtype=np_dtype,
+                transpose=transpose,
+            ):
                 tm = (M + tile_size - 1) // tile_size
                 tn = (N + tile_size - 1) // tile_size
                 tk = (K + tile_size - 1) // tile_size
 
                 a_np = np.random.normal(size=(M, K)).astype(np_dtype)
-                a_np_mask = np.random.normal(size=(tm, tk)) < 0.0
-
                 b_np = np.random.normal(size=(K, N)).astype(np_dtype)
-                b_np_mask = np.random.normal(size=(tk, tn)) < 0.0
 
+                a_np_mask = np.random.normal(size=(tm, tk)) < 0.0
+                b_np_mask = np.random.normal(size=(tk, tn)) < 0.0
                 out_np_mask = np.random.normal(size=(tm, tn)) < 0.0
 
                 a_mx, b_mx, a_mx_mask, b_mx_mask, out_mx_mask = map(
                     mx.array, (a_np, b_np, a_np_mask, b_np_mask, out_np_mask)
                 )
+
+                if transpose:
+                    b_np = np.random.normal(size=(N, K)).astype(np_dtype)
+                    b_mx = mx.array(b_np)
+
+                    b_np = b_np.T
+                    b_mx = b_mx.T
 
                 out_np = np_tile_masked_mm(
                     a_np, b_np, tile_size, out_np_mask, a_np_mask, b_np_mask
@@ -763,7 +776,8 @@ class TestBlas(mlx_tests.MLXTestCase):
         )
 
         for M, N, K, tile_size in shapes:
-            test_shape(M, N, K, tile_size)
+            test_shape(M, N, K, tile_size, transpose=False)
+            test_shape(M, N, K, tile_size, transpose=True)
 
 
 if __name__ == "__main__":

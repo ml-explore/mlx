@@ -3685,28 +3685,6 @@ array tile_masked_mm(
     return broadcast_to(mask, bs_shape, s);
   };
 
-  // Expand masks
-  auto expand_mask =
-      [](array mask, int tile_size, int Y, int X, StreamOrDevice s) {
-        mask = expand_dims(mask, {-3, -1}, s);
-        auto mask_shape = mask.shape();
-        int nd_expand = mask_shape.size();
-        mask_shape[nd_expand - 1] = tile_size;
-        mask_shape[nd_expand - 3] = tile_size;
-
-        mask = broadcast_to(mask, mask_shape, s);
-        std::vector<int> mask_reshape{mask_shape.begin(), mask_shape.end() - 4};
-        std::vector<int> stops = mask_reshape;
-        mask_reshape.push_back(mask.shape(-4) * tile_size);
-        mask_reshape.push_back(mask.shape(-2) * tile_size);
-
-        mask = reshape(mask, mask_reshape, s);
-        std::vector<int> starts(mask.ndim(), 0);
-        stops.push_back(Y);
-        stops.push_back(X);
-        return slice(mask, starts, stops, s);
-      };
-
   // Out mask
   array mask_out_p = mask_out.value_or(array({true}));
   mask_out_p = broadcast_mask(mask_out_p, bsx_shape, tm, tn, s);
@@ -3725,13 +3703,6 @@ array tile_masked_mm(
 
     mask_list.push_back(mask_lhs_p);
     mask_list.push_back(mask_rhs_p);
-
-    if (to_stream(s).device != Device::gpu) {
-      mask_lhs_p = expand_mask(mask_lhs_p, tile_size, M, K, s);
-      mask_rhs_p = expand_mask(mask_rhs_p, tile_size, K, N, s);
-      a = multiply(a, mask_lhs_p, s);
-      b = multiply(b, mask_rhs_p, s);
-    }
   }
 
   std::vector<array> inputs = {a, b};
@@ -3743,11 +3714,6 @@ array tile_masked_mm(
       out_type,
       std::make_shared<TileMaskedMM>(to_stream(s), tile_size),
       inputs);
-
-  if (to_stream(s).device != Device::gpu) {
-    auto mask_out_p = expand_mask(mask_list.front(), tile_size, M, N, s);
-    out = multiply(out, mask_out_p, s);
-  }
 
   // Remove the possibly inserted singleton dimensions
   if (in_a_ndim == 1 || in_b_ndim == 1) {
