@@ -181,7 +181,7 @@ class Upsample(Module):
             Otherwise, the number of scale factors provided must match the
             number of spatial dimensions.
         mode (str, optional): The upsampling algorithm, either ``"nearest"``,
-            ``"linear"`` or ``cubic``. Default: ``"nearest"``.
+            ``"linear"`` or ``"cubic"``. Default: ``"nearest"``.
         align_corners (bool, optional): Changes the way the corners are treated
             during ``"linear"`` upsampling.  See the note above and the
             examples below for more details.  Default: ``False``.
