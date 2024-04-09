@@ -48,7 +48,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             << bits_ << "_fast";
 
       // Encode and dispatch kernel
-      auto compute_encoder = d.get_command_encoder(s.index);
+      auto& compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
@@ -61,7 +61,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       set_array_buffer(compute_encoder, scales, 1);
       set_array_buffer(compute_encoder, biases, 2);
       set_array_buffer(compute_encoder, x, 3);
-      set_array_buffer(compute_encoder, out, 4);
+      set_output_buffer(compute_encoder, out, 4);
       compute_encoder->setBytes(&D, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
 
@@ -75,7 +75,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             << bits_;
 
       // Encode and dispatch kernel
-      auto compute_encoder = d.get_command_encoder(s.index);
+      auto& compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
@@ -88,7 +88,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       set_array_buffer(compute_encoder, scales, 1);
       set_array_buffer(compute_encoder, biases, 2);
       set_array_buffer(compute_encoder, x, 3);
-      set_array_buffer(compute_encoder, out, 4);
+      set_output_buffer(compute_encoder, out, 4);
       compute_encoder->setBytes(&D, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
 
@@ -102,7 +102,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             << bits_ << "_alN_" << std::boolalpha << ((O % 32) == 0);
 
       // Encode and dispatch kernel
-      auto compute_encoder = d.get_command_encoder(s.index);
+      auto& compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
@@ -118,7 +118,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       set_array_buffer(compute_encoder, w, 1);
       set_array_buffer(compute_encoder, scales, 2);
       set_array_buffer(compute_encoder, biases, 3);
-      set_array_buffer(compute_encoder, out, 4);
+      set_output_buffer(compute_encoder, out, 4);
       compute_encoder->setBytes(&B, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
       compute_encoder->setBytes(&D, sizeof(int), 7);
@@ -133,7 +133,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             << bits_;
 
       // Encode and dispatch kernel
-      auto compute_encoder = d.get_command_encoder(s.index);
+      auto& compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
@@ -146,7 +146,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       set_array_buffer(compute_encoder, w, 1);
       set_array_buffer(compute_encoder, scales, 2);
       set_array_buffer(compute_encoder, biases, 3);
-      set_array_buffer(compute_encoder, out, 4);
+      set_output_buffer(compute_encoder, out, 4);
       compute_encoder->setBytes(&D, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
 
@@ -160,7 +160,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
             << bits_;
 
       // Encode and dispatch kernel
-      auto compute_encoder = d.get_command_encoder(s.index);
+      auto& compute_encoder = d.get_command_encoder(s.index);
       auto kernel = d.get_kernel(kname.str());
       compute_encoder->setComputePipelineState(kernel);
 
@@ -183,7 +183,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       set_array_buffer(compute_encoder, w, 1);
       set_array_buffer(compute_encoder, scales, 2);
       set_array_buffer(compute_encoder, biases, 3);
-      set_array_buffer(compute_encoder, out, 4);
+      set_output_buffer(compute_encoder, out, 4);
       compute_encoder->setBytes(&B, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
       compute_encoder->setBytes(&D, sizeof(int), 7);

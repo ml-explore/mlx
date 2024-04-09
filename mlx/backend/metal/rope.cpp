@@ -66,12 +66,12 @@ void RoPE::eval_gpu(
   kname << "rope_" << (forward_ ? "" : "vjp_")
         << (traditional_ ? "traditional_" : "") << type_to_name(in);
   auto kernel = d.get_kernel(kname.str());
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
 
   float base = std::log2(base_);
   compute_encoder->setComputePipelineState(kernel);
   set_array_buffer(compute_encoder, donated ? out : in, 0);
-  set_array_buffer(compute_encoder, out, 1);
+  set_output_buffer(compute_encoder, out, 1);
   compute_encoder->setBytes(&strides, 3 * sizeof(size_t), 2);
   compute_encoder->setBytes(&out_strides, 3 * sizeof(size_t), 3);
   compute_encoder->setBytes(&offset_, sizeof(int), 4);

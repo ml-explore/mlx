@@ -206,21 +206,17 @@ void Device::end_encoding(int index) {
   }
 }
 
-MTL::ComputeCommandEncoder* Device::get_command_encoder(
-    int index,
-    bool serial /* = false */) {
+CommandEncoder& Device::get_command_encoder(int index) {
   auto eit = encoder_map_.find(index);
-  if (eit != encoder_map_.end()) {
-    eit->second->endEncoding();
-    eit->second->release();
+  if (eit == encoder_map_.end()) {
+    auto cb = get_command_buffer(index);
+    auto compute_encoder =
+        cb->computeCommandEncoder(MTL::DispatchTypeConcurrent);
+    // Increment ref count so the buffer is not garbage collected
+    compute_encoder->retain();
+    eit = encoder_map_.emplace(index, CommandEncoder{compute_encoder}).first;
   }
-  auto cb = get_command_buffer(index);
-  auto compute_encoder = cb->computeCommandEncoder(
-      serial ? MTL::DispatchTypeSerial : MTL::DispatchTypeConcurrent);
-  // Increment ref count so the buffer is not garbage collected
-  compute_encoder->retain();
-  encoder_map_[index] = compute_encoder;
-  return compute_encoder;
+  return eit->second;
 }
 
 void Device::register_library(

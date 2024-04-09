@@ -289,7 +289,7 @@ void Compiled::eval_gpu(
     }
   }
   auto kernel = d.get_kernel(kernel_name, lib);
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
 
   // Put the inputs in
@@ -315,7 +315,7 @@ void Compiled::eval_gpu(
 
   // Put the outputs in
   for (auto& x : outputs) {
-    set_array_buffer(compute_encoder, x, cnt++);
+    set_output_buffer(compute_encoder, x, cnt++);
   }
 
   // Put the output shape and strides in

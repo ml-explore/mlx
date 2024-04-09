@@ -49,7 +49,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_" << idx_ndim;
   }
 
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -82,7 +82,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Set all the buffers
   set_array_buffer(compute_encoder, src, 0);
-  set_array_buffer(compute_encoder, out, 1);
+  set_output_buffer(compute_encoder, out, 1);
 
   // Set source info
   compute_encoder->setBytes(src.shape().data(), ndim * sizeof(int), 2);
@@ -183,7 +183,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   kname << "_" << nidx;
 
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
 
   auto& upd = inputs.back();
@@ -193,7 +193,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Set all the buffers
   set_array_buffer(compute_encoder, upd, 1);
-  set_array_buffer(compute_encoder, out, 2);
+  set_output_buffer(compute_encoder, out, 2);
 
   // Set update info
   uint upd_ndim = upd.ndim();

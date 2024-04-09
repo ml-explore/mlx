@@ -41,12 +41,12 @@ void explicit_gemm_conv_ND_gpu(
   // Prepare unfolding kernel
   std::ostringstream kname;
   kname << "naive_unfold_nd_" << type_to_name(in_unfolded) << "_" << N;
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
   set_array_buffer(compute_encoder, in, 0);
-  set_array_buffer(compute_encoder, in_unfolded, 1);
+  set_output_buffer(compute_encoder, in_unfolded, 1);
 
   compute_encoder->setBytes(&conv_params, sizeof(conv_params), 2);
 
@@ -140,7 +140,7 @@ void slow_conv_2D_gpu(
         << "_tm" << tm << "_tn" << tn;
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -155,7 +155,7 @@ void slow_conv_2D_gpu(
 
   set_array_buffer(compute_encoder, in, 0);
   set_array_buffer(compute_encoder, wt, 1);
-  set_array_buffer(compute_encoder, out, 2);
+  set_output_buffer(compute_encoder, out, 2);
 
   compute_encoder->setBytes(&conv_params, sizeof(MLXConvParams<2>), 3);
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
@@ -241,7 +241,7 @@ void implicit_gemm_conv_2D_gpu(
         << "_filter_" << (small_filter ? 's' : 'l');
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -256,7 +256,7 @@ void implicit_gemm_conv_2D_gpu(
   // Encode arrays
   set_array_buffer(compute_encoder, in, 0);
   set_array_buffer(compute_encoder, wt, 1);
-  set_array_buffer(compute_encoder, out, 2);
+  set_output_buffer(compute_encoder, out, 2);
 
   // Encode params
   compute_encoder->setBytes(&conv_params, sizeof(MLXConvParams<2>), 3);
@@ -394,7 +394,7 @@ void implicit_gemm_conv_2D_general_gpu(
         << "_bn" << bn << "_bk" << bk << "_wm" << wm << "_wn" << wn;
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -410,7 +410,7 @@ void implicit_gemm_conv_2D_general_gpu(
   // Encode arrays
   set_array_buffer(compute_encoder, in, 0);
   set_array_buffer(compute_encoder, wt, 1);
-  set_array_buffer(compute_encoder, out, 2);
+  set_output_buffer(compute_encoder, out, 2);
 
   // Encode params
   compute_encoder->setBytes(&conv_params, sizeof(MLXConvParams<2>), 3);
@@ -511,12 +511,12 @@ void winograd_conv_2D_gpu(
     std::ostringstream kname;
     kname << "winograd_conv_2d_weight_transform_" << type_to_name(out) << "_bc"
           << bc;
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
     set_array_buffer(compute_encoder, wt, 0);
-    set_array_buffer(compute_encoder, filt_wg, 1);
+    set_output_buffer(compute_encoder, filt_wg, 1);
 
     compute_encoder->setBytes(&C_c, sizeof(int), 2);
     compute_encoder->setBytes(&O_c, sizeof(int), 3);
@@ -539,12 +539,12 @@ void winograd_conv_2D_gpu(
     std::ostringstream kname;
     kname << "winograd_conv_2d_input_transform_" << type_to_name(out) << "_bc"
           << bc;
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
     set_array_buffer(compute_encoder, in_padded, 0);
-    set_array_buffer(compute_encoder, inp_wg, 1);
+    set_output_buffer(compute_encoder, inp_wg, 1);
 
     compute_encoder->setBytes(
         &conv_params_updated, sizeof(MLXConvParams<2>), 2);
@@ -587,12 +587,12 @@ void winograd_conv_2D_gpu(
     std::ostringstream kname;
     kname << "winograd_conv_2d_output_transform_" << type_to_name(out) << "_bo"
           << bc;
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
     set_array_buffer(compute_encoder, out_wg, 0);
-    set_array_buffer(compute_encoder, out, 1);
+    set_output_buffer(compute_encoder, out, 1);
 
     compute_encoder->setBytes(
         &conv_params_updated, sizeof(MLXConvParams<2>), 2);

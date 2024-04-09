@@ -52,10 +52,10 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << type_to_name(in) << "_" << type_to_name(out);
 
     auto kernel = d.get_kernel(kname.str());
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder->setComputePipelineState(kernel);
     set_array_buffer(compute_encoder, in, 0);
-    set_array_buffer(compute_encoder, out, 1);
+    set_output_buffer(compute_encoder, out, 1);
     size_t size = in.shape(axis_);
     compute_encoder->setBytes(&size, sizeof(size_t), 2);
 
@@ -101,10 +101,10 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << type_to_name(in) << "_" << type_to_name(out);
 
     auto kernel = d.get_kernel(kname.str());
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder->setComputePipelineState(kernel);
     set_array_buffer(compute_encoder, in, 0);
-    set_array_buffer(compute_encoder, out, 1);
+    set_output_buffer(compute_encoder, out, 1);
     size_t size = in.shape(axis_);
     size_t stride = in.strides()[axis_];
     compute_encoder->setBytes(&size, sizeof(size_t), 2);

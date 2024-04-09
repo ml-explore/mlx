@@ -10,16 +10,10 @@ namespace mlx::core {
 
 namespace {
 
-inline void
-set_array_buffer(MTL::ComputeCommandEncoder* enc, const array& a, int idx) {
-  auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-  auto offset = a.data<char>() -
-      static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
-  enc->setBuffer(a_buf, offset, idx);
-}
+using metal::CommandEncoder;
 
-inline void set_array_buffer(
-    MTL::ComputeCommandEncoder* enc,
+inline void set_array_buffer_impl(
+    CommandEncoder& enc,
     const array& a,
     int64_t offset,
     int idx) {
@@ -30,9 +24,37 @@ inline void set_array_buffer(
   enc->setBuffer(a_buf, base_offset, idx);
 }
 
+inline void
+set_array_buffer(CommandEncoder& enc, const array& a, int64_t offset, int idx) {
+  auto a_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
+  if (auto it = enc.outputs_.find(a_buf); it != enc.outputs_.end()) {
+    // Insert a barrier
+    enc->memoryBarrier(&a_buf, 1);
+
+    // Remove the output
+    enc.outputs_.erase(it);
+  }
+  set_array_buffer_impl(enc, a, offset, idx);
+}
+
+inline void set_array_buffer(CommandEncoder& enc, const array& a, int idx) {
+  set_array_buffer(enc, a, 0, idx);
+}
+
+inline void
+set_output_buffer(CommandEncoder& enc, array& a, int64_t offset, int idx) {
+  set_array_buffer_impl(enc, a, offset, idx);
+  auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
+  enc.outputs_.insert(buf);
+}
+
+inline void set_output_buffer(CommandEncoder& enc, array& a, int idx) {
+  set_output_buffer(enc, a, 0, idx);
+}
+
 template <typename T>
 inline void set_vector_bytes(
-    MTL::ComputeCommandEncoder* enc,
+    CommandEncoder& enc,
     const std::vector<T>& vec,
     size_t nelems,
     int idx) {
@@ -40,10 +62,8 @@ inline void set_vector_bytes(
 }
 
 template <typename T>
-inline void set_vector_bytes(
-    MTL::ComputeCommandEncoder* enc,
-    const std::vector<T>& vec,
-    int idx) {
+inline void
+set_vector_bytes(CommandEncoder& enc, const std::vector<T>& vec, int idx) {
   return set_vector_bytes(enc, vec, vec.size(), idx);
 }
 

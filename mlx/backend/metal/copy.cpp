@@ -83,7 +83,7 @@ void copy_gpu_inplace(
     kname << "_" << shape.size();
   }
   auto kernel = d.get_kernel(kname.str());
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_in = in.data_shared_ptr() == nullptr;
 
@@ -91,7 +91,7 @@ void copy_gpu_inplace(
   out_offset *= size_of(out.dtype());
 
   set_array_buffer(compute_encoder, donate_in ? out : in, inp_offset, 0);
-  set_array_buffer(compute_encoder, out, out_offset, 1);
+  set_output_buffer(compute_encoder, out, out_offset, 1);
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
     int ndim = shape.size();

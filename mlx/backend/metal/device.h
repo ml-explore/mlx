@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <dlfcn.h>
 #include <filesystem>
@@ -34,6 +35,20 @@ inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
+class CommandEncoder {
+ public:
+  CommandEncoder(MTL::ComputeCommandEncoder* enc) : enc_(enc){};
+  CommandEncoder& operator=(const CommandEncoder&) = delete;
+
+  MTL::ComputeCommandEncoder* operator->() {
+    return enc_;
+  }
+
+  // private:
+  MTL::ComputeCommandEncoder* enc_;
+  std::unordered_set<MTL::Resource*> outputs_;
+};
+
 class Device {
  public:
   Device();
@@ -51,9 +66,7 @@ class Device {
   int get_command_buffer_ops(int index);
   void increment_command_buffer_ops(int index);
   void commit_command_buffer(int index);
-  MTL::ComputeCommandEncoder* get_command_encoder(
-      int index,
-      bool serial = false);
+  CommandEncoder& get_command_encoder(int index);
   void end_encoding(int index);
 
   void register_library(
@@ -134,7 +147,7 @@ class Device {
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
-  std::unordered_map<int32_t, MTL::ComputeCommandEncoder*> encoder_map_;
+  std::unordered_map<int32_t, CommandEncoder> encoder_map_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
   std::mutex mtx_;

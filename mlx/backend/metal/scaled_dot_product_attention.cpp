@@ -71,7 +71,7 @@ void sdpa_metal(
 
   std::string kname_suffix = kname_suffix_tile_size + kname_suffix_nsimdgroups;
   kname_partials << kname_suffix;
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname_partials.str());
   compute_encoder->setComputePipelineState(kernel);
 
