@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cmath>
 #include <sstream>
@@ -235,9 +235,9 @@ array multivariate_normal(
       std::vector<int>(mean.shape().begin(), mean.shape().end() - 1);
   auto truncated_cov_shape =
       std::vector<int>(cov.shape().begin(), cov.shape().end() - 2);
-  auto trucated_inferred_shape =
+  auto output_shape =
       broadcast_shapes(truncated_cov_shape, truncated_mean_shape);
-  auto output_shape = broadcast_shapes(trucated_inferred_shape, shape);
+  output_shape = broadcast_shapes(output_shape, shape);
   output_shape.push_back(n);
 
   // Compute the square-root of the covariance matrix, using the SVD

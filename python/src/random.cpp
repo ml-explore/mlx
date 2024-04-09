@@ -196,15 +196,24 @@ void init_random(nb::module_& parent_module) {
       "dtype"_a.none() = float32,
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def multivariate_normal(mean: array, cov: array, shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Generate jointly-normal random samples, given a mean and covariance.
+        Generate jointly-normal random samples given a mean and covariance.
 
-        ``cov`` must be a positive semi-definite matrix. If the matrix is not positive semi-definite, the behavior is undefined. The only supported ``dtype`` is ``float32``.
+        The matrix ``cov`` must be positive semi-definite. The behavior is
+        undefined if it is not.  The only supported ``dtype`` is ``float32``.
 
         Args:
-            mean (array): array of shape ``(...,n)``, the mean of the distribution.
-            cov (array): array  of shape ``(...,n,n)``, the covariance matrix of the distribution. The batch shape ``...`` must be broadcast-compatible with that of ``mean``. 
-            shape (list(int), optional): The output shape must be broadcast-compatible with ``mean.shape[:-1]`` and ``cov.shape[:-2]``. If empty, the result shape is determined by broadcasting the batch shapes of ``mean`` and ``cov``.
+            mean (array): array of shape ``(..., n)``, the mean of the
+              distribution.
+            cov (array): array  of shape ``(..., n, n)``, the covariance
+              matrix of the distribution. The batch shape ``...`` must be
+              broadcast-compatible with that of ``mean``.
+            shape (list(int), optional): The output shape must be
+              broadcast-compatible with ``mean.shape[:-1]`` and ``cov.shape[:-2]``.
+              If empty, the result shape is determined by broadcasting the batch
+              shapes of ``mean`` and ``cov``. Default: ``[]``.
             dtype (Dtype, optional): The output type. Default: ``float32``.
             key (array, optional): A PRNG key. Default: ``None``.
 
