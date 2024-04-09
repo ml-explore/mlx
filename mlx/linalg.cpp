@@ -96,7 +96,7 @@ inline array matrix_norm(
 
 inline array matrix_norm(
     const array& a,
-    std::string_view ord,
+    const std::string& ord,
     const std::vector<int>& axis,
     bool keepdims,
     StreamOrDevice s) {
@@ -153,7 +153,7 @@ array norm(
 
 array norm(
     const array& a,
-    std::string_view ord,
+    const std::string& ord,
     const std::optional<std::vector<int>>& axis /* = std::nullopt */,
     bool keepdims /* = false */,
     StreamOrDevice s /* = {} */) {

@@ -50,7 +50,7 @@ void save_safetensors(
 
 /** Load array map and metadata from .gguf file format */
 
-GGUFLoad load_gguf(std::string_view file, StreamOrDevice s = {});
+GGUFLoad load_gguf(const std::string& file, StreamOrDevice s = {});
 
 void save_gguf(
     std::string file,
