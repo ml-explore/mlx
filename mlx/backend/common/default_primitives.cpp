@@ -168,7 +168,7 @@ inline void matmul_common_general(
 template <typename T>
 inline void mask_matrix(
     T* data,
-    bool* mask,
+    const bool* mask,
     int tile_size,
     const int X,
     const int Y,
@@ -182,16 +182,17 @@ inline void mask_matrix(
   for (int i = 0; i < tX; i++) {
     for (int j = 0; j < tY; j++) {
       bool do_mask = mask[i * X_mask_str + j * Y_mask_str];
-      if (do_mask) {
+      if (!do_mask) {
         int loc_x = i * tile_size;
         int loc_y = j * tile_size;
         T* data_block = data + loc_x * X_data_str + loc_y * Y_data_str;
 
-        int size_x = std::max(tile_size, X - loc_x);
-        int size_y = std::max(tile_size, Y - loc_y);
+        int size_x = std::min(tile_size, X - loc_x);
+        int size_y = std::min(tile_size, Y - loc_y);
         for (int ii = 0; ii < size_x; ii++) {
-          T* data_row = data_block + ii * X_data_str;
-          std::memset(static_cast<void*>(data_row), 0, size_y * sizeof(T));
+          for (int jj = 0; jj < size_y; jj++) {
+            data_block[ii * X_data_str + jj * Y_data_str] = T(0.);
+          }
         }
       }
     }
@@ -276,15 +277,15 @@ void TileMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     return;
   }
 
-  auto mask_array = [tile_size_](
-                        const array& mask,
-                        float* data,
-                        int batch_idx,
-                        int X,
-                        int Y,
-                        size_t X_data_str,
-                        size_t Y_data_str) {
-    bool* mask_ptr = mask.data<bool>() +
+  auto mask_array = [](const array& mask,
+                       float* data,
+                       int tile_size,
+                       int batch_idx,
+                       int X,
+                       int Y,
+                       size_t X_data_str,
+                       size_t Y_data_str) {
+    const bool* mask_ptr = mask.data<bool>() +
         elem_to_loc(mask.shape(-1) * mask.shape(-2) * batch_idx,
                     mask.shape(),
                     mask.strides());
@@ -295,7 +296,7 @@ void TileMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     return mask_matrix(
         data,
         mask_ptr,
-        tile_size_,
+        tile_size,
         X,
         Y,
         X_data_str,
@@ -316,11 +317,25 @@ void TileMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
     if (has_op_mask) {
       auto& a_mask = inputs[3];
       mask_array(
-          a_mask, ai, i, M, K, a_transposed ? 1 : lda, a_transposed ? lda : 1);
+          a_mask,
+          ai,
+          tile_size_,
+          i,
+          M,
+          K,
+          a_transposed ? 1 : lda,
+          a_transposed ? lda : 1);
 
       auto& b_mask = inputs[4];
       mask_array(
-          b_mask, bi, i, K, N, b_transposed ? 1 : ldb, b_transposed ? ldb : 1);
+          b_mask,
+          bi,
+          tile_size_,
+          i,
+          K,
+          N,
+          b_transposed ? 1 : ldb,
+          b_transposed ? ldb : 1);
     }
 
     // Do matmul
@@ -331,19 +346,18 @@ void TileMaskedMM::eval_cpu(const std::vector<array>& inputs, array& out) {
         M,
         N,
         K,
-        alpha, // alpha
+        1.0, // alpha
         ai,
         lda,
         bi,
         ldb,
-        beta, // beta
+        0.0, // beta
         ci,
         out.shape(-1) // ldc
     );
 
     // Zero out blocks in out
-    mask_array(out_mask, ci, i, M, N, out.shape(-1), 1);
+    mask_array(out_mask, ci, tile_size_, i, M, N, N, 1);
   }
 }
-
 } // namespace mlx::core
