@@ -696,6 +696,41 @@ split(const array& a, int num_splits, StreamOrDevice s /* = {} */) {
   return split(a, num_splits, 0, to_stream(s));
 }
 
+std::vector<array> meshgrid(
+    const std::vector<array>& arrays,
+    bool sparse /* = false */,
+    std::string indexing /* = "xy" */,
+    StreamOrDevice s /* = {} */) {
+  if (indexing != "xy" && indexing != "ij") {
+    throw std::invalid_argument(
+        "[meshgrid] Invalid indexing value. Valid values are 'xy' and 'ij'.");
+  }
+
+  auto ndim = arrays.size();
+  std::vector<array> outputs;
+  for (int i = 0; i < ndim; ++i) {
+    std::vector<int> shape(ndim, 1);
+    shape[i] = -1;
+    outputs.push_back(reshape(arrays[i], std::move(shape), s));
+  }
+
+  if (indexing == "xy" and ndim > 1) {
+    std::vector<int> shape(ndim, 1);
+
+    shape[1] = arrays[0].size();
+    outputs[0] = reshape(arrays[0], shape, s);
+    shape[1] = 1;
+    shape[0] = arrays[1].size();
+    outputs[1] = reshape(arrays[1], std::move(shape), s);
+  }
+
+  if (!sparse) {
+    outputs = broadcast_arrays(outputs, s);
+  }
+
+  return outputs;
+}
+
 array clip(
     const array& a,
     const std::optional<array>& a_min,
