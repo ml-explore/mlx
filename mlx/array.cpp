@@ -93,7 +93,9 @@ void array::detach() {
 }
 
 void array::eval() {
-  mlx::core::eval({*this});
+  if (!is_evaled()) {
+    mlx::core::eval({*this});
+  }
 }
 
 bool array::is_tracer() const {

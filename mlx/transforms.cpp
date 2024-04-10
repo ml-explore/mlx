@@ -39,6 +39,12 @@ class Synchronizer : public Primitive {
 int detail::InTracing::tracing_counter{0};
 
 std::shared_future<void> async_eval(std::vector<array> outputs) {
+  static std::shared_future<void> global_synchronizer;
+  // Catch up with previous async eval if needed
+  if (global_synchronizer.valid()) {
+    global_synchronizer.wait();
+  }
+
   std::function<void(const array&)> recurse;
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;
@@ -152,7 +158,8 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
       scheduler::enqueue(stream, std::move(task));
     }
   }
-  return deps[synchronizer.id()];
+  global_synchronizer = std::move(deps[synchronizer.id()]);
+  return global_synchronizer;
 }
 
 void eval(std::vector<array> outputs) {

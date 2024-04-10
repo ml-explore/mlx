@@ -38,6 +38,12 @@ class TestEval(mlx_tests.MLXTestCase):
         sync.wait()
         self.assertEqual(x.item(), 3)
 
+        # It should be safe to call eval on the array which has been async
+        # eval'ed
+        x = mx.array(1) + mx.array(1) + mx.array(1)
+        sync = mx.async_eval(x)
+        self.assertEqual(x.item(), 3)
+
 
 if __name__ == "__main__":
     unittest.main()
