@@ -1048,7 +1048,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   set_array_buffer(compute_encoder, a, 0);
   set_array_buffer(compute_encoder, b, 1);
   set_array_buffer(compute_encoder, c, 2);
-  set_array_buffer(compute_encoder, out, 3);
+  set_output_buffer(compute_encoder, out, 3);
 
   compute_encoder->setBytes(&gemm_params, sizeof(GEMMParams), 4);
   compute_encoder->setBytes(&params, sizeof(GEMMAddMMParams), 5);
