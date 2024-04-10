@@ -67,8 +67,12 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
       if (idx < a.inputs().size()) {
         // Add an input, and continue
         auto& in = a.inputs()[idx++];
-
         if (!in.is_evaled()) {
+          if (!in.has_primitive()) {
+            throw std::invalid_argument(
+                "[eval] Attempting to eval an array without a primitive.");
+          }
+
           // If the input is being computed on a different stream, we need to
           // manage the dependency.
           if (a.primitive().stream() != in.primitive().stream()) {
@@ -88,10 +92,6 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
 
       // All inputs are done being processed, process this array
       if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
-        if (!a.has_primitive()) {
-          throw std::invalid_argument(
-              "[eval] Attempting to eval an array without a primitive.");
-        }
         tape.push(a);
       }
       dfs.pop();
