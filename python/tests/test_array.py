@@ -1044,7 +1044,6 @@ class TestArray(mlx_tests.MLXTestCase):
 
         a = mx.array([[1, 2], [3, 4]])
         idx = [[0, 1], 1]
-        print(np.array(a)[idx])
         with self.assertRaises(ValueError):
             a[idx]
 
