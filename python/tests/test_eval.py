@@ -44,6 +44,15 @@ class TestEval(mlx_tests.MLXTestCase):
         sync = mx.async_eval(x)
         self.assertEqual(x.item(), 3)
 
+        x = mx.array([1, 2, 3])
+        y = 2 * x
+        s1 = mx.async_eval(y)
+        z = 2 * y
+        s2 = mx.async_eval(z)
+        s2.wait()
+        self.assertTrue(mx.array_equal(y, mx.array([2, 4, 6])))
+        self.assertTrue(mx.array_equal(z, mx.array([4, 8, 12])))
+
 
 if __name__ == "__main__":
     unittest.main()

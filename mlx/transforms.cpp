@@ -39,9 +39,9 @@ int detail::InTracing::tracing_counter{0};
 std::shared_future<void> async_eval(std::vector<array> outputs) {
   static std::shared_future<void> global_synchronizer;
   // Catch up with previous async eval if needed
-  if (global_synchronizer.valid()) {
-    global_synchronizer.wait();
-  }
+  //  if (global_synchronizer.valid()) {
+  //    global_synchronizer.wait();
+  //  }
   std::queue<array> tape;
   std::unordered_set<std::uintptr_t> cache;
   std::unordered_map<std::uintptr_t, std::shared_future<void>> deps;
@@ -80,14 +80,15 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
           }
         }
 
-        if (cache.find(in.id()) == cache.end()) {
-          dfs.emplace(in, 0);
-          cache.insert(in.id());
-          for (auto& s : in.siblings()) {
-            cache.insert(s.id());
-          }
-        }
-        continue;
+    cache.insert(id);
+    for (auto& s : a.siblings()) {
+      cache.insert(s.id());
+    }
+
+    if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
+      if (!a.has_primitive()) {
+        throw std::invalid_argument(
+            "[eval] Attempting to eval an array without a primitive.");
       }
 
       // All inputs are done being processed, process this array
@@ -104,10 +105,16 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
     auto arr = std::move(tape.front());
     tape.pop();
     if (arr.is_evaled()) {
-      if (!arr.is_tracer() && arr.has_primitive()) {
-        arr.detach();
-      }
+      //      if (!arr.is_tracer() && arr.has_primitive()) {
+      //        arr.detach();
+      //      }
       continue;
+    }
+
+    // Mark array and sibs as evaluated
+    arr.set_evaled();
+    for (auto& s : arr.siblings()) {
+      s.set_evaled();
     }
 
     auto stream = arr.primitive().stream();

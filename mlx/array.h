@@ -317,7 +317,11 @@ class array {
 
   // Check if the array has been evaluated
   bool is_evaled() const {
-    return array_desc_->data != nullptr;
+    return array_desc_->evaled;
+  }
+  // Mark the array as evaluated
+  bool set_evaled() const {
+    return array_desc_->evaled = true;
   }
 
   // Mark the array as a tracer array (true) or not.
@@ -369,6 +373,9 @@ class array {
     size_t size;
     Dtype dtype;
     std::shared_ptr<Primitive> primitive;
+
+    // Whether or not the array is evaluated
+    bool evaled{false};
 
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph
