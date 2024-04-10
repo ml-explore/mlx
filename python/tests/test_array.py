@@ -1032,19 +1032,21 @@ class TestArray(mlx_tests.MLXTestCase):
     def test_basic_indexing_with_list(self):
         a = mx.array([1, 2, 3, 4, 5])
         idx = [0, 2, 4]
-        self.assertTrue(np.array_equal(np.array(a[[idx]]), np.array([1, 3, 5])))
+        self.assertTrue(np.array_equal(np.array(a[idx]), np.array(a)[idx]))
 
         a = mx.array([[1, 2], [3, 4], [5, 6]])
         idx = [0, 2]
-        self.assertTrue(np.array_equal(a[[idx]], np.array([[1, 2], [5, 6]])))
+        self.assertTrue(np.array_equal(np.array(a[idx]), np.array(a)[idx]))
 
         a = mx.arange(10).reshape(5, 2)
         idx = [0, 2, 4]
-        self.assertTrue(np.array_equal(a[[idx]], np.array([[0, 1], [4, 5], [8, 9]])))
+        self.assertTrue(np.array_equal(np.array(a[idx]), np.array(a)[idx]))
 
         a = mx.array([[1, 2], [3, 4]])
         idx = [[0, 1], 1]
-        self.assertTrue(np.array_equal(a[idx], np.array([2, 4])))
+        print(np.array(a)[idx])
+        with self.assertRaises(ValueError):
+            a[idx]
 
     def test_setitem(self):
         a = mx.array(0)
