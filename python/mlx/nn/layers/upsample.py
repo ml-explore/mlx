@@ -164,13 +164,14 @@ class Upsample(Module):
     For example, an audio signal would be 3D with 1 spatial dimension, an image
     4D with 2 and so on and so forth.
 
-    There are two upsampling algorithms implemented nearest neighbor upsampling
-    and linear interpolation. Both can be applied to any number of spatial
-    dimensions and the linear interpolation will be bilinear, trilinear etc
-    when applied to more than one spatial dimension.
+    There are three upsampling algorithms implemented nearest neighbor upsampling,
+    linear interpolation, and cubic interpolation. All can be applied to any number
+    of spatial dimensions. The linear interpolation will be bilinear, trilinear etc
+    when applied to more than one spatial dimension. And cubic interpolation will be
+    bicubic when there are 2 spatial dimensions.
 
     .. note::
-       When using one of the linear interpolation modes the ``align_corners``
+       When using one of the linear or cubic interpolation modes the ``align_corners``
        argument changes how the corners are treated in the input image. If
        ``align_corners=True`` then the top and left edge of the input and
        output will be matching as will the bottom right edge.
@@ -183,7 +184,7 @@ class Upsample(Module):
         mode (str, optional): The upsampling algorithm, either ``"nearest"``,
             ``"linear"`` or ``"cubic"``. Default: ``"nearest"``.
         align_corners (bool, optional): Changes the way the corners are treated
-            during ``"linear"`` upsampling.  See the note above and the
+            during ``"linear"`` and ``"cubic"`` upsampling.  See the note above and the
             examples below for more details.  Default: ``False``.
 
     Examples:
