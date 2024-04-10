@@ -1,7 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cstdlib>
 #include <future>
-#include <iostream> // TODO
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
