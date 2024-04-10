@@ -36,14 +36,14 @@ using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
 struct CommandEncoder {
-  CommandEncoder(){};
+  CommandEncoder(MTL::ComputeCommandEncoder* enc) : enc(enc){};
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
   MTL::ComputeCommandEncoder* operator->() {
     return enc;
   }
 
-  MTL::ComputeCommandEncoder* enc{nullptr};
+  MTL::ComputeCommandEncoder* enc;
   std::unordered_set<MTL::Resource*> outputs;
 };
 

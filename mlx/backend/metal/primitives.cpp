@@ -552,13 +552,22 @@ void Concatenate::eval_gpu(const std::vector<array>& inputs, array& out) {
   flags.row_contiguous = false;
   flags.col_contiguous = false;
   flags.contiguous = false;
+  auto& d = metal::device(stream().device);
+  auto& compute_encoder = d.get_command_encoder(stream().index);
+  auto buf = static_cast<MTL::Resource*>(out.buffer().ptr());
   for (int i = 0; i < inputs.size(); i++) {
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
     size_t data_offset = strides[axis_] * sizes[i];
     out_slice.copy_shared_buffer(
         out, strides, flags, out_slice.size(), data_offset);
     copy_gpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, stream());
+
+    // Remove the dependency so we don't synch on it
+    compute_encoder.outputs.erase(buf);
   }
+
+  // Add the dependency back so future ops synch with it
+  compute_encoder.outputs.insert(buf);
 }
 
 void Copy::eval_gpu(const std::vector<array>& inputs, array& out) {
