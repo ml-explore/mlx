@@ -36,9 +36,14 @@ inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
+struct CommandBufferInfo {
+  int ops;
+  size_t bytes;
+};
+
 struct CommandEncoder {
-  CommandEncoder(MTL::ComputeCommandEncoder* enc)
-      : enc(enc), concurrent(false){};
+  CommandEncoder(MTL::ComputeCommandEncoder* enc, CommandBufferInfo& cb_info)
+      : enc(enc), cb_info(cb_info){};
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
@@ -76,6 +81,9 @@ struct CommandEncoder {
         static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
     base_offset += offset;
     enc->setBuffer(a_buf, base_offset, idx);
+
+    // Rough estimate of the amount of memory used
+    enc.cb_info.bytes += a.nbytes();
   }
 
   void set_output_array(array& a, int idx, int offset = 0) {
@@ -95,7 +103,8 @@ struct CommandEncoder {
 
  private:
   MTL::ComputeCommandEncoder* enc;
-  bool concurrent;
+  bool concurrent{false};
+  CommandBufferInfo& cb_info;
   std::unordered_set<MTL::Resource*> outputs;
   std::unordered_set<MTL::Resource*> concurrent_outputs;
 };
@@ -114,7 +123,7 @@ class Device {
   void new_queue(int index);
   MTL::CommandBuffer* new_command_buffer(int index);
   MTL::CommandBuffer* get_command_buffer(int index);
-  int get_command_buffer_ops(int index);
+  const CommandBufferInfo& get_command_buffer_info(int index);
   void increment_command_buffer_ops(int index);
   void commit_command_buffer(int index);
   CommandEncoder& get_command_encoder(int index);
@@ -197,7 +206,8 @@ class Device {
 
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
-  std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
+  std::unordered_map<int32_t, std::pair<CommandBufferInfo, MTL::CommandBuffer*>>
+      buffer_map_;
   std::unordered_map<int32_t, std::unique_ptr<CommandEncoder>> encoder_map_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
   std::unordered_map<std::string, MTL::Library*> library_map_;

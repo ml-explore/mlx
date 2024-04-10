@@ -134,51 +134,6 @@ elem_to_loc_3(uint3 elem, constant const stride_t strides[3]) {
 }
 
 template <int NDIM>
-METAL_FUNC size_t elem_to_loc_nd(
-    uint elem,
-    device const int* shape,
-    device const size_t* strides) {
-  size_t loc = (elem % shape[NDIM - 1]) * strides[NDIM - 1];
-
-  MLX_MTL_PRAGMA_UNROLL
-  for (int d = NDIM - 2; d >= 0; --d) {
-    elem /= shape[d + 1];
-    loc += (elem % shape[d]) * strides[d];
-  }
-
-  return loc;
-}
-
-template <int NDIM>
-METAL_FUNC size_t elem_to_loc_nd(
-    uint3 elem,
-    constant const int shape[NDIM],
-    constant const size_t strides[NDIM]) {
-  size_t loc = elem.x * strides[NDIM - 1] + elem.y * strides[NDIM - 2];
-  for (int d = NDIM - 3; d >= 0; --d) {
-    loc += (elem.z % shape[d]) * strides[d];
-    elem.z /= shape[d];
-  }
-  return loc;
-}
-
-template <int NDIM>
-METAL_FUNC int64_t elem_to_loc_nd(
-    uint elem,
-    constant const int shape[NDIM],
-    constant const int64_t strides[NDIM]) {
-  int64_t loc = (elem % shape[NDIM - 1]) * strides[NDIM - 1];
-
-  MLX_MTL_PRAGMA_UNROLL
-  for (int d = NDIM - 2; d >= 0; --d) {
-    elem /= shape[d + 1];
-    loc += (elem % shape[d]) * strides[d];
-  }
-
-  return loc;
-}
-
-template <int NDIM>
 METAL_FUNC int64_t elem_to_loc_nd(
     uint3 elem,
     constant const int shape[NDIM],

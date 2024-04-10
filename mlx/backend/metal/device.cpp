@@ -155,14 +155,15 @@ void Device::new_queue(int index) {
   queue_map_.insert({index, q});
 }
 
-int Device::get_command_buffer_ops(int index) {
+const CommandBufferInfo& Device::get_command_buffer_info(int index) {
   auto bit = buffer_map_.find(index);
   return bit->second.first;
 }
 
 void Device::increment_command_buffer_ops(int index) {
   auto bit = buffer_map_.find(index);
-  bit->second.first++;
+  // bit->second.first.bytes += bytes;
+  bit->second.first.ops++;
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
@@ -187,7 +188,8 @@ MTL::CommandBuffer* Device::new_command_buffer(int index) {
   // Increment ref count so the buffer is not garbage collected
   cb->retain();
 
-  return buffer_map_.insert({index, {0, cb}}).first->second.second;
+  return buffer_map_.insert({index, {CommandBufferInfo{}, cb}})
+      .first->second.second;
 }
 
 void Device::commit_command_buffer(int index) {
@@ -209,13 +211,13 @@ void Device::end_encoding(int index) {
 CommandEncoder& Device::get_command_encoder(int index) {
   auto eit = encoder_map_.find(index);
   if (eit == encoder_map_.end()) {
-    auto cb = get_command_buffer(index);
+    auto& [cb_info, cb] = buffer_map_[index];
     auto compute_encoder =
         cb->computeCommandEncoder(MTL::DispatchTypeConcurrent);
     // Increment ref count so the buffer is not garbage collected
     compute_encoder->retain();
     eit = encoder_map_
-              .emplace(index, std::make_unique<CommandEncoder>(compute_encoder))
+              .emplace(index, std::make_unique<CommandEncoder>(compute_encoder, cb_info))
               .first;
   }
   return *(eit->second);

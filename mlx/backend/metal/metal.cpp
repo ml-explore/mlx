@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cstdlib>
 #include <future>
+#include <iostream> // TODO
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
@@ -14,25 +15,41 @@ bool is_available() {
   return true;
 }
 
+int get_env_val(const char* name, int fallback) {
+  if (const char* buff_str = std::getenv(name)) {
+    return atoi(buff_str);
+  } else {
+    return fallback;
+  }
+}
+
 int max_ops_per_buffer() {
-  auto get_val = []() {
-    if (const char* buff_str = std::getenv("MLX_MAX_OPS_PER_BUFFER")) {
-      return atoi(buff_str);
-    } else {
-      return 10;
-    }
-  };
-  static int max_ops_per_buffer_ = get_val();
+  static int max_ops_per_buffer_ = get_env_val("MLX_MAX_OPS_PER_BUFFER", 30);
   return max_ops_per_buffer_;
 }
 
-#define MAX_OPS_PER_BUFFER max_ops_per_buffer()
+int max_mb_per_buffer() {
+  static int max_mb_per_buffer_ = get_env_val("MLX_MAX_MB_PER_BUFFER", 40);
+  return max_mb_per_buffer_;
+}
 
-MTL::CommandBuffer* increment_command_buffer(Stream s) {
+#define MAX_OPS_PER_BUFFER max_ops_per_buffer()
+#define MAX_MB_PER_BUFFER max_mb_per_buffer()
+
+// Get an active command buffer. This function will possibly make a new
+// command buffer if the commit conditions are satisfied.
+MTL::CommandBuffer* fetch_command_buffer(Stream s) {
   auto& d = metal::device(s.device);
   auto command_buffer = d.get_command_buffer(s.index);
-  if (command_buffer == nullptr ||
-      d.get_command_buffer_ops(s.index) >= MAX_OPS_PER_BUFFER) {
+
+  auto check_commit = [&d, &s]() {
+    auto& cb_info = d.get_command_buffer_info(s.index);
+    return (
+        cb_info.ops >= MAX_OPS_PER_BUFFER ||
+        (cb_info.bytes >> 20) >= MAX_MB_PER_BUFFER);
+  };
+
+  if (command_buffer == nullptr || check_commit()) {
     if (command_buffer != nullptr) {
       d.end_encoding(s.index);
       scheduler::notify_new_task(s);
@@ -59,7 +76,8 @@ std::function<void()> make_task(array arr, bool signal) {
   auto task = [arr = std::move(arr), signal]() mutable {
     auto pool = new_scoped_memory_pool();
     auto s = arr.primitive().stream();
-    auto command_buffer = increment_command_buffer(s);
+
+    auto command_buffer = fetch_command_buffer(s);
     for (auto& input : arr.inputs()) {
       if (input.event().valid() &&
           input.event().stream() != arr.primitive().stream()) {
@@ -83,7 +101,9 @@ std::function<void()> make_task(array arr, bool signal) {
     }
     std::vector<std::shared_ptr<array::Data>> buffers;
     for (auto& in : arr.inputs()) {
-      buffers.push_back(in.data_shared_ptr());
+      if (in.data_shared_ptr() != nullptr) {
+        buffers.push_back(in.data_shared_ptr());
+      }
     }
     for (auto& s : arr.siblings()) {
       buffers.push_back(s.data_shared_ptr());
