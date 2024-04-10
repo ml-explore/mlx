@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "mlx/ops.h"
+#include "python/src/array.h"
 #include "python/src/indexing.h"
 #include "utils.h"
 
@@ -449,96 +450,8 @@ array mlx_get_item_list(array src, const nb::list& entries) {
     throw std::invalid_argument(
         "too many indices for array: array is 0-dimensional");
   }
-  // Ellipsis handling
-  auto [non_none_indices, indices] = mlx_expand_ellipsis(src.shape(), entries);
 
-  // Calculate number of lists inside the indices
-  int num_lists = 0;
-  int num_ints = 0;
-  for (auto& idx : indices) {
-    if (nb::isinstance<nb::list>(idx)) {
-      num_lists++;
-    } else if (nb::isinstance<nb::int_>(idx)) {
-      num_ints++;
-    } else {
-      throw std::invalid_argument(
-          "Cannot index mlx array using the given type yet");
-    }
-  }
-
-  // Check for the number of indices passed
-  // and compare with the number of dimensions in the array
-  if ((num_lists + num_ints) > src.ndim()) {
-    std::ostringstream msg;
-    msg << "Too many indices for array with " << src.ndim() << "dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-
-  std::vector<array> gather_indices_vec;
-  std::vector<int> axes_vec;
-
-  // Go through indices and gather the arrays
-  int axis = 0;
-
-  // If only one input array is mentioned, we use axis=0 and pass it to `take`
-  if ((num_lists + num_ints) == 1) {
-    std::vector<int> gather_indices;
-    for (const auto& idx : indices[0]) {
-      if (nb::isinstance<nb::int_>(idx)) {
-        gather_indices.push_back(nb::cast<int>(idx));
-      } else {
-        throw std::invalid_argument(
-            "Cannot index mlx array using the given type yet");
-      }
-    }
-    auto idx = array(
-        gather_indices.begin(),
-        {static_cast<int>(gather_indices.size())},
-        uint32);
-    src = take(src, idx, axis);
-  }
-  // If multiple arrays are mentioned, we gather them
-  else {
-    for (auto& idx : indices) {
-      if (nb::isinstance<nb::list>(idx)) {
-        auto list_idx = nb::cast<nb::list>(idx);
-        std::vector<int> gather_indices;
-
-        for (const auto& lidx : list_idx) {
-          if (nb::isinstance<nb::int_>(lidx)) {
-            int sub_ = nb::cast<int>(lidx);
-            throw_if_invalid_index(src, sub_, axis);
-            gather_indices.push_back(sub_);
-          } else {
-            throw std::invalid_argument(
-                "Cannot index mlx array using the given type yet");
-          }
-        }
-        auto arr = array(
-            gather_indices.begin(),
-            {static_cast<int>(gather_indices.size())},
-            uint32);
-        gather_indices_vec.push_back(arr);
-      } else if (nb::isinstance<nb::int_>(idx)) {
-        int sub_ = nb::cast<int>(idx);
-        throw_if_invalid_index(src, sub_, axis);
-        gather_indices_vec.push_back(get_int_index(idx, src.shape(axis)));
-      } else {
-        throw std::invalid_argument(
-            "Cannot index mlx array using the given type yet");
-      }
-      axes_vec.push_back(axis);
-      axis++;
-    }
-    if (!gather_indices_vec.empty()) {
-      std::vector<int> slice_sizes(src.ndim(), 1);
-      std::fill(slice_sizes.begin(), slice_sizes.end(), 1);
-      src = gather(src, gather_indices_vec, axes_vec, slice_sizes);
-      // squeeze the dimensions to make final shape correct
-      src = squeeze(src);
-    }
-  }
-  return src;
+  return mlx_get_item_array(src, array_from_list(entries, std::nullopt));
 }
 
 array mlx_get_item(const array& src, const nb::object& obj) {
