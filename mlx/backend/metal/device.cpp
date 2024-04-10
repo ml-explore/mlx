@@ -1,4 +1,4 @@
-// Copyright © 2023-24 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
 #include <cstdlib>

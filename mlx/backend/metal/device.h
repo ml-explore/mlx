@@ -1,4 +1,4 @@
-// Copyright © 2023-24 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -35,18 +35,16 @@ inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
-class CommandEncoder {
- public:
-  CommandEncoder(MTL::ComputeCommandEncoder* enc) : enc_(enc){};
+struct CommandEncoder {
+  CommandEncoder(){};
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
   MTL::ComputeCommandEncoder* operator->() {
-    return enc_;
+    return enc;
   }
 
-  // private:
-  MTL::ComputeCommandEncoder* enc_;
-  std::unordered_set<MTL::Resource*> outputs_;
+  MTL::ComputeCommandEncoder* enc{nullptr};
+  std::unordered_set<MTL::Resource*> outputs;
 };
 
 class Device {
