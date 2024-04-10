@@ -24,7 +24,7 @@ int get_env_val(const char* name, int fallback) {
 }
 
 int max_ops_per_buffer() {
-  static int max_ops_per_buffer_ = get_env_val("MLX_MAX_OPS_PER_BUFFER", 30);
+  static int max_ops_per_buffer_ = get_env_val("MLX_MAX_OPS_PER_BUFFER", 40);
   return max_ops_per_buffer_;
 }
 
