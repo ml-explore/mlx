@@ -22,18 +22,29 @@ int get_env_val(const char* name, int fallback) {
   }
 }
 
-int max_ops_per_buffer() {
-  static int max_ops_per_buffer_ = get_env_val("MLX_MAX_OPS_PER_BUFFER", 40);
+constexpr int default_max_ops[3] = {
+    10, // Category::small
+    30, // Category::medium
+    50, // Category::large
+};
+
+constexpr int default_max_mb[3] = {
+    20, // Category::small
+    50, // Category::medium
+    50, // Category::large
+};
+
+int max_ops_per_buffer(metal::Device::Category category) {
+  static int max_ops_per_buffer_ =
+      get_env_val("MLX_MAX_OPS_PER_BUFFER", default_max_ops[category]);
   return max_ops_per_buffer_;
 }
 
-int max_mb_per_buffer() {
-  static int max_mb_per_buffer_ = get_env_val("MLX_MAX_MB_PER_BUFFER", 40);
+int max_mb_per_buffer(metal::Device::Category category) {
+  static int max_mb_per_buffer_ =
+      get_env_val("MLX_MAX_MB_PER_BUFFER", default_max_mb[category]);
   return max_mb_per_buffer_;
 }
-
-#define MAX_OPS_PER_BUFFER max_ops_per_buffer()
-#define MAX_MB_PER_BUFFER max_mb_per_buffer()
 
 // Get an active command buffer. This function will possibly make a new
 // command buffer if the commit conditions are satisfied.
@@ -44,10 +55,9 @@ MTL::CommandBuffer* fetch_command_buffer(Stream s) {
   auto check_commit = [&d, &s]() {
     auto& cb_info = d.get_command_buffer_info(s.index);
     return (
-        cb_info.ops >= MAX_OPS_PER_BUFFER ||
-        (cb_info.bytes >> 20) >= MAX_MB_PER_BUFFER);
+        cb_info.ops >= max_ops_per_buffer(d.category()) ||
+        (cb_info.bytes >> 20) >= max_mb_per_buffer(d.category()));
   };
-
   if (command_buffer == nullptr || check_commit()) {
     if (command_buffer != nullptr) {
       d.end_encoding(s.index);

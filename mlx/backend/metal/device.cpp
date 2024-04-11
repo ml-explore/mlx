@@ -118,6 +118,18 @@ Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   library_map_ = {{"mlx", load_library(device_)}};
+
+  auto arch = std::string(device_->architecture()->name()->utf8String());
+  // Try to determine the category and fallback to small:
+  if (arch.empty()) {
+    category_ = Category::small;
+  } else if (arch.back() == 'd') {
+    category_ = Category::large;
+  } else if (arch.back() == 's') {
+    category_ = Category::medium;
+  } else {
+    category_ = Category::small;
+  }
 }
 
 Device::~Device() {
