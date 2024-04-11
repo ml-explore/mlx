@@ -75,11 +75,11 @@ void binary_op(
   //   otherwise it goes to the second output
   bool donate_a = a.data_shared_ptr() == nullptr;
   bool donate_b = b.data_shared_ptr() == nullptr;
-  set_array_buffer(compute_encoder, donate_a ? outputs[0] : a, 0);
-  set_array_buffer(
-      compute_encoder, donate_b ? (donate_a ? outputs[1] : outputs[0]) : b, 1);
-  set_output_buffer(compute_encoder, outputs[0], 2);
-  set_output_buffer(compute_encoder, outputs[1], 3);
+  compute_encoder.set_input_array(donate_a ? outputs[0] : a, 0);
+  compute_encoder.set_input_array(
+      donate_b ? (donate_a ? outputs[1] : outputs[0]) : b, 1);
+  compute_encoder.set_output_array(outputs[0], 2);
+  compute_encoder.set_output_array(outputs[1], 3);
 
   if (bopt == BinaryOpType::General) {
     auto ndim = shape.size();
@@ -171,9 +171,9 @@ void binary_op(
   compute_encoder->setComputePipelineState(kernel);
   bool donate_a = a.data_shared_ptr() == nullptr;
   bool donate_b = b.data_shared_ptr() == nullptr;
-  set_array_buffer(compute_encoder, donate_a ? out : a, 0);
-  set_array_buffer(compute_encoder, donate_b ? out : b, 1);
-  set_output_buffer(compute_encoder, out, 2);
+  compute_encoder.set_input_array(donate_a ? out : a, 0);
+  compute_encoder.set_input_array(donate_b ? out : b, 1);
+  compute_encoder.set_output_array(out, 2);
 
   if (bopt == BinaryOpType::General) {
     auto ndim = shape.size();
@@ -255,10 +255,10 @@ void ternary_op(
   auto kernel = d.get_kernel(kname.str());
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
-  set_array_buffer(compute_encoder, c, 2);
-  set_output_buffer(compute_encoder, out, 3);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(c, 2);
+  compute_encoder.set_output_array(out, 3);
 
   if (topt == TernaryOpType::General) {
     auto ndim = shape.size();
@@ -341,9 +341,9 @@ void unary_op(
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(
-      compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
-  set_output_buffer(compute_encoder, out, 1);
+  compute_encoder.set_input_array(
+      in.data_shared_ptr() == nullptr ? out : in, 0);
+  compute_encoder.set_output_array(out, 1);
   if (!contig) {
     compute_encoder->setBytes(in.shape().data(), in.ndim() * sizeof(int), 2);
     compute_encoder->setBytes(
@@ -427,7 +427,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
       throw std::runtime_error("[Arange::eval_gpu] Does not support complex64");
   }
 
-  set_output_buffer(compute_encoder, out, 2);
+  compute_encoder.set_output_array(out, 2);
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 }
 
@@ -502,8 +502,8 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size grid_dims = MTL::Size(n_threads, 1, 1);
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     if (ndim == 0) {
       // Pass place holders so metal doesn't complain
       int shape_ = 0;
@@ -802,8 +802,8 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, keys, 0);
-  set_output_buffer(compute_encoder, out, 1);
+  compute_encoder.set_input_array(keys, 0);
+  compute_encoder.set_output_array(out, 1);
   compute_encoder->setBytes(&odd, sizeof(bool), 2);
   compute_encoder->setBytes(&bytes_per_key, sizeof(size_t), 3);
 

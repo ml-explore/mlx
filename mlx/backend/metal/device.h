@@ -12,6 +12,7 @@
 #include <dlfcn.h>
 #include <filesystem>
 
+#include "mlx/array.h"
 #include "mlx/device.h"
 
 namespace fs = std::filesystem;
@@ -41,6 +42,30 @@ struct CommandEncoder {
 
   MTL::ComputeCommandEncoder* operator->() {
     return enc;
+  }
+
+  void set_input_array(const array& a, int idx, int offset = 0) {
+    auto r_buf =
+        static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
+    if (auto it = outputs.find(r_buf); it != outputs.end()) {
+      // Insert a barrier
+      enc->memoryBarrier(&r_buf, 1);
+
+      // Remove the output
+      outputs.erase(it);
+    }
+    auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
+    auto base_offset = a.data<char>() -
+        static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
+    base_offset += offset;
+    enc->setBuffer(a_buf, base_offset, idx);
+  }
+
+  void set_output_array(array& a, int idx, int offset = 0) {
+    // Add barriers before adding the output to the output set
+    set_input_array(a, idx, offset);
+    auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
+    outputs.insert(buf);
   }
 
   MTL::ComputeCommandEncoder* enc;

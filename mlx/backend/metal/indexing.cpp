@@ -81,8 +81,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Set all the buffers
-  set_array_buffer(compute_encoder, src, 0);
-  set_output_buffer(compute_encoder, out, 1);
+  compute_encoder.set_input_array(src, 0);
+  compute_encoder.set_output_array(out, 1);
 
   // Set source info
   compute_encoder->setBytes(src.shape().data(), ndim * sizeof(int), 2);
@@ -103,7 +103,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Set index buffers
   for (int i = 1; i < nidx + 1; ++i) {
-    set_array_buffer(compute_encoder, inputs[i], 20 + i);
+    compute_encoder.set_input_array(inputs[i], 20 + i);
   }
 
   // Launch grid
@@ -192,8 +192,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setComputePipelineState(kernel);
 
   // Set all the buffers
-  set_array_buffer(compute_encoder, upd, 1);
-  set_output_buffer(compute_encoder, out, 2);
+  compute_encoder.set_input_array(upd, 1);
+  compute_encoder.set_output_array(out, 2);
 
   // Set update info
   uint upd_ndim = upd.ndim();
@@ -210,7 +210,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Set index buffers
     for (int i = 1; i < nidx + 1; ++i) {
-      set_array_buffer(compute_encoder, inputs[i], 20 + i);
+      compute_encoder.set_input_array(inputs[i], 20 + i);
     }
 
     // Launch grid
@@ -280,7 +280,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Set index buffers
     for (int i = 1; i < nidx + 1; ++i) {
-      set_array_buffer(compute_encoder, inputs[i], 20 + i);
+      compute_encoder.set_input_array(inputs[i], 20 + i);
     }
 
     // Launch grid

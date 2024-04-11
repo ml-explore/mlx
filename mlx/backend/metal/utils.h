@@ -12,39 +12,6 @@ namespace {
 
 using metal::CommandEncoder;
 
-inline void
-set_array_buffer(CommandEncoder& enc, const array& a, int64_t offset, int idx) {
-  auto r_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
-  if (auto it = enc.outputs.find(r_buf); it != enc.outputs.end()) {
-    // Insert a barrier
-    enc->memoryBarrier(&r_buf, 1);
-
-    // Remove the output
-    enc.outputs.erase(it);
-  }
-  auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-  auto base_offset = a.data<char>() -
-      static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
-  base_offset += offset;
-  enc->setBuffer(a_buf, base_offset, idx);
-}
-
-inline void set_array_buffer(CommandEncoder& enc, const array& a, int idx) {
-  set_array_buffer(enc, a, 0, idx);
-}
-
-inline void
-set_output_buffer(CommandEncoder& enc, array& a, int64_t offset, int idx) {
-  // Add barriers before adding the output to the output set
-  set_array_buffer(enc, a, offset, idx);
-  auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
-  enc.outputs.insert(buf);
-}
-
-inline void set_output_buffer(CommandEncoder& enc, array& a, int idx) {
-  set_output_buffer(enc, a, 0, idx);
-}
-
 template <typename T>
 inline void set_vector_bytes(
     CommandEncoder& enc,

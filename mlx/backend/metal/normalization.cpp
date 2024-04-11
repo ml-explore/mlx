@@ -79,10 +79,10 @@ void RMSNorm::eval_gpu(
 
     uint32_t w_stride = w.strides()[0];
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(
-        compute_encoder, x.data_shared_ptr() == nullptr ? out : x, 0);
-    set_array_buffer(compute_encoder, w, 1);
-    set_output_buffer(compute_encoder, out, 2);
+    compute_encoder.set_input_array(
+        x.data_shared_ptr() == nullptr ? out : x, 0);
+    compute_encoder.set_input_array(w, 1);
+    compute_encoder.set_output_array(out, 2);
     compute_encoder->setBytes(&eps_, sizeof(float), 3);
     compute_encoder->setBytes(&axis_size, sizeof(int), 4);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 5);
@@ -182,12 +182,11 @@ void RMSNormVJP::eval_gpu(
 
     uint32_t w_stride = w.strides()[0];
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(compute_encoder, x_in_gx ? gx : x, 0);
-    set_array_buffer(compute_encoder, w, 1);
-    set_array_buffer(
-        compute_encoder, g_in_gx ? gx : (g_in_gw ? gw_temp : g), 2);
-    set_output_buffer(compute_encoder, gx, 3);
-    set_output_buffer(compute_encoder, gw_temp, 4);
+    compute_encoder.set_input_array(x_in_gx ? gx : x, 0);
+    compute_encoder.set_input_array(w, 1);
+    compute_encoder.set_input_array(g_in_gx ? gx : (g_in_gw ? gw_temp : g), 2);
+    compute_encoder.set_output_array(gx, 3);
+    compute_encoder.set_output_array(gw_temp, 4);
     compute_encoder->setBytes(&eps_, sizeof(float), 5);
     compute_encoder->setBytes(&axis_size, sizeof(int), 6);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 7);
@@ -274,11 +273,11 @@ void LayerNorm::eval_gpu(
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     uint32_t b_stride = (b.ndim() == 1) ? b.strides()[0] : 0;
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(
-        compute_encoder, x.data_shared_ptr() == nullptr ? out : x, 0);
-    set_array_buffer(compute_encoder, w, 1);
-    set_array_buffer(compute_encoder, b, 2);
-    set_output_buffer(compute_encoder, out, 3);
+    compute_encoder.set_input_array(
+        x.data_shared_ptr() == nullptr ? out : x, 0);
+    compute_encoder.set_input_array(w, 1);
+    compute_encoder.set_input_array(b, 2);
+    compute_encoder.set_output_array(out, 3);
     compute_encoder->setBytes(&eps_, sizeof(float), 4);
     compute_encoder->setBytes(&axis_size, sizeof(int), 5);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 6);
@@ -394,12 +393,11 @@ void LayerNormVJP::eval_gpu(
 
     uint32_t w_stride = (w.ndim() == 1) ? w.strides()[0] : 0;
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(compute_encoder, x_in_gx ? gx : x, 0);
-    set_array_buffer(compute_encoder, w, 1);
-    set_array_buffer(
-        compute_encoder, g_in_gx ? gx : (g_in_gw ? gw_temp : g), 2);
-    set_output_buffer(compute_encoder, gx, 3);
-    set_output_buffer(compute_encoder, gw_temp, 4);
+    compute_encoder.set_input_array(x_in_gx ? gx : x, 0);
+    compute_encoder.set_input_array(w, 1);
+    compute_encoder.set_input_array(g_in_gx ? gx : (g_in_gw ? gw_temp : g), 2);
+    compute_encoder.set_output_array(gx, 3);
+    compute_encoder.set_output_array(gw_temp, 4);
     compute_encoder->setBytes(&eps_, sizeof(float), 5);
     compute_encoder->setBytes(&axis_size, sizeof(int), 6);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 7);

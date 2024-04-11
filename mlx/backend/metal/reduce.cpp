@@ -71,8 +71,8 @@ void all_reduce_dispatch(
 
   // Encode buffers and dispatch
   if (is_out_64b_int == false || n_thread_groups == 1) {
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
 
@@ -85,14 +85,14 @@ void all_reduce_dispatch(
     std::vector<array> intermediates = {intermediate};
 
     // First dispatch
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, intermediate, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(intermediate, 1);
     compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
 
     // Second pass to reduce intermediate reduction results written to DRAM
-    set_array_buffer(compute_encoder, intermediate, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(intermediate, 0);
+    compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 2);
 
     mod_in_size = (intermediate_size + n_reads - 1) / n_reads;
@@ -208,8 +208,8 @@ void row_reduce_general_dispatch(
   // Dispatch kernel
   if (!is_out_64b_int || non_row_reductions == 1) {
     // Set the arguments for the kernel
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
     compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 4);
@@ -230,8 +230,8 @@ void row_reduce_general_dispatch(
     std::vector<array> intermediates = {intermediate};
 
     // Set the arguments for the kernel
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, intermediate, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(intermediate, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
     compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 4);
@@ -258,8 +258,8 @@ void row_reduce_general_dispatch(
     ndim = new_shape.size();
 
     // Set the arguments for the kernel
-    set_array_buffer(compute_encoder, intermediate, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(intermediate, 0);
+    compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
     compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 4);
@@ -349,8 +349,8 @@ void strided_reduce_general_dispatch(
     }
 
     // Encode arrays
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
@@ -415,8 +415,8 @@ void strided_reduce_general_dispatch(
 
   if (is_out_64b_int == false) {
     // Set the arguments for the kernel
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
@@ -450,8 +450,8 @@ void strided_reduce_general_dispatch(
     std::vector<array> intermediates = {intermediate};
 
     // Set the arguments for the kernel
-    set_array_buffer(compute_encoder, in, 0);
-    set_output_buffer(compute_encoder, intermediate, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(intermediate, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 4);
@@ -494,8 +494,8 @@ void strided_reduce_general_dispatch(
         "row_reduce_general_no_atomics_" + op_name +
         type_to_name(intermediate));
     compute_encoder->setComputePipelineState(row_reduce_kernel);
-    set_array_buffer(compute_encoder, intermediate, 0);
-    set_output_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(intermediate, 0);
+    compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 4);
@@ -584,7 +584,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->setComputePipelineState(kernel);
-    set_output_buffer(compute_encoder, out, 0);
+    compute_encoder.set_output_array(out, 0);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
 

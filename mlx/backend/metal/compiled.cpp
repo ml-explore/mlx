@@ -300,7 +300,7 @@ void Compiled::eval_gpu(
       continue;
     }
     auto& x = inputs[i];
-    set_array_buffer(compute_encoder, x, cnt++);
+    compute_encoder.set_input_array(x, cnt++);
     if (!contiguous && !is_scalar(x)) {
       compute_encoder->setBytes(
           strides[stride_idx].data(),
@@ -315,7 +315,7 @@ void Compiled::eval_gpu(
 
   // Put the outputs in
   for (auto& x : outputs) {
-    set_output_buffer(compute_encoder, x, cnt++);
+    compute_encoder.set_output_array(x, cnt++);
   }
 
   // Put the output shape and strides in

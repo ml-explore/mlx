@@ -70,8 +70,8 @@ void RoPE::eval_gpu(
 
   float base = std::log2(base_);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, donated ? out : in, 0);
-  set_output_buffer(compute_encoder, out, 1);
+  compute_encoder.set_input_array(donated ? out : in, 0);
+  compute_encoder.set_output_array(out, 1);
   compute_encoder->setBytes(&strides, 3 * sizeof(size_t), 2);
   compute_encoder->setBytes(&out_strides, 3 * sizeof(size_t), 3);
   compute_encoder->setBytes(&offset_, sizeof(int), 4);
