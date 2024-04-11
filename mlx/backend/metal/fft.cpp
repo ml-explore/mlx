@@ -84,7 +84,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
   size_t m = n / 4;
   size_t batch = in.size() / in.shape(axes_[0]);
 
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   {
     std::ostringstream kname;
     kname << "fft_" << n;
