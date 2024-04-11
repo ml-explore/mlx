@@ -203,7 +203,7 @@ array::ArrayDesc::~ArrayDesc() {
   std::vector<std::shared_ptr<ArrayDesc>> for_deletion;
 
   for (array& a : inputs) {
-    if (a.array_desc_ != nullptr && a.array_desc_.use_count() == 1) {
+    if (a.array_desc_.use_count() == 1) {
       for_deletion.push_back(std::move(a.array_desc_));
     }
   }
@@ -215,7 +215,7 @@ array::ArrayDesc::~ArrayDesc() {
     for_deletion.pop_back();
 
     for (array& a : top->inputs) {
-      if (a.array_desc_ != nullptr && a.array_desc_.use_count() == 1) {
+      if (a.array_desc_.use_count() == 1) {
         for_deletion.push_back(std::move(a.array_desc_));
       }
     }
