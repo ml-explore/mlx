@@ -904,6 +904,9 @@ class FFT : public UnaryPrimitive {
   // GPU FFT planning
   static int next_fast_n(int n);
   static std::vector<int> plan_stockham_fft(int n);
+  inline static const std::vector<int> supported_radices() {
+    return {7, 5, 4, 3, 2};
+  }
 
  private:
   std::vector<size_t> axes_;

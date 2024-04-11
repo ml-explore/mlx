@@ -15,7 +15,18 @@
 
 namespace mlx::core::fft {
 
-// Forward declaration
+// Forward declarations
+array gpu_nd_fft(
+    const array& a,
+    std::vector<int> n,
+    const std::vector<size_t> axes,
+    bool real,
+    bool inverse,
+    std::vector<int> out_shape,
+    StreamOrDevice s);
+
+array gpu_irfft(const array& a, int n, int axis, StreamOrDevice s);
+
 array bluestein_fft(
     const array& a,
     int n,
@@ -101,7 +112,9 @@ array fft_impl(
   if (any_greater) {
     // Pad with zeros
     auto tmp = zeros(in_shape, a.dtype(), s);
-    in = scatter(tmp, std::vector<array>{}, in, std::vector<int>{}, s);
+    // Scatter complex64 is not supported on GPU currently
+    in =
+        scatter(tmp, std::vector<array>{}, in, std::vector<int>{}, Device::cpu);
   }
 
   auto out_shape = in_shape;
@@ -116,53 +129,37 @@ array fft_impl(
   auto out_type = real && inverse ? float32 : complex64;
 
   if (stream.device == Device::gpu) {
-    // Perform ND FFT on GPU as a series of 1D FFTs
+    // Here are the code paths for GPU FFT:
+    // if stockham_decomposable(N) && N <= MAX_STOCKHAM:
+    //     stockham()
+    // else if N <= MAX_BLUESTEIN:
+    //     fused_bluestein()
+    // else if N > MAX_BLUESTEIN && largest_prime_factor(N) <= MAX_BLUESTEIN
+    //     four_step()
+    // else if N > MAX_BLUESTEIN && larget_prime_factor(N) > MAX_BLUESTEIN:
+    //     bluestein()
+
     if (valid_axes.size() > 1) {
-      auto out = in;
-      for (int i = valid_axes.size() - 1; i >= 0; i--) {
-        // Opposite order for fft vs ifft
-        int index = inverse ? valid_axes.size() - i - 1 : i;
-        int axis = valid_axes[index];
-        // Mirror np.fft.(i)rfftn and perform a real transform
-        // only on the final axis.
-        bool step_real = (real && index == valid_axes.size() - 1);
-        int step_shape = inverse ? out_shape[axis] : in.shape(axis);
-        out = fft_impl(out, {step_shape}, {axis}, step_real, inverse, s);
-      }
-      return out;
+      return gpu_nd_fft(in, n, valid_axes, real, inverse, out_shape, s);
     }
 
     // Guarranteed to be 1D now
     int n_1d = n.back();
+    int axis = valid_axes[0];
+
+    if (n_1d == 1) {
+      return astype(a, complex64, s);
+    }
+
+    if (out_type == float32) {
+      return gpu_irfft(a, n_1d, axis, s);
+    }
 
     // Check if n can be done with the Stockham algorithm
     auto plan = FFT::plan_stockham_fft(n_1d);
     if (plan.size() == 0 || n_1d > MAX_STOCKHAM_FFT_SIZE) {
       array in_complex = astype(in, complex64, s);
-      int axis = valid_axes[0];
-
-      if (out_type == float32) {
-        // IRFFT case
-        std::vector<int> starts(in.ndim(), 0);
-        std::vector<int> ends(in.shape());
-        std::vector<int> steps(in.ndim(), 1);
-        starts[axis] = -2;
-        ends[axis] = 0;
-        steps[axis] = -1;
-        array conj = conjugate(slice(in_complex, starts, ends, steps, s), s);
-        in_complex = concatenate({in_complex, conj}, axis, s);
-        array out = fft_impl(
-            in_complex,
-            {n_1d},
-            {axis},
-            /* real= */ false,
-            /* inverse= */ true,
-            s);
-        return astype(out, float32, s);
-      }
-
       array out = in;
-
       // If n is larger than the maximum size, do a 4 step FFT
       if (n_1d > MAX_BLUESTEIN_FFT_SIZE) {
         out = four_step_fft(in_complex, n_1d, axis, inverse, s);
@@ -171,6 +168,7 @@ array fft_impl(
       }
 
       if (in_type == float32) {
+        // RFFT
         std::vector<int> starts(in.ndim(), 0);
         std::vector<int> ends(in.shape());
         ends[axis] = n_1d / 2 + 1;
@@ -294,6 +292,48 @@ std::vector<int> prime_factors(int n) {
   return factors;
 }
 
+array gpu_nd_fft(
+    const array& a,
+    std::vector<int> n,
+    const std::vector<size_t> axes,
+    bool real,
+    bool inverse,
+    std::vector<int> out_shape,
+    StreamOrDevice s) {
+  // Perform ND FFT on GPU as a series of 1D FFTs
+  auto out = a;
+  for (int i = axes.size() - 1; i >= 0; i--) {
+    // Opposite order for fft vs ifft
+    int index = inverse ? axes.size() - i - 1 : i;
+    int axis = axes[index];
+    // Mirror np.fft.(i)rfftn and perform a real transform
+    // only on the final axis.
+    bool step_real = (real && index == axes.size() - 1);
+    int step_shape = inverse ? out_shape[axis] : a.shape(axis);
+    out = fft_impl(out, {step_shape}, {axis}, step_real, inverse, Device::gpu);
+  }
+  return out;
+}
+
+array gpu_irfft(const array& a, int n, int axis, StreamOrDevice s) {
+  std::vector<int> starts(a.ndim(), 0);
+  std::vector<int> ends(a.shape());
+  std::vector<int> steps(a.ndim(), 1);
+  starts[axis] = n % 2 == 0 ? -2 : -1;
+  ends[axis] = 0;
+  steps[axis] = -1;
+  array conj = conjugate(slice(a, starts, ends, steps, s), s);
+  array in = concatenate({a, conj}, axis, s);
+  array out = fft_impl(
+      in,
+      {n},
+      {axis},
+      /* real= */ false,
+      /* inverse= */ true,
+      s);
+  return astype(out, float32, s);
+}
+
 array bluestein_fft(
     const array& a,
     int n,
@@ -312,30 +352,51 @@ array bluestein_fft(
   array w_k = blue_outputs[1];
   std::vector<size_t> axes;
   axes.push_back(axis);
-  // if (bluestein_n <= MAX_STOCKHAM_FFT_SIZE) {
-  if (false) {
+  if (bluestein_n <= MAX_STOCKHAM_FFT_SIZE) {
     return array(
         a.shape(),
         complex64,
         std::make_shared<FFT>(to_stream(s), axes, inverse, false),
         {a, w_q, w_k});
   } else {
-    std::cout << "Manual bluestein " << bluestein_n << std::endl;
-    // Too big for the fused implementation, so do it with MLX ops
-    array out = a * w_k;
-    out = pad(out, {{0, 0}, {0, bluestein_n - n}}, array(0), s);
+    // Broadcast w_k and w_q to the appropriate shapes
+    std::vector<int> broadcast_shape(a.ndim(), 1);
+    broadcast_shape[axis] = a.shape(axis);
+    w_k = reshape(w_k, broadcast_shape);
+    broadcast_shape[axis] = bluestein_n;
+    w_q = reshape(w_q, broadcast_shape);
+
+    // Pad out to the bluestein n size
+    std::vector<std::pair<int, int>> pads;
+    for (int i = 0; i < a.ndim(); i++) {
+      if (axis == i) {
+        pads.push_back({0, bluestein_n - n});
+      } else {
+        pads.push_back({0, 0});
+      }
+    }
+
+    // Do the convolution via FFT
+    array out = pad(a * w_k, pads, array(0), s);
     out = fft_impl(
         out, {bluestein_n}, {axis}, /* real= */ false, /* inverse= */ false, s);
-    out = out * w_q;
-    // std::cout << "ifft in" << out << std::endl;
     out = fft_impl(
-        out, {bluestein_n}, {axis}, /* real= */ false, /* inverse= */ true, s);
-    std::cout << "ifft " << out << std::endl;
+        out * w_q,
+        {bluestein_n},
+        {axis},
+        /* real= */ false,
+        /* inverse= */ true,
+        s);
     int offset = bluestein_n - (2 * n - 1);
-    out = slice(out, {0, -offset - n}, {1, -offset}, s);
-    std::cout << "out slice " << out << std::endl;
+
+    // Slice back into the original FFT size
+    std::vector<int> starts(a.ndim(), 0);
+    std::vector<int> ends(a.shape());
+    starts[axis] = -offset - n;
+    ends[axis] = -offset;
+    out = slice(out, starts, ends, s);
+
     out = w_k * out;
-    // std::cout << "w_k times " << out << std::endl;
     return out;
   }
 }
@@ -348,7 +409,6 @@ array four_step_fft(
     int axis,
     bool inverse,
     StreamOrDevice s) {
-  std::cout << "four step inv " << inverse << std::endl;
   array in = inverse ? conjugate(a) : a;
 
   auto factors = prime_factors(n);
@@ -368,12 +428,11 @@ array four_step_fft(
     }
     n1 *= factor;
   }
-  std::cout << "n1 " << n1 << std::endl;
-  std::cout << "n2 " << n2 << std::endl;
   if (n1 > MAX_BLUESTEIN_FFT_SIZE || n2 > MAX_BLUESTEIN_FFT_SIZE) {
     // Prime factors are too large for the fused bluestein implementation
     // so we fallback to doing a manual bluestein.
-    return bluestein_fft(in, n, axis, inverse, s);
+    array out = bluestein_fft(in, n, axis, false, s);
+    return inverse ? conjugate(out) / n : out;
   }
   // (..., n) -> (..., n1, n2)
   std::vector<int> four_step_shape(a.shape());

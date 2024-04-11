@@ -2,135 +2,99 @@
 
 #include "doctest/doctest.h"
 
-#include <iostream>
-#include "benchmarks/cpp/time_utils.h"
 #include "mlx/mlx.h"
 
 using namespace mlx::core;
 
-// Get Bluestein working again
-// Run a benchmark against MPS
-// Implement 4 step FFT
-// Add radix 5,7,8,11,13
-
 TEST_CASE("test fft basics") {
-  auto device = default_device();
-  set_default_device(Device::gpu);
-  // array x(1.0);
-  // array x = tile(reshape(arange(4), {1, 4}), {2, 1});
-  // array x = arange(11);
-  random::seed(7);
-  // array x = array({complex64_t{6, 0}, complex64_t{-2, 2}, complex64_t{-2,
-  // 0}}); x = tile(reshape(x, {1, 3}), {2, 1});
-  // array x = random::normal({1, 13});
-  array x = reshape(arange(1259), {1, 1259});
-  // array xi = complex64_t{0, 1} * random::normal({17, 17});
-  // x = x + xi;
-  std::cout << "x " << x << std::endl;
-  array y = fft::fft(x);
-  std::cout << "y " << y << std::endl;
+  array x(1.0);
+  CHECK_THROWS(fft::fft(x));
+  CHECK_THROWS(fft::ifft(x));
 
-  // auto bench_fft = [&x]() { return fft::irfft(x); };
-  // TIME(bench_fft);
+  x = array({1.0});
+  auto y = fft::fft(x);
+  CHECK_EQ(y.dtype(), complex64);
+  CHECK_EQ(y.size(), x.size());
+  CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 0.0f});
 
-  set_default_device(Device::cpu);
+  y = fft::ifft(x);
+  CHECK_EQ(y.dtype(), complex64);
+  CHECK_EQ(y.size(), x.size());
+  CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 0.0f});
+
+  x = array({complex64_t{1.0f, 1.0f}}, complex64);
   y = fft::fft(x);
-  // // // TIME(bench_fft);
+  CHECK_EQ(y.size(), x.size());
+  CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 1.0f});
 
-  std::cout << "y " << y << std::endl;
-  // std::cout << "y " << reshape(y, {4, 3}) << std::endl;
+  y = fft::ifft(x);
+  CHECK_EQ(y.dtype(), complex64);
+  CHECK_EQ(y.size(), x.size());
+  CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 1.0f});
 
-  // CHECK_THROWS(fft::fft(x));
-  // CHECK_THROWS(fft::ifft(x));
+  {
+    x = array({0.0f, 1.0f, 2.0f, 3.0f});
+    y = fft::fft(x);
+    std::initializer_list<complex64_t> expected = {
+        {6.0, 0.0},
+        {-2.0, 2.0},
+        {-2.0, 0.0},
+        {-2.0, -2.0},
+    };
+    CHECK_EQ(y.size(), x.size());
+    CHECK(array_equal(y, array(expected)).item<bool>());
 
-  // x = array({1.0});
-  // auto y = fft::fft(x);
-  // CHECK_EQ(y.dtype(), complex64);
-  // CHECK_EQ(y.size(), x.size());
-  // CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 0.0f});
+    y = fft::ifft(x);
+    std::initializer_list<complex64_t> expected_inv = {
+        {1.5, 0.0},
+        {-0.5, -0.5},
+        {-0.5, 0.0},
+        {-0.5, 0.5},
+    };
+    CHECK(array_equal(y, array(expected_inv)).item<bool>());
+  }
 
-  // y = fft::ifft(x);
-  // CHECK_EQ(y.dtype(), complex64);
-  // CHECK_EQ(y.size(), x.size());
-  // CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 0.0f});
+  {
+    std::initializer_list<complex64_t> vals = {
+        {1.0f, 1.0f}, {2.0f, 1.0f}, {1.0f, 2.0f}, {2.0f, 2.0f}};
+    x = array(vals);
+    y = fft::fft(x);
+    std::initializer_list<complex64_t> expected = {
+        {6.0, 6.0},
+        {-1.0, -1.0},
+        {-2.0, 0.0},
+        {1.0, -1.0},
+    };
+    CHECK_EQ(y.size(), x.size());
+    CHECK(array_equal(y, array(expected)).item<bool>());
+    CHECK(array_equal(fft::ifft(y), x).item<bool>());
+  }
 
-  // x = array({complex64_t{1.0f, 1.0f}}, complex64);
-  // y = fft::fft(x);
-  // CHECK_EQ(y.size(), x.size());
-  // CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 1.0f});
-
-  // y = fft::ifft(x);
-  // CHECK_EQ(y.dtype(), complex64);
-  // CHECK_EQ(y.size(), x.size());
-  // CHECK_EQ(y.item<complex64_t>(), complex64_t{1.0f, 1.0f});
-
-  // {
-  //   x = array({0.0f, 1.0f, 2.0f, 3.0f});
-  //   y = fft::fft(x);
-  //   std::initializer_list<complex64_t> expected = {
-  //       {6.0, 0.0},
-  //       {-2.0, 2.0},
-  //       {-2.0, 0.0},
-  //       {-2.0, -2.0},
-  //   };
-  //   CHECK_EQ(y.size(), x.size());
-  //   CHECK(array_equal(y, array(expected)).item<bool>());
-
-  //   y = fft::ifft(x);
-  //   std::initializer_list<complex64_t> expected_inv = {
-  //       {1.5, 0.0},
-  //       {-0.5, -0.5},
-  //       {-0.5, 0.0},
-  //       {-0.5, 0.5},
-  //   };
-  //   CHECK(array_equal(y, array(expected_inv)).item<bool>());
-  // }
-
-  // {
-  //   std::initializer_list<complex64_t> vals = {
-  //       {1.0f, 1.0f}, {2.0f, 1.0f}, {1.0f, 2.0f}, {2.0f, 2.0f}};
-  //   x = array(vals);
-  //   y = fft::fft(x);
-  //   std::initializer_list<complex64_t> expected = {
-  //       {6.0, 6.0},
-  //       {-1.0, -1.0},
-  //       {-2.0, 0.0},
-  //       {1.0, -1.0},
-  //   };
-  //   CHECK_EQ(y.size(), x.size());
-  //   CHECK(array_equal(y, array(expected)).item<bool>());
-  //   CHECK(array_equal(fft::ifft(y), x).item<bool>());
-  // }
-
-  // // Specify axes
-  // {
-  //   x = array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2});
-  //   std::initializer_list<complex64_t> expected_0 = {
-  //       {2.0, 0.0},
-  //       {4.0, 0.0},
-  //       {-2.0, 0.0},
-  //       {-2.0, 0.0},
-  //   };
-  //   y = fft::fft(x, 0);
-  //   CHECK(array_equal(y, array(expected_0, {2, 2})).item<bool>());
-  //   CHECK(array_equal(fft::ifft(y, 0), x).item<bool>());
-  //   std::initializer_list<complex64_t> expected_1 = {
-  //       {1.0, 0.0},
-  //       {-1.0, 0.0},
-  //       {5.0, 0.0},
-  //       {-1.0, 0.0},
-  //   };
-  //   y = fft::fft(x, 1);
-  //   CHECK(array_equal(y, array(expected_1, {2, 2})).item<bool>());
-  //   CHECK(array_equal(fft::ifft(y, 1), x).item<bool>());
-  // }
-  // set_default_device(device);
+  // Specify axes
+  {
+    x = array({0.0f, 1.0f, 2.0f, 3.0f}, {2, 2});
+    std::initializer_list<complex64_t> expected_0 = {
+        {2.0, 0.0},
+        {4.0, 0.0},
+        {-2.0, 0.0},
+        {-2.0, 0.0},
+    };
+    y = fft::fft(x, 0);
+    CHECK(array_equal(y, array(expected_0, {2, 2})).item<bool>());
+    CHECK(array_equal(fft::ifft(y, 0), x).item<bool>());
+    std::initializer_list<complex64_t> expected_1 = {
+        {1.0, 0.0},
+        {-1.0, 0.0},
+        {5.0, 0.0},
+        {-1.0, 0.0},
+    };
+    y = fft::fft(x, 1);
+    CHECK(array_equal(y, array(expected_1, {2, 2})).item<bool>());
+    CHECK(array_equal(fft::ifft(y, 1), x).item<bool>());
+  }
 }
 
 TEST_CASE("test real ffts") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   auto x = array({1.0});
   auto y = fft::rfft(x);
   CHECK_EQ(y.dtype(), complex64);
@@ -154,14 +118,9 @@ TEST_CASE("test real ffts") {
   CHECK_EQ(y.size(), 2);
   CHECK_EQ(y.dtype(), float32);
   CHECK(array_equal(y, array({0.5f, -0.5f})).item<bool>());
-
-  set_default_device(device);
 }
 
 TEST_CASE("test fftn") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   auto x = zeros({5, 5, 5});
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, 3}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, -4}), std::invalid_argument);
@@ -234,8 +193,6 @@ TEST_CASE("test fftn") {
     CHECK_EQ(y.shape(), std::vector<int>{5, 8});
     CHECK_EQ(y.dtype(), float32);
   }
-
-  set_default_device(device);
 }
 
 TEST_CASE("test fft with provided shape") {
@@ -264,9 +221,6 @@ TEST_CASE("test fft with provided shape") {
 }
 
 TEST_CASE("test fft vmap") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   auto fft_fn = [](array x) { return fft::fft(x); };
   auto x = reshape(arange(8), {2, 4});
   auto y = vmap(fft_fn)(x);
@@ -282,14 +236,9 @@ TEST_CASE("test fft vmap") {
 
   y = vmap(rfft_fn, 1, 1)(x);
   CHECK(array_equal(y, fft::rfft(x, 0)).item<bool>());
-
-  set_default_device(device);
 }
 
 TEST_CASE("test fft grads") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   // Regular
   auto fft_fn = [](array x) { return fft::fft(x); };
   auto cotangent = astype(arange(10), complex64);
@@ -320,6 +269,10 @@ TEST_CASE("test fft grads") {
   CHECK(array_equal(fft::rfft(tangent), jvp_out).item<bool>());
 
   // Inverse real
+  auto device = default_device();
+  // Allow running on GPU once grads are implemented for mx.conj
+  set_default_device(Device::cpu);
+
   auto irfft_fn = [](array x) { return fft::irfft(x); };
   cotangent = astype(arange(10), float32);
   vjp_out = vjp(irfft_fn, astype(zeros({6}), complex64), cotangent).second;
@@ -333,6 +286,8 @@ TEST_CASE("test fft grads") {
   tangent = astype(arange(10), complex64);
   jvp_out = jvp(irfft_fn, zeros_like(tangent), tangent).second;
   CHECK(array_equal(fft::irfft(tangent), jvp_out).item<bool>());
+
+  set_default_device(device);
 
   // Check ND vjps run properly
   vjp_out = vjp([](array x) { return fft::fftn(x); },
@@ -352,6 +307,8 @@ TEST_CASE("test fft grads") {
                 astype(zeros({5, 5}), complex64))
                 .second;
   CHECK_EQ(vjp_out.shape(), std::vector<int>{5, 9});
+
+  set_default_device(Device::cpu);
 
   vjp_out = vjp([](array x) { return fft::irfftn(x); },
                 astype(zeros({5, 5}), complex64),

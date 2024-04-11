@@ -58,37 +58,45 @@ def run_bench_mps(system_size, fft_sizes):
 
 
 def time_fft():
-    # x = range(4, 256)
-    x = [1024 * 1024]
-    system_size = int(2**24)
+    x = range(4, 1024)
+    system_size = int(2**26)
 
     # with mx.stream(mx.gpu):
     #     gpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
-    mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
-    print("mps_bandwidths", mps_bandwidths)
+    # np.save("gpu_bandwidths", gpu_bandwidths)
 
-    return
+    # mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
+
+    # np.save("mps_bandwidths", mps_bandwidths)
+
+    # system_size = int(2**21)
+    # with mx.stream(mx.cpu):
+    #     cpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
+
+    # np.save("cpu_bandwidths", cpu_bandwidths)
+
+    gpu_bandwidths = np.load("gpu_bandwidths.npy")
+    cpu_bandwidths = np.load("cpu_bandwidths.npy")
 
     # with mx.stream(mx.cpu):
     #     cpu_bandwidths = run_bench(system_size=int(2**22))
+
     # x = list(range(4, 1025))
-    mps_bandwidths = np.load("mps_bandwidths.npy")
-    gpu_bandwidths = np.load("gpu_bandwidths.npy")
 
     x = np.array(x)
 
-    multiples = (
-        np.array([i for i in x if any(i % p == 0 for p in (2, 3, 5, 7, 11, 13))]) - 4
-    )
-    non_multiples = (
-        np.array([i for i in x if all(i % p != 0 for p in (2, 3, 5, 7, 11, 13))]) - 4
-    )
+    # multiples = (
+    #     np.array([i for i in x if any(i % p == 0 for p in (2, 3, 5, 7, 11, 13))]) - 4
+    # )
+    # non_multiples = (
+    #     np.array([i for i in x if all(i % p != 0 for p in (2, 3, 5, 7, 11, 13))]) - 4
+    # )
 
     # plot bandwidths
-    plt.scatter(x[multiples], gpu_bandwidths[multiples], color="green", label="GPU")
-    plt.scatter(x[multiples], mps_bandwidths[multiples], color="blue", label="MPS")
-    # plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
+    plt.scatter(x, gpu_bandwidths, color="green", label="GPU")
+    # plt.scatter(x, mps_bandwidths, color="blue", label="MPS")
+    plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
     plt.title("MLX FFT Benchmark")
     plt.xlabel("N")
     plt.ylabel("Bandwidth (GB/s)")
@@ -96,32 +104,18 @@ def time_fft():
     plt.savefig("fftm_plot.png")
     plt.clf()
 
-    plt.scatter(
-        x[non_multiples], gpu_bandwidths[non_multiples], color="green", label="GPU"
-    )
-    plt.scatter(
-        x[non_multiples], mps_bandwidths[non_multiples], color="blue", label="MPS"
-    )
-    # plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
-    plt.title("MLX FFT Benchmark")
-    plt.xlabel("N")
-    plt.ylabel("Bandwidth (GB/s)")
-    plt.legend()
-    plt.savefig("fftnm_plot.png")
-    plt.clf()
+    # diffs = gpu_bandwidths - mps_bandwidths
 
-    diffs = gpu_bandwidths - mps_bandwidths
-
-    pos = np.where(diffs > 0)
-    neg = np.where(diffs < 0)
-    plt.scatter(x[pos], diffs[pos], color="green")
-    plt.scatter(x[neg], diffs[neg], color="red")
-    # plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
-    plt.title("MLX FFT Benchmark")
-    plt.xlabel("N")
-    plt.ylabel("Bandwidth diff")
-    plt.legend()
-    plt.savefig("diff_plot.png")
+    # pos = np.where(diffs > 0)
+    # neg = np.where(diffs < 0)
+    # plt.scatter(x[pos], diffs[pos], color="green")
+    # plt.scatter(x[neg], diffs[neg], color="red")
+    # # plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
+    # plt.title("MLX FFT Benchmark")
+    # plt.xlabel("N")
+    # plt.ylabel("Bandwidth diff")
+    # plt.legend()
+    # plt.savefig("diff_plot.png")
 
 
 if __name__ == "__main__":
