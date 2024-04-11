@@ -92,8 +92,8 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     bool donated = in.data_shared_ptr() == nullptr;
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(compute_encoder, in_contiguous, 0);
-    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in_contiguous, 0);
+    compute_encoder.set_output_array(compute_encoder, out, 1);
 
     auto group_dims = MTL::Size(1, m, 1);
     auto grid_dims = MTL::Size(batch, m, 1);
