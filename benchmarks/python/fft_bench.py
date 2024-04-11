@@ -3,9 +3,9 @@
 import matplotlib
 import mlx.core as mx
 import numpy as np
+import sympy
 import torch
 from time_utils import measure_runtime
-from tqdm import tqdm
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -59,63 +59,63 @@ def run_bench_mps(system_size, fft_sizes):
 
 def time_fft():
     x = range(4, 1024)
-    system_size = int(2**26)
+    system_size = int(2**24)
 
-    # with mx.stream(mx.gpu):
-    #     gpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
+    with mx.stream(mx.gpu):
+        gpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
-    # np.save("gpu_bandwidths", gpu_bandwidths)
+    np.save("gpu_bandwidths", gpu_bandwidths)
 
-    # mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
+    mps_bandwidths = run_bench_mps(system_size=system_size, fft_sizes=x)
 
-    # np.save("mps_bandwidths", mps_bandwidths)
+    np.save("mps_bandwidths", mps_bandwidths)
 
-    # system_size = int(2**21)
-    # with mx.stream(mx.cpu):
-    #     cpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
+    system_size = int(2**21)
+    with mx.stream(mx.cpu):
+        cpu_bandwidths = run_bench(system_size=system_size, fft_sizes=x)
 
-    # np.save("cpu_bandwidths", cpu_bandwidths)
+    np.save("cpu_bandwidths", cpu_bandwidths)
 
-    gpu_bandwidths = np.load("gpu_bandwidths.npy")
-    cpu_bandwidths = np.load("cpu_bandwidths.npy")
-
-    # with mx.stream(mx.cpu):
-    #     cpu_bandwidths = run_bench(system_size=int(2**22))
-
-    # x = list(range(4, 1025))
+    # cpu_bandwidths = np.load("cpu_bandwidths.npy")
+    # gpu_bandwidths = np.load("gpu_bandwidths.npy")
+    # mps_bandwidths = np.load("mps_bandwidths.npy")
 
     x = np.array(x)
 
-    # multiples = (
-    #     np.array([i for i in x if any(i % p == 0 for p in (2, 3, 5, 7, 11, 13))]) - 4
-    # )
-    # non_multiples = (
-    #     np.array([i for i in x if all(i % p != 0 for p in (2, 3, 5, 7, 11, 13))]) - 4
-    # )
+    all_indices = x - x[0]
+    radix_2to13 = (
+        np.array([i for i in x if all(p <= 13 for p in sympy.primefactors(i))]) - x[0]
+    )
+    bluesteins = (
+        np.array([i for i in x if any(p > 13 for p in sympy.primefactors(i))]) - x[0]
+    )
 
-    # plot bandwidths
-    plt.scatter(x, gpu_bandwidths, color="green", label="GPU")
-    # plt.scatter(x, mps_bandwidths, color="blue", label="MPS")
-    plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
-    plt.title("MLX FFT Benchmark")
-    plt.xlabel("N")
-    plt.ylabel("Bandwidth (GB/s)")
-    plt.legend()
-    plt.savefig("fftm_plot.png")
-    plt.clf()
+    for indices, name in [
+        (all_indices, "All"),
+        (radix_2to13, "Radix 2-13"),
+        (bluesteins, "Bluestein's"),
+    ]:
+        # plot bandwidths
+        plt.scatter(x[indices], gpu_bandwidths[indices], color="green", label="GPU")
+        plt.scatter(x[indices], mps_bandwidths[indices], color="blue", label="MPS")
+        plt.scatter(x[indices], cpu_bandwidths[indices], color="red", label="CPU")
+        plt.title(f"MLX FFT Benchmark -- {name}")
+        plt.xlabel("N")
+        plt.ylabel("Bandwidth (GB/s)")
+        plt.legend()
+        plt.savefig(f"{name}.png")
+        plt.clf()
 
-    # diffs = gpu_bandwidths - mps_bandwidths
+    av_gpu_bandwidth = np.mean(gpu_bandwidths)
+    av_mps_bandwidth = np.mean(mps_bandwidths)
+    av_cpu_bandwidth = np.mean(cpu_bandwidths)
+    print("Average bandwidths:")
+    print("GPU:", av_gpu_bandwidth)
+    print("MPS:", av_mps_bandwidth)
+    print("CPU:", av_cpu_bandwidth)
 
-    # pos = np.where(diffs > 0)
-    # neg = np.where(diffs < 0)
-    # plt.scatter(x[pos], diffs[pos], color="green")
-    # plt.scatter(x[neg], diffs[neg], color="red")
-    # # plt.scatter(x, cpu_bandwidths, color="red", label="CPU")
-    # plt.title("MLX FFT Benchmark")
-    # plt.xlabel("N")
-    # plt.ylabel("Bandwidth diff")
-    # plt.legend()
-    # plt.savefig("diff_plot.png")
+    portion_faster = len(np.where(gpu_bandwidths > mps_bandwidths)[0]) / len(x)
+    print("Percent MLX faster than MPS: ", portion_faster * 100)
 
 
 if __name__ == "__main__":

@@ -235,6 +235,7 @@ class ArcCos : public UnaryPrimitive {
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
   DEFINE_VMAP()
   DEFINE_GRADS()
   DEFINE_PRINT(ArcCos)
@@ -905,6 +906,7 @@ class FFT : public UnaryPrimitive {
   static int next_fast_n(int n);
   static std::vector<int> plan_stockham_fft(int n);
   inline static const std::vector<int> supported_radices() {
+    // Ordered by preference in decomposition.
     return {7, 5, 4, 3, 2};
   }
 
@@ -912,10 +914,6 @@ class FFT : public UnaryPrimitive {
   std::vector<size_t> axes_;
   bool inverse_;
   bool real_;
-
-  // Ordered by preference in decomposition. Typically largest->smallest is
-  // best.
-  const std::vector<int> gpu_radices_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };

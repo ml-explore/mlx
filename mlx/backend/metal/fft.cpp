@@ -5,8 +5,6 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-#include <iostream>
-
 namespace mlx::core {
 
 using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
@@ -16,8 +14,7 @@ using MTLFC = std::tuple<const void*, MTL::DataType, NS::UInteger>;
 #define MIN_THREADGROUP_MEM_SIZE 64
 
 int FFT::next_fast_n(int n) {
-  // Next power of 2
-  return pow(2, std::ceil(std::log2(n)));
+  return next_power_of_2(n);
 }
 
 // Plan the sequence of radices
@@ -208,13 +205,6 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&n, sizeof(int), 2);
       compute_encoder->setBytes(&total_batch_size, sizeof(int), 3);
     }
-
-    // std::cout << "elems_per_thread " << elems_per_thread << std::endl;
-    // std::cout << "total batch_size " << total_batch_size << std::endl;
-    // std::cout << "batch_size " << batch_size << std::endl;
-    // std::cout << "threadgroup_batch_size " << threadgroup_batch_size <<
-    // std::endl; std::cout << "threads_per_fft " << threads_per_fft <<
-    // std::endl;
 
     auto group_dims = MTL::Size(1, threadgroup_batch_size, threads_per_fft);
     auto grid_dims =

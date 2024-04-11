@@ -8,8 +8,6 @@
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
-#include <iostream>
-
 #define MAX_STOCKHAM_FFT_SIZE 2048
 #define MAX_BLUESTEIN_FFT_SIZE 1024
 
@@ -275,23 +273,6 @@ array irfftn(const array& a, StreamOrDevice s /* = {} */) {
   return fft_impl(a, true, true, s);
 }
 
-std::vector<int> prime_factors(int n) {
-  int z = 2;
-  std::vector<int> factors;
-  while (z * z <= n) {
-    if (n % z == 0) {
-      factors.push_back(z);
-      n /= z;
-    } else {
-      z++;
-    }
-  }
-  if (n > 1) {
-    factors.push_back(n);
-  }
-  return factors;
-}
-
 array gpu_nd_fft(
     const array& a,
     std::vector<int> n,
@@ -399,6 +380,23 @@ array bluestein_fft(
     out = w_k * out;
     return out;
   }
+}
+
+std::vector<int> prime_factors(int n) {
+  int z = 2;
+  std::vector<int> factors;
+  while (z * z <= n) {
+    if (n % z == 0) {
+      factors.push_back(z);
+      n /= z;
+    } else {
+      z++;
+    }
+  }
+  if (n > 1) {
+    factors.push_back(n);
+  }
+  return factors;
 }
 
 // For n that doesn't fit into GPU shared memory, we use the 4 step FFT
