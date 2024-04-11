@@ -23,13 +23,13 @@ int get_env_val(const char* name, int fallback) {
 }
 
 constexpr int default_max_ops[3] = {
-    10, // Category::small
-    30, // Category::medium
+    20, // Category::small
+    25, // Category::medium
     50, // Category::large
 };
 
 constexpr int default_max_mb[3] = {
-    20, // Category::small
+    50, // Category::small
     50, // Category::medium
     50, // Category::large
 };
