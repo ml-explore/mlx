@@ -54,8 +54,7 @@ void copy_gpu_inplace(
     int64_t inp_offset,
     int64_t out_offset,
     CopyType ctype,
-    const Stream& s,
-    bool async /* = false */) {
+    const Stream& s) {
   // Try to collapse contiguous dims
   auto [shape, strides] = collapse_contiguous_dims(
       data_shape, std::vector{strides_in_pre, strides_out_pre});
@@ -92,11 +91,7 @@ void copy_gpu_inplace(
   out_offset *= size_of(out.dtype());
 
   compute_encoder.set_input_array(donate_in ? out : in, 0, inp_offset);
-  if (async) {
-    compute_encoder.set_input_array(out, 1, out_offset);
-  } else {
-    compute_encoder.set_output_array(out, 1, out_offset);
-  }
+  compute_encoder.set_output_array(out, 1, out_offset);
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
     int ndim = shape.size();
@@ -148,10 +143,9 @@ void copy_gpu_inplace(
     const array& in,
     array& out,
     CopyType ctype,
-    const Stream& s,
-    bool async /* = false */) {
+    const Stream& s) {
   return copy_gpu_inplace(
-      in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s, async);
+      in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s);
 }
 
 void copy_gpu_inplace(
@@ -160,11 +154,10 @@ void copy_gpu_inplace(
     const std::vector<int64_t>& istride,
     int64_t ioffset,
     CopyType ctype,
-    const Stream& s,
-    bool async /* = false */) {
+    const Stream& s) {
   std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
   return copy_gpu_inplace(
-      in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s, async);
+      in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s);
 }
 
 } // namespace mlx::core

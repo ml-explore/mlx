@@ -37,8 +37,24 @@ using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
 struct CommandEncoder {
-  CommandEncoder(MTL::ComputeCommandEncoder* enc) : enc(enc){};
+  CommandEncoder(MTL::ComputeCommandEncoder* enc)
+      : enc(enc), concurrent(false){};
   CommandEncoder& operator=(const CommandEncoder&) = delete;
+
+  struct ConcurrentContext {
+    ConcurrentContext(CommandEncoder& enc) : enc(enc) {
+      enc.concurrent = true;
+    }
+    ~ConcurrentContext() {
+      enc.concurrent = false;
+      enc.outputs.insert(
+          enc.concurrent_outputs.begin(), enc.concurrent_outputs.end());
+      enc.concurrent_outputs.clear();
+    }
+
+   private:
+    CommandEncoder& enc;
+  };
 
   MTL::ComputeCommandEncoder* operator->() {
     return enc;
@@ -65,17 +81,22 @@ struct CommandEncoder {
     // Add barriers before adding the output to the output set
     set_input_array(a, idx, offset);
     auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
-    outputs.insert(buf);
+    if (concurrent) {
+      concurrent_outputs.insert(buf);
+    } else {
+      outputs.insert(buf);
+    }
   }
 
-  void set_output_array(array& a) {
-    // Add barriers before adding the output to the output set
-    auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
-    outputs.insert(buf);
+  ConcurrentContext start_concurrent() {
+    return ConcurrentContext(*this);
   }
 
+ private:
   MTL::ComputeCommandEncoder* enc;
+  bool concurrent;
   std::unordered_set<MTL::Resource*> outputs;
+  std::unordered_set<MTL::Resource*> concurrent_outputs;
 };
 
 class Device {
