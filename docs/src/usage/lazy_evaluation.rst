@@ -18,7 +18,7 @@ describe below.
 Transforming Compute Graphs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Lazy evaluation let's us record a compute graph without actually doing any
+Lazy evaluation lets us record a compute graph without actually doing any
 computations. This is useful for function transformations like :func:`grad` and
 :func:`vmap` and graph optimizations.
 
