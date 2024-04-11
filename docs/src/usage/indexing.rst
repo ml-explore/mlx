@@ -46,7 +46,8 @@ You can index with ``None`` to create a new axis:
   [1, 8]
 
 
-You can also use an :obj:`array` to index another :obj:`array`:
+You can also use an :obj:`array` to index another :obj:`array`. Alongside, you can use :obj:`list` to index an array.
+This works exactly as it does in numpy. (Note that the list, implicitly gets converted to :obj:`array` before indexing.)
 
 .. code-block:: shell
 
@@ -54,14 +55,9 @@ You can also use an :obj:`array` to index another :obj:`array`:
   >>> idx = mx.array([5, 7]) 
   >>> arr[idx]
   array([5, 7], dtype=int32)
-
-Also, you can use :obj:`list` or :obj:`tuple` to index an array. It works exactly as it does in numpy. About usage of :obj:`list`, it
-is worth mentioning that the list, implicitly gets converted to :obj:`array` before indexing. So, it follows the same behaviour as
-indexing via :obj:`array`.
-
-.. code-block:: shell
-
-  >>> arr = mx.arange(10)
+  >>> idx = [5, 7]
+  >>> arr[idx]
+  array([5, 7], dtype=int32)
   >>> arr[[1, 3, 5]]
   array([1, 3, 5], dtype=int32)
   >>> arr.reshape(2, 5)[(1, 3)]
