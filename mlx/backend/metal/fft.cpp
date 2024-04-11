@@ -37,7 +37,7 @@ std::vector<int> FFT::plan_stockham_fft(int n) {
 }
 
 void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
-  auto& s = out.primitive().stream();
+  auto& s = stream();
   auto& d = metal::device(s.device);
 
   auto& in = inputs[0];
@@ -128,15 +128,15 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   int fft_size = bluestein_n > 0 ? bluestein_n : n;
 
+  // Setup function constants
+  bool power_of_2 = is_power_of_2(fft_size);
+
   auto make_int = [](int* a, int i) {
     return std::make_tuple(a, MTL::DataType::DataTypeInt, i);
   };
   auto make_bool = [](bool* a, int i) {
     return std::make_tuple(a, MTL::DataType::DataTypeBool, i);
   };
-  // Pass this as a function constant so we can specialize
-  // the kernel for powers of 2.
-  bool power_of_2 = is_power_of_2(fft_size);
 
   std::vector<MTLFC> func_consts = {
       make_bool(&inverse_, 0), make_bool(&power_of_2, 1)};

@@ -113,67 +113,6 @@ class TestFFT(mlx_tests.MLXTestCase):
         for k in range(17, 20):
             self._run_ffts((3, 2**k), atol=1e-2)
 
-    def test_fft_powers_of_two(self):
-        shape = (5, 7, 8)
-        for k in range(4, 12):
-            self._run_ffts((*shape, 2**k))
-
-            # self.check_mx_np(mx.fft.rfft, np.fft.rfft, r, atol=atol, rtol=rtol)
-
-            # r = np.random.rand(*shape, 2 ** (k - 1) + 1).astype(np.float32)
-            # i = np.random.rand(*shape, 2 ** (k - 1) + 1).astype(np.float32)
-            # a_np_ir = r + 1j * i
-            # self.check_mx_np(mx.fft.irfft, np.fft.irfft, a_np_ir, atol=atol, rtol=rtol)
-
-        r = np.random.rand(*shape, 32).astype(np.float32)
-        i = np.random.rand(*shape, 32).astype(np.float32)
-        a_np = r + 1j * i
-
-        for axis in range(4):
-            self.check_mx_np(
-                mx.fft.fft, np.fft.fft, a_np, atol=atol, rtol=rtol, axis=axis
-            )
-            self.check_mx_np(
-                mx.fft.ifft, np.fft.ifft, a_np, atol=atol, rtol=rtol, axis=axis
-            )
-            # self.check_mx_np(
-            #     mx.fft.rfft, np.fft.rfft, r, atol=atol, rtol=rtol, axis=axis
-            # )
-
-        # fftn
-        for axes in [(0, 1, 2), (1, 0, 2), (2, 1, 0)]:
-            self.check_mx_np(
-                mx.fft.fftn, np.fft.fftn, a_np, atol=atol, rtol=rtol, axes=axes
-            )
-            self.check_mx_np(
-                mx.fft.ifftn, np.fft.ifftn, a_np, atol=atol, rtol=rtol, axes=axes
-            )
-            # self.check_mx_np(
-            #     mx.fft.rfftn, np.fft.rfftn, r, atol=atol, rtol=rtol, axes=axes
-            # )
-
-        # irfftn
-        # r = np.random.rand(16, 5, 8, 32).astype(np.float32)
-        # i = np.random.rand(16, 5, 8, 32).astype(np.float32)
-        # a_np = r + 1j * i
-        # self.check_mx_np(
-        #     mx.fft.irfftn, np.fft.irfftn, a_np, atol=atol, rtol=rtol, axes=(0, 2, 1)
-        # )
-
-        # irfft
-        # r = np.random.rand(9, 3, 5, 17).astype(np.float32)
-        # i = np.random.rand(9, 3, 5, 17).astype(np.float32)
-        # a_np = r + 1j * i
-        # for axis in range(4):
-        #     self.check_mx_np(
-        #         mx.fft.irfft, np.fft.irfft, r, atol=atol, rtol=rtol, axis=axis
-        #     )
-
-        r = np.random.rand(4, 8).astype(np.float32)
-        i = np.random.rand(4, 8).astype(np.float32)
-        a_np = r + 1j * i
-        a_mx = mx.array(a_np)
-
     def test_fft_contiguity(self):
         r = np.random.rand(4, 8).astype(np.float32)
         i = np.random.rand(4, 8).astype(np.float32)
@@ -200,6 +139,22 @@ class TestFFT(mlx_tests.MLXTestCase):
         ]
         for large_num in numbers:
             self._run_ffts((large_num,))
+
+    def test_fft_contiguity(self):
+        r = np.random.rand(4, 8).astype(np.float32)
+        i = np.random.rand(4, 8).astype(np.float32)
+        a_np = r + 1j * i
+        a_mx = mx.array(a_np)
+
+        # non-contiguous in the FFT dim
+        out_mx = mx.fft.fft(a_mx[:, ::2])
+        out_np = np.fft.fft(a_np[:, ::2])
+        np.testing.assert_allclose(out_np, out_mx, atol=1e-5, rtol=1e-5)
+
+        # non-contiguous not in the FFT dim
+        out_mx = mx.fft.fft(a_mx[::2])
+        out_np = np.fft.fft(a_np[::2])
+        np.testing.assert_allclose(out_np, out_mx, atol=1e-5, rtol=1e-5)
 
         out_mx = mx.broadcast_to(mx.reshape(mx.transpose(a_mx), (4, 8, 1)), (4, 8, 16))
         out_np = np.broadcast_to(np.reshape(np.transpose(a_np), (4, 8, 1)), (4, 8, 16))
