@@ -336,7 +336,7 @@ void steel_matmul(
           << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
 
     // Encode and dispatch gemm kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -360,9 +360,9 @@ void steel_matmul(
     MTL::Size group_dims = MTL::Size(32, wn, wm);
     MTL::Size grid_dims = MTL::Size(tn, tm, split_k_partitions);
 
-    set_array_buffer(compute_encoder, a, 0);
-    set_array_buffer(compute_encoder, b, 1);
-    set_array_buffer(compute_encoder, C_split, 2);
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_input_array(b, 1);
+    compute_encoder.set_output_array(C_split, 2);
 
     compute_encoder->setBytes(&params, sizeof(GEMMSpiltKParams), 3);
     compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
@@ -380,8 +380,8 @@ void steel_matmul(
       compute_encoder->setComputePipelineState(kernel);
 
       // Set the arguments for the kernel
-      set_array_buffer(compute_encoder, C_split, 0);
-      set_array_buffer(compute_encoder, out, 1);
+      compute_encoder.set_input_array(C_split, 0);
+      compute_encoder.set_output_array(out, 1);
       compute_encoder->setBytes(&split_k_partitions, sizeof(int), 2);
       compute_encoder->setBytes(&split_k_partition_stride, sizeof(int), 3);
       compute_encoder->setBytes(&N, sizeof(int), 4);
@@ -426,7 +426,7 @@ void steel_matmul(
         << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -467,9 +467,9 @@ void steel_matmul(
       batch_strides.end(), B_batch_stride.begin(), B_batch_stride.end());
 
   // Launch kernel
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
-  set_array_buffer(compute_encoder, out, 3);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(out, 3);
 
   compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
 
@@ -622,7 +622,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_nc" << !contiguous_kernel << "_axpby0";
 
     // Encode and dispatch kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -630,9 +630,9 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(bn, bm, 1);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
-    set_array_buffer(compute_encoder, mat, 0);
-    set_array_buffer(compute_encoder, vec, 1);
-    set_array_buffer(compute_encoder, out, 3);
+    compute_encoder.set_input_array(mat, 0);
+    compute_encoder.set_input_array(vec, 1);
+    compute_encoder.set_output_array(out, 3);
 
     compute_encoder->setBytes(&in_vector_len, sizeof(int), 4);
     compute_encoder->setBytes(&out_vector_len, sizeof(int), 5);
@@ -834,7 +834,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_nc" << !contiguous_kernel << "_axpby1";
 
     // Encode and dispatch kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -842,10 +842,10 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(bn, bm, 1);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
-    set_array_buffer(compute_encoder, mat, 0);
-    set_array_buffer(compute_encoder, vec, 1);
-    set_array_buffer(compute_encoder, c, 2);
-    set_array_buffer(compute_encoder, out, 3);
+    compute_encoder.set_input_array(mat, 0);
+    compute_encoder.set_input_array(vec, 1);
+    compute_encoder.set_input_array(c, 2);
+    compute_encoder.set_output_array(out, 3);
 
     compute_encoder->setBytes(&in_vector_len, sizeof(int), 4);
     compute_encoder->setBytes(&out_vector_len, sizeof(int), 5);
@@ -907,7 +907,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
 
     // Encode and dispatch gemm kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -931,9 +931,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(32, wn, wm);
     MTL::Size grid_dims = MTL::Size(tn, tm, split_k_partitions);
 
-    set_array_buffer(compute_encoder, a, 0);
-    set_array_buffer(compute_encoder, b, 1);
-    set_array_buffer(compute_encoder, C_split, 2);
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_input_array(b, 1);
+    compute_encoder.set_output_array(C_split, 2);
 
     compute_encoder->setBytes(&params, sizeof(GEMMSpiltKParams), 3);
     compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
@@ -946,12 +946,12 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setComputePipelineState(kernel);
 
       // Set the arguments for the kernel
-      set_array_buffer(compute_encoder, C_split, 0);
-      set_array_buffer(compute_encoder, out, 1);
+      compute_encoder.set_input_array(C_split, 0);
+      compute_encoder.set_output_array(out, 1);
       compute_encoder->setBytes(&split_k_partitions, sizeof(int), 2);
       compute_encoder->setBytes(&split_k_partition_stride, sizeof(int), 3);
       compute_encoder->setBytes(&N, sizeof(int), 4);
-      set_array_buffer(compute_encoder, c, 5);
+      compute_encoder.set_input_array(c, 5);
       compute_encoder->setBytes(&ldc, sizeof(int), 6);
       compute_encoder->setBytes(&fdc, sizeof(int), 7);
       compute_encoder->setBytes(&alpha_, sizeof(float), 8);
@@ -997,7 +997,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << ((alpha_ == 1. && beta_ == 1.) ? "_add" : "_axpby");
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -1045,10 +1045,10 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       batch_strides.end(), C_batch_stride.begin(), C_batch_stride.end());
 
   // Launch kernel
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
-  set_array_buffer(compute_encoder, c, 2);
-  set_array_buffer(compute_encoder, out, 3);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(c, 2);
+  compute_encoder.set_output_array(out, 3);
 
   compute_encoder->setBytes(&gemm_params, sizeof(GEMMParams), 4);
   compute_encoder->setBytes(&params, sizeof(GEMMAddMMParams), 5);

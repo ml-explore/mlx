@@ -1,4 +1,4 @@
-// Copyright © 2023-24 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <dlfcn.h>
 #include <cstdlib>
@@ -206,14 +206,15 @@ void Device::end_encoding(int index) {
   }
 }
 
-MTL::ComputeCommandEncoder* Device::get_command_encoder(int index) {
+CommandEncoder& Device::get_command_encoder(int index) {
   auto eit = encoder_map_.find(index);
   if (eit == encoder_map_.end()) {
     auto cb = get_command_buffer(index);
-    auto compute_encoder = cb->computeCommandEncoder();
+    auto compute_encoder =
+        cb->computeCommandEncoder(MTL::DispatchTypeConcurrent);
     // Increment ref count so the buffer is not garbage collected
     compute_encoder->retain();
-    eit = encoder_map_.insert({index, compute_encoder}).first;
+    eit = encoder_map_.emplace(index, CommandEncoder{compute_encoder}).first;
   }
   return eit->second;
 }

@@ -88,7 +88,6 @@ std::function<void()> make_task(
     if (!arr.is_tracer()) {
       arr.detach();
     }
-
     if (p) {
       metal::device(s.device).end_encoding(s.index);
       scheduler::notify_new_task(s);
