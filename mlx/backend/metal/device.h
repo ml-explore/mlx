@@ -83,7 +83,7 @@ struct CommandEncoder {
     enc->setBuffer(a_buf, base_offset, idx);
 
     // Rough estimate of the amount of memory used
-    enc.cb_info.bytes += a.nbytes();
+    cb_info.bytes += a.nbytes();
   }
 
   void set_output_array(array& a, int idx, int offset = 0) {
