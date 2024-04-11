@@ -24,8 +24,8 @@ class Synchronizer : public Primitive {
  public:
   explicit Synchronizer(Stream stream) : Primitive(stream){};
 
-  void eval_cpu(const std::vector<array>&, std::vector<array>&) override{};
-  void eval_gpu(const std::vector<array>&, std::vector<array>&) override{};
+  void eval_cpu(const std::vector<array>&, std::vector<array>&) override {};
+  void eval_gpu(const std::vector<array>&, std::vector<array>&) override {};
 
   DEFINE_PRINT(Synchronize);
 };
