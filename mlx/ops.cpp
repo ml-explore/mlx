@@ -932,15 +932,15 @@ array pad(
     if (low_pad_size[i] < 0) {
       std::ostringstream msg;
       msg << "Invalid low padding size (" << low_pad_size[i]
-          << ") passed to pad"
-          << " for axis " << i << ". Padding sizes must be non-negative";
+          << ") passed to pad" << " for axis " << i
+          << ". Padding sizes must be non-negative";
       throw std::invalid_argument(msg.str());
     }
     if (high_pad_size[i] < 0) {
       std::ostringstream msg;
       msg << "Invalid high padding size (" << high_pad_size[i]
-          << ") passed to pad"
-          << " for axis " << i << ". Padding sizes must be non-negative";
+          << ") passed to pad" << " for axis " << i
+          << ". Padding sizes must be non-negative";
       throw std::invalid_argument(msg.str());
     }
 
@@ -2508,8 +2508,8 @@ array take_along_axis(
     StreamOrDevice s /* = {} */) {
   if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
     std::ostringstream msg;
-    msg << "[take_along_axis] Received invalid axis "
-        << " for array with " << a.ndim() << " dimensions.";
+    msg << "[take_along_axis] Received invalid axis " << " for array with "
+        << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
 
@@ -2904,15 +2904,15 @@ inline std::vector<int> conv_out_shape(
 
     if (pads_lo[i - 1] < 0 || pads_hi[i - 1] < 0) {
       std::ostringstream msg;
-      msg << "[conv] Padding sizes must be non-negative."
-          << " Got padding " << pads_lo << " | " << pads_hi << ".";
+      msg << "[conv] Padding sizes must be non-negative." << " Got padding "
+          << pads_lo << " | " << pads_hi << ".";
       throw std::invalid_argument(msg.str());
     }
 
     if (strides[i - 1] <= 0) {
       std::ostringstream msg;
-      msg << "[conv] Stride sizes must be positive."
-          << " Got strides " << strides << ".";
+      msg << "[conv] Stride sizes must be positive." << " Got strides "
+          << strides << ".";
       throw std::invalid_argument(msg.str());
     }
 
@@ -2948,8 +2948,7 @@ inline void run_conv_checks(const array& in, const array& wt, int n_dim) {
   if (in.ndim() != n_dim + 2) {
     std::ostringstream msg;
     msg << "[conv] Invalid input array with " << in.ndim() << " dimensions for "
-        << n_dim << "D convolution."
-        << " Expected an array with " << n_dim + 2
+        << n_dim << "D convolution." << " Expected an array with " << n_dim + 2
         << " dimensions following the format [N, ..., C_in].";
     throw std::invalid_argument(msg.str());
   }
@@ -3236,8 +3235,7 @@ std::tuple<array, array, array> quantize(
     std::ostringstream msg;
     msg << "[quantize] The last dimension of the matrix needs to be divisible by "
         << "the quantization group size " << group_size
-        << ". However the provided "
-        << " matrix has shape " << w.shape();
+        << ". However the provided " << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
 

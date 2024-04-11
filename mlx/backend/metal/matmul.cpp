@@ -197,8 +197,8 @@ inline auto collapse_batches(const array& a, const array& b) {
   std::vector<int> B_bshape{b.shape().begin(), b.shape().end() - 2};
   if (A_bshape != B_bshape) {
     std::ostringstream msg;
-    msg << "[matmul] Got matrices with incorrectly broadcasted shapes: "
-        << "A " << a.shape() << ", B " << b.shape() << ".";
+    msg << "[matmul] Got matrices with incorrectly broadcasted shapes: " << "A "
+        << a.shape() << ", B " << b.shape() << ".";
     throw std::runtime_error(msg.str());
   }
 
@@ -227,9 +227,8 @@ inline auto collapse_batches(const array& a, const array& b, const array& c) {
   std::vector<int> C_bshape{c.shape().begin(), c.shape().end() - 2};
   if (A_bshape != B_bshape || A_bshape != C_bshape) {
     std::ostringstream msg;
-    msg << "[addmm] Got matrices with incorrectly broadcasted shapes: "
-        << "A " << a.shape() << ", B " << b.shape() << ", B " << c.shape()
-        << ".";
+    msg << "[addmm] Got matrices with incorrectly broadcasted shapes: " << "A "
+        << a.shape() << ", B " << b.shape() << ", B " << c.shape() << ".";
     throw std::runtime_error(msg.str());
   }
 
@@ -332,8 +331,8 @@ void steel_matmul(
           << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
           << type_to_name(C_split) << "_bm" << bm << "_bn" << bn << "_bk" << bk
           << "_wm" << wm << "_wn" << wn << "_MN_"
-          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-          << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+          << ((K % bk == 0) ? "t" : "n") << "aligned";
 
     // Encode and dispatch gemm kernel
     auto& compute_encoder = d.get_command_encoder(s.index);
@@ -422,8 +421,8 @@ void steel_matmul(
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+        << ((K % bk == 0) ? "t" : "n") << "aligned";
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -903,8 +902,8 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
           << type_to_name(C_split) << "_bm" << bm << "_bn" << bn << "_bk" << bk
           << "_wm" << wm << "_wn" << wn << "_MN_"
-          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-          << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+          << ((K % bk == 0) ? "t" : "n") << "aligned";
 
     // Encode and dispatch gemm kernel
     auto& compute_encoder = d.get_command_encoder(s.index);
@@ -992,8 +991,8 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned"
+        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+        << ((K % bk == 0) ? "t" : "n") << "aligned"
         << ((alpha_ == 1. && beta_ == 1.) ? "_add" : "_axpby");
 
   // Encode and dispatch kernel

@@ -18,9 +18,7 @@ TEST_CASE("test simple custom vjp") {
       fn,
       [&](const std::vector<array>&,
           const std::vector<array>&,
-          const std::vector<array>&) {
-        return std::vector<array>{one, one};
-      });
+          const std::vector<array>&) { return std::vector<array>{one, one}; });
 
   auto [z, g] = vjp(fn, {x, y}, {one, one});
   CHECK_EQ(z[0].item<float>(), 6.0f);

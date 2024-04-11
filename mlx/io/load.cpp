@@ -63,8 +63,7 @@ void save(std::shared_ptr<io::Writer> out_stream, array a) {
   std::string fortran_order = a.flags().col_contiguous ? "True" : "False";
   std::ostringstream header;
   header << "{'descr': '" << dtype_to_array_protocol(a.dtype()) << "',"
-         << " 'fortran_order': " << fortran_order << ","
-         << " 'shape': (";
+         << " 'fortran_order': " << fortran_order << "," << " 'shape': (";
   for (auto i : a.shape()) {
     header << i << ", ";
   }
