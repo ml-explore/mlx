@@ -129,7 +129,7 @@ Device::~Device() {
     b.second.second->release();
   }
   for (auto& e : encoder_map_) {
-    e.second->release();
+    (*e.second)->release();
   }
   for (auto& k : kernel_map_) {
     k.second->release();
@@ -200,8 +200,8 @@ void Device::commit_command_buffer(int index) {
 void Device::end_encoding(int index) {
   auto eit = encoder_map_.find(index);
   if (eit != encoder_map_.end()) {
-    eit->second->endEncoding();
-    eit->second->release();
+    (*eit->second)->endEncoding();
+    (*eit->second)->release();
     encoder_map_.erase(eit);
   }
 }
@@ -214,9 +214,11 @@ CommandEncoder& Device::get_command_encoder(int index) {
         cb->computeCommandEncoder(MTL::DispatchTypeConcurrent);
     // Increment ref count so the buffer is not garbage collected
     compute_encoder->retain();
-    eit = encoder_map_.emplace(index, CommandEncoder{compute_encoder}).first;
+    eit = encoder_map_
+              .emplace(index, std::make_unique<CommandEncoder>(compute_encoder))
+              .first;
   }
-  return eit->second;
+  return *(eit->second);
 }
 
 void Device::register_library(
