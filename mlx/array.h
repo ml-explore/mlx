@@ -404,6 +404,8 @@ class array {
         std::shared_ptr<Primitive> primitive,
         std::vector<array> inputs);
 
+    ~ArrayDesc();
+
    private:
     // Initialize size, strides, and other metadata
     void init();
