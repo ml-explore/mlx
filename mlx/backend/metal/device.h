@@ -68,6 +68,12 @@ struct CommandEncoder {
     outputs.insert(buf);
   }
 
+  void set_output_array(array& a) {
+    // Add barriers before adding the output to the output set
+    auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
+    outputs.insert(buf);
+  }
+
   MTL::ComputeCommandEncoder* enc;
   std::unordered_set<MTL::Resource*> outputs;
 };

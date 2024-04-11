@@ -18,7 +18,8 @@ void copy_gpu_inplace(
     int64_t i_offset,
     int64_t o_offset,
     CopyType ctype,
-    const Stream& s);
+    const Stream& s,
+    bool async = false);
 
 void copy_gpu(const array& src, array& out, CopyType ctype, const Stream& s);
 void copy_gpu(const array& src, array& out, CopyType ctype);
@@ -27,7 +28,8 @@ void copy_gpu_inplace(
     const array& src,
     array& out,
     CopyType ctype,
-    const Stream& s);
+    const Stream& s,
+    bool async = false);
 
 void copy_gpu_inplace(
     const array& in,
@@ -35,6 +37,7 @@ void copy_gpu_inplace(
     const std::vector<int64_t>& istride,
     int64_t ioffset,
     CopyType ctype,
-    const Stream& s);
+    const Stream& s,
+    bool async = false);
 
 } // namespace mlx::core
