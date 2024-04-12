@@ -196,6 +196,23 @@ def gelu_fast_approx(x):
     return x * mx.sigmoid(1.702 * x)
 
 
+@partial(mx.compile, shapeless=True)
+def gelu_tanh_approx(x):
+    r"""An approximation to Gaussian Error Linear Unit.
+
+    See :func:`gelu` for the exact computation.
+
+    This function approximates ``gelu`` with a maximum absolute error :math:`<
+    0.0005` in the range :math:`[-6, 6]` using the following
+
+    .. math::
+
+        x = 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right)
+
+    """
+    return 0.5 * x * (1 + mx.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * x**3)))
+
+
 def glu(x: mx.array, axis: int = -1) -> mx.array:
     r"""Applies the gated linear unit function.
 
@@ -501,19 +518,20 @@ class GELU(Module):
 
     where :math:`\Phi(x)` is the Gaussian CDF.
 
-    However, if ``approx`` is set to 'precise' or 'fast' it applies
+    However, if ``approx`` is set to 'precise', 'fast' or 'tanh' it applies
 
     .. math::
         \textrm{GELUApprox}(x) &= x * \sigma\left(1.60033 * x \left(1 + 0.0433603 * x^2\right)\right) \\
-        \textrm{GELUFast}(x) &= x * \sigma\left(1.773 * x\right)
+        \textrm{GELUFast}(x) &= x * \sigma\left(1.773 * x\right) \\
+        \textrm{GELUTanh}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right)
 
     respectively.
 
-    See :func:`gelu`, :func:`gelu_approx` and :func:`gelu_fast_approx` for the
+    See :func:`gelu`, :func:`gelu_approx`, :func:`gelu_fast_approx` and :func:`gelu_tanh_approx` for the
     functional equivalents and information regarding error bounds.
 
     Args:
-        approx ('none' | 'precise' | 'fast'): Which approximation to gelu to use if any.
+        approx ('none' | 'precise' | 'fast' | 'tanh'): Which approximation to gelu to use if any.
     """
 
     def __init__(self, approx="none"):
@@ -525,9 +543,11 @@ class GELU(Module):
             self._act = gelu_approx
         elif approx == "fast":
             self._act = gelu_fast_approx
+        elif approx == "tanh":
+            self._act = gelu_tanh_approx
         else:
             raise ValueError(
-                f"The approximation should be in ['none', 'precise', 'fast'] but '{approx}' was given"
+                f"The approximation should be in ['none', 'precise', 'fast', 'tanh'] but '{approx}' was given"
             )
 
     def __call__(self, x):
