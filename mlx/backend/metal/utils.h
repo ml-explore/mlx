@@ -130,6 +130,10 @@ inline void debug_set_primitive_buffer_label(
 #endif
 }
 
+bool is_power_of_2(int n) {
+  return ((n & (n - 1)) == 0) && n != 0;
+}
+
 } // namespace
 
 } // namespace mlx::core
