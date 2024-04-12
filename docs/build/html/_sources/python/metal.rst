@@ -3,7 +3,7 @@ Metal
 
 .. currentmodule:: mlx.core.metal
 
-.. autosummary:: 
+.. autosummary::
   :toctree: _autosummary
 
   is_available
@@ -12,3 +12,5 @@ Metal
   get_cache_memory
   set_memory_limit
   set_cache_limit
+  start_capture
+  stop_capture
