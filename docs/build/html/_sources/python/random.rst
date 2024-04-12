@@ -38,6 +38,7 @@ we use a splittable version of Threefry, which is a counter-based PRNG.
    gumbel
    key
    normal
+   multivariate_normal
    randint
    seed
    split
