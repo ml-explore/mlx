@@ -813,19 +813,61 @@ std::vector<array> Convolution::vjp(
         padding_hi[i] = in_size - out_size + padding_[i];
       }
 
+      // Check for negative padding
+      bool has_neg_padding = false;
+      for (auto& pd : padding_lo) {
+        has_neg_padding = (pd < 0) || has_neg_padding;
+      }
+      for (auto& pd : padding_hi) {
+        has_neg_padding = (pd < 0) || has_neg_padding;
+      }
+
+      auto padding_lo_ = std::vector<int>(padding_lo);
+      auto padding_hi_ = std::vector<int>(padding_hi);
+
+      // Use negative padding on the gradient output
+      if (has_neg_padding) {
+        for (auto& p : padding_lo_) {
+          p = std::max(0, p);
+        }
+        for (auto& p : padding_hi_) {
+          p = std::max(0, p);
+        }
+      }
+
       auto wt_trans = swapaxes(wt, 0, -1, stream());
 
       auto grad = conv_general(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
           /* std::vector<int> stride = */ input_dilation_,
-          /* std::vector<int> padding_lo = */ padding_lo,
-          /* std::vector<int> padding_hi = */ padding_hi,
+          /* std::vector<int> padding_lo = */ padding_lo_,
+          /* std::vector<int> padding_hi = */ padding_hi_,
           /* std::vector<int> kernel_dilation = */ kernel_dilation_,
           /* std::vector<int> input_dilation = */ kernel_strides_,
           /* int groups = */ 1,
           /* bool flip = */ !flip_,
           stream());
+
+      // Handle negative padding
+      if (has_neg_padding) {
+        std::vector<int> starts(grad.ndim(), 0);
+        std::vector<int> stops = grad.shape();
+
+        for (int i = 0; i < grad.ndim() - 2; i++) {
+          if (padding_lo[i] < 0) {
+            starts[i + 1] -= padding_lo[i];
+            padding_lo[i] = 0;
+          }
+
+          if (padding_hi[i] < 0) {
+            stops[i + 1] += padding_hi[i];
+            padding_hi[i] = 0;
+          }
+        }
+
+        grad = slice(grad, std::move(starts), std::move(stops), stream());
+      }
 
       grads.push_back(grad);
     }
