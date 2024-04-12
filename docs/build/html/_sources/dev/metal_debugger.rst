@@ -1,29 +1,46 @@
 Metal Debugger
 ==============
 
+.. currentmodule:: mlx.core
+
 Profiling is a key step for performance optimization. You can build MLX with
-the ``MLX_METAL_DEBUG`` option to improve the Metal debugging and optimization
-workflow. The ``MLX_METAL_DEBUG`` debug option:
+the ``MLX_METAL_DEBUG`` option to improve the Metal debugging and
+optimization workflow. The ``MLX_METAL_DEBUG`` debug option:
 
 * Records source during Metal compilation, for later inspection while
   debugging.
 * Labels Metal objects such as command queues, improving capture readability.
 
-The ``metal::start_capture`` function initiates a capture of all MLX GPU work.
+To build with debugging enabled in Python prepend
+``CMAKE_ARGS="-DMLX_METAL_DEBUG=ON"`` to the build call.
 
-.. code-block:: C++
+The :func:`metal.start_capture` function initiates a capture of all MLX GPU
+work.
 
-    int main() {
-        metal::start_capture("/Users/Jane/Developer/MLX.gputrace");
+.. note::
 
-        auto a = arange(10.f, 20.f, 1.f, float32);
-        auto b = arange(30.f, 40.f, 1.f, float32);
-        auto c = add(a, b);
+   To capture a GPU trace you must run the application with
+   ``MTL_CAPTURE_ENABLED=1``.
 
-        eval(c);
+.. code-block:: python
 
-        metal::stop_capture();
-    }
+    import mlx.core as mx
+
+    a = mx.random.uniform(shape=(512, 512))
+    b = mx.random.uniform(shape=(512, 512))
+    mx.eval(a, b)
+
+    trace_file = "mlx_trace.gputrace"
+
+    if not mx.metal.start_capture(trace_file):
+      print("Make sure to run with MTL_CAPTURE_ENABLED=1 and "
+            f"that the path {trace_file} does not already exist.")
+      exit(1)
+
+    for _ in range(10):
+      mx.eval(mx.add(a, b))
+
+    mx.metal.stop_capture()
 
 You can open and replay the GPU trace in Xcode. The ``Dependencies`` view
 has a great overview of all operations. Checkout the `Metal debugger
@@ -35,8 +52,8 @@ documentation`_ for more information.
 Xcode Workflow
 --------------
 
-You can skip saving to a path by running within Xcode. First, generate an Xcode
-project using CMake.
+You can skip saving to a path by running within Xcode. First, generate an
+Xcode project using CMake.
 
 .. code-block::
 
