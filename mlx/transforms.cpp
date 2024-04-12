@@ -80,15 +80,14 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
           }
         }
 
-    cache.insert(id);
-    for (auto& s : a.siblings()) {
-      cache.insert(s.id());
-    }
-
-    if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
-      if (!a.has_primitive()) {
-        throw std::invalid_argument(
-            "[eval] Attempting to eval an array without a primitive.");
+        if (cache.find(in.id()) == cache.end()) {
+          dfs.emplace(in, 0);
+          cache.insert(in.id());
+          for (auto& s : in.siblings()) {
+            cache.insert(s.id());
+          }
+        }
+        continue;
       }
 
       // All inputs are done being processed, process this array
