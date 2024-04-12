@@ -39,6 +39,7 @@ using MTLFCList =
 struct CommandEncoder {
   CommandEncoder(MTL::ComputeCommandEncoder* enc)
       : enc(enc), concurrent(false){};
+  CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
   struct ConcurrentContext {
@@ -197,7 +198,7 @@ class Device {
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
-  std::unordered_map<int32_t, CommandEncoder> encoder_map_;
+  std::unordered_map<int32_t, std::unique_ptr<CommandEncoder>> encoder_map_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
   std::mutex mtx_;
