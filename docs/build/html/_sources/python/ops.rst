@@ -5,13 +5,13 @@ Operations
 
 .. currentmodule:: mlx.core
 
-.. autosummary:: 
+.. autosummary::
   :toctree: _autosummary
 
    abs
    add
    all
-   allclose 
+   allclose
    any
    arange
    arccos
@@ -51,6 +51,7 @@ Operations
    erf
    erfinv
    exp
+   expm1
    expand_dims
    eye
    flatten
@@ -83,6 +84,7 @@ Operations
    max
    maximum
    mean
+   meshgrid
    min
    minimum
    moveaxis
@@ -117,6 +119,7 @@ Operations
    square
    squeeze
    stack
+   std
    stop_gradient
    subtract
    sum
