@@ -317,7 +317,7 @@ class array {
 
   // Check if the array has been evaluated
   bool is_evaled() const {
-    return array_desc_->data_ptr != nullptr;
+    return array_desc_->data != nullptr;
   }
 
   // Check if the array has been async evaluated
