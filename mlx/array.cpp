@@ -176,7 +176,7 @@ void array::ArrayDesc::init() {
 }
 
 array::ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
-    : shape(std::move(shape)), dtype(dtype), evaled(true) {
+    : shape(std::move(shape)), dtype(dtype) {
   init();
 }
 
