@@ -36,14 +36,8 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation.
 int detail::InTracing::tracing_counter{0};
 
-std::shared_future<void> async_eval(std::vector<array> outputs) {
-  static std::shared_future<void> global_synchronizer;
-  // Catch up with previous async eval if needed
-  //  if (global_synchronizer.valid()) {
-  //    global_synchronizer.wait();
-  //  }
+std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
   std::queue<array> tape;
-  std::unordered_set<std::uintptr_t> cache;
   std::unordered_map<std::uintptr_t, std::shared_future<void>> deps;
 
   // Make an effort to choose a good output stream
@@ -59,6 +53,7 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
 
   {
+    std::unordered_set<std::uintptr_t> cache;
     std::stack<std::pair<std::reference_wrapper<array>, int>> dfs;
     dfs.emplace(synchronizer, 0);
     while (!dfs.empty()) {
@@ -67,6 +62,9 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
       if (idx < a.inputs().size()) {
         // Add an input, and continue
         auto& in = a.inputs()[idx++];
+        if (in.is_async_evaled()) {
+          continue;
+        }
         if (!in.is_evaled()) {
           if (!in.has_primitive()) {
             throw std::invalid_argument(
@@ -91,7 +89,8 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
       }
 
       // All inputs are done being processed, process this array
-      if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
+      if (!a.is_async_evaled() || !a.is_evaled() ||
+          (!a.is_tracer() && a.has_primitive())) {
         tape.push(a);
       }
       dfs.pop();
@@ -103,17 +102,19 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
   while (!tape.empty()) {
     auto arr = std::move(tape.front());
     tape.pop();
-    if (arr.is_evaled()) {
-      //      if (!arr.is_tracer() && arr.has_primitive()) {
-      //        arr.detach();
-      //      }
+    if (arr.is_evaled() && !arr.is_async_evaled()) {
+      if (!arr.is_tracer() && arr.has_primitive()) {
+        arr.detach();
+      }
       continue;
     }
 
-    // Mark array and sibs as evaluated
-    arr.set_evaled();
-    for (auto& s : arr.siblings()) {
-      s.set_evaled();
+    // Mark array and sibs as async evaluated
+    if (async) {
+      arr.set_async_evaled();
+      for (auto& s : arr.siblings()) {
+        s.set_async_evaled();
+      }
     }
 
     auto stream = arr.primitive().stream();
@@ -158,12 +159,15 @@ std::shared_future<void> async_eval(std::vector<array> outputs) {
       scheduler::enqueue(stream, std::move(task));
     }
   }
-  global_synchronizer = std::move(deps[synchronizer.id()]);
-  return global_synchronizer;
+  return deps[synchronizer.id()];
+}
+
+std::shared_future<void> async_eval(std::vector<array> outputs) {
+  return eval_impl(std::move(outputs), true);
 }
 
 void eval(std::vector<array> outputs) {
-  async_eval(std::move(outputs)).wait();
+  eval_impl(std::move(outputs), false).wait();
 }
 
 std::pair<std::vector<array>, std::vector<array>> vjp(

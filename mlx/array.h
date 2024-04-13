@@ -317,11 +317,17 @@ class array {
 
   // Check if the array has been evaluated
   bool is_evaled() const {
-    return array_desc_->evaled;
+    return array_desc_->data_ptr != nullptr;
   }
+
+  // Check if the array has been async evaluated
+  bool is_async_evaled() const {
+    return array_desc_->async_evaled;
+  }
+
   // Mark the array as evaluated
-  bool set_evaled() const {
-    return array_desc_->evaled = true;
+  bool set_async_evaled() const {
+    return array_desc_->async_evaled = true;
   }
 
   // Mark the array as a tracer array (true) or not.
@@ -374,8 +380,8 @@ class array {
     Dtype dtype;
     std::shared_ptr<Primitive> primitive;
 
-    // Whether or not the array is evaluated
-    bool evaled{false};
+    // Whether or not the array has been asynchronously evaluated
+    bool async_evaled{false};
 
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph
