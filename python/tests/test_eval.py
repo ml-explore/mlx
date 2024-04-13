@@ -53,6 +53,49 @@ class TestEval(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(y, mx.array([2, 4, 6])))
         self.assertTrue(mx.array_equal(z, mx.array([4, 8, 12])))
 
+    def test_async_eval_twice(self):
+        x = mx.array(1) + mx.array(1) + mx.array(1)
+        sync = mx.async_eval(x)
+        sync2 = mx.async_eval(x)
+        # Calling either synchronizer is fine
+        sync.wait()
+        self.assertEqual(x.item(), 3)
+
+        # Calling sync2 should be a no-op
+        sync2.wait()
+
+    def test_async_eval_in_trace(self):
+        def fun(x):
+            y = x + 1.0
+            mx.async_eval(y)
+            return mx.exp(y)
+
+        # Raises
+        with self.assertRaises(ValueError):
+            mx.grad(fun)(mx.array(1.0))
+
+        # Also raises
+        with self.assertRaises(ValueError):
+            mx.vmap(fun)(mx.ones((2, 2)))
+
+    def test_async_eval_into_eval(self):
+        x = mx.array(1)
+        y = x + 1
+        sync = mx.async_eval(y)
+        a = y - 10
+        sync.wait()
+        b = mx.abs(a)
+        self.assertEqual(b.item(), 8)
+
+    def test_async_eval_into_eval_diff_stream(self):
+        s = mx.new_stream(mx.cpu)
+        x = mx.array(0)
+        y = x - 5
+        sync = mx.async_eval(y)
+        sync.wait()
+        z = mx.abs(y, stream=s)
+        self.assertEqual(z.item(), 5)
+
 
 if __name__ == "__main__":
     unittest.main()
