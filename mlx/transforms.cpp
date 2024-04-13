@@ -62,10 +62,18 @@ std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
       if (idx < a.inputs().size()) {
         // Add an input, and continue
         auto& in = a.inputs()[idx++];
+
+        // Async evaled arrays could not have been tracers and are safe to
+        // ignore
         if (in.is_async_evaled()) {
           continue;
         }
+
         if (!in.is_evaled()) {
+          if (async && in.is_tracer()) {
+            throw std::invalid_argument(
+                "[async_eval] Not allowed inside a graph transfomration.");
+          }
           if (!in.has_primitive()) {
             throw std::invalid_argument(
                 "[eval] Attempting to eval an array without a primitive.");

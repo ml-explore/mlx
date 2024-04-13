@@ -654,6 +654,20 @@ void init_transforms(nb::module_& m) {
 
         Returns:
             Synchronizer: A synchronization object.
+
+        Example:
+            >>> x = mx.array(1.0)
+            >>> y = mx.exp(x)
+            >>> sync = mx.async_eval(y)
+            >>> sync.wait() # wait for y to be computed
+            >>> print(y)
+            >>>
+            >>> y = mx.exp(x)
+            >>> mx.async_eval(y)
+            >>> z = y + 3
+            >>> sync = mx.async_eval(z)
+            >>> sync.wait() # wait for z (and y) to be computed
+            >>> print(z)
       )pbdoc");
   m.def(
       "jvp",
