@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 import math
 
@@ -14,7 +14,7 @@ class Embedding(Module):
 
     Args:
         num_embeddings (int): How many possible discrete tokens can we embed.
-                              Usually called the vocabulary size.
+           Usually called the vocabulary size.
         dims (int): The dimensionality of the embeddings.
     """
 
@@ -28,3 +28,12 @@ class Embedding(Module):
 
     def __call__(self, x):
         return self.weight[x]
+
+    def call_as_linear(self, x):
+        """
+        Treat the embedding layer as a linear layer.
+
+        Use this for example when input embedding and output projection
+        weights are tied.
+        """
+        return x @ self.weight.T

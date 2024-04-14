@@ -27,11 +27,11 @@ def tree_map(fn, tree, *rest, is_leaf=None):
         model.update(tree_map(lambda x: x*x, model.parameters()))
 
     Args:
-        fn (Callable): The function that processes the leaves of the tree
-        tree (Any): The main python tree that will be iterated upon
-        rest (Tuple[Any]): Extra trees to be iterated together with tree
-        is_leaf (Optional[Callable]): An optional callable that returns True if
-            the passed object is considered a leaf or False otherwise.
+        fn (Callable): The function that processes the leaves of the tree.
+        tree (Any): The main python tree that will be iterated upon.
+        rest (Tuple[Any]): Extra trees to be iterated together with ``tree``.
+        is_leaf (Optional[Callable]): An optional callable that returns ``True``
+           if the passed object is considered a leaf or ``False`` otherwise.
 
     Returns:
         A python tree with the new values returned by ``fn``.
@@ -51,6 +51,55 @@ def tree_map(fn, tree, *rest, is_leaf=None):
         }
     else:
         return fn(tree, *rest)
+
+
+def tree_map_with_path(fn, tree, *rest, is_leaf=None, path=None):
+    """Applies ``fn`` to the path and leaves of the python tree ``tree`` and
+    returns a new collection with the results.
+
+    This function is the same :func:`tree_map` but the `fn` takes the path as
+    the first argument followed by the remaining tree nodes.
+
+    Args:
+        fn (Callable): The function that processes the leaves of the tree.
+        tree (Any): The main python tree that will be iterated upon.
+        rest (Tuple[Any]): Extra trees to be iterated together with ``tree``.
+        is_leaf (Optional[Callable]): An optional callable that returns ``True``
+           if the passed object is considered a leaf or ``False`` otherwise.
+
+    Returns:
+        A python tree with the new values returned by ``fn``.
+
+    Example:
+        >>> from mlx.utils import tree_map_with_path
+        >>> tree = {"model": [{"w": 0, "b": 1}, {"w": 0, "b": 1}]}
+        >>> new_tree = tree_map_with_path(lambda path, _: print(path), tree)
+        model.0.w
+        model.0.b
+        model.1.w
+        model.1.b
+    """
+    if is_leaf is not None and is_leaf(tree):
+        return fn(path, tree, *rest)
+    elif isinstance(tree, (list, tuple)):
+        prefix = f"{path}." if path else ""
+        TreeType = type(tree)
+        return TreeType(
+            tree_map_with_path(
+                fn, child, *(r[i] for r in rest), is_leaf=is_leaf, path=f"{prefix}{i}"
+            )
+            for i, child in enumerate(tree)
+        )
+    elif isinstance(tree, dict):
+        prefix = f"{path}." if path else ""
+        return {
+            k: tree_map_with_path(
+                fn, child, *(r[k] for r in rest), is_leaf=is_leaf, path=f"{prefix}{k}"
+            )
+            for k, child in tree.items()
+        }
+    else:
+        return fn(path, tree, *rest)
 
 
 def tree_flatten(tree, prefix="", is_leaf=None):
