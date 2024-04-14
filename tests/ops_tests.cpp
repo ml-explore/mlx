@@ -3283,7 +3283,6 @@ TEST_CASE("test conv1d") {
         {1, 3, 4});
 
     auto out = conv1d(in, wt, stride, padding, /* dilation= */ 1, groups);
-    // std::cout << "OUT1: " << out << std::endl;
     CHECK(allclose(out, expected, /* rtol = */ 1.0e-3).item<bool>());
   }
 
