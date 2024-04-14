@@ -118,12 +118,12 @@ void explicit_gemm_conv_group_ND_gpu(
   // Prepare unfolding kernel
   std::ostringstream kname;
   kname << "naive_unfold_nd_" << type_to_name(in_unfolded) << "_" << N;
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
-  set_array_buffer(compute_encoder, in, 0);
-  set_array_buffer(compute_encoder, in_unfolded, 1);
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(in_unfolded, 1);
 
   compute_encoder->setBytes(&conv_params, sizeof(conv_params), 2);
 
@@ -141,7 +141,7 @@ void explicit_gemm_conv_group_ND_gpu(
   // Transpose inputs and weights so that we can slice them by contiguous chunks
   // of channel groups.
   //
-  // Transpose the unfolded inputs
+  // Transpose unfolded inputs
   array in_view(
       {in_unfolded.shape(0), conv_params.C, kernel_size},
       in_unfolded.dtype(),
@@ -153,7 +153,7 @@ void explicit_gemm_conv_group_ND_gpu(
       in_unfolded.flags(),
       in_unfolded.data_size());
 
-  // Materialize transposed inputs
+  // Materialize
   auto in_transpose = array(in_view.shape(), in_view.dtype(), nullptr, {});
   copy_gpu(in_view, in_transpose, CopyType::General, s);
 
@@ -166,7 +166,7 @@ void explicit_gemm_conv_group_ND_gpu(
       wt.flags(),
       wt.size());
 
-  // Materialize transposed kernel weights
+  // Materialize
   auto wt_transpose = array(wt_view.shape(), wt_view.dtype(), nullptr, {});
   copy_gpu(wt_view, wt_transpose, CopyType::General, s);
 
@@ -174,62 +174,24 @@ void explicit_gemm_conv_group_ND_gpu(
   out_buffer.set_data(allocator::malloc_or_wait(out_buffer.nbytes()));
 
   // Perform gemm
-  for (int g = 0; g < groups; ++g) {
-    // Pick input channels group
-    array input_group(
-        {implicit_M, implicit_K}, in_transpose.dtype(), nullptr, {});
-    input_group.copy_shared_buffer(
-        in_transpose,
-        in_transpose.strides(),
-        in_transpose.flags(),
-        input_group.size(),
-        g * implicit_K // data_offset
-    );
-
-    // Pick output channels group
-    array wt_group({implicit_K, implicit_N}, wt_transpose.dtype(), nullptr, {});
-    wt_group.copy_shared_buffer(
-        wt_transpose,
-        wt_transpose.strides(),
-        wt_transpose.flags(),
-        wt_group.size(),
-        g * O_per_group * implicit_K // data_offset
-    );
-
-    array out_slice({implicit_M, implicit_N}, out.dtype(), nullptr, {});
-    out_slice.copy_shared_buffer(
-        out,
-        {static_cast<size_t>(implicit_N) * groups, 1},
-        out.flags(),
-        out_slice.size(),
-        g * O_per_group // data_offset
-    );
-
-    std::vector<array> steel_matmul_copies{input_group, wt_group, out_slice};
-    steel_matmul(
-        s,
-        d,
-        /*a = */ input_group,
-        /*b = */ wt_group,
-        /*c = */ out_buffer,
-        /*M = */ implicit_M,
-        /*N = */ implicit_N,
-        /*K = */ implicit_K,
-        /*batch_size_out = */ 1,
-        /*a_cols = */ implicit_K * groups,
-        /*b_cols = */ implicit_K,
-        /*a_transposed = */ false,
-        /*b_transposed = */ true,
-        /*copies = */ steel_matmul_copies);
-
-    copy_gpu_inplace(out_buffer, out_slice, CopyType::GeneralGeneral, s);
-  }
-
-  std::vector<array> copies{
-      in_unfolded, in_view, wt_view, in_transpose, wt_transpose, out_buffer};
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
-  return;
+  std::vector<array> copies = {
+      in_unfolded, in_view, wt_view, in_transpose, wt_transpose};
+  return steel_matmul_conv_groups(
+      s,
+      d,
+      /*a = */ in_transpose,
+      /*b = */ wt_transpose,
+      /*c = */ out,
+      /*M = */ implicit_M,
+      /*N = */ implicit_N,
+      /*K = */ implicit_K,
+      /*a_cols = */ implicit_K * groups,
+      /*b_cols = */ implicit_K,
+      /*out_cols = */ implicit_N * groups,
+      /*a_transposed = */ false,
+      /*b_transposed = */ true,
+      /* groups = */ groups,
+      /*copies = */ copies);
 }
 
 void conv_1D_gpu(

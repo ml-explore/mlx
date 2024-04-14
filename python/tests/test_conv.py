@@ -121,11 +121,12 @@ class TestConv(mlx_tests.MLXTestCase):
                 ):
                     run_conv1D(N, C, O, iH, kH, stride, padding, dtype=dtype)
 
-        # groups tests
+        # Groups tests
         N, C, O = (4, 32, 64)
         iH, kH, stride, padding = (31, 5, 1, 2)
         for group in (1, 2, 4, 8, 16, 32):
             run_conv1D(N, C, O, iH, kH, stride=1, padding=1, groups=group, dtype=dtype)
+
         # Strided inputs tests
         for tpose_in, tpose_wt in (
             ((0, 2, 1), (0, 1, 2)),

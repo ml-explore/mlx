@@ -12,6 +12,23 @@
 
 namespace mlx::core {
 
+void steel_matmul_conv_groups(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    array& out,
+    int M,
+    int N,
+    int K,
+    int lda,
+    int ldb,
+    int ldd,
+    bool transpose_a,
+    bool transpose_b,
+    int groups,
+    std::vector<array>& copies);
+
 void steel_matmul(
     const Stream& s,
     metal::Device& d,
