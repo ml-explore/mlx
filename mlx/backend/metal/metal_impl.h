@@ -10,7 +10,8 @@
 namespace mlx::core::metal {
 
 void new_stream(Stream stream);
-std::shared_ptr<void> new_scoped_memory_pool();
+
+std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
 std::function<void()> make_task(array arr, bool flush);
 
