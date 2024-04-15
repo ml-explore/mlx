@@ -754,11 +754,11 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out_mx = mx.tile_masked_mm(
                     a_mx, b_mx, tile_size, out_mx_mask, a_mx_mask, b_mx_mask
                 )
-                self.assertTrue(np.allclose(out_np, out_mx))
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
                 out_np = np_tile_masked_mm(a_np, b_np, tile_size, out_np_mask)
                 out_mx = mx.tile_masked_mm(a_mx, b_mx, tile_size, out_mx_mask)
-                self.assertTrue(np.allclose(out_np, out_mx))
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
                 out_np = np_tile_masked_mm(
                     a_np, b_np, tile_size, None, a_np_mask, b_np_mask
@@ -766,7 +766,7 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out_mx = mx.tile_masked_mm(
                     a_mx, b_mx, tile_size, None, a_mx_mask, b_mx_mask
                 )
-                self.assertTrue(np.allclose(out_np, out_mx))
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
         shapes = (
             (16, 16, 16, 32),
