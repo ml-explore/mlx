@@ -104,9 +104,9 @@ class QuantizedEmbedding(Module):
         )
         return out.reshape(*s, -1)
 
-    def call_as_linear(self, x):
+    def as_linear(self, x):
         """
-        Treat the quantized embedding layer as a quantized linear layer.
+        Call the quantized embedding layer as a quantized linear layer.
 
         Use this for example when input embedding and output projection
         weights are tied.
@@ -122,7 +122,10 @@ class QuantizedEmbedding(Module):
         )
 
     def _extra_repr(self):
-        return f"{self.num_embeddings}, {self.dims}"
+        return (
+            f"{self.num_embeddings}, {self.dims}, "
+            f"group_size={self.group_size}, bits={self.bits}"
+        )
 
     @classmethod
     def from_embedding(

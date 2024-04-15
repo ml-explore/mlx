@@ -29,9 +29,9 @@ class Embedding(Module):
     def __call__(self, x):
         return self.weight[x]
 
-    def call_as_linear(self, x):
+    def as_linear(self, x):
         """
-        Treat the embedding layer as a linear layer.
+        Call the embedding layer as a linear layer.
 
         Use this for example when input embedding and output projection
         weights are tied.
