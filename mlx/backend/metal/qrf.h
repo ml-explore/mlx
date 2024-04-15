@@ -6,7 +6,7 @@ namespace mlx {
 namespace core {
 
 struct QRFParams {
-  static constexpr int max_col_block_size = 3;
+  static constexpr int max_col_block_size = 32;
 };
 
 } // namespace core

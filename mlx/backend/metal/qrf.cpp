@@ -23,6 +23,9 @@ size_t colmajor_idx(size_t row, size_t col, size_t nrows) {
 
 // Flip to true to run the scalar cpu code for debugging.
 static constexpr bool RUN_ON_CPU_FOR_DEBUG = false;
+
+// Set to true to wait for each kernel to complete. Useful for debugging.
+static constexpr bool WAIT_FOR_KERNELS = false;
 } // namespace
 
 void qrf_block(
@@ -52,18 +55,16 @@ void qrf_block(
 
   auto& device = metal::device(stream.device);
 
+  auto& compute_encoder = device.get_command_encoder(stream.index);
+
   for (int jj = 0; jj < R; jj++) {
     const int col = startc + jj;
 
     if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
       auto launch_kernel = [&](const std::string& kernel_name) {
         auto kernel = device.get_kernel(kernel_name);
-        auto command_buffer = device.new_command_buffer(stream.index);
 
-        auto compute_encoder =
-            metal::CommandEncoder(command_buffer->computeCommandEncoder());
         compute_encoder->setComputePipelineState(kernel);
-
         compute_encoder.set_input_array(a, 0);
         compute_encoder.set_output_array(Y, 1);
         compute_encoder.set_output_array(betas, 2);
@@ -75,10 +76,6 @@ void qrf_block(
         const MTL::Size threads_per_threadgroup(8, 1, 1);
         compute_encoder->dispatchThreads(
             threads_per_grid, threads_per_threadgroup);
-        compute_encoder->endEncoding();
-
-        device.commit_command_buffer(stream.index);
-        command_buffer->waitUntilCompleted();
       };
 
       launch_kernel("qrf_compute_sq_norm_xc");
@@ -137,9 +134,6 @@ void qrf_block(
 
       std::vector<array> copies;
 
-      // Get a new command buffer to avoid issues on the next kernel launch.
-      device.new_command_buffer(stream.index);
-
       // We store data in colmajor order, but the matmul kernel assumes
       // row-major. To produce the right result in col-major order, we swap the
       // order of the inputs and invert the transpose_* flags, taking advantage
@@ -164,11 +158,6 @@ void qrf_block(
           /* std::vector<int> batch_shape = */ {1},
           /* std::vector<size_t> A_batch_stride = */ {0},
           /* std::vector<size_t> B_batch_stride = */ {0});
-
-      auto cb = device.get_command_buffer(stream.index);
-      device.end_encoding(stream.index);
-      device.commit_command_buffer(stream.index);
-      cb->waitUntilCompleted();
     } else {
       // Use the first column of Wp as a temporary of size (startc + R - jj).
       // It's guaranteed to be big enough because Wp has shape r x n.
@@ -194,12 +183,8 @@ void qrf_block(
     //    a[:, col:startc+r] -= beta * np.outer(v, c)
     if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
       auto kernel = device.get_kernel("qrf_reflect_current_block");
-      auto command_buffer = device.new_command_buffer(stream.index);
 
-      auto compute_encoder =
-          metal::CommandEncoder(command_buffer->computeCommandEncoder());
       compute_encoder->setComputePipelineState(kernel);
-
       compute_encoder.set_input_array(betas, 0);
       compute_encoder.set_input_array(Y, 1);
       compute_encoder.set_output_array(a, 2);
@@ -213,10 +198,6 @@ void qrf_block(
       const MTL::Size threads_per_threadgroup(8, 1, 1);
       compute_encoder->dispatchThreads(
           threads_per_grid, threads_per_threadgroup);
-      compute_encoder->endEncoding();
-
-      device.commit_command_buffer(stream.index);
-      command_buffer->waitUntilCompleted();
     } else {
       float* va = wp_data;
 
@@ -234,12 +215,8 @@ void qrf_block(
   // Precompute Yp = Y.T @ Y
   if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
     auto kernel = device.get_kernel("qrf_compute_yp");
-    auto command_buffer = device.new_command_buffer(stream.index);
 
-    auto compute_encoder =
-        metal::CommandEncoder(command_buffer->computeCommandEncoder());
     compute_encoder->setComputePipelineState(kernel);
-
     compute_encoder.set_input_array(Y, 0);
     compute_encoder.set_output_array(Yp, 1);
     compute_encoder->setBytes(&m, sizeof(m), 2);
@@ -255,10 +232,6 @@ void qrf_block(
             threads_per_grid.height, kernel->maxTotalThreadsPerThreadgroup()),
         1);
     compute_encoder->dispatchThreads(threads_per_grid, threads_per_threadgroup);
-    compute_encoder->endEncoding();
-
-    device.commit_command_buffer(stream.index);
-    command_buffer->waitUntilCompleted();
   } else {
     for (int i = 0; i < R; i++) {
       for (int j = 0; j < R; j++) {
@@ -274,12 +247,8 @@ void qrf_block(
   // Initialize first column of W.
   if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
     auto kernel = device.get_kernel("qrf_compute_w_first_col");
-    auto command_buffer = device.new_command_buffer(stream.index);
 
-    auto compute_encoder =
-        metal::CommandEncoder(command_buffer->computeCommandEncoder());
     compute_encoder->setComputePipelineState(kernel);
-
     compute_encoder.set_input_array(betas, 0);
     compute_encoder.set_input_array(Y, 1);
     compute_encoder.set_output_array(W, 2);
@@ -289,10 +258,6 @@ void qrf_block(
     const MTL::Size threads_per_threadgroup(
         std::min(threads_per_grid.width, kernel->threadExecutionWidth()), 1, 1);
     compute_encoder->dispatchThreads(threads_per_grid, threads_per_threadgroup);
-    compute_encoder->endEncoding();
-
-    device.commit_command_buffer(stream.index);
-    command_buffer->waitUntilCompleted();
   } else {
     for (int i = 0; i < m; i++) {
       w_data[colmajor_idx(i, 0, m)] =
@@ -303,12 +268,8 @@ void qrf_block(
   // Compute remaining columns of W one column at a time.
   if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
     auto kernel = device.get_kernel("qrf_compute_w_col");
-    auto command_buffer = device.new_command_buffer(stream.index);
 
-    auto compute_encoder =
-        metal::CommandEncoder(command_buffer->computeCommandEncoder());
     compute_encoder->setComputePipelineState(kernel);
-
     compute_encoder.set_input_array(betas, 0);
     compute_encoder.set_input_array(Y, 1);
     compute_encoder.set_input_array(Yp, 2);
@@ -320,10 +281,6 @@ void qrf_block(
     const MTL::Size threads_per_threadgroup(
         std::min(threads_per_grid.width, kernel->threadExecutionWidth()), 1, 1);
     compute_encoder->dispatchThreads(threads_per_grid, threads_per_threadgroup);
-    compute_encoder->endEncoding();
-
-    device.commit_command_buffer(stream.index);
-    command_buffer->waitUntilCompleted();
   } else {
     for (int i = 0; i < m; i++) {
       for (int j = 1; j < R; j++) {
@@ -355,9 +312,6 @@ void qrf_block(
     if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
       std::vector<array> copies;
 
-      // Get a new command buffer to avoid issues on the next kernel launch.
-      device.new_command_buffer(stream.index);
-
       // See comment above about using a transpose trick with the matmul kernel.
       steel_matmul(
           /* const Stream& s = */ stream,
@@ -377,11 +331,6 @@ void qrf_block(
           /* std::vector<int> batch_shape = */ {1},
           /* std::vector<size_t> A_batch_stride = */ {0},
           /* std::vector<size_t> B_batch_stride = */ {0});
-
-      auto cb = device.get_command_buffer(stream.index);
-      device.end_encoding(stream.index);
-      device.commit_command_buffer(stream.index);
-      cb->waitUntilCompleted();
     } else {
       // wp = w_data.T @ a[:, startc+r:]
       for (int i = 0; i < R; i++) {
@@ -428,10 +377,6 @@ void qrf_block(
             << ((alpha == 1. && beta == 1.) ? "_add" : "_axpby");
 
       auto kernel = device.get_kernel(kname.str());
-      auto command_buffer = device.new_command_buffer(stream.index);
-
-      auto compute_encoder =
-          metal::CommandEncoder(command_buffer->computeCommandEncoder());
       compute_encoder->setComputePipelineState(kernel);
 
       steel::GEMMParams gemm_params{
@@ -482,10 +427,6 @@ void qrf_block(
           batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
 
       compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
-      compute_encoder->endEncoding();
-
-      device.commit_command_buffer(stream.index);
-      command_buffer->waitUntilCompleted();
     } else {
       // a[:, startc+r:] += y_data @ wp_data
       for (int i = 0; i < m; i++) {
@@ -507,9 +448,6 @@ void qrf_block(
   if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
     std::vector<array> copies;
 
-    // Get a new command buffer to avoid issues on the next kernel launch.
-    device.new_command_buffer(stream.index);
-
     // See comment above about using a transpose trick with the matmul kernel.
     steel_matmul(
         /* const Stream& s = */ stream,
@@ -529,11 +467,6 @@ void qrf_block(
         /* std::vector<int> batch_shape = */ {1},
         /* std::vector<size_t> A_batch_stride = */ {0},
         /* std::vector<size_t> B_batch_stride = */ {0});
-
-    auto cb = device.get_command_buffer(stream.index);
-    device.end_encoding(stream.index);
-    device.commit_command_buffer(stream.index);
-    cb->waitUntilCompleted();
   } else {
     for (int i = 0; i < m; i++) {
       for (int j = 0; j < m; j++) {
@@ -551,9 +484,6 @@ void qrf_block(
   // First, qwy = q @ wy.
   if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
     std::vector<array> copies;
-
-    // Get a new command buffer to avoid issues on the next kernel launch.
-    device.new_command_buffer(stream.index);
 
     // See comment above about using a transpose trick with the matmul kernel.
     steel_matmul(
@@ -574,11 +504,6 @@ void qrf_block(
         /* std::vector<int> batch_shape = */ {1},
         /* std::vector<size_t> A_batch_stride = */ {0},
         /* std::vector<size_t> B_batch_stride = */ {0});
-
-    auto cb = device.get_command_buffer(stream.index);
-    device.end_encoding(stream.index);
-    device.commit_command_buffer(stream.index);
-    cb->waitUntilCompleted();
   } else {
     for (int i = 0; i < m; i++) {
       for (int j = 0; j < m; j++) {
@@ -594,10 +519,7 @@ void qrf_block(
   // Then, q += qwy
   if constexpr (!RUN_ON_CPU_FOR_DEBUG) {
     auto binary_add_kernel = device.get_kernel("vvaddfloat32");
-    auto command_buffer = device.new_command_buffer(stream.index);
 
-    auto compute_encoder =
-        metal::CommandEncoder(command_buffer->computeCommandEncoder());
     compute_encoder->setComputePipelineState(binary_add_kernel);
     compute_encoder.set_input_array(q, 0);
     compute_encoder.set_input_array(QWY, 1);
@@ -610,10 +532,6 @@ void qrf_block(
     const MTL::Size group_dims(thread_group_size, 1, 1);
 
     compute_encoder->dispatchThreads(grid_dims, group_dims);
-    compute_encoder->endEncoding();
-
-    device.commit_command_buffer(stream.index);
-    command_buffer->waitUntilCompleted();
   } else {
     for (int i = 0; i < m; i++) {
       for (int j = 0; j < m; j++) {
@@ -652,7 +570,6 @@ void QRF::eval_gpu(
   const int batch_size = a.size() / (m * n);
   auto& q = outputs[0];
   auto& r = outputs[1];
-  auto& s = stream();
 
   {
     auto flags = q.flags();
