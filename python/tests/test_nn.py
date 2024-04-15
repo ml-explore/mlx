@@ -1628,8 +1628,8 @@ class TestLayers(mlx_tests.MLXTestCase):
         self.assertLess((y - yq).abs().max(), 1e-3)
 
         x = mx.random.uniform(shape=(2, 256))
-        y = emb.call_as_linear(x)
-        yq = qemb.call_as_linear(x)
+        y = emb.as_linear(x)
+        yq = qemb.as_linear(x)
         self.assertLess((y - yq).abs().max(), 1e-2)
 
 
