@@ -3646,39 +3646,39 @@ void init_ops(nb::module_& m) {
             array: ``alpha * (a @ b)  + beta * c``
       )pbdoc");
   m.def(
-      "tile_masked_mm",
-      [](array a,
-         array b,
-         int tile_sz,
-         std::optional<array> mask_out,
-         std::optional<array> mask_lhs,
-         std::optional<array> mask_rhs,
-         StreamOrDevice s) {
-        return tile_masked_mm(a, b, tile_sz, mask_out, mask_lhs, mask_rhs, s);
-      },
+      "block_masked_mm",
+      &block_masked_mm,
       nb::arg(),
       nb::arg(),
-      nb::arg(),
+      "tile_size"_a = 64,
       "mask_out"_a = nb::none(),
       "mask_lhs"_a = nb::none(),
       "mask_rhs"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def tile_masked_mm(a: array, b: array, tile_size: int, /, mask_out: array, mask_lhs: array, mask_rhs: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def block_masked_mm(a: array, b: array, /, tile_size: int = 64, mask_out: array, mask_lhs: array, mask_rhs: array, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Matrix multiplication with tile level masking.
+        Matrix multiplication with block masking.
 
-        Perform the (possibly batched) matrix multiplication of two arrays and with tiles
-        optionally masked out.
+        Perform the (possibly batched) matrix multiplication of two arrays and with blocks
+        of size ``tile_size x tile_size`` optionally masked out.
+
+        Assuming ``a`` with shape (..., `M`, `K`) and b with shape (..., `K`, `N`)
+
+        * ``lhs_mask`` must have shape (..., :math:`\lceil` `M` / ``tile_size`` :math:`\rceil`, :math:`\lceil` `K` / ``tile_size`` :math:`\rceil`)
+
+        * ``rhs_mask`` must have shape (..., :math:`\lceil` `K` / ``tile_size`` :math:`\rceil`, :math:`\lceil` `N` / ``tile_size`` :math:`\rceil`) 
+        
+        * ``out_mask`` must have shape (..., :math:`\lceil` `M` / ``tile_size`` :math:`\rceil`, :math:`\lceil` `N` / ``tile_size`` :math:`\rceil`)
 
         Args:
             a (array): Input array or scalar.
             b (array): Input array or scalar.
-            tile_size (int): Mask tile size.
-            mask_out (array, optional): Mask for output tiles.
-            mask_lhs (array, optional): Mask for a.
-            mask_rhs (array, optional): Mask for b.
+            tile_size (int): Block size (default: ``64``)
+            mask_out (array, optional): Mask for output (default: ``None``)
+            mask_lhs (array, optional): Mask for a (default: ``None``)
+            mask_rhs (array, optional): Mask for b (default: ``None``)
 
       )pbdoc");
   m.def(

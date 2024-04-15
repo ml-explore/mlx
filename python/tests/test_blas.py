@@ -681,9 +681,9 @@ class TestBlas(mlx_tests.MLXTestCase):
         mx.eval(c)
         self.assertEqual(c.shape, (0, 0))
 
-    def test_tile_masked_matmul(self):
-        def np_tile_masked_mm(
-            a, b, tile_size, out_mask=None, lhs_mask=None, rhs_mask=None
+    def test_block_masked_matmul(self):
+        def np_block_masked_mm(
+            a, b, block_size, out_mask=None, lhs_mask=None, rhs_mask=None
         ):
             # Get mask adjusted shapes
             M = a.shape[-2]
@@ -691,44 +691,44 @@ class TestBlas(mlx_tests.MLXTestCase):
             K = a.shape[-1]
 
             # Expand mask dims
-            def expand_mask(mask, tile_size, Y, X):
+            def expand_mask(mask, block_size, Y, X):
                 mask = np.expand_dims(mask, (-3, -1))
                 mask_shape = list(mask.shape)
-                mask_shape[-1] = tile_size
-                x = mask_shape[-2] * tile_size
-                mask_shape[-3] = tile_size
-                y = mask_shape[-4] * tile_size
+                mask_shape[-1] = block_size
+                x = mask_shape[-2] * block_size
+                mask_shape[-3] = block_size
+                y = mask_shape[-4] * block_size
                 mask = np.broadcast_to(mask, mask_shape)
                 mask_shape = mask_shape[:-4] + [y, x]
                 return mask.reshape(mask_shape)[..., :Y, :X]
 
             if lhs_mask is not None:
-                lhs_mask = expand_mask(lhs_mask, tile_size, M, K)
+                lhs_mask = expand_mask(lhs_mask, block_size, M, K)
                 a = lhs_mask * a
 
             if rhs_mask is not None:
-                rhs_mask = expand_mask(rhs_mask, tile_size, K, N)
+                rhs_mask = expand_mask(rhs_mask, block_size, K, N)
                 b = rhs_mask * b
 
             out = a @ b
 
             if out_mask is not None:
-                out_mask = expand_mask(out_mask, tile_size, M, N)
+                out_mask = expand_mask(out_mask, block_size, M, N)
                 out = out * out_mask
             return out
 
-        def test_shape(M, N, K, tile_size, transpose=False, np_dtype=np.float32):
+        def test_shape(M, N, K, block_size, transpose=False, np_dtype=np.float32):
             with self.subTest(
                 M=M,
                 N=N,
                 K=K,
-                tile_size=tile_size,
+                block_size=block_size,
                 np_dtype=np_dtype,
                 transpose=transpose,
             ):
-                tm = (M + tile_size - 1) // tile_size
-                tn = (N + tile_size - 1) // tile_size
-                tk = (K + tile_size - 1) // tile_size
+                tm = (M + block_size - 1) // block_size
+                tn = (N + block_size - 1) // block_size
+                tk = (K + block_size - 1) // block_size
 
                 a_np = np.random.normal(size=(M, K)).astype(np_dtype)
                 b_np = np.random.normal(size=(K, N)).astype(np_dtype)
@@ -748,23 +748,23 @@ class TestBlas(mlx_tests.MLXTestCase):
                     b_np = b_np.T
                     b_mx = b_mx.T
 
-                out_np = np_tile_masked_mm(
-                    a_np, b_np, tile_size, out_np_mask, a_np_mask, b_np_mask
+                out_np = np_block_masked_mm(
+                    a_np, b_np, block_size, out_np_mask, a_np_mask, b_np_mask
                 )
-                out_mx = mx.tile_masked_mm(
-                    a_mx, b_mx, tile_size, out_mx_mask, a_mx_mask, b_mx_mask
+                out_mx = mx.block_masked_mm(
+                    a_mx, b_mx, block_size, out_mx_mask, a_mx_mask, b_mx_mask
                 )
                 self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
-                out_np = np_tile_masked_mm(a_np, b_np, tile_size, out_np_mask)
-                out_mx = mx.tile_masked_mm(a_mx, b_mx, tile_size, out_mx_mask)
+                out_np = np_block_masked_mm(a_np, b_np, block_size, out_np_mask)
+                out_mx = mx.block_masked_mm(a_mx, b_mx, block_size, out_mx_mask)
                 self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
-                out_np = np_tile_masked_mm(
-                    a_np, b_np, tile_size, None, a_np_mask, b_np_mask
+                out_np = np_block_masked_mm(
+                    a_np, b_np, block_size, None, a_np_mask, b_np_mask
                 )
-                out_mx = mx.tile_masked_mm(
-                    a_mx, b_mx, tile_size, None, a_mx_mask, b_mx_mask
+                out_mx = mx.block_masked_mm(
+                    a_mx, b_mx, block_size, None, a_mx_mask, b_mx_mask
                 )
                 self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 
@@ -775,9 +775,9 @@ class TestBlas(mlx_tests.MLXTestCase):
             (256, 256, 128, 64),
         )
 
-        for M, N, K, tile_size in shapes:
-            test_shape(M, N, K, tile_size, transpose=False)
-            test_shape(M, N, K, tile_size, transpose=True)
+        for M, N, K, block_size in shapes:
+            test_shape(M, N, K, block_size, transpose=False)
+            test_shape(M, N, K, block_size, transpose=True)
 
 
 if __name__ == "__main__":

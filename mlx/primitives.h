@@ -443,6 +443,27 @@ class AsStrided : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class BlockMaskedMM : public UnaryPrimitive {
+ public:
+  explicit BlockMaskedMM(Stream stream, int tile_size)
+      : UnaryPrimitive(stream), tile_size_(tile_size){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(BlockMaskedMM)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int tile_size_;
+};
+
 class Broadcast : public UnaryPrimitive {
  public:
   explicit Broadcast(Stream stream, const std::vector<int>& shape)
@@ -1886,27 +1907,6 @@ class Tanh : public UnaryPrimitive {
 
  private:
   void eval(const std::vector<array>& inputs, array& out);
-};
-
-class TileMaskedMM : public UnaryPrimitive {
- public:
-  explicit TileMaskedMM(Stream stream, int tile_size)
-      : UnaryPrimitive(stream), tile_size_(tile_size){};
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  std::vector<array> vjp(
-      const std::vector<array>& primals,
-      const std::vector<array>& cotangents,
-      const std::vector<int>& argnums,
-      const std::vector<array>& outputs) override;
-
-  DEFINE_PRINT(TileMaskedMM)
-  bool is_equivalent(const Primitive& other) const override;
-
- private:
-  int tile_size_;
 };
 
 class Uniform : public UnaryPrimitive {

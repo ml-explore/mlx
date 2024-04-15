@@ -29,6 +29,7 @@ Operations
    atleast_2d
    atleast_3d
    broadcast_to
+   block_masked_mm
    ceil
    clip
    concatenate

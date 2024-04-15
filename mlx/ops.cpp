@@ -3573,7 +3573,7 @@ array addmm(
 }
 
 /** Compute matrix product with tile-level masking */
-array tile_masked_mm(
+array block_masked_mm(
     array a,
     array b,
     int tile_size,
@@ -3712,7 +3712,7 @@ array tile_masked_mm(
   auto out = array(
       out_shape,
       out_type,
-      std::make_shared<TileMaskedMM>(to_stream(s), tile_size),
+      std::make_shared<BlockMaskedMM>(to_stream(s), tile_size),
       inputs);
 
   // Remove the possibly inserted singleton dimensions

@@ -22,7 +22,7 @@ template <typename T,
           bool MN_aligned,
           bool K_aligned, 
           bool has_operand_mask=false>
-[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void tile_masked_gemm(
+[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void block_masked_gemm(
     const device T *A [[buffer(0)]],
     const device T *B [[buffer(1)]],
     device T *D [[buffer(3)]],
@@ -281,8 +281,8 @@ template <typename T,
 ///////////////////////////////////////////////////////////////////////////////
 
 #define instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, aname, mn_aligned, kname, k_aligned, omname, op_mask) \
-  template [[host_name("steel_tile_masked_gemm_" #tname "_"  #iname "_" #oname "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_MN_" #aname "_K_" #kname "_op_mask_" #omname)]] \
-  [[kernel]] void tile_masked_gemm<itype, bm, bn, bk, wm, wn, trans_a, trans_b, mn_aligned, k_aligned, op_mask>( \
+  template [[host_name("steel_block_masked_gemm_" #tname "_"  #iname "_" #oname "_bm" #bm "_bn" #bn "_bk" #bk "_wm" #wm "_wn" #wn "_MN_" #aname "_K_" #kname "_op_mask_" #omname)]] \
+  [[kernel]] void block_masked_gemm<itype, bm, bn, bk, wm, wn, trans_a, trans_b, mn_aligned, k_aligned, op_mask>( \
       const device itype *A [[buffer(0)]], \
       const device itype *B [[buffer(1)]], \
       device itype *D [[buffer(3)]], \

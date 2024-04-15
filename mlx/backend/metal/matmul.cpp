@@ -1064,7 +1064,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   return;
 }
 
-void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   using namespace mlx::steel;
   // assert(inputs.size() == 2);
   if (!issubdtype(out.dtype(), floating)) {
@@ -1136,7 +1136,7 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_tile_masked_gemm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_block_masked_gemm_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_"

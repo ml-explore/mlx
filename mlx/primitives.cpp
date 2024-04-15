@@ -3272,7 +3272,7 @@ std::pair<std::vector<array>, std::vector<int>> Tanh::vmap(
   return {{tanh(inputs[0], stream())}, axes};
 }
 
-std::vector<array> TileMaskedMM::vjp(
+std::vector<array> BlockMaskedMM::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
@@ -3294,7 +3294,7 @@ std::vector<array> TileMaskedMM::vjp(
           ? std::make_optional<array>(transpose(primals[4], reorder, stream()))
           : std::nullopt;
 
-      auto grad = tile_masked_mm(
+      auto grad = block_masked_mm(
           cotan, b_t, tile_size_, lhs_mask, out_mask, rhs_mask_t, stream());
 
       vjps.push_back(grad);
@@ -3309,7 +3309,7 @@ std::vector<array> TileMaskedMM::vjp(
       auto rhs_mask =
           has_op_mask ? std::make_optional<array>(primals[4]) : std::nullopt;
 
-      auto grad = tile_masked_mm(
+      auto grad = block_masked_mm(
           a_t, cotan, tile_size_, rhs_mask, lhs_mask_t, out_mask, stream());
 
       vjps.push_back(grad);
@@ -3320,8 +3320,8 @@ std::vector<array> TileMaskedMM::vjp(
   return vjps;
 }
 
-bool TileMaskedMM::is_equivalent(const Primitive& other) const {
-  const TileMaskedMM& a_other = static_cast<const TileMaskedMM&>(other);
+bool BlockMaskedMM::is_equivalent(const Primitive& other) const {
+  const BlockMaskedMM& a_other = static_cast<const BlockMaskedMM&>(other);
   return (tile_size_ == a_other.tile_size_);
 }
 
