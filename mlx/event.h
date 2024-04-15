@@ -2,6 +2,8 @@
 #pragma once
 
 #include <memory>
+#include <stdexcept>
+
 #include "mlx/stream.h"
 
 namespace mlx::core {
