@@ -1140,9 +1140,9 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
         << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned"
-        << "_op_mask_" << (inputs.size() > 3 ? "T" : "N");
+        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+        << ((K % bk == 0) ? "t" : "n") << "aligned" << "_op_mask_"
+        << (inputs.size() > 3 ? "T" : "N");
 
   // Encode and dispatch kernel
   auto compute_encoder = d.get_command_encoder(s.index);
