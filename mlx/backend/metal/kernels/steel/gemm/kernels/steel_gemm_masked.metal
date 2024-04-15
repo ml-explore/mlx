@@ -67,9 +67,6 @@ template <typename T,
       }
     }
 
-    threadgroup T As[gemm_kernel::tgp_mem_size_a];
-    threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
-
     // Adjust for batch
     if(params->batch_ndim > 1) {
       const constant size_t* A_bstrides = batch_strides;
@@ -88,8 +85,6 @@ template <typename T,
     
     D += params->batch_stride_d * tid.z;
 
-    threadgroup_barrier(mem_flags::mem_none);
-
     // Find block in A, B, C
     const int c_row = tid_y * BM;
     const int c_col = tid_x * BN;
@@ -98,23 +93,56 @@ template <typename T,
     B += transpose_b ? c_col * params->ldb : c_col;
     D += c_row * params->ldd + c_col;
 
+
+    bool mask_out = out_mask[tid_y * mask_strides[1] + tid_x * mask_strides[0]];
+
+    // Write zeros and return
+    if(!mask_out) {
+      constexpr short tgp_size = WM * WN * 32;
+      constexpr short vec_size = 4;
+
+      // Tile threads in threadgroup
+      constexpr short TN = BN / vec_size;
+      constexpr short TM = tgp_size / TN;
+
+      const short thread_idx = simd_group_id * 32 + simd_lane_id;
+      const short bi = thread_idx / TN;
+      const short bj = vec_size * (thread_idx % TN);
+
+      D += bi * params->ldd + bj;
+
+      short tgp_bm = min(BM, params->M - c_row);
+      short tgp_bn = min(BN, params->N - c_col);
+
+      if (MN_aligned || (tgp_bm == BM && tgp_bn == BN)) {
+        for (short ti = 0; ti < BM; ti += TM) {
+          STEEL_PRAGMA_UNROLL
+          for(short j = 0; j < vec_size; j++) {
+            D[ti * params->ldd + j] = T(0.);
+          }
+        }
+      } else {
+        short jmax = tgp_bn - bj;
+        jmax = jmax < vec_size ? jmax : vec_size;
+        for (short ti = 0; (bi + ti) < tgp_bm; ti += TM) {
+          for(short j = 0; j < jmax; j++) {
+            D[ti * params->ldd + j] = T(0.);
+          }
+        }
+      }
+      
+      return;
+    }
+
+    threadgroup_barrier(mem_flags::mem_none);
+
     // Prepare threadgroup mma operation
     thread typename gemm_kernel::mma_t mma_op(simd_group_id, simd_lane_id);
 
     int gemm_k_iterations = params->gemm_k_iterations_aligned;
 
-    bool mask_out = out_mask[tid_y * mask_strides[1] + tid_x * mask_strides[0]];
-    if(!mask_out) {
-      short tgp_bm = min(BM, params->M - c_row);
-      short tgp_bn = min(BN, params->N - c_col);
-      if (MN_aligned) {
-        mma_op.store_result(D, params->ldd);
-      } else {
-        mma_op.store_result_safe(D, params->ldd, short2(tgp_bn, tgp_bm));
-      }
-      
-      return;
-    }
+    threadgroup T As[gemm_kernel::tgp_mem_size_a];
+    threadgroup T Bs[gemm_kernel::tgp_mem_size_b];
 
     // Prepare threadgroup loading operations
     thread typename gemm_kernel::loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);

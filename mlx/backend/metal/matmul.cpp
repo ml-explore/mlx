@@ -1145,7 +1145,7 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         << (inputs.size() > 3 ? "T" : "N");
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -1206,7 +1206,7 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         lhs_mask.strides().begin(),
         lhs_mask.strides().end() - 2);
 
-    set_array_buffer(compute_encoder, lhs_mask, 11);
+    compute_encoder.set_input_array(lhs_mask, 11);
 
     auto& rhs_mask = inputs[4];
     mask_strides.push_back(*(rhs_mask.strides().end() - 1));
@@ -1217,20 +1217,20 @@ void TileMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
         rhs_mask.strides().begin(),
         rhs_mask.strides().end() - 2);
 
-    set_array_buffer(compute_encoder, rhs_mask, 12);
+    compute_encoder.set_input_array(rhs_mask, 12);
   }
 
   // Launch kernel
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
-  set_array_buffer(compute_encoder, out, 3);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(out, 3);
 
   compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
 
   set_vector_bytes(compute_encoder, batch_shape, 6);
   set_vector_bytes(compute_encoder, batch_strides, 7);
 
-  set_array_buffer(compute_encoder, out_mask, 10);
+  compute_encoder.set_input_array(out_mask, 10);
   set_vector_bytes(compute_encoder, mask_strides, 13);
 
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
