@@ -82,8 +82,10 @@ elseif (MLX_BUILD_METAL)
   message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
 
   if (${MACOS_VERSION} GREATER_EQUAL 14.2)
+    set(METAL_CPP_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/metal.14.2.diff)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
   elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
+    set(METAL_CPP_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/metal.14.0.diff)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14_iOS17-beta.zip)
   else()
     message(FATAL_ERROR "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON" )
@@ -92,6 +94,7 @@ elseif (MLX_BUILD_METAL)
   FetchContent_Declare(
     metal_cpp
     URL ${METAL_CPP_URL}
+    PATCH_COMMAND patch -i ${METAL_CPP_PATCH}
   )
 
   FetchContent_MakeAvailable(metal_cpp)

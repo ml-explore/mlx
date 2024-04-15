@@ -36,9 +36,11 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation.
 int detail::InTracing::tracing_counter{0};
 
-std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
+array eval_impl(std::vector<array> outputs, bool async) {
   std::queue<array> tape;
-  std::unordered_map<std::uintptr_t, std::shared_future<void>> deps;
+
+  // stream events to use for synchronization
+  std::unordered_map<uint32_t, Event> events;
 
   // Make an effort to choose a good output stream
   Stream stream = default_stream(default_device());
@@ -49,8 +51,14 @@ std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
     }
   }
 
+  std::unordered_set<uintptr_t> needs_signal;
+
   auto synchronizer = array(
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
+  needs_signal.insert(synchronizer.id());
+
+  // Make an event for the synchronizer stream
+  events.emplace(stream.index, Event{stream});
 
   {
     std::unordered_set<std::uintptr_t> cache;
@@ -63,8 +71,9 @@ std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
         // Add an input, and continue
         auto& in = a.inputs()[idx++];
 
-        // Async evaled arrays could not have been tracers and are safe to
-        // ignore
+        // Async evaled arrays could not have been tracers and should be
+        // ignored. Don't add them to the tape because they will be detached in
+        // their scheduled tasks.
         if (in.is_async_evaled()) {
           continue;
         }
@@ -78,11 +87,8 @@ std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
             throw std::invalid_argument(
                 "[eval] Attempting to eval an array without a primitive.");
           }
-
-          // If the input is being computed on a different stream, we need to
-          // manage the dependency.
           if (a.primitive().stream() != in.primitive().stream()) {
-            deps.insert({in.output(0).id(), std::shared_future<void>{}});
+            needs_signal.insert(in.id());
           }
         }
 
@@ -97,16 +103,24 @@ std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
       }
 
       // All inputs are done being processed, process this array
-      if (!a.is_async_evaled() || !a.is_evaled() ||
-          (!a.is_tracer() && a.has_primitive())) {
+      if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
         tape.push(a);
+        // Lookup corresponding event and increment counter
+        auto& stream = a.primitive().stream();
+        auto e = events.find(stream.index);
+        if (e == events.end()) {
+          e = events.emplace(stream.index, Event{stream}).first;
+        }
+        e->second.set_value(e->second.value() + 1);
+        a.attach_event(e->second);
+        for (auto& s : a.siblings()) {
+          s.attach_event(e->second);
+        }
       }
       dfs.pop();
     }
   }
-  deps.insert({synchronizer.id(), std::shared_future<void>{}});
 
-  std::vector<std::shared_ptr<std::promise<void>>> ps;
   while (!tape.empty()) {
     auto arr = std::move(tape.front());
     tape.pop();
@@ -127,31 +141,21 @@ std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
 
     auto stream = arr.primitive().stream();
     std::vector<std::shared_future<void>> arr_deps;
-    for (auto& in : arr.inputs()) {
-      if (auto it = deps.find(in.output(0).id()); it != deps.end()) {
-        arr_deps.push_back(it->second);
-      }
-    }
-    std::shared_ptr<std::promise<void>> p;
-    if (auto it = deps.find(arr.output(0).id()); it != deps.end()) {
-      p = std::make_shared<std::promise<void>>();
-      ps.push_back(p);
-      it->second = p->get_future().share();
-    }
+    bool signal = needs_signal.find(arr.id()) != needs_signal.end();
 
     if (arr.primitive().device() == Device::gpu) {
       if (!metal::is_available()) {
         throw std::runtime_error("Metal GPU is not available.");
       }
-      scheduler::enqueue(
-          stream, metal::make_task(arr, std::move(arr_deps), std::move(p)));
+      scheduler::enqueue(stream, metal::make_task(std::move(arr), signal));
     } else {
-      auto task = [arr,
-                   stream,
-                   deps = std::move(arr_deps),
-                   p = std::move(p)]() mutable {
-        for (auto& d : deps) {
-          d.wait();
+      bool flush = needs_signal.find(arr.id()) != needs_signal.end();
+      auto task = [arr = std::move(arr), stream, signal]() mutable {
+        for (auto& i : arr.inputs()) {
+          if (i.event().valid() &&
+              i.event().stream() != arr.primitive().stream()) {
+            i.event().wait();
+          }
         }
         scheduler::notify_new_task(stream);
         auto outputs = arr.outputs();
@@ -159,23 +163,24 @@ std::shared_future<void> eval_impl(std::vector<array> outputs, bool async) {
         if (!arr.is_tracer()) {
           arr.detach();
         }
-        if (p) {
-          p->set_value();
+        if (signal) {
+          arr.event().signal();
         }
+
         scheduler::notify_task_completion(stream);
       };
       scheduler::enqueue(stream, std::move(task));
     }
   }
-  return deps[synchronizer.id()];
+  return synchronizer;
 }
 
-std::shared_future<void> async_eval(std::vector<array> outputs) {
-  return eval_impl(std::move(outputs), true);
+void async_eval(std::vector<array> outputs) {
+  eval_impl(std::move(outputs), true);
 }
 
 void eval(std::vector<array> outputs) {
-  eval_impl(std::move(outputs), false).wait();
+  eval_impl(std::move(outputs), false).event().wait();
 }
 
 std::pair<std::vector<array>, std::vector<array>> vjp(

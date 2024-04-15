@@ -9,6 +9,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
+#include "mlx/event.h"
 
 namespace mlx::core {
 
@@ -330,6 +331,14 @@ class array {
     return array_desc_->async_evaled = true;
   }
 
+  Event& event() const {
+    return array_desc_->event;
+  }
+
+  void attach_event(Event e) const {
+    array_desc_->event = std::move(e);
+  }
+
   // Mark the array as a tracer array (true) or not.
   void set_tracer(bool is_tracer) {
     array_desc_->is_tracer = is_tracer;
@@ -382,6 +391,9 @@ class array {
 
     // Whether or not the array has been asynchronously evaluated
     bool async_evaled{false};
+
+    //
+    Event event;
 
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph

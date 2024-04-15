@@ -34,35 +34,28 @@ class TestEval(mlx_tests.MLXTestCase):
 
     def test_async_eval(self):
         x = mx.array(1) + mx.array(1) + mx.array(1)
-        sync = mx.async_eval(x)
-        sync.wait()
+        mx.async_eval(x)
         self.assertEqual(x.item(), 3)
 
         # It should be safe to call eval on the array which has been async
         # eval'ed
         x = mx.array(1) + mx.array(1) + mx.array(1)
-        sync = mx.async_eval(x)
         self.assertEqual(x.item(), 3)
 
         x = mx.array([1, 2, 3])
         y = 2 * x
-        s1 = mx.async_eval(y)
+        mx.async_eval(y)
         z = 2 * y
-        s2 = mx.async_eval(z)
-        s2.wait()
+        mx.async_eval(z)
         self.assertTrue(mx.array_equal(y, mx.array([2, 4, 6])))
         self.assertTrue(mx.array_equal(z, mx.array([4, 8, 12])))
 
     def test_async_eval_twice(self):
         x = mx.array(1) + mx.array(1) + mx.array(1)
-        sync = mx.async_eval(x)
-        sync2 = mx.async_eval(x)
-        # Calling either synchronizer is fine
-        sync.wait()
+        mx.async_eval(x)
+        y = x + 1
+        mx.async_eval(y)
         self.assertEqual(x.item(), 3)
-
-        # Calling sync2 should be a no-op
-        sync2.wait()
 
     def test_async_eval_in_trace(self):
         def fun(x):
@@ -81,9 +74,8 @@ class TestEval(mlx_tests.MLXTestCase):
     def test_async_eval_into_eval(self):
         x = mx.array(1)
         y = x + 1
-        sync = mx.async_eval(y)
+        mx.async_eval(y)
         a = y - 10
-        sync.wait()
         b = mx.abs(a)
         self.assertEqual(b.item(), 8)
 
@@ -91,8 +83,7 @@ class TestEval(mlx_tests.MLXTestCase):
         s = mx.new_stream(mx.cpu)
         x = mx.array(0)
         y = x - 5
-        sync = mx.async_eval(y)
-        sync.wait()
+        mx.async_eval(y)
         z = mx.abs(y, stream=s)
         self.assertEqual(z.item(), 5)
 

@@ -55,17 +55,19 @@ inline void check_error(MTL::CommandBuffer* cbuf) {
   }
 }
 
-std::function<void()> make_task(
-    array& arr,
-    std::vector<std::shared_future<void>> deps,
-    std::shared_ptr<std::promise<void>> p) {
-  auto task = [arr, deps = std::move(deps), p = std::move(p)]() mutable {
+std::function<void()> make_task(array arr, bool signal) {
+  auto task = [arr = std::move(arr), signal]() mutable {
     auto pool = new_scoped_memory_pool();
-    for (auto& d : deps) {
-      d.wait();
-    }
     auto s = arr.primitive().stream();
     auto command_buffer = increment_command_buffer(s);
+    for (auto& i : arr.inputs()) {
+      if (i.event().valid() && i.event().stream() != arr.primitive().stream()) {
+        // TODO, consider committing the buffer and encoding a wait in the new
+        // buffer rather than on the task thread
+        i.event().wait();
+      }
+    }
+
     auto outputs = arr.outputs();
     {
       // If the array is a tracer hold a reference
@@ -88,20 +90,26 @@ std::function<void()> make_task(
     if (!arr.is_tracer()) {
       arr.detach();
     }
-    if (p) {
+
+    if (signal) {
+      // Make sure this buffer had at least one command encoder on it.
+      auto id = arr.id();
       metal::device(s.device).end_encoding(s.index);
+      command_buffer->encodeSignalEvent(
+          static_cast<MTL::Event*>(arr.event().raw_event().get()),
+          arr.event().value());
       scheduler::notify_new_task(s);
       command_buffer->addCompletedHandler(
-          [s, buffers = std::move(buffers), p = std::move(p)](
+          [s, buffers = std::move(buffers), event = arr.event()](
               MTL::CommandBuffer* cbuf) {
-            p->set_value();
             scheduler::notify_task_completion(s);
             check_error(cbuf);
           });
       metal::device(s.device).commit_command_buffer(s.index);
     } else {
+      auto id = arr.id();
       command_buffer->addCompletedHandler(
-          [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
+          [s, buffers = std::move(buffers), id](MTL::CommandBuffer* cbuf) {
             check_error(cbuf);
           });
     }

@@ -16,10 +16,7 @@ std::shared_ptr<void> new_scoped_memory_pool() {
   return nullptr;
 }
 
-std::function<void()> make_task(
-    array& arr,
-    std::vector<std::shared_future<void>> deps,
-    std::shared_ptr<std::promise<void>> p) {
+std::function<void()> make_task(array arr, bool flush) {
   throw std::runtime_error(
       "[metal::make_task] Cannot make GPU task without metal backend");
 }
