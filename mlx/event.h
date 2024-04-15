@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 #pragma once
 
+#include <memory>
 #include "mlx/stream.h"
 
 namespace mlx::core {

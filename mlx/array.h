@@ -331,10 +331,12 @@ class array {
     return array_desc_->async_evaled = true;
   }
 
+  // Get the array's shared event
   Event& event() const {
     return array_desc_->event;
   }
 
+  // Attach an event to a not yet evaluated array
   void attach_event(Event e) const {
     array_desc_->event = std::move(e);
   }
@@ -392,7 +394,7 @@ class array {
     // Whether or not the array has been asynchronously evaluated
     bool async_evaled{false};
 
-    //
+    // An event on the array used for synchronization
     Event event;
 
     // Indicates an array is being used in a graph transform
