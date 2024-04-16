@@ -3295,7 +3295,7 @@ std::vector<array> BlockMaskedMM::vjp(
           : std::nullopt;
 
       auto grad = block_masked_mm(
-          cotan, b_t, tile_size_, lhs_mask, out_mask, rhs_mask_t, stream());
+          cotan, b_t, block_size_, lhs_mask, out_mask, rhs_mask_t, stream());
 
       vjps.push_back(grad);
 
@@ -3310,7 +3310,7 @@ std::vector<array> BlockMaskedMM::vjp(
           has_op_mask ? std::make_optional<array>(primals[4]) : std::nullopt;
 
       auto grad = block_masked_mm(
-          a_t, cotan, tile_size_, rhs_mask, lhs_mask_t, out_mask, stream());
+          a_t, cotan, block_size_, rhs_mask, lhs_mask_t, out_mask, stream());
 
       vjps.push_back(grad);
     } else {
@@ -3322,7 +3322,7 @@ std::vector<array> BlockMaskedMM::vjp(
 
 bool BlockMaskedMM::is_equivalent(const Primitive& other) const {
   const BlockMaskedMM& a_other = static_cast<const BlockMaskedMM&>(other);
-  return (tile_size_ == a_other.tile_size_);
+  return (block_size_ == a_other.block_size_);
 }
 
 std::vector<array> Transpose::vjp(

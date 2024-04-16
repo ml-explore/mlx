@@ -1131,7 +1131,7 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Regular kernel dispatch
 
   // Determine dispatch kernel
-  int bm = tile_size_, bn = tile_size_, bk = 16;
+  int bm = block_size_, bn = block_size_, bk = 16;
   int wm = 2, wn = 2;
 
   // Prepare kernel name

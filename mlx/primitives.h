@@ -446,7 +446,7 @@ class AsStrided : public UnaryPrimitive {
 class BlockMaskedMM : public UnaryPrimitive {
  public:
   explicit BlockMaskedMM(Stream stream, int block_size)
-      : UnaryPrimitive(stream), tile_size_(block_size){};
+      : UnaryPrimitive(stream), block_size_(block_size){};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -461,7 +461,7 @@ class BlockMaskedMM : public UnaryPrimitive {
   bool is_equivalent(const Primitive& other) const override;
 
  private:
-  int tile_size_;
+  int block_size_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };

@@ -3650,7 +3650,7 @@ void init_ops(nb::module_& m) {
       &block_masked_mm,
       nb::arg(),
       nb::arg(),
-      "tile_size"_a = 64,
+      "block_size"_a = 64,
       "mask_out"_a = nb::none(),
       "mask_lhs"_a = nb::none(),
       "mask_rhs"_a = nb::none(),

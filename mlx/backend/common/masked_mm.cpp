@@ -21,26 +21,26 @@ template <typename T>
 inline void mask_matrix(
     T* data,
     const bool* mask,
-    int tile_size,
+    int block_size,
     const int X,
     const int Y,
     const size_t X_data_str,
     const size_t Y_data_str,
     const size_t X_mask_str,
     const size_t Y_mask_str) {
-  int tX = (X + tile_size - 1) / tile_size;
-  int tY = (Y + tile_size - 1) / tile_size;
+  int tX = (X + block_size - 1) / block_size;
+  int tY = (Y + block_size - 1) / block_size;
 
   for (int i = 0; i < tX; i++) {
     for (int j = 0; j < tY; j++) {
       bool do_mask = mask[i * X_mask_str + j * Y_mask_str];
       if (!do_mask) {
-        int loc_x = i * tile_size;
-        int loc_y = j * tile_size;
+        int loc_x = i * block_size;
+        int loc_y = j * block_size;
         T* data_block = data + loc_x * X_data_str + loc_y * Y_data_str;
 
-        int size_x = std::min(tile_size, X - loc_x);
-        int size_y = std::min(tile_size, Y - loc_y);
+        int size_x = std::min(block_size, X - loc_x);
+        int size_y = std::min(block_size, Y - loc_y);
         for (int ii = 0; ii < size_x; ii++) {
           for (int jj = 0; jj < size_y; jj++) {
             data_block[ii * X_data_str + jj * Y_data_str] = T(0.);
@@ -108,7 +108,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
 
   auto mask_array = [](const array& mask,
                        float* data,
-                       int tile_size,
+                       int block_size,
                        int batch_idx,
                        int X,
                        int Y,
@@ -125,7 +125,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
     return mask_matrix(
         data,
         mask_ptr,
-        tile_size,
+        block_size,
         X,
         Y,
         X_data_str,
@@ -148,7 +148,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
       mask_array(
           a_mask,
           ai,
-          tile_size_,
+          block_size_,
           i,
           M,
           K,
@@ -159,7 +159,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
       mask_array(
           b_mask,
           bi,
-          tile_size_,
+          block_size_,
           i,
           K,
           N,
@@ -186,7 +186,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
     );
 
     // Zero out blocks in out
-    mask_array(out_mask, ci, tile_size_, i, M, N, N, 1);
+    mask_array(out_mask, ci, block_size_, i, M, N, N, 1);
   }
 }
 
