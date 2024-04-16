@@ -99,6 +99,7 @@ NO_GPU(Subtract)
 NO_GPU_MULTI(SVD)
 NO_GPU(Tan)
 NO_GPU(Tanh)
+NO_GPU(BlockMaskedMM)
 NO_GPU(Transpose)
 NO_GPU(Inverse)
 

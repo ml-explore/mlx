@@ -3272,6 +3272,59 @@ std::pair<std::vector<array>, std::vector<int>> Tanh::vmap(
   return {{tanh(inputs[0], stream())}, axes};
 }
 
+std::vector<array> BlockMaskedMM::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  std::vector<int> reorder(cotan.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
+  bool has_op_mask = primals.size() > 3;
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      // M X N * (K X N).T -> M X K
+      auto b_t = transpose(primals[1], reorder, stream());
+      auto out_mask = primals[2];
+      auto lhs_mask =
+          has_op_mask ? std::make_optional<array>(primals[3]) : std::nullopt;
+      auto rhs_mask_t = has_op_mask
+          ? std::make_optional<array>(transpose(primals[4], reorder, stream()))
+          : std::nullopt;
+
+      auto grad = block_masked_mm(
+          cotan, b_t, block_size_, lhs_mask, out_mask, rhs_mask_t, stream());
+
+      vjps.push_back(grad);
+
+    } else if (arg == 1) {
+      // (M X K).T * M X N -> K X N
+      auto a_t = transpose(primals[0], reorder, stream());
+      auto out_mask = primals[2];
+      auto lhs_mask_t = has_op_mask
+          ? std::make_optional<array>(transpose(primals[3], reorder, stream()))
+          : std::nullopt;
+      auto rhs_mask =
+          has_op_mask ? std::make_optional<array>(primals[4]) : std::nullopt;
+
+      auto grad = block_masked_mm(
+          a_t, cotan, block_size_, rhs_mask, lhs_mask_t, out_mask, stream());
+
+      vjps.push_back(grad);
+    } else {
+      vjps.push_back(zeros_like(primals[arg], stream()));
+    }
+  }
+  return vjps;
+}
+
+bool BlockMaskedMM::is_equivalent(const Primitive& other) const {
+  const BlockMaskedMM& a_other = static_cast<const BlockMaskedMM&>(other);
+  return (block_size_ == a_other.block_size_);
+}
+
 std::vector<array> Transpose::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
