@@ -504,7 +504,7 @@ class GELU(Module):
 
     .. math::
         \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
-        \textrm{GELUFast}(x) &= x * \sigma\left(1.773 * x\right) \\
+        \textrm{GELUFast}(x) &= x * \sigma\left(1.773 * x\right)
 
     respectively.
 
