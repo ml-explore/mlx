@@ -500,12 +500,11 @@ class GELU(Module):
 
     where :math:`\Phi(x)` is the Gaussian CDF.
 
-    However, if ``approx`` is set to 'precise', 'fast' or 'tanh' it applies
+    However, if ``approx`` is set to 'precise' or 'fast' it applies
 
     .. math::
-        \textrm{GELUApprox}(x) &= x * \sigma\left(1.60033 * x \left(1 + 0.0433603 * x^2\right)\right) \\
+        \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
         \textrm{GELUFast}(x) &= x * \sigma\left(1.773 * x\right) \\
-        \textrm{GELUTanh}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right)
 
     respectively.
 
