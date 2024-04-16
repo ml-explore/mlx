@@ -3576,7 +3576,7 @@ array addmm(
 array block_masked_mm(
     array a,
     array b,
-    int tile_size,
+    int block_size,
     std::optional<array> mask_out /* = std::nullopt */,
     std::optional<array> mask_lhs /* = std::nullopt */,
     std::optional<array> mask_rhs /* = std::nullopt */,
@@ -3586,15 +3586,15 @@ array block_masked_mm(
     return matmul(a, b, s);
   }
 
-  bool has_out_mask = !!mask_out;
+  bool has_out_mask = mask_out.has_value();
   bool has_operand_mask = !(!mask_out && !mask_rhs);
 
   // Check valid tile sizes
   // TODO: Add support for 16x16 tile
-  if (tile_size != 32 && tile_size != 64) {
+  if (block_size != 32 && block_size != 64) {
     std::ostringstream msg;
-    msg << "[tile_masked_mm] Only tile_sizes 32, 64 are supported."
-        << "Got tile size " << tile_size << ".";
+    msg << "[block_masked_mm] Only block_sizes 32, 64 are supported."
+        << "Got block size " << block_size << ".";
     throw std::invalid_argument(msg.str());
   }
 
@@ -3604,7 +3604,7 @@ array block_masked_mm(
 
   if (a.ndim() == 0 || b.ndim() == 0) {
     throw std::invalid_argument(
-        "[addmm] Got 0 dimension input. Inputs must "
+        "[block_masked_mm] Got 0 dimension input. Inputs must "
         "have at least one dimension.");
   }
 
@@ -3619,7 +3619,7 @@ array block_masked_mm(
 
   if (a.shape(-1) != b.shape(-2)) {
     std::ostringstream msg;
-    msg << "[tile_masked_mm] Last dimension of first input with shape "
+    msg << "[block_masked_mm] Last dimension of first input with shape "
         << a.shape() << " must match second to last dimension of"
         << " second input with shape " << b.shape() << ".";
     throw std::invalid_argument(msg.str());
@@ -3629,7 +3629,7 @@ array block_masked_mm(
   auto out_type = result_type(a, b);
   if (!issubdtype(out_type, floating)) {
     std::ostringstream msg;
-    msg << "[tile_masked_mm] Only real floating point types are supported but "
+    msg << "[block_masked_mm] Only real floating point types are supported but "
         << a.dtype() << " and " << b.dtype()
         << " were provided which results in " << out_type
         << ", which is not a real floating point type.";
@@ -3668,9 +3668,9 @@ array block_masked_mm(
   out_shape[nd - 1] = N;
 
   // Determine mask shape requirments
-  int tm = (M + tile_size - 1) / tile_size;
-  int tn = (N + tile_size - 1) / tile_size;
-  int tk = (K + tile_size - 1) / tile_size;
+  int tm = (M + block_size - 1) / block_size;
+  int tn = (N + block_size - 1) / block_size;
+  int tk = (K + block_size - 1) / block_size;
 
   // Broadcast and astype mask
   auto broadcast_mask = [](array mask,
@@ -3689,31 +3689,34 @@ array block_masked_mm(
   array mask_out_p = mask_out.value_or(array({true}));
   mask_out_p = broadcast_mask(mask_out_p, bsx_shape, tm, tn, s);
 
-  std::vector<array> mask_list = {mask_out_p};
+  std::vector<array> inputs = {a, b, mask_out_p};
 
   // Operand masks
   if (has_operand_mask) {
     // LHS mask
     array mask_lhs_p = mask_lhs.value_or(array({true}));
+    if (in_a_ndim == 1) {
+      mask_lhs_p = expand_dims(mask_lhs_p, -1, s);
+    }
     mask_lhs_p = broadcast_mask(mask_lhs_p, bsx_shape, tm, tk, s);
 
     // RHS mask
     array mask_rhs_p = mask_rhs.value_or(array({true}));
+    if (in_b_ndim == 1) {
+      mask_rhs_p = expand_dims(mask_lhs_p, -2, s);
+    }
     mask_rhs_p = broadcast_mask(mask_rhs_p, bsx_shape, tk, tn, s);
 
-    mask_list.push_back(mask_lhs_p);
-    mask_list.push_back(mask_rhs_p);
+    inputs.push_back(mask_lhs_p);
+    inputs.push_back(mask_rhs_p);
   }
-
-  std::vector<array> inputs = {a, b};
-  inputs.insert(inputs.end(), mask_list.begin(), mask_list.end());
 
   // Caculate array
   auto out = array(
       out_shape,
       out_type,
-      std::make_shared<BlockMaskedMM>(to_stream(s), tile_size),
-      inputs);
+      std::make_shared<BlockMaskedMM>(to_stream(s), block_size),
+      std::move(inputs));
 
   // Remove the possibly inserted singleton dimensions
   if (in_a_ndim == 1 || in_b_ndim == 1) {

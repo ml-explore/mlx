@@ -1189,7 +1189,7 @@ array addmm(
 array block_masked_mm(
     array a,
     array b,
-    int tile_size,
+    int block_size,
     std::optional<array> mask_out = std::nullopt,
     std::optional<array> mask_lhs = std::nullopt,
     std::optional<array> mask_rhs = std::nullopt,
