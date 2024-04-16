@@ -27,7 +27,6 @@ from mlx.nn.layers.activations import (
     gelu,
     gelu_approx,
     gelu_fast_approx,
-    gelu_tanh_approx,
     glu,
     hardswish,
     leaky_relu,
