@@ -87,6 +87,22 @@ class TestEval(mlx_tests.MLXTestCase):
         z = mx.abs(y, stream=s)
         self.assertEqual(z.item(), 5)
 
+    def test_eval_slow_fast_multi_stream(self):
+        x = mx.ones((8000,))
+        y = mx.abs(mx.array(-1.0))
+        for _ in range(20):
+            x = x + mx.array(1.0)
+        z = mx.add(x, y, stream=mx.cpu)
+        self.assertTrue(mx.allclose(z, mx.full((8000,), 22.0)))
+
+        # Switch eval order
+        x = mx.ones((8000,))
+        y = mx.abs(mx.array(-1.0))
+        for _ in range(20):
+            x = x + mx.array(1.0)
+        z = mx.add(y, x, stream=mx.cpu)
+        self.assertTrue(mx.allclose(z, mx.full((8000,), 22.0)))
+
 
 if __name__ == "__main__":
     unittest.main()
