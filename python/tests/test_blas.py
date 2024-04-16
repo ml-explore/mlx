@@ -779,6 +779,21 @@ class TestBlas(mlx_tests.MLXTestCase):
             test_shape(M, N, K, block_size, transpose=False)
             test_shape(M, N, K, block_size, transpose=True)
 
+        # Test gemv
+        a_np = np.random.normal(size=(64, 64)).astype(np.float32)
+        b_np = np.random.normal(size=(64,)).astype(np.float32)
+        mask_np = np.array([True, False]).astype(np.bool_)
+
+        a_mx = mx.array(a_np)
+        b_mx = mx.array(b_np)
+        mask_mx = mx.array(mask_np)
+
+        c_mx = mx.block_masked_mm(a_mx, b_mx, 32, mask_mx)
+        c_np = a_np @ b_np
+        c_np[32:] = 0.0
+
+        self.assertTrue(np.allclose(c_mx, c_np, atol=1e-5))
+
 
 if __name__ == "__main__":
     unittest.main()

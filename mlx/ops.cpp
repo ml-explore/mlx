@@ -3587,7 +3587,7 @@ array block_masked_mm(
   }
 
   bool has_out_mask = mask_out.has_value();
-  bool has_operand_mask = !(!mask_out && !mask_rhs);
+  bool has_operand_mask = mask_lhs.has_value() || mask_rhs.has_value();
 
   // Check valid tile sizes
   // TODO: Add support for 16x16 tile
@@ -3642,6 +3642,7 @@ array block_masked_mm(
   // Handle broadcasting
   std::vector<int> bsx_a(a.shape().begin(), a.shape().end() - 2);
   std::vector<int> bsx_b(b.shape().begin(), b.shape().end() - 2);
+
   auto bsx_shape = broadcast_shapes(bsx_a, bsx_b);
 
   bsx_shape.push_back(1);
@@ -3687,6 +3688,14 @@ array block_masked_mm(
 
   // Out mask
   array mask_out_p = mask_out.value_or(array({true}));
+  if (in_a_ndim == 1 || in_b_ndim == 1) {
+    std::vector<int> ex_dims;
+    if (in_a_ndim == 1)
+      ex_dims.push_back(-2);
+    if (in_b_ndim == 1)
+      ex_dims.push_back(-1);
+    mask_out_p = expand_dims(mask_out_p, ex_dims, s);
+  }
   mask_out_p = broadcast_mask(mask_out_p, bsx_shape, tm, tn, s);
 
   std::vector<array> inputs = {a, b, mask_out_p};
@@ -3696,14 +3705,14 @@ array block_masked_mm(
     // LHS mask
     array mask_lhs_p = mask_lhs.value_or(array({true}));
     if (in_a_ndim == 1) {
-      mask_lhs_p = expand_dims(mask_lhs_p, -1, s);
+      mask_lhs_p = expand_dims(mask_lhs_p, -2, s);
     }
     mask_lhs_p = broadcast_mask(mask_lhs_p, bsx_shape, tm, tk, s);
 
     // RHS mask
     array mask_rhs_p = mask_rhs.value_or(array({true}));
     if (in_b_ndim == 1) {
-      mask_rhs_p = expand_dims(mask_lhs_p, -2, s);
+      mask_rhs_p = expand_dims(mask_lhs_p, -1, s);
     }
     mask_rhs_p = broadcast_mask(mask_rhs_p, bsx_shape, tk, tn, s);
 
