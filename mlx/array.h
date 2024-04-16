@@ -316,11 +316,6 @@ class array {
     return static_cast<T*>(array_desc_->data_ptr);
   };
 
-  // Check if the array has been evaluated
-  bool is_evaled() const {
-    return array_desc_->data != nullptr;
-  }
-
   // Check if the array has been async evaluated
   bool is_async_evaled() const {
     return array_desc_->async_evaled;
@@ -383,6 +378,13 @@ class array {
   // Initialize the arrays data
   template <typename It>
   void init(const It src);
+
+  // Check if the array has had eval called on it already
+  // Note, this method returning true does not mean the array is safe to be
+  // read. To ensure the array is safe to be read call array::eval()
+  bool is_evaled() const {
+    return is_async_evaled() || array_desc_->data != nullptr;
+  }
 
   struct ArrayDesc {
     std::vector<int> shape;
@@ -500,6 +502,10 @@ T array::item() const {
   if (!is_evaled()) {
     throw std::invalid_argument(
         "item() const can only be called on evaled arrays");
+  }
+  // Ensure the array is ready to be read
+  if (is_async_evaled()) {
+    event().wait();
   }
   return *data<T>();
 }

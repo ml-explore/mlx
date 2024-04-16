@@ -352,7 +352,9 @@ void compile_simplify(
   // Helpers to identify identical scalars
   std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
   auto is_scalar = [](const array& a) {
-    return a.is_evaled() && a.ndim() == 0;
+    // Condition for when it's safe to read an array
+    return !a.is_async_evaled() && a.data_shared_ptr() != nullptr &&
+        a.ndim() == 0;
   };
   auto get_scalar_rep = [](const array& a) {
     uint64_t v = 0;

@@ -39,13 +39,18 @@ int detail::InTracing::tracing_counter{0};
 array eval_impl(std::vector<array> outputs, bool async) {
   std::queue<array> tape;
 
+  // Check if the array has had eval called on it already
+  auto is_evaled = [](const array& a) {
+    return a.is_async_evaled() || a.data_shared_ptr() != nullptr;
+  };
+
   // stream events to use for synchronization
   std::unordered_map<uint32_t, Event> events;
 
   // Make an effort to choose a good output stream
   Stream stream = default_stream(default_device());
   for (auto& o : outputs) {
-    if (!o.is_evaled() && o.has_primitive()) {
+    if (!is_evaled(o) && o.has_primitive()) {
       stream = o.primitive().stream();
       break;
     }
@@ -78,7 +83,7 @@ array eval_impl(std::vector<array> outputs, bool async) {
           continue;
         }
 
-        if (!in.is_evaled()) {
+        if (!is_evaled(in)) {
           if (async && in.is_tracer()) {
             throw std::invalid_argument(
                 "[async_eval] Not allowed inside a graph transfomration.");
@@ -103,9 +108,14 @@ array eval_impl(std::vector<array> outputs, bool async) {
       }
 
       // All inputs are done being processed, process this array
-      if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
+      if (is_evaled(a) && !a.is_tracer() && a.has_primitive()) {
+        // If the array is evaluated and is no longer a tracer, detach it
+        a.detach();
+      } else if (!is_evaled(a)) {
         tape.push(a);
         // Lookup corresponding event and increment counter
+        // TODO if a signal is not needed and not an async eval,
+        // don't need to attach events to every array
         auto& stream = a.primitive().stream();
         auto e = events.find(stream.index);
         if (e == events.end()) {
@@ -124,12 +134,6 @@ array eval_impl(std::vector<array> outputs, bool async) {
   while (!tape.empty()) {
     auto arr = std::move(tape.front());
     tape.pop();
-    if (arr.is_evaled() && !arr.is_async_evaled()) {
-      if (!arr.is_tracer() && arr.has_primitive()) {
-        arr.detach();
-      }
-      continue;
-    }
 
     // Mark array and sibs as async evaluated
     if (async) {
