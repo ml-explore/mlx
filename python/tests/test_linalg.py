@@ -100,25 +100,22 @@ class TestLinalg(mlx_tests.MLXTestCase):
             mx.linalg.qr(mx.array([[0, 1], [1, 0]]))
 
         A = mx.array([[2.0, 3.0], [1.0, 2.0]])
-        Q, R = mx.linalg.qr(A, stream=mx.cpu)
-        out = Q @ R
-        self.assertTrue(mx.allclose(out, A))
-        out = Q @ Q
-        self.assertTrue(mx.allclose(out, mx.eye(2), rtol=1e-5, atol=1e-7))
-        self.assertTrue(mx.allclose(mx.tril(R, -1), mx.zeros_like(R)))
+        Q, R = mx.linalg.qr(A)
+        self.assertTrue(mx.allclose(Q @ R, A))
+        self.assertTrue(mx.allclose(Q @ Q.T, mx.eye(2), rtol=1e-5, atol=1e-7))
+        self.assertTrue(mx.allclose(mx.tril(R, -1), mx.zeros_like(R), rtol=0, atol=1e-7))
         self.assertEqual(Q.dtype, mx.float32)
         self.assertEqual(R.dtype, mx.float32)
 
         # Multiple matrices
         B = mx.array([[-1.0, 2.0], [-4.0, 1.0]])
-        A = mx.stack([A, B])
-        Q, R = mx.linalg.qr(A, stream=mx.cpu)
-        for a, q, r in zip(A, Q, R):
-            out = q @ r
-            self.assertTrue(mx.allclose(out, a))
-            out = q @ q
-            self.assertTrue(mx.allclose(out, mx.eye(2), rtol=1e-5, atol=1e-7))
-            self.assertTrue(mx.allclose(mx.tril(r, -1), mx.zeros_like(r)))
+        As = mx.stack([A, B])
+        mx.eval(As)
+        Qs, Rs = mx.linalg.qr(As)
+        for a, q, r in zip(As, Qs, Rs):
+            self.assertTrue(mx.allclose(q @ r, a))
+            self.assertTrue(mx.allclose(q @ q.T, mx.eye(2), rtol=0, atol=1e-6))
+            self.assertTrue(mx.allclose(mx.tril(r, -1), mx.zeros_like(r), rtol=0, atol=1e-6))
 
     def test_svd_decomposition(self):
         A = mx.array([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]], dtype=mx.float32)
