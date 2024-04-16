@@ -93,7 +93,9 @@ void array::detach() {
 }
 
 void array::eval() {
-  if (!is_evaled()) {
+  if (is_async_evaled()) {
+    event().wait();
+  } else if (!is_evaled()) {
     mlx::core::eval({*this});
   }
 }
