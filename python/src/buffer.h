@@ -86,7 +86,7 @@ extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
   std::memset(view, 0, sizeof(Py_buffer));
   auto a = nb::cast<array>(nb::handle(obj));
 
-  if (!a.is_evaled()) {
+  {
     nb::gil_scoped_release nogil;
     a.eval();
   }

@@ -946,10 +946,7 @@ void init_array(nb::module_& m) {
       .def(
           "__repr__",
           [](array& a) {
-            if (!a.is_evaled()) {
-              nb::gil_scoped_release nogil;
-              a.eval();
-            }
+            nb::gil_scoped_release nogil;
             std::ostringstream os;
             os << a;
             return os.str();
