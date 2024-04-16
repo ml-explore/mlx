@@ -2976,7 +2976,7 @@ run_conv_checks(const array& in, const array& wt, int n_dim, int groups) {
   if (in.shape(n_dim + 1) % groups != 0) {
     std::ostringstream msg;
     msg << "[conv] The input channels must be divisible by the number"
-        << " of groups. Got input with shape " << in.shape() << "and " << groups
+        << " of groups. Got input with shape " << in.shape() << " and " << groups
         << " groups.";
     throw std::invalid_argument(msg.str());
   }
