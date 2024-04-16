@@ -316,14 +316,17 @@ class array {
     return static_cast<T*>(array_desc_->data_ptr);
   };
 
-  // Check if the array has been async evaluated
-  bool is_async_evaled() const {
-    return array_desc_->async_evaled;
+  enum Status { unscheduled, scheduled, available };
+
+  bool is_available() const {
+    return status() == Status::available;
+  }
+  const Status status() const {
+    return array_desc_->status;
   }
 
-  // Mark the array as evaluated
-  bool set_async_evaled() const {
-    return array_desc_->async_evaled = true;
+  void set_status(Status s) const {
+    array_desc_->status = s;
   }
 
   // Get the array's shared event
@@ -379,13 +382,6 @@ class array {
   template <typename It>
   void init(const It src);
 
-  // Check if the array has had eval called on it already
-  // Note, this method returning true does not mean the array is safe to be
-  // read. To ensure the array is safe to be read call array::eval()
-  bool is_evaled() const {
-    return is_async_evaled() || array_desc_->data != nullptr;
-  }
-
   struct ArrayDesc {
     std::vector<int> shape;
     std::vector<size_t> strides;
@@ -393,8 +389,7 @@ class array {
     Dtype dtype;
     std::shared_ptr<Primitive> primitive;
 
-    // Whether or not the array has been asynchronously evaluated
-    bool async_evaled{false};
+    Status status;
 
     // An event on the array used for synchronization
     Event event;
@@ -499,14 +494,11 @@ T array::item() const {
   if (size() != 1) {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
-  if (!is_evaled()) {
+  if (status() == Status::unscheduled) {
     throw std::invalid_argument(
         "item() const can only be called on evaled arrays");
   }
-  // Ensure the array is ready to be read
-  if (is_async_evaled()) {
-    event().wait();
-  }
+  const_cast<array*>(this)->eval();
   return *data<T>();
 }
 

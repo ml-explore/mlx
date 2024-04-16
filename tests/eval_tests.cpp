@@ -56,13 +56,13 @@ TEST_CASE("test eval with tracer when not tracing") {
   CHECK(!x.is_tracer());
   eval(x);
   CHECK(!x.has_primitive());
-  CHECK(x.is_evaled());
+  CHECK(x.is_available());
 
   x = ones({2, 3});
   x.set_tracer(true);
   eval(x);
   CHECK(!x.has_primitive());
-  CHECK(x.is_evaled());
+  CHECK(x.is_available());
 }
 
 TEST_CASE("test eval graph retention when not tracing") {
@@ -74,20 +74,20 @@ TEST_CASE("test eval graph retention when not tracing") {
   auto z = x + y;
   eval(z);
   CHECK(!z.has_primitive());
-  CHECK(z.is_evaled());
+  CHECK(z.is_available());
   CHECK_EQ(z.item<int>(), 3);
 
   z.set_tracer(false);
   CHECK_EQ(z.item<int>(), 3);
   CHECK(!z.has_primitive());
-  CHECK(z.is_evaled());
+  CHECK(z.is_available());
 
   z = x + y;
   auto a = z + x;
   auto b = a + y;
   eval(b);
   CHECK(!z.has_primitive());
-  CHECK(z.is_evaled());
+  CHECK(z.is_available());
   CHECK(!a.has_primitive());
-  CHECK(a.is_evaled());
+  CHECK(a.is_available());
 }

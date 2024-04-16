@@ -100,7 +100,7 @@ TEST_CASE("test jvp") {
     auto fun1 = [](const array& x) {
       auto y = 3 * x;
       eval(y);
-      CHECK(y.is_evaled());
+      CHECK(y.is_available());
       CHECK(y.has_primitive());
       CHECK(y.is_tracer());
       return 2 * y;
@@ -253,7 +253,7 @@ TEST_CASE("test grad") {
       eval(y);
       CHECK(x.is_tracer());
       CHECK(!y.is_tracer());
-      CHECK(y.is_evaled());
+      CHECK(y.is_available());
       CHECK(!y.has_primitive());
       return square(x);
     };
@@ -265,7 +265,7 @@ TEST_CASE("test grad") {
       x = x + 2.0f;
       eval(x);
       CHECK(x.is_tracer());
-      CHECK(x.is_evaled());
+      CHECK(x.is_available());
       CHECK(x.has_primitive());
       return square(x);
     };
@@ -1259,7 +1259,7 @@ TEST_CASE("test update state") {
   grad(fn)(y);
   eval(state);
   CHECK(!state.has_primitive());
-  CHECK(state.is_evaled());
+  CHECK(state.is_available());
   CHECK(array_equal(state, array({1.0, 1.0})).item<bool>());
 }
 

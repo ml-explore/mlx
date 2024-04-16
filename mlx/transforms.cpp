@@ -39,18 +39,13 @@ int detail::InTracing::tracing_counter{0};
 array eval_impl(std::vector<array> outputs, bool async) {
   std::queue<array> tape;
 
-  // Check if the array has had eval called on it already
-  auto is_evaled = [](const array& a) {
-    return a.is_async_evaled() || a.data_shared_ptr() != nullptr;
-  };
-
   // stream events to use for synchronization
   std::unordered_map<uint32_t, Event> events;
 
   // Make an effort to choose a good output stream
   Stream stream = default_stream(default_device());
   for (auto& o : outputs) {
-    if (!is_evaled(o) && o.has_primitive()) {
+    if (o.status() == array::Status::unscheduled && o.has_primitive()) {
       stream = o.primitive().stream();
       break;
     }
@@ -76,17 +71,15 @@ array eval_impl(std::vector<array> outputs, bool async) {
         // Add an input, and continue
         auto& in = a.inputs()[idx++];
 
-        // Async evaled arrays could not have been tracers and should be
-        // ignored. Don't add them to the tape because they will be detached in
-        // their scheduled tasks.
-        if (in.is_async_evaled()) {
+        // Ignore arrays already scheduled
+        if (in.status() == array::Status::scheduled) {
           continue;
         }
 
-        if (!is_evaled(in)) {
+        if (!in.is_available()) {
           if (async && in.is_tracer()) {
             throw std::invalid_argument(
-                "[async_eval] Not allowed inside a graph transfomration.");
+                "[async_eval] Not allowed inside a graph transformation.");
           }
           if (!in.has_primitive()) {
             throw std::invalid_argument(
@@ -108,14 +101,12 @@ array eval_impl(std::vector<array> outputs, bool async) {
       }
 
       // All inputs are done being processed, process this array
-      if (is_evaled(a) && !a.is_tracer() && a.has_primitive()) {
+      if (a.is_available() && !a.is_tracer() && a.has_primitive()) {
         // If the array is evaluated and is no longer a tracer, detach it
         a.detach();
-      } else if (!is_evaled(a)) {
+      } else if (a.status() == array::Status::unscheduled) {
         tape.push(a);
         // Lookup corresponding event and increment counter
-        // TODO if a signal is not needed and not an async eval,
-        // don't need to attach events to every array
         auto& stream = a.primitive().stream();
         auto e = events.find(stream.index);
         if (e == events.end()) {
@@ -135,12 +126,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
     auto arr = std::move(tape.front());
     tape.pop();
 
-    // Mark array and sibs as async evaluated
-    if (async) {
-      arr.set_async_evaled();
-      for (auto& s : arr.siblings()) {
-        s.set_async_evaled();
-      }
+    // Set the status of the array and siblings.
+    auto status = async ? array::Status::scheduled : array::Status::available;
+    arr.set_status(status);
+    for (auto& s : arr.siblings()) {
+      s.set_status(status);
     }
 
     auto stream = arr.primitive().stream();

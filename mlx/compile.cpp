@@ -353,8 +353,7 @@ void compile_simplify(
   std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
   auto is_scalar = [](const array& a) {
     // Condition for when it's safe to read an array
-    return !a.is_async_evaled() && a.data_shared_ptr() != nullptr &&
-        a.ndim() == 0;
+    return a.is_available() && a.ndim() == 0;
   };
   auto get_scalar_rep = [](const array& a) {
     uint64_t v = 0;
