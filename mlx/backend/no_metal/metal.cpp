@@ -17,7 +17,7 @@ std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
   return nullptr;
 }
 
-std::function<void()> make_task(array arr, bool flush) {
+std::function<void()> make_task(array arr, bool signal) {
   throw std::runtime_error(
       "[metal::make_task] Cannot make GPU task without metal backend");
 }

@@ -60,11 +60,12 @@ std::function<void()> make_task(array arr, bool signal) {
     auto pool = new_scoped_memory_pool();
     auto s = arr.primitive().stream();
     auto command_buffer = increment_command_buffer(s);
-    for (auto& i : arr.inputs()) {
-      if (i.event().valid() && i.event().stream() != arr.primitive().stream()) {
+    for (auto& input : arr.inputs()) {
+      if (input.event().valid() &&
+          input.event().stream() != arr.primitive().stream()) {
         // TODO, consider committing the buffer and encoding a wait in the new
         // buffer rather than on the task thread
-        i.event().wait();
+        input.event().wait();
       }
     }
 
@@ -92,8 +93,6 @@ std::function<void()> make_task(array arr, bool signal) {
     }
 
     if (signal) {
-      // Make sure this buffer had at least one command encoder on it.
-      auto id = arr.id();
       metal::device(s.device).end_encoding(s.index);
       command_buffer->encodeSignalEvent(
           static_cast<MTL::Event*>(arr.event().raw_event().get()),
@@ -107,9 +106,8 @@ std::function<void()> make_task(array arr, bool signal) {
           });
       metal::device(s.device).commit_command_buffer(s.index);
     } else {
-      auto id = arr.id();
       command_buffer->addCompletedHandler(
-          [s, buffers = std::move(buffers), id](MTL::CommandBuffer* cbuf) {
+          [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
             check_error(cbuf);
           });
     }

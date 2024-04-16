@@ -13,6 +13,6 @@ void new_stream(Stream stream);
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool();
 
-std::function<void()> make_task(array arr, bool flush);
+std::function<void()> make_task(array arr, bool signal);
 
 } // namespace mlx::core::metal

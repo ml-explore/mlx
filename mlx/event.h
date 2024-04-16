@@ -14,10 +14,10 @@ class Event {
 
   Event(const Stream& steam);
 
-  // Wait for the event to be signaled at it's curent value
+  // Wait for the event to be signaled at its curent value
   void wait();
 
-  // Signal the event at it's current value
+  // Signal the event at its current value
   void signal();
 
   // Check if the event is valid

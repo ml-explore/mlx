@@ -149,12 +149,11 @@ array eval_impl(std::vector<array> outputs, bool async) {
       }
       scheduler::enqueue(stream, metal::make_task(std::move(arr), signal));
     } else {
-      bool flush = needs_signal.find(arr.id()) != needs_signal.end();
       auto task = [arr = std::move(arr), stream, signal]() mutable {
-        for (auto& i : arr.inputs()) {
-          if (i.event().valid() &&
-              i.event().stream() != arr.primitive().stream()) {
-            i.event().wait();
+        for (auto& input : arr.inputs()) {
+          if (input.event().valid() &&
+              input.event().stream() != arr.primitive().stream()) {
+            input.event().wait();
           }
         }
         scheduler::notify_new_task(stream);
