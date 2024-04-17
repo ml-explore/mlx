@@ -117,7 +117,8 @@ void explicit_gemm_conv_group_ND_gpu(
 
   // Prepare unfolding kernel
   std::ostringstream kname;
-  kname << "naive_unfold_nd_" << type_to_name(in_unfolded) << "_" << N;
+  kname << "naive_unfold_transpose_nd_" << type_to_name(in_unfolded) << "_"
+        << N;
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
@@ -138,26 +139,8 @@ void explicit_gemm_conv_group_ND_gpu(
 
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 
-  // Transpose inputs and weights so that we can slice them by contiguous chunks
+  // Transpose kernel weights so that we can slice them by contiguous chunks
   // of channel groups.
-  //
-  // Transpose unfolded inputs
-  array in_view(
-      {in_unfolded.shape(0), conv_params.C, kernel_size},
-      in_unfolded.dtype(),
-      nullptr,
-      {});
-  in_view.copy_shared_buffer(
-      in_unfolded,
-      {in_unfolded.strides(0), 1, static_cast<size_t>(conv_params.C)},
-      in_unfolded.flags(),
-      in_unfolded.data_size());
-
-  // Materialize
-  auto in_transpose = array(in_view.shape(), in_view.dtype(), nullptr, {});
-  copy_gpu(in_view, in_transpose, CopyType::General, s);
-
-  // Transpose kernel weights
   array wt_view(
       {wt.shape(0), C_per_group, kernel_size}, wt.dtype(), nullptr, {});
   wt_view.copy_shared_buffer(
@@ -170,16 +153,12 @@ void explicit_gemm_conv_group_ND_gpu(
   auto wt_transpose = array(wt_view.shape(), wt_view.dtype(), nullptr, {});
   copy_gpu(wt_view, wt_transpose, CopyType::General, s);
 
-  array out_buffer({implicit_M, implicit_N}, out.dtype(), nullptr, {});
-  out_buffer.set_data(allocator::malloc_or_wait(out_buffer.nbytes()));
-
   // Perform gemm
-  std::vector<array> copies = {
-      in_unfolded, in_view, wt_view, in_transpose, wt_transpose};
+  std::vector<array> copies = {in_unfolded, wt_view, wt_transpose};
   return steel_matmul_conv_groups(
       s,
       d,
-      /*a = */ in_transpose,
+      /*a = */ in_unfolded,
       /*b = */ wt_transpose,
       /*c = */ out,
       /*M = */ implicit_M,
