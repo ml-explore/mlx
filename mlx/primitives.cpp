@@ -889,10 +889,10 @@ std::vector<array> Convolution::vjp(
       // Check for negative padding
       bool has_neg_padding = false;
       for (auto& pd : padding_lo) {
-        has_neg_padding = (pd < 0) || has_neg_padding;
+        has_neg_padding |= (pd < 0);
       }
       for (auto& pd : padding_hi) {
-        has_neg_padding = (pd < 0) || has_neg_padding;
+        has_neg_padding |= (pd < 0);
       }
 
       auto padding_lo_ = std::vector<int>(padding_lo);
