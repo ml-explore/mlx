@@ -12,14 +12,12 @@ bool is_available() {
 }
 
 void new_stream(Stream) {}
-std::shared_ptr<void> new_scoped_memory_pool() {
+
+std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
   return nullptr;
 }
 
-std::function<void()> make_task(
-    array& arr,
-    std::vector<std::shared_future<void>> deps,
-    std::shared_ptr<std::promise<void>> p) {
+std::function<void()> make_task(array arr, bool signal) {
   throw std::runtime_error(
       "[metal::make_task] Cannot make GPU task without metal backend");
 }

@@ -264,9 +264,7 @@ std::ostream& operator<<(std::ostream& os, const Dtype::Kind& k) {
 }
 
 std::ostream& operator<<(std::ostream& os, array a) {
-  if (!a.is_evaled()) {
-    a.eval();
-  }
+  a.eval();
   switch (a.dtype()) {
     case bool_:
       print_array<bool>(os, a);

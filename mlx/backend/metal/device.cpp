@@ -544,11 +544,12 @@ Device& device(mlx::core::Device) {
   return metal_device;
 }
 
-std::shared_ptr<void> new_scoped_memory_pool() {
+std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
   auto dtor = [](void* ptr) {
     static_cast<NS::AutoreleasePool*>(ptr)->release();
   };
-  return std::shared_ptr<void>(NS::AutoreleasePool::alloc()->init(), dtor);
+  return std::unique_ptr<void, std::function<void(void*)>>(
+      NS::AutoreleasePool::alloc()->init(), dtor);
 }
 
 void new_stream(Stream stream) {
