@@ -65,6 +65,12 @@ template <typename T,
         lhs_mask += batch_offsets.x;
         rhs_mask += batch_offsets.y;
       }
+    } else {
+      out_mask += tid.z * batch_strides[2 * params->batch_ndim];
+      if(has_operand_mask) { 
+        lhs_mask += tid.z * batch_strides[3 * params->batch_ndim];
+        rhs_mask += tid.z * batch_strides[4 * params->batch_ndim];
+      }
     }
 
     // Adjust for batch
