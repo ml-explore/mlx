@@ -717,7 +717,16 @@ class TestBlas(mlx_tests.MLXTestCase):
                 out = out * out_mask
             return out
 
-        def test_shape(M, N, K, block_size, transpose=False, np_dtype=np.float32):
+        def test_shape(
+            M,
+            N,
+            K,
+            block_size,
+            transpose=False,
+            np_dtype=np.float32,
+            batch_A=(),
+            batch_B=(),
+        ):
             with self.subTest(
                 M=M,
                 N=N,
@@ -725,28 +734,32 @@ class TestBlas(mlx_tests.MLXTestCase):
                 block_size=block_size,
                 np_dtype=np_dtype,
                 transpose=transpose,
+                batch_A=batch_A,
+                batch_B=batch_B,
             ):
                 tm = (M + block_size - 1) // block_size
                 tn = (N + block_size - 1) // block_size
                 tk = (K + block_size - 1) // block_size
 
-                a_np = np.random.normal(size=(M, K)).astype(np_dtype)
-                b_np = np.random.normal(size=(K, N)).astype(np_dtype)
+                a_np = np.random.normal(size=batch_A + (M, K)).astype(np_dtype)
+                b_np = np.random.normal(size=batch_B + (K, N)).astype(np_dtype)
 
-                a_np_mask = np.random.normal(size=(tm, tk)) < 0.0
-                b_np_mask = np.random.normal(size=(tk, tn)) < 0.0
-                out_np_mask = np.random.normal(size=(tm, tn)) < 0.0
+                batch_out = np.broadcast_shapes(batch_A, batch_B)
+
+                a_np_mask = np.random.normal(size=batch_A + (tm, tk)) < 0.0
+                b_np_mask = np.random.normal(size=batch_B + (tk, tn)) < 0.0
+                out_np_mask = np.random.normal(size=batch_out + (tm, tn)) < 0.0
 
                 a_mx, b_mx, a_mx_mask, b_mx_mask, out_mx_mask = map(
                     mx.array, (a_np, b_np, a_np_mask, b_np_mask, out_np_mask)
                 )
 
                 if transpose:
-                    b_np = np.random.normal(size=(N, K)).astype(np_dtype)
+                    b_np = np.random.normal(size=batch_B + (N, K)).astype(np_dtype)
                     b_mx = mx.array(b_np)
 
-                    b_np = b_np.T
-                    b_mx = b_mx.T
+                    b_np = np.swapaxes(b_np, -2, -1)
+                    b_mx = mx.swapaxes(b_mx, -2, -1)
 
                 out_np = np_block_masked_mm(
                     a_np, b_np, block_size, out_np_mask, a_np_mask, b_np_mask
@@ -778,6 +791,9 @@ class TestBlas(mlx_tests.MLXTestCase):
         for M, N, K, block_size in shapes:
             test_shape(M, N, K, block_size, transpose=False)
             test_shape(M, N, K, block_size, transpose=True)
+
+        # Test broadcasting
+        test_shape(64, 64, 64, 32, transpose=False, batch_A=(1, 2), batch_B=(2, 2))
 
         # Test gemv
         a_np = np.random.normal(size=(64, 64)).astype(np.float32)
