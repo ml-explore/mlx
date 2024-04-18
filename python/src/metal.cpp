@@ -2,6 +2,7 @@
 
 #include "mlx/backend/metal/metal.h"
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 
 namespace nb = nanobind;
@@ -16,6 +17,19 @@ void init_metal(nb::module_& m) {
       &metal::is_available,
       R"pbdoc(
       Check if the Metal back-end is available.
+      )pbdoc");
+  metal.def(
+      "synchronize",
+      [](const std::optional<Stream>& s) {
+        s ? metal::synchronize(s.value()) : metal::synchronize();
+      },
+      "stream"_a = nb::none(),
+      R"pbdoc(
+      Synchronize with the given stream.
+
+      Args:
+        (Stream, optional): The stream to synchronize with. If ``None`` then
+           the default stream of the default device is used. Default: ``None``.
       )pbdoc");
   metal.def(
       "get_active_memory",
@@ -99,9 +113,6 @@ void init_metal(nb::module_& m) {
       Args:
         path (str): The path to save the capture which should have
           the extension ``.gputrace``.
-
-      Returns:
-        bool: Whether the capture was successfully started.
       )pbdoc");
   metal.def(
       "stop_capture",

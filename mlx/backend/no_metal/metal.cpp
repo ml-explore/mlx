@@ -11,6 +11,11 @@ bool is_available() {
   return false;
 }
 
+void synchronize() {}
+
+/* Synchronize with the provided stream. */
+void synchronize(Stream);
+
 void new_stream(Stream) {}
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
@@ -38,9 +43,7 @@ size_t set_memory_limit(size_t, bool) {
 size_t set_cache_limit(size_t) {
   return 0;
 }
-bool start_capture(std::string path) {
-  return false;
-}
+void start_capture(std::string path) {}
 void stop_capture() {}
 
 } // namespace mlx::core::metal

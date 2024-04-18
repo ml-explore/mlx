@@ -497,14 +497,15 @@ TEST_CASE("test metal memory info") {
   {
     // Do these tests on the CPU since deallocation is synchronized
     // with the main thread.
-    auto a = zeros({4096}, Device::cpu);
+    auto a = zeros({4096});
     eval(a);
     auto active_mem = metal::get_active_memory();
     CHECK(active_mem >= 4096 * 4);
     {
-      auto b = zeros({4096}, Device::cpu);
+      auto b = zeros({4096});
       eval(b);
     }
+    metal::synchronize();
     auto new_active_mem = metal::get_active_memory();
     CHECK_EQ(new_active_mem, active_mem);
     auto peak_mem = metal::get_peak_memory();

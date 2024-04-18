@@ -9,6 +9,12 @@ namespace mlx::core::metal {
 /* Check if the Metal backend is available. */
 bool is_available();
 
+/* Synchronize with the default stream. */
+void synchronize();
+
+/* Synchronize with the provided stream. */
+void synchronize(Stream);
+
 /* Get the actively used memory in bytes.
  *
  * Note, this will not always match memory use reported by the system because
@@ -55,7 +61,7 @@ size_t set_memory_limit(size_t limit, bool relaxed = true);
 size_t set_cache_limit(size_t limit);
 
 /** Capture a GPU trace, saving it to an absolute file `path` */
-bool start_capture(std::string path = "");
+void start_capture(std::string path = "");
 void stop_capture();
 
 } // namespace mlx::core::metal
