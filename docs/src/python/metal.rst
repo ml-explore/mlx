@@ -7,6 +7,7 @@ Metal
   :toctree: _autosummary
 
   is_available
+  synchronize
   get_active_memory
   get_peak_memory
   get_cache_memory

@@ -11,7 +11,7 @@ int main() {
   // To use Metal debugging and profiling:
   // 1. Build with the MLX_METAL_DEBUG CMake option (i.e. -DMLX_METAL_DEBUG=ON).
   // 2. Run with MTL_CAPTURE_ENABLED=1.
-  assert(metal::start_capture("mlx_trace.gputrace"));
+  metal::start_capture("mlx_trace.gputrace");
 
   // Start at index two because the default GPU and CPU streams have indices
   // zero and one, respectively. This naming matches the label assigned to each
