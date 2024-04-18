@@ -913,7 +913,7 @@ void explicit_gemm_conv_ND_cpu(
   const auto wDim = std::vector<int>(
       wt.shape().begin() + 1, wt.shape().end() - 1); // Weight spatial dim
 
-  auto conv_dtype = out.dtype();
+  auto conv_dtype = float32;
 
   // Pad input
   std::vector<int> padded_shape(in.shape().size());
@@ -1035,7 +1035,7 @@ void conv_1D_cpu(
     const std::vector<int>& in_dilation,
     bool flip) {
   if (wt_dilation[0] == 1 && in_dilation[0] == 1 && !flip) {
-    return explicit_gemm_conv_ND_cpu(
+    return explicit_gemm_conv_1D_cpu(
         in, wt, out, padding, wt_strides, wt_dilation);
   }
 
