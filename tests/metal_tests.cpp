@@ -499,6 +499,7 @@ TEST_CASE("test metal memory info") {
     // with the main thread.
     auto a = zeros({4096});
     eval(a);
+    metal::synchronize();
     auto active_mem = metal::get_active_memory();
     CHECK(active_mem >= 4096 * 4);
     {
