@@ -4,6 +4,7 @@
 
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
+#include "mlx/stream.h"
 
 namespace mlx::core::metal {
 
