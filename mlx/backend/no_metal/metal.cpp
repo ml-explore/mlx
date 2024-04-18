@@ -4,7 +4,6 @@
 
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
-#include "mlx/stream.h"
 
 namespace mlx::core::metal {
 
@@ -15,7 +14,7 @@ bool is_available() {
 void synchronize() {}
 
 /* Synchronize with the provided stream. */
-void synchronize(Stream);
+void synchronize(Stream) {}
 
 void new_stream(Stream) {}
 
