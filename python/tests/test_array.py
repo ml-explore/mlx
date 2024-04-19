@@ -2,6 +2,7 @@
 
 import operator
 import pickle
+import sys
 import unittest
 import weakref
 from copy import copy, deepcopy
@@ -1496,6 +1497,17 @@ class TestArray(mlx_tests.MLXTestCase):
             np.array(a_mx)
         e = cm.exception
         self.assertTrue("Item size 2 for PEP 3118 buffer format string" in str(e))
+
+        # Test buffer protocol with non-arrays ie bytes
+        a = ord("a") * 257 + mx.arange(10).astype(mx.int16)
+        ab = bytes(a)
+        self.assertEqual(len(ab), 20)
+        if sys.byteorder == "little":
+            self.assertEqual(b"aaaaaaaaaa", ab[1::2])
+            self.assertEqual(b"abcdefghij", ab[::2])
+        else:
+            self.assertEqual(b"aaaaaaaaaa", ab[::2])
+            self.assertEqual(b"abcdefghij", ab[1::2])
 
     def test_buffer_protocol_ref_counting(self):
         a = mx.arange(3)
