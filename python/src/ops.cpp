@@ -1033,6 +1033,40 @@ void init_ops(nb::module_& m) {
             array: The inverse hyperbolic tangent of ``a``.
       )pbdoc");
   m.def(
+      "degrees",
+      &mlx::core::degrees,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def degrees(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert angles from radians to degrees.
+
+      Args:
+          a (array): Input array.
+
+      Returns:
+          array: The angles in degrees.
+    )pbdoc");
+  m.def(
+      "radians",
+      &mlx::core::radians,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def radians(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert angles from degrees to radians.
+
+      Args:
+          a (array): Input array.
+
+      Returns:
+          array: The angles in radians.
+    )pbdoc");
+  m.def(
       "log",
       &mlx::core::log,
       nb::arg(),
