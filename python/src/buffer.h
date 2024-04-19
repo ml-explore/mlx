@@ -104,7 +104,7 @@ extern "C" inline int getbuffer(PyObject* obj, Py_buffer* view, int flags) {
   view->internal = info;
   view->buf = a.data<void>();
   view->itemsize = a.itemsize();
-  view->len = a.size();
+  view->len = a.nbytes();
   view->readonly = false;
   if ((flags & PyBUF_FORMAT) == PyBUF_FORMAT) {
     view->format = const_cast<char*>(info->format.c_str());
