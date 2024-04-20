@@ -154,10 +154,10 @@ void init_fast(nb::module_& parent_module) {
 
         The inputs to this function must satisfy the following requirements:
 
-        * The input ``x[:-1]`` must be broadcast-compatible with ``indices``.
-        * The input ``x`` and ``weight`` must also satisfy``x.shape[-1] == weight.shape[-2]``
-        * The input ``x`` and ``weight`` must be floating point arrays
-        * The indices must be an integer type
+        * ``x.shape[:-1]`` must be broadcast-compatible with ``indices.shape``
+        * ``x`` and ``weight`` must satisfy ``x.shape[-1] == weight.shape[-2]``
+        * ``x`` and ``weight`` must be floating point arrays
+        * ``indices`` must be an integer type
 
         The output will have shape ``[N_1, ..., N_m, D]`` where ``[N_1, ..., N_m]``
         is the result of broadcasting ``x.shape[:-1]`` with ``indices.shape``
