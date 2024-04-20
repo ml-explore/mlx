@@ -3268,6 +3268,9 @@ std::tuple<array, array, array> quantize(
   array scales = squeeze(delta, -1, s);
   array biases = squeeze(w_min, -1, s);
 
+  // making sure that 0 is represented exactly in the resulting quantization
+  biases = multiply(round(divide(biases, scales, s), s), scales, s);
+
   // Quantize and pack w
   packed_w =
       astype(round(divide(subtract(packed_w, w_min, s), delta, s), s), uint32);
