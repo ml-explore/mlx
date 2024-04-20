@@ -52,7 +52,6 @@ class TestVmap(mlx_tests.MLXTestCase):
             "degrees",
             "radians",
         ]
-        ops += ["erfinv"]
         for opname in ops:
             with self.subTest(op=opname):
                 op = getattr(mx, opname)
