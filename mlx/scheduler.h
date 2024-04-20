@@ -117,11 +117,16 @@ class Scheduler {
   }
 
   void notify_task_completion(const Stream& stream) {
-    {
-      std::unique_lock<std::mutex> lk(mtx);
-      n_active_tasks_--;
+    try {
+      {
+        std::unique_lock<std::mutex> lk(mtx);
+        n_active_tasks_--;
+      }
+      completion_cv.notify_all();
+    } catch (...) {
+      // Getting the lock failed likely because we were in the middle of the
+      // program's destruction.
     }
-    completion_cv.notify_all();
   }
 
   int n_active_tasks() const {

@@ -205,7 +205,12 @@ class array {
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;
     ~Data() {
-      d(buffer);
+      try {
+        d(buffer);
+      } catch (...) {
+        // Deletion failed likely because we were in the middle of the
+        // program's destruction.
+      }
     }
   };
 
