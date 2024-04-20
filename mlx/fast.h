@@ -39,4 +39,10 @@ array scaled_dot_product_attention(
     const std::optional<array>& mask = std::nullopt,
     StreamOrDevice s = {});
 
+array switch_linear(
+    array x,
+    array weight,
+    array indices,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::fast

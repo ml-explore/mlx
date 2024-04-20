@@ -439,6 +439,31 @@ class TestFast(mlx_tests.MLXTestCase):
         )(x)
         self.assertTrue(mx.allclose(vmap_out, vmap_fast_out))
 
+    def test_switch_linear(self):
+        K = 2
+        E = 4
+        D = 64
+
+        def switch_linear(x, w, inds):
+            k = inds.shape[-1]
+            if x.shape[-2] != k:
+                x = mx.tile(x, (k, 1))
+            x = mx.expand_dims(x, -2)
+            return (x @ w[inds]).squeeze(-2)
+
+        x = mx.random.uniform(shape=(1, D))
+        w = mx.random.uniform(shape=(E, D, D))
+        inds = mx.array([1, 3])
+        expected = switch_linear(x, w, inds)
+        out = mx.fast.switch_linear(x, w, inds)
+        self.assertTrue(mx.allclose(expected, out))
+
+        x = mx.random.uniform(shape=(K, D))
+        inds = mx.array([1, 3])
+        expected = switch_linear(x, w, inds)
+        out = mx.fast.switch_linear(x, w, inds)
+        self.assertTrue(mx.allclose(expected, out))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -593,4 +593,78 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_;
 }
 
+array switch_linear(
+    array x,
+    array weight,
+    array indices,
+    StreamOrDevice s_ /* = {} */) {
+  if (x.ndim() != indices.ndim() + 1) {
+    std::ostringstream msg;
+    msg << "[switch_linear] Input x must have one more dimension than indices"
+        << " but got dimensions " << x.ndim() << " and " << indices.ndim()
+        << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (x.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[switch_linear] Input x must have at least two dimensions "
+        << "but has shape " << x.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (weight.ndim() != 3) {
+    std::ostringstream msg;
+    msg << "[switch_linear] weight must have 3 dimension but has "
+        << weight.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (x.dtype() != weight.dtype()) {
+    std::ostringstream msg;
+    msg << "[switch_linear] x and weight must have the same type but got "
+        << x.dtype() << " and " << weight.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (!issubdtype(x.dtype(), floating)) {
+    std::ostringstream msg;
+    msg << "[switch_linear] Unsupported type " << x.dtype()
+        << " for x and weight.";
+    throw std::invalid_argument(msg.str());
+  }
+  if (!issubdtype(indices.dtype(), integer)) {
+    std::ostringstream msg;
+    msg << "[switch_linear] Unsupported type " << indices.dtype()
+        << " for indices.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+  {
+    auto bx_shape = x.shape();
+    bx_shape.pop_back();
+    bx_shape = broadcast_shapes(bx_shape, indices.shape());
+    indices = broadcast_to(indices, bx_shape, s);
+    bx_shape.push_back(x.shape(-1));
+    x = broadcast_to(x, std::move(bx_shape), s);
+  }
+
+  auto fallback = [s](const std::vector<array>& inputs) {
+    return std::vector<array>{squeeze(
+        matmul(
+            expand_dims(inputs[0], -2, s), take(inputs[1], inputs[2], 0, s), s),
+        -2,
+        s)};
+  };
+
+  if (false && s.device == Device::gpu) {
+    auto out_shape = x.shape();
+    out_shape.back() = weight.shape().back();
+    return array(
+        std::move(out_shape),
+        x.dtype(),
+        std::make_shared<SwitchLinear>(s, fallback),
+        {x, weight, indices});
+  }
+
+  return fallback({x, weight, indices})[0];
+}
+
 } // namespace mlx::core::fast

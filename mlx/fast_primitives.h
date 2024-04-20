@@ -212,4 +212,28 @@ class ScaledDotProductAttention : public Custom {
   bool needs_mask_;
 };
 
+class SwitchLinear : public Custom {
+ public:
+  explicit SwitchLinear(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback)
+      : Custom(stream, fallback){};
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  };
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  };
+
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_PRINT(SwitchLinear)
+
+ private:
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+};
+
 } // namespace mlx::core::fast

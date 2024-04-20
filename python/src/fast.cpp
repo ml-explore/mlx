@@ -139,4 +139,38 @@ void init_fast(nb::module_& parent_module) {
         Returns:
             array: The output array.
       )pbdoc");
+  m.def(
+      "switch_linear",
+      &fast::switch_linear,
+      "x"_a,
+      "weight"_a,
+      "indices"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def switch_linear(x: array, weight: array, indices: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        A fast implementation of a switch linear layer.
+
+        The inputs to this function must satisfy the following requirements:
+
+        * The input ``x[:-1]`` must be broadcast-compatible with ``indices``.
+        * The input ``x`` and ``weight`` must also satisfy``x.shape[-1] == weight.shape[-2]``
+        * The input ``x`` and ``weight`` must be floating point arrays
+        * The indices must be an integer type
+
+        The output will have shape ``[N_1, ..., N_m, D]`` where ``[N_1, ..., N_m]``
+        is the result of broadcasting ``x.shape[:-1]`` with ``indices.shape``
+        and ``D = weight.shape[-1]``.
+
+        Args:
+            x (array): Input array should be at least two dimensions and `
+            weight (array): A 3-dimensional weight array with the number of
+              "experts" in the first dimension.
+            indices (array): The selected expert indices. The selected experts
+              are in the last dimension of the ``indices`` array.
+
+        Returns:
+            array: The output array.
+      )pbdoc");
 }
