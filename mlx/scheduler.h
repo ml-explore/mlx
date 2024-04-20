@@ -27,6 +27,7 @@ struct StreamThread {
       : stop(false), stream(stream), thread(&StreamThread::thread_fn, this) {}
 
   ~StreamThread() {
+    metal::synchronize(stream);
     {
       std::unique_lock<std::mutex> lk(mtx);
       stop = true;
