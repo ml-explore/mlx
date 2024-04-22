@@ -29,4 +29,10 @@ inline bool operator!=(const Stream& lhs, const Stream& rhs) {
   return !(lhs == rhs);
 }
 
+/* Synchronize with the default stream. */
+void synchronize();
+
+/* Synchronize with the provided stream. */
+void synchronize(Stream);
+
 } // namespace mlx::core

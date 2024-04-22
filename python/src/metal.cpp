@@ -2,6 +2,7 @@
 
 #include "mlx/backend/metal/metal.h"
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 
 namespace nb = nanobind;
@@ -99,9 +100,6 @@ void init_metal(nb::module_& m) {
       Args:
         path (str): The path to save the capture which should have
           the extension ``.gputrace``.
-
-      Returns:
-        bool: Whether the capture was successfully started.
       )pbdoc");
   metal.def(
       "stop_capture",
