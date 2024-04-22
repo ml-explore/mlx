@@ -9,12 +9,6 @@ namespace mlx::core::metal {
 /* Check if the Metal backend is available. */
 bool is_available();
 
-/* Synchronize with the default stream. */
-void synchronize();
-
-/* Synchronize with the provided stream. */
-void synchronize(Stream);
-
 /* Get the actively used memory in bytes.
  *
  * Note, this will not always match memory use reported by the system because

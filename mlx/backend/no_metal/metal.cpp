@@ -11,11 +11,6 @@ bool is_available() {
   return false;
 }
 
-void synchronize() {}
-
-/* Synchronize with the provided stream. */
-void synchronize(Stream) {}
-
 void new_stream(Stream) {}
 
 std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
@@ -25,6 +20,14 @@ std::unique_ptr<void, std::function<void(void*)>> new_scoped_memory_pool() {
 std::function<void()> make_task(array arr, bool signal) {
   throw std::runtime_error(
       "[metal::make_task] Cannot make GPU task without metal backend");
+}
+
+std::function<void()> make_synchronize_task(
+    Stream s,
+    std::shared_ptr<std::promise<void>> p) {
+  throw std::runtime_error(
+      "[metal::make_synchronize_task] Cannot synchronize GPU"
+      " without metal backend");
 }
 
 // No-ops when Metal is not available.

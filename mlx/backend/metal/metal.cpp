@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cstdlib>
-#include <future>
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
@@ -115,13 +114,10 @@ std::function<void()> make_task(array arr, bool signal) {
   return task;
 }
 
-void synchronize(Stream s) {
-  if (s.device == mlx::core::Device::cpu) {
-    return;
-  }
-  auto p = std::make_shared<std::promise<void>>();
-  std::future<void> f = p->get_future();
-  scheduler::enqueue(s, [s, p = std::move(p)]() {
+std::function<void()> make_synchronize_task(
+    Stream s,
+    std::shared_ptr<std::promise<void>> p) {
+  return [s, p = std::move(p)]() {
     auto& d = metal::device(s.device);
     auto cb = d.get_command_buffer(s.index);
     if (cb == nullptr) {
@@ -133,12 +129,7 @@ void synchronize(Stream s) {
     cb->waitUntilCompleted();
     check_error(cb);
     p->set_value();
-  });
-  f.wait();
-}
-
-void synchronize() {
-  synchronize(default_stream(default_device()));
+  };
 }
 
 void start_capture(std::string path, id object) {

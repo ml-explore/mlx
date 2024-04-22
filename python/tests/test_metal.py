@@ -26,14 +26,14 @@ class TestMetal(mlx_tests.MLXTestCase):
         # Query active and peak memory
         a = mx.zeros((4096,))
         mx.eval(a)
-        mx.metal.synchronize()
+        mx.synchronize()
         active_mem = mx.metal.get_active_memory()
         self.assertTrue(active_mem >= 4096 * 4)
 
         b = mx.zeros((4096,))
         mx.eval(b)
         del b
-        mx.metal.synchronize()
+        mx.synchronize()
 
         new_active_mem = mx.metal.get_active_memory()
         self.assertEqual(new_active_mem, active_mem)

@@ -19,19 +19,6 @@ void init_metal(nb::module_& m) {
       Check if the Metal back-end is available.
       )pbdoc");
   metal.def(
-      "synchronize",
-      [](const std::optional<Stream>& s) {
-        s ? metal::synchronize(s.value()) : metal::synchronize();
-      },
-      "stream"_a = nb::none(),
-      R"pbdoc(
-      Synchronize with the given stream.
-
-      Args:
-        (Stream, optional): The stream to synchronize with. If ``None`` then
-           the default stream of the default device is used. Default: ``None``.
-      )pbdoc");
-  metal.def(
       "get_active_memory",
       &metal::get_active_memory,
       R"pbdoc(
