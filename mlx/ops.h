@@ -851,6 +851,12 @@ array arccosh(const array& a, StreamOrDevice s = {});
 /** Inverse Hyperbolic Tangent of the elements of an array */
 array arctanh(const array& a, StreamOrDevice s = {});
 
+/** Convert the elements of an array from Radians to Degrees **/
+array degrees(const array& a, StreamOrDevice s = {});
+
+/** Convert the elements of an array from Degrees to Radians **/
+array radians(const array& a, StreamOrDevice s = {});
+
 /** Natural logarithm of the elements of an array. */
 array log(const array& a, StreamOrDevice s = {});
 

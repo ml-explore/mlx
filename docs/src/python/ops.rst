@@ -43,6 +43,7 @@ Operations
    cummin
    cumprod
    cumsum
+   degrees
    dequantize
    diag
    diagonal
@@ -99,6 +100,7 @@ Operations
    prod
    quantize
    quantized_matmul
+   radians
    reciprocal
    repeat
    reshape

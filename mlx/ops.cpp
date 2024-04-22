@@ -2192,6 +2192,16 @@ array arctanh(const array& a, StreamOrDevice s /* = {} */) {
       a.shape(), dtype, std::make_shared<ArcTanh>(to_stream(s)), {input});
 }
 
+array degrees(const array& a, StreamOrDevice s /* = {} */) {
+  auto dtype = at_least_float(a.dtype());
+  return multiply(a, array(180.0 / M_PI, dtype), s);
+}
+
+array radians(const array& a, StreamOrDevice s /* = {} */) {
+  auto dtype = at_least_float(a.dtype());
+  return multiply(a, array(M_PI / 180.0, dtype), s);
+}
+
 array log(const array& a, StreamOrDevice s /* = {} */) {
   auto dtype = at_least_float(a.dtype());
   auto input = astype(a, dtype, s);

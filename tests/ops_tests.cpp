@@ -1154,6 +1154,56 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK(allclose(cos(x), expected).item<bool>());
   }
 
+  // Test degrees
+  {
+    array x(0.0);
+    CHECK_EQ(degrees(x).item<float>(), 0.0);
+
+    x = array(M_PI_2);
+    CHECK(degrees(x).item<float>() == doctest::Approx(90.0));
+
+    CHECK(array_equal(degrees(array({})), array({})).item<bool>());
+
+    // Integer input type
+    x = array(0);
+    CHECK_EQ(x.dtype(), int32);
+    CHECK_EQ(degrees(x).item<float>(), 0.0);
+
+    // Input is irregularly strided
+    x = broadcast_to(array(M_PI_2), {2, 2, 2});
+    CHECK(allclose(degrees(x), full({2, 2, 2}, 90.0)).item<bool>());
+
+    float angles[] = {0.0f, M_PI_2, M_PI, 3.0f * M_PI_2};
+    x = split(array(angles, {2, 2}), 2, 1)[0];
+    auto expected = array({0.0f, 180.0f}, {2, 1});
+    CHECK(allclose(degrees(x), expected).item<bool>());
+  }
+
+  // Test radians
+  {
+    array x(0.0);
+    CHECK_EQ(radians(x).item<float>(), 0.0);
+
+    x = array(90.0);
+    CHECK(radians(x).item<float>() == doctest::Approx(M_PI_2));
+
+    CHECK(array_equal(radians(array({})), array({})).item<bool>());
+
+    // Integer input type
+    x = array(90);
+    CHECK_EQ(x.dtype(), int32);
+    CHECK(radians(x).item<float>() == doctest::Approx(M_PI_2));
+
+    // Input is irregularly strided
+    x = broadcast_to(array(90.0f), {2, 2, 2});
+    CHECK(allclose(radians(x), full({2, 2, 2}, M_PI_2)).item<bool>());
+
+    x = split(array({0.0f, 90.0f, 180.0f, 270.0f}, {2, 2}), 2, 1)[0];
+    float angles[] = {0.0f, M_PI};
+    auto expected = array(angles, {2, 1});
+    CHECK(allclose(radians(x), expected).item<bool>());
+  }
+
   // Test log
   {
     array x(0.0);
