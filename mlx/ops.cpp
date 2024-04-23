@@ -3275,7 +3275,7 @@ std::tuple<array, array, array> quantize(
   array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
   array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
   array delta = divide(subtract(w_max, w_min, s), array(n_bins, w.dtype()), s);
-  array scales = squeeze(delta, -1, s);
+  array scales = maximum(squeeze(delta, -1, s), array(1e-7, w.dtype()), s);
   array biases = squeeze(w_min, -1, s);
 
   // making sure that 0 is represented exactly in the resulting quantization
