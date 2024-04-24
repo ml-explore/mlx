@@ -514,6 +514,6 @@ TEST_CASE("test metal memory info") {
     CHECK(cache_mem >= 4096 * 4);
   }
 
-  clear_cache();
+  metal::clear_cache();
   CHECK_EQ(metal::get_cache_memory(), 0);
 }
