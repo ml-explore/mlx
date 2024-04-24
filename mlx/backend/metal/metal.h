@@ -54,6 +54,9 @@ size_t set_memory_limit(size_t limit, bool relaxed = true);
  * */
 size_t set_cache_limit(size_t limit);
 
+/* Clear the memory cache. */
+void clear_cache();
+
 /** Capture a GPU trace, saving it to an absolute file `path` */
 void start_capture(std::string path = "");
 void stop_capture();

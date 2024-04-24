@@ -91,6 +91,15 @@ void init_metal(nb::module_& m) {
         int: The previous cache limit in bytes.
       )pbdoc");
   metal.def(
+      "clear_cache",
+      &metal::clear_cache,
+      R"pbdoc(
+      Clear the memory cache.
+
+      After calling this, :func:`get_cache_memory` should return ``0``.
+      )pbdoc");
+
+  metal.def(
       "start_capture",
       &metal::start_capture,
       "path"_a,

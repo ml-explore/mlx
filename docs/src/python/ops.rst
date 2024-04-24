@@ -92,6 +92,7 @@ Operations
    moveaxis
    multiply
    negative
+   not_equal
    ones
    ones_like
    outer
