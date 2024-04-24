@@ -724,32 +724,25 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
-  const uint lidy = lid / SIMD_SIZE;
+  (void)lid;
 
   constexpr int WM = 2;
   constexpr int WN = 2;
-  constexpr int bitmask = (1 << bits) - 1;
-  constexpr int el_per_int = 32 / bits;
-  constexpr int groups_per_block = (BN / group_size > 0) ? (BN / group_size) : 1;
-  constexpr int groups_per_simd = BK / (WM * WN);
-  constexpr int w_els_per_thread = (BK * BN / el_per_int) / (SIMD_SIZE * WM * WN);
+  constexpr int pack_factor = 32 / bits;
 
   // Instantiate the appropriate BlockMMA and Loader
   using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, false, BK, BN>;
   using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE, 1, 4>;
+  using loader_w_t = QuantizedBlockLoader<T, BK, BN, BN, 0, WM * WN * SIMD_SIZE, group_size, bits>;
 
-  threadgroup T scales_block[BK * groups_per_block];
-  threadgroup T biases_block[BK * groups_per_block];
   threadgroup T Xs[BM * BK];
   threadgroup T Ws[BK * BN];
 
   // Set the block
-  const int N_w = N / el_per_int;
-  const int N_g = N / group_size;
   const int y_row = tid.y * BM;
   const int y_col = tid.x * BN;
   x += y_row * K;
-  w += y_col / el_per_int;
+  w += y_col / pack_factor;
   scales += y_col / group_size;
   biases += y_col / group_size;
   y += y_row * N + y_col;
@@ -757,86 +750,25 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   // Make the x loader and mma operation
   const short num_els = min(BM, M - y_row);
   loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
+  loader_w_t loader_w(w, scales, biases, N, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
   for (int k=0; k<K; k += BK) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    // Load the x tile
+
+    // Load the x and w tiles
     short num_k = min(BK, K - k);
     if (num_els < BM || num_k < BK) {
         loader_x.load_safe(short2(num_k, num_els));
     } else {
         loader_x.load_unsafe();
     }
-
-    // Load the scale and bias
-    if (simd_lid == 0) {
-      threadgroup T *scales_block_local = scales_block + lidy * groups_per_block * groups_per_simd;
-      threadgroup T *biases_block_local = biases_block + lidy * groups_per_block * groups_per_simd;
-      const device T *scales_local = scales + lidy * groups_per_simd * N_g;
-      const device T *biases_local = biases + lidy * groups_per_simd * N_g;
-      #pragma clang loop unroll(full)
-      for (int gs=0; gs<groups_per_simd; gs++) {
-        #pragma clang loop unroll(full)
-        for (int gc=0; gc<groups_per_block; gc++) {
-          scales_block_local[gc] = scales_local[gc];
-          biases_block_local[gc] = biases_local[gc];
-        }
-        scales_block_local += groups_per_block;
-        scales_local += N_g;
-        biases_block_local += groups_per_block;
-        biases_local += N_g;
-      }
+    if (num_k < BK) {
+        loader_w.load_safe(short2(BN, num_k));
+    } else {
+        loader_w.load_unsafe();
     }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    // Load the w tile
-    {
-      if (num_k < BK) {
-        for (int wo=0; wo<w_els_per_thread; wo++) {
-          int offset = lid * w_els_per_thread + wo;
-          int offset_row = offset / (BN / el_per_int);
-          int offset_col = offset % (BN / el_per_int);
-          const device uint32_t * w_local = w + offset_row * N_w + offset_col;
-          threadgroup T * Ws_local = Ws + offset_row * BN + offset_col * el_per_int;
-
-          if (k + offset_row < K) {
-            uint32_t wi = *w_local;
-            T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-            T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-
-            #pragma clang loop unroll(full)
-            for (int t=0; t<el_per_int; t++) {
-              Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
-              wi >>= bits;
-            }
-          } else {
-            #pragma clang loop unroll(full)
-            for (int t=0; t<el_per_int; t++) {
-              Ws_local[t] = 0;
-            }
-          }
-        }
-      } else {
-        for (int wo=0; wo<w_els_per_thread; wo++) {
-          int offset = lid * w_els_per_thread + wo;
-          int offset_row = offset / (BN / el_per_int);
-          int offset_col = offset % (BN / el_per_int);
-          const device uint32_t * w_local = w + offset_row * N_w + offset_col;
-          threadgroup T * Ws_local = Ws + offset_row * BN + offset_col * el_per_int;
-
-          uint32_t wi = *w_local;
-          T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-          T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-
-          #pragma clang loop unroll(full)
-          for (int t=0; t<el_per_int; t++) {
-            Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
-            wi >>= bits;
-          }
-        }
-      }
-    }
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Multiply and accumulate threadgroup elements
@@ -844,9 +776,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
     // Prepare for next iteration
     loader_x.next();
-    w += BK * N_w;
-    scales += BK * N_g;
-    biases += BK * N_g;
+    loader_w.next();
   }
 
   // Store results to device memory
@@ -982,7 +912,7 @@ instantiate_qmm_t_types( 32, 8)
 
 #define instantiate_qmm_n(name, itype, group_size, bits) \
   template [[host_name("qmm_n_" #name "_gs_" #group_size "_b_" #bits)]] \
-  [[kernel]] void qmm_n<itype, 32, 32, 64, group_size, bits>( \
+  [[kernel]] void qmm_n<itype, 32, 32, 32, group_size, bits>( \
       const device itype* x [[buffer(0)]], \
       const device uint32_t* w [[buffer(1)]], \
       const device itype* scales [[buffer(2)]], \
