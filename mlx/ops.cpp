@@ -3274,8 +3274,11 @@ std::tuple<array, array, array> quantize(
       reshape(w, {w.shape(0), w.shape(1) / group_size, group_size}, s);
   array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
   array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
-  array delta = divide(subtract(w_max, w_min, s), array(n_bins, w.dtype()), s);
-  array scales = maximum(squeeze(delta, -1, s), array(1e-7, w.dtype()), s);
+  array delta = maximum(
+      divide(subtract(w_max, w_min, s), array(n_bins, w.dtype()), s),
+      array(1e-7, w.dtype()),
+      s);
+  array scales = squeeze(delta, -1, s);
   array biases = squeeze(w_min, -1, s);
 
   // making sure that 0 is represented exactly in the resulting quantization
