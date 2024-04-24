@@ -201,6 +201,150 @@ inline void qouter(const thread uint8_t* w, U x, U scale, U bias, thread U* resu
   }
 }
 
+template <typename U, int N, int bits>
+inline void dequantize(const device uint8_t* w, U scale, U bias, threadgroup U* w_local) {
+  static_assert(bits == 2 || bits == 4 || bits == 8, "Template undefined for bits not in {2, 4, 8}");
+
+  if (bits == 2) {
+    U s[4] = {scale, scale / static_cast<U>(4.0f), scale / static_cast<U>(16.0f), scale / static_cast<U>(64.0f)};
+    for (int i = 0; i < (N / 4); i++) {
+      w_local[4*i] = s[0] * (w[i] & 0x03) + bias;
+      w_local[4*i+1] = s[1] * (w[i] & 0x0c) + bias;
+      w_local[4*i+2] = s[2] * (w[i] & 0x30) + bias;
+      w_local[4*i+3] = s[3] * (w[i] & 0xc0) + bias;
+    }
+  }
+
+  else if (bits == 4) {
+    const device uint16_t* ws = (const device uint16_t*)w;
+    U s[4] = {scale, scale / static_cast<U>(16.0f), scale / static_cast<U>(256.0f), scale / static_cast<U>(4096.0f)};
+    for (int i = 0; i < (N / 4); i++) {
+      w_local[4*i] = s[0] * (ws[i] & 0x000f) + bias;
+      w_local[4*i+1] = s[1] * (ws[i] & 0x00f0) + bias;
+      w_local[4*i+2] = s[2] * (ws[i] & 0x0f00) + bias;
+      w_local[4*i+3] = s[3] * (ws[i] & 0xf000) + bias;
+    }
+  }
+
+  else if (bits == 8) {
+    for (int i = 0; i < N; i++) {
+      w_local[i] = scale * w[i] + bias;
+    }
+  }
+}
+
+template <
+    typename T,
+    short BROWS,
+    short BCOLS,
+    short dst_ld,
+    short reduction_dim,
+    short tgp_size,
+    short group_size,
+    short bits>
+struct QuantizedBlockLoader {
+  static_assert(BCOLS <= group_size, "The group size should be larger than the columns");
+  static_assert(group_size % BCOLS == 0, "The group size should be divisible by the columns");
+  static_assert(bits == 2 || bits == 4 || bits == 8, "Template undefined for bits not in {2, 4, 8}");
+
+  MLX_MTL_CONST short pack_factor = 32 / bits;
+  MLX_MTL_CONST short BCOLS_PACKED = BCOLS / pack_factor;
+  MLX_MTL_CONST short n_reads = (BCOLS_PACKED * BROWS < tgp_size) ? 1 : (BCOLS_PACKED * BROWS) / tgp_size;
+  MLX_MTL_CONST short group_steps = group_size / BCOLS;
+
+  const int src_ld;
+  const int tile_stride;
+  short group_step_cnt;
+  const int group_stride;
+
+  const short thread_idx;
+  const short bi;
+  const short bj;
+
+  threadgroup T* dst;
+  const device uint32_t* src;
+  const device T* scales;
+  const device T* biases;
+
+  QuantizedBlockLoader(
+      const device uint32_t* src_,
+      const device T* scales_,
+      const device T* biases_,
+      const int src_ld_,
+      threadgroup T* dst_,
+      ushort simd_group_id [[simdgroup_index_in_threadgroup]],
+      ushort simd_lane_id [[thread_index_in_simdgroup]])
+      : src_ld(src_ld_),
+        tile_stride(reduction_dim ? BCOLS_PACKED : BROWS * src_ld / pack_factor),
+        group_step_cnt(0),
+        group_stride(BROWS * src_ld / group_size),
+        thread_idx(simd_group_id * 32 + simd_lane_id),
+        bi(n_reads * thread_idx / BCOLS_PACKED),
+        bj((n_reads * thread_idx) % BCOLS_PACKED),
+        dst(dst_ + bi * dst_ld + bj * pack_factor),
+        src(src_ + bi * src_ld / pack_factor + bj),
+        scales(scales_ + bi * src_ld / group_size),
+        biases(biases_ + bi * src_ld / group_size) {}
+
+  void load_unsafe() const {
+    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
+      return;
+    }
+
+    T scale = *scales;
+    T bias = *biases;
+    for (int i=0; i<n_reads; i++) {
+      dequantize<T, pack_factor, bits>((device uint8_t*)(src + i), scale, bias, dst + i * pack_factor);
+    }
+  }
+
+  void load_safe(short2 src_tile_dim) const {
+    if (BCOLS_PACKED * BROWS < tgp_size && bi >= BROWS) {
+      return;
+    }
+
+    if (reduction_dim == 1 && bi >= src_tile_dim.y) {
+      for (int i=0; i<n_reads*pack_factor; i++) {
+        dst[i] = T(0);
+      }
+      return;
+    }
+
+    if (reduction_dim == 0 && bi >= src_tile_dim.x) {
+      for (int i=0; i<n_reads*pack_factor; i++) {
+        dst[i] = T(0);
+      }
+      return;
+    }
+
+    T scale = *scales;
+    T bias = *biases;
+    for (int i=0; i<n_reads; i++) {
+      dequantize<T, pack_factor, bits>((device uint8_t*)(src + i), scale, bias, dst + i * pack_factor);
+    }
+  }
+
+  void next() {
+    src += tile_stride;
+    if (reduction_dim == 1) {
+      if (group_steps > 1) {
+        group_step_cnt++;
+        if (group_step_cnt == group_steps) {
+          group_step_cnt = 0;
+          scales++;
+          biases++;
+        }
+      } else {
+        scales++;
+        biases++;
+      }
+    } else {
+      scales += group_stride;
+      biases += group_stride;
+    }
+  }
+};
+
 template <typename T, int group_size, int bits, int packs_per_thread>
 [[kernel]] void qmv_fast(
     const device uint32_t* w [[buffer(0)]],
@@ -495,28 +639,22 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
   static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
 
-  const uint lidy = lid / SIMD_SIZE;
+  (void)lid;
 
   constexpr int WM = 2;
   constexpr int WN = 2;
-  constexpr int bitmask = (1 << bits) - 1;
-  constexpr int el_per_int = 32 / bits;
-  constexpr int ints_per_block = BK / el_per_int;
-  constexpr int groups_per_block = (BK / group_size > 0) ? (BK / group_size) : 1;
-  constexpr int groups_per_simd = BN / (WM * WN);
-  constexpr int w_els_per_thread = (BN * BK / el_per_int) / (SIMD_SIZE * WM * WN);
+  constexpr int pack_factor = 32 / bits;
 
   // Instantiate the appropriate BlockMMA and Loader
   using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK, BK>;
-  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE, 1, 4>;
+  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE>;
+  using loader_w_t = QuantizedBlockLoader<T, BN, BK, BK, 1, WM * WN * SIMD_SIZE, group_size, bits>;
 
-  threadgroup T scales_block[BN * groups_per_block];
-  threadgroup T biases_block[BN * groups_per_block];
   threadgroup T Xs[BM * BK];
   threadgroup T Ws[BN * BK];
 
   // Set the block
-  const int K_w = K / el_per_int;
+  const int K_w = K / pack_factor;
   const int K_g = K / group_size;
   const int y_row = tid.y * BM;
   const int y_col = tid.x * BN;
@@ -531,87 +669,22 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   const short num_els = min(BM, M - y_row);
   const short num_outs = min(BN, N - y_col);
   loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
+  loader_w_t loader_w(w, scales, biases, K, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
   for (int k=0; k<K; k += BK) {
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    // Load the x tile
+
+    // Load the x and w tiles
     if (num_els < BM) {
         loader_x.load_safe(short2(BK, num_els));
     } else {
         loader_x.load_unsafe();
     }
-
-    // Load the scale and bias
-    if (simd_lid == 0) {
-      threadgroup T *scales_block_local = scales_block + lidy * groups_per_block * groups_per_simd;
-      threadgroup T *biases_block_local = biases_block + lidy * groups_per_block * groups_per_simd;
-      const device T *scales_local = scales + lidy * groups_per_simd * K_g + k / group_size;
-      const device T *biases_local = biases + lidy * groups_per_simd * K_g + k / group_size;
-      #pragma clang loop unroll(full)
-      for (int gs=0; gs<groups_per_simd; gs++) {
-        #pragma clang loop unroll(full)
-        for (int gc=0; gc<groups_per_block; gc++) {
-          scales_block_local[gc] = scales_local[gc];
-          biases_block_local[gc] = biases_local[gc];
-        }
-        scales_block_local += groups_per_block;
-        scales_local += K_g;
-        biases_block_local += groups_per_block;
-        biases_local += K_g;
-      }
-    }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Load the w tile
-    {
-      if (!aligned_N && num_outs < BN) {
-        for (int wo=0; wo<w_els_per_thread; wo++) {
-          int offset = lid * w_els_per_thread + wo;
-          int offset_row = offset / (BK / el_per_int);
-          int offset_col = offset % (BK / el_per_int);
-          const device uint32_t * w_local = w + offset_row * K_w + offset_col;
-          threadgroup T * Ws_local = Ws + offset_row * BK + offset_col * el_per_int;
-
-          // y_col corresponds to the row of the weight matrix and added to
-          // offset_row it should be less than the total number of rows
-          // otherwise skip.
-          if (y_col + offset_row < N) {
-            uint32_t wi = *w_local;
-            T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-            T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-
-            #pragma clang loop unroll(full)
-            for (int t=0; t<el_per_int; t++) {
-              Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
-              wi >>= bits;
-            }
-          } else {
-            #pragma clang loop unroll(full)
-            for (int t=0; t<el_per_int; t++) {
-              Ws_local[t] = 0;
-            }
-          }
-        }
-      } else {
-        for (int wo=0; wo<w_els_per_thread; wo++) {
-          int offset = lid * w_els_per_thread + wo;
-          int offset_row = offset / (BK / el_per_int);
-          int offset_col = offset % (BK / el_per_int);
-          const device uint32_t * w_local = w + offset_row * K_w + offset_col;
-          threadgroup T * Ws_local = Ws + offset_row * BK + offset_col * el_per_int;
-
-          uint32_t wi = *w_local;
-          T scale = scales_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-          T bias = biases_block[offset_row * groups_per_block + offset_col / (group_size / el_per_int)];
-
-          #pragma clang loop unroll(full)
-          for (int t=0; t<el_per_int; t++) {
-            Ws_local[t] = scale * static_cast<T>(wi & bitmask) + bias;
-            wi >>= bits;
-          }
-        }
-      }
+    if (!aligned_N && num_outs < BN) {
+      loader_w.load_safe(short2(BK, num_outs));
+    } else {
+        loader_w.load_unsafe();
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -620,9 +693,7 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
 
     // Prepare for next iteration
     loader_x.next();
-    w += ints_per_block;
-    // scales and biases cannot be advanced because they would have to be
-    // advanced every other iteration or sth.
+    loader_w.next();
   }
 
   // Store results to device memory
@@ -877,7 +948,7 @@ instantiate_qvm_types( 32, 8)
 
 #define instantiate_qmm_t(name, itype, group_size, bits, aligned_N) \
   template [[host_name("qmm_t_" #name "_gs_" #group_size "_b_" #bits "_alN_" #aligned_N)]] \
-  [[kernel]] void qmm_t<itype, 32, 64, 32, group_size, bits, aligned_N>( \
+  [[kernel]] void qmm_t<itype, 32, 32, 32, group_size, bits, aligned_N>( \
       const device itype* x [[buffer(0)]], \
       const device uint32_t* w [[buffer(1)]], \
       const device itype* scales [[buffer(2)]], \
