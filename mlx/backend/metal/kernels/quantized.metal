@@ -644,14 +644,15 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   constexpr int WM = 2;
   constexpr int WN = 2;
   constexpr int pack_factor = 32 / bits;
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
 
   // Instantiate the appropriate BlockMMA and Loader
-  using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK, BK>;
-  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE>;
-  using loader_w_t = QuantizedBlockLoader<T, BN, BK, BK, 1, WM * WN * SIMD_SIZE, group_size, bits>;
+  using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
+  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
+  using loader_w_t = QuantizedBlockLoader<T, BN, BK, BK_padded, 1, WM * WN * SIMD_SIZE, group_size, bits>;
 
-  threadgroup T Xs[BM * BK];
-  threadgroup T Ws[BN * BK];
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[BN * BK_padded];
 
   // Set the block
   const int K_w = K / pack_factor;
@@ -672,28 +673,50 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   loader_w_t loader_w(w, scales, biases, K, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
-  for (int k=0; k<K; k += BK) {
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Load the x and w tiles
-    if (num_els < BM) {
-        loader_x.load_safe(short2(BK, num_els));
-    } else {
-        loader_x.load_unsafe();
-    }
+  if (num_els < BM) {
     if (!aligned_N && num_outs < BN) {
-      loader_w.load_safe(short2(BK, num_outs));
+      for (int k=0; k<K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_safe(short2(BK, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     } else {
+      for (int k=0; k<K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
         loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     }
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Multiply and accumulate threadgroup elements
-    mma_op.mma(Xs, Ws);
-
-    // Prepare for next iteration
-    loader_x.next();
-    loader_w.next();
+  } else {
+    if (!aligned_N && num_outs < BN) {
+      for (int k=0; k<K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_safe(short2(BK, num_outs));
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    } else {
+      for (int k=0; k<K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    }
   }
 
   // Store results to device memory
@@ -729,14 +752,16 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   constexpr int WM = 2;
   constexpr int WN = 2;
   constexpr int pack_factor = 32 / bits;
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  constexpr int BN_padded = (BN + 16 / sizeof(T));
 
   // Instantiate the appropriate BlockMMA and Loader
-  using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, false, BK, BN>;
-  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK, 1, WM * WN * SIMD_SIZE, 1, 4>;
-  using loader_w_t = QuantizedBlockLoader<T, BK, BN, BN, 0, WM * WN * SIMD_SIZE, group_size, bits>;
+  using mma_t = mlx::steel::BlockMMA<T, T, BM, BN, BK, WM, WN, false, false, BK_padded, BN_padded>;
+  using loader_x_t = mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE, 1, 4>;
+  using loader_w_t = QuantizedBlockLoader<T, BK, BN, BN_padded, 0, WM * WN * SIMD_SIZE, group_size, bits>;
 
-  threadgroup T Xs[BM * BK];
-  threadgroup T Ws[BK * BN];
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[BK * BN_padded];
 
   // Set the block
   const int y_row = tid.y * BM;
@@ -753,30 +778,64 @@ template <typename T, const int BM, const int BK, const int BN, const int group_
   loader_w_t loader_w(w, scales, biases, N, Ws, simd_gid, simd_lid);
   mma_t mma_op(simd_gid, simd_lid);
 
-  for (int k=0; k<K; k += BK) {
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Load the x and w tiles
-    short num_k = min(BK, K - k);
-    if (num_els < BM || num_k < BK) {
-        loader_x.load_safe(short2(num_k, num_els));
-    } else {
-        loader_x.load_unsafe();
-    }
-    if (num_k < BK) {
-        loader_w.load_safe(short2(BN, num_k));
-    } else {
+  if (num_els < BM) {
+    if ((K % BK) != 0) {
+      const int k_blocks = K/BK;
+      for (int k=0; k<k_blocks; k++) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
         loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+      const short num_k = K - k_blocks * BK;
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      loader_x.load_safe(short2(num_k, num_els));
+      loader_w.load_safe(short2(BN, num_k));
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      mma_op.mma(Xs, Ws);
+    } else {
+      for (int k=0; k<K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_safe(short2(BK, num_els));
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
     }
-
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
-    // Multiply and accumulate threadgroup elements
-    mma_op.mma(Xs, Ws);
-
-    // Prepare for next iteration
-    loader_x.next();
-    loader_w.next();
+  } else {
+    if ((K % BK) != 0) {
+      const int k_blocks = K/BK;
+      for (int k=0; k<k_blocks; k++) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+      const short num_k = K - k_blocks * BK;
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      loader_x.load_safe(short2(num_k, BM));
+      loader_w.load_safe(short2(BN, num_k));
+      threadgroup_barrier(mem_flags::mem_threadgroup);
+      mma_op.mma(Xs, Ws);
+    } else {
+      for (int k=0; k<K; k += BK) {
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        loader_x.load_unsafe();
+        loader_w.load_unsafe();
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+        mma_op.mma(Xs, Ws);
+        loader_x.next();
+        loader_w.next();
+      }
+    }
   }
 
   // Store results to device memory
