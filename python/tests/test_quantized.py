@@ -18,6 +18,14 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 eps = 1e-6
                 self.assertTrue((errors <= (scales[..., None] + eps)).all())
 
+        # test quantize/dequantize 0s
+        a = mx.zeros((256, 512))
+        for gs in [32, 64, 128]:
+            for b in [2, 4, 8]:
+                w_q, scales, biases = mx.quantize(a, gs, b)
+                a_hat = mx.dequantize(w_q, scales, biases, gs, b)
+                self.assertTrue(mx.all(a_hat == 0))
+
     def test_qmm(self):
         key = mx.random.key(0)
         k1, k2 = mx.random.split(key)
