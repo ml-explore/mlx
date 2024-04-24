@@ -42,6 +42,9 @@ class TestMetal(mlx_tests.MLXTestCase):
         cache_mem = mx.metal.get_cache_memory()
         self.assertTrue(cache_mem >= 4096 * 4)
 
+        mx.metal.clear_cache()
+        self.assertEqual(mx.metal.get_cache_memory(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

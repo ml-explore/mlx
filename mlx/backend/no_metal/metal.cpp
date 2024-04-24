@@ -4,7 +4,6 @@
 
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
-
 namespace mlx::core::metal {
 
 bool is_available() {
@@ -48,5 +47,6 @@ size_t set_cache_limit(size_t) {
 }
 void start_capture(std::string path) {}
 void stop_capture() {}
+void clear_cache() {}
 
 } // namespace mlx::core::metal

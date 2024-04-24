@@ -209,6 +209,11 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   return Buffer{static_cast<void*>(buf)};
 }
 
+void MetalAllocator::clear_cache() {
+  std::unique_lock lk(mutex_);
+  buffer_cache_.clear();
+}
+
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
   std::unique_lock lk(mutex_);
@@ -241,6 +246,9 @@ size_t get_peak_memory() {
 }
 size_t get_cache_memory() {
   return allocator().get_cache_memory();
+}
+void clear_cache() {
+  return allocator().clear_cache();
 }
 
 } // namespace metal
