@@ -3944,4 +3944,77 @@ array number_of_elements(
       {a}));
 }
 
+array bitwise_impl(
+    const array& a,
+    const array& b,
+    BitwiseBinary::Op op,
+    const std::string& op_name,
+    const StreamOrDevice& s) {
+  auto out_type = promote_types(a.dtype(), b.dtype());
+  if (!(issubdtype(out_type, integer) || out_type == bool_)) {
+    std::ostringstream msg;
+    msg << "[" << op_name
+        << "] Only allowed on integer or boolean types "
+           "but got types "
+        << a.dtype() << " and " << b.dtype() << ".";
+    throw std::runtime_error(msg.str());
+  }
+  auto inputs =
+      broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+  return array(
+      a.shape(),
+      out_type,
+      std::make_shared<BitwiseBinary>(to_stream(s), op),
+      std::move(inputs));
+}
+
+array bitwise_and(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  return bitwise_impl(a, b, BitwiseBinary::Op::And, "bitwise_and", s);
+}
+array operator&(const array& a, const array& b) {
+  return bitwise_and(a, b);
+}
+
+array bitwise_or(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  return bitwise_impl(a, b, BitwiseBinary::Op::Or, "bitwise_or", s);
+}
+array operator|(const array& a, const array& b) {
+  return bitwise_or(a, b);
+}
+
+array bitwise_xor(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  return bitwise_impl(a, b, BitwiseBinary::Op::Xor, "bitwise_xor", s);
+}
+array operator^(const array& a, const array& b) {
+  return bitwise_xor(a, b);
+}
+
+array left_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  // Bit shift on bool always up-casts to uint8
+  auto t = promote_types(result_type(a, b), uint8);
+  return bitwise_impl(
+      astype(a, t, s),
+      astype(b, t, s),
+      BitwiseBinary::Op::LeftShift,
+      "left_shift",
+      s);
+}
+array operator<<(const array& a, const array& b) {
+  return left_shift(a, b);
+}
+
+array right_shift(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  // Bit shift on bool always up-casts to uint8
+  auto t = promote_types(result_type(a, b), uint8);
+  return bitwise_impl(
+      astype(a, t, s),
+      astype(b, t, s),
+      BitwiseBinary::Op::RightShift,
+      "right_shift",
+      s);
+}
+array operator>>(const array& a, const array& b) {
+  return right_shift(a, b);
+}
+
 } // namespace mlx::core
