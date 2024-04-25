@@ -165,6 +165,15 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
     return Buffer{nullptr};
   }
 
+  // More helpful message if maximum buffer length is exceeded
+  if (size > device_->maxBufferLength()) {
+    std::ostringstream msg;
+    msg << "Attempting to allocate " << size << " bytes which is greater than"
+        << " the maximum allowed buffer size of " << device_->maxBufferLength()
+        << " bytes.";
+    throw std::runtime_error(msg.str());
+  }
+
   // Align up memory
   if (size > vm_page_size) {
     size = vm_page_size * ((size + vm_page_size - 1) / vm_page_size);

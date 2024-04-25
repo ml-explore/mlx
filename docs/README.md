@@ -2,12 +2,16 @@
 
 ### Setup (do once)
 
-Install [sphinx](https://www.sphinx-doc.org/en/master/usage/installation.html)
-for example with `conda`:
+Install Doxygen:
 
 ```
-conda install sphinx
-pip install sphinx-book-theme
+brew install doxygen
+```
+
+Install Python packages:
+
+```
+pip install -r requirements.txt
 ```
 
 ### Build
@@ -15,7 +19,7 @@ pip install sphinx-book-theme
 Build the docs from `mlx/docs/`
 
 ```
-make html
+doxygen && make html
 ```
 
 View the docs by running a server in `mlx/docs/build/html/`:

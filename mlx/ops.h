@@ -11,7 +11,10 @@
 
 namespace mlx::core {
 
-/** Creation operations */
+/**
+ * \defgroup ops Core array operations
+ * @{
+ */
 
 /**
  * A 1D array of numbers starting at `start` (optional),
@@ -114,8 +117,6 @@ inline array tri(int n, Dtype type, StreamOrDevice s = {}) {
 
 array tril(array x, int k = 0, StreamOrDevice s = {});
 array triu(array x, int k = 0, StreamOrDevice s = {});
-
-/** array manipulation */
 
 /** Reshape an array to the given shape. */
 array reshape(const array& a, std::vector<int> shape, StreamOrDevice s = {});
@@ -289,8 +290,6 @@ std::vector<array> broadcast_arrays(
     const std::vector<array>& inputs,
     StreamOrDevice s = {});
 
-/** Comparison operations */
-
 /** Returns the bool array with (a == b) element-wise. */
 array equal(const array& a, const array& b, StreamOrDevice s = {});
 inline array operator==(const array& a, const array& b) {
@@ -400,8 +399,6 @@ array where(
     const array& x,
     const array& y,
     StreamOrDevice s = {});
-
-/** Reduction operations */
 
 /** True if all elements in the array are true (or non-zero). **/
 array all(const array& a, bool keepdims, StreamOrDevice s = {});
@@ -709,8 +706,6 @@ array logsumexp(
     int axis,
     bool keepdims = false,
     StreamOrDevice s = {});
-
-/** Simple arithmetic operations */
 
 /** Absolute value of elements in an array. */
 array abs(const array& a, StreamOrDevice s = {});
@@ -1076,8 +1071,6 @@ array cummin(
     bool inclusive = true,
     StreamOrDevice s = {});
 
-/** Convolution operations */
-
 /** General convolution with a filter */
 array conv_general(
     array input,
@@ -1245,5 +1238,7 @@ array number_of_elements(
     bool inverted,
     Dtype dtype = int32,
     StreamOrDevice s = {});
+
+/** @} */
 
 } // namespace mlx::core
