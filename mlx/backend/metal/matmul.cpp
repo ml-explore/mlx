@@ -342,11 +342,19 @@ void steel_matmul_conv_groups(
   MTL::Size group_dims = MTL::Size(32, wn, wm);
   MTL::Size grid_dims = MTL::Size(tn, tm, groups);
 
+  std::vector<int> batch_shape = {1};
+  std::vector<size_t> batch_strides = {0};
+
   // Launch kernel
   compute_encoder.set_input_array(a, 0);
   compute_encoder.set_input_array(b, 1);
   compute_encoder.set_output_array(out, 3);
   compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
+
+  compute_encoder->setBytes(
+      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
+  compute_encoder->setBytes(
+      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
 
   compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 
