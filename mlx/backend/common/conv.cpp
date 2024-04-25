@@ -440,7 +440,7 @@ void explicit_gemm_conv_1D_cpu(
         wt.flags(),
         wt.size(),
         0);
-    auto gemm_wt = array(wt_transpose.shape(), float32, nullptr, {});
+    gemm_wt = array(wt_transpose.shape(), float32, nullptr, {});
     copy(wt_transpose, gemm_wt, CopyType::General);
   } else if (wt.dtype() != float32 || !wt.flags().row_contiguous) {
     auto ctype =
