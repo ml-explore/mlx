@@ -29,6 +29,7 @@ Operations
    atleast_2d
    atleast_3d
    broadcast_to
+   block_masked_mm
    ceil
    clip
    concatenate
@@ -42,6 +43,7 @@ Operations
    cummin
    cumprod
    cumsum
+   degrees
    dequantize
    diag
    diagonal
@@ -90,6 +92,7 @@ Operations
    moveaxis
    multiply
    negative
+   not_equal
    ones
    ones_like
    outer
@@ -98,6 +101,7 @@ Operations
    prod
    quantize
    quantized_matmul
+   radians
    reciprocal
    repeat
    reshape
