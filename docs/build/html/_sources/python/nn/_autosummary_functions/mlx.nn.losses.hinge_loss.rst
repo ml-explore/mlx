@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autofunction:: hinge_loss
+.. autoclass:: hinge_loss
+
+   
+
+   
+   
