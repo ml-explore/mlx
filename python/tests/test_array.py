@@ -1255,19 +1255,9 @@ class TestArray(mlx_tests.MLXTestCase):
             slice(None, None, 2),
         )
 
-        check_slices(
-            np.zeros((5, 4, 3)),
-            np.ones((5, 3)),
-            slice(None),
-            0
-        )
+        check_slices(np.zeros((5, 4, 3)), np.ones((5, 3)), slice(None), 0)
 
-        check_slices(
-            np.zeros((5, 4, 3)),
-            np.ones((5, 1, 3)),
-            slice(None),
-            slice(0, 1)
-        )
+        check_slices(np.zeros((5, 4, 3)), np.ones((5, 1, 3)), slice(None), slice(0, 1))
 
     def test_array_at(self):
         a = mx.array(1)
