@@ -16,3 +16,4 @@ Devices and Streams
    new_stream
    set_default_stream
    stream
+   synchronize
