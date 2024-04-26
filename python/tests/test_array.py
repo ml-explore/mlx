@@ -1194,6 +1194,10 @@ class TestArray(mlx_tests.MLXTestCase):
             a = mx.zeros((2, 2))
             a[0, 0, 0] = 1
 
+        with self.assertRaises(ValueError):
+            a = mx.zeros((5, 4, 3))
+            a[:, 0] = mx.ones((5, 1, 3))
+
         check_slices(np.zeros((2, 2, 2, 2)), 1, None, Ellipsis, None)
         check_slices(
             np.zeros((2, 2, 2, 2)), 1, np.array([0, 1]), Ellipsis, np.array([0, 1])
