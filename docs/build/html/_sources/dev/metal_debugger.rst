@@ -32,10 +32,9 @@ work.
 
     trace_file = "mlx_trace.gputrace"
 
-    if not mx.metal.start_capture(trace_file):
-      print("Make sure to run with MTL_CAPTURE_ENABLED=1 and "
-            f"that the path {trace_file} does not already exist.")
-      exit(1)
+    # Make sure to run with MTL_CAPTURE_ENABLED=1 and
+    # that the path trace_file does not already exist.
+    mx.metal.start_capture(trace_file)
 
     for _ in range(10):
       mx.eval(mx.add(a, b))

@@ -31,6 +31,7 @@ Layers
    Mish
    MultiHeadAttention
    PReLU
+   QuantizedEmbedding
    QuantizedLinear
    RMSNorm
    ReLU

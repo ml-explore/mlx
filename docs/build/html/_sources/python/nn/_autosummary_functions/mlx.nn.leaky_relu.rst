@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn
 
-.. autofunction:: leaky_relu
+.. autoclass:: leaky_relu
+
+   
+
+   
+   

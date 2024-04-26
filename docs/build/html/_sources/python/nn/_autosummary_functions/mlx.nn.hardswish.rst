@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn
 
-.. autofunction:: hardswish
+.. autoclass:: hardswish
+
+   
+
+   
+   
