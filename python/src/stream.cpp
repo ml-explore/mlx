@@ -139,7 +139,8 @@ void init_stream(nb::module_& m) {
       Synchronize with the given stream.
 
       Args:
-        (Stream, optional): The stream to synchronize with. If ``None`` then
-           the default stream of the default device is used. Default: ``None``.
+        stream (Stream, optional): The stream to synchronize with. If ``None``
+           then the default stream of the default device is used.
+           Default: ``None``.
       )pbdoc");
 }
