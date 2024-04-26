@@ -4,3 +4,13 @@
 .. currentmodule:: mlx.nn
 
 .. autoclass:: Mish
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+   
+   

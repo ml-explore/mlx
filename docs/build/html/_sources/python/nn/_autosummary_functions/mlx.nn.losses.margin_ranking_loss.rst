@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autofunction:: margin_ranking_loss
+.. autoclass:: margin_ranking_loss
+
+   
+
+   
+   

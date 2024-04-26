@@ -4,3 +4,13 @@
 .. currentmodule:: mlx.nn
 
 .. autoclass:: Dropout3d
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+   
+   
