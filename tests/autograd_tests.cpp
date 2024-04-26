@@ -596,7 +596,7 @@ TEST_CASE("test op vjps") {
   // Test power
   {
     auto fun = [](std::vector<array> inputs) {
-      return std::vector<array>{inputs[0] ^ inputs[1]};
+      return std::vector<array>{power(inputs[0], inputs[1])};
     };
     auto out = vjp(fun, {array(4.0f), array(3.0f)}, {array(1.0f)}).second;
     CHECK_EQ(out[0].item<float>(), 48.0f);
