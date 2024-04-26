@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn
 
-.. autofunction:: log_softmax
+.. autoclass:: log_softmax
+
+   
+
+   
+   
