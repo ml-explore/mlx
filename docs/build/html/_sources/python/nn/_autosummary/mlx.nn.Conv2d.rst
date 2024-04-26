@@ -4,3 +4,13 @@
 .. currentmodule:: mlx.nn
 
 .. autoclass:: Conv2d
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+   
+   
