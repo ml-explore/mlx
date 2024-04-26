@@ -74,7 +74,7 @@ Install `nanobind <https://nanobind.readthedocs.io/en/latest/>`_ with:
 
 .. code-block:: shell
 
-    pip install git+https://github.com/wjakob/nanobind.git
+    pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
 
 Then simply build and install MLX using pip:
 
@@ -120,7 +120,7 @@ Create a build directory and run CMake and make:
 .. code-block:: shell
 
    mkdir -p build && cd build
-   cmake .. && make -j 
+   cmake .. && make -j
 
 Run tests with:
 
@@ -139,7 +139,7 @@ directory as the executable statically linked to ``libmlx.a`` or the
 preprocessor constant ``METAL_PATH`` should be defined at build time and it
 should point to the path to the built metal library.
 
-.. list-table:: Build Options 
+.. list-table:: Build Options
    :widths: 25 8
    :header-rows: 1
 
@@ -161,15 +161,15 @@ should point to the path to the built metal library.
 
 .. note::
 
-    If you have multiple Xcode installations and wish to use 
-    a specific one while building, you can do so by adding the 
-    following environment variable before building 
+    If you have multiple Xcode installations and wish to use
+    a specific one while building, you can do so by adding the
+    following environment variable before building
 
     .. code-block:: shell
 
       export DEVELOPER_DIR="/path/to/Xcode.app/Contents/Developer/"
 
-    Further, you can use the following command to find out which 
+    Further, you can use the following command to find out which
     macOS SDK will be used
 
     .. code-block:: shell
@@ -201,7 +201,7 @@ Then set the active developer directory:
 
   sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
 
-x86 Shell 
+x86 Shell
 ~~~~~~~~~
 
 .. _build shell:

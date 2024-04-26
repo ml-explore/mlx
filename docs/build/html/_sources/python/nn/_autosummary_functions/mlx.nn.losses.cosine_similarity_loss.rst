@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autofunction:: cosine_similarity_loss
+.. autoclass:: cosine_similarity_loss
+
+   
+
+   
+   
