@@ -173,6 +173,7 @@ In detail:
    :toctree: _autosummary
 
    value_and_grad
+   quantize
 
 .. toctree::
 

@@ -4,3 +4,13 @@
 .. currentmodule:: mlx.nn
 
 .. autoclass:: GroupNorm
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+   
+   

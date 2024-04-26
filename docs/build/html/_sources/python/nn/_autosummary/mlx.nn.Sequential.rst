@@ -4,3 +4,13 @@
 .. currentmodule:: mlx.nn
 
 .. autoclass:: Sequential
+
+   
+
+   
+   .. rubric:: Methods
+
+   .. autosummary::
+   
+   
+   
