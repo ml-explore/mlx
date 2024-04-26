@@ -22,7 +22,7 @@ struct complex64_t {
   float imag;
 
   // Constructors
-  constexpr complex64_t(float real, float imag) : real(real), imag(imag){};
+  constexpr complex64_t(float real, float imag) : real(real), imag(imag) {};
 
   // Conversions to complex64_t
   template <

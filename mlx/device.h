@@ -13,7 +13,7 @@ struct Device {
   static constexpr DeviceType cpu = DeviceType::cpu;
   static constexpr DeviceType gpu = DeviceType::gpu;
 
-  Device(DeviceType type, int index = 0) : type(type), index(index){};
+  Device(DeviceType type, int index = 0) : type(type), index(index) {};
 
   DeviceType type;
   int index;

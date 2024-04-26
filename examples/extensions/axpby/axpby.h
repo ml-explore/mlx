@@ -33,7 +33,7 @@ array axpby(
 class Axpby : public Primitive {
  public:
   explicit Axpby(Stream stream, float alpha, float beta)
-      : Primitive(stream), alpha_(alpha), beta_(beta){};
+      : Primitive(stream), alpha_(alpha), beta_(beta) {};
 
   /**
    * A primitive must know how to evaluate itself on the CPU/GPU

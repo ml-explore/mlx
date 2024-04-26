@@ -99,7 +99,8 @@ template <typename T, int N_READS = RMS_N_READS>
     for (int i = 0; i < N_READS; i++) {
       if ((lid * N_READS + i) < axis_size) {
         thread_x[i] = (thread_x[i] - mean) * normalizer;
-        out[i] = w[w_stride * i] * static_cast<T>(thread_x[i]) + b[b_stride * i];
+        out[i] =
+            w[w_stride * i] * static_cast<T>(thread_x[i]) + b[b_stride * i];
       }
     }
   }
@@ -192,13 +193,15 @@ template <typename T, int N_READS = RMS_N_READS>
     if (r + lid * N_READS + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {
         float xi = (x[r + i] - mean) * normalizer;
-        out[r + i] = w[w_stride * (i + r)] * static_cast<T>(xi) + b[b_stride * (i + r)];
+        out[r + i] =
+            w[w_stride * (i + r)] * static_cast<T>(xi) + b[b_stride * (i + r)];
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
         if ((r + lid * N_READS + i) < axis_size) {
           float xi = (x[r + i] - mean) * normalizer;
-          out[r + i] = w[w_stride * (i + r)] * static_cast<T>(xi) + b[b_stride * (i + r)];
+          out[r + i] = w[w_stride * (i + r)] * static_cast<T>(xi) +
+              b[b_stride * (i + r)];
         }
       }
     }
@@ -323,16 +326,18 @@ template <typename T, int N_READS = RMS_N_READS>
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
       thread_x[i] = (thread_x[i] - mean) * normalizer;
-      gx[i] = static_cast<T>(normalizer * (thread_w[i] * thread_g[i] - meanwg) -
-                             thread_x[i] * meanwgxc * normalizer2);
+      gx[i] = static_cast<T>(
+          normalizer * (thread_w[i] * thread_g[i] - meanwg) -
+          thread_x[i] * meanwgxc * normalizer2);
       gw[i] = static_cast<T>(thread_g[i] * thread_x[i]);
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
       if ((lid * N_READS + i) < axis_size) {
         thread_x[i] = (thread_x[i] - mean) * normalizer;
-        gx[i] = static_cast<T>(normalizer * (thread_w[i] * thread_g[i] - meanwg) -
-                               thread_x[i] * meanwgxc * normalizer2);
+        gx[i] = static_cast<T>(
+            normalizer * (thread_w[i] * thread_g[i] - meanwg) -
+            thread_x[i] * meanwgxc * normalizer2);
         gw[i] = static_cast<T>(thread_g[i] * thread_x[i]);
       }
     }
@@ -460,8 +465,8 @@ template <typename T, int N_READS = RMS_N_READS>
         float xi = (x[i + r] - mean) * normalizer;
         float wi = w[(i + r) * w_stride];
         float gi = g[i + r];
-        gx[i + r] = static_cast<T>(normalizer * (wi * gi - meanwg) -
-                                   xi * meanwgxc * normalizer2);
+        gx[i + r] = static_cast<T>(
+            normalizer * (wi * gi - meanwg) - xi * meanwgxc * normalizer2);
         gw[i + r] = static_cast<T>(gi * xi);
       }
     } else {
@@ -470,8 +475,8 @@ template <typename T, int N_READS = RMS_N_READS>
           float xi = (x[i + r] - mean) * normalizer;
           float wi = w[(i + r) * w_stride];
           float gi = g[i + r];
-          gx[i + r] = static_cast<T>(normalizer * (wi * gi - meanwg) -
-                                     xi * meanwgxc * normalizer2);
+          gx[i + r] = static_cast<T>(
+              normalizer * (wi * gi - meanwg) - xi * meanwgxc * normalizer2);
           gw[i + r] = static_cast<T>(gi * xi);
         }
       }
@@ -550,4 +555,3 @@ instantiate_layer_norm(float32, float)
 instantiate_layer_norm(float16, half)
 instantiate_layer_norm(bfloat16, bfloat16_t)
     // clang-format on
-

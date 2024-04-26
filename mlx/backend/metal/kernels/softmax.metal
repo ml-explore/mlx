@@ -246,4 +246,4 @@ instantiate_softmax(float16, half)
 instantiate_softmax(bfloat16, bfloat16_t)
 instantiate_softmax_precise(float16, half)
 instantiate_softmax_precise(bfloat16, bfloat16_t)
-// clang-format on
+    // clang-format on

@@ -7,8 +7,8 @@
 
 template <typename T, bool traditional, bool forward>
 [[kernel]] void rope(
-    const device T *in [[buffer(0)]],
-    device T * out [[buffer(1)]],
+    const device T* in [[buffer(0)]],
+    device T* out [[buffer(1)]],
     constant const size_t strides[3],
     constant const size_t out_strides[3],
     constant const int& offset,
@@ -20,12 +20,15 @@ template <typename T, bool traditional, bool forward>
   uint in_index_1, in_index_2;
   uint out_index_1, out_index_2;
   if (traditional) {
-    out_index_1 = 2 * pos.x * out_strides[2] + pos.y * out_strides[1] + pos.z * out_strides[0];
+    out_index_1 = 2 * pos.x * out_strides[2] + pos.y * out_strides[1] +
+        pos.z * out_strides[0];
     out_index_2 = out_index_1 + 1;
-    in_index_1 = 2 * pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
+    in_index_1 =
+        2 * pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
     in_index_2 = in_index_1 + strides[2];
   } else {
-    out_index_1 = pos.x * out_strides[2] + pos.y * out_strides[1] + pos.z * out_strides[0];
+    out_index_1 = pos.x * out_strides[2] + pos.y * out_strides[1] +
+        pos.z * out_strides[0];
     out_index_2 = out_index_1 + grid.x * out_strides[2];
     in_index_1 = pos.x * strides[2] + pos.y * strides[1] + pos.z * strides[0];
     in_index_2 = in_index_1 + grid.x * strides[2];
@@ -57,27 +60,31 @@ template <typename T, bool traditional, bool forward>
 }
 
 #define instantiate_rope(name, type, traditional, forward) \
-  template [[host_name("rope_" #name)]] \
-  [[kernel]] void rope<type, traditional, forward>( \
-      const device type* in [[buffer(0)]], \
-      device type* out [[buffer(1)]], \
-    constant const size_t strides[3], \
-    constant const size_t out_strides[3], \
-    constant const int& offset, \
-    constant const float& base, \
-    constant const float& scale, \
-    uint3 pos [[thread_position_in_grid]], \
-    uint3 grid [[threads_per_grid]]);
+  template [[host_name("rope_" #name)]] [[kernel]] void    \
+  rope<type, traditional, forward>(                        \
+      const device type* in [[buffer(0)]],                 \
+      device type* out [[buffer(1)]],                      \
+      constant const size_t strides[3],                    \
+      constant const size_t out_strides[3],                \
+      constant const int& offset,                          \
+      constant const float& base,                          \
+      constant const float& scale,                         \
+      uint3 pos [[thread_position_in_grid]],               \
+      uint3 grid [[threads_per_grid]]);
 
-instantiate_rope(traditional_float16, half, true, true)
-instantiate_rope(traditional_bfloat16, bfloat16_t, true, true)
-instantiate_rope(traditional_float32, float, true, true)
-instantiate_rope(float16, half, false, true)
-instantiate_rope(bfloat16, bfloat16_t, false, true)
-instantiate_rope(float32, float, false, true)
-instantiate_rope(vjp_traditional_float16, half, true, false)
-instantiate_rope(vjp_traditional_bfloat16, bfloat16_t, true, false)
-instantiate_rope(vjp_traditional_float32, float, true, false)
-instantiate_rope(vjp_float16, half, false, false)
-instantiate_rope(vjp_bfloat16, bfloat16_t, false, false)
-instantiate_rope(vjp_float32, float, false, false)
+instantiate_rope(traditional_float16, half, true, true) instantiate_rope(
+    traditional_bfloat16,
+    bfloat16_t,
+    true,
+    true) instantiate_rope(traditional_float32, float, true, true)
+    instantiate_rope(float16, half, false, true) instantiate_rope(
+        bfloat16,
+        bfloat16_t,
+        false,
+        true) instantiate_rope(float32, float, false, true)
+        instantiate_rope(vjp_traditional_float16, half, true, false)
+            instantiate_rope(vjp_traditional_bfloat16, bfloat16_t, true, false)
+                instantiate_rope(vjp_traditional_float32, float, true, false)
+                    instantiate_rope(vjp_float16, half, false, false)
+                        instantiate_rope(vjp_bfloat16, bfloat16_t, false, false)
+                            instantiate_rope(vjp_float32, float, false, false)
