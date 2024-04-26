@@ -75,16 +75,7 @@ are the CPU and GPU.
    :caption: C++ API Reference
    :maxdepth: 1
 
-   cpp/array
-   cpp/data_types
-   cpp/devices_and_streams
    cpp/ops
-   cpp/random
-   cpp/transforms
-   cpp/fast
-   cpp/fft
-   cpp/linalg
-   cpp/metal
 
 .. toctree::
    :caption: Further Reading
