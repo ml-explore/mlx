@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autofunction:: smooth_l1_loss
+.. autoclass:: smooth_l1_loss
+
+   
+
+   
+   

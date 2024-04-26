@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn.losses
 
-.. autofunction:: log_cosh_loss
+.. autoclass:: log_cosh_loss
+
+   
+
+   
+   
