@@ -3,4 +3,9 @@
 
 .. currentmodule:: mlx.nn
 
-.. autofunction:: softmax
+.. autoclass:: softmax
+
+   
+
+   
+   
