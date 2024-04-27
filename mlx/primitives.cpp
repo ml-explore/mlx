@@ -560,6 +560,44 @@ bool AsStrided::is_equivalent(const Primitive& other) const {
       offset_ == a_other.offset_;
 }
 
+bool BitwiseBinary::is_equivalent(const Primitive& other) const {
+  const BitwiseBinary& a_other = static_cast<const BitwiseBinary&>(other);
+  return op_ == a_other.op_;
+}
+
+void BitwiseBinary::print(std::ostream& os) {
+  switch (op_) {
+    case BitwiseBinary::And:
+      os << "BitwiseAnd";
+      break;
+    case BitwiseBinary::Or:
+      os << "BitwiseOr";
+      break;
+    case BitwiseBinary::Xor:
+      os << "BitwiseXor";
+      break;
+    case BitwiseBinary::LeftShift:
+      os << "LeftShift";
+      break;
+    case BitwiseBinary::RightShift:
+      os << "RightShift";
+      break;
+  }
+}
+
+std::pair<std::vector<array>, std::vector<int>> BitwiseBinary::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {
+      {array(
+          a.shape(),
+          a.dtype(),
+          std::make_shared<BitwiseBinary>(stream(), op_),
+          {a, b})},
+      {to_ax}};
+}
+
 std::vector<array> Broadcast::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

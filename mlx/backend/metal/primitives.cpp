@@ -533,6 +533,26 @@ void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
+void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
+  switch (op_) {
+    case BitwiseBinary::And:
+      binary_op(inputs, out, "bitwise_and");
+      break;
+    case BitwiseBinary::Or:
+      binary_op(inputs, out, "bitwise_or");
+      break;
+    case BitwiseBinary::Xor:
+      binary_op(inputs, out, "bitwise_xor");
+      break;
+    case BitwiseBinary::LeftShift:
+      binary_op(inputs, out, "left_shift");
+      break;
+    case BitwiseBinary::RightShift:
+      binary_op(inputs, out, "right_shift");
+      break;
+  }
+}
+
 void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }

@@ -28,8 +28,11 @@ Operations
    atleast_1d
    atleast_2d
    atleast_3d
-   broadcast_to
+   bitwise_and
+   bitwise_or
+   bitwise_xor
    block_masked_mm
+   broadcast_to
    ceil
    clip
    concatenate
@@ -69,6 +72,7 @@ Operations
    isnan
    isneginf
    isposinf
+   left_shift
    less
    less_equal
    linspace
@@ -105,6 +109,7 @@ Operations
    reciprocal
    repeat
    reshape
+   right_shift
    round
    rsqrt
    save

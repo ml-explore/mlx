@@ -606,4 +606,39 @@ struct Select {
   }
 };
 
+struct BitwiseAnd {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x & y;
+  };
+};
+
+struct BitwiseOr {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x | y;
+  };
+};
+
+struct BitwiseXor {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x ^ y;
+  };
+};
+
+struct LeftShift {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x << y;
+  };
+};
+
+struct RightShift {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x >> y;
+  };
+};
+
 } // namespace mlx::core::detail
