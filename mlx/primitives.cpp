@@ -831,6 +831,11 @@ std::vector<array> Convolution::vjp(
   assert(primals.size() == 2);
   std::vector<array> grads;
 
+  if (groups_ != 1) {
+    throw std::invalid_argument(
+        "[Convolution] Backward pass not implemented for groups > 1.");
+  }
+
   // Collect info
   auto& in = primals[0];
   auto& wt = primals[1];
