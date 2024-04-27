@@ -368,23 +368,11 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
 #define instantiate_same_row_reduce_na_helper(name, tname, type, op) \
   instantiate_row_reduce_general_no_atomics(name##tname, type, type, op<type>)
 
-instantiate_reduce_ops(
-    instantiate_same_row_reduce_helper,
-    instantiate_reduce_helper_types)
-    instantiate_reduce_ops(
-        instantiate_same_row_reduce_na_helper,
-        instantiate_reduce_helper_64b)
+// clang-format off
+instantiate_reduce_ops(instantiate_same_row_reduce_helper, instantiate_reduce_helper_types)
+instantiate_reduce_ops(instantiate_same_row_reduce_na_helper, instantiate_reduce_helper_64b)
 
-        instantiate_reduce_from_types(instantiate_row_reduce_general, and, bool, And)
-            instantiate_reduce_from_types(
-                instantiate_row_reduce_general,
-                or
-                ,
-                bool,
-                Or)
+instantiate_reduce_from_types(instantiate_row_reduce_general, and, bool, And)
+instantiate_reduce_from_types(instantiate_row_reduce_general, or, bool, Or)
 
-                instantiate_row_reduce_general(
-                    sumbool_,
-                    bool,
-                    uint32_t,
-                    Sum<uint32_t>)
+instantiate_row_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>) // clang-format on

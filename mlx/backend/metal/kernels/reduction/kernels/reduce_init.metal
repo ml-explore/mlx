@@ -24,12 +24,9 @@ template <typename T, typename Op>
 #define instantiate_init_reduce_helper(name, tname, type, op) \
   instantiate_init_reduce(name##tname, type, op<type>)
 
-instantiate_reduce_ops(
-    instantiate_init_reduce_helper,
-    instantiate_reduce_helper_types)
-    instantiate_reduce_ops(
-        instantiate_init_reduce_helper,
-        instantiate_reduce_helper_64b)
+// clang-format off
+instantiate_reduce_ops(instantiate_init_reduce_helper, instantiate_reduce_helper_types)
+instantiate_reduce_ops(instantiate_init_reduce_helper, instantiate_reduce_helper_64b)
 
-        instantiate_init_reduce(andbool_, bool, And)
-            instantiate_init_reduce(orbool_, bool, Or)
+instantiate_init_reduce(andbool_, bool, And)
+instantiate_init_reduce(orbool_, bool, Or) // clang-format on

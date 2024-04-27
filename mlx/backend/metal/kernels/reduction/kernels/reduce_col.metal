@@ -226,40 +226,24 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
 // Instantiations
 ///////////////////////////////////////////////////////////////////////////////
 
-#define instantiate_same_col_reduce_helper(name, tname, type, op) \
-  instantiate_col_reduce_small(name##tname, type, type, op<type>) \
-      instantiate_col_reduce_general(name##tname, type, type, op<type>)
+// clang-format off
+#define instantiate_same_col_reduce_helper(name, tname, type, op)  \
+  instantiate_col_reduce_small(name ##tname, type, type, op<type>) \
+  instantiate_col_reduce_general(name ##tname, type, type, op<type>) // clang-format on
 
+// clang-format off
 #define instantiate_same_col_reduce_na_helper(name, tname, type, op) \
-  instantiate_col_reduce_small(name##tname, type, type, op<type>)    \
-      instantiate_col_reduce_general_no_atomics(                     \
-          name##tname, type, type, op<type>)
+  instantiate_col_reduce_small(name ##tname, type, type, op<type>)   \
+  instantiate_col_reduce_general_no_atomics(name ##tname, type, type, op<type>) // clang-format on
 
-instantiate_reduce_ops(
-    instantiate_same_col_reduce_helper,
-    instantiate_reduce_helper_types)
-    instantiate_reduce_ops(
-        instantiate_same_col_reduce_na_helper,
-        instantiate_reduce_helper_64b)
+// clang-format off
+instantiate_reduce_ops(instantiate_same_col_reduce_helper, instantiate_reduce_helper_types)
+instantiate_reduce_ops(instantiate_same_col_reduce_na_helper, instantiate_reduce_helper_64b)
 
-        instantiate_col_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>)
-            instantiate_reduce_from_types(instantiate_col_reduce_general, and, bool, And)
-                instantiate_reduce_from_types(
-                    instantiate_col_reduce_general,
-                    or
-                    ,
-                    bool,
-                    Or)
+instantiate_col_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>)
+instantiate_reduce_from_types(instantiate_col_reduce_general, and, bool, And)
+instantiate_reduce_from_types(instantiate_col_reduce_general, or, bool, Or)
 
-                    instantiate_col_reduce_small(
-                        sumbool_,
-                        bool,
-                        uint32_t,
-                        Sum<uint32_t>)
-                        instantiate_reduce_from_types(instantiate_col_reduce_small, and, bool, And)
-                            instantiate_reduce_from_types(
-                                instantiate_col_reduce_small,
-                                or
-                                ,
-                                bool,
-                                Or)
+instantiate_col_reduce_small(sumbool_, bool, uint32_t, Sum<uint32_t>)
+instantiate_reduce_from_types(instantiate_col_reduce_small, and, bool, And)
+instantiate_reduce_from_types(instantiate_col_reduce_small, or, bool, Or) // clang-format on
