@@ -737,12 +737,15 @@ class Adafactor(Optimizer):
             parameter += parameter * (-self.weight_decay * learning_rate)
         return parameter - update
 
+
 def clip_grad_norm(grads, max_norm):
-    norm_squared = tree_reduce(lambda acc, g: acc + g.square().sum(), grads, mx.array(0.0))
+    norm_squared = tree_reduce(
+        lambda acc, g: acc + g.square().sum(), grads, mx.array(0.0)
+    )
     total_norm = mx.sqrt(norm_squared)
 
     def clipper(g):
         return mx.where(total_norm < max_norm, g, g * max_norm / (total_norm + 1e-6))
-    
+
     clipped_grads = tree_map(clipper, grads)
     return clipped_grads, total_norm

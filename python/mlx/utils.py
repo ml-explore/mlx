@@ -192,6 +192,7 @@ def tree_unflatten(tree):
     else:
         return {k: tree_unflatten(v) for k, v in children.items()}
 
+
 def tree_reduce(fn, tree, initializer=None, is_leaf=None):
     """
     Recursively applies a reducer function `fn` to the leaves of the Python tree `tree` and aggregates them into a single value.
@@ -207,7 +208,7 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
     """
     if is_leaf is not None and is_leaf(tree):
         return tree if initializer is None else fn(initializer, tree)
-    
+
     if initializer is None:
         # Handle empty structures
         first = True
