@@ -417,29 +417,33 @@ template <
   instantiate_block_sort(                                  \
       block_merge_sort, itname, itype, itname, itype, false, bn, tn)
 
+// clang-format off
 #define instantiate_block_sort_tn(itname, itype, bn) \
   instantiate_block_sort_base(itname, itype, bn, 8)  \
-      instantiate_arg_block_sort_base(itname, itype, bn, 8)
+  instantiate_arg_block_sort_base(itname, itype, bn, 8) // clang-format on
 
-#define instantiate_block_sort_bn(itname, itype)                           \
-  instantiate_block_sort_tn(itname, itype, 128) instantiate_block_sort_tn( \
-      itname, itype, 256) instantiate_block_sort_tn(itname, itype, 512)
+// clang-format off
+#define instantiate_block_sort_bn(itname, itype) \
+  instantiate_block_sort_tn(itname, itype, 128)  \
+  instantiate_block_sort_tn(itname, itype, 256)  \
+  instantiate_block_sort_tn(itname, itype, 512) 
 
-instantiate_block_sort_bn(uint8, uint8_t) instantiate_block_sort_bn(
-    uint16,
-    uint16_t) instantiate_block_sort_bn(uint32, uint32_t)
-    instantiate_block_sort_bn(int8, int8_t)
-        instantiate_block_sort_bn(int16, int16_t)
-            instantiate_block_sort_bn(int32, int32_t)
-                instantiate_block_sort_bn(float16, half)
-                    instantiate_block_sort_bn(float32, float)
-                        instantiate_block_sort_bn(bfloat16, bfloat16_t)
+instantiate_block_sort_bn(uint8, uint8_t)
+instantiate_block_sort_bn(uint16, uint16_t)
+instantiate_block_sort_bn(uint32, uint32_t)
+instantiate_block_sort_bn(int8, int8_t)
+instantiate_block_sort_bn(int16, int16_t)
+instantiate_block_sort_bn(int32, int32_t)
+instantiate_block_sort_bn(float16, half)
+instantiate_block_sort_bn(float32, float)
+instantiate_block_sort_bn(bfloat16, bfloat16_t) // clang-format on
+// clang-format off
 #define instantiate_block_sort_long(itname, itype) \
   instantiate_block_sort_tn(itname, itype, 128)    \
-      instantiate_block_sort_tn(itname, itype, 256)
+  instantiate_block_sort_tn(itname, itype, 256)
 
-                            instantiate_block_sort_long(uint64, uint64_t)
-                                instantiate_block_sort_long(int64, int64_t)
+instantiate_block_sort_long(uint64, uint64_t)
+instantiate_block_sort_long(int64, int64_t) // clang-format on
 
     ///////////////////////////////////////////////////////////////////////////////
     // Multi block merge sort
@@ -784,24 +788,23 @@ mb_block_merge(
       uint3 tid [[threadgroup_position_in_grid]],                          \
       uint3 lid [[thread_position_in_threadgroup]]);
 
+// clang-format off
 #define instantiate_multi_block_sort_base(vtname, vtype) \
   instantiate_multi_block_sort(vtname, vtype, uint32, uint32_t, true, 512, 8)
 
-instantiate_multi_block_sort_base(
-    uint8,
-    uint8_t) instantiate_multi_block_sort_base(uint16, uint16_t)
-    instantiate_multi_block_sort_base(
-        uint32,
-        uint32_t) instantiate_multi_block_sort_base(int8, int8_t)
-        instantiate_multi_block_sort_base(
-            int16,
-            int16_t) instantiate_multi_block_sort_base(int32, int32_t)
-            instantiate_multi_block_sort_base(float16, half)
-                instantiate_multi_block_sort_base(float32, float)
-                    instantiate_multi_block_sort_base(bfloat16, bfloat16_t)
+instantiate_multi_block_sort_base(uint8, uint8_t)
+instantiate_multi_block_sort_base(uint16, uint16_t)
+instantiate_multi_block_sort_base(uint32, uint32_t)
+instantiate_multi_block_sort_base(int8, int8_t)
+instantiate_multi_block_sort_base(int16, int16_t)
+instantiate_multi_block_sort_base(int32, int32_t)
+instantiate_multi_block_sort_base(float16, half)
+instantiate_multi_block_sort_base(float32, float)
+instantiate_multi_block_sort_base(bfloat16, bfloat16_t) // clang-format on
 
+// clang-format off
 #define instantiate_multi_block_sort_long(vtname, vtype) \
   instantiate_multi_block_sort(vtname, vtype, uint32, uint32_t, true, 256, 8)
 
-                        instantiate_multi_block_sort_long(uint64, uint64_t)
-                            instantiate_multi_block_sort_long(int64, int64_t)
+instantiate_multi_block_sort_long(uint64, uint64_t)
+instantiate_multi_block_sort_long(int64, int64_t) // clang-format on

@@ -193,13 +193,14 @@ template <
       uint simd_gid [[simdgroup_index_in_threadgroup]],                     \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
+// clang-format off
 #define instantiate_naive_conv_2d_blocks(name, itype) \
   instantiate_naive_conv_2d(name, itype, 16, 8, 4, 4) \
-      instantiate_naive_conv_2d(name, itype, 16, 8, 2, 4)
+  instantiate_naive_conv_2d(name, itype, 16, 8, 2, 4) 
 
 instantiate_naive_conv_2d_blocks(float32, float);
 instantiate_naive_conv_2d_blocks(float16, half);
-instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t);
+instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t); // clang-format on
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Winograd kernels
@@ -568,10 +569,11 @@ winograd_conv_2d_output_transform(
       uint simd_group_id [[simdgroup_index_in_threadgroup]],           \
       uint simd_lane_id [[thread_index_in_simdgroup]]);
 
+// clang-format off
 #define instantiate_winograd_conv_2d(name, itype)                     \
   instantiate_winograd_conv_2d_weight_transform_base(name, itype, 32) \
-      instantiate_winograd_conv_2d_input_transform(name, itype, 32)   \
-          instantiate_winograd_conv_2d_output_transform(name, itype, 32)
+  instantiate_winograd_conv_2d_input_transform(name, itype, 32)       \
+  instantiate_winograd_conv_2d_output_transform(name, itype, 32) 
 
 instantiate_winograd_conv_2d(float32, float);
-instantiate_winograd_conv_2d(float16, half);
+instantiate_winograd_conv_2d(float16, half); // clang-format on

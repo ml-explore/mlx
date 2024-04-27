@@ -72,19 +72,16 @@ template <typename T, bool traditional, bool forward>
       uint3 pos [[thread_position_in_grid]],               \
       uint3 grid [[threads_per_grid]]);
 
-instantiate_rope(traditional_float16, half, true, true) instantiate_rope(
-    traditional_bfloat16,
-    bfloat16_t,
-    true,
-    true) instantiate_rope(traditional_float32, float, true, true)
-    instantiate_rope(float16, half, false, true) instantiate_rope(
-        bfloat16,
-        bfloat16_t,
-        false,
-        true) instantiate_rope(float32, float, false, true)
-        instantiate_rope(vjp_traditional_float16, half, true, false)
-            instantiate_rope(vjp_traditional_bfloat16, bfloat16_t, true, false)
-                instantiate_rope(vjp_traditional_float32, float, true, false)
-                    instantiate_rope(vjp_float16, half, false, false)
-                        instantiate_rope(vjp_bfloat16, bfloat16_t, false, false)
-                            instantiate_rope(vjp_float32, float, false, false)
+// clang-format off
+instantiate_rope(traditional_float16, half, true, true)
+instantiate_rope(traditional_bfloat16, bfloat16_t, true, true)
+instantiate_rope(traditional_float32, float, true, true)
+instantiate_rope(float16, half, false, true)
+instantiate_rope(bfloat16, bfloat16_t, false, true)
+instantiate_rope(float32, float, false, true)
+instantiate_rope(vjp_traditional_float16, half, true, false)
+instantiate_rope(vjp_traditional_bfloat16, bfloat16_t, true, false)
+instantiate_rope(vjp_traditional_float32, float, true, false)
+instantiate_rope(vjp_float16, half, false, false)
+instantiate_rope(vjp_bfloat16, bfloat16_t, false, false)
+instantiate_rope(vjp_float32, float, false, false) // clang-format on

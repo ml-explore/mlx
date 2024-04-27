@@ -187,12 +187,13 @@ template <size_t n, size_t radix_2_steps, size_t radix_4_steps>
       uint3 threads_per_grid [[threads_per_grid]]);
 
 // Explicitly define kernels for each power of 2.
+// clang-format off
 instantiate_fft(4, /* n= */ 4, /* radix_2_steps= */ 0, /* radix_4_steps= */ 1)
-    instantiate_fft(8, 8, 1, 1) instantiate_fft(16, 16, 0, 2)
-        instantiate_fft(32, 32, 1, 2) instantiate_fft(64, 64, 0, 3)
-            instantiate_fft(128, 128, 1, 3) instantiate_fft(256, 256, 0, 4)
-                instantiate_fft(512, 512, 1, 4)
-                    instantiate_fft(1024, 1024, 0, 5)
-    // 2048 is the max that will fit into 32KB of threadgroup memory.
-    // TODO: implement 4 step FFT for larger n.
-    instantiate_fft(2048, 2048, 1, 5)
+instantiate_fft(8, 8, 1, 1) instantiate_fft(16, 16, 0, 2)
+instantiate_fft(32, 32, 1, 2) instantiate_fft(64, 64, 0, 3)
+instantiate_fft(128, 128, 1, 3) instantiate_fft(256, 256, 0, 4)
+instantiate_fft(512, 512, 1, 4)
+instantiate_fft(1024, 1024, 0, 5)
+// 2048 is the max that will fit into 32KB of threadgroup memory.
+// TODO: implement 4 step FFT for larger n.
+instantiate_fft(2048, 2048, 1, 5) // clang-format on

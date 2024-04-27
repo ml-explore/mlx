@@ -217,6 +217,7 @@ template <typename T, typename U, typename Op1, typename Op2>
       uint3 index [[thread_position_in_grid]],                       \
       uint3 grid_dim [[threads_per_grid]]);
 
+// clang-format off
 #define instantiate_binary_g_nd(name, itype, otype, op1, op2) \
   template [[host_name(name "_1")]] [[kernel]] void           \
   binary_op_g_nd1<itype, otype, op1, op2>(                    \
@@ -248,7 +249,7 @@ template <typename T, typename U, typename Op1, typename Op2>
       uint3 index [[thread_position_in_grid]],                \
       uint3 grid_dim [[threads_per_grid]]);                   \
   instantiate_binary_g_dim(name, itype, otype, op1, op2, 4)   \
-      instantiate_binary_g_dim(name, itype, otype, op1, op2, 5)
+  instantiate_binary_g_dim(name, itype, otype, op1, op2, 5) // clang-format on
 
 #define instantiate_binary_g(name, itype, otype, op1, op2) \
   template [[host_name(name)]] [[kernel]] void             \
@@ -264,47 +265,33 @@ template <typename T, typename U, typename Op1, typename Op2>
       uint3 index [[thread_position_in_grid]],             \
       uint3 grid_dim [[threads_per_grid]]);
 
-#define instantiate_binary_all(name, tname, itype, otype, op1, op2)         \
-  instantiate_binary("ss" #name #tname, itype, otype, op1, op2, ss)         \
-      instantiate_binary("sv" #name #tname, itype, otype, op1, op2, sv)     \
-          instantiate_binary("vs" #name #tname, itype, otype, op1, op2, vs) \
-              instantiate_binary(                                           \
-                  "vv" #name #tname, itype, otype, op1, op2, vv)            \
-                  instantiate_binary_g(                                     \
-                      "g" #name #tname, itype, otype, op1, op2)             \
-                      instantiate_binary_g_nd(                              \
-                          "g" #name #tname, itype, otype, op1, op2)
+// clang-format off
+#define instantiate_binary_all(name, tname, itype, otype, op1, op2) \
+  instantiate_binary("ss" #name #tname, itype, otype, op1, op2, ss) \
+  instantiate_binary("sv" #name #tname, itype, otype, op1, op2, sv) \
+  instantiate_binary("vs" #name #tname, itype, otype, op1, op2, vs) \
+  instantiate_binary("vv" #name #tname, itype, otype, op1, op2, vv) \
+  instantiate_binary_g("g" #name #tname, itype, otype, op1, op2)    \
+  instantiate_binary_g_nd("g" #name #tname, itype, otype, op1, op2) // clang-format on
 
-#define instantiate_binary_float(name, op1, op2)                    \
-  instantiate_binary_all(name, float16, half, half, op1, op2)       \
-      instantiate_binary_all(name, float32, float, float, op1, op2) \
-          instantiate_binary_all(                                   \
-              name, bfloat16, bfloat16_t, bfloat16_t, op1, op2)
+// clang-format off
+#define instantiate_binary_float(name, op1, op2)                \
+  instantiate_binary_all(name, float16, half, half, op1, op2)   \
+  instantiate_binary_all(name, float32, float, float, op1, op2) \
+  instantiate_binary_all(name, bfloat16, bfloat16_t, bfloat16_t, op1, op2) // clang-format on
 
-#define instantiate_binary_types(name, op1, op2)                               \
-  instantiate_binary_all(name, bool_, bool, bool, op1, op2)                    \
-      instantiate_binary_all(name, uint8, uint8_t, uint8_t, op1, op2)          \
-          instantiate_binary_all(name, uint16, uint16_t, uint16_t, op1, op2)   \
-              instantiate_binary_all(                                          \
-                  name, uint32, uint32_t, uint32_t, op1, op2)                  \
-                  instantiate_binary_all(                                      \
-                      name, uint64, uint64_t, uint64_t, op1, op2)              \
-                      instantiate_binary_all(                                  \
-                          name, int8, int8_t, int8_t, op1, op2)                \
-                          instantiate_binary_all(                              \
-                              name, int16, int16_t, int16_t, op1, op2)         \
-                              instantiate_binary_all(                          \
-                                  name, int32, int32_t, int32_t, op1, op2)     \
-                                  instantiate_binary_all(                      \
-                                      name, int64, int64_t, int64_t, op1, op2) \
-                                      instantiate_binary_all(                  \
-                                          name,                                \
-                                          complex64,                           \
-                                          complex64_t,                         \
-                                          complex64_t,                         \
-                                          op1,                                 \
-                                          op2)                                 \
-                                          instantiate_binary_float(            \
-                                              name, op1, op2)
+// clang-format off
+#define instantiate_binary_types(name, op1, op2)                              \
+  instantiate_binary_all(name, bool_, bool, bool, op1, op2)                   \
+  instantiate_binary_all(name, uint8, uint8_t, uint8_t, op1, op2)             \
+  instantiate_binary_all(name, uint16, uint16_t, uint16_t, op1, op2)          \
+  instantiate_binary_all(name, uint32, uint32_t, uint32_t, op1, op2)          \
+  instantiate_binary_all(name, uint64, uint64_t, uint64_t, op1, op2)          \
+  instantiate_binary_all(name, int8, int8_t, int8_t, op1, op2)                \
+  instantiate_binary_all(name, int16, int16_t, int16_t, op1, op2)             \
+  instantiate_binary_all(name, int32, int32_t, int32_t, op1, op2)             \
+  instantiate_binary_all(name, int64, int64_t, int64_t, op1, op2)             \
+  instantiate_binary_all(name, complex64, complex64_t, complex64_t, op1, op2) \
+  instantiate_binary_float(name, op1, op2)
 
-instantiate_binary_types(divmod, FloorDivide, Remainder)
+instantiate_binary_types(divmod, FloorDivide, Remainder) // clang-format on

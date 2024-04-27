@@ -519,20 +519,20 @@ template <
       uint simd_gid [[simdgroup_index_in_threadgroup]],                        \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-#define instantiate_gemv_t(name, itype, bm, bn, tm, tn)                \
-  instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 0, 0)         \
-      instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 0, 1)     \
-          instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 1, 0) \
-              instantiate_gemv_t_helper(name, itype, bm, bn, tm, tn, 1, 1)
+// clang-format off
+#define instantiate_gemv_t(name, itype, bm, bn, tm, tn) \
+  instantiate_gemv_t_c(name, itype, bm, bn, tm, tn)     \
+  instantiate_gemv_t_nc(name, itype, bm, bn, tm, tn) // clang-format on
 
-#define instantiate_gemv_t_blocks(name, itype)                 \
-  instantiate_gemv_t(name, itype, 8, 8, 4, 1)                  \
-      instantiate_gemv_t(name, itype, 8, 8, 4, 4)              \
-          instantiate_gemv_t(name, itype, 8, 16, 4, 4)         \
-              instantiate_gemv_t(name, itype, 8, 32, 4, 4)     \
-                  instantiate_gemv_t(name, itype, 8, 64, 4, 4) \
-                      instantiate_gemv_t(name, itype, 8, 128, 4, 4)
+// clang-format off
+#define instantiate_gemv_t_blocks(name, itype) \
+  instantiate_gemv_t(name, itype, 8, 8, 4, 1)  \
+  instantiate_gemv_t(name, itype, 8, 8, 4, 4)  \
+  instantiate_gemv_t(name, itype, 8, 16, 4, 4) \
+  instantiate_gemv_t(name, itype, 8, 32, 4, 4) \
+  instantiate_gemv_t(name, itype, 8, 64, 4, 4) \
+  instantiate_gemv_t(name, itype, 8, 128, 4, 4)
 
 instantiate_gemv_t_blocks(float32, float);
 instantiate_gemv_t_blocks(float16, half);
-instantiate_gemv_t_blocks(bfloat16, bfloat16_t);
+instantiate_gemv_t_blocks(bfloat16, bfloat16_t); // clang-format on

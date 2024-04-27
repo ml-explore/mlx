@@ -164,73 +164,73 @@ make_scatter(0) make_scatter(1) make_scatter(2) make_scatter(3) make_scatter(4)
       const constant size_t& upd_size [[buffer(5)]],                        \
       IDX_ARG(idx_t) uint2 gid [[thread_position_in_grid]]);
 
-#define instantiate_scatter4(name, src_t, idx_t, op_t, nidx)           \
-  instantiate_scatter5(name, src_t, idx_t, op_t, nidx, IDX_ARG_##nidx) \
-      instantiate_scatter6(name, src_t, idx_t, op_t, nidx, IDX_ARG_##nidx)
+// clang-format off
+#define instantiate_scatter4(name, src_t, idx_t, op_t, nidx)            \
+  instantiate_scatter5(name, src_t, idx_t, op_t, nidx, IDX_ARG_ ##nidx) \
+  instantiate_scatter6(name, src_t, idx_t, op_t, nidx, IDX_ARG_ ##nidx) // clang-format on
 
+// clang-format off
 // Special case NINDEX=0
-#define instantiate_scatter_nd0(name, type)                                \
-  instantiate_scatter4(#name "none", type, bool, None, 0)                  \
-      instantiate_scatter4(#name "_sum", type, bool, Sum<type>, 0)         \
-          instantiate_scatter4(#name "_prod", type, bool, Prod<type>, 0)   \
-              instantiate_scatter4(#name "_max", type, bool, Max<type>, 0) \
-                  instantiate_scatter4(#name "_min", type, bool, Min<type>, 0)
+#define instantiate_scatter_nd0(name, type)                      \
+  instantiate_scatter4(#name "none", type, bool, None, 0)        \
+  instantiate_scatter4(#name "_sum", type, bool, Sum<type>, 0)   \
+  instantiate_scatter4(#name "_prod", type, bool, Prod<type>, 0) \
+  instantiate_scatter4(#name "_max", type, bool, Max<type>, 0)   \
+  instantiate_scatter4(#name "_min", type, bool, Min<type>, 0) // clang-format on
 
-#define instantiate_scatter3(name, type, ind_type, op_type)                    \
-  instantiate_scatter4(name, type, ind_type, op_type, 1) instantiate_scatter4( \
-      name, type, ind_type, op_type, 2)                                        \
-      instantiate_scatter4(name, type, ind_type, op_type, 3)                   \
-          instantiate_scatter4(name, type, ind_type, op_type, 4)               \
-              instantiate_scatter4(name, type, ind_type, op_type, 5)           \
-                  instantiate_scatter4(name, type, ind_type, op_type, 6)       \
-                      instantiate_scatter4(name, type, ind_type, op_type, 7)   \
-                          instantiate_scatter4(                                \
-                              name, type, ind_type, op_type, 8)                \
-                              instantiate_scatter4(                            \
-                                  name, type, ind_type, op_type, 9)            \
-                                  instantiate_scatter4(                        \
-                                      name, type, ind_type, op_type, 10)
+// clang-format off
+#define instantiate_scatter3(name, type, ind_type, op_type) \
+  instantiate_scatter4(name, type, ind_type, op_type, 1)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 2)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 3)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 4)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 5)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 6)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 7)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 8)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 9)    \
+  instantiate_scatter4(name, type, ind_type, op_type, 10) // clang-format on
 
-#define instantiate_scatter2(name, type, ind_type)                         \
-  instantiate_scatter3(name "_none", type, ind_type, None)                 \
-      instantiate_scatter3(name "_sum", type, ind_type, Sum<type>)         \
-          instantiate_scatter3(name "_prod", type, ind_type, Prod<type>)   \
-              instantiate_scatter3(name "_max", type, ind_type, Max<type>) \
-                  instantiate_scatter3(name "_min", type, ind_type, Min<type>)
+// clang-format off
+#define instantiate_scatter2(name, type, ind_type)               \
+  instantiate_scatter3(name "_none", type, ind_type, None)       \
+  instantiate_scatter3(name "_sum", type, ind_type, Sum<type>)   \
+  instantiate_scatter3(name "_prod", type, ind_type, Prod<type>) \
+  instantiate_scatter3(name "_max", type, ind_type, Max<type>)   \
+  instantiate_scatter3(name "_min", type, ind_type, Min<type>) // clang-format on
 
-#define instantiate_scatter(name, type)                                        \
-  instantiate_scatter2(#name "bool_", type, bool)                              \
-      instantiate_scatter2(#name "uint8", type, uint8_t) instantiate_scatter2( \
-          #name "uint16", type, uint16_t)                                      \
-          instantiate_scatter2(#name "uint32", type, uint32_t)                 \
-              instantiate_scatter2(#name "uint64", type, uint64_t)             \
-                  instantiate_scatter2(#name "int8", type, int8_t)             \
-                      instantiate_scatter2(#name "int16", type, int16_t)       \
-                          instantiate_scatter2(#name "int32", type, int32_t)   \
-                              instantiate_scatter2(                            \
-                                  #name "int64", type, int64_t)
+// clang-format off
+#define instantiate_scatter(name, type)                \
+  instantiate_scatter2(#name "bool_", type, bool)      \
+  instantiate_scatter2(#name "uint8", type, uint8_t)   \
+  instantiate_scatter2(#name "uint16", type, uint16_t) \
+  instantiate_scatter2(#name "uint32", type, uint32_t) \
+  instantiate_scatter2(#name "uint64", type, uint64_t) \
+  instantiate_scatter2(#name "int8", type, int8_t)     \
+  instantiate_scatter2(#name "int16", type, int16_t)   \
+  instantiate_scatter2(#name "int32", type, int32_t)   \
+  instantiate_scatter2(#name "int64", type, int64_t) // clang-format on
 
-    // TODO uint64 and int64 unsupported
-    instantiate_scatter_nd0(bool_, bool) instantiate_scatter_nd0(uint8, uint8_t)
-        instantiate_scatter_nd0(uint16, uint16_t) instantiate_scatter_nd0(
-            uint32,
-            uint32_t) instantiate_scatter_nd0(int8, int8_t)
-            instantiate_scatter_nd0(int16, int16_t) instantiate_scatter_nd0(
-                int32,
-                int32_t) instantiate_scatter_nd0(float16, half)
-                instantiate_scatter_nd0(float32, float) instantiate_scatter_nd0(
-                    bfloat16,
-                    bfloat16_t)
+    // clang-format off
+// TODO uint64 and int64 unsupported
+instantiate_scatter_nd0(bool_, bool)
+instantiate_scatter_nd0(uint8, uint8_t)
+instantiate_scatter_nd0(uint16, uint16_t)
+instantiate_scatter_nd0(uint32, uint32_t)
+instantiate_scatter_nd0(int8, int8_t)
+instantiate_scatter_nd0(int16, int16_t)
+instantiate_scatter_nd0(int32, int32_t)
+instantiate_scatter_nd0(float16, half)
+instantiate_scatter_nd0(float32, float)
+instantiate_scatter_nd0(bfloat16, bfloat16_t)
 
-                    instantiate_scatter(bool_, bool) instantiate_scatter(
-                        uint8,
-                        uint8_t) instantiate_scatter(uint16, uint16_t)
-                        instantiate_scatter(uint32, uint32_t)
-                            instantiate_scatter(int8, int8_t)
-                                instantiate_scatter(int16, int16_t)
-                                    instantiate_scatter(int32, int32_t)
-                                        instantiate_scatter(float16, half)
-                                            instantiate_scatter(float32, float)
-                                                instantiate_scatter(
-                                                    bfloat16,
-                                                    bfloat16_t)
+instantiate_scatter(bool_, bool)
+instantiate_scatter(uint8, uint8_t)
+instantiate_scatter(uint16, uint16_t)
+instantiate_scatter(uint32, uint32_t)
+instantiate_scatter(int8, int8_t)
+instantiate_scatter(int16, int16_t)
+instantiate_scatter(int32, int32_t)
+instantiate_scatter(float16, half)
+instantiate_scatter(float32, float)
+instantiate_scatter(bfloat16, bfloat16_t) // clang-format on

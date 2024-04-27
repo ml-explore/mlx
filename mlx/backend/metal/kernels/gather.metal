@@ -109,78 +109,65 @@ make_gather(0) make_gather(1) make_gather(2) make_gather(3) make_gather(4)
       IDX_ARG(idx_t) uint2 index [[thread_position_in_grid]],                 \
       uint2 grid_dim [[threads_per_grid]]);
 
+// clang-format off
 #define instantiate_gather5(name, src_t, idx_t, nidx, nd, nd_name) \
-  instantiate_gather6(name, src_t, idx_t, nidx, IDX_ARG_##nidx, nd, nd_name)
+  instantiate_gather6(name, src_t, idx_t, nidx, IDX_ARG_ ##nidx, nd, nd_name) // clang-format on
 
-#define instantiate_gather4(name, src_t, idx_t, nidx)      \
-  instantiate_gather5(name, src_t, idx_t, nidx, 0, _0)     \
-      instantiate_gather5(name, src_t, idx_t, nidx, 1, _1) \
-          instantiate_gather5(name, src_t, idx_t, nidx, 2, )
+// clang-format off
+#define instantiate_gather4(name, src_t, idx_t, nidx) \
+  instantiate_gather5(name, src_t, idx_t, nidx, 0, _0) \
+  instantiate_gather5(name, src_t, idx_t, nidx, 1, _1) \
+  instantiate_gather5(name, src_t, idx_t, nidx, 2, )
 
-    // Special for case NIDX=0
-    instantiate_gather4("bool_", bool, bool, 0) instantiate_gather4(
-        "uint8",
-        uint8_t,
-        bool,
-        0) instantiate_gather4("uint16", uint16_t, bool, 0)
-        instantiate_gather4("uint32", uint32_t, bool, 0) instantiate_gather4(
-            "uint64",
-            uint64_t,
-            bool,
-            0) instantiate_gather4("int8", int8_t, bool, 0)
-            instantiate_gather4("int16", int16_t, bool, 0) instantiate_gather4(
-                "int32",
-                int32_t,
-                bool,
-                0) instantiate_gather4("int64", int64_t, bool, 0)
-                instantiate_gather4(
-                    "float16",
-                    half,
-                    bool,
-                    0) instantiate_gather4("float32", float, bool, 0)
-                    instantiate_gather4("bfloat16", bfloat16_t, bool, 0)
 
-#define instantiate_gather3(name, src_type, ind_type)                          \
-  instantiate_gather4(name, src_type, ind_type, 1)                             \
-      instantiate_gather4(name, src_type, ind_type, 2) instantiate_gather4(    \
-          name, src_type, ind_type, 3)                                         \
-          instantiate_gather4(name, src_type, ind_type, 4)                     \
-              instantiate_gather4(name, src_type, ind_type, 5)                 \
-                  instantiate_gather4(name, src_type, ind_type, 6)             \
-                      instantiate_gather4(name, src_type, ind_type, 7)         \
-                          instantiate_gather4(name, src_type, ind_type, 8)     \
-                              instantiate_gather4(name, src_type, ind_type, 9) \
-                                  instantiate_gather4(                         \
-                                      name, src_type, ind_type, 10)
+// Special for case NIDX=0
+instantiate_gather4("bool_", bool, bool, 0)
+instantiate_gather4("uint8", uint8_t, bool, 0)
+instantiate_gather4("uint16", uint16_t, bool, 0)
+instantiate_gather4("uint32", uint32_t, bool, 0)
+instantiate_gather4("uint64", uint64_t, bool, 0)
+instantiate_gather4("int8", int8_t, bool, 0)
+instantiate_gather4("int16", int16_t, bool, 0)
+instantiate_gather4("int32", int32_t, bool, 0)
+instantiate_gather4("int64", int64_t, bool, 0)
+instantiate_gather4("float16", half, bool, 0)
+instantiate_gather4("float32", float, bool, 0)
+instantiate_gather4("bfloat16", bfloat16_t, bool, 0) // clang-format on
 
-#define instantiate_gather(name, src_type)                                  \
-  instantiate_gather3(#name "bool_", src_type, bool) instantiate_gather3(   \
-      #name "uint8", src_type, uint8_t)                                     \
-      instantiate_gather3(#name "uint16", src_type, uint16_t)               \
-          instantiate_gather3(#name "uint32", src_type, uint32_t)           \
-              instantiate_gather3(#name "uint64", src_type, uint64_t)       \
-                  instantiate_gather3(#name "int8", src_type, int8_t)       \
-                      instantiate_gather3(#name "int16", src_type, int16_t) \
-                          instantiate_gather3(                              \
-                              #name "int32", src_type, int32_t)             \
-                              instantiate_gather3(                          \
-                                  #name "int64", src_type, int64_t)
+// clang-format off
+#define instantiate_gather3(name, src_type, ind_type) \
+  instantiate_gather4(name, src_type, ind_type, 1)    \
+  instantiate_gather4(name, src_type, ind_type, 2)    \
+  instantiate_gather4(name, src_type, ind_type, 3)    \
+  instantiate_gather4(name, src_type, ind_type, 4)    \
+  instantiate_gather4(name, src_type, ind_type, 5)    \
+  instantiate_gather4(name, src_type, ind_type, 6)    \
+  instantiate_gather4(name, src_type, ind_type, 7)    \
+  instantiate_gather4(name, src_type, ind_type, 8)    \
+  instantiate_gather4(name, src_type, ind_type, 9)    \
+  instantiate_gather4(name, src_type, ind_type, 10) // clang-format on
 
-                        instantiate_gather(bool_, bool) instantiate_gather(
-                            uint8,
-                            uint8_t) instantiate_gather(uint16, uint16_t)
-                            instantiate_gather(
-                                uint32,
-                                uint32_t) instantiate_gather(uint64, uint64_t)
-                                instantiate_gather(
-                                    int8,
-                                    int8_t) instantiate_gather(int16, int16_t)
-                                    instantiate_gather(int32, int32_t)
-                                        instantiate_gather(int64, int64_t)
-                                            instantiate_gather(float16, half)
-                                                instantiate_gather(
-                                                    float32,
-                                                    float)
-                                                    instantiate_gather(
-                                                        bfloat16,
-                                                        bfloat16_t)
+// clang-format off
+#define instantiate_gather(name, src_type)                \
+  instantiate_gather3(#name "bool_", src_type, bool)      \
+  instantiate_gather3(#name "uint8", src_type, uint8_t)   \
+  instantiate_gather3(#name "uint16", src_type, uint16_t) \
+  instantiate_gather3(#name "uint32", src_type, uint32_t) \
+  instantiate_gather3(#name "uint64", src_type, uint64_t) \
+  instantiate_gather3(#name "int8", src_type, int8_t)     \
+  instantiate_gather3(#name "int16", src_type, int16_t)   \
+  instantiate_gather3(#name "int32", src_type, int32_t)   \
+  instantiate_gather3(#name "int64", src_type, int64_t)
+
+instantiate_gather(bool_, bool)
+instantiate_gather(uint8, uint8_t)
+instantiate_gather(uint16, uint16_t)
+instantiate_gather(uint32, uint32_t)
+instantiate_gather(uint64, uint64_t)
+instantiate_gather(int8, int8_t)
+instantiate_gather(int16, int16_t)
+instantiate_gather(int32, int32_t)
+instantiate_gather(int64, int64_t)
+instantiate_gather(float16, half)
+instantiate_gather(float32, float)
+instantiate_gather(bfloat16, bfloat16_t) // clang-format on

@@ -427,12 +427,13 @@ template <
       uint simd_group_id [[simdgroup_index_in_threadgroup]],                 \
       uint3 tid [[threadgroup_position_in_grid]]);
 
+// clang-format off
 #define instantiate_fast_inference_sdpa_to_partials_shapes_helper( \
     itype, itype2, itype4, tile_size)                              \
   instantiate_fast_inference_sdpa_to_partials_kernel(              \
       itype, itype2, itype4, tile_size, 4)                         \
-      instantiate_fast_inference_sdpa_to_partials_kernel(          \
-          itype, itype2, itype4, tile_size, 8)
+  instantiate_fast_inference_sdpa_to_partials_kernel(              \
+      itype, itype2, itype4, tile_size, 8) // clang-format on
 
 instantiate_fast_inference_sdpa_to_partials_shapes_helper(
     float,

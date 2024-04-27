@@ -437,5 +437,4 @@ template <typename T, int N_READS = RMS_N_READS>
 
 instantiate_rms(float32, float)
 instantiate_rms(float16, half)
-instantiate_rms(bfloat16, bfloat16_t)
-    // clang-format on
+instantiate_rms(bfloat16, bfloat16_t) // clang-format on

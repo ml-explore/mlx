@@ -178,18 +178,20 @@ template <typename T, typename Op, int N_READS>
       uint simd_lane_id [[thread_index_in_simdgroup]], \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
-#define instantiate_arg_reduce(name, itype)                     \
-  instantiate_arg_reduce_helper("argmin_" #name, itype, ArgMin) \
-      instantiate_arg_reduce_helper("argmax_" #name, itype, ArgMax)
+// clang-format off
+#define instantiate_arg_reduce(name, itype)                      \
+  instantiate_arg_reduce_helper("argmin_" #name , itype, ArgMin) \
+  instantiate_arg_reduce_helper("argmax_" #name , itype, ArgMax)
 
-instantiate_arg_reduce(bool_, bool) instantiate_arg_reduce(uint8, uint8_t)
-    instantiate_arg_reduce(uint16, uint16_t) instantiate_arg_reduce(
-        uint32,
-        uint32_t) instantiate_arg_reduce(uint64, uint64_t)
-        instantiate_arg_reduce(int8, int8_t)
-            instantiate_arg_reduce(int16, int16_t)
-                instantiate_arg_reduce(int32, int32_t)
-                    instantiate_arg_reduce(int64, int64_t)
-                        instantiate_arg_reduce(float16, half)
-                            instantiate_arg_reduce(float32, float)
-                                instantiate_arg_reduce(bfloat16, bfloat16_t)
+instantiate_arg_reduce(bool_, bool)
+instantiate_arg_reduce(uint8, uint8_t)
+instantiate_arg_reduce(uint16, uint16_t)
+instantiate_arg_reduce(uint32, uint32_t)
+instantiate_arg_reduce(uint64, uint64_t)
+instantiate_arg_reduce(int8, int8_t)
+instantiate_arg_reduce(int16, int16_t)
+instantiate_arg_reduce(int32, int32_t)
+instantiate_arg_reduce(int64, int64_t)
+instantiate_arg_reduce(float16, half)
+instantiate_arg_reduce(float32, float)
+instantiate_arg_reduce(bfloat16, bfloat16_t) // clang-format on

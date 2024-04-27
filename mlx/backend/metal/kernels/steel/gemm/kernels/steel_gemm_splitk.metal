@@ -206,113 +206,32 @@ template <
       uint3 tid [[threadgroup_position_in_grid]],                        \
       uint3 lid [[thread_position_in_threadgroup]]);
 
-#define instantiate_gemm_aligned_helper(                                     \
-    tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
-  instantiate_gemm(                                                          \
-      tname,                                                                 \
-      trans_a,                                                               \
-      trans_b,                                                               \
-      iname,                                                                 \
-      itype,                                                                 \
-      oname,                                                                 \
-      otype,                                                                 \
-      bm,                                                                    \
-      bn,                                                                    \
-      bk,                                                                    \
-      wm,                                                                    \
-      wn,                                                                    \
-      taligned,                                                              \
-      true,                                                                  \
-      taligned,                                                              \
-      true)                                                                  \
-      instantiate_gemm(                                                      \
-          tname,                                                             \
-          trans_a,                                                           \
-          trans_b,                                                           \
-          iname,                                                             \
-          itype,                                                             \
-          oname,                                                             \
-          otype,                                                             \
-          bm,                                                                \
-          bn,                                                                \
-          bk,                                                                \
-          wm,                                                                \
-          wn,                                                                \
-          taligned,                                                          \
-          true,                                                              \
-          naligned,                                                          \
-          false)                                                             \
-          instantiate_gemm(                                                  \
-              tname,                                                         \
-              trans_a,                                                       \
-              trans_b,                                                       \
-              iname,                                                         \
-              itype,                                                         \
-              oname,                                                         \
-              otype,                                                         \
-              bm,                                                            \
-              bn,                                                            \
-              bk,                                                            \
-              wm,                                                            \
-              wn,                                                            \
-              naligned,                                                      \
-              false,                                                         \
-              taligned,                                                      \
-              true)                                                          \
-              instantiate_gemm(                                              \
-                  tname,                                                     \
-                  trans_a,                                                   \
-                  trans_b,                                                   \
-                  iname,                                                     \
-                  itype,                                                     \
-                  oname,                                                     \
-                  otype,                                                     \
-                  bm,                                                        \
-                  bn,                                                        \
-                  bk,                                                        \
-                  wm,                                                        \
-                  wn,                                                        \
-                  naligned,                                                  \
-                  false,                                                     \
-                  naligned,                                                  \
-                  false)
+// clang-format off
+#define instantiate_gemm_aligned_helper(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn)             \
+  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, taligned, true, taligned, true)  \
+  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, taligned, true, naligned, false) \
+  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, naligned, false, taligned, true) \
+  instantiate_gemm(tname, trans_a, trans_b, iname, itype, oname, otype, bm, bn, bk, wm, wn, naligned, false, naligned, false) // clang-format on
 
-#define instantiate_gemm_transpose_helper(                                     \
-    iname, itype, oname, otype, bm, bn, bk, wm, wn)                            \
-  instantiate_gemm_aligned_helper(                                             \
-      nn, false, false, iname, itype, oname, otype, bm, bn, bk, wm, wn)        \
-      instantiate_gemm_aligned_helper(                                         \
-          nt, false, true, iname, itype, oname, otype, bm, bn, bk, wm, wn)     \
-          instantiate_gemm_aligned_helper(                                     \
-              tn, true, false, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
-              instantiate_gemm_aligned_helper(                                 \
-                  tt,                                                          \
-                  true,                                                        \
-                  true,                                                        \
-                  iname,                                                       \
-                  itype,                                                       \
-                  oname,                                                       \
-                  otype,                                                       \
-                  bm,                                                          \
-                  bn,                                                          \
-                  bk,                                                          \
-                  wm,                                                          \
-                  wn)
+// clang-format off
+#define instantiate_gemm_transpose_helper(iname, itype, oname, otype, bm, bn, bk, wm, wn)             \
+    instantiate_gemm_aligned_helper(nn, false, false, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
+    instantiate_gemm_aligned_helper(nt, false, true , iname, itype, oname, otype, bm, bn, bk, wm, wn) \
+    instantiate_gemm_aligned_helper(tn, true , false, iname, itype, oname, otype, bm, bn, bk, wm, wn) \
+    instantiate_gemm_aligned_helper(tt, true , true , iname, itype, oname, otype, bm, bn, bk, wm, wn) // clang-format on
 
-#define instantiate_gemm_shapes_helper(iname, itype, oname, otype) \
-  instantiate_gemm_transpose_helper(                               \
-      iname, itype, oname, otype, 16, 16, 16, 2, 2)                \
-      instantiate_gemm_transpose_helper(                           \
-          iname, itype, oname, otype, 16, 32, 16, 2, 2)            \
-          instantiate_gemm_transpose_helper(                       \
-              iname, itype, oname, otype, 32, 16, 16, 2, 2)        \
-              instantiate_gemm_transpose_helper(                   \
-                  iname, itype, oname, otype, 32, 32, 16, 2, 2)
+// clang-format off
+#define instantiate_gemm_shapes_helper(iname, itype, oname, otype)                  \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 16, 16, 16, 2, 2) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 16, 32, 16, 2, 2) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 32, 16, 16, 2, 2) \
+    instantiate_gemm_transpose_helper(iname, itype, oname, otype, 32, 32, 16, 2, 2) // clang-format on
 
+// clang-format off
 instantiate_gemm_shapes_helper(float16, half, float32, float);
 instantiate_gemm_shapes_helper(bfloat16, bfloat16_t, float32, float);
 
-instantiate_gemm_shapes_helper(float32, float, float32, float);
+instantiate_gemm_shapes_helper(float32, float, float32, float); // clang-format on
 
 ///////////////////////////////////////////////////////////////////////////////
 // Split k accumulation kernel
@@ -404,6 +323,7 @@ template <
       const constant float& beta [[buffer(9)]],                     \
       uint2 gid [[thread_position_in_grid]]);
 
+// clang-format off
 instantiate_accum(bfloat16, bfloat16_t, float32, float);
 instantiate_accum(float16, half, float32, float);
-instantiate_accum(float32, float, float32, float);
+instantiate_accum(float32, float, float32, float); // clang-format on

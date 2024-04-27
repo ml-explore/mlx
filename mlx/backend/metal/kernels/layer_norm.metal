@@ -553,5 +553,4 @@ template <typename T, int N_READS = RMS_N_READS>
 
 instantiate_layer_norm(float32, float)
 instantiate_layer_norm(float16, half)
-instantiate_layer_norm(bfloat16, bfloat16_t)
-    // clang-format on
+instantiate_layer_norm(bfloat16, bfloat16_t) // clang-format on

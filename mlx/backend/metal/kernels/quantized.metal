@@ -887,14 +887,14 @@ template <
           instantiate_qmv_fast(                                               \
               bfloat16, bfloat16_t, group_size, bits, packs_per_thread)
 
-instantiate_qmv_fast_types(128, 2, 1) instantiate_qmv_fast_types(128, 4, 2) instantiate_qmv_fast_types(
-    128,
-    8,
-    2) instantiate_qmv_fast_types(64, 2, 1) instantiate_qmv_fast_types(64, 4, 2)
-    instantiate_qmv_fast_types(64, 8, 2) instantiate_qmv_fast_types(
-        32,
-        2,
-        1) instantiate_qmv_fast_types(32, 4, 2) instantiate_qmv_fast_types(32, 8, 2)
+instantiate_qmv_fast_types(128, 2, 1) instantiate_qmv_fast_types(128, 4, 2)
+    instantiate_qmv_fast_types(128, 8, 2) instantiate_qmv_fast_types(64, 2, 1)
+        instantiate_qmv_fast_types(64, 4, 2) instantiate_qmv_fast_types(
+            64,
+            8,
+            2) instantiate_qmv_fast_types(32, 2, 1)
+            instantiate_qmv_fast_types(32, 4, 2)
+                instantiate_qmv_fast_types(32, 8, 2)
 
 #define instantiate_qmv(name, itype, group_size, bits)  \
   template [[host_name("qmv_" #name "_gs_" #group_size  \
@@ -911,17 +911,21 @@ instantiate_qmv_fast_types(128, 2, 1) instantiate_qmv_fast_types(128, 4, 2) inst
       uint simd_gid [[simdgroup_index_in_threadgroup]], \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-#define instantiate_qmv_types(group_size, bits)        \
-  instantiate_qmv(float32, float, group_size, bits)    \
-      instantiate_qmv(float16, half, group_size, bits) \
-          instantiate_qmv(bfloat16, bfloat16_t, group_size, bits)
+// clang-format off
+#define instantiate_qmv_types(group_size, bits)     \
+  instantiate_qmv(float32, float, group_size, bits) \
+  instantiate_qmv(float16, half, group_size, bits)  \
+  instantiate_qmv(bfloat16, bfloat16_t, group_size, bits)
 
-        instantiate_qmv_types(128, 2) instantiate_qmv_types(128, 4) instantiate_qmv_types(
-            128,
-            8) instantiate_qmv_types(64, 2) instantiate_qmv_types(64, 4)
-            instantiate_qmv_types(64, 8) instantiate_qmv_types(
-                32,
-                2) instantiate_qmv_types(32, 4) instantiate_qmv_types(32, 8)
+instantiate_qmv_types(128, 2)
+instantiate_qmv_types(128, 4)
+instantiate_qmv_types(128, 8)
+instantiate_qmv_types( 64, 2)
+instantiate_qmv_types( 64, 4)
+instantiate_qmv_types( 64, 8)
+instantiate_qmv_types( 32, 2)
+instantiate_qmv_types( 32, 4)
+instantiate_qmv_types( 32, 8) // clang-format on
 
 #define instantiate_qvm(name, itype, group_size, bits)  \
   template [[host_name("qvm_" #name "_gs_" #group_size  \
@@ -938,20 +942,21 @@ instantiate_qmv_fast_types(128, 2, 1) instantiate_qmv_fast_types(128, 4, 2) inst
       uint simd_gid [[simdgroup_index_in_threadgroup]], \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-#define instantiate_qvm_types(group_size, bits)        \
-  instantiate_qvm(float32, float, group_size, bits)    \
-      instantiate_qvm(float16, half, group_size, bits) \
-          instantiate_qvm(bfloat16, bfloat16_t, group_size, bits)
+// clang-format off
+#define instantiate_qvm_types(group_size, bits)     \
+  instantiate_qvm(float32, float, group_size, bits) \
+  instantiate_qvm(float16, half, group_size, bits)  \
+  instantiate_qvm(bfloat16, bfloat16_t, group_size, bits)
 
-                instantiate_qvm_types(128, 2) instantiate_qvm_types(
-                    128,
-                    4) instantiate_qvm_types(128, 8)
-                    instantiate_qvm_types(64, 2) instantiate_qvm_types(
-                        64,
-                        4) instantiate_qvm_types(64, 8)
-                        instantiate_qvm_types(32, 2) instantiate_qvm_types(
-                            32,
-                            4) instantiate_qvm_types(32, 8)
+instantiate_qvm_types(128, 2)
+instantiate_qvm_types(128, 4)
+instantiate_qvm_types(128, 8)
+instantiate_qvm_types( 64, 2)
+instantiate_qvm_types( 64, 4)
+instantiate_qvm_types( 64, 8)
+instantiate_qvm_types( 32, 2)
+instantiate_qvm_types( 32, 4)
+instantiate_qvm_types( 32, 8) // clang-format on
 
 #define instantiate_qmm_t(name, itype, group_size, bits, aligned_N)  \
   template [[host_name("qmm_t_" #name "_gs_" #group_size "_b_" #bits \
@@ -970,24 +975,24 @@ instantiate_qmv_fast_types(128, 2, 1) instantiate_qmv_fast_types(128, 4, 2) inst
       uint simd_gid [[simdgroup_index_in_threadgroup]],              \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-#define instantiate_qmm_t_types(group_size, bits)                          \
-  instantiate_qmm_t(float32, float, group_size, bits, false)               \
-      instantiate_qmm_t(float16, half, group_size, bits, false)            \
-          instantiate_qmm_t(bfloat16, bfloat16_t, group_size, bits, false) \
-              instantiate_qmm_t(float32, float, group_size, bits, true)    \
-                  instantiate_qmm_t(float16, half, group_size, bits, true) \
-                      instantiate_qmm_t(                                   \
-                          bfloat16, bfloat16_t, group_size, bits, true)
+// clang-format off
+#define instantiate_qmm_t_types(group_size, bits)                  \
+  instantiate_qmm_t(float32, float, group_size, bits, false)       \
+  instantiate_qmm_t(float16, half, group_size, bits, false)        \
+  instantiate_qmm_t(bfloat16, bfloat16_t, group_size, bits, false) \
+  instantiate_qmm_t(float32, float, group_size, bits, true)        \
+  instantiate_qmm_t(float16, half, group_size, bits, true)         \
+  instantiate_qmm_t(bfloat16, bfloat16_t, group_size, bits, true)
 
-                            instantiate_qmm_t_types(128, 2) instantiate_qmm_t_types(
-                                128,
-                                4) instantiate_qmm_t_types(128, 8)
-                                instantiate_qmm_t_types(64, 2) instantiate_qmm_t_types(
-                                    64,
-                                    4) instantiate_qmm_t_types(64, 8)
-                                    instantiate_qmm_t_types(32, 2) instantiate_qmm_t_types(
-                                        32,
-                                        4) instantiate_qmm_t_types(32, 8)
+instantiate_qmm_t_types(128, 2)
+instantiate_qmm_t_types(128, 4)
+instantiate_qmm_t_types(128, 8)
+instantiate_qmm_t_types( 64, 2)
+instantiate_qmm_t_types( 64, 4)
+instantiate_qmm_t_types( 64, 8)
+instantiate_qmm_t_types( 32, 2)
+instantiate_qmm_t_types( 32, 4)
+instantiate_qmm_t_types( 32, 8) // clang-format on
 
 #define instantiate_qmm_n(name, itype, group_size, bits) \
   template [[host_name("qmm_n_" #name "_gs_" #group_size \
@@ -1006,26 +1011,18 @@ instantiate_qmv_fast_types(128, 2, 1) instantiate_qmv_fast_types(128, 4, 2) inst
       uint simd_gid [[simdgroup_index_in_threadgroup]],  \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-#define instantiate_qmm_n_types(group_size, bits)        \
-  instantiate_qmm_n(float32, float, group_size, bits)    \
-      instantiate_qmm_n(float16, half, group_size, bits) \
-          instantiate_qmm_n(bfloat16, bfloat16_t, group_size, bits)
+// clang-format off
+#define instantiate_qmm_n_types(group_size, bits)     \
+  instantiate_qmm_n(float32, float, group_size, bits) \
+  instantiate_qmm_n(float16, half, group_size, bits)  \
+  instantiate_qmm_n(bfloat16, bfloat16_t, group_size, bits)
 
-                                        instantiate_qmm_n_types(
-                                            128,
-                                            2) instantiate_qmm_n_types(128, 4)
-                                            instantiate_qmm_n_types(
-                                                128,
-                                                8) instantiate_qmm_n_types(64, 2)
-                                                instantiate_qmm_n_types(
-                                                    64,
-                                                    4) instantiate_qmm_n_types(64, 8)
-                                                    instantiate_qmm_n_types(
-                                                        32,
-                                                        2)
-                                                        instantiate_qmm_n_types(
-                                                            32,
-                                                            4)
-                                                            instantiate_qmm_n_types(
-                                                                32,
-                                                                8)
+instantiate_qmm_n_types(128, 2)
+instantiate_qmm_n_types(128, 4)
+instantiate_qmm_n_types(128, 8)
+instantiate_qmm_n_types( 64, 2)
+instantiate_qmm_n_types( 64, 4)
+instantiate_qmm_n_types( 64, 8)
+instantiate_qmm_n_types( 32, 2)
+instantiate_qmm_n_types( 32, 4)
+instantiate_qmm_n_types( 32, 8) // clang-format on
