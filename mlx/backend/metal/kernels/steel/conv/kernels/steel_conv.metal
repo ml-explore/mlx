@@ -200,29 +200,25 @@ implicit_gemm_conv_2d(
       uint simd_gid [[simdgroup_index_in_threadgroup]],                        \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-#define instantiate_implicit_2d_filter(name, itype, bm, bn, bk, wm, wn)        \
-  instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, l, 0, s, true) \
-      instantiate_implicit_conv_2d(                                            \
-          name, itype, bm, bn, bk, wm, wn, l, 0, l, false)                     \
-          instantiate_implicit_conv_2d(                                        \
-              name, itype, bm, bn, bk, wm, wn, 1, 1, l, false)                 \
-              instantiate_implicit_conv_2d(                                    \
-                  name, itype, bm, bn, bk, wm, wn, 2, 2, l, false)             \
-                  instantiate_implicit_conv_2d(                                \
-                      name, itype, bm, bn, bk, wm, wn, 3, 3, l, false)         \
-                      instantiate_implicit_conv_2d(                            \
-                          name, itype, bm, bn, bk, wm, wn, 4, 4, l, false)
+// clang-format off
+#define instantiate_implicit_2d_filter(name, itype, bm, bn, bk, wm, wn)           \
+    instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, l, 0, s, true)  \
+    instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, l, 0, l, false) \
+    instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, 1, 1, l, false) \
+    instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, 2, 2, l, false) \
+    instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, 3, 3, l, false) \
+    instantiate_implicit_conv_2d(name, itype, bm, bn, bk, wm, wn, 4, 4, l, false) // clang-format on
 
-#define instantiate_implicit_2d_blocks(name, itype)                         \
-  instantiate_implicit_2d_filter(name, itype, 32, 8, 16, 4, 1)              \
-      instantiate_implicit_2d_filter(name, itype, 64, 8, 16, 4, 1)          \
-          instantiate_implicit_2d_filter(name, itype, 32, 32, 16, 2, 2)     \
-              instantiate_implicit_2d_filter(name, itype, 32, 64, 16, 2, 2) \
-                  instantiate_implicit_2d_filter(                           \
-                      name, itype, 64, 32, 16, 2, 2)                        \
-                      instantiate_implicit_2d_filter(                       \
-                          name, itype, 64, 64, 16, 2, 2)
+// clang-format off
+#define instantiate_implicit_2d_blocks(name, itype)               \
+    instantiate_implicit_2d_filter(name, itype, 32,  8, 16, 4, 1) \
+    instantiate_implicit_2d_filter(name, itype, 64,  8, 16, 4, 1) \
+    instantiate_implicit_2d_filter(name, itype, 32, 32, 16, 2, 2) \
+    instantiate_implicit_2d_filter(name, itype, 32, 64, 16, 2, 2) \
+    instantiate_implicit_2d_filter(name, itype, 64, 32, 16, 2, 2) \
+    instantiate_implicit_2d_filter(name, itype, 64, 64, 16, 2, 2) // clang-format on
 
+// clang-format off
 instantiate_implicit_2d_blocks(float32, float);
 instantiate_implicit_2d_blocks(float16, half);
-instantiate_implicit_2d_blocks(bfloat16, bfloat16_t);
+instantiate_implicit_2d_blocks(bfloat16, bfloat16_t); // clang-format on
