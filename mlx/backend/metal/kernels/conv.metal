@@ -32,7 +32,7 @@ template <typename T, int N>
   // Set out
   out += gid.z * filter_size + gid.y * (params->C);
 
-  // Corrdinates in input
+  // Coordinates in input
   int is[N] = {0};
 
   // gid.z: N oS (Batch and row in unfolded output)
@@ -76,13 +76,85 @@ template <typename T, int N>
   }
 }
 
-#define instantiate_naive_unfold_nd(name, itype, n)                       \
-  template [[host_name("naive_unfold_nd_" #name "_" #n)]] [[kernel]] void \
-  naive_unfold_Nd(                                                        \
-      const device itype* in [[buffer(0)]],                               \
-      device itype* out [[buffer(1)]],                                    \
-      const constant MLXConvParams<n>* params [[buffer(2)]],              \
-      uint3 gid [[thread_position_in_grid]]);
+// This kernel unfolds the input array of size (N, *spatial_dims, C)
+// into an array of size (N x *spatial_dims, C x *kernel_dims).
+template <typename T, int N>
+[[kernel]] void naive_unfold_transpose_Nd(
+    const device T* in [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    const constant MLXConvParams<N>* params [[buffer(2)]],
+    uint3 gid [[thread_position_in_grid]]) {
+  int filter_size = params->C;
+  for (short i = 0; i < N; i++)
+    filter_size *= params->wS[i];
+
+  int out_pixels = 1;
+  for (short i = 0; i < N; i++)
+    out_pixels *= params->oS[i];
+
+  // Set out
+  out += gid.z * filter_size + gid.x * (filter_size / params->C);
+
+  // Coordinates in input
+  int is[N] = {0};
+
+  // gid.z: N oS (Batch and row in unfolded output)
+  // gid.y: wS (Filter location to unfold input)
+  // gid.x: C (channel)
+
+  int n = (gid.z) / out_pixels;
+  int oS = (gid.z) % out_pixels;
+  int wS = gid.y;
+
+  bool valid = n < params->N;
+
+  // Unroll dimensions
+  for (int i = N - 1; i >= 0; --i) {
+    int os_ = (oS % params->oS[i]);
+    int ws_ = (wS % params->wS[i]);
+
+    ws_ = params->flip ? params->wS[i] - ws_ - 1 : ws_;
+
+    int is_ = os_ * params->str[i] - params->pad[i] + ws_ * params->kdil[i];
+    int is_max = 1 + params->idil[i] * (params->iS[i] - 1);
+
+    valid &= is_ >= 0 && is_ < is_max && (is_ % params->idil[i] == 0);
+
+    is[i] = is_ / params->idil[i];
+
+    oS /= params->oS[i];
+    wS /= params->wS[i];
+
+    out += ws_ * params->str[i];
+  }
+
+  if (valid) {
+    size_t in_offset = n * params->in_strides[0];
+
+    for (int i = 0; i < N; ++i) {
+      in_offset += is[i] * params->in_strides[i + 1];
+    }
+
+    out[0] = in[in_offset + gid.x];
+  } else {
+    out[0] = T(0);
+  }
+}
+
+#define instantiate_naive_unfold_nd(name, itype, n)                            \
+  template [[host_name("naive_unfold_nd_" #name "_" #n)]] [[kernel]] void      \
+  naive_unfold_Nd(                                                             \
+      const device itype* in [[buffer(0)]],                                    \
+      device itype* out [[buffer(1)]],                                         \
+      const constant MLXConvParams<n>* params [[buffer(2)]],                   \
+      uint3 gid [[thread_position_in_grid]]);                                  \
+  template                                                                     \
+      [[host_name("naive_unfold_transpose_nd_" #name "_" #n)]] [[kernel]] void \
+      naive_unfold_transpose_Nd(                                               \
+          const device itype* in [[buffer(0)]],                                \
+          device itype* out [[buffer(1)]],                                     \
+          const constant MLXConvParams<n>* params [[buffer(2)]],               \
+          uint3 gid [[thread_position_in_grid]]);
 
 #define instantiate_naive_unfold_nd_dims(name, itype)                      \
   instantiate_naive_unfold_nd(name, itype, 1) instantiate_naive_unfold_nd( \
@@ -193,14 +265,13 @@ template <
       uint simd_gid [[simdgroup_index_in_threadgroup]],                     \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-// clang-format off
 #define instantiate_naive_conv_2d_blocks(name, itype) \
   instantiate_naive_conv_2d(name, itype, 16, 8, 4, 4) \
-  instantiate_naive_conv_2d(name, itype, 16, 8, 2, 4) 
+      instantiate_naive_conv_2d(name, itype, 16, 8, 2, 4)
 
 instantiate_naive_conv_2d_blocks(float32, float);
 instantiate_naive_conv_2d_blocks(float16, half);
-instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t); // clang-format on
+instantiate_naive_conv_2d_blocks(bfloat16, bfloat16_t);
 
 ///////////////////////////////////////////////////////////////////////////////
 /// Winograd kernels
@@ -573,7 +644,8 @@ winograd_conv_2d_output_transform(
 #define instantiate_winograd_conv_2d(name, itype)                     \
   instantiate_winograd_conv_2d_weight_transform_base(name, itype, 32) \
   instantiate_winograd_conv_2d_input_transform(name, itype, 32)       \
-  instantiate_winograd_conv_2d_output_transform(name, itype, 32) 
+  instantiate_winograd_conv_2d_output_transform(name, itype, 32) // clang-format on
 
+// clang-format off
 instantiate_winograd_conv_2d(float32, float);
 instantiate_winograd_conv_2d(float16, half); // clang-format on

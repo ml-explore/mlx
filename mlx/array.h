@@ -114,6 +114,15 @@ class array {
     return array_desc_->strides;
   };
 
+  /**
+   *  Get the stride of the corresponding dimension.
+   *
+   *  This function supports negative indexing and provides
+   *  bounds checking. */
+  size_t strides(int dim) const {
+    return strides().at(dim < 0 ? dim + ndim() : dim);
+  };
+
   /** Get the arrays data type. */
   Dtype dtype() const {
     return array_desc_->dtype;
