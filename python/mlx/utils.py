@@ -191,3 +191,45 @@ def tree_unflatten(tree):
         return l
     else:
         return {k: tree_unflatten(v) for k, v in children.items()}
+
+def tree_reduce(fn, tree, initializer=None, is_leaf=None):
+    """
+    Recursively applies a reducer function `fn` to the leaves of the Python tree `tree` and aggregates them into a single value.
+
+    Args:
+        fn (callable): The reducer function that takes two arguments (accumulator, current_value) and returns the updated accumulator.
+        tree (Any): The Python tree to reduce.
+        initializer (Any, optional): The initial value to start the reduction. If not provided, the first leaf value is used.
+        is_leaf (callable, optional): A function to determine if an object is a leaf.
+
+    Returns:
+        The aggregated value after reduction.
+    """
+    if is_leaf is not None and is_leaf(tree):
+        return tree if initializer is None else fn(initializer, tree)
+    
+    if initializer is None:
+        # Handle empty structures
+        first = True
+    else:
+        first = False
+        accumulator = initializer
+
+    if isinstance(tree, (list, tuple)):
+        for item in tree:
+            if first:
+                accumulator = tree_reduce(fn, item, None, is_leaf)
+                first = False
+            else:
+                accumulator = tree_reduce(fn, item, accumulator, is_leaf)
+    elif isinstance(tree, dict):
+        for item in tree.values():
+            if first:
+                accumulator = tree_reduce(fn, item, None, is_leaf)
+                first = False
+            else:
+                accumulator = tree_reduce(fn, item, accumulator, is_leaf)
+    else:
+        return tree if initializer is None else fn(initializer, tree)
+
+    return accumulator
