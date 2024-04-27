@@ -10,7 +10,7 @@ namespace mlx::core {
 
 class Event {
  public:
-  Event(){};
+  Event() {};
 
   Event(const Stream& steam);
 

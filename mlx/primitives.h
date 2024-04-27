@@ -448,7 +448,7 @@ class BitwiseBinary : public UnaryPrimitive {
   enum Op { And, Or, Xor, LeftShift, RightShift };
 
   explicit BitwiseBinary(Stream stream, Op op)
-      : UnaryPrimitive(stream), op_(op){};
+      : UnaryPrimitive(stream), op_(op) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -465,7 +465,7 @@ class BitwiseBinary : public UnaryPrimitive {
 class BlockMaskedMM : public UnaryPrimitive {
  public:
   explicit BlockMaskedMM(Stream stream, int block_size)
-      : UnaryPrimitive(stream), block_size_(block_size){};
+      : UnaryPrimitive(stream), block_size_(block_size) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
