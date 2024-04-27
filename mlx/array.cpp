@@ -93,7 +93,11 @@ void array::detach() {
 }
 
 void array::eval() {
-  if (!is_evaled()) {
+  // Ensure the array is ready to be read
+  if (status() == Status::scheduled) {
+    event().wait();
+    set_status(Status::available);
+  } else if (status() == Status::unscheduled) {
     mlx::core::eval({*this});
   }
 }
@@ -176,7 +180,7 @@ void array::ArrayDesc::init() {
 }
 
 array::ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
-    : shape(std::move(shape)), dtype(dtype) {
+    : shape(std::move(shape)), dtype(dtype), status(Status::available) {
   init();
 }
 
@@ -187,6 +191,7 @@ array::ArrayDesc::ArrayDesc(
     std::vector<array> inputs)
     : shape(std::move(shape)),
       dtype(dtype),
+      status(Status::unscheduled),
       primitive(std::move(primitive)),
       inputs(std::move(inputs)) {
   init();

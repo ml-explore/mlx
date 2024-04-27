@@ -11,7 +11,10 @@
 
 namespace mlx::core {
 
-/** Creation operations */
+/**
+ * \defgroup ops Core array operations
+ * @{
+ */
 
 /**
  * A 1D array of numbers starting at `start` (optional),
@@ -114,8 +117,6 @@ inline array tri(int n, Dtype type, StreamOrDevice s = {}) {
 
 array tril(array x, int k = 0, StreamOrDevice s = {});
 array triu(array x, int k = 0, StreamOrDevice s = {});
-
-/** array manipulation */
 
 /** Reshape an array to the given shape. */
 array reshape(const array& a, std::vector<int> shape, StreamOrDevice s = {});
@@ -289,8 +290,6 @@ std::vector<array> broadcast_arrays(
     const std::vector<array>& inputs,
     StreamOrDevice s = {});
 
-/** Comparison operations */
-
 /** Returns the bool array with (a == b) element-wise. */
 array equal(const array& a, const array& b, StreamOrDevice s = {});
 inline array operator==(const array& a, const array& b) {
@@ -400,8 +399,6 @@ array where(
     const array& x,
     const array& y,
     StreamOrDevice s = {});
-
-/** Reduction operations */
 
 /** True if all elements in the array are true (or non-zero). **/
 array all(const array& a, bool keepdims, StreamOrDevice s = {});
@@ -710,8 +707,6 @@ array logsumexp(
     bool keepdims = false,
     StreamOrDevice s = {});
 
-/** Simple arithmetic operations */
-
 /** Absolute value of elements in an array. */
 array abs(const array& a, StreamOrDevice s = {});
 
@@ -850,6 +845,12 @@ array arccosh(const array& a, StreamOrDevice s = {});
 
 /** Inverse Hyperbolic Tangent of the elements of an array */
 array arctanh(const array& a, StreamOrDevice s = {});
+
+/** Convert the elements of an array from Radians to Degrees **/
+array degrees(const array& a, StreamOrDevice s = {});
+
+/** Convert the elements of an array from Degrees to Radians **/
+array radians(const array& a, StreamOrDevice s = {});
 
 /** Natural logarithm of the elements of an array. */
 array log(const array& a, StreamOrDevice s = {});
@@ -1026,17 +1027,6 @@ softmax(const array& a, int axis, bool precise = false, StreamOrDevice s = {}) {
 
 /** Raise elements of a to the power of b element-wise */
 array power(const array& a, const array& b, StreamOrDevice s = {});
-inline array operator^(const array& a, const array& b) {
-  return power(a, b);
-}
-template <typename T>
-array operator^(T a, const array& b) {
-  return power(array(a), b);
-}
-template <typename T>
-array operator^(const array& a, T b) {
-  return power(a, array(b));
-}
 
 /** Cumulative sum of an array. */
 array cumsum(
@@ -1069,8 +1059,6 @@ array cummin(
     bool reverse = false,
     bool inclusive = true,
     StreamOrDevice s = {});
-
-/** Convolution operations */
 
 /** General convolution with a filter */
 array conv_general(
@@ -1185,6 +1173,16 @@ array addmm(
     const float& beta = 1.f,
     StreamOrDevice s = {});
 
+/** Compute matrix product with block masking */
+array block_masked_mm(
+    array a,
+    array b,
+    int block_size,
+    std::optional<array> mask_out = std::nullopt,
+    std::optional<array> mask_lhs = std::nullopt,
+    std::optional<array> mask_rhs = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Extract a diagonal or construct a diagonal array */
 array diagonal(
     const array& a,
@@ -1229,5 +1227,27 @@ array number_of_elements(
     bool inverted,
     Dtype dtype = int32,
     StreamOrDevice s = {});
+
+/** Bitwise and. */
+array bitwise_and(const array& a, const array& b, StreamOrDevice s = {});
+array operator&(const array& a, const array& b);
+
+/** Bitwise inclusive or. */
+array bitwise_or(const array& a, const array& b, StreamOrDevice s = {});
+array operator|(const array& a, const array& b);
+
+/** Bitwise exclusive or. */
+array bitwise_xor(const array& a, const array& b, StreamOrDevice s = {});
+array operator^(const array& a, const array& b);
+
+/** Shift bits to the left. */
+array left_shift(const array& a, const array& b, StreamOrDevice s = {});
+array operator<<(const array& a, const array& b);
+
+/** Shift bits to the right. */
+array right_shift(const array& a, const array& b, StreamOrDevice s = {});
+array operator>>(const array& a, const array& b);
+
+/** @} */
 
 } // namespace mlx::core

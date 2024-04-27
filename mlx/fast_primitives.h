@@ -204,7 +204,7 @@ class ScaledDotProductAttention : public Custom {
   void eval_gpu(const std::vector<array>& inputs, array& out);
   bool is_equivalent(const Primitive& other) const override;
 
-  DEFINE_PRINT(ScaledDotProductAttention)
+  DEFINE_PRINT(ScaledDotProductAttention);
 
  private:
   std::function<std::vector<array>(std::vector<array>)> fallback_;

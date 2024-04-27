@@ -12,5 +12,6 @@ Metal
   get_cache_memory
   set_memory_limit
   set_cache_limit
+  clear_cache
   start_capture
   stop_capture

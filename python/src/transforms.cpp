@@ -595,14 +595,6 @@ class PyCheckpointedFun {
 };
 
 void init_transforms(nb::module_& m) {
-  nb::class_<std::shared_future<void>>(
-      m,
-      "Synchronizer",
-      R"pbdoc(
-      A synchronization object returned by :func:`async_eval`.
-      )pbdoc")
-      .def("wait", [](const std::shared_future<void>& f) { f.wait(); });
-
   m.def(
       "eval",
       [](const nb::args& args) {
@@ -629,18 +621,13 @@ void init_transforms(nb::module_& m) {
         std::vector<array> arrays = tree_flatten(args, false);
         {
           nb::gil_scoped_release nogil;
-          return async_eval(arrays);
+          async_eval(arrays);
         }
       },
       nb::arg(),
-      nb::sig("def async_eval(*args) -> Synchronizer"),
+      nb::sig("def async_eval(*args)"),
       R"pbdoc(
         Asynchronously evaluate an :class:`array` or tree of :class:`array`.
-
-        .. warning::
-
-          You must call ``wait`` on the returned synchronization object before
-          using any arrays that are asynchronously evaluated.
 
         .. note::
 
@@ -652,8 +639,17 @@ void init_transforms(nb::module_& m) {
               :class:`list`, :class:`tuple` or :class:`dict`. Leaves which are not
               arrays are ignored.
 
-        Returns:
-            Synchronizer: A synchronization object.
+        Example:
+            >>> x = mx.array(1.0)
+            >>> y = mx.exp(x)
+            >>> mx.async_eval(y)
+            >>> print(y)
+            >>>
+            >>> y = mx.exp(x)
+            >>> mx.async_eval(y)
+            >>> z = y + 3
+            >>> mx.async_eval(z)
+            >>> print(z)
       )pbdoc");
   m.def(
       "jvp",

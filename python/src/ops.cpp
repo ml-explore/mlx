@@ -1033,6 +1033,40 @@ void init_ops(nb::module_& m) {
             array: The inverse hyperbolic tangent of ``a``.
       )pbdoc");
   m.def(
+      "degrees",
+      &mlx::core::degrees,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def degrees(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert angles from radians to degrees.
+
+      Args:
+          a (array): Input array.
+
+      Returns:
+          array: The angles in degrees.
+    )pbdoc");
+  m.def(
+      "radians",
+      &mlx::core::radians,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def radians(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert angles from degrees to radians.
+
+      Args:
+          a (array): Input array.
+
+      Returns:
+          array: The angles in radians.
+    )pbdoc");
+  m.def(
       "log",
       &mlx::core::log,
       nb::arg(),
@@ -3646,6 +3680,44 @@ void init_ops(nb::module_& m) {
             array: ``alpha * (a @ b)  + beta * c``
       )pbdoc");
   m.def(
+      "block_masked_mm",
+      &block_masked_mm,
+      nb::arg(),
+      nb::arg(),
+      "block_size"_a = 64,
+      "mask_out"_a = nb::none(),
+      "mask_lhs"_a = nb::none(),
+      "mask_rhs"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def block_masked_mm(a: array, b: array, /, block_size: int = 64, mask_out: array, mask_lhs: array, mask_rhs: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Matrix multiplication with block masking.
+
+        Perform the (possibly batched) matrix multiplication of two arrays and with blocks
+        of size ``block_size x block_size`` optionally masked out.
+
+        Assuming ``a`` with shape (..., `M`, `K`) and b with shape (..., `K`, `N`)
+
+        * ``lhs_mask`` must have shape (..., :math:`\lceil` `M` / ``block_size`` :math:`\rceil`, :math:`\lceil` `K` / ``block_size`` :math:`\rceil`)
+
+        * ``rhs_mask`` must have shape (..., :math:`\lceil` `K` / ``block_size`` :math:`\rceil`, :math:`\lceil` `N` / ``block_size`` :math:`\rceil`)
+
+        * ``out_mask`` must have shape (..., :math:`\lceil` `M` / ``block_size`` :math:`\rceil`, :math:`\lceil` `N` / ``block_size`` :math:`\rceil`)
+
+        Note: Only ``block_size=64`` and ``block_size=32`` are currently supported
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+            block_size (int): Size of blocks to be masked. Must be ``32`` or ``64`` (default: ``64``)
+            mask_out (array, optional): Boolean mask for output (default: ``None``)
+            mask_lhs (array, optional): Boolean mask for a (default: ``None``)
+            mask_rhs (array, optional): Boolean mask for b (default: ``None``)
+
+      )pbdoc");
+  m.def(
       "diagonal",
       &diagonal,
       "a"_a,
@@ -3825,4 +3897,132 @@ void init_ops(nb::module_& m) {
           &issubdtype),
       ""_a,
       ""_a);
+  m.def(
+      "bitwise_and",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return bitwise_and(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bitwise_and(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise bitwise and.
+
+        Take the bitwise and of two arrays with numpy-style broadcasting
+        semantics. Either or both input arrays can also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise and ``a & b``.
+      )pbdoc");
+  m.def(
+      "bitwise_or",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return bitwise_or(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bitwise_or(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise bitwise or.
+
+        Take the bitwise or of two arrays with numpy-style broadcasting
+        semantics. Either or both input arrays can also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise or``a | b``.
+      )pbdoc");
+  m.def(
+      "bitwise_xor",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return bitwise_xor(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bitwise_xor(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise bitwise xor.
+
+        Take the bitwise exclusive or of two arrays with numpy-style
+        broadcasting semantics. Either or both input arrays can also be
+        scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise xor ``a ^ b``.
+      )pbdoc");
+  m.def(
+      "left_shift",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return left_shift(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def left_shift(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise left shift.
+
+        Shift the bits of the first input to the left by the second using
+        numpy-style broadcasting semantics. Either or both input arrays can
+        also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise left shift ``a << b``.
+      )pbdoc");
+  m.def(
+      "right_shift",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return right_shift(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def right_shift(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise right shift.
+
+        Shift the bits of the first input to the right by the second using
+        numpy-style broadcasting semantics. Either or both input arrays can
+        also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise right shift ``a >> b``.
+      )pbdoc");
 }

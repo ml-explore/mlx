@@ -893,6 +893,22 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+    def test_degrees(self):
+        a = mx.array(
+            [0, math.pi / 4, math.pi / 2, math.pi, 3 * math.pi / 4, 2 * math.pi]
+        )
+        result = mx.degrees(a)
+        expected = np.degrees(a, dtype=np.float32)
+
+        self.assertTrue(np.allclose(result, expected))
+
+    def test_radians(self):
+        a = mx.array([0.0, 45.0, 90.0, 180.0, 270.0, 360.0])
+        result = mx.radians(a)
+        expected = np.radians(a, dtype=np.float32)
+
+        self.assertTrue(np.allclose(result, expected))
+
     def test_log1p(self):
         a = mx.array([1, 0.5, 10, 100])
         result = mx.log1p(a)
@@ -2160,6 +2176,38 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.issubdtype(getattr(np, a), getattr(np, b)),
                     f"mx and np don't aggree on {a}, {b}",
                 )
+
+    def test_bitwise_ops(self):
+        types = [
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+        ]
+        a = mx.random.randint(0, 4096, (1000,))
+        b = mx.random.randint(0, 4096, (1000,))
+        for op in ["bitwise_and", "bitwise_or", "bitwise_xor"]:
+            for t in types:
+                a_mlx = a.astype(t)
+                b_mlx = b.astype(t)
+                a_np = np.array(a_mlx)
+                b_np = np.array(b_mlx)
+                out_mlx = getattr(mx, op)(a_mlx, b_mlx)
+                out_np = getattr(np, op)(a_np, b_np)
+                self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
+        for op in ["left_shift", "right_shift"]:
+            for t in types:
+                a_mlx = a.astype(t)
+                b_mlx = mx.random.randint(0, t.size, (1000,)).astype(t)
+                a_np = np.array(a_mlx)
+                b_np = np.array(b_mlx)
+                out_mlx = getattr(mx, op)(a_mlx, b_mlx)
+                out_np = getattr(np, op)(a_np, b_np)
+                self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
 
 if __name__ == "__main__":

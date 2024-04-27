@@ -104,8 +104,7 @@ template <typename Lib, typename T>
 nb::ndarray<Lib> mlx_to_nd_array(
     array a,
     std::optional<nb::dlpack::dtype> t = {}) {
-  // Eval if not already evaled
-  if (!a.is_evaled()) {
+  {
     nb::gil_scoped_release nogil;
     a.eval();
   }

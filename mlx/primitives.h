@@ -443,6 +443,48 @@ class AsStrided : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class BitwiseBinary : public UnaryPrimitive {
+ public:
+  enum Op { And, Or, Xor, LeftShift, RightShift };
+
+  explicit BitwiseBinary(Stream stream, Op op)
+      : UnaryPrimitive(stream), op_(op){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  bool is_equivalent(const Primitive& other) const override;
+  void print(std::ostream& os) override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  Op op_;
+};
+
+class BlockMaskedMM : public UnaryPrimitive {
+ public:
+  explicit BlockMaskedMM(Stream stream, int block_size)
+      : UnaryPrimitive(stream), block_size_(block_size){};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(BlockMaskedMM)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int block_size_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Broadcast : public UnaryPrimitive {
  public:
   explicit Broadcast(Stream stream, const std::vector<int>& shape)

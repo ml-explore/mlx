@@ -28,6 +28,10 @@ Operations
    atleast_1d
    atleast_2d
    atleast_3d
+   bitwise_and
+   bitwise_or
+   bitwise_xor
+   block_masked_mm
    broadcast_to
    ceil
    clip
@@ -42,6 +46,7 @@ Operations
    cummin
    cumprod
    cumsum
+   degrees
    dequantize
    diag
    diagonal
@@ -67,6 +72,7 @@ Operations
    isnan
    isneginf
    isposinf
+   left_shift
    less
    less_equal
    linspace
@@ -90,6 +96,7 @@ Operations
    moveaxis
    multiply
    negative
+   not_equal
    ones
    ones_like
    outer
@@ -98,9 +105,11 @@ Operations
    prod
    quantize
    quantized_matmul
+   radians
    reciprocal
    repeat
    reshape
+   right_shift
    round
    rsqrt
    save
