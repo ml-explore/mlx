@@ -383,7 +383,7 @@ class TestSchedulers(unittest.TestCase):
             "second": mx.array([0.3]),
         }
         max_norm = 10.0  # A large max_norm that shouldn't trigger clipping
-        clipped_grads, total_norm = mlx.utils.clip_grad_norm(small_grads, max_norm)
+        clipped_grads, total_norm = opt.clip_grad_norm(small_grads, max_norm)
         self.assertTrue(
             tree_equal(
                 lambda x, y: mx.array_equal(x, y), 
@@ -399,7 +399,7 @@ class TestSchedulers(unittest.TestCase):
             "second": mx.array([30]),
         }
         max_norm = 1.0  # A small max_norm that should trigger clipping
-        clipped_grads, total_norm = mlx.utils.clip_grad_norm(large_grads, max_norm)
+        clipped_grads, total_norm = opt.clip_grad_norm(large_grads, max_norm)
         # Check if the norm of the resulting gradients is close to max_norm
         self.assertAlmostEqual(
             mx.sqrt(sum(mx.square(g).sum() for g in tree_flatten(clipped_grads)[1])).item(),

@@ -4,7 +4,7 @@ import math
 from typing import Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
-from mlx.utils import tree_map
+from mlx.utils import tree_map, tree_reduce
 
 
 class Optimizer:
