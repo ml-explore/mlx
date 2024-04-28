@@ -182,27 +182,24 @@ template <typename T, typename Op>
 
 // clang-format off
 #define instantiate_ternary_all(name, tname, type, op) \
+  instantiate_ternary_v("v" #name #tname, type, op)    \
   instantiate_ternary_g("g" #name #tname, type, op)    \
-  instantiate_ternary_g_nd("g" #name #tname, type, op) // clang-format off
+  instantiate_ternary_g_nd("g" #name #tname, type, op) // clang-format on
 
 // clang-format off
-#define instantiate_ternary_float(name, op)         \
-  instantiate_ternary_all(name, float16, half, op)  \
-  instantiate_ternary_all(name, float32, float, op) \
-  instantiate_ternary_all(name, bfloat16, bfloat16_t, op) // clang-format on
+#define instantiate_ternary_types(name, op)               \
+  instantiate_ternary_all(name, bool_, bool, op)          \
+  instantiate_ternary_all(name, uint8, uint8_t, op)       \
+  instantiate_ternary_all(name, uint16, uint16_t, op)     \
+  instantiate_ternary_all(name, uint32, uint32_t, op)     \
+  instantiate_ternary_all(name, uint64, uint64_t, op)     \
+  instantiate_ternary_all(name, int8, int8_t, op)         \
+  instantiate_ternary_all(name, int16, int16_t, op)       \
+  instantiate_ternary_all(name, int32, int32_t, op)       \
+  instantiate_ternary_all(name, int64, int64_t, op)       \
+  instantiate_ternary_all(name, float16, half, op)        \
+  instantiate_ternary_all(name, float32, float, op)       \
+  instantiate_ternary_all(name, bfloat16, bfloat16_t, op) \
+  instantiate_ternary_all(name, complex64, complex64_t, op) // clang-format on
 
-// clang-format off
-#define instantiate_ternary_types(name, op)                 \
-  instantiate_ternary_all(name, bool_, bool, op)            \
-  instantiate_ternary_all(name, uint8, uint8_t, op)         \
-  instantiate_ternary_all(name, uint16, uint16_t, op)       \
-  instantiate_ternary_all(name, uint32, uint32_t, op)       \
-  instantiate_ternary_all(name, uint64, uint64_t, op)       \
-  instantiate_ternary_all(name, int8, int8_t, op)           \
-  instantiate_ternary_all(name, int16, int16_t, op)         \
-  instantiate_ternary_all(name, int32, int32_t, op)         \
-  instantiate_ternary_all(name, int64, int64_t, op)         \
-  instantiate_ternary_all(name, complex64, complex64_t, op) \
-  instantiate_ternary_float(name, op)
-
-instantiate_ternary_types(select, Select) // clang-format on
+instantiate_ternary_types(select, Select)
