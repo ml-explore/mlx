@@ -400,9 +400,11 @@ class TestSchedulers(unittest.TestCase):
         }
         max_norm = 1.0  # A small max_norm that should trigger clipping
         clipped_grads, total_norm = opt.clip_grad_norm(large_grads, max_norm)
-        # Check if the norm of the resulting gradients is close to max_norm
+        # Correctly extract only the gradient values for norm calculation
+        clipped_values = [value for _, value in tree_flatten(clipped_grads)]
+        norm_of_clipped = mx.sqrt(sum(mx.square(g).sum() for g in clipped_values)).item()
         self.assertAlmostEqual(
-            mx.sqrt(sum(mx.square(g).sum() for g in tree_flatten(clipped_grads)[1])).item(),
+            norm_of_clipped,
             max_norm,
             places=6,
             msg="Clipped gradients norm should be close to the specified max_norm."
@@ -422,6 +424,7 @@ class TestSchedulers(unittest.TestCase):
             ),
             "Gradients were not scaled correctly during clipping."
         )
+
 
 if __name__ == "__main__":
     unittest.main()
