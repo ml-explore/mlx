@@ -265,8 +265,7 @@ MTL::Library* Device::get_library_(const std::string& source_string) {
   // Throw error if unable to compile library
   if (!mtl_lib) {
     std::ostringstream msg;
-    msg << "[metal::Device] Unable to load build metal library from source"
-        << "\n";
+    msg << "[metal::Device] Unable to build metal library from source" << "\n";
     if (error) {
       msg << error->localizedDescription()->utf8String() << "\n";
     }
@@ -285,8 +284,7 @@ MTL::Library* Device::get_library_(const MTL::StitchedLibraryDescriptor* desc) {
   // Throw error if unable to compile library
   if (!mtl_lib) {
     std::ostringstream msg;
-    msg << "[metal::Device] Unable to load build stitched metal library"
-        << "\n";
+    msg << "[metal::Device] Unable to build stitched metal library" << "\n";
     if (error) {
       msg << error->localizedDescription()->utf8String() << "\n";
     }

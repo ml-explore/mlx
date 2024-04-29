@@ -1262,6 +1262,14 @@ class TestArray(mlx_tests.MLXTestCase):
             np.ones((3, 4, 4, 4)), np.zeros((4, 4)), 0, slice(0, 4), 3, slice(0, 4)
         )
 
+        x = mx.zeros((2, 3, 4, 5, 3))
+        x[..., 0] = 1.0
+        self.assertTrue(mx.array_equal(x[..., 0], mx.ones((2, 3, 4, 5))))
+
+        x = mx.zeros((2, 3, 4, 5, 3))
+        x[:, 0] = 1.0
+        self.assertTrue(mx.array_equal(x[:, 0], mx.ones((2, 4, 5, 3))))
+
     def test_array_at(self):
         a = mx.array(1)
         a = a.at[None].add(1)

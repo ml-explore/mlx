@@ -426,7 +426,7 @@ array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
   int ax = axis < 0 ? axis + out_dim : axis;
   if (ax < 0 || ax >= out_dim) {
     std::ostringstream msg;
-    msg << "[expand_dims] Invalid axes " << axis << " for output array with "
+    msg << "[expand_dims] Invalid axis " << axis << " for output array with "
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
@@ -452,7 +452,7 @@ array expand_dims(
     ax = ax < 0 ? ax + out_ndim : ax;
     if (ax < 0 || ax >= out_ndim) {
       std::ostringstream msg;
-      msg << "[expand_dims] Invalid axes " << ax << " for output array with "
+      msg << "[expand_dims] Invalid axis " << ax << " for output array with "
           << a.ndim() << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
@@ -591,7 +591,6 @@ array slice_update(
   if (!has_neg_strides && upd_shape == src.shape()) {
     return astype(update_broadcasted, src.dtype(), s);
   }
-
   return array(
       src.shape(),
       src.dtype(),
