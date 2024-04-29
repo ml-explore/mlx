@@ -845,9 +845,7 @@ auto mlx_slice_update(
       st = (st < 0) ? st + src.shape(ax) : st;
       starts[ax] = st;
       stops[ax] = st + 1;
-      if (src.ndim() - ax < up.ndim()) {
-        upd_expand_dims.push_back(ax - src.ndim());
-      }
+      upd_expand_dims.push_back(ax);
       ax++;
     }
   }
