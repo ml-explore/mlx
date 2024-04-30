@@ -743,9 +743,10 @@ def clip_grad_norm(grads, max_norm):
         lambda acc, g: acc + g.square().sum(), grads, mx.array(0.0)
     )
     total_norm = mx.sqrt(norm_squared)
+    normalizer = max_norm / (total_norm + 1e-6)
 
     def clipper(g):
-        return mx.where(total_norm < max_norm, g, g * max_norm / (total_norm + 1e-6))
+        return mx.where(total_norm < max_norm, g, g * normalizer)
 
     clipped_grads = tree_map(clipper, grads)
     return clipped_grads, total_norm

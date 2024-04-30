@@ -197,40 +197,39 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
     """
     Recursively applies a reducer function `fn` to the leaves of the Python tree `tree` and aggregates them into a single value.
 
+    This function simplifies complex tree structures into a single accumulated result by applying a provided function `fn` from the leaves upward. It is similar to the built-in `reduce` function but works over nested, tree-like data structures.
+
+    Example:
+        >>> from mlx.utils import tree_reduce
+        >>> tree = {"a": [1, 2, 3], "b": [4, 5]}
+        >>> tree_reduce(lambda acc, x: acc + x, tree, 0)
+        15
+
     Args:
         fn (callable): The reducer function that takes two arguments (accumulator, current_value) and returns the updated accumulator.
-        tree (Any): The Python tree to reduce.
+        tree (Any): The Python tree to reduce. It can be any nested combination of lists, tuples, or dictionaries.
         initializer (Any, optional): The initial value to start the reduction. If not provided, the first leaf value is used.
-        is_leaf (callable, optional): A function to determine if an object is a leaf.
+        is_leaf (callable, optional): A function to determine if an object is a leaf, returning True for leaf nodes and False otherwise.
 
     Returns:
-        The aggregated value after reduction.
+        Any: The aggregated value after reduction.
+
+    .. note::
+        If `initializer` is not provided, the function will use the first leaf value as the initial accumulator. This may lead to unexpected results if the first leaf is not representative or compatible with the intended reduction.
+
     """
     if is_leaf is not None and is_leaf(tree):
         return tree if initializer is None else fn(initializer, tree)
 
-    if initializer is None:
-        # Handle empty structures
-        first = True
-    else:
-        first = False
-        accumulator = initializer
+    accumulator = initializer
 
     if isinstance(tree, (list, tuple)):
         for item in tree:
-            if first:
-                accumulator = tree_reduce(fn, item, None, is_leaf)
-                first = False
-            else:
-                accumulator = tree_reduce(fn, item, accumulator, is_leaf)
+            accumulator = tree_reduce(fn, item, accumulator, is_leaf)
     elif isinstance(tree, dict):
         for item in tree.values():
-            if first:
-                accumulator = tree_reduce(fn, item, None, is_leaf)
-                first = False
-            else:
-                accumulator = tree_reduce(fn, item, accumulator, is_leaf)
+            accumulator = tree_reduce(fn, item, accumulator, is_leaf)
     else:
-        return tree if initializer is None else fn(initializer, tree)
+        return tree if accumulator is None else fn(accumulator, tree)
 
     return accumulator
