@@ -7,8 +7,6 @@
 #include <set>
 #include <sstream>
 
-#include <iostream>
-
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -3876,12 +3874,6 @@ array block_sparse_mm(
   int N = b.shape(-1);
   int K = a.shape(-1);
 
-  a = reshape(a, {-1, M, K}, s);
-  b = reshape(b, {-1, K, N}, s);
-
-  // Get output shape
-  // std::cout << lhs_indices.shape() << std::endl;
-  // std::cout << rhs_indices.shape() << std::endl;
   auto out_bsx_shape =
       broadcast_shapes(lhs_indices.shape(), rhs_indices.shape());
 
@@ -3892,13 +3884,12 @@ array block_sparse_mm(
   out_shape.push_back(M);
   out_shape.push_back(N);
 
-  auto a_gathered = take(a, lhs_indices, 0, s);
-  auto b_gathered = take(b, rhs_indices, 0, s);
-
-  auto out = matmul(a_gathered, b_gathered, s);
-
-  std::cout << "Out shape: " << out_shape
-            << ", actual out shape: " << out.shape() << std::endl;
+  // Caculate array
+  auto out = array(
+      out_shape,
+      out_type,
+      std::make_shared<BlockSparseMM>(to_stream(s)),
+      {a, b, lhs_indices, rhs_indices});
 
   // Remove the possibly inserted singleton dimensions
   if (in_a_ndim == 1 || in_b_ndim == 1) {

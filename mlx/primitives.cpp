@@ -3363,6 +3363,15 @@ std::vector<array> BlockMaskedMM::vjp(
   return vjps;
 }
 
+std::vector<array> BlockSparseMM::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  return vjps;
+}
+
 bool BlockMaskedMM::is_equivalent(const Primitive& other) const {
   const BlockMaskedMM& a_other = static_cast<const BlockMaskedMM&>(other);
   return (block_size_ == a_other.block_size_);

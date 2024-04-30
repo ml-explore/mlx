@@ -190,4 +190,12 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void BlockSparseMM::eval(const std::vector<array>& inputs, array& out) {
+  if (out.dtype() != float32) {
+    throw std::runtime_error(
+        "[BlockSparseMM::eval] Currently only supports float32.");
+  }
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+}
+
 } // namespace mlx::core
