@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <variant>
+
 #include "mlx/array.h"
 
 namespace mlx::core::metal {
@@ -60,5 +62,9 @@ void clear_cache();
 /** Capture a GPU trace, saving it to an absolute file `path` */
 void start_capture(std::string path = "");
 void stop_capture();
+
+/** Get information about the GPU and system settings. */
+std::unordered_map<std::string, std::variant<std::string, size_t>>
+device_info();
 
 } // namespace mlx::core::metal

@@ -556,4 +556,15 @@ void new_stream(Stream stream) {
   }
 }
 
+std::unordered_map<std::string, std::variant<std::string, size_t>>
+device_info() {
+  auto raw_device = device(default_device()).mtl_device();
+  auto arch = std::string(raw_device->architecture()->name()->utf8String());
+  return {
+      {"architecture", arch},
+      {"max_buffer_length", raw_device->maxBufferLength()},
+      {"max_recommended_working_set_size",
+       raw_device->recommendedMaxWorkingSetSize()}};
+}
+
 } // namespace mlx::core::metal
