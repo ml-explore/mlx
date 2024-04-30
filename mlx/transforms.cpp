@@ -22,7 +22,7 @@ namespace mlx::core {
  * for synchronizing with the main thread. */
 class Synchronizer : public Primitive {
  public:
-  explicit Synchronizer(Stream stream) : Primitive(stream){};
+  explicit Synchronizer(Stream stream) : Primitive(stream) {};
 
   void eval_cpu(const std::vector<array>&, std::vector<array>&) override {};
   void eval_gpu(const std::vector<array>&, std::vector<array>&) override {};

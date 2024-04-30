@@ -12,7 +12,7 @@ class Custom : public Primitive {
   explicit Custom(
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback)
-      : Primitive(stream), fallback_(fallback){};
+      : Primitive(stream), fallback_(fallback) {};
 
   virtual std::pair<std::vector<array>, std::vector<int>> vmap(
       const std::vector<array>& inputs,
@@ -39,7 +39,7 @@ class RMSNorm : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps){};
+      : Custom(stream, fallback), eps_(eps) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -68,7 +68,7 @@ class RMSNormVJP : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps){};
+      : Custom(stream, fallback), eps_(eps) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -91,7 +91,7 @@ class LayerNorm : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps){};
+      : Custom(stream, fallback), eps_(eps) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -120,7 +120,7 @@ class LayerNormVJP : public Custom {
       Stream stream,
       std::function<std::vector<array>(std::vector<array>)> fallback,
       float eps)
-      : Custom(stream, fallback), eps_(eps){};
+      : Custom(stream, fallback), eps_(eps) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -154,7 +154,7 @@ class RoPE : public Custom {
         base_(base),
         scale_(scale),
         offset_(offset),
-        forward_(forward){};
+        forward_(forward) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -189,7 +189,7 @@ class ScaledDotProductAttention : public Custom {
       std::function<std::vector<array>(std::vector<array>)> fallback,
       const float scale,
       const bool needs_mask)
-      : Custom(stream, fallback), scale_(scale), needs_mask_(needs_mask){};
+      : Custom(stream, fallback), scale_(scale), needs_mask_(needs_mask) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {

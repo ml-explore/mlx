@@ -209,7 +209,7 @@ class array {
     allocator::Buffer buffer;
     deleter_t d;
     Data(allocator::Buffer buffer, deleter_t d = allocator::free)
-        : buffer(buffer), d(d){};
+        : buffer(buffer), d(d) {};
     // Not copyable
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;

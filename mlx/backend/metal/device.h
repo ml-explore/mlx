@@ -38,7 +38,7 @@ using MTLFCList =
 
 struct CommandEncoder {
   CommandEncoder(MTL::ComputeCommandEncoder* enc)
-      : enc(enc), concurrent(false){};
+      : enc(enc), concurrent(false) {};
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 

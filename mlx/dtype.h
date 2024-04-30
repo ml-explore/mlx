@@ -51,7 +51,7 @@ struct Dtype {
 
   Val val;
   const uint8_t size;
-  constexpr explicit Dtype(Val val, uint8_t size) : val(val), size(size){};
+  constexpr explicit Dtype(Val val, uint8_t size) : val(val), size(size) {};
   constexpr operator Val() const {
     return val;
   };
