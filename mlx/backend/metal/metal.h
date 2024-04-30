@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <variant>
+
 #include "mlx/array.h"
 
 namespace mlx::core::metal {
