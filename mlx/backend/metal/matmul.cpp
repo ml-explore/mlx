@@ -327,9 +327,9 @@ void steel_matmul_conv_groups(
       /* const int ldd = */ ldd,
       /* const int tiles_n = */ tn,
       /* const int tiles_m = */ tm,
-      /* const int batch_stride_a = */ K,
-      /* const int batch_stride_b = */ N * K,
-      /* const int batch_stride_d = */ N,
+      /* const size_t batch_stride_a = */ size_t(K),
+      /* const size_t batch_stride_b = */ size_t(N) * K,
+      /* const size_t batch_stride_d = */ size_t(N),
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ 1};
@@ -405,7 +405,7 @@ void steel_matmul(
     }
   }
 
-  int matrix_stride_out = M * N;
+  size_t matrix_stride_out = size_t(M) * N;
 
   /////////////////////////////////////////////////////////////////////////////
   // Split K specialization
@@ -550,9 +550,9 @@ void steel_matmul(
       /* const int ldd = */ N,
       /* const int tiles_n = */ tn,
       /* const int tiles_m = */ tm,
-      /* const int batch_stride_a = */ int(A_batch_stride.back()),
-      /* const int batch_stride_b = */ int(B_batch_stride.back()),
-      /* const int batch_stride_d = */ matrix_stride_out,
+      /* const size_t batch_stride_a = */ A_batch_stride.back(),
+      /* const size_t batch_stride_b = */ B_batch_stride.back(),
+      /* const size_t batch_stride_d = */ matrix_stride_out,
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ int(batch_shape.size())};
@@ -645,7 +645,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [batch_shape, A_batch_stride, B_batch_stride] = collapse_batches(a, b);
 
-  auto batch_size_out = out.size() / (M * N);
+  auto batch_size_out = out.size() / (size_t(M) * size_t(N));
 
   // Collapse batches into M if needed
   if (batch_size_out > 1 && !a_transposed && batch_shape.size() == 1 &&
@@ -853,7 +853,8 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [batch_shape, A_batch_stride, B_batch_stride, C_batch_stride] =
       collapse_batches(a, b, c);
 
-  auto batch_size_out = out.size() / (M * N);
+  size_t matrix_stride_out = size_t(M) * size_t(N);
+  auto batch_size_out = out.size() / (matrix_stride_out);
 
   // Collapse batches into M if needed
   if (batch_size_out > 1 && !transpose_a && batch_shape.size() == 1 &&
@@ -868,8 +869,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     C_batch_stride = {0};
     batch_shape = {1};
   }
-
-  int matrix_stride_out = M * N;
 
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
@@ -1120,9 +1119,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* const int ldd = */ N,
       /* const int tiles_n = */ tn,
       /* const int tiles_m = */ tm,
-      /* const int batch_stride_a = */ int(A_batch_stride.back()),
-      /* const int batch_stride_b = */ int(B_batch_stride.back()),
-      /* const int batch_stride_d = */ matrix_stride_out,
+      /* const size_t batch_stride_a = */ A_batch_stride.back(),
+      /* const size_t batch_stride_b = */ B_batch_stride.back(),
+      /* const size_t batch_stride_d = */ matrix_stride_out,
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ int(batch_shape.size())};
@@ -1130,7 +1129,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   GEMMAddMMParams params{
       /* const int ldc = */ ldc,
       /* const int fdc = */ fdc,
-      /* const int batch_stride_c = */ int(C_batch_stride.back()),
+      /* const size_t batch_stride_c = */ C_batch_stride.back(),
       /* const float alpha = */ alpha_,
       /* const float beta = */ beta_};
 
@@ -1230,8 +1229,8 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& out_mask = inputs[2];
 
   std::vector<int> batch_shape{1};
-  int A_batch_str = 0;
-  int B_batch_str = 0;
+  size_t A_batch_str = 0;
+  size_t B_batch_str = 0;
 
   std::vector<size_t> batch_strides;
 
@@ -1249,8 +1248,8 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     auto [bshape_c, bstrides_c] = collapse_contiguous_dims(bshape, bstrides);
     batch_shape = bshape_c;
-    A_batch_str = int(bstrides_c[0].back());
-    B_batch_str = int(bstrides_c[1].back());
+    A_batch_str = bstrides_c[0].back();
+    B_batch_str = bstrides_c[1].back();
 
     for (auto& bstr : bstrides_c) {
       batch_strides.insert(batch_strides.end(), bstr.begin(), bstr.end());
@@ -1259,8 +1258,8 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     batch_strides = std::vector<size_t>(inputs.size(), 0);
   }
 
-  auto batch_size_out = out.size() / (M * N);
-  int matrix_stride_out = M * N;
+  size_t matrix_stride_out = size_t(M) * N;
+  size_t batch_size_out = out.size() / (matrix_stride_out);
 
   /////////////////////////////////////////////////////////////////////////////
   // Regular kernel dispatch
@@ -1301,9 +1300,9 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* const int ldd = */ N,
       /* const int tiles_n = */ tn,
       /* const int tiles_m = */ tm,
-      /* const int batch_stride_a = */ A_batch_str,
-      /* const int batch_stride_b = */ B_batch_str,
-      /* const int batch_stride_d = */ matrix_stride_out,
+      /* const size_t batch_stride_a = */ A_batch_str,
+      /* const size_t batch_stride_b = */ B_batch_str,
+      /* const size_t batch_stride_d = */ matrix_stride_out,
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ int(batch_shape.size())};
@@ -1427,13 +1426,13 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       batch_strides.end(),
       lhs_indices.strides().begin(),
       lhs_indices.strides().end());
-  int lhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
+  size_t lhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
 
   batch_strides.insert(
       batch_strides.end(),
       rhs_indices.strides().begin(),
       rhs_indices.strides().end());
-  int rhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
+  size_t rhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
 
   int batch_ndim = batch_shape.size();
 
@@ -1461,8 +1460,8 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     batch_strides_B = {0};
   }
 
-  auto batch_size_out = out.size() / (M * N);
-  int matrix_stride_out = M * N;
+  size_t matrix_stride_out = size_t(M) * N;
+  auto batch_size_out = out.size() / matrix_stride_out;
 
   /////////////////////////////////////////////////////////////////////////////
   // Regular kernel dispatch
@@ -1513,9 +1512,9 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* const int ldd = */ N,
       /* const int tiles_n = */ tn,
       /* const int tiles_m = */ tm,
-      /* const int batch_stride_a = */ lhs_indices_str,
-      /* const int batch_stride_b = */ rhs_indices_str,
-      /* const int batch_stride_d = */ matrix_stride_out,
+      /* const size_t batch_stride_a = */ lhs_indices_str,
+      /* const size_t batch_stride_b = */ rhs_indices_str,
+      /* const size_t batch_stride_d = */ matrix_stride_out,
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ batch_ndim};

@@ -3357,7 +3357,8 @@ std::vector<array> BlockMaskedMM::vjp(
 
       vjps.push_back(grad);
     } else {
-      vjps.push_back(zeros_like(primals[arg], stream()));
+      throw std::invalid_argument(
+          "[BlockMaskedMM] Cannot calculate VJP with respect to masks.");
     }
   }
   return vjps;
@@ -3411,6 +3412,9 @@ std::vector<array> BlockSparseMM::vjp(
       auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
 
       vjps.push_back(reshape(gacc, base_shape, stream()));
+    } else {
+      throw std::invalid_argument(
+          "[BlockSparseMM] Cannot calculate VJP with respect to indices.");
     }
   }
   return vjps;
