@@ -4,6 +4,8 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/unordered_map.h>
+#include <nanobind/stl/variant.h>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -115,5 +117,20 @@ void init_metal(nb::module_& m) {
       &metal::stop_capture,
       R"pbdoc(
       Stop a Metal capture.
+      )pbdoc");
+  metal.def(
+      "device_info",
+      &metal::device_info,
+      R"pbdoc(
+      Get information about the GPU device and system settings.
+
+      Currently returns:
+
+        - ``architecture``
+        - ``max_buffer_size``
+        - ``max_recommended_working_set_size``
+
+      Returns:
+          dict: A dictionary with string keys and string or integer values.
       )pbdoc");
 }

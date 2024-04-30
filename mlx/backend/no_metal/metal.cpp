@@ -49,4 +49,12 @@ void start_capture(std::string path) {}
 void stop_capture() {}
 void clear_cache() {}
 
+std::unordered_map<std::string, std::variant<std::string, size_t>>
+device_info() {
+  throw std::runtime_error(
+      "[metal::device_info] Cannot get device info without metal backend");
+};
+
+}
+
 } // namespace mlx::core::metal
