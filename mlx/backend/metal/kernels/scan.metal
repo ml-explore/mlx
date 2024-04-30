@@ -483,8 +483,9 @@ template <
   instantiate_strided_scan(inclusive_##name, itype, otype, op, true, false, nreads)            \
   instantiate_strided_scan(exclusive_##name, itype, otype, op, false, false, nreads)           \
   instantiate_strided_scan(reverse_inclusive_##name, itype, otype, op, true, true, nreads)     \
-  instantiate_strided_scan(reverse_exclusive_##name, itype, otype, op, false, true, nreads)
+  instantiate_strided_scan(reverse_exclusive_##name, itype, otype, op, false, true, nreads) // clang-format on
 
+// clang-format off
 instantiate_scan_helper(sum_bool__int32,         bool,        int32_t,     CumSum, 4)
 instantiate_scan_helper(sum_uint8_uint8,         uint8_t,     uint8_t,     CumSum, 4)
 instantiate_scan_helper(sum_uint16_uint16,       uint16_t,    uint16_t,    CumSum, 4)
@@ -496,7 +497,7 @@ instantiate_scan_helper(sum_int32_int32,         int32_t,     int32_t,     CumSu
 //instantiate_scan_helper(sum_int64_int64,         int64_t,     int64_t,     CumSum, 2)
 instantiate_scan_helper(sum_float16_float16,     half,        half,        CumSum, 4)
 instantiate_scan_helper(sum_float32_float32,     float,       float,       CumSum, 4)
-//instantiate_scan_helper(sum_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumSum, 4)
+instantiate_scan_helper(sum_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumSum, 4)
 //instantiate_scan_helper(sum_complex64_complex64, complex64_t, complex64_t, CumSum)
 //instantiate_scan_helper(prod_bool__bool_,         bool,        bool,        CumProd, 4)
 instantiate_scan_helper(prod_uint8_uint8,         uint8_t,     uint8_t,     CumProd, 4)
@@ -509,7 +510,7 @@ instantiate_scan_helper(prod_int32_int32,         int32_t,     int32_t,     CumP
 //instantiate_scan_helper(prod_int64_int64,         int64_t,     int64_t,     CumProd, 2)
 instantiate_scan_helper(prod_float16_float16,     half,        half,        CumProd, 4)
 instantiate_scan_helper(prod_float32_float32,     float,       float,       CumProd, 4)
-//instantiate_scan_helper(prod_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumProd, 4)
+instantiate_scan_helper(prod_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumProd, 4)
 //instantiate_scan_helper(prod_complex64_complex64, complex64_t, complex64_t, CumProd)
 //instantiate_scan_helper(max_bool__bool_,         bool,        bool,        CumMax, 4)
 instantiate_scan_helper(max_uint8_uint8,         uint8_t,     uint8_t,     CumMax, 4)
@@ -522,7 +523,7 @@ instantiate_scan_helper(max_int32_int32,         int32_t,     int32_t,     CumMa
 //instantiate_scan_helper(max_int64_int64,         int64_t,     int64_t,     CumMax, 2)
 instantiate_scan_helper(max_float16_float16,     half,        half,        CumMax, 4)
 instantiate_scan_helper(max_float32_float32,     float,       float,       CumMax, 4)
-//instantiate_scan_helper(max_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumMax, 4)
+instantiate_scan_helper(max_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumMax, 4)
 //instantiate_scan_helper(max_complex64_complex64, complex64_t, complex64_t, CumMax)
 //instantiate_scan_helper(min_bool__bool_,         bool,        bool,        CumMin, 4)
 instantiate_scan_helper(min_uint8_uint8,         uint8_t,     uint8_t,     CumMin, 4)
@@ -535,5 +536,5 @@ instantiate_scan_helper(min_int32_int32,         int32_t,     int32_t,     CumMi
 //instantiate_scan_helper(min_int64_int64,         int64_t,     int64_t,     CumMin, 2)
 instantiate_scan_helper(min_float16_float16,     half,        half,        CumMin, 4)
 instantiate_scan_helper(min_float32_float32,     float,       float,       CumMin, 4)
-//instantiate_scan_helper(min_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumMin, 4)
+instantiate_scan_helper(min_bfloat16_bfloat16,   bfloat16_t,  bfloat16_t,  CumMin, 4)
 //instantiate_scan_helper(min_complex64_complex64, complex64_t, complex64_t, CumMin) // clang-format on
