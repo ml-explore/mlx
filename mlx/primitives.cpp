@@ -3369,6 +3369,50 @@ std::vector<array> BlockSparseMM::vjp(
     const std::vector<int>& argnums,
     const std::vector<array>&) {
   std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+  std::vector<int> reorder(cotan.ndim());
+  std::iota(reorder.begin(), reorder.end(), 0);
+  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
+
+  auto& lhs_indices = primals[2];
+  auto& rhs_indices = primals[3];
+
+  int M = cotan.shape(-2);
+  int N = cotan.shape(-1);
+  int K = primals[0].shape(-1);
+
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      // M X N * (K X N).T -> M X K
+      auto base = zeros_like(primals[0], stream());
+      auto bt = transpose(primals[1], reorder, stream());
+
+      auto base_shape = base.shape();
+      base = reshape(base, {-1, M, K}, stream());
+
+      // g : (out_batch_shape) + (M, K)
+      auto g = block_sparse_mm(cotan, bt, std::nullopt, rhs_indices, stream());
+      g = expand_dims(g, -3, stream());
+      auto gacc = scatter_add(base, lhs_indices, g, 0, stream());
+
+      vjps.push_back(reshape(gacc, base_shape, stream()));
+
+    } else if (arg == 1) {
+      // (M X K).T * M X N -> K X N
+      auto base = zeros_like(primals[1], stream());
+      auto at = transpose(primals[0], reorder, stream());
+
+      auto base_shape = base.shape();
+      base = reshape(base, {-1, K, N}, stream());
+
+      // g : (out_batch_shape) + (K, N)
+      auto g = block_sparse_mm(at, cotan, lhs_indices, std::nullopt, stream());
+      g = expand_dims(g, -3, stream());
+      auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
+
+      vjps.push_back(reshape(gacc, base_shape, stream()));
+    }
+  }
   return vjps;
 }
 

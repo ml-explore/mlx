@@ -862,10 +862,19 @@ class TestBlas(mlx_tests.MLXTestCase):
                 "batch_A": (1,),
                 "lhs_indices": (0,),
                 "batch_B": (3,),
-                "rhs_indices": (
-                    2,
-                    1,
-                ),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (1,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (2,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
             },
             {
                 "batch_A": (3,),
@@ -877,16 +886,10 @@ class TestBlas(mlx_tests.MLXTestCase):
                 "batch_A": (5,),
                 "lhs_indices": (0, 2),
                 "batch_B": (3,),
-                "rhs_indices": (
-                    2,
-                    1,
-                ),
+                "rhs_indices": (2, 1),
             },
             {
-                "batch_A": (
-                    4,
-                    2,
-                ),
+                "batch_A": (4, 2),
                 "lhs_indices": (
                     (7, 6),
                     (5, 4),
@@ -899,6 +902,85 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         for kwargs in inputs:
             test_shape(32, 32, 32, **kwargs)
+
+        # Add tests for broadcasting
+        a_np = np.random.normal(size=(5, 32, 32)).astype(np.float32)
+        b_np = np.random.normal(size=(3, 32, 32)).astype(np.float32)
+        a_mx = mx.array(a_np)
+        b_mx = mx.array(b_np)
+
+        # Numpy
+        a_np = a_np.reshape((5, 1, 32, 32))
+        b_np = b_np.reshape((1, 3, 32, 32))
+
+        a_np = np.broadcast_to(a_np, (5, 4, 32, 32))
+        b_np = np.broadcast_to(b_np, (2, 3, 32, 32)).swapaxes(1, 0)
+
+        lhs_indices = [0, 13, 12]
+        rhs_indices = [0, 3, 5]
+
+        out_np = np_block_sparse_mm(a_np, b_np, lhs_indices, rhs_indices)
+
+        # MLX
+        a_mx = a_mx.reshape((5, 1, 32, 32))
+        b_mx = b_mx.reshape((1, 3, 32, 32))
+
+        a_mx = mx.broadcast_to(a_mx, (5, 4, 32, 32))
+        b_mx = mx.broadcast_to(b_mx, (2, 3, 32, 32)).swapaxes(1, 0)
+
+        lhs_indices_mx = mx.array(lhs_indices)
+        rhs_indices_mx = mx.array(rhs_indices)
+
+        out_mx = mx.block_sparse_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
+
+        self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+    def test_block_sparse_matmul_grad(self):
+
+        lhs_indices = mx.array([[7, 6], [4, 1], [0, 2]], dtype=mx.uint32)
+        rhs_indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
+
+        def f_ref(a, b):
+            lhs_indices_ = mx.broadcast_to(lhs_indices, (3, 2))
+            rhs_indices_ = mx.broadcast_to(rhs_indices, (3, 2))
+            M = a.shape[-2]
+            N = b.shape[-2]
+            K = a.shape[-1]
+
+            a = a.reshape((-1, M, K))
+            b = b.reshape((-1, K, N))
+
+            a = mx.take(a, lhs_indices_, 0)
+            b = mx.take(b, rhs_indices_, 0)
+
+            return a @ b
+
+        def f_test(a, b):
+            return mx.block_sparse_mm(a, b, lhs_indices, rhs_indices)
+
+        a_mx = mx.random.normal((4, 2, 32, 32))
+        b_mx = mx.random.normal((4, 1, 32, 32))
+
+        out_test = f_test(a_mx, b_mx)
+        out_ref = f_ref(a_mx, b_mx)
+
+        self.assertTrue(mx.allclose(out_test, out_ref, atol=1e-5))
+
+        cotan = mx.ones_like(out_test)
+        out_ref, dout_ref = mx.vjp(
+            f_ref,
+            [a_mx, b_mx],
+            [cotan],
+        )
+        out_test, dout_test = mx.vjp(
+            f_test,
+            [a_mx, b_mx],
+            [cotan],
+        )
+
+        for r, t in zip(dout_ref, dout_test):
+            self.assertEqual(r.shape, t.shape)
+            self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
 
 
 if __name__ == "__main__":

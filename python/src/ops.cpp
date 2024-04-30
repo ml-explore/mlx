@@ -3734,6 +3734,15 @@ void init_ops(nb::module_& m) {
         Perform the (possibly batched) matrix multiplication of two arrays and with a gather
         along the provided indices on the operands.
 
+        ``lhs_indices`` and ``rhs_indices`` contain flat indices along the batch dimension 
+        for ``a`` and ``b`` respectively 
+
+        For ``a`` with shape ``(A1, A2, ..., AS, M, K)``, 
+        ``lhs_indices`` contains indices from the range ``[0, A1 * A2 * ... * AS)``
+
+        For ``b`` with shape ``(B1, B2, ..., BS, M, K)``, 
+        ``rhs_indices`` contains indices from the range ``[0, B1 * B2 * ... * BS)``
+
         Args:
             a (array): Input array or scalar.
             b (array): Input array or scalar.
