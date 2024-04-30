@@ -810,6 +810,96 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(c_mx, c_np, atol=1e-5))
 
+    def test_block_sparse_matmul(self):
+        def np_block_sparse_mm(a, b, lhs_indices=None, rhs_indices=None):
+            a = a.reshape((-1, a.shape[-2], a.shape[-1]))
+            b = b.reshape((-1, b.shape[-2], b.shape[-1]))
+            lhs_indices = lhs_indices or np.arange(a.shape[0])
+            rhs_indices = rhs_indices or np.arange(b.shape[0])
+            a = a[lhs_indices, :, :]
+            b = b[rhs_indices, :, :]
+            out = a @ b
+            return out
+
+        def test_shape(
+            M,
+            N,
+            K,
+            np_dtype=np.float32,
+            batch_A=(),
+            batch_B=(),
+            lhs_indices=None,
+            rhs_indices=None,
+        ):
+            with self.subTest(
+                M=M,
+                N=N,
+                K=K,
+                np_dtype=np_dtype,
+                batch_A=batch_A,
+                batch_B=batch_B,
+                lhs_indices=lhs_indices,
+                rhs_indices=rhs_indices,
+            ):
+
+                a_np = np.random.normal(size=batch_A + (M, K)).astype(np_dtype)
+                b_np = np.random.normal(size=batch_B + (K, N)).astype(np_dtype)
+
+                a_mx = mx.array(a_np)
+                b_mx = mx.array(b_np)
+
+                out_np = np_block_sparse_mm(a_np, b_np, lhs_indices, rhs_indices)
+
+                lhs_indices_mx = None if lhs_indices is None else mx.array(lhs_indices)
+                rhs_indices_mx = None if rhs_indices is None else mx.array(rhs_indices)
+
+                out_mx = mx.block_sparse_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
+
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+        inputs = (
+            {
+                "batch_A": (1,),
+                "lhs_indices": (0,),
+                "batch_B": (3,),
+                "rhs_indices": (
+                    2,
+                    1,
+                ),
+            },
+            {
+                "batch_A": (3,),
+                "lhs_indices": (0, 2),
+                "batch_B": (1,),
+                "rhs_indices": (0,),
+            },
+            {
+                "batch_A": (5,),
+                "lhs_indices": (0, 2),
+                "batch_B": (3,),
+                "rhs_indices": (
+                    2,
+                    1,
+                ),
+            },
+            {
+                "batch_A": (
+                    4,
+                    2,
+                ),
+                "lhs_indices": (
+                    (7, 6),
+                    (5, 4),
+                    (1, 2),
+                ),
+                "batch_B": (4, 1),
+                "rhs_indices": ((2,), (0,), (1,)),
+            },
+        )
+
+        for kwargs in inputs:
+            test_shape(32, 32, 32, **kwargs)
+
 
 if __name__ == "__main__":
     unittest.main()

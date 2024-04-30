@@ -3718,6 +3718,30 @@ void init_ops(nb::module_& m) {
 
       )pbdoc");
   m.def(
+      "block_sparse_mm",
+      &block_sparse_mm,
+      nb::arg(),
+      nb::arg(),
+      "lhs_indices"_a = nb::none(),
+      "rhs_indices"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def block_sparse_mm(a: array, b: array, /, lhs_indices: array, rhs_indices: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Matrix multiplication with matrix-level gather
+
+        Perform the (possibly batched) matrix multiplication of two arrays and with a gather
+        along the provided indices on the operands.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+            lhs_indices (array, optional): Integer indices for ``a`` (default: ``None``)
+            rhs_indices (array, optional): Integer indices for ``b`` (default: ``None``)
+
+      )pbdoc");
+  m.def(
       "diagonal",
       &diagonal,
       "a"_a,
