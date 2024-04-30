@@ -171,12 +171,16 @@ array::~array() {
     return;
   }
 
-  // Break circular reference for non-detached arrays with siblings
+  // Ignore arrays that will be detached
   if (status() != array::Status::unscheduled) {
     return;
   }
+  // Break circular reference for non-detached arrays with siblings
   if (auto n = siblings().size(); n > 0) {
     bool do_detach = true;
+    // If all siblings have siblings.size() references except
+    // the one we are currently destroying (which has siblings.size() + 1)
+    // then there are no more external references
     do_detach &= (array_desc_.use_count() == (n + 1));
     for (auto& s : siblings()) {
       do_detach &= (s.array_desc_.use_count() == n);
