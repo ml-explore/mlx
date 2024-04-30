@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <algorithm>
 #include <future>
+#include <iostream> // TODO
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -246,7 +247,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       return;
     }
     a.set_tracer(false);
-    for (auto s : a.siblings()) {
+    for (auto& s : a.siblings()) {
       s.set_tracer(false);
       cache.insert(s.id());
     }
@@ -403,7 +404,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       return;
     }
     a.set_tracer(false);
-    for (auto s : a.siblings()) {
+    for (auto& s : a.siblings()) {
       s.set_tracer(false);
       cache.insert(s.id());
     }
