@@ -1194,6 +1194,10 @@ class TestArray(mlx_tests.MLXTestCase):
             a = mx.zeros((2, 2))
             a[0, 0, 0] = 1
 
+        with self.assertRaises(ValueError):
+            a = mx.zeros((5, 4, 3))
+            a[:, 0] = mx.ones((5, 1, 3))
+
         check_slices(np.zeros((2, 2, 2, 2)), 1, None, Ellipsis, None)
         check_slices(
             np.zeros((2, 2, 2, 2)), 1, np.array([0, 1]), Ellipsis, np.array([0, 1])
@@ -1250,6 +1254,21 @@ class TestArray(mlx_tests.MLXTestCase):
             slice(None, None, None),
             slice(None, None, 2),
         )
+
+        check_slices(np.zeros((5, 4, 3)), np.ones((5, 3)), slice(None), 0)
+
+        check_slices(np.zeros((5, 4, 3)), np.ones((5, 1, 3)), slice(None), slice(0, 1))
+        check_slices(
+            np.ones((3, 4, 4, 4)), np.zeros((4, 4)), 0, slice(0, 4), 3, slice(0, 4)
+        )
+
+        x = mx.zeros((2, 3, 4, 5, 3))
+        x[..., 0] = 1.0
+        self.assertTrue(mx.array_equal(x[..., 0], mx.ones((2, 3, 4, 5))))
+
+        x = mx.zeros((2, 3, 4, 5, 3))
+        x[:, 0] = 1.0
+        self.assertTrue(mx.array_equal(x[:, 0], mx.ones((2, 4, 5, 3))))
 
     def test_array_at(self):
         a = mx.array(1)

@@ -426,7 +426,7 @@ array expand_dims(const array& a, int axis, StreamOrDevice s /* = {} */) {
   int ax = axis < 0 ? axis + out_dim : axis;
   if (ax < 0 || ax >= out_dim) {
     std::ostringstream msg;
-    msg << "[expand_dims] Invalid axes " << axis << " for output array with "
+    msg << "[expand_dims] Invalid axis " << axis << " for output array with "
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
@@ -452,7 +452,7 @@ array expand_dims(
     ax = ax < 0 ? ax + out_ndim : ax;
     if (ax < 0 || ax >= out_ndim) {
       std::ostringstream msg;
-      msg << "[expand_dims] Invalid axes " << ax << " for output array with "
+      msg << "[expand_dims] Invalid axis " << ax << " for output array with "
           << a.ndim() << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
@@ -591,7 +591,6 @@ array slice_update(
   if (!has_neg_strides && upd_shape == src.shape()) {
     return astype(update_broadcasted, src.dtype(), s);
   }
-
   return array(
       src.shape(),
       src.dtype(),
@@ -3300,24 +3299,22 @@ std::tuple<array, array, array> quantize(
       reshape(w, {w.shape(0), w.shape(1) / group_size, group_size}, s);
   array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
   array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
-  array delta = maximum(
+  array scales = maximum(
       divide(subtract(w_max, w_min, s), array(n_bins, w.dtype()), s),
       array(1e-7, w.dtype()),
       s);
-  array scales = squeeze(delta, -1, s);
-  array biases = squeeze(w_min, -1, s);
-
   // making sure that 0 is represented exactly in the resulting quantization
-  biases = multiply(round(divide(biases, scales, s), s), scales, s);
+  array biases = multiply(round(divide(w_min, scales, s), s), scales, s);
 
   // Quantize and pack w
-  packed_w =
-      astype(round(divide(subtract(packed_w, w_min, s), delta, s), s), uint32);
+  packed_w = astype(
+      round(divide(subtract(packed_w, biases, s), scales, s), s), uint32);
   packed_w = reshape(packed_w, {w.shape(0), -1, el_per_int}, s);
   packed_w = sum(
       multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
 
-  return std::make_tuple(packed_w, scales, biases);
+  return std::make_tuple(
+      packed_w, squeeze(scales, -1, s), squeeze(biases, -1, s));
 }
 
 array dequantize(
