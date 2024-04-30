@@ -172,6 +172,9 @@ array::~array() {
   }
 
   // Break circular reference for non-detached arrays with siblings
+  if (status() != array::Status::unscheduled) {
+    return;
+  }
   if (auto n = siblings().size(); n > 0) {
     bool do_detach = true;
     do_detach &= (array_desc_.use_count() == (n + 1));
