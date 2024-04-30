@@ -55,6 +55,4 @@ device_info() {
       "[metal::device_info] Cannot get device info without metal backend");
 };
 
-}
-
 } // namespace mlx::core::metal
