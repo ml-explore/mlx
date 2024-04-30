@@ -196,6 +196,85 @@ void BlockSparseMM::eval(const std::vector<array>& inputs, array& out) {
         "[BlockSparseMM::eval] Currently only supports float32.");
   }
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+
+  auto check_transpose = [](const array& arr) {
+    auto stx = arr.strides()[arr.ndim() - 2];
+    auto sty = arr.strides()[arr.ndim() - 1];
+    if (stx == arr.shape(-1) && sty == 1) {
+      return std::make_tuple(false, stx, arr);
+    } else if (stx == 1 && sty == arr.shape(-2)) {
+      return std::make_tuple(true, sty, arr);
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy(arr, arr_copy, CopyType::General);
+      size_t stx = arr.shape(-1);
+      return std::make_tuple(false, stx, arr_copy);
+    }
+  };
+
+  auto [a_transposed, lda, a] = check_transpose(a_pre);
+  auto [b_transposed, ldb, b] = check_transpose(b_pre);
+
+  size_t M = a.shape(-2);
+  size_t N = b.shape(-1);
+  size_t K = a.shape(-1);
+
+  if (M == 0 || N == 0) {
+    return;
+  }
+
+  if (K == 0) {
+    std::memset(static_cast<void*>(out.data<float>()), 0, out.nbytes());
+    return;
+  }
+
+  // Get batch dims
+  auto batch_size_out = out.size() / (M * N);
+  size_t matrix_stride_out = M * N;
+
+  auto get_batch_dims = [](const auto& v) {
+    return decltype(v){v.begin(), v.end() - 2};
+  };
+
+  auto& lhs_indices = inputs[2];
+  auto& rhs_indices = inputs[3];
+
+  std::vector<int> batch_shape = get_batch_dims(out.shape());
+  int batch_ndim = batch_shape.size();
+
+  std::vector<int> batch_shape_A = get_batch_dims(a.shape());
+  std::vector<size_t> batch_strides_A = get_batch_dims(a.strides());
+  std::vector<int> batch_shape_B = get_batch_dims(b.shape());
+  std::vector<size_t> batch_strides_B = get_batch_dims(b.strides());
+
+  const uint32_t* lhs_indices_ptr = lhs_indices.data<uint32_t>();
+  const uint32_t* rhs_indices_ptr = rhs_indices.data<uint32_t>();
+
+  for (int i = 0; i < batch_size_out; i++) {
+    // Get index
+    uint32_t indx_A = lhs_indices_ptr[elem_to_loc(i, lhs_indices)];
+    uint32_t indx_B = rhs_indices_ptr[elem_to_loc(i, rhs_indices)];
+
+    cblas_sgemm(
+        CblasRowMajor,
+        a_transposed ? CblasTrans : CblasNoTrans, // transA
+        b_transposed ? CblasTrans : CblasNoTrans, // transB
+        M,
+        N,
+        K,
+        1.0f, // alpha
+        a.data<float>() + elem_to_loc(indx_A, batch_shape_A, batch_strides_A),
+        lda,
+        b.data<float>() + elem_to_loc(indx_B, batch_shape_B, batch_strides_B),
+        ldb,
+        0.0f, // beta
+        out.data<float>() + matrix_stride_out * i,
+        out.shape(-1) // ldc
+    );
+  }
 }
 
 } // namespace mlx::core
