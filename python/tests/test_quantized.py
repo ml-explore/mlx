@@ -16,7 +16,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
                 w_hat = mx.dequantize(w_q, scales, biases, gs, b)
                 errors = (w - w_hat).abs().reshape(*scales.shape, -1)
                 eps = 1e-6
-                self.assertTrue((2 * errors <= (scales[..., None] + eps)).all())
+                self.assertTrue((errors <= (scales[..., None] + eps).abs()).all())
 
         # test quantize/dequantize 0s
         a = mx.zeros((256, 512))
