@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <functional>
 
 #include "mlx/array.h"
@@ -165,6 +164,39 @@ void array::move_shared_buffer(
 
 void array::move_shared_buffer(array other) {
   move_shared_buffer(other, other.strides(), other.flags(), other.data_size());
+}
+
+array::~array() {
+  if (array_desc_ == nullptr) {
+    return;
+  }
+
+  // Ignore arrays that will be detached
+  if (status() != array::Status::unscheduled) {
+    return;
+  }
+  // Break circular reference for non-detached arrays with siblings
+  if (auto n = siblings().size(); n > 0) {
+    bool do_detach = true;
+    // If all siblings have siblings.size() references except
+    // the one we are currently destroying (which has siblings.size() + 1)
+    // then there are no more external references
+    do_detach &= (array_desc_.use_count() == (n + 1));
+    for (auto& s : siblings()) {
+      do_detach &= (s.array_desc_.use_count() == n);
+      if (!do_detach) {
+        break;
+      }
+    }
+    if (do_detach) {
+      for (auto& s : siblings()) {
+        for (auto& ss : s.siblings()) {
+          ss.array_desc_ = nullptr;
+        }
+        s.array_desc_->siblings.clear();
+      }
+    }
+  }
 }
 
 void array::ArrayDesc::init() {

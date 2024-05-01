@@ -11,7 +11,7 @@ GCC=$2
 SRCDIR=$3
 CLANG=$4
 
-if [ $CLANG = "TRUE" ]; then
+if [ "$CLANG" = "TRUE" ]; then
   read -r -d '' INCLUDES <<- EOM
   #include <cmath>
   #include <complex>

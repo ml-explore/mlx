@@ -261,21 +261,15 @@ class array {
     return array_desc_->siblings;
   };
 
+  /** The array's siblings. */
+  std::vector<array>& siblings() {
+    return array_desc_->siblings;
+  };
+
   void set_siblings(std::vector<array> siblings, uint16_t position) {
     array_desc_->siblings = std::move(siblings);
     array_desc_->position = position;
   }
-
-  /** The i-th output of the array's primitive. */
-  const array& output(int i) const {
-    if (i == array_desc_->position) {
-      return *this;
-    } else if (i < array_desc_->position) {
-      return siblings()[i];
-    } else {
-      return siblings()[i + 1];
-    }
-  };
 
   /** The outputs of the array's primitive (i.e. this array and
    * its siblings) in the order the primitive expects. */
@@ -385,6 +379,8 @@ class array {
   void overwrite_descriptor(const array& other) {
     array_desc_ = other.array_desc_;
   }
+
+  ~array();
 
  private:
   // Initialize the arrays data
