@@ -3371,9 +3371,6 @@ std::vector<array> BlockSparseMM::vjp(
     const std::vector<array>&) {
   std::vector<array> vjps;
   auto& cotan = cotangents[0];
-  std::vector<int> reorder(cotan.ndim());
-  std::iota(reorder.begin(), reorder.end(), 0);
-  std::iter_swap(reorder.end() - 1, reorder.end() - 2);
 
   auto& lhs_indices = primals[2];
   auto& rhs_indices = primals[3];
@@ -3386,7 +3383,7 @@ std::vector<array> BlockSparseMM::vjp(
     if (arg == 0) {
       // M X N * (K X N).T -> M X K
       auto base = zeros_like(primals[0], stream());
-      auto bt = transpose(primals[1], reorder, stream());
+      auto bt = swapaxes(primals[1], -1, -2, stream());
 
       auto base_shape = base.shape();
       base = reshape(base, {-1, M, K}, stream());
@@ -3401,7 +3398,7 @@ std::vector<array> BlockSparseMM::vjp(
     } else if (arg == 1) {
       // (M X K).T * M X N -> K X N
       auto base = zeros_like(primals[1], stream());
-      auto at = transpose(primals[0], reorder, stream());
+      auto at = swapaxes(primals[0], -1, -2, stream());
 
       auto base_shape = base.shape();
       base = reshape(base, {-1, K, N}, stream());
