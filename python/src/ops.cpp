@@ -3729,13 +3729,12 @@ void init_ops(nb::module_& m) {
       nb::sig(
           "def block_sparse_mm(a: array, b: array, /, lhs_indices: array, rhs_indices: array, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Matrix multiplication with matrix-level gather
+        Matrix multiplication with matrix-level gather.
 
-        Perform the (possibly batched) matrix multiplication of two arrays and with a gather
-        along the provided indices on the operands.
-
-        ``lhs_indices`` and ``rhs_indices`` contain flat indices along the batch dimension 
-        for ``a`` and ``b`` respectively 
+        Performs a gather of the operands with the given indices followed by a (possibly batched) matrix multiplication of two arrays. 
+        This operation is more efficient than explicitly applying a :func:``take`` followed by a :func:``matmul``.
+        
+        The indices ``lhs_indices`` and ``rhs_indices`` contain flat indices along the batch dimensions (i.e. all but the last two dimensions) of ``a`` and ``b`` respectively.
 
         For ``a`` with shape ``(A1, A2, ..., AS, M, K)``, 
         ``lhs_indices`` contains indices from the range ``[0, A1 * A2 * ... * AS)``
@@ -3744,8 +3743,8 @@ void init_ops(nb::module_& m) {
         ``rhs_indices`` contains indices from the range ``[0, B1 * B2 * ... * BS)``
 
         Args:
-            a (array): Input array or scalar.
-            b (array): Input array or scalar.
+            a (array): Input array.
+            b (array): Input array.
             lhs_indices (array, optional): Integer indices for ``a`` (default: ``None``)
             rhs_indices (array, optional): Integer indices for ``b`` (default: ``None``)
 

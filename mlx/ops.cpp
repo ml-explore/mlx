@@ -3842,27 +3842,28 @@ array block_sparse_mm(
   std::vector<int> bsx_a(a.shape().begin(), a.shape().end() - 2);
   std::vector<int> bsx_b(b.shape().begin(), b.shape().end() - 2);
 
-  int n_batch_a = 1;
-  int n_batch_b = 1;
-  for (auto& i : bsx_a)
-    n_batch_a *= i;
-  for (auto& i : bsx_b)
-    n_batch_b *= i;
+  auto indices_or_default = [&](const std::optional<array>& indices,
+                                const std::vector<int>& bsx_shape) {
+    if (indices.has_value()) {
+      return indices.value();
+    } else {
+      int n_batch = 1;
+      for (auto& i : bsx_shape)
+        n_batch *= i;
+      return reshape(arange(n_batch, uint32, s), bsx_shape, s);
+    }
+  };
 
   // Pull and broadcast indices
-  array lhs_indices =
-      lhs_indices_.value_or(reshape(arange(n_batch_a, uint32, s), bsx_a, s));
-  array rhs_indices =
-      rhs_indices_.value_or(reshape(arange(n_batch_b, uint32, s), bsx_b, s));
+  array lhs_indices = indices_or_default(lhs_indices_, bsx_a);
+  array rhs_indices = indices_or_default(rhs_indices_, bsx_b);
 
-  if (issubdtype(lhs_indices.dtype(), inexact) ||
-      lhs_indices.dtype() == bool_) {
+  if (!issubdtype(lhs_indices.dtype(), integer)) {
     throw std::invalid_argument(
         "[block_sparse_mm] Got lhs_indices with invalid dtype. Indices must be integral.");
   }
 
-  if (issubdtype(rhs_indices.dtype(), inexact) ||
-      rhs_indices.dtype() == bool_) {
+  if (!issubdtype(rhs_indices.dtype(), integer)) {
     throw std::invalid_argument(
         "[block_sparse_mm] Got rhs_indices with invalid dtype. Indices must be integral.");
   }
