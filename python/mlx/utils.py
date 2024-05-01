@@ -194,8 +194,7 @@ def tree_unflatten(tree):
 
 
 def tree_reduce(fn, tree, initializer=None, is_leaf=None):
-    """
-    Applies a reduction to the leaves of a Python tree.
+    """Applies a reduction to the leaves of a Python tree.
 
     This function reduces Python trees into an accumulated result by applying the provided function `fn` to the leaves of the tree. It is similar to the built-in `reduce` function but works over nested, tree-like data structures.
 
@@ -213,10 +212,6 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
 
     Returns:
         Any: The accumulated value.
-
-    .. note::
-        If ``initializer`` is not provided, the function will use the first leaf value as the initial accumulator. 
-
     """
     if is_leaf is not None and is_leaf(tree):
         return tree if initializer is None else fn(initializer, tree)
