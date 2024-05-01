@@ -197,7 +197,7 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
     """
     Applies a reduction to the leaves of a Python tree.
 
-    This function simplifies complex tree structures into a single accumulated result by applying a provided function `fn` from the leaves upward. It is similar to the built-in `reduce` function but works over nested, tree-like data structures.
+    This function reduces Python trees into an accumulated result by applying the provided function `fn` to the leaves of the tree. It is similar to the built-in `reduce` function but works over nested, tree-like data structures.
 
     Example:
         >>> from mlx.utils import tree_reduce
