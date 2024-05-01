@@ -212,7 +212,7 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
         is_leaf (callable, optional): A function to determine if an object is a leaf, returning ``True`` for leaf nodes and ``False`` otherwise.
 
     Returns:
-        Any: The aggregated value after reduction.
+        Any: The accumulated value.
 
     .. note::
         If `initializer` is not provided, the function will use the first leaf value as the initial accumulator. This may lead to unexpected results if the first leaf is not representative or compatible with the intended reduction.
