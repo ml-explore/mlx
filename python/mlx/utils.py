@@ -215,7 +215,7 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
         Any: The accumulated value.
 
     .. note::
-        If `initializer` is not provided, the function will use the first leaf value as the initial accumulator. This may lead to unexpected results if the first leaf is not representative or compatible with the intended reduction.
+        If ``initializer`` is not provided, the function will use the first leaf value as the initial accumulator. 
 
     """
     if is_leaf is not None and is_leaf(tree):
