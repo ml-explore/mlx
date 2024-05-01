@@ -209,7 +209,7 @@ def tree_reduce(fn, tree, initializer=None, is_leaf=None):
         fn (callable): The reducer function that takes two arguments (accumulator, current value) and returns the updated accumulator.
         tree (Any): The Python tree to reduce. It can be any nested combination of lists, tuples, or dictionaries.
         initializer (Any, optional): The initial value to start the reduction. If not provided, the first leaf value is used.
-        is_leaf (callable, optional): A function to determine if an object is a leaf, returning True for leaf nodes and False otherwise.
+        is_leaf (callable, optional): A function to determine if an object is a leaf, returning ``True`` for leaf nodes and ``False`` otherwise.
 
     Returns:
         Any: The aggregated value after reduction.
