@@ -140,10 +140,15 @@ void BufferCache::remove_from_list(BufferCache::BufferHolder* to_remove) {
 
 MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
-      buffer_cache_(device_),
-      block_limit_(1.5 * device_->recommendedMaxWorkingSetSize()),
-      gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()),
-      max_pool_size_(block_limit_) {}
+      buffer_cache_(device_) {
+  auto memsize = std::get<size_t>(device_info()["memory_size"]);
+  block_limit_ =
+      std::min(1.5 * device_->recommendedMaxWorkingSetSize(), 0.95 * memsize);
+  gc_limit_ = std::min(
+      static_cast<size_t>(0.95 * device_->recommendedMaxWorkingSetSize()),
+      block_limit_);
+  max_pool_size_ = block_limit_;
+}
 
 size_t MetalAllocator::set_cache_limit(size_t limit) {
   std::swap(limit, max_pool_size_);
