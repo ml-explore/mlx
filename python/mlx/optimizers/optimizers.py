@@ -739,10 +739,13 @@ class Adafactor(Optimizer):
 
 
 def clip_grad_norm(grads, max_norm):
-    """
-    Clips the gradients by scaling them when their norm exceeds a maximum threshold.
+    """Clips the gradients by scaling them when their norm exceeds a maximum
+    threshold.
 
-    This function ensures that the norm of the gradients does not exceed `max_norm` to prevent issues like exploding gradients in neural networks. It scales down the gradients proportionally if their norm is greater than `max_norm`.
+    This function ensures that the norm of the gradients does not exceed 
+    `max_norm` to prevent issues like exploding gradients in neural networks.
+    It scales down the gradients proportionally if their norm is greater than
+    `max_norm`.
 
     Example:
         >>> grads = {"w1": mx.array([2, 3]), "w2": mx.array([1])}
@@ -752,7 +755,8 @@ def clip_grad_norm(grads, max_norm):
         {"w1": mx.array([...]), "w2": mx.array([...])}
 
     Args:
-        grads (dict): A dictionary containing the gradient tensors for each parameter of the model.
+        grads (dict): A dictionary containing the gradient tensors for each 
+            parameter of the model.
         max_norm (float): The maximum norm value for the gradients.
     """
     norm_squared = tree_reduce(lambda acc, g: acc + g.square().sum(), grads, 0.0)
