@@ -902,6 +902,8 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         for kwargs in inputs:
             test_shape(32, 32, 32, **kwargs)
+            test_shape(1, 16, 16, **kwargs)
+            test_shape(16, 1, 16, **kwargs)
 
         # Add tests for broadcasting
         a_np = np.random.normal(size=(5, 32, 32)).astype(np.float32)
