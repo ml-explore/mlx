@@ -3357,7 +3357,61 @@ std::vector<array> BlockMaskedMM::vjp(
 
       vjps.push_back(grad);
     } else {
-      vjps.push_back(zeros_like(primals[arg], stream()));
+      throw std::invalid_argument(
+          "[BlockMaskedMM] Cannot calculate VJP with respect to masks.");
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> BlockSparseMM::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+  auto& cotan = cotangents[0];
+
+  auto& lhs_indices = primals[2];
+  auto& rhs_indices = primals[3];
+
+  int M = cotan.shape(-2);
+  int N = cotan.shape(-1);
+  int K = primals[0].shape(-1);
+
+  for (auto arg : argnums) {
+    if (arg == 0) {
+      // M X N * (K X N).T -> M X K
+      auto base = zeros_like(primals[0], stream());
+      auto bt = swapaxes(primals[1], -1, -2, stream());
+
+      auto base_shape = base.shape();
+      base = reshape(base, {-1, M, K}, stream());
+
+      // g : (out_batch_shape) + (M, K)
+      auto g = block_sparse_mm(cotan, bt, std::nullopt, rhs_indices, stream());
+      g = expand_dims(g, -3, stream());
+      auto gacc = scatter_add(base, lhs_indices, g, 0, stream());
+
+      vjps.push_back(reshape(gacc, base_shape, stream()));
+
+    } else if (arg == 1) {
+      // (M X K).T * M X N -> K X N
+      auto base = zeros_like(primals[1], stream());
+      auto at = swapaxes(primals[0], -1, -2, stream());
+
+      auto base_shape = base.shape();
+      base = reshape(base, {-1, K, N}, stream());
+
+      // g : (out_batch_shape) + (K, N)
+      auto g = block_sparse_mm(at, cotan, lhs_indices, std::nullopt, stream());
+      g = expand_dims(g, -3, stream());
+      auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
+
+      vjps.push_back(reshape(gacc, base_shape, stream()));
+    } else {
+      throw std::invalid_argument(
+          "[BlockSparseMM] Cannot calculate VJP with respect to indices.");
     }
   }
   return vjps;

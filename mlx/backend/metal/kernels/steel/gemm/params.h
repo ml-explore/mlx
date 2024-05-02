@@ -21,9 +21,9 @@ struct GEMMParams {
   const int tiles_n;
   const int tiles_m;
 
-  const int batch_stride_a;
-  const int batch_stride_b;
-  const int batch_stride_d;
+  const size_t batch_stride_a;
+  const size_t batch_stride_b;
+  const size_t batch_stride_d;
 
   const int swizzle_log;
   const int gemm_k_iterations_aligned;
@@ -54,7 +54,7 @@ struct GEMMAddMMParams {
   const int ldc;
   const int fdc;
 
-  const int batch_stride_c;
+  const size_t batch_stride_c;
 
   const float alpha;
   const float beta;

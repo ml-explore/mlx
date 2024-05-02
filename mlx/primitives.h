@@ -485,6 +485,26 @@ class BlockMaskedMM : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class BlockSparseMM : public UnaryPrimitive {
+ public:
+  explicit BlockSparseMM(Stream stream) : UnaryPrimitive(stream) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(BlockSparseMM)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Broadcast : public UnaryPrimitive {
  public:
   explicit Broadcast(Stream stream, const std::vector<int>& shape)

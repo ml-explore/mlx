@@ -32,6 +32,7 @@ Operations
    bitwise_or
    bitwise_xor
    block_masked_mm
+   block_sparse_mm
    broadcast_to
    ceil
    clip
