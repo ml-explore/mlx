@@ -20,7 +20,7 @@ option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.12.0)
+  set(MLX_VERSION 0.12.1)
 endif()
 
 # --------------------- Processor tests -------------------------
