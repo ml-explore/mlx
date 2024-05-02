@@ -74,6 +74,16 @@ class Primitive {
       std::vector<array>& outputs) = 0;
 
   /**
+   * Some primitives are computed by an IO device (disk, network, camera etc).
+   *
+   * Like in eval_cpu/gpu the eval_io function is responsible for allocating
+   * the space for the array.
+   */
+  virtual void eval_io(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs);
+
+  /**
    * The Jacobian-vector product.
    */
   virtual std::vector<array> jvp(

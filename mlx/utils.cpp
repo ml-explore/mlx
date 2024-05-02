@@ -133,6 +133,9 @@ std::ostream& operator<<(std::ostream& os, const Device& d) {
     case Device::gpu:
       os << "gpu";
       break;
+    case Device::io:
+      os << "io";
+      break;
   }
   os << ", " << d.index << ")";
   return os;

@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "mlx/backend/common/cpu_impl.h"
 #include "mlx/backend/metal/metal_impl.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -137,32 +138,17 @@ array eval_impl(std::vector<array> outputs, bool async) {
     std::vector<std::shared_future<void>> arr_deps;
     bool signal = needs_signal.find(arr.id()) != needs_signal.end();
 
-    if (arr.primitive().device() == Device::gpu) {
-      if (!metal::is_available()) {
-        throw std::runtime_error("Metal GPU is not available.");
+    switch (arr.primitive().device().type) {
+      case Device::gpu: {
+        if (!metal::is_available()) {
+          throw std::runtime_error("Metal GPU is not available.");
+        }
+        scheduler::enqueue(stream, metal::make_task(std::move(arr), signal));
+        break;
       }
-      scheduler::enqueue(stream, metal::make_task(std::move(arr), signal));
-    } else {
-      auto task = [arr = std::move(arr), stream, signal]() mutable {
-        for (auto& input : arr.inputs()) {
-          if (input.event().valid() &&
-              input.event().stream() != arr.primitive().stream()) {
-            input.event().wait();
-          }
-        }
-        scheduler::notify_new_task(stream);
-        auto outputs = arr.outputs();
-        arr.primitive().eval_cpu(arr.inputs(), outputs);
-        if (!arr.is_tracer()) {
-          arr.detach();
-        }
-        if (signal) {
-          arr.event().signal();
-        }
-
-        scheduler::notify_task_completion(stream);
-      };
-      scheduler::enqueue(stream, std::move(task));
+      case Device::cpu:
+        scheduler::enqueue(stream, cpu::make_task(std::move(arr), signal));
+        break;
     }
   }
   return synchronizer;

@@ -106,6 +106,16 @@ std::tuple<array, array, array, int> vmap_ternary_op(
 
 } // namespace
 
+void Primitive::eval_io(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  std::ostringstream msg;
+  msg << "[Primitive::eval_io] Not implemented for ";
+  print(msg);
+  msg << ".";
+  throw std::invalid_argument(msg.str());
+}
+
 std::vector<array> Primitive::jvp(
     const std::vector<array>&,
     const std::vector<array>&,

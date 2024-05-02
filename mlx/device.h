@@ -8,10 +8,12 @@ struct Device {
   enum class DeviceType {
     cpu,
     gpu,
+    io,
   };
 
   static constexpr DeviceType cpu = DeviceType::cpu;
   static constexpr DeviceType gpu = DeviceType::gpu;
+  static constexpr DeviceType io = DeviceType::io;
 
   Device(DeviceType type, int index = 0) : type(type), index(index) {};
 

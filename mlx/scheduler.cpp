@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #include "mlx/scheduler.h"
+#include "mlx/backend/common/cpu_impl.h"
 #include "mlx/backend/metal/metal.h"
 
 namespace mlx::core {
@@ -36,10 +37,13 @@ Stream new_stream() {
 void synchronize(Stream s) {
   auto p = std::make_shared<std::promise<void>>();
   std::future<void> f = p->get_future();
-  if (s.device == mlx::core::Device::cpu) {
-    scheduler::enqueue(s, [p = std::move(p)]() { p->set_value(); });
-  } else {
-    scheduler::enqueue(s, metal::make_synchronize_task(s, std::move(p)));
+  switch (s.device.type) {
+    case mlx::core::Device::cpu:
+      scheduler::enqueue(s, cpu::make_synchronize_task(s, std::move(p)));
+      break;
+    case mlx::core::Device::gpu:
+      scheduler::enqueue(s, metal::make_synchronize_task(s, std::move(p)));
+      break;
   }
   f.wait();
 }
