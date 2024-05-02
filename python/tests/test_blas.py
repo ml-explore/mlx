@@ -902,7 +902,6 @@ class TestBlas(mlx_tests.MLXTestCase):
 
         for kwargs in inputs:
             test_shape(32, 32, 32, **kwargs)
-            test_shape(1, 16, 16, **kwargs)
             test_shape(16, 1, 16, **kwargs)
 
         # Add tests for broadcasting
@@ -934,6 +933,26 @@ class TestBlas(mlx_tests.MLXTestCase):
         rhs_indices_mx = mx.array(rhs_indices)
 
         out_mx = mx.block_sparse_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
+
+        self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+        # Gemv test
+        a_np = np.random.normal(size=(5, 1, 32)).astype(np.float32)
+        b_np = np.random.normal(size=(3, 16, 32)).astype(np.float32)
+        a_mx = mx.array(a_np)
+        b_mx = mx.array(b_np)
+
+        lhs_indices = [3, 1]
+        rhs_indices = [0, 2]
+
+        b_np_t = np.swapaxes(b_np, -1, -2)
+        out_np = np_block_sparse_mm(a_np, b_np_t, lhs_indices, rhs_indices)
+
+        lhs_indices_mx = mx.array(lhs_indices)
+        rhs_indices_mx = mx.array(rhs_indices)
+
+        b_mx_t = mx.swapaxes(b_mx, -1, -2)
+        out_mx = mx.block_sparse_mm(a_mx, b_mx_t, lhs_indices_mx, rhs_indices_mx)
 
         self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
 

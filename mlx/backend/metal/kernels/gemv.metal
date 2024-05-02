@@ -460,8 +460,8 @@ template <
 
   // Update batch offsets
   if (batch_ndim > 1) {
-    const constant size_t* veci_bstrides = index_batch_strides + batch_ndim;
-    const constant size_t* mati_bstrides = index_batch_strides;
+    const constant size_t* veci_bstrides = index_batch_strides;
+    const constant size_t* mati_bstrides = index_batch_strides + batch_ndim;
 
     ulong2 batch_offsets = elem_to_loc_broadcast(
         tid.z, batch_shape, veci_bstrides, mati_bstrides, batch_ndim);
@@ -470,8 +470,8 @@ template <
     indx_mat = mat_indices[batch_offsets.y];
 
   } else {
-    indx_vec = vec_indices[index_batch_strides[batch_ndim] * tid.z];
-    indx_mat = mat_indices[index_batch_strides[0] * tid.z];
+    indx_vec = vec_indices[index_batch_strides[0] * tid.z];
+    indx_mat = mat_indices[index_batch_strides[batch_ndim] * tid.z];
   }
 
   if (vector_batch_ndim > 1) {

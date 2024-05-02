@@ -1487,6 +1487,14 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     auto batch_shape_mat = is_b_matrix ? batch_shape_B : batch_shape_A;
     auto batch_shape_vec = is_b_matrix ? batch_shape_A : batch_shape_B;
 
+    if (!is_b_matrix) {
+      batch_strides = rhs_indices.strides();
+      batch_strides.insert(
+          batch_strides.end(),
+          lhs_indices.strides().begin(),
+          lhs_indices.strides().end());
+    }
+
     int batch_ndim = batch_shape.size();
 
     // Determine dispatch kernel
@@ -1555,8 +1563,8 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     set_vector_bytes(compute_encoder, batch_shape_mat, 16);
     set_vector_bytes(compute_encoder, batch_strides_mat, 17);
 
-    compute_encoder.set_input_array(lhs_indices, 18 + !is_b_matrix);
-    compute_encoder.set_input_array(rhs_indices, 18 + is_b_matrix);
+    compute_encoder.set_input_array(lhs_indices, 18 + int(!is_b_matrix));
+    compute_encoder.set_input_array(rhs_indices, 18 + int(is_b_matrix));
 
     compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
 
