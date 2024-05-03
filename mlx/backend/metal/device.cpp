@@ -5,6 +5,8 @@
 #include <filesystem>
 #include <sstream>
 
+#include <sys/sysctl.h>
+
 #define NS_PRIVATE_IMPLEMENTATION
 #define CA_PRIVATE_IMPLEMENTATION
 #define MTL_PRIVATE_IMPLEMENTATION
@@ -560,11 +562,19 @@ std::unordered_map<std::string, std::variant<std::string, size_t>>
 device_info() {
   auto raw_device = device(default_device()).mtl_device();
   auto arch = std::string(raw_device->architecture()->name()->utf8String());
+
+  int mib[] = {CTL_HW, HW_MEMSIZE};
+  size_t memsize = 0;
+  size_t length = sizeof(memsize);
+
+  sysctl(mib, 2, &memsize, &length, NULL, 0);
+
   return {
       {"architecture", arch},
       {"max_buffer_length", raw_device->maxBufferLength()},
       {"max_recommended_working_set_size",
-       raw_device->recommendedMaxWorkingSetSize()}};
+       raw_device->recommendedMaxWorkingSetSize()},
+      {"memory_size", memsize}};
 }
 
 } // namespace mlx::core::metal

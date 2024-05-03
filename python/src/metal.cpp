@@ -129,6 +129,7 @@ void init_metal(nb::module_& m) {
       * ``architecture``
       * ``max_buffer_size``
       * ``max_recommended_working_set_size``
+      * ``memory_size``
 
       Returns:
           dict: A dictionary with string keys and string or integer values.
