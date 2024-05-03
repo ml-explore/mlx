@@ -20,10 +20,14 @@ size_t get_active_memory();
 
 /* Get the peak amount of used memory in bytes.
  *
- * The maximum memory used is recorded from the beginning of the program
- * execution.
+ * The maximum memory used recorded from the beginning of the program
+ * execution or since the last call to reset_peak_memory.
  * */
 size_t get_peak_memory();
+
+/* Reset the peak memory to zero.
+ * */
+void reset_peak_memory();
 
 /* Get the cache size in bytes.
  *

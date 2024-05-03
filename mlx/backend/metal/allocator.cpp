@@ -258,6 +258,9 @@ size_t get_active_memory() {
 size_t get_peak_memory() {
   return allocator().get_peak_memory();
 }
+void reset_peak_memory() {
+  allocator().reset_peak_memory();
+}
 size_t get_cache_memory() {
   return allocator().get_cache_memory();
 }

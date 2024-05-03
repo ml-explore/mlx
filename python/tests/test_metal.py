@@ -45,6 +45,9 @@ class TestMetal(mlx_tests.MLXTestCase):
         mx.metal.clear_cache()
         self.assertEqual(mx.metal.get_cache_memory(), 0)
 
+        mx.metal.reset_peak_memory()
+        self.assertEqual(mx.metal.get_peak_memory(), 0)
+
 
 if __name__ == "__main__":
     unittest.main()
