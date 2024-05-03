@@ -94,7 +94,7 @@ elseif (MLX_BUILD_METAL)
   FetchContent_Declare(
     metal_cpp
     URL ${METAL_CPP_URL}
-    PATCH_COMMAND patch -N -i ${METAL_CPP_PATCH} || true
+    PATCH_COMMAND /usr/bin/patch -N -i ${METAL_CPP_PATCH} || true
   )
 
   FetchContent_MakeAvailable(metal_cpp)
