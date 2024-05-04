@@ -62,6 +62,10 @@ class MetalAllocator : public allocator::Allocator {
   size_t get_peak_memory() {
     return peak_memory_;
   };
+  void reset_peak_memory() {
+    std::unique_lock lk(mutex_);
+    peak_memory_ = 0;
+  };
   size_t get_cache_memory() {
     return buffer_cache_.cache_size();
   };

@@ -35,8 +35,14 @@ void init_metal(nb::module_& m) {
       R"pbdoc(
       Get the peak amount of used memory in bytes.
 
-      The maximum memory used is recorded from the beginning of the program
-      execution.
+      The maximum memory used recorded from the beginning of the program
+      execution or since the last call to :func:`reset_peak_memory`.
+      )pbdoc");
+  metal.def(
+      "reset_peak_memory",
+      &metal::reset_peak_memory,
+      R"pbdoc(
+      Reset the peak memory to zero.
       )pbdoc");
   metal.def(
       "get_cache_memory",
