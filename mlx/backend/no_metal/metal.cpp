@@ -36,6 +36,7 @@ size_t get_active_memory() {
 size_t get_peak_memory() {
   return 0;
 }
+void reset_peak_memory() {}
 size_t get_cache_memory() {
   return 0;
 }
