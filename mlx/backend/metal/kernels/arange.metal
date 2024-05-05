@@ -19,11 +19,11 @@ template <typename T>
       uint index [[thread_position_in_grid]]);
 
 // clang-format off
-instantiate_arange(uint8, uint8_t) 
+instantiate_arange(uint8, uint8_t)
 instantiate_arange(uint16, uint16_t)
-instantiate_arange(uint32, uint32_t) 
+instantiate_arange(uint32, uint32_t)
 instantiate_arange(uint64, uint64_t)
-instantiate_arange(int8, int8_t) 
+instantiate_arange(int8, int8_t)
 instantiate_arange(int16, int16_t)
 instantiate_arange(int32, int32_t)
 instantiate_arange(int64, int64_t)

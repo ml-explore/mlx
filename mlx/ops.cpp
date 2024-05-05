@@ -2642,7 +2642,7 @@ array scatter(
   }
 
   // TODO, remove when scatter supports 64-bit outputs
-  if (size_of(a.dtype()) == 8) {
+  if (to_stream(s).device == Device::gpu && size_of(a.dtype()) == 8) {
     std::ostringstream msg;
     msg << "[scatter] Does not support " << a.dtype();
     throw std::invalid_argument(msg.str());
