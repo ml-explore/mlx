@@ -336,7 +336,7 @@ void Compiled::eval_gpu(
     MTL::Size grid_dims(nthreads, 1, 1);
     MTL::Size group_dims(
         std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
@@ -347,7 +347,7 @@ void Compiled::eval_gpu(
     }
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 

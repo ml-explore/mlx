@@ -27,24 +27,6 @@ int max_ops_per_buffer() {
 
 #define MAX_OPS_PER_BUFFER max_ops_per_buffer()
 
-MTL::CommandBuffer* increment_command_buffer(Stream s) {
-  auto& d = metal::device(s.device);
-  auto command_buffer = d.get_command_buffer(s.index);
-  if (command_buffer == nullptr ||
-      d.get_command_buffer_ops(s.index) >= MAX_OPS_PER_BUFFER) {
-    if (command_buffer != nullptr) {
-      d.end_encoding(s.index);
-      scheduler::notify_new_task(s);
-      command_buffer->addCompletedHandler(
-          [s](MTL::CommandBuffer*) { scheduler::notify_task_completion(s); });
-      d.commit_command_buffer(s.index);
-    }
-    command_buffer = d.new_command_buffer(s.index);
-  }
-  d.increment_command_buffer_ops(s.index);
-  return command_buffer;
-}
-
 inline void check_error(MTL::CommandBuffer* cbuf) {
   if (cbuf->status() == MTL::CommandBufferStatusError) {
     std::ostringstream msg;
@@ -58,7 +40,10 @@ std::function<void()> make_task(array arr, bool signal) {
   auto task = [arr = std::move(arr), signal]() mutable {
     auto pool = new_scoped_memory_pool();
     auto s = arr.primitive().stream();
-    auto command_buffer = increment_command_buffer(s);
+    auto& d = metal::device(s.device);
+    auto command_buffer = d.get_command_buffer(s.index);
+    d.increment_command_buffer_ops(s.index);
+
     for (auto& input : arr.inputs()) {
       if (input.event().valid() &&
           input.event().stream() != arr.primitive().stream()) {
@@ -91,11 +76,13 @@ std::function<void()> make_task(array arr, bool signal) {
       arr.detach();
     }
 
-    if (signal) {
-      metal::device(s.device).end_encoding(s.index);
-      command_buffer->encodeSignalEvent(
-          static_cast<MTL::Event*>(arr.event().raw_event().get()),
-          arr.event().value());
+    if (signal || d.get_command_buffer_ops(s.index) >= MAX_OPS_PER_BUFFER) {
+      d.end_encoding(s.index);
+      if (signal) {
+        command_buffer->encodeSignalEvent(
+            static_cast<MTL::Event*>(arr.event().raw_event().get()),
+            arr.event().value());
+      }
       scheduler::notify_new_task(s);
       command_buffer->addCompletedHandler(
           [s, buffers = std::move(buffers), event = arr.event()](
@@ -103,7 +90,8 @@ std::function<void()> make_task(array arr, bool signal) {
             scheduler::notify_task_completion(s);
             check_error(cbuf);
           });
-      metal::device(s.device).commit_command_buffer(s.index);
+      d.commit_command_buffer(s.index);
+      d.get_command_buffer(s.index);
     } else {
       command_buffer->addCompletedHandler(
           [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
@@ -120,11 +108,7 @@ std::function<void()> make_synchronize_task(
   return [s, p = std::move(p)]() {
     auto& d = metal::device(s.device);
     auto cb = d.get_command_buffer(s.index);
-    if (cb == nullptr) {
-      cb = d.new_command_buffer(s.index);
-    } else {
-      d.end_encoding(s.index);
-    }
+    d.end_encoding(s.index);
     d.commit_command_buffer(s.index);
     cb->waitUntilCompleted();
     check_error(cb);

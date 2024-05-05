@@ -107,7 +107,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Launch grid
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -216,7 +216,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Launch grid
     MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
     MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   } else {
     // Collect all idx shapes and strides into one place
@@ -286,7 +286,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Launch grid
     MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
     MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 

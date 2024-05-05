@@ -85,7 +85,7 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
         in.data_shared_ptr() == nullptr ? out : in, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&axis_size, sizeof(int), 2);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
