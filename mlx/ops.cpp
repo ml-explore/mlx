@@ -2641,6 +2641,13 @@ array scatter(
     idx = astype(idx, dtype, s);
   }
 
+  // TODO, remove when scatter supports 64-bit outputs
+  if (size_of(a.dtype()) == 8) {
+    std::ostringstream msg;
+    msg << "[scatter] Does not support " << a.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+
   inputs.insert(inputs.begin(), a);
   // TODO promote or cast?
   inputs.push_back(astype(updates, a.dtype(), s));
