@@ -828,6 +828,9 @@ array arccos(const array& a, StreamOrDevice s = {});
 /** Arc Tangent of the elements of an array */
 array arctan(const array& a, StreamOrDevice s = {});
 
+/** Arc Tangent of elements of two arrays */
+array arctan2(const array& y, const array& x, StreamOrDevice s = {});
+
 /** Hyperbolic Sine of the elements of an array */
 array sinh(const array& a, StreamOrDevice s = {});
 

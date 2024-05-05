@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <cwchar>
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -2150,6 +2151,14 @@ array arctan(const array& a, StreamOrDevice s /* = {} */) {
   auto input = astype(a, dtype, s);
   return array(
       a.shape(), dtype, std::make_shared<ArcTan>(to_stream(s)), {input});
+}
+
+array arctan2(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  auto dtype = at_least_float(promote_types(a.dtype(), b.dtype()));
+  auto inputs = broadcast_arrays(astype(a, dtype, s), astype(b, dtype, s), s);
+  auto& shape = inputs[0].shape();
+  return array(
+      shape, dtype, std::make_shared<ArcTan2>(to_stream(s)), std::move(inputs));
 }
 
 array sinh(const array& a, StreamOrDevice s /* = {} */) {

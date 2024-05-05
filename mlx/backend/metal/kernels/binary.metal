@@ -241,6 +241,7 @@ instantiate_binary_types(mul, Multiply)
 instantiate_binary_types(sub, Subtract)
 instantiate_binary_types(pow, Power)
 instantiate_binary_types(rem, Remainder)
+instantiate_binary_float(arctan2, ArcTan2)
 
 // NaNEqual only needed for floating point types with boolean output
 instantiate_binary_all(naneq, float16, half, bool, NaNEqual)

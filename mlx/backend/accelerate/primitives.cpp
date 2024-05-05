@@ -193,6 +193,25 @@ void ArcTan::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  if (out.dtype() == float32 && a.flags().contiguous && b.flags().contiguous) {
+    if (a.is_donatable() && a.itemsize() == out.itemsize()) {
+      out.copy_shared_buffer(a);
+    } else if (b.is_donatable() && b.itemsize() == out.itemsize()) {
+      out.copy_shared_buffer(b);
+    } else {
+      out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    }
+    int size = a.data_size();
+    vvatan2f(out.data<float>(), a.data<float>(), b.data<float>(), &size);
+  } else {
+    eval(inputs, out);
+  }
+}
+
 void ArcTanh::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];

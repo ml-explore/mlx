@@ -1273,6 +1273,7 @@ class TestOps(mlx_tests.MLXTestCase):
             "arcsin": lambda primal, cotan: cotan / np.sqrt(1.0 - primal**2),
             "arccos": lambda primal, cotan: -cotan / np.sqrt(1.0 - primal**2),
             "arctan": lambda primal, cotan: cotan / (1.0 + primal**2),
+            "arctan2": lambda primal, cotan: cotan / (1.0 + primal**2),
             "arcsinh": lambda primal, cotan: cotan / np.sqrt(primal**2 + 1),
             "arccosh": lambda primal, cotan: cotan / np.sqrt(primal**2 - 1),
             "arctanh": lambda primal, cotan: cotan / (1.0 - primal**2),
