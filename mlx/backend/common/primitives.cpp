@@ -94,19 +94,6 @@ void ArcTan::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void ArcTan2::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2);
-  const auto& in1 = inputs[0];
-  const auto& in2 = inputs[1];
-  if (issubdtype(out.dtype(), inexact)) {
-    binary(in1, in2, out, detail::ArcTan2());
-  } else {
-    throw std::invalid_argument(
-        "[arctan2] Cannot compute inverse tangent of elements in array"
-        " with non floating point type.");
-  }
-}
-
 void ArcTanh::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];

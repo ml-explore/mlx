@@ -197,7 +197,8 @@ void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
-  if (out.dtype() == float32 && a.flags().contiguous && b.flags().contiguous) {
+  if (out.dtype() == float32 && a.flags().row_contiguous &&
+      b.flags().row_contiguous) {
     if (a.is_donatable() && a.itemsize() == out.itemsize()) {
       out.copy_shared_buffer(a);
     } else if (b.is_donatable() && b.itemsize() == out.itemsize()) {

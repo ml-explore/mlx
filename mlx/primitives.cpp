@@ -5,7 +5,6 @@
 #include <numeric>
 #include <sstream>
 #include <stdexcept>
-#include <utility>
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/fft.h"
