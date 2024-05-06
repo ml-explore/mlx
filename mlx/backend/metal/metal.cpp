@@ -108,10 +108,12 @@ std::function<void()> make_synchronize_task(
   return [s, p = std::move(p)]() {
     auto& d = metal::device(s.device);
     auto cb = d.get_command_buffer(s.index);
+    cb->retain();
     d.end_encoding(s.index);
     d.commit_command_buffer(s.index);
     cb->waitUntilCompleted();
     check_error(cb);
+    cb->release();
     p->set_value();
   };
 }
