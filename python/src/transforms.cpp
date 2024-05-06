@@ -87,7 +87,7 @@ auto py_value_and_grad(
       std::ostringstream msg;
       msg << error_msg_tag << " Can't compute the gradient of argument index "
           << argnums.back() << " because the function is called with only "
-          << args.size() << " arguments.";
+          << args.size() << " positional arguments.";
       throw std::invalid_argument(msg.str());
     }
 
