@@ -100,12 +100,14 @@ template <
   // Find block in A, B, C
   const int c_row = tid_y * BM;
   const int c_col = tid_x * BN;
+  const size_t c_row_long = size_t(c_row);
+  const size_t c_col_long = size_t(c_col);
 
-  A += transpose_a ? c_row : c_row * params->lda;
-  B += transpose_b ? c_col * params->ldb : c_col;
-  D += c_row * params->ldd + c_col;
+  A += transpose_a ? c_row_long : c_row_long * params->lda;
+  B += transpose_b ? c_col_long * params->ldb : c_col_long;
+  D += c_row_long * params->ldd + c_col_long;
 
-  C += c_row * addmm_params->ldc + c_col * addmm_params->fdc;
+  C += c_row_long * addmm_params->ldc + c_col_long * addmm_params->fdc;
 
   // Prepare threadgroup loading operations
   thread loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
@@ -164,7 +166,7 @@ template <
   else { // Loop over K - unaligned case
     short tgp_bm = min(BM, params->M - c_row);
     short tgp_bn = min(BN, params->N - c_col);
-    short leftover_bk = params->K - params->gemm_k_iterations_aligned * BK;
+    int leftover_bk = params->K - params->gemm_k_iterations_aligned * BK;
 
     if (tgp_bm == BM && tgp_bn == BN) {
       gemm_kernel::gemm_loop(

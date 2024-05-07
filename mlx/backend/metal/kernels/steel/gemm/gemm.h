@@ -164,10 +164,12 @@ struct GEMMKernel {
     // Find block in A, B, C
     const int c_row = tid_y * BM;
     const int c_col = tid_x * BN;
+    const size_t c_row_long = size_t(c_row);
+    const size_t c_col_long = size_t(c_col);
 
-    A += transpose_a ? c_row : c_row * params->lda;
-    B += transpose_b ? c_col * params->ldb : c_col;
-    D += c_row * params->ldd + c_col;
+    A += transpose_a ? c_row_long : c_row_long * params->lda;
+    B += transpose_b ? c_col_long * params->ldb : c_col_long;
+    D += c_row_long * params->ldd + c_col_long;
 
     // Prepare threadgroup loading operations
     thread loader_a_t loader_a(A, params->lda, As, simd_group_id, simd_lane_id);
