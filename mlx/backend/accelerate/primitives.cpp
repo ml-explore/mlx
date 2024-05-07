@@ -199,9 +199,9 @@ void ArcTan2::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
   if (out.dtype() == float32 && a.flags().row_contiguous &&
       b.flags().row_contiguous) {
-    if (a.is_donatable() && a.itemsize() == out.itemsize()) {
+    if (a.is_donatable()) {
       out.copy_shared_buffer(a);
-    } else if (b.is_donatable() && b.itemsize() == out.itemsize()) {
+    } else if (b.is_donatable()) {
       out.copy_shared_buffer(b);
     } else {
       out.set_data(allocator::malloc_or_wait(out.nbytes()));

@@ -416,7 +416,6 @@ std::vector<array> ArcTan2::jvp(
     const std::vector<int>& argnums) {
   assert(primals.size() == 2);
   assert(argnums.size() == 2);
-  array one = array(1., primals[0].dtype());
   array t =
       add(square(primals[0], stream()), square(primals[1], stream()), stream());
   return {
