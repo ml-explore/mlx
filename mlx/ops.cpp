@@ -3104,7 +3104,7 @@ array conv_general(
 
   if (spatial_dims < 1 || spatial_dims > 3) {
     throw std::invalid_argument(
-        "[conv] Can only work with inputs that have 1, 2, or 3 spatial dimensions."
+        "[conv] Only works for inputs with 1-3 spatial dimensions."
         " The inputs must be in the format [N, ..., C_in]");
   }
 

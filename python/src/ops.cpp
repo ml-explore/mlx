@@ -3204,30 +3204,36 @@ void init_ops(nb::module_& m) {
          const std::variant<int, std::tuple<int, int, int>>& dilation,
          int groups,
          StreamOrDevice s) {
-        std::tuple<int, int, int> stride_pair{1, 1, 1};
-        std::tuple<int, int, int> padding_pair{0, 0, 0};
-        std::tuple<int, int, int> dilation_pair{1, 1, 1};
+        std::tuple<int, int, int> stride_tuple{1, 1, 1};
+        std::tuple<int, int, int> padding_tuple{0, 0, 0};
+        std::tuple<int, int, int> dilation_tuple{1, 1, 1};
 
         if (auto pv = std::get_if<int>(&stride); pv) {
-          stride_pair = std::tuple<int, int, int>{*pv, *pv, *pv};
+          stride_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
         } else {
-          stride_pair = std::get<std::tuple<int, int, int>>(stride);
+          stride_tuple = std::get<std::tuple<int, int, int>>(stride);
         }
 
         if (auto pv = std::get_if<int>(&padding); pv) {
-          padding_pair = std::tuple<int, int, int>{*pv, *pv, *pv};
+          padding_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
         } else {
-          padding_pair = std::get<std::tuple<int, int, int>>(padding);
+          padding_tuple = std::get<std::tuple<int, int, int>>(padding);
         }
 
         if (auto pv = std::get_if<int>(&dilation); pv) {
-          dilation_pair = std::tuple<int, int, int>{*pv, *pv, *pv};
+          dilation_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
         } else {
-          dilation_pair = std::get<std::tuple<int, int, int>>(dilation);
+          dilation_tuple = std::get<std::tuple<int, int, int>>(dilation);
         }
 
         return conv3d(
-            input, weight, stride_pair, padding_pair, dilation_pair, groups, s);
+            input,
+            weight,
+            stride_tuple,
+            padding_tuple,
+            dilation_tuple,
+            groups,
+            s);
       },
       nb::arg(),
       nb::arg(),
