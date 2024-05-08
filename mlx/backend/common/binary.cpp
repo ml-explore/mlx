@@ -293,4 +293,25 @@ void BitwiseBinary::eval_cpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void ArcTan2::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  const auto& a = inputs[0];
+  const auto& b = inputs[1];
+  if (out.dtype() == float32) {
+    binary_op<float>(a, b, out, detail::ArcTan2());
+  } else if (out.dtype() == float16) {
+    binary_op<float16_t>(a, b, out, detail::ArcTan2());
+  } else if (out.dtype() == bfloat16) {
+    binary_op<bfloat16_t>(a, b, out, detail::ArcTan2());
+  } else if (issubdtype(out.dtype(), inexact)) {
+    std::ostringstream err;
+    err << "[arctan2] Does not support " << out.dtype();
+    throw std::invalid_argument(err.str());
+  } else {
+    throw std::invalid_argument(
+        "[arctan2] Cannot compute inverse tangent for arrays"
+        " with non floating point type.");
+  }
+}
+
 } // namespace mlx::core

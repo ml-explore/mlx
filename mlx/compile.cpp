@@ -45,7 +45,8 @@ bool is_binary(const Primitive& p) {
       typeid(p) == typeid(LogAddExp) || typeid(p) == typeid(Maximum) ||
       typeid(p) == typeid(Minimum) || typeid(p) == typeid(Multiply) ||
       typeid(p) == typeid(NotEqual) || typeid(p) == typeid(Power) ||
-      typeid(p) == typeid(Subtract) || typeid(p) == typeid(BitwiseBinary));
+      typeid(p) == typeid(Subtract) || typeid(p) == typeid(BitwiseBinary) ||
+      typeid(p) == typeid(ArcTan2));
 }
 
 bool is_ternary(const Primitive& p) {

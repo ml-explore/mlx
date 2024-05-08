@@ -19,6 +19,7 @@ Operations
    arcsin
    arcsinh
    arctan
+   arctan2
    arctanh
    argmax
    argmin

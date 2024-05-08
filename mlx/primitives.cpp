@@ -402,6 +402,36 @@ std::pair<std::vector<array>, std::vector<int>> ArcTan::vmap(
   return {{arctan(inputs[0], stream())}, axes};
 }
 
+std::vector<array> ArcTan2::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  return jvp(primals, cotangents, argnums);
+}
+
+std::vector<array> ArcTan2::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  assert(argnums.size() == 2);
+  array t =
+      add(square(primals[0], stream()), square(primals[1], stream()), stream());
+  return {
+      divide(tangents[0], t, stream()),
+      divide(negative(tangents[1], stream()), t, stream())};
+}
+
+std::pair<std::vector<array>, std::vector<int>> ArcTan2::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 2);
+  assert(axes.size() == 2);
+  auto [a, b, to_ax] = vmap_binary_op(inputs, axes, stream());
+  return {{arctan2(a, b, stream())}, {to_ax}};
+}
+
 std::vector<array> ArcTanh::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,

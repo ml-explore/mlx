@@ -264,3 +264,10 @@ struct RightShift {
     return x >> y;
   };
 };
+
+struct ArcTan2 {
+  template <typename T>
+  T operator()(T y, T x) {
+    return metal::precise::atan2(y, x);
+  }
+};

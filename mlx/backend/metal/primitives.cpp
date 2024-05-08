@@ -451,6 +451,10 @@ void ArcTan::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "arctan");
 }
 
+void ArcTan2::eval_gpu(const std::vector<array>& inputs, array& out) {
+  binary_op(inputs, out, "arctan2");
+}
+
 void ArcTanh::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "arctanh");
 }

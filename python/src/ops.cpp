@@ -931,6 +931,25 @@ void init_ops(nb::module_& m) {
             array: The inverse tangent of ``a``.
       )pbdoc");
   m.def(
+      "arctan2",
+      &mlx::core::arctan2,
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def arctan2(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise inverse tangent of the ratio of two arrays.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+
+        Returns:
+            array: The inverse tangent of the ratio of ``a`` and ``b``.
+      )pbdoc");
+  m.def(
       "sinh",
       &mlx::core::sinh,
       nb::arg(),

@@ -161,6 +161,13 @@ struct ArcTan {
   };
 };
 
+struct ArcTan2 {
+  template <typename T>
+  T operator()(T y, T x) {
+    return std::atan2(y, x);
+  };
+};
+
 struct ArcTanh {
   template <typename T>
   T operator()(T x) {
