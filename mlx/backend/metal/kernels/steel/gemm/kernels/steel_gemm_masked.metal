@@ -114,10 +114,12 @@ block_masked_gemm(
   // Find block in A, B, C
   const int c_row = tid_y * BM;
   const int c_col = tid_x * BN;
+  const size_t c_row_long = size_t(c_row);
+  const size_t c_col_long = size_t(c_col);
 
-  A += transpose_a ? c_row : c_row * params->lda;
-  B += transpose_b ? c_col * params->ldb : c_col;
-  D += c_row * params->ldd + c_col;
+  A += transpose_a ? c_row_long : c_row_long * params->lda;
+  B += transpose_b ? c_col_long * params->ldb : c_col_long;
+  D += c_row_long * params->ldd + c_col_long;
 
   bool mask_out = out_mask[tid_y * mask_strides[1] + tid_x * mask_strides[0]];
 
