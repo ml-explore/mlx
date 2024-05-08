@@ -12,8 +12,7 @@ std::function<void()> make_task(array arr, bool signal) {
 
     // Wait on inputs coming from different streams/devices.
     for (auto& input : arr.inputs()) {
-      if (input.event().valid() &&
-          input.event().stream() != arr.primitive().stream()) {
+      if (input.event().valid() && input.event().stream() != stream) {
         input.event().wait();
       }
     }

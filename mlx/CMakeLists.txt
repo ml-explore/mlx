@@ -20,6 +20,7 @@ target_sources(
 )
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/io)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
 if (MLX_BUILD_ACCELERATE)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate)
