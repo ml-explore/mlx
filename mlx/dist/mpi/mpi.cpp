@@ -3,6 +3,7 @@
 #include <mpi.h>
 
 #include "mlx/dist/dist.h"
+#include "mlx/scheduler.h"
 
 namespace mlx::core::dist {
 
@@ -73,6 +74,15 @@ MPI_Datatype mpi_datatype(const array& arr) {
 
 bool is_available() {
   return true;
+}
+
+Stream stream() {
+  static std::shared_ptr<Stream> comm_stream = nullptr;
+  if (comm_stream == nullptr) {
+    comm_stream = std::make_shared<Stream>(
+        scheduler::scheduler().new_stream(Device::cpu));
+  }
+  return *comm_stream;
 }
 
 std::shared_ptr<Group> init() {

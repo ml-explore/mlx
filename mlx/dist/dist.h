@@ -11,6 +11,9 @@ namespace mlx::core::dist {
 /* Check if a communication backend is available */
 bool is_available();
 
+/* Return the communication stream. */
+Stream communication_stream();
+
 /**
  * A dist::Group represents a group of independent mlx processes that can
  * communicate. We must also be able to create sub-groups from a group in order

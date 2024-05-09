@@ -82,3 +82,6 @@ build/
 
 # Jetbrains
 .cache
+
+# Negate mlx/dist
+!mlx/dist
