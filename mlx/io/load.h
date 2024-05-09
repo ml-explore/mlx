@@ -20,6 +20,8 @@ class Reader {
       std::ios_base::seekdir way = std::ios_base::beg) = 0;
   virtual void read(char* data, size_t n) = 0;
   virtual std::string label() const = 0;
+  virtual void lock() = 0;
+  virtual void unlock() = 0;
 };
 
 class Writer {
@@ -67,9 +69,18 @@ class FileReader : public Reader {
     return "file " + label_;
   }
 
+  void lock() override {
+    is_mutex_.lock();
+  }
+
+  void unlock() override {
+    is_mutex_.unlock();
+  }
+
  private:
   std::ifstream is_;
   std::string label_;
+  std::mutex is_mutex_;
 };
 
 class FileWriter : public Writer {

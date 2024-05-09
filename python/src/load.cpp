@@ -150,11 +150,21 @@ class PyFileReader : public io::Reader {
     return "python file object";
   }
 
+  void lock() override {
+    stream_mutex_.lock();
+  }
+
+  void unlock() override {
+    stream_mutex_.unlock();
+  }
+
  private:
   nb::object pyistream_;
   nb::object readinto_func_;
   nb::object seek_func_;
   nb::object tell_func_;
+
+  std::mutex stream_mutex_;
 };
 
 std::pair<

@@ -35,8 +35,12 @@ void Load::eval_io(
   array& out = outputs[0];
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
-  reader_->seek(offset_, std::ios_base::beg);
-  reader_->read(out.data<char>(), out.nbytes());
+  {
+    std::lock_guard lock(*reader_);
+
+    reader_->seek(offset_, std::ios_base::beg);
+    reader_->read(out.data<char>(), out.nbytes());
+  }
 
   if (swap_endianness_) {
     switch (out.itemsize()) {
