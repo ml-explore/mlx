@@ -92,7 +92,7 @@ void unary_op(
     int ndim = in.ndim();
     compute_encoder->setBytes(&ndim, sizeof(int), 4);
   }
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 void Abs::eval_gpu(const std::vector<array>& inputs, array& out) {
