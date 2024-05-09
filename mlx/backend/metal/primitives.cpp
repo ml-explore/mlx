@@ -6,18 +6,11 @@
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
-
-namespace {
-
-constexpr int METAL_MAX_INDEX_ARRAYS = 10;
-
-} // namespace
 
 template <typename T>
 void arange_set_scalars(T start, T next, CommandEncoder& enc) {
