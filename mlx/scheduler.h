@@ -76,6 +76,7 @@ class Scheduler {
       default_streams_.insert({Device::gpu, new_stream(Device::gpu)});
     }
     default_streams_.insert({Device::cpu, new_stream(Device::cpu)});
+    default_streams_.insert({Device::io, new_stream(Device::io)});
   }
 
   // Not copyable or moveable

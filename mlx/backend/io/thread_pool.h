@@ -43,10 +43,10 @@ class ThreadPool {
   std::vector<std::queue<std::packaged_task<void()>>> task_queues_;
   std::vector<std::mutex> queue_mutexes_;
   std::vector<std::condition_variable> queue_cvs_;
-  std::vector<std::thread> workers_;
   std::vector<std::mutex> set_mutexes_;
-  std::vector<std::unordered_set<const void*>> output_sets_;
+  std::vector<std::unordered_set<std::uintptr_t>> output_sets_;
   bool stop_;
+  std::vector<std::thread> workers_;
 };
 
 } // namespace mlx::core::io::detail

@@ -2,6 +2,7 @@
 
 #include "mlx/scheduler.h"
 #include "mlx/backend/common/cpu_impl.h"
+#include "mlx/backend/io/io_impl.h"
 #include "mlx/backend/metal/metal.h"
 
 namespace mlx::core {
@@ -43,6 +44,9 @@ void synchronize(Stream s) {
       break;
     case mlx::core::Device::gpu:
       scheduler::enqueue(s, metal::make_synchronize_task(s, std::move(p)));
+      break;
+    case mlx::core::Device::io:
+      scheduler::enqueue(s, io::make_synchronize_task(s, std::move(p)));
       break;
   }
   f.wait();

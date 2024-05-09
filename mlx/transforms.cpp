@@ -28,6 +28,7 @@ class Synchronizer : public Primitive {
 
   void eval_cpu(const std::vector<array>&, std::vector<array>&) override {};
   void eval_gpu(const std::vector<array>&, std::vector<array>&) override {};
+  void eval_io(const std::vector<array>&, std::vector<array>&) override {};
 
   DEFINE_PRINT(Synchronize);
 };
