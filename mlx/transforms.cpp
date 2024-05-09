@@ -9,6 +9,7 @@
 #include <unordered_set>
 
 #include "mlx/backend/common/cpu_impl.h"
+#include "mlx/backend/io/io_impl.h"
 #include "mlx/backend/metal/metal_impl.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
@@ -148,6 +149,9 @@ array eval_impl(std::vector<array> outputs, bool async) {
       }
       case Device::cpu:
         scheduler::enqueue(stream, cpu::make_task(std::move(arr), signal));
+        break;
+      case Device::io:
+        scheduler::enqueue(stream, io::make_task(std::move(arr), signal));
         break;
     }
   }

@@ -94,9 +94,7 @@ Dtype dtype_from_safetensor_str(std::string_view str) {
 }
 
 /** Load array from reader in safetensor format */
-SafetensorsLoad load_safetensors(
-    std::shared_ptr<io::Reader> in_stream,
-    StreamOrDevice s) {
+SafetensorsLoad load_safetensors(std::shared_ptr<io::Reader> in_stream) {
   ////////////////////////////////////////////////////////
   // Open and check file
   if (!in_stream->good() || !in_stream->is_open()) {
@@ -138,15 +136,18 @@ SafetensorsLoad load_safetensors(
         shape,
         type,
         std::make_shared<Load>(
-            to_stream(s), in_stream, offset + data_offsets.at(0), false),
+            to_stream(Device::io),
+            in_stream,
+            offset + data_offsets.at(0),
+            false),
         std::vector<array>{});
     res.insert({item.key(), loaded_array});
   }
   return {res, metadata_map};
 }
 
-SafetensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
-  return load_safetensors(std::make_shared<io::FileReader>(file), s);
+SafetensorsLoad load_safetensors(const std::string& file) {
+  return load_safetensors(std::make_shared<io::FileReader>(file));
 }
 
 /** Save array to out stream in .npy format */

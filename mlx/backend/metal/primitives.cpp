@@ -671,10 +671,6 @@ void LessEqual::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "leq");
 }
 
-void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
-}
-
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (base_) {
     case Base::e:

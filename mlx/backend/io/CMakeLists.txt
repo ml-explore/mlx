@@ -3,4 +3,5 @@ target_sources(
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/io_impl.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/thread_pool.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
 )

@@ -32,12 +32,8 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s = {});
 array load(std::string file, StreamOrDevice s = {});
 
 /** Load array map from .safetensors file format */
-SafetensorsLoad load_safetensors(
-    std::shared_ptr<io::Reader> in_stream,
-    StreamOrDevice s = {});
-SafetensorsLoad load_safetensors(
-    const std::string& file,
-    StreamOrDevice s = {});
+SafetensorsLoad load_safetensors(std::shared_ptr<io::Reader> in_stream);
+SafetensorsLoad load_safetensors(const std::string& file);
 
 void save_safetensors(
     std::shared_ptr<io::Writer> in_stream,
@@ -50,7 +46,7 @@ void save_safetensors(
 
 /** Load array map and metadata from .gguf file format */
 
-GGUFLoad load_gguf(const std::string& file, StreamOrDevice s = {});
+GGUFLoad load_gguf(const std::string& file);
 
 void save_gguf(
     std::string file,

@@ -162,6 +162,26 @@ class UnaryPrimitive : public Primitive {
   UnaryPrimitive& operator=(UnaryPrimitive&& other) = delete;
 };
 
+class IOPrimitive : public Primitive {
+  /**
+   * An abstract class for primitives that are doing io which usually are not
+   * supposed to be evaluated on any other "device".
+   */
+ public:
+  explicit IOPrimitive(Stream stream) : Primitive(stream) {}
+
+  inline void eval_cpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) override {
+    throw std::runtime_error("IO primitives cannot be evaluated on CPU");
+  }
+  inline void eval_gpu(
+      const std::vector<array>& inputs,
+      std::vector<array>& outputs) override {
+    throw std::runtime_error("IO primitives cannot be evaluated on GPU");
+  }
+};
+
 class Abs : public UnaryPrimitive {
  public:
   explicit Abs(Stream stream) : UnaryPrimitive(stream) {};
@@ -1074,20 +1094,20 @@ class LessEqual : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
-class Load : public UnaryPrimitive {
+class Load : public IOPrimitive {
  public:
   explicit Load(
       Stream stream,
       std::shared_ptr<io::Reader> reader,
       size_t offset,
       bool swap_endianness = false)
-      : UnaryPrimitive(stream),
+      : IOPrimitive(stream),
         reader_(reader),
         offset_(offset),
         swap_endianness_(swap_endianness) {};
 
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+  void eval_io(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
 
   DEFINE_PRINT(Load)
 
