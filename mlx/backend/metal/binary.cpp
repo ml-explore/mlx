@@ -1,7 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <fmt/format.h>
 #include <cassert>
-#include <format>
 
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/compiled.h"
@@ -14,65 +14,80 @@
 namespace mlx::core {
 
 constexpr std::string_view binary_kernels = R"(
-template
-[[host_name("{0}_ss")]] [[kernel]] void binary_op_ss<{1}, {2}, {3}>(
+[[kernel]] void {0}_ss(
       device const {1}* a,
       device const {1}* b,
       device {2}* c,
-      uint index [[thread_position_in_grid]]);
+      uint index [[thread_position_in_grid]]) {{
+  c[index] = {3}()(a[0], b[0]);
+}}
 
-template
-[[host_name("{0}_sv")]] [[kernel]] void binary_op_sv<{1}, {2}, {3}>(
+[[kernel]] void {0}_sv(
       device const {1}* a,
       device const {1}* b,
       device {2}* c,
-      uint index [[thread_position_in_grid]]);
+      uint index [[thread_position_in_grid]]) {{
+  c[index] = {3}()(a[0], b[index]);
+}}
 
-template
-[[host_name("{0}_vs")]] [[kernel]] void binary_op_vs<{1}, {2}, {3}>(
+[[kernel]] void {0}_vs(
      device const {1}* a,
      device const {1}* b,
      device {2}* c,
-     uint index [[thread_position_in_grid]]);
+     uint index [[thread_position_in_grid]]) {{
+  c[index] = {3}()(a[index], b[0]);
+}}
 
-template
-[[host_name("{0}_vv")]] [[kernel]] void binary_op_vv<{1}, {2}, {3}>(
+[[kernel]] void {0}_vv(
      device const {1}* a,
      device const {1}* b,
      device {2}* c,
-     uint index [[thread_position_in_grid]]);
+     uint index [[thread_position_in_grid]]) {{
+  c[index] = {3}()(a[index], b[index]);
+}}
 
-template [[host_name("{0}_g_1")]] [[kernel]] void
-binary_op_g_nd1<{1}, {2}, {3}>(
+[[kernel]] void {0}_g_1(
      device const {1}* a,
      device const {1}* b,
      device {2}* c,
      constant const size_t& a_stride,
      constant const size_t& b_stride,
-     uint index [[thread_position_in_grid]]);
+     uint index [[thread_position_in_grid]]) {{
+  auto a_idx = elem_to_loc_1(index, a_stride);
+  auto b_idx = elem_to_loc_1(index, b_stride);
+  c[index] = {3}()(a[a_idx], b[b_idx]);
+}}
 
-template [[host_name("{0}_g_2")]] [[kernel]] void
-binary_op_g_nd2<{1}, {2}, {3}>(
+[[kernel]] void {0}_g_2(
      device const {1}* a,
      device const {1}* b,
      device {2}* c,
      constant const size_t a_strides[2],
      constant const size_t b_strides[2],
      uint2 index [[thread_position_in_grid]],
-     uint2 grid_dim [[threads_per_grid]]);
+     uint2 grid_dim [[threads_per_grid]]) {{
+  auto a_idx = elem_to_loc_2(index, a_strides);
+  auto b_idx = elem_to_loc_2(index, b_strides);
+  size_t out_idx = index.x + (size_t)grid_dim.x * index.y;
+  c[out_idx] = {3}()(a[a_idx], b[b_idx]);
+}}
 
-template [[host_name("{0}_g_3")]] [[kernel]] void
-binary_op_g_nd3<{1}, {2}, {3}>(
+[[kernel]] void {0}_g_3(
      device const {1}* a,
      device const {1}* b,
      device {2}* c,
      constant const size_t a_strides[3],
      constant const size_t b_strides[3],
      uint3 index [[thread_position_in_grid]],
-     uint3 grid_dim [[threads_per_grid]]);
+     uint3 grid_dim [[threads_per_grid]]) {{
+  auto a_idx = elem_to_loc_3(index, a_strides);
+  auto b_idx = elem_to_loc_3(index, b_strides);
+  size_t out_idx =
+      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
+  c[out_idx] = {3}()(a[a_idx], b[b_idx]);
+}}
 
-template [[host_name("{0}_g_4")]] [[kernel]] void
-binary_op_g_nd<{1}, {2}, {3}, 4>(
+[[kernel]] void {0}_g_4(
     device const {1}* a,
     device const {1}* b,
     device {2}* c,
@@ -80,9 +95,15 @@ binary_op_g_nd<{1}, {2}, {3}, 4>(
     constant const size_t a_strides[4],
     constant const size_t b_strides[4],
     uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]);
-template [[host_name("{0}_g_5")]] [[kernel]] void
-binary_op_g_nd<{1}, {2}, {3}, 5>(
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto idx = elem_to_loc_2_nd<4>(index, shape, a_strides, b_strides);
+  size_t out_idx =
+      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
+  c[out_idx] = {3}()(a[idx.x], b[idx.y]);
+
+}}
+
+[[kernel]] void {0}_g_5(
     device const {1}* a,
     device const {1}* b,
     device {2}* c,
@@ -90,8 +111,14 @@ binary_op_g_nd<{1}, {2}, {3}, 5>(
     constant const size_t a_strides[5],
     constant const size_t b_strides[5],
     uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]);
-template [[host_name("{0}_g")]] [[kernel]] void binary_op_g<{1}, {2}, {3}>(
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto idx = elem_to_loc_2_nd<5>(index, shape, a_strides, b_strides);
+  size_t out_idx =
+      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
+  c[out_idx] = {3}()(a[idx.x], b[idx.y]);
+}}
+
+[[kernel]] void {0}_g(
     device const {1}* a,
     device const {1}* b,
     device {2}* c,
@@ -100,70 +127,109 @@ template [[host_name("{0}_g")]] [[kernel]] void binary_op_g<{1}, {2}, {3}>(
     constant const size_t* b_strides,
     constant const int& ndim,
     uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]);
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto idx = elem_to_loc_2_nd(index, shape, a_strides, b_strides, ndim);
+  size_t out_idx = index.x + grid_dim.x * (index.y + grid_dim.y * index.z);
+  c[out_idx] = {3}()(a[idx.x], b[idx.y]);
+}}
 )";
 
 constexpr std::string_view binary_two_kernels = R"(
-template [[host_name("{0}_ss")]] [[kernel]] void
-binary_op_ss<{1}, {2}, {3}>(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    uint index [[thread_position_in_grid]]);
-template [[host_name("{0}_sv")]] [[kernel]] void
-binary_op_sv<{1}, {2}, {3}>(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    uint index [[thread_position_in_grid]]);
-template [[host_name("{0}_vs")]] [[kernel]] void
-binary_op_vs<{1}, {2}, {3}>(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    uint index [[thread_position_in_grid]]);
-template [[host_name("{0}_vv")]] [[kernel]] void
-binary_op_vv<{1}, {2}, {3}>(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    uint index [[thread_position_in_grid]]);
+[[kernel]] void {0}_ss(
+      device const {1}* a,
+      device const {1}* b,
+      device {2}* c,
+      device {2}* d,
+      uint index [[thread_position_in_grid]]) {{
+  auto out = {3}()(a[0], b[0]);
+  c[index] = out[0];
+  d[index] = out[1];
+}}
 
-template [[host_name("{0}_1")]] [[kernel]] void
-binary_op_g_nd1<{1}, {2}, {3}>(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
+[[kernel]] void {0}_sv(
+      device const {1}* a,
+      device const {1}* b,
+      device {2}* c,
+      device {2}* d,
+      uint index [[thread_position_in_grid]]) {{
+  auto out = {3}()(a[0], b[index]);
+  c[index] = out[0];
+  d[index] = out[1];
+}}
+
+[[kernel]] void {0}_vs(
+     device const {1}* a,
+     device const {1}* b,
+     device {2}* c,
+     device {2}* d,
+     uint index [[thread_position_in_grid]]) {{
+  auto out = {3}()(a[index], b[0]);
+  c[index] = out[0];
+  d[index] = out[1];
+}}
+
+[[kernel]] void {0}_vv(
+     device const {1}* a,
+     device const {1}* b,
+     device {2}* c,
+     device {2}* d,
+     uint index [[thread_position_in_grid]]) {{
+  auto out = {3}()(a[index], b[index]);
+  c[index] = out[0];
+  d[index] = out[1];
+}}
+
+[[kernel]] void {0}_g_1(
+     device const {1}* a,
+     device const {1}* b,
+     device {2}* c,
+     device {2}* d,
+     constant const size_t& a_stride,
+     constant const size_t& b_stride,
+     uint index [[thread_position_in_grid]]) {{
+  auto a_idx = elem_to_loc_1(index, a_stride);
+  auto b_idx = elem_to_loc_1(index, b_stride);
+  auto out = {3}()(a[a_idx], b[b_idx]);
+  c[index] = out[0];
+  d[index] = out[1];
+}}
+
+[[kernel]] void {0}_g_2(
+     device const {1}* a,
+     device const {1}* b,
+     device {2}* c,
+     device {2}* d,
+     constant const size_t a_strides[2],
+     constant const size_t b_strides[2],
+     uint2 index [[thread_position_in_grid]],
+     uint2 grid_dim [[threads_per_grid]]) {{
+  auto a_idx = elem_to_loc_2(index, a_strides);
+  auto b_idx = elem_to_loc_2(index, b_strides);
+  size_t out_idx = index.x + (size_t)grid_dim.x * index.y;
+  auto out = {3}()(a[a_idx], b[b_idx]);
+  c[out_idx] = out[0];
+  d[out_idx] = out[1];
+}}
+
+[[kernel]] void {0}_g_3(
+     device const {1}* a,
+     device const {1}* b,
+     device {2}* c,
     device {2}* d,
-    constant const size_t& a_stride,
-    constant const size_t& b_stride,
-    uint index [[thread_position_in_grid]]);
-template [[host_name("{0}_2")]] [[kernel]] void
-binary_op_g_nd2<{1}, {2}, {3}>(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    constant const size_t a_strides[2],
-    constant const size_t b_strides[2],
-    uint2 index [[thread_position_in_grid]],
-    uint2 grid_dim [[threads_per_grid]]);
-template [[host_name("{0}_3")]] [[kernel]] void
-binary_op_g_nd3<{1}, {2}, {3}>(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    constant const size_t a_strides[3],
-    constant const size_t b_strides[3],
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]);
-template [[host_name("{0}_4")]] [[kernel]] void
-binary_op_g_nd<{1}, {2}, {3}, dims>(
+     constant const size_t a_strides[3],
+     constant const size_t b_strides[3],
+     uint3 index [[thread_position_in_grid]],
+     uint3 grid_dim [[threads_per_grid]]) {{
+  auto a_idx = elem_to_loc_3(index, a_strides);
+  auto b_idx = elem_to_loc_3(index, b_strides);
+  size_t out_idx =
+      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
+  auto out = {3}()(a[a_idx], b[b_idx]);
+  c[out_idx] = out[0];
+  d[out_idx] = out[1];
+}}
+
+[[kernel]] void {0}_g_4(
     device const {1}* a,
     device const {1}* b,
     device {2}* c,
@@ -172,9 +238,16 @@ binary_op_g_nd<{1}, {2}, {3}, dims>(
     constant const size_t a_strides[4],
     constant const size_t b_strides[4],
     uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]);
-template [[host_name("{0}_5")]] [[kernel]] void
-binary_op_g_nd<{1}, {2}, {3}, dims>(
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto idx = elem_to_loc_2_nd<4>(index, shape, a_strides, b_strides);
+  size_t out_idx =
+      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
+  auto out = {3}()(a[idx.x], b[idx.y]);
+  c[out_idx] = out[0];
+  d[out_idx] = out[1];
+}}
+
+[[kernel]] void {0}_g_5(
     device const {1}* a,
     device const {1}* b,
     device {2}* c,
@@ -183,9 +256,16 @@ binary_op_g_nd<{1}, {2}, {3}, dims>(
     constant const size_t a_strides[5],
     constant const size_t b_strides[5],
     uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]);
-template [[host_name("{0}_g")]] [[kernel]] void
-binary_op_g<{1}, {2}, {3}>(
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto idx = elem_to_loc_2_nd<5>(index, shape, a_strides, b_strides);
+  size_t out_idx =
+      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
+  auto out = {3}()(a[idx.x], b[idx.y]);
+  c[out_idx] = out[0];
+  d[out_idx] = out[1];
+}}
+
+[[kernel]] void {0}_g(
     device const {1}* a,
     device const {1}* b,
     device {2}* c,
@@ -195,7 +275,13 @@ binary_op_g<{1}, {2}, {3}>(
     constant const size_t* b_strides,
     constant const int& ndim,
     uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]);
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto idx = elem_to_loc_2_nd(index, shape, a_strides, b_strides, ndim);
+  size_t out_idx = index.x + grid_dim.x * (index.y + grid_dim.y * index.z);
+  auto out = {3}()(a[idx.x], b[idx.y]);
+  c[out_idx] = out[0];
+  d[out_idx] = out[1];
+}}
 )";
 
 void binary_op(
@@ -258,7 +344,7 @@ void binary_op(
     out.primitive().print(op_t);
     std::ostringstream kernel_source;
     kernel_source << metal::get_kernel_preamble() << std::endl;
-    kernel_source << std::format(
+    kernel_source << fmt::format(
         binary_two_kernels,
         op + type_to_name(a),
         get_type_string(a.dtype()),
@@ -381,7 +467,7 @@ void binary_op(
     out.primitive().print(op_t);
     std::ostringstream kernel_source;
     kernel_source << metal::get_kernel_preamble() << std::endl;
-    kernel_source << std::format(
+    kernel_source << fmt::format(
         binary_kernels,
         op + type_to_name(a),
         get_type_string(a.dtype()),
@@ -442,6 +528,10 @@ void binary_op(
 
 void Add::eval_gpu(const std::vector<array>& inputs, array& out) {
   binary_op(inputs, out, "add");
+}
+
+void ArcTan2::eval_gpu(const std::vector<array>& inputs, array& out) {
+  binary_op(inputs, out, "arctan2");
 }
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
