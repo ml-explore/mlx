@@ -8,7 +8,6 @@ add_custom_command(
               "-D${MLX_METAL_VERSION}"
     DEPENDS make_compiled_preamble.sh
             kernels/compiled_preamble.h
-            kernels/unary.h
             kernels/binary.h
             kernels/bf16.h
             kernels/erf.h

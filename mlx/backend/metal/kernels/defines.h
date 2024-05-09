@@ -8,7 +8,6 @@
 #define MTL_CONST
 #endif
 
-static MTL_CONST constexpr int MAX_BINARY_SPECIALIZED_DIMS = 5;
 static MTL_CONST constexpr int MAX_COPY_SPECIALIZED_DIMS = 5;
 static MTL_CONST constexpr int MAX_REDUCE_SPECIALIZED_DIMS = 4;
 static MTL_CONST constexpr int REDUCE_N_READS = 16;

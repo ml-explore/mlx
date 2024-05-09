@@ -106,7 +106,7 @@ void copy_gpu_inplace(
       set_vector_bytes(compute_encoder, strides_out, ndim, 4);
     }
 
-    if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
+    if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
       compute_encoder->setBytes(&ndim, sizeof(int), 5);
     }
 

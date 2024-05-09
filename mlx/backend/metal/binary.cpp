@@ -1,17 +1,17 @@
 // Copyright © 2024 Apple Inc.
 
 #include <fmt/format.h>
-#include <cassert>
 
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/compiled_preamble.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
+
+constexpr int MAX_BINARY_SPECIALIZED_DIMS = 5;
 
 constexpr std::string_view binary_kernels = R"(
 [[kernel]] void {0}_ss(

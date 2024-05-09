@@ -1,17 +1,17 @@
 // Copyright © 2024 Apple Inc.
 
 #include <fmt/format.h>
-#include <cassert>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/ternary.h"
 #include "mlx/backend/metal/compiled_preamble.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
+
+constexpr int MAX_TERNARY_SPECIALIZED_DIMS = 5;
 
 constexpr std::string_view ternary_kernels = R"(
 [[kernel]] void {0}_v(
@@ -158,7 +158,7 @@ void ternary_op(
     lib_name = kname.str();
     if (topt == TernaryOpType::General) {
       kname << "_g";
-      if (shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
+      if (shape.size() <= MAX_TERNARY_SPECIALIZED_DIMS) {
         kname << "_" << shape.size();
       }
     } else {
@@ -198,7 +198,7 @@ void ternary_op(
       compute_encoder->setBytes(strides_b.data(), ndim * sizeof(size_t), 6);
       compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 7);
 
-      if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
+      if (ndim > MAX_TERNARY_SPECIALIZED_DIMS) {
         compute_encoder->setBytes(&ndim, sizeof(int), 8);
       }
     } else {

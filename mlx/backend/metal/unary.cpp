@@ -1,12 +1,10 @@
 // Copyright © 2024 Apple Inc.
 
 #include <fmt/format.h>
-#include <cassert>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/compiled_preamble.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 

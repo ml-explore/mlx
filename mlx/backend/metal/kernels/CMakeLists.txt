@@ -5,9 +5,6 @@ set(
   ${CMAKE_CURRENT_SOURCE_DIR}/bf16_math.h
   ${CMAKE_CURRENT_SOURCE_DIR}/complex.h
   ${CMAKE_CURRENT_SOURCE_DIR}/defines.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/erf.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/expm1f.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/indexing.h
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
 )
 
@@ -28,8 +25,6 @@ set(
   "scaled_dot_product_attention"
   "softmax"
   "sort"
-  "gather"
-  "scatter"
 )
 
 function(build_kernel_base TARGET SRCFILE DEPS)
