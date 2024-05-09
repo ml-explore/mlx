@@ -76,7 +76,7 @@ bool is_available() {
   return true;
 }
 
-Stream stream() {
+Stream communication_stream() {
   static std::shared_ptr<Stream> comm_stream = nullptr;
   if (comm_stream == nullptr) {
     comm_stream = std::make_shared<Stream>(
