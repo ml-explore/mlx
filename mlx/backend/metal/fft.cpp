@@ -97,7 +97,7 @@ void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     auto group_dims = MTL::Size(1, m, 1);
     auto grid_dims = MTL::Size(batch, m, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });

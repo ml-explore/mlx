@@ -59,7 +59,7 @@ void explicit_gemm_conv_ND_gpu(
   MTL::Size grid_dims = MTL::Size(
       conv_params.C, unfolded_shape[1] / conv_params.C, unfolded_shape[0]);
 
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   // Reshape weight
   std::vector<int> wt_reshape{implicit_K, implicit_N};
@@ -137,7 +137,7 @@ void explicit_gemm_conv_group_ND_gpu(
   MTL::Size grid_dims = MTL::Size(
       conv_params.C, unfolded_shape[1] / conv_params.C, unfolded_shape[0]);
 
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   // Transpose kernel weights so that we can slice them by contiguous chunks
   // of channel groups.
@@ -247,7 +247,7 @@ void slow_conv_2D_gpu(
   compute_encoder.set_output_array(out, 2);
 
   compute_encoder->setBytes(&conv_params, sizeof(MLXConvParams<2>), 3);
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 }
 
 void implicit_gemm_conv_2D_gpu(
@@ -352,7 +352,7 @@ void implicit_gemm_conv_2D_gpu(
   compute_encoder->setBytes(&gemm_params, sizeof(ImplicitGemmConv2DParams), 4);
 
   // Launch kernel
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 }
 
 void implicit_gemm_conv_2D_general_gpu(
@@ -512,7 +512,7 @@ void implicit_gemm_conv_2D_general_gpu(
       base_w.data(), sizeof(Conv2DGeneralBaseInfo) * base_w.size(), 7);
 
   // Launch kernel
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 }
 
 void winograd_conv_2D_gpu(
@@ -613,7 +613,7 @@ void winograd_conv_2D_gpu(
     MTL::Size group_dims = MTL::Size(32, bo, 1);
     MTL::Size grid_dims = MTL::Size(O_c / bo, 1, 1);
 
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
   }
 
   // Do input transform
@@ -641,7 +641,7 @@ void winograd_conv_2D_gpu(
     MTL::Size group_dims = MTL::Size(32, wn, wm);
     MTL::Size grid_dims = MTL::Size(N_tiles_w, N_tiles_h, N_tiles_n);
 
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
   }
 
   // Do batched gemm
@@ -689,7 +689,7 @@ void winograd_conv_2D_gpu(
     MTL::Size group_dims = MTL::Size(32, wn, wm);
     MTL::Size grid_dims = MTL::Size(N_tiles_w, N_tiles_h, N_tiles_n);
 
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
   }
 }
 

@@ -89,7 +89,7 @@ void RMSNorm::eval_gpu(
     compute_encoder->setThreadgroupMemoryLength(
         16 * 8, 0); // minimum of 16 bytes
     compute_encoder->setThreadgroupMemoryLength(simd_size * sizeof(float), 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
@@ -190,7 +190,7 @@ void RMSNormVJP::eval_gpu(
     compute_encoder->setBytes(&eps_, sizeof(float), 5);
     compute_encoder->setBytes(&axis_size, sizeof(int), 6);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 7);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 
   ReductionPlan plan(
@@ -282,7 +282,7 @@ void LayerNorm::eval_gpu(
     compute_encoder->setBytes(&axis_size, sizeof(int), 5);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 6);
     compute_encoder->setBytes(&b_stride, sizeof(uint32_t), 7);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
@@ -401,7 +401,7 @@ void LayerNormVJP::eval_gpu(
     compute_encoder->setBytes(&eps_, sizeof(float), 5);
     compute_encoder->setBytes(&axis_size, sizeof(int), 6);
     compute_encoder->setBytes(&w_stride, sizeof(uint32_t), 7);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 
   if (gw.ndim() == 1 && gw.size() == axis_size) {

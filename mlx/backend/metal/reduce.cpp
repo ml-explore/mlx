@@ -74,7 +74,7 @@ void all_reduce_dispatch(
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   } else {
     // Allocate intermediate array to store partial reduction results
@@ -88,7 +88,7 @@ void all_reduce_dispatch(
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(intermediate, 1);
     compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     // Second pass to reduce intermediate reduction results written to DRAM
     compute_encoder.set_input_array(intermediate, 0);
@@ -108,7 +108,7 @@ void all_reduce_dispatch(
     nthreads = thread_group_size;
     group_dims = MTL::Size(thread_group_size, 1, 1);
     grid_dims = MTL::Size(nthreads, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     d.get_command_buffer(s.index)->addCompletedHandler(
         [intermediates](MTL::CommandBuffer*) mutable {
@@ -217,7 +217,7 @@ void row_reduce_general_dispatch(
     compute_encoder->setBytes(
         strides.data(), strides.size() * sizeof(size_t), 6);
     compute_encoder->setBytes(&ndim, sizeof(int), 7);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   } else {
     // Allocate intermediate array to store partial reduction results
@@ -239,7 +239,7 @@ void row_reduce_general_dispatch(
     compute_encoder->setBytes(
         strides.data(), strides.size() * sizeof(size_t), 6);
     compute_encoder->setBytes(&ndim, sizeof(int), 7);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     // Set up second dispatch
     reduction_size = non_row_reductions;
@@ -286,7 +286,7 @@ void row_reduce_general_dispatch(
     grid_dims = MTL::Size(n_threads, out.size(), 1);
     group_dims = MTL::Size(thread_group_size, 1, 1);
 
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     d.get_command_buffer(s.index)->addCompletedHandler(
         [intermediates](MTL::CommandBuffer*) mutable {
@@ -366,7 +366,7 @@ void strided_reduce_general_dispatch(
     compute_encoder->setBytes(&non_col_ndim, sizeof(int), 11);
 
     // Dispatch threads
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     return;
   }
@@ -435,7 +435,7 @@ void strided_reduce_general_dispatch(
     compute_encoder->setThreadgroupMemoryLength(
         safe_divup(threadgroup_dim_x * threadgroup_dim_y * out.itemsize(), 16),
         0);
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
   } else {
     // Allocate intermediate array to store reduction results from all thread
@@ -470,7 +470,7 @@ void strided_reduce_general_dispatch(
     compute_encoder->setThreadgroupMemoryLength(
         safe_divup(threadgroup_dim_x * threadgroup_dim_y * out.itemsize(), 16),
         0);
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
     // Perform second pass of reductions
     // Reduce results of threadgroups along y, z from first pass, that
@@ -523,7 +523,7 @@ void strided_reduce_general_dispatch(
     grid_dims = MTL::Size(n_threads, out.size(), 1);
     group_dims = MTL::Size(thread_group_size, 1, 1);
 
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     d.get_command_buffer(s.index)->addCompletedHandler(
         [intermediates](MTL::CommandBuffer*) mutable {
@@ -585,7 +585,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->setComputePipelineState(kernel);
     compute_encoder.set_output_array(out, 0);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 
   // Reduce

@@ -126,7 +126,7 @@ void copy_gpu_inplace(
 
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     size_t nthreads = out.data_size();
     MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
@@ -135,7 +135,7 @@ void copy_gpu_inplace(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 

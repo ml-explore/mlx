@@ -83,7 +83,7 @@ void RoPE::eval_gpu(
   int dim2 = in.size() / mat_size;
   auto group_dims = get_block_dims(dim0, dim1, dim2);
   auto grid_dims = MTL::Size(dim0, dim1, dim2);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 } // namespace mlx::core::fast

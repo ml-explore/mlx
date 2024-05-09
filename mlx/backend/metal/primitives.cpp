@@ -107,7 +107,7 @@ void binary_op(
     }
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
     size_t nthreads = out.data_size();
@@ -117,7 +117,7 @@ void binary_op(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -201,7 +201,7 @@ void binary_op(
     }
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
     size_t nthreads =
@@ -212,7 +212,7 @@ void binary_op(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -288,7 +288,7 @@ void ternary_op(
     }
     MTL::Size group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
     size_t nthreads = out.data_size();
@@ -298,7 +298,7 @@ void ternary_op(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -351,7 +351,7 @@ void unary_op(
     int ndim = in.ndim();
     compute_encoder->setBytes(&ndim, sizeof(int), 4);
   }
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 } // namespace
@@ -428,7 +428,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   compute_encoder.set_output_array(out, 2);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 void ArcCos::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -523,7 +523,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
     compute_encoder->setBytes(&axis_stride, sizeof(size_t), 6);
     compute_encoder->setBytes(&axis_size, sizeof(size_t), 7);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -834,7 +834,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
         keys.strides().data(), keys.ndim() * sizeof(size_t), 6);
   }
 
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {

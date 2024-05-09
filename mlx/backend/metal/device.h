@@ -37,8 +37,10 @@ using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
 struct CommandEncoder {
-  CommandEncoder(MTL::ComputeCommandEncoder* enc)
-      : enc(enc), concurrent(false) {};
+  CommandEncoder(MTL::CommandBuffer* cbuf) : cbuf(cbuf) {
+    enc = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
+    enc->retain();
+  };
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
@@ -89,13 +91,25 @@ struct CommandEncoder {
     }
   }
 
+  void dispatchThreadgroups(MTL::Size grid_dims, MTL::Size group_dims);
+  void dispatchThreads(MTL::Size grid_dims, MTL::Size group_dims);
+
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
   }
 
+  ~CommandEncoder() {
+    enc->endEncoding();
+    enc->release();
+  }
+
  private:
+  void maybe_split();
+
+  int num_dispatches{0};
+  MTL::CommandBuffer* cbuf;
   MTL::ComputeCommandEncoder* enc;
-  bool concurrent;
+  bool concurrent{false};
   std::unordered_set<MTL::Resource*> outputs;
   std::unordered_set<MTL::Resource*> concurrent_outputs;
 };
@@ -112,7 +126,6 @@ class Device {
   };
 
   void new_queue(int index);
-  MTL::CommandBuffer* new_command_buffer(int index);
   MTL::CommandBuffer* get_command_buffer(int index);
   int get_command_buffer_ops(int index);
   void increment_command_buffer_ops(int index);
