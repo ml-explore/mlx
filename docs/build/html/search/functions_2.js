@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['begin_0',['begin',['../classmlx_1_1core_1_1array.html#a76b258b169d7d73419ebbf85340fb914',1,'mlx::core::array']]],
+  ['bernoulli_1',['bernoulli',['../namespacemlx_1_1core_1_1random.html#acb3f278fea2c4f06dea947d3bac2e9b7',1,'mlx::core::random::bernoulli(const array &amp;p, const std::vector&lt; int &gt; &amp;shape, const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})'],['../namespacemlx_1_1core_1_1random.html#aaa49f6c2af5496822fa09435e54275cb',1,'mlx::core::random::bernoulli(const array &amp;p, const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})'],['../namespacemlx_1_1core_1_1random.html#aa9e360f9cb7bd23221352ed9e31d83c2',1,'mlx::core::random::bernoulli(T p, const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})'],['../namespacemlx_1_1core_1_1random.html#a37fcba120a1d246176db5256d3201cd4',1,'mlx::core::random::bernoulli(T p, const std::vector&lt; int &gt; &amp;shape, const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})'],['../namespacemlx_1_1core_1_1random.html#ad7eb4467e2f9d5f74a5607b29a935b6e',1,'mlx::core::random::bernoulli(const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})']]],
+  ['bfloat_5fbits_5fto_5ffloat_2',['bfloat_bits_to_float',['../backend_2metal_2kernels_2bf16_8h.html#a3b33ae338dc4f223d0f3c748de07bad1',1,'bf16.h']]],
+  ['bits_3',['bits',['../namespacemlx_1_1core_1_1random.html#abb895baa477f5a06b5f88e69245f1825',1,'mlx::core::random::bits(const std::vector&lt; int &gt; &amp;shape, int width, const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})'],['../namespacemlx_1_1core_1_1random.html#a548ffed4ba3107b89885ff850ffce5f4',1,'mlx::core::random::bits(const std::vector&lt; int &gt; &amp;shape, const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})']]],
+  ['bits_5fto_5fbfloat_4',['bits_to_bfloat',['../struct___m_l_x___b_float16.html#a91ccb774773b65f8d4c1aea3f1c6e1ca',1,'_MLX_BFloat16']]],
+  ['bitwise_5fand_5',['bitwise_and',['../group__ops.html#ga752fd2707dabb05d0308ba3d55346ada',1,'mlx::core']]],
+  ['bitwise_5for_6',['bitwise_or',['../group__ops.html#ga8af4f22c08c11c4ffab7e3d45e0f3cd6',1,'mlx::core']]],
+  ['bitwise_5fxor_7',['bitwise_xor',['../group__ops.html#ga3188638fba3a60e264baf69956a1e08b',1,'mlx::core']]],
+  ['bitwisebinary_8',['BitwiseBinary',['../classmlx_1_1core_1_1_bitwise_binary.html#a0d8b3a94951621ffcdebc6fda748a172',1,'mlx::core::BitwiseBinary']]],
+  ['block_5fmasked_5fmm_9',['block_masked_mm',['../group__ops.html#ga6b76c8ea46b19e6866af155fa5910be6',1,'mlx::core']]],
+  ['block_5fsparse_5fmm_10',['block_sparse_mm',['../group__ops.html#gaf5d82380cd204e7c33324cebcd1461ce',1,'mlx::core']]],
+  ['blockloader_11',['BlockLoader',['../structmlx_1_1steel_1_1_block_loader.html#a37aca066e63dff238865b5923a2d4335',1,'mlx::steel::BlockLoader']]],
+  ['blockmaskedmm_12',['BlockMaskedMM',['../classmlx_1_1core_1_1_block_masked_m_m.html#ad26509deb5306d0c5eb72477e9a57477',1,'mlx::core::BlockMaskedMM']]],
+  ['blockmma_13',['BlockMMA',['../structmlx_1_1steel_1_1_block_m_m_a.html#aa14406b7298456ac45d23dd3c4642dd8',1,'mlx::steel::BlockMMA']]],
+  ['blocksparsemm_14',['BlockSparseMM',['../classmlx_1_1core_1_1_block_sparse_m_m.html#a2c2c272e52575fbb7411e1f3ff340f6c',1,'mlx::core::BlockSparseMM']]],
+  ['broadcast_15',['Broadcast',['../classmlx_1_1core_1_1_broadcast.html#accbab8433c93e281608a268d11afaefb',1,'mlx::core::Broadcast']]],
+  ['broadcast_5farrays_16',['broadcast_arrays',['../group__ops.html#gab783890428b596f715dc7dd2057eae99',1,'mlx::core']]],
+  ['broadcast_5fshapes_17',['broadcast_shapes',['../namespacemlx_1_1core.html#a075e07def338cd9d815182d0e6a656c0',1,'mlx::core']]],
+  ['broadcast_5fto_18',['broadcast_to',['../group__ops.html#gad256e86cc1a6e6b3832e392baa90318d',1,'mlx::core']]],
+  ['buffer_19',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html#ac4fc2cc6aa1368cfb74aff329d9a1300',1,'mlx::core::allocator::Buffer']]],
+  ['buffer_20',['buffer',['../classmlx_1_1core_1_1array.html#ab3daf04c27c4593d9d73c397b8484a08',1,'mlx::core::array::buffer()'],['../classmlx_1_1core_1_1array.html#a634466ce661485394f2fdc3bd6796bcd',1,'mlx::core::array::buffer() const']]],
+  ['build_5flib_5fname_21',['build_lib_name',['../namespacemlx_1_1core.html#a3ef23f334cb9f68a2c50524bc67c913b',1,'mlx::core']]]
+];
