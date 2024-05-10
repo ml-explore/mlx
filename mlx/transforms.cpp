@@ -82,8 +82,15 @@ array eval_impl(std::vector<array> outputs, bool async) {
                 "[async_eval] Not allowed inside a graph transformation.");
           }
           if (!in.has_primitive()) {
-            throw std::invalid_argument(
-                "[eval] Attempting to eval an array without a primitive.");
+            if (in.is_tracer()) {
+              throw std::invalid_argument(
+                  "[eval] Attempting to eval an array during function"
+                  " transformations like compile or vmap is not allowed.");
+            }
+            throw std::runtime_error(
+                "[eval] Attempting to eval an array without a primitive. "
+                "This may be a bug, please file an issue here: "
+                " https://github.com/ml-explore/mlx/issues.");
           }
           if (a.primitive().stream() != in.primitive().stream()) {
             needs_signal.insert(in.id());
