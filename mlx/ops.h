@@ -1239,6 +1239,8 @@ array number_of_elements(
     Dtype dtype = int32,
     StreamOrDevice s = {});
 
+array conjugate(const array& a, StreamOrDevice s = {});
+
 /** Bitwise and. */
 array bitwise_and(const array& a, const array& b, StreamOrDevice s = {});
 array operator&(const array& a, const array& b);

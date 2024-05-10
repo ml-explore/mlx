@@ -789,6 +789,14 @@ bool Concatenate::is_equivalent(const Primitive& other) const {
   return axis_ == c_other.axis_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> Conjugate::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  return {{conjugate(inputs[0], stream())}, axes};
+}
+
 array conv_weight_backward_patches(
     const array& in,
     const array& wt,

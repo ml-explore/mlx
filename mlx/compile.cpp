@@ -23,16 +23,17 @@ bool is_unary(const Primitive& p) {
       typeid(p) == typeid(ArcSinh) || typeid(p) == typeid(ArcTan) ||
       typeid(p) == typeid(ArcTanh) || typeid(p) == typeid(AsType) ||
       typeid(p) == typeid(Ceil) || typeid(p) == typeid(Cos) ||
-      typeid(p) == typeid(Cosh) || typeid(p) == typeid(Remainder) ||
-      typeid(p) == typeid(Erf) || typeid(p) == typeid(ErfInv) ||
-      typeid(p) == typeid(Exp) || typeid(p) == typeid(Floor) ||
-      typeid(p) == typeid(Log) || typeid(p) == typeid(Log1p) ||
-      typeid(p) == typeid(LogicalNot) || typeid(p) == typeid(Negative) ||
-      typeid(p) == typeid(Round) || typeid(p) == typeid(Sigmoid) ||
-      typeid(p) == typeid(Sign) || typeid(p) == typeid(Sin) ||
-      typeid(p) == typeid(Sinh) || typeid(p) == typeid(Square) ||
-      typeid(p) == typeid(Sqrt) || typeid(p) == typeid(Tan) ||
-      typeid(p) == typeid(Tanh) || typeid(p) == typeid(Expm1));
+      typeid(p) == typeid(Conjugate) || typeid(p) == typeid(Cosh) ||
+      typeid(p) == typeid(Remainder) || typeid(p) == typeid(Erf) ||
+      typeid(p) == typeid(ErfInv) || typeid(p) == typeid(Exp) ||
+      typeid(p) == typeid(Floor) || typeid(p) == typeid(Log) ||
+      typeid(p) == typeid(Log1p) || typeid(p) == typeid(LogicalNot) ||
+      typeid(p) == typeid(Negative) || typeid(p) == typeid(Round) ||
+      typeid(p) == typeid(Sigmoid) || typeid(p) == typeid(Sign) ||
+      typeid(p) == typeid(Sin) || typeid(p) == typeid(Sinh) ||
+      typeid(p) == typeid(Square) || typeid(p) == typeid(Sqrt) ||
+      typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh) ||
+      typeid(p) == typeid(Expm1));
 }
 
 bool is_binary(const Primitive& p) {
