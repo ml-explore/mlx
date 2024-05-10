@@ -1,0 +1,23 @@
+var searchData=
+[
+  ['i_0',['i',['../structpocketfft_1_1detail_1_1cmplx.html#a35d2dce1b7de5f37d7029e639bc7f23d',1,'pocketfft::detail::cmplx::i'],['../unionmlx_1_1core_1_1detail_1_1_int_or_float.html#aa6d4b02e99df90a321e0eeeb98e71b49',1,'mlx::core::detail::IntOrFloat::i'],['../unionbool4__or__uint.html#ab24d95aaf4203ddf3e6b1ed19397ced7',1,'bool4_or_uint::i']]],
+  ['idil_1',['idil',['../struct_m_l_x_conv_params.html#af900fdb4c4d4ea35eed02940dee8d4d1',1,'MLXConvParams']]],
+  ['imag_2',['imag',['../structcomplex64__t.html#a94037c0cf8451aaff7cb4d154a8426de',1,'complex64_t']]],
+  ['in_5fstrides_3',['in_strides',['../struct_m_l_x_conv_params.html#ab25eade6573784985dbea1216f9068cf',1,'MLXConvParams']]],
+  ['index_4',['index',['../structmlx_1_1core_1_1_device.html#a5e345748fe318a267833ab7398b364ac',1,'mlx::core::Device::index'],['../structmlx_1_1core_1_1_stream.html#a9d0dafc1899333e1176eb2bbc0a8b626',1,'mlx::core::Stream::index']]],
+  ['inexact_5',['inexact',['../namespacemlx_1_1core.html#a54c6fae21b7f2fea8e6f80011ef38534',1,'mlx::core']]],
+  ['init_6',['init',['../struct_and.html#a87b2dfbc460911fdc0f0054b2e008126',1,'And::init'],['../struct_or.html#a9e7135dc9686bb30f78970a2b134d30f',1,'Or::init'],['../struct_sum.html#a433bf0fe3ce751c18e5269bbc19daa65',1,'Sum::init'],['../struct_prod.html#ac99f3882b6c3c0c17d70a82f2f2f2c56',1,'Prod::init'],['../struct_min.html#a322a8241f9e9f60ffa040e68c02af97c',1,'Min::init'],['../struct_max.html#aa985471d570c1009e5cbb174efcb9131',1,'Max::init']]],
+  ['inp_5fjump_5fc_7',['inp_jump_c',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#a78d30e843d65d1829623afb0b607f0a5',1,'mlx::steel::ImplicitGemmConv2DParams']]],
+  ['inp_5fjump_5fh_8',['inp_jump_h',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#a03685a4066cdb11ffb647408e2c5b122',1,'mlx::steel::ImplicitGemmConv2DParams']]],
+  ['inp_5fjump_5fw_9',['inp_jump_w',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#acf168c72f4a86b72b8f5f386f07c9d8c',1,'mlx::steel::ImplicitGemmConv2DParams']]],
+  ['int16_10',['int16',['../namespacemlx_1_1core.html#a71ebba4ad1afa730962f0692c4f42f07',1,'mlx::core']]],
+  ['int32_11',['int32',['../namespacemlx_1_1core.html#a5d6373aad1444edc9de1eb07bfe5cad3',1,'mlx::core']]],
+  ['int64_12',['int64',['../namespacemlx_1_1core.html#a9019bdc191054ada0a502c7c34cef5b8',1,'mlx::core']]],
+  ['int8_13',['int8',['../namespacemlx_1_1core.html#a892e934e146dd938d144cee8813ca672',1,'mlx::core']]],
+  ['integer_14',['integer',['../namespacemlx_1_1core.html#a074d000f25ae3ed77450e6a5fec4b38b',1,'mlx::core']]],
+  ['inv_5falpha_15',['INV_ALPHA',['../struct_m_l_x_scaled_dot_product_attention_params.html#a7461e0e17cdc7d3fed80bb00d58d8644',1,'MLXScaledDotProductAttentionParams']]],
+  ['is_16',['iS',['../struct_m_l_x_conv_params.html#a72e1c3b4da0f70622cf18036bbf97fe6',1,'MLXConvParams']]],
+  ['is_5farray_5fv_17',['is_array_v',['../namespacemlx_1_1core.html#a01b0d64a75dfa2e95d6c7b5c53d708af',1,'mlx::core']]],
+  ['is_5farrays_5fv_18',['is_arrays_v',['../namespacemlx_1_1core.html#a94c1057929b390e5613304afa16dfbda',1,'mlx::core']]],
+  ['is_5fmetal_5fatomic_19',['is_metal_atomic',['../atomic_8h.html#a91a8bdcae647947a83c6689d7f252d24',1,'atomic.h']]]
+];
