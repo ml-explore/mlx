@@ -6,8 +6,8 @@
 
 #include "mlx/array.h"
 #include "mlx/io/load.h"
-#include "mlx/ops.h"
 #include "mlx/stream.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 using GGUFMetaData =
