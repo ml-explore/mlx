@@ -20,6 +20,7 @@
       ~array.argmax
       ~array.argmin
       ~array.astype
+      ~array.conj
       ~array.cos
       ~array.cummax
       ~array.cummin

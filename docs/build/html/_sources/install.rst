@@ -157,7 +157,10 @@ should point to the path to the built metal library.
      - OFF
    * - MLX_METAL_DEBUG
      - OFF
-
+   * - MLX_BUILD_SAFETENSORS
+     - ON
+   * - MLX_BUILD_GGUF
+     - ON
 
 .. note::
 
