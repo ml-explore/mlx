@@ -20,3 +20,4 @@ return python trees will be using the default python ``dict``, ``list`` and
    tree_unflatten
    tree_map
    tree_map_with_path
+   tree_reduce
