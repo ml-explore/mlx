@@ -19,6 +19,7 @@ Operations
    arcsin
    arcsinh
    arctan
+   arctan2
    arctanh
    argmax
    argmin
@@ -28,11 +29,17 @@ Operations
    atleast_1d
    atleast_2d
    atleast_3d
-   broadcast_to
+   bitwise_and
+   bitwise_or
+   bitwise_xor
    block_masked_mm
+   block_sparse_mm
+   broadcast_to
    ceil
    clip
    concatenate
+   conj
+   conjugate
    convolve
    conv1d
    conv2d
@@ -69,6 +76,7 @@ Operations
    isnan
    isneginf
    isposinf
+   left_shift
    less
    less_equal
    linspace
@@ -105,6 +113,7 @@ Operations
    reciprocal
    repeat
    reshape
+   right_shift
    round
    rsqrt
    save
