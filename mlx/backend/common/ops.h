@@ -209,6 +209,12 @@ struct Ceil {
   };
 };
 
+struct Conjugate {
+  complex64_t operator()(complex64_t x) {
+    return std::conj(x);
+  }
+};
+
 struct Cos {
   template <typename T>
   T operator()(T x) {

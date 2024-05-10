@@ -3028,6 +3028,22 @@ void init_ops(nb::module_& m) {
             element of the input.
       )pbdoc");
   m.def(
+      "conjugate",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::conjugate(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conjugate(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the elementwise complex conjugate of the input.
+
+        Args:
+          a (array): Input array
+      )pbdoc");
+  m.def(
       "convolve",
       [](const array& a,
          const array& v,

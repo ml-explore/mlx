@@ -203,6 +203,17 @@ void Concatenate::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Conjugate::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (out.dtype() == complex64) {
+    unary_fp(in, out, detail::Conjugate());
+  } else {
+    throw std::invalid_argument(
+        "[conjugate] conjugate must be called on complex input.");
+  }
+}
+
 void Copy::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   out.copy_shared_buffer(inputs[0]);

@@ -4101,6 +4101,15 @@ array number_of_elements(
       {a}));
 }
 
+array conjugate(const array& a, StreamOrDevice s /* = {} */) {
+  // Mirror NumPy's behaviour for real input
+  if (a.dtype() != complex64) {
+    return a;
+  }
+  return array(
+      a.shape(), a.dtype(), std::make_shared<Conjugate>(to_stream(s)), {a});
+}
+
 array bitwise_impl(
     const array& a,
     const array& b,

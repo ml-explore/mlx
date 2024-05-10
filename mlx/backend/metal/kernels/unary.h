@@ -158,6 +158,12 @@ struct Cosh {
   };
 };
 
+struct Conjugate {
+  complex64_t operator()(complex64_t x) {
+    return complex64_t{x.real, -x.imag};
+  }
+};
+
 struct Erf {
   template <typename T>
   T operator()(T x) {

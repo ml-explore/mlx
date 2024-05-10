@@ -620,6 +620,22 @@ class Concatenate : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Conjugate : public UnaryPrimitive {
+ public:
+  explicit Conjugate(Stream stream) : UnaryPrimitive(stream) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Conjugate)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Convolution : public UnaryPrimitive {
  public:
   explicit Convolution(

@@ -1245,6 +1245,7 @@ class TestOps(mlx_tests.MLXTestCase):
             "log1p",
             "floor",
             "ceil",
+            "conjugate",
         ]
 
         x = 0.5
@@ -2257,6 +2258,14 @@ class TestOps(mlx_tests.MLXTestCase):
                 out_mlx = getattr(mx, op)(a_mlx, b_mlx)
                 out_np = getattr(np, op)(a_np, b_np)
                 self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
+
+    def test_conjugate(self):
+        shape = (3, 5, 7)
+        a = np.random.normal(size=shape) + 1j * np.random.normal(size=shape)
+        a = a.astype(np.complex64)
+        out_mlx = mx.conjugate(mx.array(a))
+        out_np = np.conjugate(a)
+        self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
 
 if __name__ == "__main__":
