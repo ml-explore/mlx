@@ -2,10 +2,10 @@
 
 #include <mpi.h>
 
-#include "mlx/dist/dist.h"
+#include "mlx/distributed/distributed.h"
 #include "mlx/scheduler.h"
 
-namespace mlx::core::dist {
+namespace mlx::core::distributed {
 
 namespace {
 
@@ -111,4 +111,4 @@ void all_reduce_sum(
       mpi_group->comm);
 }
 
-} // namespace mlx::core::dist
+} // namespace mlx::core::distributed

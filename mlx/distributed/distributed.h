@@ -6,7 +6,7 @@
 
 #include "mlx/array.h"
 
-namespace mlx::core::dist {
+namespace mlx::core::distributed {
 
 /* Check if a communication backend is available */
 bool is_available();
@@ -15,9 +15,9 @@ bool is_available();
 Stream communication_stream();
 
 /**
- * A dist::Group represents a group of independent mlx processes that can
- * communicate. We must also be able to create sub-groups from a group in order
- * to define more granular communication.
+ * A distributed::Group represents a group of independent mlx processes that
+ * can communicate. We must also be able to create sub-groups from a group in
+ * order to define more granular communication.
  */
 struct Group {
   virtual int rank() = 0;
@@ -37,4 +37,4 @@ void all_reduce_sum(
     const array& input,
     array& output);
 
-} // namespace mlx::core::dist
+} // namespace mlx::core::distributed

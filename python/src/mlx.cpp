@@ -18,7 +18,7 @@ void init_fft(nb::module_&);
 void init_linalg(nb::module_&);
 void init_constants(nb::module_&);
 void init_fast(nb::module_&);
-void init_dist(nb::module_&);
+void init_distributed(nb::module_&);
 
 NB_MODULE(core, m) {
   m.doc() = "mlx: A framework for machine learning on Apple silicon.";
@@ -38,7 +38,7 @@ NB_MODULE(core, m) {
   init_linalg(m);
   init_constants(m);
   init_fast(m);
-  init_dist(m);
+  init_distributed(m);
 
   m.attr("__version__") = TOSTRING(_VERSION_);
 }

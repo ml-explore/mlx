@@ -1,12 +1,12 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/dist/ops.h"
+#include "mlx/distributed/ops.h"
 
-namespace mlx::core::dist {
+namespace mlx::core::distributed {
 
 array all_reduce_sum(const array& x, std::shared_ptr<Group> group) {
   if (group == nullptr) {
-    group = dist::init();
+    group = distributed::init();
   }
 
   return array(
@@ -16,4 +16,4 @@ array all_reduce_sum(const array& x, std::shared_ptr<Group> group) {
       {x});
 }
 
-} // namespace mlx::core::dist
+} // namespace mlx::core::distributed

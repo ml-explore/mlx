@@ -2,10 +2,10 @@
 
 #pragma once
 
-#include "mlx/dist/dist.h"
+#include "mlx/distributed/distributed.h"
 #include "mlx/primitives.h"
 
-namespace mlx::core::dist {
+namespace mlx::core::distributed {
 
 class DistPrimitive : public Primitive {
  public:
@@ -75,4 +75,4 @@ class AllReduce : public DistPrimitive {
   ReduceType reduce_type_;
 };
 
-} // namespace mlx::core::dist
+} // namespace mlx::core::distributed

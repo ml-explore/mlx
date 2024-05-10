@@ -7,19 +7,19 @@
 using namespace mlx::core;
 
 int main() {
-  if (!dist::is_available()) {
+  if (!distributed::is_available()) {
     std::cout << "MLX is compiled without communication backend" << std::endl;
     return 1;
   }
 
-  auto global_group = dist::init();
+  auto global_group = distributed::init();
   array x = ones({10});
   array out = zeros({10});
   eval(x, out);
 
   std::cout << global_group->rank() << " / " << global_group->size()
             << std::endl;
-  dist::all_reduce_sum(global_group, x, out);
+  distributed::all_reduce_sum(global_group, x, out);
 
   std::cout << out << std::endl;
 }

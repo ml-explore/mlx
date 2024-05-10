@@ -4,10 +4,10 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
-#include "mlx/dist/ops.h"
-#include "mlx/dist/primitives.h"
+#include "mlx/distributed/ops.h"
+#include "mlx/distributed/primitives.h"
 
-namespace mlx::core::dist {
+namespace mlx::core::distributed {
 
 void AllReduce::eval_cpu(
     const std::vector<array>& inputs,
@@ -30,7 +30,7 @@ void AllReduce::eval_cpu(
 
   switch (reduce_type_) {
     case Sum:
-      dist::all_reduce_sum(group(), input, outputs[0]);
+      distributed::all_reduce_sum(group(), input, outputs[0]);
       break;
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
@@ -65,12 +65,7 @@ std::vector<array> AllReduce::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  switch (reduce_type_) {
-    case Sum:
-      return {all_reduce_sum(cotangents[0], group())};
-    default:
-      throw std::runtime_error("Only all reduce sum is supported for now");
-  }
+  return cotangents;
 }
 
-} // namespace mlx::core::dist
+} // namespace mlx::core::distributed
