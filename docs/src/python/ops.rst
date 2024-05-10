@@ -38,6 +38,8 @@ Operations
    ceil
    clip
    concatenate
+   conj
+   conjugate
    convolve
    conv1d
    conv2d

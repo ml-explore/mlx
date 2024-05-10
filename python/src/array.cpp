@@ -1584,5 +1584,13 @@ void init_array(nb::module_& m) {
           "stream"_a = nb::none(),
           R"pbdoc(
             Extract a diagonal or construct a diagonal matrix.
-        )pbdoc");
+        )pbdoc")
+      .def(
+          "conj",
+          [](const array& a, StreamOrDevice s) {
+            return mlx::core::conjugate(to_array(a), s);
+          },
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          "See :func:`conj`.");
 }

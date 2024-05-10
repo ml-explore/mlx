@@ -3028,6 +3028,23 @@ void init_ops(nb::module_& m) {
             element of the input.
       )pbdoc");
   m.def(
+      "conj",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::conjugate(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conj(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the elementwise complex conjugate of the input.
+        Alias for `mx.conjugate`.
+
+        Args:
+          a (array): Input array
+      )pbdoc");
+  m.def(
       "conjugate",
       [](const ScalarOrArray& a, StreamOrDevice s) {
         return mlx::core::conjugate(to_array(a), s);
@@ -3039,6 +3056,7 @@ void init_ops(nb::module_& m) {
           "def conjugate(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the elementwise complex conjugate of the input.
+        Alias for `mx.conj`.
 
         Args:
           a (array): Input array

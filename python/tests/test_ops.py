@@ -2263,8 +2263,13 @@ class TestOps(mlx_tests.MLXTestCase):
         shape = (3, 5, 7)
         a = np.random.normal(size=shape) + 1j * np.random.normal(size=shape)
         a = a.astype(np.complex64)
-        out_mlx = mx.conjugate(mx.array(a))
-        out_np = np.conjugate(a)
+        ops = ["conjugate", "conj"]
+        for op in ops:
+            out_mlx = getattr(mx, op)(mx.array(a))
+            out_np = getattr(np, op)(a)
+            self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
+        out_mlx = mx.array(a).conj()
+        out_np = a.conj()
         self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
 
