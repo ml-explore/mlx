@@ -5,6 +5,7 @@
 
 #include "mlx/io.h"
 #include "mlx/io/load.h"
+#include "mlx/ops.h"
 #include "mlx/primitives.h"
 
 using json = nlohmann::json;
@@ -149,7 +150,6 @@ SafetensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
   return load_safetensors(std::make_shared<io::FileReader>(file), s);
 }
 
-/** Save array to out stream in .npy format */
 void save_safetensors(
     std::shared_ptr<io::Writer> out_stream,
     std::unordered_map<std::string, array> a,

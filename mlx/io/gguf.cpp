@@ -4,7 +4,8 @@
 #include <cstring>
 #include <numeric>
 
-#include <mlx/io/gguf.h>
+#include "mlx/io/gguf.h"
+#include "mlx/ops.h"
 
 namespace mlx::core {
 
