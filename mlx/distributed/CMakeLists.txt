@@ -6,5 +6,11 @@ target_sources(
 )
 
 if (MPI_FOUND)
-    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mpi)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/mpi)
+else()
+  target_sources(
+    mlx
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/no_distributed.cpp
+  )
 endif()

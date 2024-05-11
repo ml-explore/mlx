@@ -167,7 +167,7 @@ else()
   set(MLX_BUILD_ACCELERATE OFF)
 endif()
 
-find_package(MPI REQUIRED)
+find_package(MPI)
 if (MPI_FOUND)
     target_include_directories(mlx PRIVATE ${MPI_INCLUDE_PATH})
     target_link_libraries(mlx ${MPI_C_LIBRARIES})
