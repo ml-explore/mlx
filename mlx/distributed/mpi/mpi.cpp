@@ -72,17 +72,17 @@ MPI_Datatype mpi_datatype(const array& arr) {
 
 } // namespace
 
-bool is_available() {
-  return true;
-}
+namespace detail {
 
 Stream communication_stream() {
-  static std::shared_ptr<Stream> comm_stream = nullptr;
-  if (comm_stream == nullptr) {
-    comm_stream = std::make_shared<Stream>(
-        scheduler::scheduler().new_stream(Device::cpu));
-  }
-  return *comm_stream;
+  static Stream comm_stream = new_stream(Device::cpu);
+  return comm_stream;
+}
+
+} // namespace detail
+
+bool is_available() {
+  return true;
 }
 
 std::shared_ptr<Group> init() {

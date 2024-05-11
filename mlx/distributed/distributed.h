@@ -8,11 +8,15 @@
 
 namespace mlx::core::distributed {
 
-/* Check if a communication backend is available */
-bool is_available();
+namespace detail {
 
 /* Return the communication stream. */
 Stream communication_stream();
+
+} // namespace detail
+
+/* Check if a communication backend is available */
+bool is_available();
 
 /**
  * A distributed::Group represents a group of independent mlx processes that

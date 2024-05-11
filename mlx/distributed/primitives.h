@@ -10,7 +10,7 @@ namespace mlx::core::distributed {
 class DistPrimitive : public Primitive {
  public:
   DistPrimitive(std::shared_ptr<Group> group)
-      : Primitive(communication_stream()), group_(group) {}
+      : Primitive(detail::communication_stream()), group_(group) {}
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
