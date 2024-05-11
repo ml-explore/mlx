@@ -105,9 +105,24 @@ void all_reduce_sum(
   MPI_Allreduce(
       input.data<void>(),
       output.data<void>(),
-      input.nbytes(),
+      input.size(),
       mpi_datatype(input),
       MPI_SUM,
+      mpi_group->comm);
+}
+
+void all_gather(
+    std::shared_ptr<Group> group,
+    const array& input,
+    array& output) {
+  auto mpi_group = std::dynamic_pointer_cast<MPIGroup>(group);
+  MPI_Allgather(
+      input.data<void>(),
+      input.size(),
+      mpi_datatype(input),
+      output.data<void>(),
+      input.size(),
+      mpi_datatype(output),
       mpi_group->comm);
 }
 

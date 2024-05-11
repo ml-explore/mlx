@@ -2,6 +2,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/shared_ptr.h>
 
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/ops.h"
@@ -62,5 +63,32 @@ void init_distributed(nb::module_& parent_module) {
 
         Returns:
           array: The sum of all ``x`` arrays.
+      )pbdoc");
+
+  m.def(
+      "all_gather",
+      [](const array& x,
+         std::optional<std::shared_ptr<distributed::Group>> group) {
+        return distributed::all_gather(x, group.value_or(nullptr));
+      },
+      "x"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      nb::sig(
+          "def all_gather(x: array, *, group: Optional[Group] = None) -> array"),
+      R"pbdoc(
+        Gather arrays from all processes.
+
+        Gather the ``x`` arrays from all processes in the group and concatenate
+        them along the first axis. The arrays should all have the same shape.
+
+        Args:
+          x (array): Input array.
+          group (Group): The group of processes that will participate in the
+            gather. If set to ``None`` the global group is used. Default:
+            ``None``.
+
+        Returns:
+          array: The concatenation of all ``x`` arrays.
       )pbdoc");
 }

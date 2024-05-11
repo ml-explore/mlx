@@ -75,4 +75,26 @@ class AllReduce : public DistPrimitive {
   ReduceType reduce_type_;
 };
 
+class AllGather : public DistPrimitive {
+ public:
+  AllGather(std::shared_ptr<Group> group) : DistPrimitive(group) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  std::pair<std::vector<array>, std::vector<int>> vmap(
+      const std::vector<array>& inputs,
+      const std::vector<int>& axes) override;
+  std::vector<array> jvp(
+      const std::vector<array>& primals,
+      const std::vector<array>& tangents,
+      const std::vector<int>& argnums) override;
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(AllGather);
+};
+
 } // namespace mlx::core::distributed

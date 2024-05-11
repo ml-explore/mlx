@@ -7,5 +7,6 @@
 namespace mlx::core::distributed {
 
 array all_reduce_sum(const array& x, std::shared_ptr<Group> group = nullptr);
+array all_gather(const array& x, std::shared_ptr<Group> group = nullptr);
 
 } // namespace mlx::core::distributed

@@ -41,4 +41,10 @@ void all_reduce_sum(
     const array& input,
     array& output);
 
+/* Perform an all reduce sum operation */
+void all_gather(
+    std::shared_ptr<Group> group,
+    const array& input,
+    array& output);
+
 } // namespace mlx::core::distributed
