@@ -1120,6 +1120,16 @@ array conv2d(
     int groups = 1,
     StreamOrDevice s = {});
 
+/** 3D convolution with a filter */
+array conv3d(
+    const array& input,
+    const array& weight,
+    const std::tuple<int, int, int>& stride = {1, 1, 1},
+    const std::tuple<int, int, int>& padding = {0, 0, 0},
+    const std::tuple<int, int, int>& dilation = {1, 1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
+
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
     const array& x,

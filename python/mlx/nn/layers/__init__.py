@@ -48,7 +48,7 @@ from mlx.nn.layers.activations import (
 )
 from mlx.nn.layers.base import Module
 from mlx.nn.layers.containers import Sequential
-from mlx.nn.layers.convolution import Conv1d, Conv2d
+from mlx.nn.layers.convolution import Conv1d, Conv2d, Conv3d
 from mlx.nn.layers.dropout import Dropout, Dropout2d, Dropout3d
 from mlx.nn.layers.embedding import Embedding
 from mlx.nn.layers.linear import Bilinear, Identity, Linear
