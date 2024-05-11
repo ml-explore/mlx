@@ -2,13 +2,16 @@
 
 #pragma once
 
+#ifndef MLX_JIT
 #include <metal_integer>
 #include <metal_math>
 
 #include "mlx/backend/metal/kernels/bf16.h"
+#include "mlx/backend/metal/kernels/utils.h"
+#endif
+
 #include "mlx/backend/metal/kernels/erf.h"
 #include "mlx/backend/metal/kernels/expm1f.h"
-#include "mlx/backend/metal/kernels/utils.h"
 
 namespace {
 constant float inf = metal::numeric_limits<float>::infinity();

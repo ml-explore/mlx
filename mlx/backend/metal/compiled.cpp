@@ -4,7 +4,7 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/metal/compiled_preamble.h"
+#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/graph_utils.h"
@@ -190,7 +190,7 @@ void Compiled::eval_gpu(
   // If not we have to build it ourselves
   if (lib == nullptr) {
     std::ostringstream kernel;
-    kernel << metal::get_kernel_preamble() << std::endl;
+    kernel << metal::utils() << metal::unary() << metal::binary();
     build_kernel(
         kernel,
         kernel_lib_ + "_contiguous",

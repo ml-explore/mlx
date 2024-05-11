@@ -2,11 +2,13 @@
 
 #pragma once
 
+#ifndef MLX_JIT
 #include <metal_integer>
 #include <metal_math>
 
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
+#endif
 
 struct Add {
   template <typename T>

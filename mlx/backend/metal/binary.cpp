@@ -4,7 +4,7 @@
 
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/compiled_preamble.h"
+#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
@@ -343,7 +343,7 @@ void binary_op(
     std::ostringstream op_t;
     out.primitive().print(op_t);
     std::ostringstream kernel_source;
-    kernel_source << metal::get_kernel_preamble() << std::endl;
+    kernel_source << metal::utils() << metal::binary();
     kernel_source << fmt::format(
         binary_two_kernels,
         op + type_to_name(a),
@@ -466,7 +466,7 @@ void binary_op(
     std::ostringstream op_t;
     out.primitive().print(op_t);
     std::ostringstream kernel_source;
-    kernel_source << metal::get_kernel_preamble() << std::endl;
+    kernel_source << metal::utils() << metal::binary();
     kernel_source << fmt::format(
         binary_kernels,
         op + type_to_name(a),

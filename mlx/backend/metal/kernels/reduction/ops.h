@@ -5,9 +5,11 @@
 #include <metal_atomic>
 #include <metal_simdgroup>
 
+#ifndef MLX_JIT
 #include "mlx/backend/metal/kernels/atomic.h"
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
+#endif
 
 union bool4_or_uint {
   bool4 b;

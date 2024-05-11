@@ -5,24 +5,25 @@
 #
 # Copyright © 2023-24 Apple Inc.
 
-
-OUTPUT_FILE=$1
+OUTPUT_DIR=$1
 CC=$2
-SRCDIR=$3
-CFLAGS=$4
+SRC_DIR=$3
+SRC_NAME=$4
+CFLAGS=$5
+INPUT_FILE=${SRC_DIR}/mlx/backend/metal/kernels/${SRC_NAME}.h
+OUTPUT_FILE=${OUTPUT_DIR}/${SRC_NAME}.cpp
 
-CONTENT=$($CC -I $SRCDIR -E $SRCDIR/mlx/backend/metal/kernels/compiled_preamble.h $CFLAGS 2>/dev/null)
+mkdir -p $OUTPUT_DIR
+
+CONTENT=$($CC -I $SRC_DIR -DMLX_JIT -E $INPUT_FILE $CFLAGS 2>/dev/null)
 
 cat << EOF > "$OUTPUT_FILE"
-// Copyright © 2023-24 Apple Inc.
-
 namespace mlx::core::metal {
 
-const char* get_kernel_preamble() {
+const char* $SRC_NAME() {
   return R"preamble(
 $CONTENT
 )preamble";
-
 }
 
 } // namespace mlx::core::metal

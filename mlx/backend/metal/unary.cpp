@@ -3,7 +3,7 @@
 #include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/compiled_preamble.h"
+#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
@@ -61,7 +61,7 @@ void unary_op(
     std::ostringstream op_t;
     out.primitive().print(op_t);
     std::ostringstream kernel_source;
-    kernel_source << metal::get_kernel_preamble() << std::endl;
+    kernel_source << metal::utils() << metal::unary();
     kernel_source << fmt::format(
         unary_kernels,
         lib_name,

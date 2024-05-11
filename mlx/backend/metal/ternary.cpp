@@ -4,7 +4,7 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/ternary.h"
-#include "mlx/backend/metal/compiled_preamble.h"
+#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
@@ -174,7 +174,7 @@ void ternary_op(
     std::ostringstream op_t;
     out.primitive().print(op_t);
     std::ostringstream kernel_source;
-    kernel_source << metal::get_kernel_preamble() << std::endl;
+    kernel_source << metal::utils() << metal::ternary();
     kernel_source << fmt::format(
         ternary_kernels,
         op + type_to_name(b),
