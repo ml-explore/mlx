@@ -89,8 +89,10 @@ void automatic_differentiation() {
   // dfdx is 2 * x
 
   // Get the second derivative by composing grad with grad
-  auto df2dx2 = grad(grad(fn))(x);
-  // df2dx2 is 2
+  auto d2fdx2 = grad(grad(fn))(x);
+  // d2fdx2 is 2
+  std::cout << d2fdx2 << std::endl;
+  assert(d2fdx2.item<float>() - 2.0 <= std::numeric_limits<float>::epsilon());
 }
 
 int main() {
