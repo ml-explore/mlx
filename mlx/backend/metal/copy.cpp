@@ -1,14 +1,179 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include <fmt/format.h>
+
 #include <sstream>
 
+#include "mlx/backend/common/compiled.h"
+#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
+
+constexpr int MAX_COPY_SPECIALIZED_DIMS = 5;
+
+constexpr std::string_view copy_kernels = R"(
+[[kernel]] void copy{0}_s(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    uint index [[thread_position_in_grid]]) {{
+  dst[index] = static_cast<{2}>(src[0]);
+}}
+
+[[kernel]] void copy{0}_v(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    uint index [[thread_position_in_grid]]) {{
+  dst[index] = static_cast<{2}>(src[index]);
+}}
+
+[[kernel]] void copy{0}_g_1(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int64_t& src_stride [[buffer(3)]],
+    uint index [[thread_position_in_grid]]) {{
+  auto src_idx = elem_to_loc_1(index, src_stride);
+  dst[index] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_g_2(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {{
+  auto src_idx = elem_to_loc_2(index, src_strides);
+  int64_t dst_idx = index.x + (int64_t)grid_dim.x * index.y;
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_g_3(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    uint3 index [[thread_position_in_grid]],
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto src_idx = elem_to_loc_3(index, src_strides);
+  int64_t dst_idx =
+      index.x + (int64_t)grid_dim.x * (index.y + (int64_t)grid_dim.y * index.z);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_g_4(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int* src_shape [[buffer(2)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    uint3 index [[thread_position_in_grid]],
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto src_idx = elem_to_loc_nd<4>(index, src_shape, src_strides);
+  int64_t dst_idx =
+      index.x + (int64_t)grid_dim.x * (index.y + (int64_t)grid_dim.y * index.z);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_g_5(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int* src_shape [[buffer(2)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    uint3 index [[thread_position_in_grid]],
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto src_idx = elem_to_loc_nd<5>(index, src_shape, src_strides);
+  int64_t dst_idx =
+      index.x + (int64_t)grid_dim.x * (index.y + (int64_t)grid_dim.y * index.z);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+
+[[kernel]] void copy{0}_g(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int* src_shape [[buffer(2)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    constant const int& ndim [[buffer(5)]],
+    uint3 index [[thread_position_in_grid]],
+    uint3 grid_dim [[threads_per_grid]]) {{
+  auto src_idx = elem_to_loc(index, src_shape, src_strides, ndim);
+  int64_t dst_idx =
+      index.x + (int64_t)grid_dim.x * (index.y + (int64_t)grid_dim.y * index.z);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_gg_1(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int64_t& src_stride [[buffer(3)]],
+    constant const int64_t& dst_stride [[buffer(4)]],
+    uint index [[thread_position_in_grid]]) {{
+  auto src_idx = elem_to_loc_1(index, src_stride);
+  auto dst_idx = elem_to_loc_1(index, dst_stride);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_gg_2(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    constant const int64_t* dst_strides [[buffer(4)]],
+    uint2 index [[thread_position_in_grid]]) {{
+  auto src_idx = elem_to_loc_2(index, src_strides);
+  auto dst_idx = elem_to_loc_2(index, dst_strides);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_gg_3(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    constant const int64_t* dst_strides [[buffer(4)]],
+    uint3 index [[thread_position_in_grid]]) {{
+  auto src_idx = elem_to_loc_3(index, src_strides);
+  auto dst_idx = elem_to_loc_3(index, dst_strides);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_gg_4(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int* src_shape [[buffer(2)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    constant const int64_t* dst_strides [[buffer(4)]],
+    uint3 index [[thread_position_in_grid]]) {{
+  auto src_idx = elem_to_loc_nd<4>(index, src_shape, src_strides);
+  auto dst_idx = elem_to_loc_nd<4>(index, src_shape, dst_strides);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+[[kernel]] void copy{0}_gg_5(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int* src_shape [[buffer(2)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    constant const int64_t* dst_strides [[buffer(4)]],
+    uint3 index [[thread_position_in_grid]]) {{
+  auto src_idx = elem_to_loc_nd<5>(index, src_shape, src_strides);
+  auto dst_idx = elem_to_loc_nd<5>(index, src_shape, dst_strides);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+
+
+[[kernel]] void copy{0}_gg(
+    device const {1}* src [[buffer(0)]],
+    device {2}* dst [[buffer(1)]],
+    constant const int* src_shape [[buffer(2)]],
+    constant const int64_t* src_strides [[buffer(3)]],
+    constant const int64_t* dst_strides [[buffer(4)]],
+    constant const int& ndim [[buffer(5)]],
+    uint3 index [[thread_position_in_grid]]) {{
+  auto src_idx = elem_to_loc(index, src_shape, src_strides, ndim);
+  auto dst_idx = elem_to_loc(index, src_shape, dst_strides, ndim);
+  dst[dst_idx] = static_cast<{2}>(src[src_idx]);
+}}
+)";
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   if (ctype == CopyType::Vector) {
@@ -62,27 +227,47 @@ void copy_gpu_inplace(
   auto& strides_out_ = strides[1];
 
   auto& d = metal::device(s.device);
-  std::ostringstream kname;
-  switch (ctype) {
-    case CopyType::Scalar:
-      kname << "scopy";
-      break;
-    case CopyType::Vector:
-      kname << "vcopy";
-      break;
-    case CopyType::General:
-      kname << "gcopy";
-      break;
-    case CopyType::GeneralGeneral:
-      kname << "ggcopy";
-      break;
+  std::string lib_name;
+  std::string kernel_name;
+  {
+    std::ostringstream kname;
+    kname << "copy";
+    kname << type_to_name(in) << type_to_name(out);
+    lib_name = kname.str();
+    kname << "_";
+    switch (ctype) {
+      case CopyType::Scalar:
+        kname << "s";
+        break;
+      case CopyType::Vector:
+        kname << "v";
+        break;
+      case CopyType::General:
+        kname << "g";
+        break;
+      case CopyType::GeneralGeneral:
+        kname << "gg";
+        break;
+    }
+    if ((ctype == CopyType::General || ctype == CopyType::GeneralGeneral) &&
+        shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
+      kname << "_" << shape.size();
+    }
+    kernel_name = kname.str();
   }
-  kname << type_to_name(in) << type_to_name(out);
-  if ((ctype == CopyType::General || ctype == CopyType::GeneralGeneral) &&
-      shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
-    kname << "_" << shape.size();
+  auto lib = d.get_library(lib_name);
+  if (lib == nullptr) {
+    std::ostringstream kernel_source;
+    kernel_source << metal::utils();
+    kernel_source << fmt::format(
+        copy_kernels,
+        type_to_name(in) + type_to_name(out),
+        get_type_string(in.dtype()),
+        get_type_string(out.dtype()));
+    lib = d.get_library(lib_name, kernel_source.str());
   }
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(kernel_name, lib);
+
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_in = in.data_shared_ptr() == nullptr;

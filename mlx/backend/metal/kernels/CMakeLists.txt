@@ -13,7 +13,6 @@ set(
   "arange"
   "arg_reduce"
   "conv"
-  "copy"
   "fft"
   "gemv"
   "quantized"
