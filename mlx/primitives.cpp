@@ -8,6 +8,7 @@
 
 #include "mlx/backend/common/utils.h"
 #include "mlx/fft.h"
+#include "mlx/linalg.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -3534,6 +3535,22 @@ bool NumberOfElements::is_equivalent(const Primitive& other) const {
   const NumberOfElements& n_other = static_cast<const NumberOfElements&>(other);
   return axes_ == n_other.axes_ && inverted_ == n_other.inverted_ &&
       dtype_ == n_other.dtype_;
+}
+
+std::pair<std::vector<array>, std::vector<int>> SVD::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto ax = axes[0] >= 0 ? 0 : -1;
+  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  return {{linalg::svd(a, stream())}, {ax, ax, ax}};
+}
+
+std::pair<std::vector<array>, std::vector<int>> Inverse::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto ax = axes[0] >= 0 ? 0 : -1;
+  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  return {{linalg::inv(a, stream())}, {ax}};
 }
 
 } // namespace mlx::core

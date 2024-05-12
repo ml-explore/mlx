@@ -19,11 +19,16 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/backend/metal/metal.h
 )
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
+if (MLX_BUILD_CPU)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/common)
+else()
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/no_cpu)
+endif()
+
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
 if (MLX_BUILD_ACCELERATE)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate)
-else()
+elseif(MLX_BUILD_CPU)
   target_sources(
     mlx
     PRIVATE
