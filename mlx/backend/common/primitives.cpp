@@ -412,22 +412,6 @@ void RandomBits::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
-void Reshape::shared_buffer_reshape(
-    const array& in,
-    const std::vector<size_t>& out_strides,
-    array& out) {
-  auto flags = in.flags();
-  if (flags.row_contiguous) {
-    // For row contiguous reshapes:
-    // - Shallow copy the buffer
-    // - If reshaping into a vector (all singleton dimensions except one) it
-    //    becomes col contiguous again.
-    auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
-    flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
-  }
-  out.copy_shared_buffer(in, out_strides, flags, in.data_size());
-}
-
 void Reshape::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
