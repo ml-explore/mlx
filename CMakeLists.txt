@@ -86,9 +86,11 @@ elseif (MLX_BUILD_METAL)
   if (${MACOS_VERSION} GREATER_EQUAL 14.2)
     set(METAL_CPP_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/metal.14.2.diff)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
+    set(MLX_METAL_VERSION METAL_3_1)
   elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
     set(METAL_CPP_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/metal.14.0.diff)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14_iOS17-beta.zip)
+    set(MLX_METAL_VERSION METAL_3_0)
   else()
     message(FATAL_ERROR "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON" )
   endif()
@@ -110,6 +112,8 @@ elseif (MLX_BUILD_METAL)
     ${METAL_LIB}
     ${FOUNDATION_LIB}
     ${QUARTZ_LIB})
+
+  add_compile_options(-D${MLX_METAL_VERSION})
 endif()
 
 find_library(ACCELERATE_LIBRARY Accelerate)

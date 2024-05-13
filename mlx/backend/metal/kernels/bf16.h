@@ -6,7 +6,9 @@
 
 using namespace metal;
 
-#if defined(__HAVE_BFLOAT__)
+// No support for less than metal 3.0
+// anything greater has native bfloat
+#ifndef METAL_3_0
 
 typedef bfloat bfloat16_t;
 
