@@ -113,7 +113,7 @@ elseif (MLX_BUILD_METAL)
     ${FOUNDATION_LIB}
     ${QUARTZ_LIB})
 
-  add_compile_options(-D${MLX_METAL_VERSION})
+  add_compile_definitions(${MLX_METAL_VERSION})
 endif()
 
 find_library(ACCELERATE_LIBRARY Accelerate)

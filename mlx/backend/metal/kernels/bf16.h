@@ -314,6 +314,6 @@ METAL_FUNC bool isnan(_MLX_BFloat16 x) {
 
 #pragma METAL internals : disable
 
-#endif // defined(__HAVE_BFLOAT__)
+#endif
 
 #include "mlx/backend/metal/kernels/bf16_math.h"
