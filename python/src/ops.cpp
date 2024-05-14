@@ -3824,7 +3824,9 @@ void init_ops(nb::module_& m) {
     )pbdoc");
   m.def(
       "tile",
-      [](const array& a, const IntOrVec& reps, StreamOrDevice s) {
+      [](const array& a,
+         const std::variant<int, std::vector<int>>& reps,
+         StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&reps); pv) {
           return tile(a, {*pv}, s);
         } else {
