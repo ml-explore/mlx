@@ -3357,7 +3357,7 @@ void init_ops(nb::module_& m) {
             /* const array& weight = */ weight,
             /* std::vector<int> stride = */ stride_vec,
             /* std::vector<int> padding_lo = */ padding_lo_vec,
-            /* std::vector<int> padding_hi = */ padding_lo_vec,
+            /* std::vector<int> padding_hi = */ padding_hi_vec,
             /* std::vector<int> kernel_dilation = */ kernel_dilation_vec,
             /* std::vector<int> input_dilation = */ input_dilation_vec,
             /* int groups = */ groups,
