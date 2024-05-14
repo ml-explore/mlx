@@ -404,13 +404,13 @@ METAL_FUNC void qmv_fast_impl(
   // Adjust positions
   const int in_vec_size_w = in_vec_size / pack_factor;
   const int in_vec_size_g = in_vec_size / group_size;
-  const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) +
+  const int out_row = tid.x * (num_simdgroups * results_per_simdgroup) +
       simd_gid * results_per_simdgroup;
   w += out_row * in_vec_size_w + simd_lid * packs_per_thread;
   scales += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
   biases += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
-  x += tid.z * in_vec_size + simd_lid * values_per_thread;
-  y += tid.z * out_vec_size + out_row;
+  x += tid.y * in_vec_size + simd_lid * values_per_thread;
+  y += tid.y * out_vec_size + out_row;
 
   for (int k = 0; k < in_vec_size; k += block_size) {
     U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
@@ -468,7 +468,7 @@ METAL_FUNC void qmv_impl(
   // Adjust positions
   const int in_vec_size_w = in_vec_size / pack_factor;
   const int in_vec_size_g = in_vec_size / group_size;
-  const int out_row = tid.y * (num_simdgroups * results_per_simdgroup) +
+  const int out_row = tid.x * (num_simdgroups * results_per_simdgroup) +
       simd_gid * results_per_simdgroup;
   const int used_out_row = min(out_vec_size - results_per_simdgroup, out_row);
 
@@ -482,8 +482,8 @@ METAL_FUNC void qmv_impl(
     w += out_row * in_vec_size_w + simd_lid * packs_per_thread;
     scales += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
     biases += out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
-    x += tid.z * in_vec_size + simd_lid * values_per_thread;
-    y += tid.z * out_vec_size + out_row;
+    x += tid.y * in_vec_size + simd_lid * values_per_thread;
+    y += tid.y * out_vec_size + out_row;
 
     int k = 0;
     for (; k < in_vec_size - block_size; k += block_size) {
@@ -537,8 +537,8 @@ METAL_FUNC void qmv_impl(
     w += used_out_row * in_vec_size_w + simd_lid * packs_per_thread;
     scales += used_out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
     biases += used_out_row * in_vec_size_g + simd_lid / scale_step_per_thread;
-    x += tid.z * in_vec_size + simd_lid * values_per_thread;
-    y += tid.z * out_vec_size + used_out_row;
+    x += tid.y * in_vec_size + simd_lid * values_per_thread;
+    y += tid.y * out_vec_size + used_out_row;
 
     int k = 0;
     for (; k < in_vec_size - block_size; k += block_size) {
@@ -616,12 +616,12 @@ METAL_FUNC void qvm_impl(
   // Adjust positions
   const int out_vec_size_w = out_vec_size / pack_factor;
   const int out_vec_size_g = out_vec_size / group_size;
-  int out_col = tid.y * (num_simdgroups * pack_factor) + simd_gid * pack_factor;
+  int out_col = tid.x * (num_simdgroups * pack_factor) + simd_gid * pack_factor;
   w += out_col / pack_factor;
   scales += out_col / group_size;
   biases += out_col / group_size;
-  x += tid.z * in_vec_size;
-  y += tid.z * out_vec_size + out_col;
+  x += tid.y * in_vec_size;
+  y += tid.y * out_vec_size + out_col;
 
   if (out_col >= out_vec_size) {
     return;
@@ -921,6 +921,60 @@ METAL_FUNC void qmm_n_impl(
   }
 }
 
+template <typename T>
+METAL_FUNC void adjust_matrix_offsets(
+    const device T*& x,
+    const device uint32_t*& w,
+    const device T*& scales,
+    const device T*& biases,
+    const device uint32_t* lhs_indices,
+    const device uint32_t* rhs_indices,
+    device T*& y,
+    int output_stride,
+    const constant int& batch_ndims,
+    const constant int* batch_shape,
+    const constant size_t* lhs_strides,
+    const constant size_t* rhs_strides,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant size_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant size_t* w_strides,
+    const constant size_t* s_strides,
+    const constant size_t* b_strides,
+    uint3 tid [[threadgroup_position_in_grid]]) {
+  // Set the input/output matrices
+  uint32_t x_idx;
+  uint32_t w_idx;
+  if (batch_ndims == 1) {
+    x_idx = lhs_indices[tid.z * lhs_strides[0]];
+    w_idx = rhs_indices[tid.z * rhs_strides[0]];
+  } else {
+    ulong2 idx = elem_to_loc_broadcast(
+        tid.z, batch_shape, lhs_strides, rhs_strides, batch_ndims);
+    x_idx = lhs_indices[idx.x];
+    w_idx = rhs_indices[idx.y];
+  }
+  if (x_batch_ndims == 1) {
+    x += x_idx * x_strides[0];
+  } else {
+    x += elem_to_loc(x_idx, x_shape, x_strides, x_batch_ndims);
+  }
+  if (w_batch_ndims == 1) {
+    w += w_idx * w_strides[0];
+    scales += w_idx * s_strides[0];
+    biases += w_idx * b_strides[0];
+  } else {
+    ulong3 idx = elem_to_loc_broadcast(
+        w_idx, w_shape, w_strides, s_strides, b_strides, w_batch_ndims);
+    w += idx.x;
+    scales += idx.y;
+    biases += idx.z;
+  }
+  y += tid.z * output_stride;
+}
+
 template <typename T, int group_size, int bits, int packs_per_thread>
 [[kernel]] void qmv_fast(
     const device uint32_t* w [[buffer(0)]],
@@ -1060,59 +1114,187 @@ template <
       x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
 }
 
-template <typename T>
-METAL_FUNC void adjust_matrix_offsets(
-    const device T*& x,
-    const device uint32_t*& w,
-    const device T*& scales,
-    const device T*& biases,
-    const device uint32_t* lhs_indices,
-    const device uint32_t* rhs_indices,
-    device T*& y,
-    const constant int& M,
-    const constant int& N,
-    const constant int& batch_ndims,
-    const constant int* batch_shape,
-    const constant size_t* lhs_strides,
-    const constant size_t* rhs_strides,
-    const constant int& x_batch_ndims,
-    const constant int* x_shape,
-    const constant size_t* x_strides,
-    const constant int& w_batch_ndims,
-    const constant int* w_shape,
-    const constant size_t* w_strides,
-    const constant size_t* s_strides,
-    const constant size_t* b_strides,
-    uint3 tid [[threadgroup_position_in_grid]]) {
-  // Set the input/output matrices
-  uint32_t x_idx;
-  uint32_t w_idx;
-  if (batch_ndims == 1) {
-    x_idx = lhs_indices[tid.z * lhs_strides[0]];
-    w_idx = rhs_indices[tid.z * rhs_strides[0]];
-  } else {
-    ulong2 idx = elem_to_loc_broadcast(
-        tid.z, batch_shape, lhs_strides, rhs_strides, batch_ndims);
-    x_idx = lhs_indices[idx.x];
-    w_idx = rhs_indices[idx.y];
-  }
-  if (x_batch_ndims == 1) {
-    x += x_idx * x_strides[0];
-  } else {
-    x += elem_to_loc(x_idx, x_shape, x_strides, x_batch_ndims);
-  }
-  if (w_batch_ndims == 1) {
-    w += w_idx * w_strides[0];
-    scales += w_idx * s_strides[0];
-    biases += w_idx * b_strides[0];
-  } else {
-    ulong3 idx = elem_to_loc_broadcast(
-        w_idx, w_shape, w_strides, s_strides, b_strides, w_batch_ndims);
-    w += idx.x;
-    scales += idx.y;
-    biases += idx.z;
-  }
-  y += tid.z * M * N;
+template <typename T, int group_size, int bits, int packs_per_thread>
+[[kernel]] void bs_qmv_fast(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    const device uint32_t* lhs_indices [[buffer(4)]],
+    const device uint32_t* rhs_indices [[buffer(5)]],
+    device T* y [[buffer(6)]],
+    const constant int& in_vec_size [[buffer(7)]],
+    const constant int& out_vec_size [[buffer(8)]],
+    const constant int& batch_ndims [[buffer(9)]],
+    const constant int* batch_shape [[buffer(10)]],
+    const constant size_t* lhs_strides [[buffer(11)]],
+    const constant size_t* rhs_strides [[buffer(12)]],
+    const constant int& x_batch_ndims [[buffer(13)]],
+    const constant int* x_shape [[buffer(14)]],
+    const constant size_t* x_strides [[buffer(15)]],
+    const constant int& w_batch_ndims [[buffer(16)]],
+    const constant int* w_shape [[buffer(17)]],
+    const constant size_t* w_strides [[buffer(18)]],
+    const constant size_t* s_strides [[buffer(19)]],
+    const constant size_t* b_strides [[buffer(20)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  adjust_matrix_offsets<T>(
+      x,
+      w,
+      scales,
+      biases,
+      lhs_indices,
+      rhs_indices,
+      y,
+      out_vec_size,
+      batch_ndims,
+      batch_shape,
+      lhs_strides,
+      rhs_strides,
+      x_batch_ndims,
+      x_shape,
+      x_strides,
+      w_batch_ndims,
+      w_shape,
+      w_strides,
+      s_strides,
+      b_strides,
+      tid);
+  qmv_fast_impl<T, group_size, bits, packs_per_thread>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
+}
+
+template <typename T, int group_size, int bits>
+[[kernel]] void bs_qmv(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    const device uint32_t* lhs_indices [[buffer(4)]],
+    const device uint32_t* rhs_indices [[buffer(5)]],
+    device T* y [[buffer(6)]],
+    const constant int& in_vec_size [[buffer(7)]],
+    const constant int& out_vec_size [[buffer(8)]],
+    const constant int& batch_ndims [[buffer(9)]],
+    const constant int* batch_shape [[buffer(10)]],
+    const constant size_t* lhs_strides [[buffer(11)]],
+    const constant size_t* rhs_strides [[buffer(12)]],
+    const constant int& x_batch_ndims [[buffer(13)]],
+    const constant int* x_shape [[buffer(14)]],
+    const constant size_t* x_strides [[buffer(15)]],
+    const constant int& w_batch_ndims [[buffer(16)]],
+    const constant int* w_shape [[buffer(17)]],
+    const constant size_t* w_strides [[buffer(18)]],
+    const constant size_t* s_strides [[buffer(19)]],
+    const constant size_t* b_strides [[buffer(20)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  adjust_matrix_offsets<T>(
+      x,
+      w,
+      scales,
+      biases,
+      lhs_indices,
+      rhs_indices,
+      y,
+      out_vec_size,
+      batch_ndims,
+      batch_shape,
+      lhs_strides,
+      rhs_strides,
+      x_batch_ndims,
+      x_shape,
+      x_strides,
+      w_batch_ndims,
+      w_shape,
+      w_strides,
+      s_strides,
+      b_strides,
+      tid);
+  qmv_impl<T, group_size, bits>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
+}
+
+template <typename T, int group_size, int bits>
+[[kernel]] void bs_qvm(
+    const device T* x [[buffer(0)]],
+    const device uint32_t* w [[buffer(1)]],
+    const device T* scales [[buffer(2)]],
+    const device T* biases [[buffer(3)]],
+    const device uint32_t* lhs_indices [[buffer(4)]],
+    const device uint32_t* rhs_indices [[buffer(5)]],
+    device T* y [[buffer(6)]],
+    const constant int& in_vec_size [[buffer(7)]],
+    const constant int& out_vec_size [[buffer(8)]],
+    const constant int& batch_ndims [[buffer(9)]],
+    const constant int* batch_shape [[buffer(10)]],
+    const constant size_t* lhs_strides [[buffer(11)]],
+    const constant size_t* rhs_strides [[buffer(12)]],
+    const constant int& x_batch_ndims [[buffer(13)]],
+    const constant int* x_shape [[buffer(14)]],
+    const constant size_t* x_strides [[buffer(15)]],
+    const constant int& w_batch_ndims [[buffer(16)]],
+    const constant int* w_shape [[buffer(17)]],
+    const constant size_t* w_strides [[buffer(18)]],
+    const constant size_t* s_strides [[buffer(19)]],
+    const constant size_t* b_strides [[buffer(20)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  adjust_matrix_offsets<T>(
+      x,
+      w,
+      scales,
+      biases,
+      lhs_indices,
+      rhs_indices,
+      y,
+      out_vec_size,
+      batch_ndims,
+      batch_shape,
+      lhs_strides,
+      rhs_strides,
+      x_batch_ndims,
+      x_shape,
+      x_strides,
+      w_batch_ndims,
+      w_shape,
+      w_strides,
+      s_strides,
+      b_strides,
+      tid);
+  qvm_impl<T, group_size, bits>(
+      x,
+      w,
+      scales,
+      biases,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
 }
 
 template <
@@ -1165,8 +1347,7 @@ template <
       lhs_indices,
       rhs_indices,
       y,
-      M,
-      N,
+      M * N,
       batch_ndims,
       batch_shape,
       lhs_strides,
@@ -1234,8 +1415,7 @@ template <
       lhs_indices,
       rhs_indices,
       y,
-      M,
-      N,
+      M * N,
       batch_ndims,
       batch_shape,
       lhs_strides,
@@ -1419,6 +1599,145 @@ instantiate_qmm_n_types( 64, 8)
 instantiate_qmm_n_types( 32, 2)
 instantiate_qmm_n_types( 32, 4)
 instantiate_qmm_n_types( 32, 8) // clang-format on
+
+#define instantiate_bs_qmv_fast(                                      \
+    name, itype, group_size, bits, packs_per_thread)                  \
+  template [[host_name("bs_qmv_" #name "_gs_" #group_size "_b_" #bits \
+                       "_fast")]] [[kernel]] void                     \
+  bs_qmv_fast<itype, group_size, bits, packs_per_thread>(             \
+      const device uint32_t* w [[buffer(0)]],                         \
+      const device itype* scales [[buffer(1)]],                       \
+      const device itype* biases [[buffer(2)]],                       \
+      const device itype* x [[buffer(3)]],                            \
+      const device uint32_t* lhs_indices [[buffer(4)]],               \
+      const device uint32_t* rhs_indices [[buffer(5)]],               \
+      device itype* y [[buffer(6)]],                                  \
+      const constant int& in_vec_size [[buffer(7)]],                  \
+      const constant int& out_vec_size [[buffer(8)]],                 \
+      const constant int& batch_ndims [[buffer(9)]],                  \
+      const constant int* batch_shape [[buffer(10)]],                 \
+      const constant size_t* lhs_strides [[buffer(11)]],              \
+      const constant size_t* rhs_strides [[buffer(12)]],              \
+      const constant int& x_batch_ndims [[buffer(13)]],               \
+      const constant int* x_shape [[buffer(14)]],                     \
+      const constant size_t* x_strides [[buffer(15)]],                \
+      const constant int& w_batch_ndims [[buffer(16)]],               \
+      const constant int* w_shape [[buffer(17)]],                     \
+      const constant size_t* w_strides [[buffer(18)]],                \
+      const constant size_t* s_strides [[buffer(19)]],                \
+      const constant size_t* b_strides [[buffer(20)]],                \
+      uint3 tid [[threadgroup_position_in_grid]],                     \
+      uint simd_gid [[simdgroup_index_in_threadgroup]],               \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
+// clang-format off
+#define instantiate_bs_qmv_fast_types(group_size, bits, packs_per_thread)     \
+  instantiate_bs_qmv_fast(float32, float, group_size, bits, packs_per_thread) \
+  instantiate_bs_qmv_fast(float16, half, group_size, bits, packs_per_thread)  \
+  instantiate_bs_qmv_fast(bfloat16, bfloat16_t, group_size, bits, packs_per_thread) // clang-format on
+
+    // clang-format off
+instantiate_bs_qmv_fast_types(128, 2, 1)
+instantiate_bs_qmv_fast_types(128, 4, 2)
+instantiate_bs_qmv_fast_types(128, 8, 2)
+instantiate_bs_qmv_fast_types( 64, 2, 1)
+instantiate_bs_qmv_fast_types( 64, 4, 2)
+instantiate_bs_qmv_fast_types( 64, 8, 2)
+instantiate_bs_qmv_fast_types( 32, 2, 1)
+instantiate_bs_qmv_fast_types( 32, 4, 2)
+instantiate_bs_qmv_fast_types( 32, 8, 2) // clang-format on
+
+#define instantiate_bs_qmv(name, itype, group_size, bits) \
+  template [[host_name("bs_qmv_" #name "_gs_" #group_size \
+                       "_b_" #bits)]] [[kernel]] void     \
+  bs_qmv<itype, group_size, bits>(                        \
+      const device uint32_t* w [[buffer(0)]],             \
+      const device itype* scales [[buffer(1)]],           \
+      const device itype* biases [[buffer(2)]],           \
+      const device itype* x [[buffer(3)]],                \
+      const device uint32_t* lhs_indices [[buffer(4)]],   \
+      const device uint32_t* rhs_indices [[buffer(5)]],   \
+      device itype* y [[buffer(6)]],                      \
+      const constant int& in_vec_size [[buffer(7)]],      \
+      const constant int& out_vec_size [[buffer(8)]],     \
+      const constant int& batch_ndims [[buffer(9)]],      \
+      const constant int* batch_shape [[buffer(10)]],     \
+      const constant size_t* lhs_strides [[buffer(11)]],  \
+      const constant size_t* rhs_strides [[buffer(12)]],  \
+      const constant int& x_batch_ndims [[buffer(13)]],   \
+      const constant int* x_shape [[buffer(14)]],         \
+      const constant size_t* x_strides [[buffer(15)]],    \
+      const constant int& w_batch_ndims [[buffer(16)]],   \
+      const constant int* w_shape [[buffer(17)]],         \
+      const constant size_t* w_strides [[buffer(18)]],    \
+      const constant size_t* s_strides [[buffer(19)]],    \
+      const constant size_t* b_strides [[buffer(20)]],    \
+      uint3 tid [[threadgroup_position_in_grid]],         \
+      uint simd_gid [[simdgroup_index_in_threadgroup]],   \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
+// clang-format off
+#define instantiate_bs_qmv_types(group_size, bits)     \
+  instantiate_bs_qmv(float32, float, group_size, bits) \
+  instantiate_bs_qmv(float16, half, group_size, bits)  \
+  instantiate_bs_qmv(bfloat16, bfloat16_t, group_size, bits) // clang-format on
+
+    // clang-format off
+instantiate_bs_qmv_types(128, 2)
+instantiate_bs_qmv_types(128, 4)
+instantiate_bs_qmv_types(128, 8)
+instantiate_bs_qmv_types( 64, 2)
+instantiate_bs_qmv_types( 64, 4)
+instantiate_bs_qmv_types( 64, 8)
+instantiate_bs_qmv_types( 32, 2)
+instantiate_bs_qmv_types( 32, 4)
+instantiate_bs_qmv_types( 32, 8) // clang-format on
+
+#define instantiate_bs_qvm(name, itype, group_size, bits) \
+  template [[host_name("bs_qvm_" #name "_gs_" #group_size \
+                       "_b_" #bits)]] [[kernel]] void     \
+  bs_qvm<itype, group_size, bits>(                        \
+      const device itype* x [[buffer(0)]],                \
+      const device uint32_t* w [[buffer(1)]],             \
+      const device itype* scales [[buffer(2)]],           \
+      const device itype* biases [[buffer(3)]],           \
+      const device uint32_t* lhs_indices [[buffer(4)]],   \
+      const device uint32_t* rhs_indices [[buffer(5)]],   \
+      device itype* y [[buffer(6)]],                      \
+      const constant int& in_vec_size [[buffer(7)]],      \
+      const constant int& out_vec_size [[buffer(8)]],     \
+      const constant int& batch_ndims [[buffer(9)]],      \
+      const constant int* batch_shape [[buffer(10)]],     \
+      const constant size_t* lhs_strides [[buffer(11)]],  \
+      const constant size_t* rhs_strides [[buffer(12)]],  \
+      const constant int& x_batch_ndims [[buffer(13)]],   \
+      const constant int* x_shape [[buffer(14)]],         \
+      const constant size_t* x_strides [[buffer(15)]],    \
+      const constant int& w_batch_ndims [[buffer(16)]],   \
+      const constant int* w_shape [[buffer(17)]],         \
+      const constant size_t* w_strides [[buffer(18)]],    \
+      const constant size_t* s_strides [[buffer(19)]],    \
+      const constant size_t* b_strides [[buffer(20)]],    \
+      uint3 tid [[threadgroup_position_in_grid]],         \
+      uint simd_gid [[simdgroup_index_in_threadgroup]],   \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
+// clang-format off
+#define instantiate_bs_qvm_types(group_size, bits)     \
+  instantiate_bs_qvm(float32, float, group_size, bits) \
+  instantiate_bs_qvm(float16, half, group_size, bits)  \
+  instantiate_bs_qvm(bfloat16, bfloat16_t, group_size, bits) // clang-format on
+
+    // clang-format off
+instantiate_bs_qvm_types(128, 2)
+instantiate_bs_qvm_types(128, 4)
+instantiate_bs_qvm_types(128, 8)
+instantiate_bs_qvm_types( 64, 2)
+instantiate_bs_qvm_types( 64, 4)
+instantiate_bs_qvm_types( 64, 8)
+instantiate_bs_qvm_types( 32, 2)
+instantiate_bs_qvm_types( 32, 4)
+instantiate_bs_qvm_types( 32, 8) // clang-format on
 
 #define instantiate_bs_qmm_t(name, itype, group_size, bits, aligned_N)  \
   template [[host_name("bs_qmm_t_" #name "_gs_" #group_size "_b_" #bits \

@@ -55,7 +55,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       int bo = 8;
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, 2, 1);
-      MTL::Size grid_dims = MTL::Size(1, O / bo, B);
+      MTL::Size grid_dims = MTL::Size(O / bo, B, 1);
 
       compute_encoder.set_input_array(w, 0);
       compute_encoder.set_input_array(scales, 1);
@@ -82,7 +82,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       int bo = 8;
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, 2, 1);
-      MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
+      MTL::Size grid_dims = MTL::Size((O + bo - 1) / bo, B, 1);
 
       compute_encoder.set_input_array(w, 0);
       compute_encoder.set_input_array(scales, 1);
@@ -140,7 +140,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       int bo = 8;
       int bd = 32;
       MTL::Size group_dims = MTL::Size(bd, bo, 1);
-      MTL::Size grid_dims = MTL::Size(1, (O + bo - 1) / bo, B);
+      MTL::Size grid_dims = MTL::Size((O + bo - 1) / bo, B, 1);
 
       compute_encoder.set_input_array(x, 0);
       compute_encoder.set_input_array(w, 1);
@@ -250,8 +250,93 @@ void BlockSparseQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   int O = out.shape(-1);
   int N = out.size() / B / O;
   if (transpose_) {
+    // Route to the fast bs_qmv kernel that has no bounds checking
+    if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
+      std::ostringstream kname;
+      kname << "bs_qmv_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+            << bits_ << "_fast";
+
+      // Encode and dispatch kernel
+      auto& compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
+
+      int bo = 8;
+      int bd = 32;
+      MTL::Size group_dims = MTL::Size(bd, 2, 1);
+      MTL::Size grid_dims = MTL::Size(O / bo, B, N);
+
+      compute_encoder.set_input_array(w, 0);
+      compute_encoder.set_input_array(scales, 1);
+      compute_encoder.set_input_array(biases, 2);
+      compute_encoder.set_input_array(x, 3);
+      compute_encoder.set_input_array(lhs_indices, 4);
+      compute_encoder.set_input_array(rhs_indices, 5);
+      compute_encoder.set_output_array(out, 6);
+      compute_encoder->setBytes(&D, sizeof(int), 7);
+      compute_encoder->setBytes(&O, sizeof(int), 8);
+
+      compute_encoder->setBytes(&batch_ndims, sizeof(int), 9);
+      set_vector_bytes(compute_encoder, batch_shape, 10);
+      set_vector_bytes(compute_encoder, lhs_strides, 11);
+      set_vector_bytes(compute_encoder, rhs_strides, 12);
+
+      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 13);
+      set_vector_bytes(compute_encoder, x_shape, 14);
+      set_vector_bytes(compute_encoder, x_strides, 15);
+      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 16);
+      set_vector_bytes(compute_encoder, w_shape, 17);
+      set_vector_bytes(compute_encoder, w_strides, 18);
+      set_vector_bytes(compute_encoder, s_strides, 19);
+      set_vector_bytes(compute_encoder, b_strides, 20);
+
+      compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    }
+
+    else if (B < 6) {
+      std::ostringstream kname;
+      kname << "bs_qmv_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+            << bits_;
+
+      // Encode and dispatch kernel
+      auto& compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
+
+      int bo = 8;
+      int bd = 32;
+      MTL::Size group_dims = MTL::Size(bd, 2, 1);
+      MTL::Size grid_dims = MTL::Size((O + bo - 1) / bo, B, N);
+
+      compute_encoder.set_input_array(w, 0);
+      compute_encoder.set_input_array(scales, 1);
+      compute_encoder.set_input_array(biases, 2);
+      compute_encoder.set_input_array(x, 3);
+      compute_encoder.set_input_array(lhs_indices, 4);
+      compute_encoder.set_input_array(rhs_indices, 5);
+      compute_encoder.set_output_array(out, 6);
+      compute_encoder->setBytes(&D, sizeof(int), 7);
+      compute_encoder->setBytes(&O, sizeof(int), 8);
+
+      compute_encoder->setBytes(&batch_ndims, sizeof(int), 9);
+      set_vector_bytes(compute_encoder, batch_shape, 10);
+      set_vector_bytes(compute_encoder, lhs_strides, 11);
+      set_vector_bytes(compute_encoder, rhs_strides, 12);
+
+      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 13);
+      set_vector_bytes(compute_encoder, x_shape, 14);
+      set_vector_bytes(compute_encoder, x_strides, 15);
+      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 16);
+      set_vector_bytes(compute_encoder, w_shape, 17);
+      set_vector_bytes(compute_encoder, w_strides, 18);
+      set_vector_bytes(compute_encoder, s_strides, 19);
+      set_vector_bytes(compute_encoder, b_strides, 20);
+
+      compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    }
+
     // Route to the bs_qmm_t
-    if (true) {
+    else {
       std::ostringstream kname;
       kname << "bs_qmm_t_" << type_to_name(out) << "_gs_" << group_size_
             << "_b_" << bits_ << "_alN_" << std::boolalpha << ((O % 32) == 0);
@@ -297,8 +382,51 @@ void BlockSparseQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
   } else {
+    // Route to the bs_qvm kernel
+    if (B < 4) {
+      std::ostringstream kname;
+      kname << "bs_qvm_" << type_to_name(out) << "_gs_" << group_size_ << "_b_"
+            << bits_;
+
+      // Encode and dispatch kernel
+      auto& compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
+
+      int bo = 8;
+      int bd = 32;
+      MTL::Size group_dims = MTL::Size(bd, bo, 1);
+      MTL::Size grid_dims = MTL::Size((O + bo - 1) / bo, B, N);
+
+      compute_encoder.set_input_array(x, 0);
+      compute_encoder.set_input_array(w, 1);
+      compute_encoder.set_input_array(scales, 2);
+      compute_encoder.set_input_array(biases, 3);
+      compute_encoder.set_input_array(lhs_indices, 4);
+      compute_encoder.set_input_array(rhs_indices, 5);
+      compute_encoder.set_output_array(out, 6);
+      compute_encoder->setBytes(&D, sizeof(int), 7);
+      compute_encoder->setBytes(&O, sizeof(int), 8);
+
+      compute_encoder->setBytes(&batch_ndims, sizeof(int), 9);
+      set_vector_bytes(compute_encoder, batch_shape, 10);
+      set_vector_bytes(compute_encoder, lhs_strides, 11);
+      set_vector_bytes(compute_encoder, rhs_strides, 12);
+
+      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 13);
+      set_vector_bytes(compute_encoder, x_shape, 14);
+      set_vector_bytes(compute_encoder, x_strides, 15);
+      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 16);
+      set_vector_bytes(compute_encoder, w_shape, 17);
+      set_vector_bytes(compute_encoder, w_strides, 18);
+      set_vector_bytes(compute_encoder, s_strides, 19);
+      set_vector_bytes(compute_encoder, b_strides, 20);
+
+      compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    }
+
     // Route to bs_qmm_n
-    if (true) {
+    else {
       std::ostringstream kname;
       kname << "bs_qmm_n_" << type_to_name(out) << "_gs_" << group_size_
             << "_b_" << bits_;
