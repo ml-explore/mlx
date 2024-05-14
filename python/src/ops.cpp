@@ -3748,6 +3748,52 @@ void init_ops(nb::module_& m) {
           result (array): The dequantized version of ``w``
       )pbdoc");
   m.def(
+      "block_sparse_qmm",
+      &block_sparse_qmm,
+      nb::arg(),
+      nb::arg(),
+      "scales"_a,
+      "biases"_a,
+      "lhs_indices"_a = nb::none(),
+      "rhs_indices"_a = nb::none(),
+      "transpose"_a = true,
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def block_sparse_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform quantized matrix multiplication with matrix-level gather.
+
+        This operation is the quantized equivalent to :func:`block_sparse_mm`.
+        Similar to :func:`block_sparse_mm`, the indices ``lhs_indices`` and
+        ``rhs_indices`` contain flat indices along the batch dimensions (i.e.
+        all but the last two dimensions) of ``x`` and ``w`` respectively.
+
+        Note that ``scales`` and ``biases`` must have the same batch dimensions
+        as ``w`` since they represent the same quantized matrix.
+
+        Args:
+          x (array): Input array
+          w (array): Quantized matrix packed in unsigned integers
+          scales (array): The scales to use per ``group_size`` elements of ``w``
+          biases (array): The biases to use per ``group_size`` elements of ``w``
+          lhs_indices (array, optional): Integer indices for ``x`` (default: ``None``)
+          rhs_indices (array, optional): Integer indices for ``w`` (default: ``None``)
+          transpose (bool, optional): Defines whether to multiply with the
+            transposed ``w`` or not, namely whether we are performing
+            ``x @ w.T`` or ``x @ w``. (default: ``True``)
+          group_size (int, optional): The size of the group in ``w`` that
+            shares a scale and bias. (default: ``64``)
+          bits (int, optional): The number of bits occupied by each element in
+            ``w``. (default: ``4``)
+
+        Returns:
+          result (array): The result of the multiplication of ``x`` with ``w``
+            after gathering using ``lhs_indices`` and ``rhs_indices``.
+      )pbdoc");
+  m.def(
       "tensordot",
       [](const array& a,
          const array& b,
@@ -3933,7 +3979,7 @@ void init_ops(nb::module_& m) {
         Matrix multiplication with matrix-level gather.
 
         Performs a gather of the operands with the given indices followed by a (possibly batched) matrix multiplication of two arrays.
-        This operation is more efficient than explicitly applying a :func:``take`` followed by a :func:``matmul``.
+        This operation is more efficient than explicitly applying a :func:`take` followed by a :func:`matmul`.
 
         The indices ``lhs_indices`` and ``rhs_indices`` contain flat indices along the batch dimensions (i.e. all but the last two dimensions) of ``a`` and ``b`` respectively.
 

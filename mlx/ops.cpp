@@ -80,15 +80,25 @@ std::pair<int, int> extract_quantized_matmul_dims(
     throw std::invalid_argument(msg.str());
   }
 
-  if (scales.ndim() != 2 || scales.shape() != biases.shape()) {
+  if (scales.shape() != biases.shape()) {
     std::ostringstream msg;
-    msg << "[" << tag << "] Scales and biases should have the same 2D shape. "
+    msg << "[" << tag << "] Scales and biases should have the same shape. "
         << "Received scales with shape " << scales.shape()
         << " and biases with " << biases.shape();
     throw std::invalid_argument(msg.str());
   }
 
-  if (w.shape(1) * 32 / bits != scales.shape(1) * group_size) {
+  if (!std::equal(
+          w.shape().begin(), w.shape().end() - 2, scales.shape().begin())) {
+    std::ostringstream msg;
+    msg << "[" << tag
+        << "] Weight, scales and biases should have the same batch shape. "
+        << "Received weight with shape " << w.shape() << ", scales with "
+        << scales.shape() << " and biases with " << biases.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (w.shape(-1) * 32 / bits != scales.shape(-1) * group_size) {
     std::ostringstream msg;
     msg << "[" << tag << "] The shapes of the weight and scales are "
         << "incompatible based on bits and group_size. w.shape() == "
