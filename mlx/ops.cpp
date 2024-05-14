@@ -2641,6 +2641,14 @@ array scatter(
     idx = astype(idx, dtype, s);
   }
 
+  // TODO, remove when scatter supports 64-bit outputs
+  if (to_stream(s).device == Device::gpu && size_of(a.dtype()) == 8) {
+    std::ostringstream msg;
+    msg << "[scatter] GPU scatter does not yet support " << a.dtype()
+        << " for the input or updates.";
+    throw std::invalid_argument(msg.str());
+  }
+
   inputs.insert(inputs.begin(), a);
   // TODO promote or cast?
   inputs.push_back(astype(updates, a.dtype(), s));
