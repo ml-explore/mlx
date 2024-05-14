@@ -261,4 +261,35 @@ array inv(const array& a, StreamOrDevice s /* = {} */) {
       a.shape(), a.dtype(), std::make_shared<Inverse>(to_stream(s)), {a});
 }
 
+array cholesky(
+    const array& a,
+    bool upper /* = false */,
+    StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::cholesky] Arrays must type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::cholesky] Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    throw std::invalid_argument(
+        "[linalg::cholesky] Cholesky decomposition is only defined for square "
+        "matrices.");
+  }
+  return array(
+      a.shape(),
+      a.dtype(),
+      std::make_shared<Cholesky>(to_stream(s), upper),
+      {a});
+}
+
 } // namespace mlx::core::linalg

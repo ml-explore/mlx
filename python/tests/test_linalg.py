@@ -150,6 +150,23 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 mx.allclose(M @ M_inv, mx.eye(M.shape[0]), rtol=0, atol=1e-5)
             )
 
+    def test_cholesky(self):
+        sqrtA = mx.array(
+            [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=mx.float32
+        )
+        A = sqrtA.T @ sqrtA / 81
+        L = mx.linalg.cholesky(A, stream=mx.cpu)
+        U = mx.linalg.cholesky(A, upper=True, stream=mx.cpu)
+        self.assertTrue(mx.allclose(L @ L.T, A, rtol=1e-5, atol=1e-7))
+        self.assertTrue(mx.allclose(U.T @ U, A, rtol=1e-5, atol=1e-7))
+
+        # Multiple matrices
+        B = A + 1 / 9
+        AB = mx.stack([A, B])
+        Ls = mx.linalg.cholesky(AB, stream=mx.cpu)
+        for M, L in zip(AB, Ls):
+            self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
+
 
 if __name__ == "__main__":
     unittest.main()
