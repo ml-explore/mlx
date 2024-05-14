@@ -378,14 +378,14 @@ struct QuantizedBlockLoader {
 };
 
 template <typename T, int group_size, int bits, int packs_per_thread>
-[[kernel]] void qmv_fast(
-    const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
-    const device T* x [[buffer(3)]],
-    device T* y [[buffer(4)]],
-    const constant int& in_vec_size [[buffer(5)]],
-    const constant int& out_vec_size [[buffer(6)]],
+METAL_FUNC void qmv_fast_impl(
+    const device uint32_t* w,
+    const device T* scales,
+    const device T* biases,
+    const device T* x,
+    device T* y,
+    const constant int& in_vec_size,
+    const constant int& out_vec_size,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -440,15 +440,15 @@ template <typename T, int group_size, int bits, int packs_per_thread>
   }
 }
 
-template <typename T, const int group_size, const int bits>
-[[kernel]] void qmv(
-    const device uint32_t* w [[buffer(0)]],
-    const device T* scales [[buffer(1)]],
-    const device T* biases [[buffer(2)]],
-    const device T* x [[buffer(3)]],
-    device T* y [[buffer(4)]],
-    const constant int& in_vec_size [[buffer(5)]],
-    const constant int& out_vec_size [[buffer(6)]],
+template <typename T, int group_size, int bits>
+METAL_FUNC void qmv_impl(
+    const device uint32_t* w,
+    const device T* scales,
+    const device T* biases,
+    const device T* x,
+    device T* y,
+    const constant int& in_vec_size,
+    const constant int& out_vec_size,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -590,14 +590,14 @@ template <typename T, const int group_size, const int bits>
 }
 
 template <typename T, const int group_size, const int bits>
-[[kernel]] void qvm(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
-    device T* y [[buffer(4)]],
-    const constant int& in_vec_size [[buffer(5)]],
-    const constant int& out_vec_size [[buffer(6)]],
+METAL_FUNC void qvm_impl(
+    const device T* x,
+    const device uint32_t* w,
+    const device T* scales,
+    const device T* biases,
+    device T* y,
+    const constant int& in_vec_size,
+    const constant int& out_vec_size,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -919,6 +919,81 @@ METAL_FUNC void qmm_n_impl(
   } else {
     mma_op.store_result(y, N);
   }
+}
+
+template <typename T, int group_size, int bits, int packs_per_thread>
+[[kernel]] void qmv_fast(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  qmv_fast_impl<T, group_size, bits, packs_per_thread>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void qmv(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  qmv_impl<T, group_size, bits>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void qvm(
+    const device T* x [[buffer(0)]],
+    const device uint32_t* w [[buffer(1)]],
+    const device T* scales [[buffer(2)]],
+    const device T* biases [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  qvm_impl<T, group_size, bits>(
+      x,
+      w,
+      scales,
+      biases,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      simd_gid,
+      simd_lid);
 }
 
 template <
