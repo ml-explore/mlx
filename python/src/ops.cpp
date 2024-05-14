@@ -2854,7 +2854,7 @@ void init_ops(nb::module_& m) {
         if (strides) {
           a_strides = *strides;
         } else {
-          std::fill_n(std::back_inserter(a_strides), a_shape.size(), 1);
+          a_strides = std::vector<size_t>(a_shape.size(), 1);
           for (int i = a_shape.size() - 1; i > 0; i--) {
             a_strides[i - 1] = a_shape[i] * a_strides[i];
           }
