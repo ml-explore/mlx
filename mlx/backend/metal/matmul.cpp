@@ -298,16 +298,46 @@ void steel_matmul_conv_groups(
 
   // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_gemm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
-        << ((K % bk == 0) ? "t" : "n") << "aligned";
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = false;
+  const bool use_out_source = false;
+  const bool do_axpby = false;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = false;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
   compute_encoder->setComputePipelineState(kernel);
 
   // Use problem size to determine threadblock swizzle
