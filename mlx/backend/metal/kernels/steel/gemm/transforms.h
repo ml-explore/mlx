@@ -26,6 +26,10 @@ template <typename OutT, typename InT>
 struct TransformAdd {
   TransformAdd(const float, const float) {}
 
+  static METAL_FUNC OutT apply(InT x) {
+    return static_cast<OutT>(x);
+  }
+
   static METAL_FUNC OutT apply(InT x, OutT c) {
     return static_cast<OutT>(x) + c;
   }
@@ -38,6 +42,10 @@ struct TransformAxpby {
 
   TransformAxpby(const float alpha_, const float beta_)
       : alpha(alpha_), beta(beta_) {}
+
+  static METAL_FUNC OutT apply(InT x) {
+    return static_cast<OutT>(x);
+  }
 
   METAL_FUNC OutT apply(InT x, OutT c) const {
     return static_cast<OutT>(x * alpha + (beta * c));

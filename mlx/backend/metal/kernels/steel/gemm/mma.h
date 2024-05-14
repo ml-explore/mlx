@@ -198,6 +198,73 @@ struct BlockMMA {
     }
   }
 
+  /* Apply epilogue */
+  template <typename BinaryEpilogue>
+  METAL_FUNC void apply_epilogue(
+      const device U* C,
+      const int ldc,
+      const int fdc,
+      thread const BinaryEpilogue& epilogue_op) {
+    // Adjust for simdgroup and thread location
+    C += (sm + tm) * ldc + (tn + sn) * fdc;
+
+    // Loop over all simdgroup tiles
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        // Get accumulated result and associated offset in C
+        thread auto& accum = results[i * TN + j].thread_elements();
+        int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
+
+        // Apply epilogue
+        accum[0] = epilogue_op.apply(accum[0], C[offset_c]);
+        accum[1] = epilogue_op.apply(accum[1], C[offset_c + fdc]);
+      }
+    }
+  }
+
+  /* Apply epilogue */
+  template <typename BinaryEpilogue>
+  METAL_FUNC void apply_epilogue_safe(
+      const device U* C,
+      const int ldc,
+      const int fdc,
+      short2 dst_tile_dims,
+      thread const BinaryEpilogue& epilogue_op) {
+    // Adjust for simdgroup and thread location
+    C += (sm + tm) * ldc + (tn + sn) * fdc;
+    dst_tile_dims -= short2(tn + sn, sm + tm);
+
+    if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
+      return;
+
+    // Loop over all simdgroup tiles
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        // Get accumulated result and associated offset in C
+        thread auto& accum = results[i * TN + j].thread_elements();
+        int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
+
+        // Read C
+        U c_elems[2] = {0};
+
+        if ((j * TN_stride + 1) < dst_tile_dims.x) {
+          c_elems[0] = C[offset_c];
+          c_elems[1] = C[offset_c + fdc];
+        } else if ((j * TN_stride) < dst_tile_dims.x) {
+          c_elems[0] = C[offset_c];
+        }
+
+        // Apply epilogue
+        accum[0] = epilogue_op.apply(accum[0], c_elems[0]);
+        accum[1] = epilogue_op.apply(accum[1], c_elems[1]);
+      }
+    }
+  }
+
   /* Store results from simdgroup_matrix results into device memory */
   METAL_FUNC void store_result(
       device U* D,
