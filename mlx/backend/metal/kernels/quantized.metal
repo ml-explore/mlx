@@ -675,15 +675,17 @@ template <
     const int group_size,
     const int bits,
     const bool aligned_N>
-[[kernel]] void qmm_t(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
-    device T* y [[buffer(4)]],
-    const constant int& M [[buffer(5)]],
-    const constant int& N [[buffer(6)]],
-    const constant int& K [[buffer(7)]],
+METAL_FUNC void qmm_t_impl(
+    const device T* x,
+    const device uint32_t* w,
+    const device T* scales,
+    const device T* biases,
+    device T* y,
+    threadgroup T* Xs,
+    threadgroup T* Ws,
+    const constant int& M,
+    const constant int& N,
+    const constant int& K,
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -712,9 +714,6 @@ template <
       WM * WN * SIMD_SIZE,
       group_size,
       bits>;
-
-  threadgroup T Xs[BM * BK_padded];
-  threadgroup T Ws[BN * BK_padded];
 
   // Set the block
   const int K_w = K / pack_factor;
@@ -797,15 +796,17 @@ template <
     const int BN,
     const int group_size,
     const int bits>
-[[kernel]] void qmm_n(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
-    device T* y [[buffer(4)]],
-    const constant int& M [[buffer(5)]],
-    const constant int& N [[buffer(6)]],
-    const constant int& K [[buffer(7)]],
+METAL_FUNC void qmm_n_impl(
+    const device T* x,
+    const device uint32_t* w,
+    const device T* scales,
+    const device T* biases,
+    device T* y,
+    threadgroup T* Xs,
+    threadgroup T* Ws,
+    const constant int& M,
+    const constant int& N,
+    const constant int& K,
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -835,9 +836,6 @@ template <
       WM * WN * SIMD_SIZE,
       group_size,
       bits>;
-
-  threadgroup T Xs[BM * BK_padded];
-  threadgroup T Ws[BK * BN_padded];
 
   // Set the block
   const int y_row = tid.y * BM;
@@ -931,61 +929,86 @@ template <
     const int group_size,
     const int bits,
     const bool aligned_N>
-[[kernel]] void bs_qmm_t(
+[[kernel]] void qmm_t(
     const device T* x [[buffer(0)]],
     const device uint32_t* w [[buffer(1)]],
     const device T* scales [[buffer(2)]],
     const device T* biases [[buffer(3)]],
-    const device uint32_t* lhs_indices [[buffer(4)]],
-    const device uint32_t* rhs_indices [[buffer(5)]],
-    device T* y [[buffer(6)]],
-    const constant int& M [[buffer(7)]],
-    const constant int& N [[buffer(8)]],
-    const constant int& K [[buffer(9)]],
-    const constant int& batch_ndims [[buffer(10)]],
-    const constant int* batch_shape [[buffer(11)]],
-    const constant size_t* lhs_strides [[buffer(12)]],
-    const constant size_t* rhs_strides [[buffer(13)]],
-    const constant int& x_batch_ndims [[buffer(14)]],
-    const constant int* x_shape [[buffer(15)]],
-    const constant size_t* x_strides [[buffer(16)]],
-    const constant int& w_batch_ndims [[buffer(17)]],
-    const constant int* w_shape [[buffer(18)]],
-    const constant size_t* w_strides [[buffer(19)]],
-    const constant size_t* s_strides [[buffer(20)]],
-    const constant size_t* b_strides [[buffer(21)]],
+    device T* y [[buffer(4)]],
+    const constant int& M [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
+    const constant int& K [[buffer(7)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
-  static_assert(BK >= SIMD_SIZE, "BK should be larger than SIMD_SIZE");
-  static_assert(BK % SIMD_SIZE == 0, "BK should be divisible by SIMD_SIZE");
-
   (void)lid;
 
-  constexpr int WM = 2;
-  constexpr int WN = 2;
-  constexpr int pack_factor = 32 / bits;
   constexpr int BK_padded = (BK + 16 / sizeof(T));
-
-  // Instantiate the appropriate BlockMMA and Loader
-  using mma_t = mlx::steel::
-      BlockMMA<T, T, BM, BN, BK, WM, WN, false, true, BK_padded, BK_padded>;
-  using loader_x_t =
-      mlx::steel::BlockLoader<T, BM, BK, BK_padded, 1, WM * WN * SIMD_SIZE>;
-  using loader_w_t = QuantizedBlockLoader<
-      T,
-      BN,
-      BK,
-      BK_padded,
-      1,
-      WM * WN * SIMD_SIZE,
-      group_size,
-      bits>;
 
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BN * BK_padded];
 
+  qmm_t_impl<T, BM, BK, BN, group_size, bits, aligned_N>(
+      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+}
+
+template <
+    typename T,
+    const int BM,
+    const int BK,
+    const int BN,
+    const int group_size,
+    const int bits>
+[[kernel]] void qmm_n(
+    const device T* x [[buffer(0)]],
+    const device uint32_t* w [[buffer(1)]],
+    const device T* scales [[buffer(2)]],
+    const device T* biases [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& M [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
+    const constant int& K [[buffer(7)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  (void)lid;
+
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  constexpr int BN_padded = (BN + 16 / sizeof(T));
+
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[BK * BN_padded];
+
+  qmm_n_impl<T, BM, BK, BN, group_size, bits>(
+      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+}
+
+template <typename T>
+METAL_FUNC void adjust_matrix_offsets(
+    const device T*& x,
+    const device uint32_t*& w,
+    const device T*& scales,
+    const device T*& biases,
+    const device uint32_t* lhs_indices,
+    const device uint32_t* rhs_indices,
+    device T*& y,
+    const constant int& M,
+    const constant int& N,
+    const constant int& batch_ndims,
+    const constant int* batch_shape,
+    const constant size_t* lhs_strides,
+    const constant size_t* rhs_strides,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant size_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant size_t* w_strides,
+    const constant size_t* s_strides,
+    const constant size_t* b_strides,
+    uint3 tid [[threadgroup_position_in_grid]]) {
   // Set the input/output matrices
   uint32_t x_idx;
   uint32_t w_idx;
@@ -1015,79 +1038,144 @@ template <
     biases += idx.z;
   }
   y += tid.z * M * N;
+}
 
-  // Set the block
-  const int K_w = K / pack_factor;
-  const int K_g = K / group_size;
-  const int y_row = tid.y * BM;
-  const int y_col = tid.x * BN;
+template <
+    typename T,
+    const int BM,
+    const int BK,
+    const int BN,
+    const int group_size,
+    const int bits,
+    const bool aligned_N>
+[[kernel]] void bs_qmm_t(
+    const device T* x [[buffer(0)]],
+    const device uint32_t* w [[buffer(1)]],
+    const device T* scales [[buffer(2)]],
+    const device T* biases [[buffer(3)]],
+    const device uint32_t* lhs_indices [[buffer(4)]],
+    const device uint32_t* rhs_indices [[buffer(5)]],
+    device T* y [[buffer(6)]],
+    const constant int& M [[buffer(7)]],
+    const constant int& N [[buffer(8)]],
+    const constant int& K [[buffer(9)]],
+    const constant int& batch_ndims [[buffer(10)]],
+    const constant int* batch_shape [[buffer(11)]],
+    const constant size_t* lhs_strides [[buffer(12)]],
+    const constant size_t* rhs_strides [[buffer(13)]],
+    const constant int& x_batch_ndims [[buffer(14)]],
+    const constant int* x_shape [[buffer(15)]],
+    const constant size_t* x_strides [[buffer(16)]],
+    const constant int& w_batch_ndims [[buffer(17)]],
+    const constant int* w_shape [[buffer(18)]],
+    const constant size_t* w_strides [[buffer(19)]],
+    const constant size_t* s_strides [[buffer(20)]],
+    const constant size_t* b_strides [[buffer(21)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  (void)lid;
 
-  x += y_row * K;
-  w += y_col * K_w;
-  scales += y_col * K_g;
-  biases += y_col * K_g;
-  y += y_row * N + y_col;
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
 
-  // Make the x loader and mma operation
-  const short num_els = min(BM, M - y_row);
-  const short num_outs = min(BN, N - y_col);
-  loader_x_t loader_x(x, K, Xs, simd_gid, simd_lid);
-  loader_w_t loader_w(w, scales, biases, K, Ws, simd_gid, simd_lid);
-  mma_t mma_op(simd_gid, simd_lid);
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[BN * BK_padded];
 
-  if (num_els < BM) {
-    if (!aligned_N && num_outs < BN) {
-      for (int k = 0; k < K; k += BK) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_safe(short2(BK, num_els));
-        loader_w.load_safe(short2(BK, num_outs));
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
-    } else {
-      for (int k = 0; k < K; k += BK) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_safe(short2(BK, num_els));
-        loader_w.load_unsafe();
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
-    }
-  } else {
-    if (!aligned_N && num_outs < BN) {
-      for (int k = 0; k < K; k += BK) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_unsafe();
-        loader_w.load_safe(short2(BK, num_outs));
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
-    } else {
-      for (int k = 0; k < K; k += BK) {
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        loader_x.load_unsafe();
-        loader_w.load_unsafe();
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-        mma_op.mma(Xs, Ws);
-        loader_x.next();
-        loader_w.next();
-      }
-    }
-  }
+  adjust_matrix_offsets<T>(
+      x,
+      w,
+      scales,
+      biases,
+      lhs_indices,
+      rhs_indices,
+      y,
+      M,
+      N,
+      batch_ndims,
+      batch_shape,
+      lhs_strides,
+      rhs_strides,
+      x_batch_ndims,
+      x_shape,
+      x_strides,
+      w_batch_ndims,
+      w_shape,
+      w_strides,
+      s_strides,
+      b_strides,
+      tid);
+  qmm_t_impl<T, BM, BK, BN, group_size, bits, aligned_N>(
+      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+}
 
-  // Store results to device memory
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  if (num_els < BM || num_outs < BN) {
-    mma_op.store_result_safe(y, N, short2(num_outs, num_els));
-  } else {
-    mma_op.store_result(y, N);
-  }
+template <
+    typename T,
+    const int BM,
+    const int BK,
+    const int BN,
+    const int group_size,
+    const int bits>
+[[kernel]] void bs_qmm_n(
+    const device T* x [[buffer(0)]],
+    const device uint32_t* w [[buffer(1)]],
+    const device T* scales [[buffer(2)]],
+    const device T* biases [[buffer(3)]],
+    const device uint32_t* lhs_indices [[buffer(4)]],
+    const device uint32_t* rhs_indices [[buffer(5)]],
+    device T* y [[buffer(6)]],
+    const constant int& M [[buffer(7)]],
+    const constant int& N [[buffer(8)]],
+    const constant int& K [[buffer(9)]],
+    const constant int& batch_ndims [[buffer(10)]],
+    const constant int* batch_shape [[buffer(11)]],
+    const constant size_t* lhs_strides [[buffer(12)]],
+    const constant size_t* rhs_strides [[buffer(13)]],
+    const constant int& x_batch_ndims [[buffer(14)]],
+    const constant int* x_shape [[buffer(15)]],
+    const constant size_t* x_strides [[buffer(16)]],
+    const constant int& w_batch_ndims [[buffer(17)]],
+    const constant int* w_shape [[buffer(18)]],
+    const constant size_t* w_strides [[buffer(19)]],
+    const constant size_t* s_strides [[buffer(20)]],
+    const constant size_t* b_strides [[buffer(21)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint lid [[thread_index_in_threadgroup]],
+    uint simd_gid [[simdgroup_index_in_threadgroup]],
+    uint simd_lid [[thread_index_in_simdgroup]]) {
+  (void)lid;
+
+  constexpr int BK_padded = (BK + 16 / sizeof(T));
+  constexpr int BN_padded = (BN + 16 / sizeof(T));
+
+  threadgroup T Xs[BM * BK_padded];
+  threadgroup T Ws[BK * BN_padded];
+
+  adjust_matrix_offsets<T>(
+      x,
+      w,
+      scales,
+      biases,
+      lhs_indices,
+      rhs_indices,
+      y,
+      M,
+      N,
+      batch_ndims,
+      batch_shape,
+      lhs_strides,
+      rhs_strides,
+      x_batch_ndims,
+      x_shape,
+      x_strides,
+      w_batch_ndims,
+      w_shape,
+      w_strides,
+      s_strides,
+      b_strides,
+      tid);
+  qmm_n_impl<T, BM, BK, BN, group_size, bits>(
+      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
 }
 
 #define instantiate_qmv_fast(name, itype, group_size, bits, packs_per_thread) \
@@ -1307,3 +1395,51 @@ instantiate_bs_qmm_t_types( 64, 8)
 instantiate_bs_qmm_t_types( 32, 2)
 instantiate_bs_qmm_t_types( 32, 4)
 instantiate_bs_qmm_t_types( 32, 8) // clang-format on
+
+#define instantiate_bs_qmm_n(name, itype, group_size, bits) \
+  template [[host_name("bs_qmm_n_" #name "_gs_" #group_size \
+                       "_b_" #bits)]] [[kernel]] void       \
+  bs_qmm_n<itype, 32, 32, 32, group_size, bits>(            \
+      const device itype* x [[buffer(0)]],                  \
+      const device uint32_t* w [[buffer(1)]],               \
+      const device itype* scales [[buffer(2)]],             \
+      const device itype* biases [[buffer(3)]],             \
+      const device uint32_t* lhs_indices [[buffer(4)]],     \
+      const device uint32_t* rhs_indices [[buffer(5)]],     \
+      device itype* y [[buffer(6)]],                        \
+      const constant int& M [[buffer(7)]],                  \
+      const constant int& N [[buffer(8)]],                  \
+      const constant int& K [[buffer(9)]],                  \
+      const constant int& batch_ndims [[buffer(10)]],       \
+      const constant int* batch_shape [[buffer(11)]],       \
+      const constant size_t* lhs_strides [[buffer(12)]],    \
+      const constant size_t* rhs_strides [[buffer(13)]],    \
+      const constant int& x_batch_ndims [[buffer(14)]],     \
+      const constant int* x_shape [[buffer(15)]],           \
+      const constant size_t* x_strides [[buffer(16)]],      \
+      const constant int& w_batch_ndims [[buffer(17)]],     \
+      const constant int* w_shape [[buffer(18)]],           \
+      const constant size_t* w_strides [[buffer(19)]],      \
+      const constant size_t* s_strides [[buffer(20)]],      \
+      const constant size_t* b_strides [[buffer(21)]],      \
+      uint3 tid [[threadgroup_position_in_grid]],           \
+      uint lid [[thread_index_in_threadgroup]],             \
+      uint simd_gid [[simdgroup_index_in_threadgroup]],     \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
+// clang-format off
+#define instantiate_bs_qmm_n_types(group_size, bits)     \
+  instantiate_bs_qmm_n(float32, float, group_size, bits) \
+  instantiate_bs_qmm_n(float16, half, group_size, bits)  \
+  instantiate_bs_qmm_n(bfloat16, bfloat16_t, group_size, bits) // clang-format on
+
+    // clang-format off
+instantiate_bs_qmm_n_types(128, 2)
+instantiate_bs_qmm_n_types(128, 4)
+instantiate_bs_qmm_n_types(128, 8)
+instantiate_bs_qmm_n_types( 64, 2)
+instantiate_bs_qmm_n_types( 64, 4)
+instantiate_bs_qmm_n_types( 64, 8)
+instantiate_bs_qmm_n_types( 32, 2)
+instantiate_bs_qmm_n_types( 32, 4)
+instantiate_bs_qmm_n_types( 32, 8) // clang-format on

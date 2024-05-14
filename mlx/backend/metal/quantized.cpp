@@ -296,6 +296,60 @@ void BlockSparseQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
+  } else {
+    // Route to bs_qmm_n
+    if (true) {
+      std::ostringstream kname;
+      kname << "bs_qmm_n_" << type_to_name(out) << "_gs_" << group_size_
+            << "_b_" << bits_;
+
+      // Encode and dispatch kernel
+      auto& compute_encoder = d.get_command_encoder(s.index);
+      auto kernel = d.get_kernel(kname.str());
+      compute_encoder->setComputePipelineState(kernel);
+
+      int wn = 2;
+      int wm = 2;
+      int bm = 32;
+      int bn = 32;
+      int bk = 32;
+      MTL::Size group_dims = MTL::Size(32, wn, wm);
+      MTL::Size grid_dims = MTL::Size(O / bn, (B + bm - 1) / bm, N);
+
+      if ((O % bn) != 0) {
+        std::ostringstream msg;
+        msg << "[quantized_matmul] The output size should be divisible by "
+            << bn << " but received " << O << ".";
+        throw std::runtime_error(msg.str());
+      }
+
+      compute_encoder.set_input_array(x, 0);
+      compute_encoder.set_input_array(w, 1);
+      compute_encoder.set_input_array(scales, 2);
+      compute_encoder.set_input_array(biases, 3);
+      compute_encoder.set_input_array(lhs_indices, 4);
+      compute_encoder.set_input_array(rhs_indices, 5);
+      compute_encoder.set_output_array(out, 6);
+      compute_encoder->setBytes(&B, sizeof(int), 7);
+      compute_encoder->setBytes(&O, sizeof(int), 8);
+      compute_encoder->setBytes(&D, sizeof(int), 9);
+
+      compute_encoder->setBytes(&batch_ndims, sizeof(int), 10);
+      set_vector_bytes(compute_encoder, batch_shape, 11);
+      set_vector_bytes(compute_encoder, lhs_strides, 12);
+      set_vector_bytes(compute_encoder, rhs_strides, 13);
+
+      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 14);
+      set_vector_bytes(compute_encoder, x_shape, 15);
+      set_vector_bytes(compute_encoder, x_strides, 16);
+      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 17);
+      set_vector_bytes(compute_encoder, w_shape, 18);
+      set_vector_bytes(compute_encoder, w_strides, 19);
+      set_vector_bytes(compute_encoder, s_strides, 20);
+      set_vector_bytes(compute_encoder, b_strides, 21);
+
+      compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+    }
   }
 }
 
