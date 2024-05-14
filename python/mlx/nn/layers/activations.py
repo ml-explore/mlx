@@ -315,7 +315,7 @@ class GLU(Module):
         return glu(x=x, axis=self.axis)
 
 
-@_make_activation_module(mx.sigmoid)
+@_make_activation_module(sigmoid)
 class Sigmoid(Module):
     r"""Applies the sigmoid function, element-wise.
 
