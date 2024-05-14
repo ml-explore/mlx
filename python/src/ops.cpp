@@ -3353,13 +3353,15 @@ void init_ops(nb::module_& m) {
         }
 
         return conv_general(
-            /* const array& input = */ input,
-            /* const array& weight = */ weight,
-            /* std::vector<int> stride = */ stride_vec,
-            /* std::vector<int> padding_lo = */ padding_lo_vec,
-            /* std::vector<int> padding_hi = */ padding_lo_vec,
-            /* std::vector<int> kernel_dilation = */ kernel_dilation_vec,
-            /* std::vector<int> input_dilation = */ input_dilation_vec,
+            /* array input = */ std::move(input),
+            /* array weight = */ std::move(weight),
+            /* std::vector<int> stride = */ std::move(stride_vec),
+            /* std::vector<int> padding_lo = */ std::move(padding_lo_vec),
+            /* std::vector<int> padding_hi = */ std::move(padding_hi_vec),
+            /* std::vector<int> kernel_dilation = */
+            std::move(kernel_dilation_vec),
+            /* std::vector<int> input_dilation = */
+            std::move(input_dilation_vec),
             /* int groups = */ groups,
             /* bool flip = */ flip,
             s);
