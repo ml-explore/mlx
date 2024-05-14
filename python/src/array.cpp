@@ -1139,7 +1139,7 @@ void init_array(nb::module_& m) {
              int start_axis,
              int end_axis,
              const StreamOrDevice& s) {
-            return flatten(a, start_axis, end_axis);
+            return flatten(a, start_axis, end_axis, s);
           },
           "start_axis"_a = 0,
           "end_axis"_a = -1,
