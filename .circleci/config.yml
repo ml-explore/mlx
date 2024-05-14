@@ -69,7 +69,7 @@ jobs:
         default: "15.2.0"
     macos:
       xcode: << parameters.xcode_version >>
-    resource_class: macos.m1.large.gen1
+    resource_class: macos.m1.medium.gen1
     steps:
       - checkout
       - run:
@@ -132,7 +132,7 @@ jobs:
         default: ""
     macos:
       xcode: << parameters.xcode_version >>
-    resource_class: macos.m1.large.gen1
+    resource_class: macos.m1.medium.gen1
     steps:
       - checkout
       - run:
