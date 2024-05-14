@@ -50,6 +50,73 @@ Dtype at_least_float(const Dtype& d) {
   return issubdtype(d, inexact) ? d : promote_types(d, float32);
 }
 
+array indices_or_default(
+    std::optional<array> indices,
+    const array& x,
+    StreamOrDevice s) {
+  if (indices.has_value()) {
+    return indices.value();
+  }
+
+  std::vector<int> shape(x.shape().begin(), x.shape().end() - 2);
+  int total =
+      std::reduce(shape.begin(), shape.end(), 1, std::multiplies<int>());
+  return reshape(arange(total, uint32, s), shape, s);
+}
+
+std::pair<int, int> extract_quantized_matmul_dims(
+    std::string_view tag,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    bool transpose,
+    int group_size,
+    int bits) {
+  if (w.dtype() != uint32) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] The weight matrix should be uint32 "
+        << "but received" << w.dtype();
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (scales.ndim() != 2 || scales.shape() != biases.shape()) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Scales and biases should have the same 2D shape. "
+        << "Received scales with shape " << scales.shape()
+        << " and biases with " << biases.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (w.shape(1) * 32 / bits != scales.shape(1) * group_size) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] The shapes of the weight and scales are "
+        << "incompatible based on bits and group_size. w.shape() == "
+        << w.shape() << " and scales.shape() == " << scales.shape()
+        << " with group_size=" << group_size << " and bits=" << bits;
+    throw std::invalid_argument(msg.str());
+  }
+
+  int x_inner_dims = x.shape(-1);
+
+  // Calculate the expanded w's dims
+  int w_inner_dims = (transpose) ? w.shape(-1) * 32 / bits : w.shape(-2);
+  int w_outer_dims = (transpose) ? w.shape(-2) : w.shape(-1) * 32 / bits;
+
+  if (w_inner_dims != x_inner_dims) {
+    std::ostringstream msg;
+    msg << "[" << tag << "] Last dimension of first input with "
+        << "shape (..., " << x_inner_dims << ") does not match "
+        << "the expanded quantized matrix (" << w_inner_dims << ", "
+        << w_outer_dims << ") computed from shape " << w.shape()
+        << " with group_size=" << group_size << ", bits=" << bits
+        << " and transpose=" << std::boolalpha << transpose;
+    throw std::invalid_argument(msg.str());
+  }
+
+  return {w_inner_dims, w_outer_dims};
+}
+
 } // namespace
 
 array arange(
@@ -3203,7 +3270,7 @@ array conv_general(
 }
 
 array quantized_matmul(
-    const array& in_x,
+    const array& x,
     const array& w,
     const array& scales,
     const array& biases,
@@ -3211,53 +3278,14 @@ array quantized_matmul(
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
-  array x = in_x;
-  if (w.dtype() != uint32) {
-    std::ostringstream msg;
-    msg << "[quantized_matmul] The weight matrix should be uint32 "
-        << "but received" << w.dtype();
-    throw std::invalid_argument(msg.str());
-  }
+  // Check and extract the quantized matrix shape against x
+  auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
+      "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
+
   if (w.ndim() != 2) {
     std::ostringstream msg;
     msg << "[quantized_matmul] Batched quantized matmul is not supported for now "
         << "received w with shape " << w.shape();
-    throw std::invalid_argument(msg.str());
-  }
-
-  // Keep x's batch dimensions to reshape it back after the matmul
-  auto original_shape = x.shape();
-  int x_inner_dims = original_shape.back();
-
-  if (scales.ndim() != 2 || scales.shape() != biases.shape()) {
-    std::ostringstream msg;
-    msg << "[quantized_matmul] Scales and biases should have the same 2D shape. "
-        << "Received scales with shape " << scales.shape()
-        << " and biases with " << biases.shape();
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (w.shape(1) * 32 / bits != scales.shape(1) * group_size) {
-    std::ostringstream msg;
-    msg << "[quantized_matmul] The shapes of the weight and scales are "
-        << "incompatible based on bits and group_size. w.shape() == "
-        << w.shape() << " and scales.shape() == " << scales.shape()
-        << " with group_size=" << group_size << " and bits=" << bits;
-    throw std::invalid_argument(msg.str());
-  }
-
-  // Calculate the expanded w's dims
-  int w_inner_dims = (transpose) ? w.shape(1) * 32 / bits : w.shape(0);
-  int w_outer_dims = (transpose) ? w.shape(0) : w.shape(1) * 32 / bits;
-
-  if (w_inner_dims != x_inner_dims) {
-    std::ostringstream msg;
-    msg << "[quantized_matmul] Last dimension of first input with "
-        << "shape (..., " << x_inner_dims << ") does not match "
-        << "the expanded quantized matrix (" << w_inner_dims << ", "
-        << w_outer_dims << ") computed from shape " << w.shape()
-        << " with group_size=" << group_size << ", bits=" << bits
-        << " and transpose=" << std::boolalpha << transpose;
     throw std::invalid_argument(msg.str());
   }
 
@@ -3270,10 +3298,11 @@ array quantized_matmul(
         << " and biases.dtype() == " << biases.dtype();
     throw std::invalid_argument(msg.str());
   }
-  std::vector<array> inputs;
-  original_shape.back() = w_outer_dims;
+
+  auto out_shape = x.shape();
+  out_shape.back() = w_outer_dims;
   return array(
-      std::move(original_shape),
+      std::move(out_shape),
       dtype,
       std::make_shared<QuantizedMatmul>(
           to_stream(s), group_size, bits, transpose),
@@ -3428,6 +3457,51 @@ array dequantize(
   w_full = reshape(w_full, {w.shape(0), -1}, s);
 
   return w_full;
+}
+
+array block_sparse_qmm(
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    std::optional<array> lhs_indices_ /* = std::nullopt */,
+    std::optional<array> rhs_indices_ /* = std::nullopt */,
+    bool transpose /* = true */,
+    int group_size /* = 64 */,
+    int bits /* = 4 */,
+    StreamOrDevice s /* = {} */) {
+  if (!lhs_indices_ && !rhs_indices_) {
+    return quantized_matmul(
+        x, w, scales, biases, transpose, group_size, bits, s);
+  }
+
+  auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
+      "block_sparse_qmm", x, w, scales, biases, transpose, group_size, bits);
+
+  // Extract indices and broadcast them
+  array lhs_indices = indices_or_default(lhs_indices_, x, s);
+  array rhs_indices = indices_or_default(rhs_indices_, w, s);
+  auto out_bsx_shape =
+      broadcast_shapes(lhs_indices.shape(), rhs_indices.shape());
+  lhs_indices = broadcast_to(lhs_indices, out_bsx_shape, s);
+  rhs_indices = broadcast_to(rhs_indices, out_bsx_shape, s);
+
+  // Compute the full output shape
+  auto out_shape = out_bsx_shape;
+  out_shape.push_back(x.shape(-2));
+  out_shape.push_back(w_outer_dims);
+
+  // and output type
+  auto out_type = result_type(x, scales, biases);
+
+  auto out = array(
+      std::move(out_shape),
+      out_type,
+      std::make_shared<BlockSparseQMM>(
+          to_stream(s), group_size, bits, transpose),
+      {x, w, scales, biases, lhs_indices, rhs_indices});
+
+  return out;
 }
 
 array tensordot(
@@ -3879,24 +3953,8 @@ array block_sparse_mm(
   b = astype(b, out_type, s);
 
   // Handle broadcasting
-  std::vector<int> bsx_a(a.shape().begin(), a.shape().end() - 2);
-  std::vector<int> bsx_b(b.shape().begin(), b.shape().end() - 2);
-
-  auto indices_or_default = [&](const std::optional<array>& indices,
-                                const std::vector<int>& bsx_shape) {
-    if (indices.has_value()) {
-      return indices.value();
-    } else {
-      int n_batch = 1;
-      for (auto& i : bsx_shape)
-        n_batch *= i;
-      return reshape(arange(n_batch, uint32, s), bsx_shape, s);
-    }
-  };
-
-  // Pull and broadcast indices
-  array lhs_indices = indices_or_default(lhs_indices_, bsx_a);
-  array rhs_indices = indices_or_default(rhs_indices_, bsx_b);
+  array lhs_indices = indices_or_default(lhs_indices_, a, s);
+  array rhs_indices = indices_or_default(rhs_indices_, b, s);
 
   if (!issubdtype(lhs_indices.dtype(), integer)) {
     throw std::invalid_argument(

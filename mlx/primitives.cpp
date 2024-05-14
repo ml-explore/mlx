@@ -2375,6 +2375,77 @@ bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_;
 }
 
+std::pair<std::vector<array>, std::vector<int>> BlockSparseQMM::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  throw std::runtime_error("BlockSparseQMM::vmap NYI");
+}
+
+std::vector<array> BlockSparseQMM::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  std::vector<array> vjps;
+
+  auto& cotan = cotangents[0];
+
+  auto& x = primals[0];
+  auto& w = primals[1];
+  auto& scales = primals[2];
+  auto& biases = primals[3];
+  auto& lhs_indices = primals[4];
+  auto& rhs_indices = primals[5];
+
+  // We rely on the fact that w is always 2D so transpose is simple
+  for (auto arg : argnums) {
+    // gradient wrt to x
+    if (arg == 0) {
+      vjps.push_back(reshape(
+          scatter_add(
+              zeros_like(x, stream()),
+              lhs_indices,
+              expand_dims(
+                  block_sparse_qmm(
+                      cotan,
+                      w,
+                      scales,
+                      biases,
+                      std::nullopt,
+                      rhs_indices,
+                      !transpose_,
+                      group_size_,
+                      bits_,
+                      stream()),
+                  -3,
+                  stream()),
+              0,
+              stream()),
+          x.shape(),
+          stream()));
+    }
+
+    // gradient wrt to w_q, scales or biases
+    else {
+      throw std::runtime_error(
+          "BlockSparseQMM::vjp no gradient wrt the quantized matrix yet.");
+    }
+  }
+  return vjps;
+}
+
+std::vector<array> BlockSparseQMM::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  throw std::runtime_error("BlockSparseQMM::jvp NYI");
+}
+
+bool BlockSparseQMM::is_equivalent(const Primitive& other) const {
+  const BlockSparseQMM& qm_other = static_cast<const BlockSparseQMM&>(other);
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_;
+}
+
 std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

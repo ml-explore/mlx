@@ -196,4 +196,6 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
 }
 
+void BlockSparseQMM::eval_gpu(const std::vector<array>& inputs, array& out) {}
+
 } // namespace mlx::core

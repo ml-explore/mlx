@@ -282,4 +282,6 @@ void QuantizedMatmul::eval(const std::vector<array>& inputs, array& out) {
   _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
 }
 
+void BlockSparseQMM::eval(const std::vector<array>& inputs, array& out) {}
+
 } // namespace mlx::core
