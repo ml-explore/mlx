@@ -526,14 +526,6 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_slice(
 
   // If simple stride
   if (stride == 1) {
-    // Squeeze out singleton dims from the start of update
-    int s = 0;
-    for (; s < update.ndim() && update.shape(s) == 1; s++)
-      ;
-    auto up_shape =
-        std::vector<int>(update.shape().begin() + s, update.shape().end());
-    auto up = reshape(update, up_shape);
-
     // Build array to mark start of slice
     auto idx = array({start}, {1}, uint32);
 
@@ -545,7 +537,7 @@ std::tuple<std::vector<array>, array, std::vector<int>> mlx_scatter_args_slice(
     up_shape_broadcast.insert(
         up_shape_broadcast.end(), src.shape().begin() + 1, src.shape().end());
 
-    up = broadcast_to(update, up_shape_broadcast);
+    auto up = broadcast_to(update, up_shape_broadcast);
 
     auto indices = std::vector<array>{idx};
     auto axes = std::vector<int>{0};
