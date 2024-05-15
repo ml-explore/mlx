@@ -190,8 +190,8 @@ void Compiled::eval_gpu(
   // If not we have to build it ourselves
   if (lib == nullptr) {
     std::ostringstream kernel;
-    kernel << metal::utils() << metal::unary() << metal::binary()
-           << metal::ternary();
+    kernel << metal::utils() << metal::unary_ops() << metal::binary_ops()
+           << metal::ternary_ops();
     build_kernel(
         kernel,
         kernel_lib_ + "_contiguous",

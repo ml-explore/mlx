@@ -26,6 +26,28 @@ set(
   "sort"
 )
 
+if (NOT MLX_METAL_JIT)
+set(
+  KERNELS
+  ${KERNELS}
+  "binary"
+  "binary_two"
+  "unary"
+  "ternary"
+  "copy"
+)
+set(
+  HEADERS 
+  ${HEADERS}
+  unary_ops.h
+  unary.h
+  binary_ops.h
+  binary.h
+  ternary.h
+  copy.h
+)
+endif()
+
 function(build_kernel_base TARGET SRCFILE DEPS)
   set(METAL_FLAGS -Wall -Wextra -fno-fast-math -D${MLX_METAL_VERSION})
   if(MLX_METAL_DEBUG)

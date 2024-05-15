@@ -1,34 +1,11 @@
 // Copyright © 2024 Apple Inc.
 
-#include <fmt/format.h>
-
-#include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
-
-constexpr std::string_view unary_kernels = R"(
-[[kernel]] void {0}_v(
-    device const {1}* in,
-    device {2}* out,
-    uint index [[thread_position_in_grid]]) {{
-  out[index] = {3}()(in[index]);
-}}
-
-[[kernel]] void {0}_g(
-    device const {1}* in,
-    device {2}* out,
-    device const int* in_shape,
-    device const size_t* in_strides,
-    device const int& ndim,
-    uint index [[thread_position_in_grid]]) {{
-  auto idx = elem_to_loc(index, in_shape, in_strides, ndim);
-  out[index] = {3}()(in[idx]);
-}}
-)";
 
 void unary_op(
     const std::vector<array>& inputs,
@@ -55,22 +32,9 @@ void unary_op(
 
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
-  std::string lib_name = op + type_to_name(in);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
-    std::ostringstream op_t;
-    out.primitive().print(op_t);
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::unary();
-    kernel_source << fmt::format(
-        unary_kernels,
-        lib_name,
-        get_type_string(in.dtype()),
-        get_type_string(out.dtype()),
-        op_t.str());
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
-  auto kernel = d.get_kernel(lib_name + (contig ? "_v" : "_g"), lib);
+
+  std::string kernel_name = (contig ? "v" : "g") + op + type_to_name(out);
+  auto kernel = get_unary_kernel(d, kernel_name, out);
 
   size_t nthreads = contig ? in.data_size() : in.size();
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
@@ -121,6 +85,17 @@ void ArcTan::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void ArcTanh::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "arctanh");
+}
+
+void Conjugate::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (out.dtype() == complex64) {
+    unary_op(inputs, out, "conj");
+  } else {
+    throw std::invalid_argument(
+        "[conjugate] conjugate must be called on complex input.");
+  }
 }
 
 void Cos::eval_gpu(const std::vector<array>& inputs, array& out) {

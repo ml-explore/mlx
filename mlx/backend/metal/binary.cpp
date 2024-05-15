@@ -1,288 +1,14 @@
 // Copyright © 2024 Apple Inc.
 
-#include <fmt/format.h>
-
 #include "mlx/backend/common/binary.h"
-#include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
 constexpr int MAX_BINARY_SPECIALIZED_DIMS = 5;
-
-constexpr std::string_view binary_kernels = R"(
-[[kernel]] void {0}_ss(
-      device const {1}* a,
-      device const {1}* b,
-      device {2}* c,
-      uint index [[thread_position_in_grid]]) {{
-  c[index] = {3}()(a[0], b[0]);
-}}
-
-[[kernel]] void {0}_sv(
-      device const {1}* a,
-      device const {1}* b,
-      device {2}* c,
-      uint index [[thread_position_in_grid]]) {{
-  c[index] = {3}()(a[0], b[index]);
-}}
-
-[[kernel]] void {0}_vs(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     uint index [[thread_position_in_grid]]) {{
-  c[index] = {3}()(a[index], b[0]);
-}}
-
-[[kernel]] void {0}_vv(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     uint index [[thread_position_in_grid]]) {{
-  c[index] = {3}()(a[index], b[index]);
-}}
-
-[[kernel]] void {0}_g_1(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     constant const size_t& a_stride,
-     constant const size_t& b_stride,
-     uint index [[thread_position_in_grid]]) {{
-  auto a_idx = elem_to_loc_1(index, a_stride);
-  auto b_idx = elem_to_loc_1(index, b_stride);
-  c[index] = {3}()(a[a_idx], b[b_idx]);
-}}
-
-[[kernel]] void {0}_g_2(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     constant const size_t a_strides[2],
-     constant const size_t b_strides[2],
-     uint2 index [[thread_position_in_grid]],
-     uint2 grid_dim [[threads_per_grid]]) {{
-  auto a_idx = elem_to_loc_2(index, a_strides);
-  auto b_idx = elem_to_loc_2(index, b_strides);
-  size_t out_idx = index.x + (size_t)grid_dim.x * index.y;
-  c[out_idx] = {3}()(a[a_idx], b[b_idx]);
-}}
-
-[[kernel]] void {0}_g_3(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     constant const size_t a_strides[3],
-     constant const size_t b_strides[3],
-     uint3 index [[thread_position_in_grid]],
-     uint3 grid_dim [[threads_per_grid]]) {{
-  auto a_idx = elem_to_loc_3(index, a_strides);
-  auto b_idx = elem_to_loc_3(index, b_strides);
-  size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
-  c[out_idx] = {3}()(a[a_idx], b[b_idx]);
-}}
-
-[[kernel]] void {0}_g_4(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    constant const int shape[4],
-    constant const size_t a_strides[4],
-    constant const size_t b_strides[4],
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {{
-  auto idx = elem_to_loc_2_nd<4>(index, shape, a_strides, b_strides);
-  size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
-  c[out_idx] = {3}()(a[idx.x], b[idx.y]);
-
-}}
-
-[[kernel]] void {0}_g_5(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    constant const int shape[5],
-    constant const size_t a_strides[5],
-    constant const size_t b_strides[5],
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {{
-  auto idx = elem_to_loc_2_nd<5>(index, shape, a_strides, b_strides);
-  size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
-  c[out_idx] = {3}()(a[idx.x], b[idx.y]);
-}}
-
-[[kernel]] void {0}_g(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    constant const int* shape,
-    constant const size_t* a_strides,
-    constant const size_t* b_strides,
-    constant const int& ndim,
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {{
-  auto idx = elem_to_loc_2_nd(index, shape, a_strides, b_strides, ndim);
-  size_t out_idx = index.x + grid_dim.x * (index.y + grid_dim.y * index.z);
-  c[out_idx] = {3}()(a[idx.x], b[idx.y]);
-}}
-)";
-
-constexpr std::string_view binary_two_kernels = R"(
-[[kernel]] void {0}_ss(
-      device const {1}* a,
-      device const {1}* b,
-      device {2}* c,
-      device {2}* d,
-      uint index [[thread_position_in_grid]]) {{
-  auto out = {3}()(a[0], b[0]);
-  c[index] = out[0];
-  d[index] = out[1];
-}}
-
-[[kernel]] void {0}_sv(
-      device const {1}* a,
-      device const {1}* b,
-      device {2}* c,
-      device {2}* d,
-      uint index [[thread_position_in_grid]]) {{
-  auto out = {3}()(a[0], b[index]);
-  c[index] = out[0];
-  d[index] = out[1];
-}}
-
-[[kernel]] void {0}_vs(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     device {2}* d,
-     uint index [[thread_position_in_grid]]) {{
-  auto out = {3}()(a[index], b[0]);
-  c[index] = out[0];
-  d[index] = out[1];
-}}
-
-[[kernel]] void {0}_vv(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     device {2}* d,
-     uint index [[thread_position_in_grid]]) {{
-  auto out = {3}()(a[index], b[index]);
-  c[index] = out[0];
-  d[index] = out[1];
-}}
-
-[[kernel]] void {0}_g_1(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     device {2}* d,
-     constant const size_t& a_stride,
-     constant const size_t& b_stride,
-     uint index [[thread_position_in_grid]]) {{
-  auto a_idx = elem_to_loc_1(index, a_stride);
-  auto b_idx = elem_to_loc_1(index, b_stride);
-  auto out = {3}()(a[a_idx], b[b_idx]);
-  c[index] = out[0];
-  d[index] = out[1];
-}}
-
-[[kernel]] void {0}_g_2(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-     device {2}* d,
-     constant const size_t a_strides[2],
-     constant const size_t b_strides[2],
-     uint2 index [[thread_position_in_grid]],
-     uint2 grid_dim [[threads_per_grid]]) {{
-  auto a_idx = elem_to_loc_2(index, a_strides);
-  auto b_idx = elem_to_loc_2(index, b_strides);
-  size_t out_idx = index.x + (size_t)grid_dim.x * index.y;
-  auto out = {3}()(a[a_idx], b[b_idx]);
-  c[out_idx] = out[0];
-  d[out_idx] = out[1];
-}}
-
-[[kernel]] void {0}_g_3(
-     device const {1}* a,
-     device const {1}* b,
-     device {2}* c,
-    device {2}* d,
-     constant const size_t a_strides[3],
-     constant const size_t b_strides[3],
-     uint3 index [[thread_position_in_grid]],
-     uint3 grid_dim [[threads_per_grid]]) {{
-  auto a_idx = elem_to_loc_3(index, a_strides);
-  auto b_idx = elem_to_loc_3(index, b_strides);
-  size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
-  auto out = {3}()(a[a_idx], b[b_idx]);
-  c[out_idx] = out[0];
-  d[out_idx] = out[1];
-}}
-
-[[kernel]] void {0}_g_4(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    constant const int shape[4],
-    constant const size_t a_strides[4],
-    constant const size_t b_strides[4],
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {{
-  auto idx = elem_to_loc_2_nd<4>(index, shape, a_strides, b_strides);
-  size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
-  auto out = {3}()(a[idx.x], b[idx.y]);
-  c[out_idx] = out[0];
-  d[out_idx] = out[1];
-}}
-
-[[kernel]] void {0}_g_5(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    constant const int shape[5],
-    constant const size_t a_strides[5],
-    constant const size_t b_strides[5],
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {{
-  auto idx = elem_to_loc_2_nd<5>(index, shape, a_strides, b_strides);
-  size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
-  auto out = {3}()(a[idx.x], b[idx.y]);
-  c[out_idx] = out[0];
-  d[out_idx] = out[1];
-}}
-
-[[kernel]] void {0}_g(
-    device const {1}* a,
-    device const {1}* b,
-    device {2}* c,
-    device {2}* d,
-    constant const int* shape,
-    constant const size_t* a_strides,
-    constant const size_t* b_strides,
-    constant const int& ndim,
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {{
-  auto idx = elem_to_loc_2_nd(index, shape, a_strides, b_strides, ndim);
-  size_t out_idx = index.x + grid_dim.x * (index.y + grid_dim.y * index.z);
-  auto out = {3}()(a[idx.x], b[idx.y]);
-  c[out_idx] = out[0];
-  d[out_idx] = out[1];
-}}
-)";
 
 void binary_op(
     const std::vector<array>& inputs,
@@ -306,54 +32,39 @@ void binary_op(
   auto& strides_b = strides[1];
   auto& strides_out = strides[2];
 
-  std::string lib_name;
   std::string kernel_name;
   {
     std::ostringstream kname;
-    kname << op << type_to_name(a);
-    lib_name = kname.str();
     switch (bopt) {
       case BinaryOpType::ScalarScalar:
-        kname << "_ss";
+        kname << "ss";
         break;
       case BinaryOpType::ScalarVector:
-        kname << "_sv";
+        kname << "sv";
         break;
       case BinaryOpType::VectorScalar:
-        kname << "_vs";
+        kname << "vs";
         break;
       case BinaryOpType::VectorVector:
-        kname << "_vv";
+        kname << "vv";
         break;
       case BinaryOpType::General:
-        kname << "_g";
+        kname << "g";
+        if (shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
+          kname << shape.size();
+        } else {
+          kname << "n";
+        }
         break;
     }
-    if (bopt == BinaryOpType::General &&
-        shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
-      kname << "_" << shape.size();
-    }
+    kname << op << type_to_name(a);
     kernel_name = kname.str();
   }
 
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
-    std::ostringstream op_t;
-    out.primitive().print(op_t);
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::binary();
-    kernel_source << fmt::format(
-        binary_two_kernels,
-        op + type_to_name(a),
-        get_type_string(a.dtype()),
-        get_type_string(out.dtype()),
-        op_t.str());
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
 
-  auto kernel = d.get_kernel(kernel_name, lib);
+  auto kernel = get_binary_two_kernel(d, kernel_name, a, outputs[0]);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
@@ -428,55 +139,39 @@ void binary_op(
   auto& strides_b = strides[1];
   auto& strides_out = strides[2];
 
-  std::string lib_name;
   std::string kernel_name;
   {
     std::ostringstream kname;
-    kname << op << type_to_name(a);
-    lib_name = kname.str();
     switch (bopt) {
       case BinaryOpType::ScalarScalar:
-        kname << "_ss";
+        kname << "ss";
         break;
       case BinaryOpType::ScalarVector:
-        kname << "_sv";
+        kname << "sv";
         break;
       case BinaryOpType::VectorScalar:
-        kname << "_vs";
+        kname << "vs";
         break;
       case BinaryOpType::VectorVector:
-        kname << "_vv";
+        kname << "vv";
         break;
       case BinaryOpType::General:
-        kname << "_g";
+        kname << "g";
+        if (shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
+          kname << shape.size();
+        } else {
+          kname << "n";
+        }
         break;
     }
-    if (bopt == BinaryOpType::General &&
-        shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
-      kname << "_" << shape.size();
-    }
+    kname << op << type_to_name(a);
     kernel_name = kname.str();
   }
 
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
-    std::ostringstream op_t;
-    out.primitive().print(op_t);
-    std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::binary();
-    kernel_source << fmt::format(
-        binary_kernels,
-        op + type_to_name(a),
-        get_type_string(a.dtype()),
-        get_type_string(out.dtype()),
-        op_t.str());
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
-
-  auto kernel = d.get_kernel(kernel_name, lib);
+  auto kernel = get_binary_kernel(d, kernel_name, a, out);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_a = a.data_shared_ptr() == nullptr;

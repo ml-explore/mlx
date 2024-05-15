@@ -25,18 +25,37 @@ make_jit_source(utils
   kernels/bf16.h
   kernels/complex.h
 )
-make_jit_source(unary
+make_jit_source(unary_ops
   kernels/erf.h
   kernels/expm1f.h
 )
-make_jit_source(binary)
-make_jit_source(ternary)
+make_jit_source(binary_ops)
+make_jit_source(ternary_ops)
 make_jit_source(reduction
   kernels/atomic.h
   kernels/reduction/ops.h
 )
 make_jit_source(scatter)
 make_jit_source(gather)
+
+if (MLX_METAL_JIT) 
+  target_sources(
+    mlx
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/jit_kernels.cpp
+  )
+  make_jit_source(copy)
+  make_jit_source(unary)
+  make_jit_source(binary)
+  make_jit_source(binary_two)
+  make_jit_source(ternary)
+else()
+  target_sources(
+    mlx
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/nojit_kernels.cpp
+  )
+endif()
 
 target_sources(
   mlx

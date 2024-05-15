@@ -5,7 +5,7 @@
 #include <metal_atomic>
 #include <metal_simdgroup>
 
-#ifndef MLX_JIT
+#ifndef MLX_METAL_JIT
 #include "mlx/backend/metal/kernels/atomic.h"
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/utils.h"
