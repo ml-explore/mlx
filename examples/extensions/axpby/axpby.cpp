@@ -257,7 +257,7 @@ void Axpby::eval_gpu(
   auto kernel = d.get_kernel(kname.str(), "mlx_ext");
 
   // Prepare to encode kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
 
   // Kernel parameters are registered with buffer indices corresponding to
@@ -266,11 +266,11 @@ void Axpby::eval_gpu(
   size_t nelem = out.size();
 
   // Encode input arrays to kernel
-  set_array_buffer(compute_encoder, x, 0);
-  set_array_buffer(compute_encoder, y, 1);
+  compute_encoder.set_input_array(x, 0);
+  compute_encoder.set_input_array(y, 1);
 
   // Encode output arrays to kernel
-  set_array_buffer(compute_encoder, out, 2);
+  compute_encoder.set_output_array(out, 2);
 
   // Encode alpha and beta
   compute_encoder->setBytes(&alpha_, sizeof(float), 3);
@@ -296,7 +296,7 @@ void Axpby::eval_gpu(
 
   // Launch the grid with the given number of threads divided among
   // the given threadgroups
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 #else // Metal is not available
