@@ -298,16 +298,46 @@ void steel_matmul_conv_groups(
 
   // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_gemm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
-        << ((K % bk == 0) ? "t" : "n") << "aligned";
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = false;
+  const bool use_out_source = false;
+  const bool do_axpby = false;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = false;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
   compute_encoder->setComputePipelineState(kernel);
 
   // Use problem size to determine threadblock swizzle
@@ -351,10 +381,8 @@ void steel_matmul_conv_groups(
   compute_encoder.set_output_array(out, 3);
   compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
 
-  compute_encoder->setBytes(
-      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
-  compute_encoder->setBytes(
-      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
 
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
@@ -521,16 +549,46 @@ void steel_matmul(
 
   // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_gemm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
-        << ((K % bk == 0) ? "t" : "n") << "aligned";
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = (batch_shape.size() > 1);
+  const bool use_out_source = false;
+  const bool do_axpby = false;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = false;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
   compute_encoder->setComputePipelineState(kernel);
 
   // Use problem size to determine threadblock swizzle
@@ -576,10 +634,8 @@ void steel_matmul(
 
   compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
 
-  compute_encoder->setBytes(
-      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
-  compute_encoder->setBytes(
-      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
 
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
@@ -957,13 +1013,10 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&beta_, sizeof(float), 8);
 
     compute_encoder->setBytes(&batch_ndim, sizeof(int), 9);
-    compute_encoder->setBytes(batch_shape.data(), batch_ndim * sizeof(int), 10);
-    compute_encoder->setBytes(
-        batch_strides_vec.data(), batch_ndim * sizeof(size_t), 11);
-    compute_encoder->setBytes(
-        batch_strides_mat.data(), batch_ndim * sizeof(size_t), 12);
-    compute_encoder->setBytes(
-        C_batch_stride.data(), batch_ndim * sizeof(size_t), 13);
+    set_vector_bytes(compute_encoder, batch_shape, 10);
+    set_vector_bytes(compute_encoder, batch_strides_vec, 11);
+    set_vector_bytes(compute_encoder, batch_strides_mat, 12);
+    set_vector_bytes(compute_encoder, C_batch_stride, 13);
 
     int bias_stride = c.strides()[c.ndim() - 1];
     compute_encoder->setBytes(&bias_stride, sizeof(int), 14);
@@ -1089,18 +1142,48 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   }
 
+  // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_addmm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
-        << ((K % bk == 0) ? "t" : "n") << "aligned"
-        << ((alpha_ == 1. && beta_ == 1.) ? "_add" : "_axpby");
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = (batch_shape.size() > 1);
+  const bool use_out_source = true;
+  const bool do_axpby = !(alpha_ == 1. && beta_ == 1.);
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = false;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
   compute_encoder->setComputePipelineState(kernel);
 
   int tn = (N + bn - 1) / bn;
@@ -1155,10 +1238,8 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setBytes(&gemm_params, sizeof(GEMMParams), 4);
   compute_encoder->setBytes(&params, sizeof(GEMMAddMMParams), 5);
 
-  compute_encoder->setBytes(
-      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
-  compute_encoder->setBytes(
-      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
 
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
@@ -1593,16 +1674,46 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_block_sparse_gemm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
-        << ((K % bk == 0) ? "t" : "n") << "aligned";
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = batch_ndim > 1;
+  const bool use_out_source = false;
+  const bool do_axpby = false;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = true;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
   compute_encoder->setComputePipelineState(kernel);
 
   // Use problem size to determine threadblock swizzle
@@ -1650,11 +1761,19 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder.set_input_array(lhs_indices, 10);
   compute_encoder.set_input_array(rhs_indices, 11);
 
-  set_vector_bytes(compute_encoder, batch_shape_A, 12);
-  set_vector_bytes(compute_encoder, batch_strides_A, 13);
-  set_vector_bytes(compute_encoder, batch_shape_B, 14);
-  set_vector_bytes(compute_encoder, batch_strides_B, 15);
-  set_vector_bytes(compute_encoder, operand_batch_ndim, 16);
+  std::vector operand_shape = batch_shape_A;
+  operand_shape.insert(
+      operand_shape.end(), batch_shape_B.begin(), batch_shape_B.end());
+
+  std::vector operand_strides = batch_strides_A;
+  operand_strides.insert(
+      operand_strides.end(), batch_strides_B.begin(), batch_strides_B.end());
+
+  operand_batch_ndim.push_back(0);
+
+  set_vector_bytes(compute_encoder, operand_shape, 13);
+  set_vector_bytes(compute_encoder, operand_strides, 14);
+  set_vector_bytes(compute_encoder, operand_batch_ndim, 15);
 
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
