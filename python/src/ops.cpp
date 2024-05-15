@@ -2527,7 +2527,7 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "kth"_a,
-      "axis"_a = -1,
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
