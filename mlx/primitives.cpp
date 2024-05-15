@@ -2397,13 +2397,12 @@ std::vector<array> BlockSparseQMM::vjp(
   auto& lhs_indices = primals[4];
   auto& rhs_indices = primals[5];
 
-  // We rely on the fact that w is always 2D so transpose is simple
   for (auto arg : argnums) {
     // gradient wrt to x
     if (arg == 0) {
       vjps.push_back(reshape(
           scatter_add(
-              zeros_like(x, stream()),
+              flatten(zeros_like(x, stream()), 0, -3, stream()),
               lhs_indices,
               expand_dims(
                   block_sparse_qmm(
