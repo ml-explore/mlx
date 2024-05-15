@@ -2372,7 +2372,8 @@ std::vector<array> QuantizedMatmul::jvp(
 
 bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
   const QuantizedMatmul& qm_other = static_cast<const QuantizedMatmul&>(other);
-  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_;
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      transpose_ == qm_other.transpose_;
 }
 
 std::pair<std::vector<array>, std::vector<int>> BlockSparseQMM::vmap(
@@ -2424,6 +2425,12 @@ std::vector<array> BlockSparseQMM::vjp(
           stream()));
     }
 
+    // gradient wrt to the indices is undefined
+    else if (arg > 3) {
+      throw std::runtime_error(
+          "BlockSparseQMM::vjp cannot compute the gradient wrt the indices.");
+    }
+
     // gradient wrt to w_q, scales or biases
     else {
       throw std::runtime_error(
@@ -2442,7 +2449,8 @@ std::vector<array> BlockSparseQMM::jvp(
 
 bool BlockSparseQMM::is_equivalent(const Primitive& other) const {
   const BlockSparseQMM& qm_other = static_cast<const BlockSparseQMM&>(other);
-  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_;
+  return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
+      transpose_ == qm_other.transpose_;
 }
 
 std::pair<std::vector<array>, std::vector<int>> RandomBits::vmap(

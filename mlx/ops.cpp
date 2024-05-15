@@ -3509,7 +3509,12 @@ array block_sparse_qmm(
       out_type,
       std::make_shared<BlockSparseQMM>(
           to_stream(s), group_size, bits, transpose),
-      {x, w, scales, biases, lhs_indices, rhs_indices});
+      {astype(x, out_type, s),
+       w,
+       astype(scales, out_type, s),
+       astype(biases, out_type, s),
+       lhs_indices,
+       rhs_indices});
 
   return out;
 }
