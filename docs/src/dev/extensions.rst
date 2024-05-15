@@ -1,5 +1,5 @@
-Extended MLX
-============
+Custom Extensions in MLX
+========================
 
 You can extend MLX with custom operations on the CPU or GPU. This guide
 explains how to do that with a simple example.
