@@ -504,10 +504,10 @@ below.
 
         // Encode input arrays to kernel
         compute_encoder.set_input_array(x, 0);
-        compute_encoder.set_output_array(y, 1);
+        compute_encoder.set_input_array(y, 1);
 
         // Encode output arrays to kernel
-        compute_encoder.set_output_buffer(out, 2);
+        compute_encoder.set_output_array(out, 2);
 
         // Encode alpha and beta
         compute_encoder->setBytes(&alpha_, sizeof(float), 3);
