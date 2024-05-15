@@ -357,7 +357,6 @@ MTL::Function* Device::get_function_(
   }
 
   mtl_func_consts->release();
-  // desc->release();
 
   return mtl_function;
 }
@@ -527,8 +526,8 @@ MTL::ComputePipelineState* Device::get_kernel(
   auto mtl_linked_funcs = get_linked_functions_(linked_functions);
   auto kernel = get_kernel_(kname, mtl_function, mtl_linked_funcs);
 
-  // mtl_function->release();
-  // mtl_linked_funcs->release();
+  mtl_function->release();
+  mtl_linked_funcs->release();
 
   // Add kernel to cache
   kernel_map_.insert({kname, kernel});
