@@ -3341,11 +3341,14 @@ std::tuple<array, array, array> quantize(
     throw std::invalid_argument(msg.str());
   }
 
-  if (w.ndim() != 2) {
-    throw std::invalid_argument("[quantize] Only matrices supported for now");
+  if (w.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+        << "but it has only " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
   }
 
-  if ((w.shape(1) % group_size) != 0) {
+  if ((w.shape(-1) % group_size) != 0) {
     std::ostringstream msg;
     msg << "[quantize] The last dimension of the matrix needs to be divisible by "
         << "the quantization group size " << group_size
@@ -3366,7 +3369,7 @@ std::tuple<array, array, array> quantize(
   // at least we bail out early which will result in a nice readable error.
   //
   // Hopefully nobody is quantizing matrices that small anyway.
-  if (w.shape(1) < 32 * el_per_int) {
+  if (w.shape(-1) < 32 * el_per_int) {
     std::ostringstream msg;
     msg << "[quantize] The feature dimension (2nd dimension of the matrix) is "
         << "too small for quantization. We support >=512 for 2 bits, "
@@ -3375,9 +3378,12 @@ std::tuple<array, array, array> quantize(
     throw std::invalid_argument(msg.str());
   }
 
+  // Prepare the shape for the outputs.
+  auto wshape = w.shape();
+  wshape.back() = -1;
+
   // Compute scales and biases
-  array packed_w =
-      reshape(w, {w.shape(0), w.shape(1) / group_size, group_size}, s);
+  array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
   array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
   array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
 
@@ -3396,12 +3402,14 @@ std::tuple<array, array, array> quantize(
           zero,
           n_bins),
       uint32);
-  packed_w = reshape(packed_w, {w.shape(0), -1, el_per_int}, s);
+  packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
   packed_w = sum(
       multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
 
   return std::make_tuple(
-      packed_w, squeeze(scales, -1, s), squeeze(biases, -1, s));
+      reshape(packed_w, wshape, s),
+      reshape(scales, wshape, s),
+      reshape(biases, wshape, s));
 }
 
 array dequantize(
@@ -3421,11 +3429,21 @@ array dequantize(
     msg << "[dequantize] Invalid value for group_size: " << group_size;
     throw std::invalid_argument(msg.str());
   }
-  if (w.ndim() != 2 || scales.ndim() != 2 || biases.ndim() != 2) {
-    throw std::invalid_argument("[dequantize] Only matrices supported for now");
+  if (w.ndim() < 2 || scales.ndim() < 2 || biases.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+        << "but it has only " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
   }
 
-  if (w.shape(0) != scales.shape(0) || w.shape(0) != biases.shape(0)) {
+  auto wshape = w.shape();
+  auto sshape = scales.shape();
+  auto bshape = biases.shape();
+  wshape.back() = -1;
+  sshape.back() = -1;
+  bshape.back() = -1;
+
+  if (wshape != sshape || wshape != bshape) {
     throw std::invalid_argument(
         "[dequantize] Shape of scales and biases does not match the matrix");
   }
@@ -3438,7 +3456,7 @@ array dequantize(
   // Compute some constants for the dequantization
   int el_per_int = 32 / bits;
 
-  if (w.shape(1) * el_per_int != scales.shape(1) * group_size) {
+  if (w.shape(-1) * el_per_int != scales.shape(-1) * group_size) {
     std::ostringstream msg;
     msg << "[dequantize] Shape of scales and biases does not match the matrix "
         << "given the quantization parameters. Provided matrix of shape "
@@ -3450,21 +3468,25 @@ array dequantize(
   // Extract the pieces from the passed quantized matrix
   std::vector<array> parts;
   for (int start = 0; start < 32; start += bits) {
-    // TODO: Implement bitwise operators for integral types
     int shift_left = 32 - (start + bits);
     int shift_right = shift_left + start;
-    array p = multiply(w, array(1 << shift_left, uint32), s);
-    p = floor_divide(p, array(1 << shift_right, uint32), s);
-    p = expand_dims(p, -1, s);
-    parts.push_back(p);
+
+    parts.push_back(expand_dims(
+        right_shift(
+            left_shift(w, array(32 - (start + bits), uint32), s),
+            array(32 - bits, uint32),
+            s),
+        -1,
+        s));
   }
   array w_full = concatenate(parts, -1, s);
 
   // Dequantize
-  w_full = reshape(w_full, {w.shape(0), -1, group_size}, s);
+  wshape.push_back(group_size);
+  w_full = reshape(w_full, wshape, s);
   w_full = multiply(w_full, expand_dims(scales, -1, s), s);
   w_full = add(w_full, expand_dims(biases, -1, s), s);
-  w_full = reshape(w_full, {w.shape(0), -1}, s);
+  w_full = reshape(w_full, sshape, s);
 
   return w_full;
 }

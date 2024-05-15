@@ -279,14 +279,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
     def test_block_sparse_qmm(self):
         def quantize(w, transpose=True, group_size=64, bits=4):
-            shape = w.shape
-            w = w.reshape(-1, shape[-1])
             qw, s, b = mx.quantize(w, group_size=group_size, bits=bits)
             w_hat = mx.dequantize(qw, s, b, group_size=group_size, bits=bits)
-            qw = qw.reshape(shape[:-1] + (-1,))
-            s = s.reshape(shape[:-1] + (-1,))
-            b = b.reshape(shape[:-1] + (-1,))
-            w_hat = w_hat.reshape(shape[:-1] + (-1,))
             if transpose:
                 w_hat = w_hat.swapaxes(-1, -2)
             return w_hat, qw, s, b
@@ -398,14 +392,8 @@ class TestQuantized(mlx_tests.MLXTestCase):
 
     def test_block_sparse_matmul_grad(self):
         def quantize(w, transpose=True, group_size=64, bits=4):
-            shape = w.shape
-            w = w.reshape(-1, shape[-1])
             qw, s, b = mx.quantize(w, group_size=group_size, bits=bits)
             w_hat = mx.dequantize(qw, s, b, group_size=group_size, bits=bits)
-            qw = qw.reshape(shape[:-1] + (-1,))
-            s = s.reshape(shape[:-1] + (-1,))
-            b = b.reshape(shape[:-1] + (-1,))
-            w_hat = w_hat.reshape(shape[:-1] + (-1,))
             if transpose:
                 w_hat = w_hat.swapaxes(-1, -2)
             return w_hat, qw, s, b
