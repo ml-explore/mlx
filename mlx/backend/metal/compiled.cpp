@@ -4,8 +4,8 @@
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/utils.h"
-#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/graph_utils.h"
 #include "mlx/primitives.h"

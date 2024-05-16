@@ -15,7 +15,7 @@ OUTPUT_FILE=${OUTPUT_DIR}/${SRC_NAME}.cpp
 
 mkdir -p $OUTPUT_DIR
 
-CONTENT=$($CC -I $SRC_DIR -DMLX_METAL_JIT -E $INPUT_FILE $CFLAGS 2>/dev/null)
+CONTENT=$($CC -I $SRC_DIR -DMLX_METAL_JIT -E -P $INPUT_FILE $CFLAGS 2>/dev/null)
 
 cat << EOF > "$OUTPUT_FILE"
 namespace mlx::core::metal {

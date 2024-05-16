@@ -1,4 +1,14 @@
 function(make_jit_source SRC_NAME)
+  # This function takes a metal header file,
+  # runs the C preprocessesor on it, and makes
+  # the processed contents available as a string in a C++ function
+  # mlx::core::metal::${SRC_NAME}()
+  #
+  # To use the function, declare it in jit/includes.h and
+  # include jit/includes.h.
+  #
+  # Additional arguments to this function are treated as dependencies
+  # in the Cmake build system.
   add_custom_command(
     OUTPUT  jit/${SRC_NAME}.cpp
     COMMAND /bin/bash
@@ -21,17 +31,20 @@ function(make_jit_source SRC_NAME)
   )
 endfunction(make_jit_source)
 
-make_jit_source(utils
+make_jit_source(
+  utils
   kernels/bf16.h
   kernels/complex.h
 )
-make_jit_source(unary_ops
+make_jit_source(
+  unary_ops
   kernels/erf.h
   kernels/expm1f.h
 )
 make_jit_source(binary_ops)
 make_jit_source(ternary_ops)
-make_jit_source(reduction
+make_jit_source(
+  reduction
   kernels/atomic.h
   kernels/reduction/ops.h
 )

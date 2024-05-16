@@ -3,10 +3,10 @@
 #include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/compiled_includes.h"
 #include "mlx/backend/metal/jit/binary.h"
 #include "mlx/backend/metal/jit/binary_two.h"
 #include "mlx/backend/metal/jit/copy.h"
+#include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/jit/ternary.h"
 #include "mlx/backend/metal/jit/unary.h"
 #include "mlx/backend/metal/kernels.h"
