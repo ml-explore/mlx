@@ -114,8 +114,8 @@ jobs:
           name: Run CPP tests
           command: |
             DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
-       - run:
-          name: Run small binary tests
+      - run:
+          name: Build small binary
           command: |
             source env/bin/activate
             cd build/
