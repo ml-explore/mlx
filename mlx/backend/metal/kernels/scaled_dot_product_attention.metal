@@ -638,7 +638,7 @@ struct FastAttentionKernel {
         maxes[simd_lane_id] = m_i_new;
         sums[simd_lane_id] = l_i_new;
         float rescale = l_i_old * exp(m_i_old - m_i_new);
-        o_rescale[simd_lane_id] = rescale; // apply to each preceding o
+        o_rescale[simd_lane_id] = rescale;
         output_scales[simd_lane_id] = 1.0 / l_i_new;
       }
     }
@@ -676,7 +676,6 @@ struct FastAttentionKernel {
     // Find block in Q, O; and head in K, V.
     const int c_row = tid_y * BM;
 
-    // a->q, b->k, c->v, d->o.
     Q += transpose_q ? c_row : c_row * params->ldq;
     thread loader_q_t loader_q(Q, params->ldq, Qs, simd_group_id, simd_lane_id);
 
@@ -768,8 +767,6 @@ struct FastAttentionKernel {
       threadgroup float* o_scales = Corrections + 2 * (BM + float_padding);
       mma_softmax_sv_op.rescale_output(o_scales);
 
-      // S-V iteration, S is Bm x Bm, Vs are Bm x Bk -> accum result as we
-      // iterate across Vs.
       mma_softmax_sv_op.mma(Ss, Vs);
 
       threadgroup float* final_output_scales =
@@ -784,7 +781,7 @@ struct FastAttentionKernel {
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
-    mma_softmax_sv_op.store_result(O, params->ldo);
+    mma_softmax_sv_op.store_result_safe(O, params->ldo, short2(BK, tgp_bm));
   }
 };
 

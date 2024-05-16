@@ -49,9 +49,6 @@ void sdpa_full_self_attention_metal(
   kname_self_attention << "bn_" + std::to_string(bn) + delimiter;
   kname_self_attention << "bk_" + std::to_string(bk) + delimiter;
 
-  /*   template [[host_name("steel_gemm_attention_bm_" #bm        \
-   "_bn_" #bn "_bk_" #bk "_itype_" #itype) */
-
   for (const auto& arr : {k, v, out}) {
     if (arr.dtype() != q.dtype()) {
       throw std::runtime_error(
@@ -60,9 +57,9 @@ void sdpa_full_self_attention_metal(
   }
 
   if (q.dtype() == float32) {
-    kname_self_attention << "float";
+    kname_self_attention << "itype" + delimiter + "float";
   } else if (q.dtype() == float16) {
-    kname_self_attention << "half";
+    kname_self_attention << "itype" + delimiter + "half";
   } else {
     throw std::runtime_error(
         "[ScaledDotProductAttention::eval_gpu]: unexpected dtype found for queries: expected either float32 or float16.");
@@ -72,7 +69,6 @@ void sdpa_full_self_attention_metal(
   auto kernel = d.get_kernel(kname_self_attention.str());
   compute_encoder->setComputePipelineState(kernel);
 
-  // supported sizes: 64, 80, 128.
   uint hidden_dim = q.shape(-1);
   uint qseq = q.shape(-2);
   uint qheads = q.shape(-3);
@@ -105,8 +101,8 @@ void sdpa_full_self_attention_metal(
   const int batch_stride_v = dk * query_sequence_length;
   const int batch_stride_o = dk * query_sequence_length;
   const int swizzle_log = 0;
-  const int gemm_k_iterations_aligned = (K + bk - 1) / bk;
   const int gemm_n_iterations_aligned = (N + bn - 1) / bn;
+  const int gemm_k_iterations_aligned = (K + bk - 1) / bk;
   const int gemm_sv_m_block_iterations = (M + bm - 1) / bm;
   const int batch_ndim = int(batch_shape.size());
 
@@ -119,7 +115,7 @@ void sdpa_full_self_attention_metal(
       ldv,
       lds,
       ldo,
-      1,
+      tn,
       tm,
       batch_stride_q,
       batch_stride_k,
@@ -131,6 +127,7 @@ void sdpa_full_self_attention_metal(
       gemm_sv_m_block_iterations,
       batch_ndim,
       alpha};
+
   const std::vector<size_t> batch_strides = {
       (size_t)batch_stride_q,
       (size_t)batch_stride_k,
@@ -140,7 +137,6 @@ void sdpa_full_self_attention_metal(
   compute_encoder.set_input_array(q, 0);
   compute_encoder.set_input_array(k, 1);
   compute_encoder.set_input_array(v, 2);
-
   compute_encoder.set_output_array(out, 3);
 
   compute_encoder->setBytes(&params, sizeof(MLXFastAttentionParams), 4);
