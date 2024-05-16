@@ -277,6 +277,148 @@ class TestQuantized(mlx_tests.MLXTestCase):
         self.assertEqual(y_q.shape, y_hat.shape)
         self.assertLess((y_q - y_hat).abs().max(), 1e-3)
 
+    def test_block_sparse_qmm(self):
+        def quantize(w, transpose=True, group_size=64, bits=4):
+            qw, s, b = mx.quantize(w, group_size=group_size, bits=bits)
+            w_hat = mx.dequantize(qw, s, b, group_size=group_size, bits=bits)
+            if transpose:
+                w_hat = w_hat.swapaxes(-1, -2)
+            return w_hat, qw, s, b
+
+        def test_shape(
+            M,
+            N,
+            K,
+            dtype=mx.float32,
+            batch_A=(),
+            batch_B=(),
+            lhs_indices=None,
+            rhs_indices=None,
+            transpose=True,
+            group_size=64,
+            bits=4,
+        ):
+            with self.subTest(
+                M=M,
+                N=N,
+                K=K,
+                dtype=dtype,
+                batch_A=batch_A,
+                batch_B=batch_B,
+                lhs_indices=lhs_indices,
+                rhs_indices=rhs_indices,
+                transpose=transpose,
+                group_size=group_size,
+                bits=bits,
+            ):
+                x = mx.random.normal(shape=batch_A + (M, K)).astype(dtype)
+                w = mx.random.normal(
+                    shape=batch_B + ((N, K) if transpose else (K, N))
+                ).astype(dtype)
+                w_hat, qw, s, b = quantize(w, transpose, group_size, bits)
+
+                if lhs_indices is not None:
+                    lhs_indices = mx.array(lhs_indices)
+                if rhs_indices is not None:
+                    rhs_indices = mx.array(rhs_indices)
+
+                c1 = mx.block_sparse_mm(x, w_hat, lhs_indices, rhs_indices)
+                c2 = mx.block_sparse_qmm(
+                    x,
+                    qw,
+                    s,
+                    b,
+                    lhs_indices,
+                    rhs_indices,
+                    transpose=transpose,
+                    group_size=group_size,
+                    bits=bits,
+                )
+
+                self.assertTrue(mx.allclose(c1, c2, atol=1e-4))
+
+        inputs = (
+            {
+                "batch_A": (1,),
+                "lhs_indices": (0,),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (1,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (2,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (3,),
+                "lhs_indices": (0, 2),
+                "batch_B": (1,),
+                "rhs_indices": (0,),
+            },
+            {
+                "batch_A": (5,),
+                "lhs_indices": (0, 2),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (4, 2),
+                "lhs_indices": (
+                    (7, 6),
+                    (5, 4),
+                    (1, 2),
+                ),
+                "batch_B": (4, 1),
+                "rhs_indices": ((2,), (0,), (1,)),
+            },
+        )
+
+        for kwargs in inputs:
+            test_shape(32, 32, 256, **kwargs)
+            test_shape(1, 32, 256, **kwargs)
+            test_shape(32, 256, 32, transpose=False, **kwargs)
+            test_shape(1, 256, 32, transpose=False, **kwargs)
+            test_shape(32, 32, 512, **kwargs)
+            test_shape(1, 32, 512, **kwargs)
+            test_shape(32, 512, 32, transpose=False, **kwargs)
+            test_shape(1, 512, 32, transpose=False, **kwargs)
+
+    def test_block_sparse_matmul_grad(self):
+        def quantize(w, transpose=True, group_size=64, bits=4):
+            qw, s, b = mx.quantize(w, group_size=group_size, bits=bits)
+            w_hat = mx.dequantize(qw, s, b, group_size=group_size, bits=bits)
+            if transpose:
+                w_hat = w_hat.swapaxes(-1, -2)
+            return w_hat, qw, s, b
+
+        lhs_indices = mx.array([[7, 6], [4, 1], [0, 2]], dtype=mx.uint32)
+        rhs_indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
+
+        x = mx.random.normal((4, 2, 32, 256))
+        w = mx.random.normal((4, 1, 32, 256))
+        w_hat, qw, s, b = quantize(w)
+
+        def f_ref(x, w, i1, i2):
+            return mx.block_sparse_mm(x, w, i1, i2).sum()
+
+        def f_test(x, qw, s, b, i1, i2):
+            return mx.block_sparse_qmm(x, qw, s, b, i1, i2, transpose=True).sum()
+
+        r1 = f_ref(x, w_hat, lhs_indices, rhs_indices)
+        r2 = f_test(x, qw, s, b, lhs_indices, rhs_indices)
+        self.assertTrue(mx.allclose(r1, r2, atol=1e-4))
+
+        g1 = mx.grad(f_ref)(x, w_hat, lhs_indices, rhs_indices)
+        g2 = mx.grad(f_test)(x, qw, s, b, lhs_indices, rhs_indices)
+        self.assertTrue(mx.allclose(g1, g2, atol=1e-4))
+
 
 if __name__ == "__main__":
     unittest.main()
