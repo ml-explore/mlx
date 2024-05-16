@@ -13,4 +13,6 @@ using namespace mlx::core;
 array nd_array_to_mlx(
     nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu> nd_array,
     std::optional<Dtype> dtype);
+
 nb::ndarray<nb::numpy> mlx_to_np_array(const array& a);
+nb::ndarray<> mlx_to_dlpack(const array& a);
