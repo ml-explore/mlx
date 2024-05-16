@@ -13,7 +13,7 @@
 
 namespace mlx::core {
 
-void cholesky_impl(const array& a, array& T, bool upper) {
+void cholesky_impl(const array& a, array& factor, bool upper) {
   // Lapack uses the column-major convention. We take advantage of the fact that
   // the matrix should be symmetric:
   //   (A)ᵀ = A
@@ -21,16 +21,14 @@ void cholesky_impl(const array& a, array& T, bool upper) {
   // triangular matrix, so uplo is the opposite of what we would expect from
   // upper
 
-  char uplo;
-  if (upper) {
-    uplo = 'L';
-  } else {
-    uplo = 'U';
-  }
+  char uplo = (upper) ? 'L' : 'U';
 
   // The decomposition is computed in place, so just copy the input to the
   // output.
-  copy(a, T, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy(
+      a,
+      factor,
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
 
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);
@@ -42,7 +40,7 @@ void cholesky_impl(const array& a, array& T, bool upper) {
     spotrf_(
         /* uplo = */ &uplo,
         /* n = */ &N,
-        /* a = */ T.data<float>() + N * N * i,
+        /* a = */ factor.data<float>() + N * N * i,
         /* lda = */ &N,
         /* info = */ &info);
 
@@ -60,9 +58,9 @@ void cholesky_impl(const array& a, array& T, bool upper) {
     for (int j = 0; j < N; j++) {
       for (int k = 0; k < j; k++) {
         if (upper)
-          T.data<float>()[N * N * i + j * N + k] = 0.;
+          factor.data<float>()[N * N * i + j * N + k] = 0.;
         else
-          T.data<float>()[N * N * i + k * N + j] = 0.;
+          factor.data<float>()[N * N * i + k * N + j] = 0.;
       }
     }
   }

@@ -323,7 +323,7 @@ TEST_CASE("test matrix inversion") {
             .item<bool>());
 }
 
-TEST_CASE("test matrix cholensky") {
+TEST_CASE("test matrix cholesky") {
   // 0D and 1D throw
   CHECK_THROWS(linalg::cholesky(array(0.0), /* upper = */ false, Device::cpu));
   CHECK_THROWS(

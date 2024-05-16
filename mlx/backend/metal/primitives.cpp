@@ -1013,7 +1013,8 @@ void Inverse::eval_gpu(const std::vector<array>& inputs, array& output) {
 }
 
 void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
-  throw std::runtime_error("[Cholesky::eval_gpu] Metal inversion NYI.");
+  throw std::runtime_error(
+      "[Cholesky::eval_gpu] Metal Cholesky decomposition NYI.");
 }
 
 } // namespace mlx::core
