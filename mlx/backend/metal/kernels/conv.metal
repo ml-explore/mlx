@@ -109,6 +109,7 @@ template <typename T, int N>
   bool valid = n < params->N;
 
   // Unroll dimensions
+  int kernel_stride = 1;
   for (int i = N - 1; i >= 0; --i) {
     int os_ = (oS % params->oS[i]);
     int ws_ = (wS % params->wS[i]);
@@ -125,7 +126,8 @@ template <typename T, int N>
     oS /= params->oS[i];
     wS /= params->wS[i];
 
-    out += ws_ * params->str[i];
+    out += ws_ * kernel_stride;
+    kernel_stride *= params->wS[i];
   }
 
   if (valid) {

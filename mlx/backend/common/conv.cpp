@@ -111,12 +111,16 @@ void slow_conv_2D(
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const int iH = 1 + in_dilation[0] * (in.shape(1) - 1); // Input spatial dim
   const int iW = 1 + in_dilation[1] * (in.shape(2) - 1); // Input spatial dim
+  const int C = in.shape(3); // In channels
   const int oH = out.shape(1); // Output spatial dim
   const int oW = out.shape(2); // Output spatial dim
   const int O = wt.shape(0); // Out channels
-  const int C = wt.shape(3); // In channels
   const int wH = wt.shape(1); // Weight spatial dim
   const int wW = wt.shape(2); // Weight spatial dim
+
+  const int groups = C / wt.shape(3);
+  const int C_per_group = wt.shape(3);
+  const int O_per_group = O / groups;
 
   const size_t in_stride_N = in.strides()[0];
   const size_t in_stride_H = in.strides()[1];
@@ -141,33 +145,35 @@ void slow_conv_2D(
         int ih_base = oh * wt_strides[0] - padding[0];
         int iw_base = ow * wt_strides[1] - padding[1];
 
-        for (int o = 0; o < O; ++o) {
-          float r = 0.;
+        for (int g = 0; g < groups; ++g) {
+          for (int o = g * O_per_group; o < (g + 1) * O_per_group; ++o) {
+            float r = 0.;
 
-          for (int wh = 0; wh < wH; ++wh) {
-            for (int ww = 0; ww < wW; ++ww) {
-              int wh_flip = flip ? wH - wh - 1 : wh;
-              int ww_flip = flip ? wW - ww - 1 : ww;
-              int ih = ih_base + wh_flip * wt_dilation[0];
-              int iw = iw_base + ww_flip * wt_dilation[1];
+            for (int wh = 0; wh < wH; ++wh) {
+              for (int ww = 0; ww < wW; ++ww) {
+                int wh_flip = flip ? wH - wh - 1 : wh;
+                int ww_flip = flip ? wW - ww - 1 : ww;
+                int ih = ih_base + wh_flip * wt_dilation[0];
+                int iw = iw_base + ww_flip * wt_dilation[1];
 
-              const T* wt_ptr_pt = wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
-              const T* in_ptr_pt = in_ptr + ih * in_stride_H + iw * in_stride_W;
+                const T* wt_ptr_pt =
+                    wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
+                const T* in_ptr_pt =
+                    in_ptr + ih * in_stride_H + iw * in_stride_W;
 
-              for (int c = 0; c < C; ++c) {
-                r += static_cast<float>(in_ptr_pt[0]) *
-                    static_cast<float>(wt_ptr_pt[0]);
-                in_ptr_pt += in_stride_C;
-                wt_ptr_pt += wt_stride_C;
-              } // c
+                for (int c = g * C_per_group; c < (g + 1) * C_per_group; ++c) {
+                  r += static_cast<float>(in_ptr_pt[c * in_stride_C]) *
+                      static_cast<float>(
+                           wt_ptr_pt[(c % C_per_group) * wt_stride_C]);
+                } // c
+              } // ww
+            } // wh
 
-            } // ww
-          } // wh
-
-          out_ptr[0] = static_cast<T>(r);
-          out_ptr += out_stride_O;
-          wt_ptr += wt_stride_O;
-        } // o
+            out_ptr[0] = static_cast<T>(r);
+            out_ptr += out_stride_O;
+            wt_ptr += wt_stride_O;
+          } // o
+        } // g
       };
 
   int jump_h = flip ? -wt_dilation[0] : wt_dilation[0];
@@ -219,41 +225,43 @@ void slow_conv_2D(
         int wh_base = base_h[oh % f_out_jump_h];
         int ww_base = base_w[ow % f_out_jump_w];
 
-        for (int o = 0; o < O; ++o) {
-          float r = 0.;
+        for (int g = 0; g < groups; ++g) {
+          for (int o = g * O_per_group; o < (g + 1) * O_per_group; ++o) {
+            float r = 0.;
 
-          for (int wh = wh_base; wh < wH; wh += f_wgt_jump_h) {
-            for (int ww = ww_base; ww < wW; ww += f_wgt_jump_w) {
-              int wh_flip = flip ? wH - wh - 1 : wh;
-              int ww_flip = flip ? wW - ww - 1 : ww;
-              int ih = ih_base + wh_flip * wt_dilation[0];
-              int iw = iw_base + ww_flip * wt_dilation[1];
+            for (int wh = wh_base; wh < wH; wh += f_wgt_jump_h) {
+              for (int ww = ww_base; ww < wW; ww += f_wgt_jump_w) {
+                int wh_flip = flip ? wH - wh - 1 : wh;
+                int ww_flip = flip ? wW - ww - 1 : ww;
+                int ih = ih_base + wh_flip * wt_dilation[0];
+                int iw = iw_base + ww_flip * wt_dilation[1];
 
-              if (ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
-                const T* wt_ptr_pt =
-                    wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
+                if (ih >= 0 && ih < iH && iw >= 0 && iw < iW) {
+                  const T* wt_ptr_pt =
+                      wt_ptr + wh * wt_stride_H + ww * wt_stride_W;
 
-                int ih_dil = !is_idil_one ? (ih / in_dilation[0]) : ih;
-                int iw_dil = !is_idil_one ? (iw / in_dilation[1]) : iw;
+                  int ih_dil = !is_idil_one ? (ih / in_dilation[0]) : ih;
+                  int iw_dil = !is_idil_one ? (iw / in_dilation[1]) : iw;
 
-                const T* in_ptr_pt =
-                    in_ptr + ih_dil * in_stride_H + iw_dil * in_stride_W;
+                  const T* in_ptr_pt =
+                      in_ptr + ih_dil * in_stride_H + iw_dil * in_stride_W;
 
-                for (int c = 0; c < C; ++c) {
-                  r += static_cast<float>(in_ptr_pt[0]) *
-                      static_cast<float>(wt_ptr_pt[0]);
-                  in_ptr_pt += in_stride_C;
-                  wt_ptr_pt += wt_stride_C;
-                } // c
+                  for (int c = g * C_per_group; c < (g + 1) * C_per_group;
+                       ++c) {
+                    r += static_cast<float>(in_ptr_pt[c * in_stride_C]) *
+                        static_cast<float>(
+                             wt_ptr_pt[(c % C_per_group) * wt_stride_C]);
+                  } // c
 
-              } // ih, iw check
-            } // ww
-          } // wh
+                } // ih, iw check
+              } // ww
+            } // wh
 
-          out_ptr[0] = static_cast<T>(r);
-          out_ptr += out_stride_O;
-          wt_ptr += wt_stride_O;
-        } // o
+            out_ptr[0] = static_cast<T>(r);
+            out_ptr += out_stride_O;
+            wt_ptr += wt_stride_O;
+          } // o
+        } // g
       };
 
   int oH_border_0 = 0;
