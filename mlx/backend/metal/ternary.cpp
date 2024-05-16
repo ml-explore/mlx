@@ -2,15 +2,9 @@
 
 #include "mlx/backend/common/ternary.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
-
-#ifndef MLX_METAL_JIT
-#include <fmt/format.h>
-#include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/compiled_includes.h"
-#include "mlx/backend/metal/jit/ternary.h"
-#endif
 
 namespace mlx::core {
 
@@ -56,29 +50,7 @@ void ternary_op(
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 
-  MTL::ComputePipelineState* kernel;
-
-  if constexpr (mlx_metal_jit()) {
-    std::ostringstream op_t;
-    out.primitive().print(op_t);
-    auto op_name = op_t.str();
-    std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-    auto lib = d.get_library(lib_name);
-    if (lib == nullptr) {
-      std::ostringstream kernel_source;
-      kernel_source << metal::utils() << metal::ternary_ops()
-                    << metal::ternary()
-                    << fmt::format(
-                           ternary_kernels,
-                           lib_name,
-                           get_type_string(out.dtype()),
-                           op_name);
-      lib = d.get_library(lib_name, kernel_source.str());
-    }
-    kernel = d.get_kernel(kernel_name, lib);
-  } else {
-    kernel = d.get_kernel(kernel_name);
-  }
+  auto kernel = get_ternary_kernel(d, kernel_name, out);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);

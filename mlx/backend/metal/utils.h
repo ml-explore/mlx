@@ -10,14 +10,6 @@ namespace mlx::core {
 
 namespace {
 
-constexpr bool mlx_metal_jit() {
-#ifndef MLX_METAL_JIT
-  return true;
-#else
-  return false;
-#endif
-}
-
 using metal::CommandEncoder;
 
 template <typename T>
