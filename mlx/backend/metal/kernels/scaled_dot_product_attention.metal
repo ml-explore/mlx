@@ -111,13 +111,13 @@ struct BlockLoaderFA {
         dst[i * dst_ld + j] = tmp_val[j];
       }
     }
-}
+  }
 
   /* Iteration helper */
   METAL_FUNC void next() {
     src += tile_stride;
   }
-    
+
   METAL_FUNC void next(short n) {
     src += n * tile_stride;
   }
@@ -176,7 +176,7 @@ struct BlockMMAFA {
 
   short sm;
   short sn;
-    
+
   ushort sid;
   ushort slid;
 
@@ -264,7 +264,7 @@ struct BlockMMAFA {
     for (short i = 0; i < TM; i++) {
       short row = sm + i * TM_stride;
       float scale_value = Corrections[row];
-        
+
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < TN; j++) {
         // Get accumulated result and associated offset in C
@@ -275,8 +275,7 @@ struct BlockMMAFA {
       }
     }
   }
-    
-    
+
   /* Store results from simdgroup_matrix results into device memory */
   METAL_FUNC void store_result(device U* C, const int ldc) const {
     // Adjust for simdgroup and thread location
@@ -300,35 +299,36 @@ struct BlockMMAFA {
       }
     }
   }
-    
 
-    METAL_FUNC void
-    store_result_to_tgp_memory(threadgroup U* C, const int ldc, short2 dst_tile_dims) const {
-        // Adjust for simdgroup and thread location
-        C += (sm + tm) * ldc + (tn + sn);
-        dst_tile_dims -= short2(tn + sn, sm + tm);
+  METAL_FUNC void store_result_to_tgp_memory(
+      threadgroup U* C,
+      const int ldc,
+      short2 dst_tile_dims) const {
+    // Adjust for simdgroup and thread location
+    C += (sm + tm) * ldc + (tn + sn);
+    dst_tile_dims -= short2(tn + sn, sm + tm);
 
+    STEEL_PRAGMA_UNROLL
+    for (int i = 0; i < TM; i++) {
+      if (i * TM_stride < dst_tile_dims.y) {
         STEEL_PRAGMA_UNROLL
-        for (int i = 0; i < TM; i++) {
-          if (i * TM_stride < dst_tile_dims.y) {
-            STEEL_PRAGMA_UNROLL
-            for (int j = 0; j < TN; j++) {
-              // Get accumulated result and associated offset in C
-              thread const auto& accum = results[i * TN + j].thread_elements();
-              int offset = (i * TM_stride) * ldc + (j * TN_stride);
+        for (int j = 0; j < TN; j++) {
+          // Get accumulated result and associated offset in C
+          thread const auto& accum = results[i * TN + j].thread_elements();
+          int offset = (i * TM_stride) * ldc + (j * TN_stride);
 
-              // Apply epilogue and output C
-              if (j * TN_stride < dst_tile_dims.x) {
-                C[offset] = Epilogue::apply(accum[0]);
-              }
+          // Apply epilogue and output C
+          if (j * TN_stride < dst_tile_dims.x) {
+            C[offset] = Epilogue::apply(accum[0]);
+          }
 
-              if (j * TN_stride + 1 < dst_tile_dims.x) {
-                C[offset + 1] = Epilogue::apply(accum[1]);
-              }
-            }
+          if (j * TN_stride + 1 < dst_tile_dims.x) {
+            C[offset + 1] = Epilogue::apply(accum[1]);
           }
         }
+      }
     }
+  }
 
   METAL_FUNC void
   store_result_safe(device U* C, const int ldc, short2 dst_tile_dims) const {
@@ -427,17 +427,16 @@ struct BlockMMAFA {
       }
     }
   }
-    
-    METAL_FUNC void clear_results() {
-        STEEL_PRAGMA_UNROLL
-        for (int i = 0; i < TM; i++) {
-            STEEL_PRAGMA_UNROLL
-            for (int j = 0; j < TN; j++) {
-                results[i * TN + j] =
-                simdgroup_matrix<AccumType, 8, 8>(0);
-            }
-        }
+
+  METAL_FUNC void clear_results() {
+    STEEL_PRAGMA_UNROLL
+    for (int i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (int j = 0; j < TN; j++) {
+        results[i * TN + j] = simdgroup_matrix<AccumType, 8, 8>(0);
+      }
     }
+  }
 };
 
 template <
@@ -463,16 +462,20 @@ struct FastAttentionKernel {
   STEEL_CONST short tgp_mem_size_k =
       transpose_k ? BK * (BN + tgp_padding) : BN * (BK + tgp_padding);
   STEEL_CONST short tgp_mem_size_v =
-        transpose_v ? BK * (BN + tgp_padding) : BN * (BK + tgp_padding);
+      transpose_v ? BK * (BN + tgp_padding) : BN * (BK + tgp_padding);
   STEEL_CONST short tgp_mem_size_s = BM * (BN + tgp_padding);
 
   // maxes, rowsums, rescale
-  STEEL_CONST short tgp_mem_size_corrections = 4 * (BM * sizeof(float) + float_padding); //
+  STEEL_CONST short tgp_mem_size_corrections =
+      4 * (BM * sizeof(float) + float_padding); //
 
   STEEL_CONST bool share_kv_smem = transpose_k != transpose_v;
 
-  STEEL_CONST short tgp_mem_size = share_kv_smem ? tgp_mem_size_q + tgp_mem_size_k + tgp_mem_size_s + tgp_mem_size_corrections:
-                                                   tgp_mem_size_q + tgp_mem_size_k + tgp_mem_size_s + tgp_mem_size_corrections + tgp_mem_size_v;
+  STEEL_CONST short tgp_mem_size = share_kv_smem
+      ? tgp_mem_size_q + tgp_mem_size_k + tgp_mem_size_s +
+          tgp_mem_size_corrections
+      : tgp_mem_size_q + tgp_mem_size_k + tgp_mem_size_s +
+          tgp_mem_size_corrections + tgp_mem_size_v;
 
   STEEL_CONST short tgp_size = WM * WN * 32;
 
@@ -497,149 +500,149 @@ struct FastAttentionKernel {
       transpose_k,
       tgp_size>;
 
-    using loader_v_t = BlockLoaderFA<
-        T,
-        transpose_v ? BK : BN,
-        transpose_v ? BN : BK,
-        transpose_v ? BN + tgp_padding : BK + tgp_padding,
-        transpose_v,
-        tgp_size>;
+  using loader_v_t = BlockLoaderFA<
+      T,
+      transpose_v ? BK : BN,
+      transpose_v ? BN : BK,
+      transpose_v ? BN + tgp_padding : BK + tgp_padding,
+      transpose_v,
+      tgp_size>;
 
-    using mma_qk_t = BlockMMAFA<
-    T,
-    U,
-    BM,
-    BN,
-    BK,
-    WM,
-    WN,
-    transpose_q,
-    transpose_k,
-    transpose_q ? BM + tgp_padding : BK + tgp_padding,
-    transpose_k ? BK + tgp_padding : BN + tgp_padding,
-    AccumType,
-    Epilogue>;
+  using mma_qk_t = BlockMMAFA<
+      T,
+      U,
+      BM,
+      BN,
+      BK,
+      WM,
+      WN,
+      transpose_q,
+      transpose_k,
+      transpose_q ? BM + tgp_padding : BK + tgp_padding,
+      transpose_k ? BK + tgp_padding : BN + tgp_padding,
+      AccumType,
+      Epilogue>;
 
-    using mma_sv_t = BlockMMAFA<
-        T,
-        U,
-        BM,
-        BK,
-        BN,
-        WM,
-        WN,
-        false,
-        transpose_v,
-        BN + tgp_padding,
-        BK + tgp_padding,
-        AccumType,
-        Epilogue>;
+  using mma_sv_t = BlockMMAFA<
+      T,
+      U,
+      BM,
+      BK,
+      BN,
+      WM,
+      WN,
+      false,
+      transpose_v,
+      BN + tgp_padding,
+      BK + tgp_padding,
+      AccumType,
+      Epilogue>;
 
-    /* Main kernel function */
-    template <bool M_aligned, bool N_aligned, bool K_aligned_>
-    static METAL_FUNC void gemm_loop(
-        threadgroup T* As [[threadgroup(0)]],
-        threadgroup T* Bs [[threadgroup(1)]],
-        const int gemm_k_iterations,
-        thread loader_k_t& loader_b,
-        thread mma_qk_t& mma_op,
-        thread const short& tgp_bm,
-        thread const short& tgp_bn,
-        LoopAlignment<M_aligned, N_aligned, K_aligned_> l = {}) {
-      // Appease the compiler
-        (void)l;
-        (void)tgp_bm;
+  /* Main kernel function */
+  template <bool M_aligned, bool N_aligned, bool K_aligned_>
+  static METAL_FUNC void gemm_loop(
+      threadgroup T* As [[threadgroup(0)]],
+      threadgroup T* Bs [[threadgroup(1)]],
+      const int gemm_k_iterations,
+      thread loader_k_t& loader_b,
+      thread mma_qk_t& mma_op,
+      thread const short& tgp_bm,
+      thread const short& tgp_bn,
+      LoopAlignment<M_aligned, N_aligned, K_aligned_> l = {}) {
+    // Appease the compiler
+    (void)l;
+    (void)tgp_bm;
 
-        short2 tile_dims_B = transpose_k ? short2(BK, tgp_bn) : short2(tgp_bn, BK);
+    short2 tile_dims_B = transpose_k ? short2(BK, tgp_bn) : short2(tgp_bn, BK);
 
-        // not valid for gemm_k_iterations > 1 (so, BK == d_k)
-        for (int k = 0; k < gemm_k_iterations; k++) {
-          threadgroup_barrier(mem_flags::mem_threadgroup);
+    // not valid for gemm_k_iterations > 1 (so, BK == d_k)
+    for (int k = 0; k < gemm_k_iterations; k++) {
+      threadgroup_barrier(mem_flags::mem_threadgroup);
 
-          if (N_aligned) {
-            loader_b.load_unsafe();
-          } else {
-            loader_b.load_safe(tile_dims_B);
-          }
+      if (N_aligned) {
+        loader_b.load_unsafe();
+      } else {
+        loader_b.load_safe(tile_dims_B);
+      }
 
-          threadgroup_barrier(mem_flags::mem_threadgroup);
+      threadgroup_barrier(mem_flags::mem_threadgroup);
 
-          // Multiply and accumulate threadgroup elements
-          mma_op.mma(As, Bs);
-        }
+      // Multiply and accumulate threadgroup elements
+      mma_op.mma(As, Bs);
     }
-
-  static METAL_FUNC void initialize_corrections(threadgroup float* C,
-                                                uint simd_lane_id,
-                                                uint simd_group_id) {
-      if(simd_group_id == 0) {
-          threadgroup float* maxes = C;
-          threadgroup float* sums = C + (BM + float_padding);
-          threadgroup float* o_rescale = sums + (BM + float_padding);
-          threadgroup float* output_rescale = o_rescale + (BM + float_padding);
-
-          if(simd_lane_id < BM) {
-              maxes[simd_lane_id] = -INFINITY; //m_i
-              sums[simd_lane_id] = 0.f; // l_i
-              o_rescale[simd_lane_id] = 1.f; // li * exp(mi - mi_new)
-              output_rescale[simd_lane_id] = 1.f; // 1.0 / l_i
-          }
-      }
   }
 
-  static METAL_FUNC void rescale_ss(threadgroup T* Ss,
-                                    threadgroup float* Corrections,
-                                    uint simd_group_id,
-                                    uint simd_lane_id,
-                                    short2 local_blocks,
-                                    float alpha) {
-      
-      // may need a cast
-      if(simd_group_id == 0) {
-          short offset = BM + float_padding;
-          threadgroup float* maxes = Corrections;
-          threadgroup float* sums = Corrections + offset;
-          threadgroup float* o_rescale = sums + offset;
-          threadgroup float* output_scales = o_rescale + offset;
+  static METAL_FUNC void initialize_corrections(
+      threadgroup float* C,
+      uint simd_lane_id,
+      uint simd_group_id) {
+    if (simd_group_id == 0) {
+      threadgroup float* maxes = C;
+      threadgroup float* sums = C + (BM + float_padding);
+      threadgroup float* o_rescale = sums + (BM + float_padding);
+      threadgroup float* output_rescale = o_rescale + (BM + float_padding);
 
-          if(simd_lane_id < uint(local_blocks.y)) {
-
-              float m_i_old = maxes[simd_lane_id];
-              float l_i_old = sums[simd_lane_id];
-              
-              float m_i_new = m_i_old;
-              float l_i_new = l_i_old;
-
-              short offset = simd_lane_id * (BN + tgp_padding);
-
-              float m_ij = -INFINITY;
-              for(short j = 0; j < local_blocks.x; j++) {
-                  float val = alpha * float(Ss[offset + j]);
-                  m_ij = max(m_ij, val);
-              }
-
-              m_i_new = max(m_ij, m_i_new);
-
-              float rowsum = 0.f; // lij
-
-              for(short j = 0; j < local_blocks.x; j++) {
-                  float val = alpha * float(Ss[offset + j]);
-                  float P_i_j = exp(val - m_ij);
-                  rowsum += P_i_j;
-                  P_i_j = P_i_j * exp(m_ij - m_i_new);
-                  Ss[offset + j] = T(P_i_j);
-              }
-
-              l_i_new = exp(m_i_old - m_i_new) * l_i_old + exp(m_ij - m_i_new) * rowsum;
-              maxes[simd_lane_id] = m_i_new;
-              sums[simd_lane_id] = l_i_new;
-              float rescale = l_i_old * exp(m_i_old - m_i_new);
-              o_rescale[simd_lane_id] = rescale; // apply to each preceding o
-              output_scales[simd_lane_id] = 1.0 / l_i_new;
-          }
+      if (simd_lane_id < BM) {
+        maxes[simd_lane_id] = -INFINITY; // m_i
+        sums[simd_lane_id] = 0.f; // l_i
+        o_rescale[simd_lane_id] = 1.f; // li * exp(mi - mi_new)
+        output_rescale[simd_lane_id] = 1.f; // 1.0 / l_i
       }
+    }
   }
 
+  static METAL_FUNC void rescale_ss(
+      threadgroup T* Ss,
+      threadgroup float* Corrections,
+      uint simd_group_id,
+      uint simd_lane_id,
+      short2 local_blocks,
+      float alpha) {
+    // may need a cast
+    if (simd_group_id == 0) {
+      short offset = BM + float_padding;
+      threadgroup float* maxes = Corrections;
+      threadgroup float* sums = Corrections + offset;
+      threadgroup float* o_rescale = sums + offset;
+      threadgroup float* output_scales = o_rescale + offset;
+
+      if (simd_lane_id < uint(local_blocks.y)) {
+        float m_i_old = maxes[simd_lane_id];
+        float l_i_old = sums[simd_lane_id];
+
+        float m_i_new = m_i_old;
+        float l_i_new = l_i_old;
+
+        short offset = simd_lane_id * (BN + tgp_padding);
+
+        float m_ij = -INFINITY;
+        for (short j = 0; j < local_blocks.x; j++) {
+          float val = alpha * float(Ss[offset + j]);
+          m_ij = max(m_ij, val);
+        }
+
+        m_i_new = max(m_ij, m_i_new);
+
+        float rowsum = 0.f; // lij
+
+        for (short j = 0; j < local_blocks.x; j++) {
+          float val = alpha * float(Ss[offset + j]);
+          float P_i_j = exp(val - m_ij);
+          rowsum += P_i_j;
+          P_i_j = P_i_j * exp(m_ij - m_i_new);
+          Ss[offset + j] = T(P_i_j);
+        }
+
+        l_i_new =
+            exp(m_i_old - m_i_new) * l_i_old + exp(m_ij - m_i_new) * rowsum;
+        maxes[simd_lane_id] = m_i_new;
+        sums[simd_lane_id] = l_i_new;
+        float rescale = l_i_old * exp(m_i_old - m_i_new);
+        o_rescale[simd_lane_id] = rescale; // apply to each preceding o
+        output_scales[simd_lane_id] = 1.0 / l_i_new;
+      }
+    }
+  }
 
   /* Main kernel function */
   static METAL_FUNC void run(
@@ -677,12 +680,11 @@ struct FastAttentionKernel {
     Q += transpose_q ? c_row : c_row * params->ldq;
     thread loader_q_t loader_q(Q, params->ldq, Qs, simd_group_id, simd_lane_id);
 
-
     short tgp_bm = min(BM, params->M - c_row);
     short2 tile_dims_Q = transpose_q ? short2(tgp_bm, BK) : short2(BK, tgp_bm);
 
     loader_q.load_safe(tile_dims_Q);
-      
+
     initialize_corrections(Corrections, simd_lane_id, simd_group_id);
 
     O += c_row * params->ldo;
@@ -693,107 +695,116 @@ struct FastAttentionKernel {
     thread loader_k_t loader_k(K, params->ldk, Ks, simd_group_id, simd_lane_id);
     thread loader_v_t loader_v(V, params->ldv, Vs, simd_group_id, simd_lane_id);
 
-    for(short n_block = 0; n_block < params->gemm_n_iterations_aligned; n_block++) {
-        short c_col = BN;
+    for (short n_block = 0; n_block < params->gemm_n_iterations_aligned;
+         n_block++) {
+      short c_col = BN;
 
-        // Prepare threadgroup loading operations
-        short gemm_k_iterations = params->gemm_k_iterations_aligned;
-        short tgp_bn_qk = min(BN, params->N - c_col * n_block);
-        threadgroup_barrier(mem_flags::mem_none);
+      // Prepare threadgroup loading operations
+      short gemm_k_iterations = params->gemm_k_iterations_aligned;
+      short tgp_bn_qk = min(BN, params->N - c_col * n_block);
+      threadgroup_barrier(mem_flags::mem_none);
 
-        ///////////////////////////////////////////////////////////////////////////////
-        { // Loop over K - unaligned case
-            short leftover_bk = params->K - params->gemm_k_iterations_aligned * BK;
-            
-            if (tgp_bm == BM && tgp_bn_qk == BN) {
-                gemm_loop<true, true, K_aligned>(
-                                                 Qs,
-                                                 Ks,
-                                                 gemm_k_iterations,
-                                                 loader_k,
-                                                 mma_qk_op,
-                                                 tgp_bm,
-                                                 tgp_bn_qk);
-            } else if (tgp_bn_qk == BN) {
-                gemm_loop<false, true, K_aligned>(
-                                                  Qs,
-                                                  Ks,
-                                                  gemm_k_iterations,
-                                                  loader_k,
-                                                  mma_qk_op,
-                                                  tgp_bm,
-                                                  tgp_bn_qk);
+      ///////////////////////////////////////////////////////////////////////////////
+      { // Loop over K - unaligned case
 
+        if (tgp_bm == BM && tgp_bn_qk == BN) {
+          gemm_loop<true, true, K_aligned>(
+              Qs,
+              Ks,
+              gemm_k_iterations,
+              loader_k,
+              mma_qk_op,
+              tgp_bm,
+              tgp_bn_qk);
+        } else if (tgp_bn_qk == BN) {
+          gemm_loop<false, true, K_aligned>(
+              Qs,
+              Ks,
+              gemm_k_iterations,
+              loader_k,
+              mma_qk_op,
+              tgp_bm,
+              tgp_bn_qk);
 
-            } else if (tgp_bm == BM) {
-                gemm_loop<true, false, K_aligned>(Qs,
-                                                  Ks,
-                                                  gemm_k_iterations,
-                                                  loader_k,
-                                                  mma_qk_op,
-                                                  tgp_bm,
-                                                  tgp_bn_qk);
-                
-            } else {
-                gemm_loop<false, false, K_aligned>(Qs,
-                                                   Ks,
-                                                   gemm_k_iterations,
-                                                   loader_k,
-                                                   mma_qk_op,
-                                                   tgp_bm,
-                                                   tgp_bn_qk);
-            }
+        } else if (tgp_bm == BM) {
+          gemm_loop<true, false, K_aligned>(
+              Qs,
+              Ks,
+              gemm_k_iterations,
+              loader_k,
+              mma_qk_op,
+              tgp_bm,
+              tgp_bn_qk);
+
+        } else {
+          gemm_loop<false, false, K_aligned>(
+              Qs,
+              Ks,
+              gemm_k_iterations,
+              loader_k,
+              mma_qk_op,
+              tgp_bm,
+              tgp_bn_qk);
         }
+      }
 
-        mma_qk_op.store_result_to_tgp_memory(Ss, BN + tgp_padding, short2(BN, BM));
+      mma_qk_op.store_result_to_tgp_memory(
+          Ss, BN + tgp_padding, short2(BN, BM));
 
-        threadgroup_barrier(mem_flags::mem_threadgroup);
+      threadgroup_barrier(mem_flags::mem_threadgroup);
 
-        rescale_ss(Ss, Corrections, simd_group_id, simd_lane_id, short2(tgp_bn_qk, tgp_bm), params->alpha);
+      rescale_ss(
+          Ss,
+          Corrections,
+          simd_group_id,
+          simd_lane_id,
+          short2(tgp_bn_qk, tgp_bm),
+          params->alpha);
 
-        loader_v.load_safe(short2(BK, tgp_bn_qk));
+      loader_v.load_safe(short2(BK, tgp_bn_qk));
 
-        threadgroup_barrier(mem_flags::mem_threadgroup);
+      threadgroup_barrier(mem_flags::mem_threadgroup);
 
-        threadgroup float* o_scales = Corrections + 2 * (BM + float_padding);
-        mma_softmax_sv_op.rescale_output(o_scales);
+      threadgroup float* o_scales = Corrections + 2 * (BM + float_padding);
+      mma_softmax_sv_op.rescale_output(o_scales);
 
-        // S-V iteration, S is Bm x Bm, Vs are Bm x Bk -> accum result as we iterate across Vs.
-        mma_softmax_sv_op.mma(Ss, Vs);
+      // S-V iteration, S is Bm x Bm, Vs are Bm x Bk -> accum result as we
+      // iterate across Vs.
+      mma_softmax_sv_op.mma(Ss, Vs);
 
-        threadgroup float* final_output_scales = Corrections + 3 * (BM + float_padding);
-        mma_softmax_sv_op.rescale_output(final_output_scales);
+      threadgroup float* final_output_scales =
+          Corrections + 3 * (BM + float_padding);
+      mma_softmax_sv_op.rescale_output(final_output_scales);
 
-        loader_v.next();
-        loader_k.next(BN);
+      loader_v.next();
+      loader_k.next(BN);
 
-        mma_qk_op.clear_results();
+      mma_qk_op.clear_results();
     }
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     mma_softmax_sv_op.store_result(O, params->ldo);
-
   }
 };
 
-
-template <typename T,
-          int BM,
-          int BN,
-          int BK,
-          int WM,
-          int WN,
-          bool transpose_q,
-          bool transpose_k,
-          bool transpose_v,
-          bool MN_aligned,
-          bool K_aligned>
-[[kernel, max_total_threads_per_threadgroup(WM * WN * 32)]] void attention(
-    const device T *Q [[buffer(0)]],
-    const device T *K [[buffer(1)]],
-    const device T *V [[buffer(2)]],
-    device T *O [[buffer(3)]],
+template <
+    typename T,
+    int BM,
+    int BN,
+    int BK,
+    int WM,
+    int WN,
+    bool transpose_q,
+    bool transpose_k,
+    bool transpose_v,
+    bool MN_aligned,
+    bool K_aligned>
+[[kernel, max_total_threads_per_threadgroup(WM* WN * 32)]] void attention(
+    const device T* Q [[buffer(0)]],
+    const device T* K [[buffer(1)]],
+    const device T* V [[buffer(2)]],
+    device T* O [[buffer(3)]],
     const constant MLXFastAttentionParams* params [[buffer(4)]],
     const constant int* batch_shape [[buffer(6)]],
     const constant size_t* batch_strides [[buffer(7)]],
@@ -801,60 +812,90 @@ template <typename T,
     uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]]) {
+  using attention_kernel = FastAttentionKernel<
+      T,
+      T,
+      BM,
+      BN,
+      BK,
+      WM,
+      WN,
+      transpose_q,
+      transpose_k,
+      transpose_v,
+      MN_aligned,
+      K_aligned>;
 
-    using attention_kernel = FastAttentionKernel<T, T, BM, BN, BK, WM, WN, transpose_q, transpose_k, transpose_v, MN_aligned, K_aligned>;
-    
-    // Adjust for batch
-    if(params->batch_ndim > 1) {
-      const constant size_t* Q_bstrides = batch_strides;
-      const constant size_t* KV_bstrides = batch_strides + params->batch_ndim;
+  // Adjust for batch
+  if (params->batch_ndim > 1) {
+    const constant size_t* Q_bstrides = batch_strides;
+    const constant size_t* KV_bstrides = batch_strides + params->batch_ndim;
 
-      ulong2 batch_offsets = elem_to_loc_broadcast(
-          tid.z, batch_shape, Q_bstrides, KV_bstrides, params->batch_ndim);
+    ulong2 batch_offsets = elem_to_loc_broadcast(
+        tid.z, batch_shape, Q_bstrides, KV_bstrides, params->batch_ndim);
 
-      Q += batch_offsets.x;
-      K += batch_offsets.y;
-      V += batch_offsets.y;
+    Q += batch_offsets.x;
+    K += batch_offsets.y;
+    V += batch_offsets.y;
 
-    } else {
-      Q += params->batch_stride_q * tid.z;
-      K += params->batch_stride_k * tid.z;
-      V += params->batch_stride_v * tid.z;
-    }
+  } else {
+    Q += params->batch_stride_q * tid.z;
+    K += params->batch_stride_k * tid.z;
+    V += params->batch_stride_v * tid.z;
+  }
 
-    // same shape as input
-    O += params->batch_stride_o * tid.z;
-    threadgroup T Qs[attention_kernel::tgp_mem_size_q];
-    threadgroup T Ss[attention_kernel::tgp_mem_size_s];
-    threadgroup float Corrections[attention_kernel::tgp_mem_size_corrections];
+  // same shape as input
+  O += params->batch_stride_o * tid.z;
+  threadgroup T Qs[attention_kernel::tgp_mem_size_q];
+  threadgroup T Ss[attention_kernel::tgp_mem_size_s];
+  threadgroup float Corrections[attention_kernel::tgp_mem_size_corrections];
 
-    if(attention_kernel::share_kv_smem) {
-        threadgroup T Ks[attention_kernel::tgp_mem_size_k];
-        threadgroup T* Vs = Ks;
-        attention_kernel::run(
-            Q, K, V, O,
-            params,
-            Qs, Ks, Ss, Vs, Corrections,
-            simd_lane_id, simd_group_id, tid, lid);
-    } else {
-        threadgroup T Ks[attention_kernel::tgp_mem_size_k];
-        threadgroup T Vs[attention_kernel::tgp_mem_size_v];
-        attention_kernel::run(
-            Q, K, V, O,
-            params,
-            Qs, Ks, Ss, Vs, Corrections,
-            simd_lane_id, simd_group_id, tid, lid);
-    }
+  if (attention_kernel::share_kv_smem) {
+    threadgroup T Ks[attention_kernel::tgp_mem_size_k];
+    threadgroup T* Vs = Ks;
+    attention_kernel::run(
+        Q,
+        K,
+        V,
+        O,
+        params,
+        Qs,
+        Ks,
+        Ss,
+        Vs,
+        Corrections,
+        simd_lane_id,
+        simd_group_id,
+        tid,
+        lid);
+  } else {
+    threadgroup T Ks[attention_kernel::tgp_mem_size_k];
+    threadgroup T Vs[attention_kernel::tgp_mem_size_v];
+    attention_kernel::run(
+        Q,
+        K,
+        V,
+        O,
+        params,
+        Qs,
+        Ks,
+        Ss,
+        Vs,
+        Corrections,
+        simd_lane_id,
+        simd_group_id,
+        tid,
+        lid);
+  }
 }
 
-
-
-template [[host_name("steel_gemm_attention_bm_16_bn_16_bk_64_float32")]]
-[[kernel]] void attention<float, 16, 16, 64, 2, 2, false, true, false, false, true>(
-    const device float *Q [[buffer(0)]],
-    const device float *K [[buffer(1)]],
-    const device float *V [[buffer(2)]],
-    device float *O [[buffer(3)]],
+template [[host_name(
+    "steel_gemm_attention_bm_16_bn_16_bk_64_float32")]] [[kernel]] void
+attention<float, 16, 16, 64, 2, 2, false, true, false, false, true>(
+    const device float* Q [[buffer(0)]],
+    const device float* K [[buffer(1)]],
+    const device float* V [[buffer(2)]],
+    device float* O [[buffer(3)]],
     const constant MLXFastAttentionParams* params [[buffer(4)]],
     const constant int* batch_shape [[buffer(6)]],
     const constant size_t* batch_strides [[buffer(7)]],
@@ -863,337 +904,338 @@ template [[host_name("steel_gemm_attention_bm_16_bn_16_bk_64_float32")]]
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]]);
 
-template<typename T, typename T2, typename T4, uint16_t TILE_SIZE_CONST, uint16_t NSIMDGROUPS>
-[[kernel]] void fast_inference_sdpa_compute_partials_template(const device T *Q [[buffer(0)]],
-                              const device T *K [[buffer(1)]],
-                              const device T *V [[buffer(2)]],
-                              const device uint64_t& L [[buffer(3)]],
-                              const device MLXScaledDotProductAttentionParams& params [[buffer(4)]],
-                              device float* O_partials [[buffer(5)]],
-                              device float* p_lse [[buffer(6)]],
-                              device float* p_maxes [[buffer(7)]],
-                              threadgroup T* threadgroup_block [[threadgroup(0)]],
-                              uint simd_lane_id [[thread_index_in_simdgroup]],
-                              uint simd_group_id [[simdgroup_index_in_threadgroup]],
-                              uint3 tid [[threadgroup_position_in_grid]]) {
-    constexpr const size_t DK = 128;
-    constexpr const ulong SIMDGROUP_MATRIX_LOAD_FACTOR = 8;
-    constexpr const size_t THREADS_PER_SIMDGROUP = 32;
-    constexpr const uint iter_offset = NSIMDGROUPS * 4;
-    const bool is_gqa = params.N_KV_HEADS != params.N_Q_HEADS;
-    uint kv_head_offset_factor = tid.x;
-    if(is_gqa) {
-        int q_kv_head_ratio = params.N_Q_HEADS / params.N_KV_HEADS;
-        kv_head_offset_factor = tid.x / q_kv_head_ratio;
-    }
-  } else {
-    thread_data_x4 = *(simdgroupQueryData + simd_lane_id);
-    const uint START_ROW = tid.y * TILE_SIZE_CONST;
-    const device T* baseKThisHead =
-        K + tgroup_k_batch_offset + tgroup_k_head_offset;
-
-    for (size_t KROW = START_ROW + simd_group_id; KROW < L;
-         KROW += NSIMDGROUPS) {
-      const uint KROW_OFFSET = KROW * DK;
-      const device T* baseKRow = baseKThisHead + KROW_OFFSET;
-      device T4* keysData = (device T4*)baseKRow;
-      thread_data_y4 = *(keysData + simd_lane_id);
-      T kq_scalar = dot(thread_data_x4, thread_data_y4);
-      threadAccum[KROW_ACCUM_INDEX] = float(kq_scalar);
-      KROW_ACCUM_INDEX++;
-    }
+template <
+    typename T,
+    typename T2,
+    typename T4,
+    uint16_t TILE_SIZE_CONST,
+    uint16_t NSIMDGROUPS>
+[[kernel]] void fast_inference_sdpa_compute_partials_template(
+    const device T* Q [[buffer(0)]],
+    const device T* K [[buffer(1)]],
+    const device T* V [[buffer(2)]],
+    const device uint64_t& L [[buffer(3)]],
+    const device MLXScaledDotProductAttentionParams& params [[buffer(4)]],
+    device float* O_partials [[buffer(5)]],
+    device float* p_lse [[buffer(6)]],
+    device float* p_maxes [[buffer(7)]],
+    threadgroup T* threadgroup_block [[threadgroup(0)]],
+    uint simd_lane_id [[thread_index_in_simdgroup]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint3 tid [[threadgroup_position_in_grid]]) {
+  constexpr const size_t DK = 128;
+  constexpr const ulong SIMDGROUP_MATRIX_LOAD_FACTOR = 8;
+  constexpr const size_t THREADS_PER_SIMDGROUP = 32;
+  constexpr const uint iter_offset = NSIMDGROUPS * 4;
+  const bool is_gqa = params.N_KV_HEADS != params.N_Q_HEADS;
+  uint kv_head_offset_factor = tid.x;
+  if (is_gqa) {
+    int q_kv_head_ratio = params.N_Q_HEADS / params.N_KV_HEADS;
+    kv_head_offset_factor = tid.x / q_kv_head_ratio;
   }
-  threadgroup float* smemP = (threadgroup float*)threadgroup_block;
+}
+else {
+  thread_data_x4 = *(simdgroupQueryData + simd_lane_id);
+  const uint START_ROW = tid.y * TILE_SIZE_CONST;
+  const device T* baseKThisHead =
+      K + tgroup_k_batch_offset + tgroup_k_head_offset;
+
+  for (size_t KROW = START_ROW + simd_group_id; KROW < L; KROW += NSIMDGROUPS) {
+    const uint KROW_OFFSET = KROW * DK;
+    const device T* baseKRow = baseKThisHead + KROW_OFFSET;
+    device T4* keysData = (device T4*)baseKRow;
+    thread_data_y4 = *(keysData + simd_lane_id);
+    T kq_scalar = dot(thread_data_x4, thread_data_y4);
+    threadAccum[KROW_ACCUM_INDEX] = float(kq_scalar);
+    KROW_ACCUM_INDEX++;
+  }
+}
+threadgroup float* smemP = (threadgroup float*)threadgroup_block;
 
 #pragma clang loop unroll(full)
-  for (size_t i = 0; i < P_VEC4; i++) {
-    thread_data_x4 =
-        T4(threadAccum[4 * i],
-           threadAccum[4 * i + 1],
-           threadAccum[4 * i + 2],
-           threadAccum[4 * i + 3]);
-    simdgroup_barrier(mem_flags::mem_none);
-    thread_data_y4 = simd_sum(thread_data_x4);
-    if (simd_lane_id == 0) {
-      const uint base_smem_p_offset = i * iter_offset + simd_group_id;
-      smemP[base_smem_p_offset + NSIMDGROUPS * 0] = float(thread_data_y4.x);
-      smemP[base_smem_p_offset + NSIMDGROUPS * 1] = float(thread_data_y4.y);
-      smemP[base_smem_p_offset + NSIMDGROUPS * 2] = float(thread_data_y4.z);
-      smemP[base_smem_p_offset + NSIMDGROUPS * 3] = float(thread_data_y4.w);
-    }
+for (size_t i = 0; i < P_VEC4; i++) {
+  thread_data_x4 =
+      T4(threadAccum[4 * i],
+         threadAccum[4 * i + 1],
+         threadAccum[4 * i + 2],
+         threadAccum[4 * i + 3]);
+  simdgroup_barrier(mem_flags::mem_none);
+  thread_data_y4 = simd_sum(thread_data_x4);
+  if (simd_lane_id == 0) {
+    const uint base_smem_p_offset = i * iter_offset + simd_group_id;
+    smemP[base_smem_p_offset + NSIMDGROUPS * 0] = float(thread_data_y4.x);
+    smemP[base_smem_p_offset + NSIMDGROUPS * 1] = float(thread_data_y4.y);
+    smemP[base_smem_p_offset + NSIMDGROUPS * 2] = float(thread_data_y4.z);
+    smemP[base_smem_p_offset + NSIMDGROUPS * 3] = float(thread_data_y4.w);
   }
+}
 
-  threadgroup_barrier(mem_flags::mem_threadgroup);
+threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  float groupMax;
-  float lse = 0.f;
+float groupMax;
+float lse = 0.f;
 
-  constexpr const size_t THREADS_PER_THREADGROUP_TIMES_4 = 4 * 32;
-  constexpr const size_t ACCUM_ARRAY_LENGTH =
-      TILE_SIZE_CONST / THREADS_PER_THREADGROUP_TIMES_4 + 1;
-  float4 pvals[ACCUM_ARRAY_LENGTH];
+constexpr const size_t THREADS_PER_THREADGROUP_TIMES_4 = 4 * 32;
+constexpr const size_t ACCUM_ARRAY_LENGTH =
+    TILE_SIZE_CONST / THREADS_PER_THREADGROUP_TIMES_4 + 1;
+float4 pvals[ACCUM_ARRAY_LENGTH];
 
 #pragma clang loop unroll(full)
-  for (uint accum_array_iter = 0; accum_array_iter < ACCUM_ARRAY_LENGTH;
-       accum_array_iter++) {
-    pvals[accum_array_iter] = float4(-INFINITY);
-  }
+for (uint accum_array_iter = 0; accum_array_iter < ACCUM_ARRAY_LENGTH;
+     accum_array_iter++) {
+  pvals[accum_array_iter] = float4(-INFINITY);
+}
 
-  if (TILE_SIZE_CONST == 64) {
-    threadgroup float2* smemPtrFlt2 = (threadgroup float2*)threadgroup_block;
-    float2 vals = smemPtrFlt2[simd_lane_id];
+if (TILE_SIZE_CONST == 64) {
+  threadgroup float2* smemPtrFlt2 = (threadgroup float2*)threadgroup_block;
+  float2 vals = smemPtrFlt2[simd_lane_id];
+  vals *= params.INV_ALPHA;
+  float maxval = max(vals.x, vals.y);
+  simdgroup_barrier(mem_flags::mem_none);
+  groupMax = simd_max(maxval);
+
+  float2 expf_shifted = exp(vals - groupMax);
+  float sumExpLocal = expf_shifted.x + expf_shifted.y;
+  simdgroup_barrier(mem_flags::mem_none);
+  float tgroupExpSum = simd_sum(sumExpLocal);
+
+  lse = log(tgroupExpSum);
+  float2 local_p_hat = expf_shifted / tgroupExpSum;
+  pvals[0].x = local_p_hat.x;
+  pvals[0].y = local_p_hat.y;
+  smemPtrFlt2[simd_lane_id] = float2(0.f);
+}
+constexpr const bool TILE_SIZE_LARGER_THAN_64 = TILE_SIZE_CONST > 64;
+constexpr const int TILE_SIZE_ITERS_128 = TILE_SIZE_CONST / 128;
+
+if (TILE_SIZE_LARGER_THAN_64) {
+  float maxval = -INFINITY;
+  threadgroup float4* smemPtrFlt4 = (threadgroup float4*)threadgroup_block;
+#pragma clang loop unroll(full)
+  for (int i = 0; i < TILE_SIZE_ITERS_128; i++) {
+    float4 vals = smemPtrFlt4[simd_lane_id + i * THREADS_PER_SIMDGROUP];
     vals *= params.INV_ALPHA;
-    float maxval = max(vals.x, vals.y);
-    simdgroup_barrier(mem_flags::mem_none);
-    groupMax = simd_max(maxval);
-
-    float2 expf_shifted = exp(vals - groupMax);
-    float sumExpLocal = expf_shifted.x + expf_shifted.y;
-    simdgroup_barrier(mem_flags::mem_none);
-    float tgroupExpSum = simd_sum(sumExpLocal);
-
-    lse = log(tgroupExpSum);
-    float2 local_p_hat = expf_shifted / tgroupExpSum;
-    pvals[0].x = local_p_hat.x;
-    pvals[0].y = local_p_hat.y;
-    smemPtrFlt2[simd_lane_id] = float2(0.f);
+    pvals[i] = vals;
+    maxval = fmax3(vals.x, vals.y, maxval);
+    maxval = fmax3(vals.z, vals.w, maxval);
   }
-  constexpr const bool TILE_SIZE_LARGER_THAN_64 = TILE_SIZE_CONST > 64;
-  constexpr const int TILE_SIZE_ITERS_128 = TILE_SIZE_CONST / 128;
+  simdgroup_barrier(mem_flags::mem_none);
+  groupMax = simd_max(maxval);
 
-  if (TILE_SIZE_LARGER_THAN_64) {
-    float maxval = -INFINITY;
-    threadgroup float4* smemPtrFlt4 = (threadgroup float4*)threadgroup_block;
+  float sumExpLocal = 0.f;
 #pragma clang loop unroll(full)
-    for (int i = 0; i < TILE_SIZE_ITERS_128; i++) {
-      float4 vals = smemPtrFlt4[simd_lane_id + i * THREADS_PER_SIMDGROUP];
-      vals *= params.INV_ALPHA;
-      pvals[i] = vals;
-      maxval = fmax3(vals.x, vals.y, maxval);
-      maxval = fmax3(vals.z, vals.w, maxval);
-    }
-    simdgroup_barrier(mem_flags::mem_none);
-    groupMax = simd_max(maxval);
-
-    float sumExpLocal = 0.f;
-#pragma clang loop unroll(full)
-    for (int i = 0; i < TILE_SIZE_ITERS_128; i++) {
-      pvals[i] = exp(pvals[i] - groupMax);
-      sumExpLocal += pvals[i].x + pvals[i].y + pvals[i].z + pvals[i].w;
-    }
-    simdgroup_barrier(mem_flags::mem_none);
-    float tgroupExpSum = simd_sum(sumExpLocal);
-    lse = log(tgroupExpSum);
-#pragma clang loop unroll(full)
-    for (int i = 0; i < TILE_SIZE_ITERS_128; i++) {
-      pvals[i] = pvals[i] / tgroupExpSum;
-      smemPtrFlt4[simd_lane_id + i * THREADS_PER_SIMDGROUP] = float4(0.f);
-    }
+  for (int i = 0; i < TILE_SIZE_ITERS_128; i++) {
+    pvals[i] = exp(pvals[i] - groupMax);
+    sumExpLocal += pvals[i].x + pvals[i].y + pvals[i].z + pvals[i].w;
   }
-
-  threadgroup T* smemV = (threadgroup T*)threadgroup_block;
-
-  const size_t v_batch_offset = tid.z * params.N_KV_HEADS * L * DK;
-  const size_t v_head_offset = kv_head_offset_factor * L * DK;
-
-  const size_t v_tile_offset = tid.y * TILE_SIZE_CONST * DK;
-  const size_t v_offset = v_batch_offset + v_head_offset + v_tile_offset;
-  device T* baseV = (device T*)V + v_offset;
-
-  threadgroup float* smemOpartial = (threadgroup float*)(smemV + totalSmemV);
-
-  if (!LAST_TILE || LAST_TILE_ALIGNED) {
+  simdgroup_barrier(mem_flags::mem_none);
+  float tgroupExpSum = simd_sum(sumExpLocal);
+  lse = log(tgroupExpSum);
 #pragma clang loop unroll(full)
-    for (size_t col = 0; col < MATRIX_COLS; col++) {
-      uint matrix_load_loop_iter = 0;
-      constexpr const size_t TILE_SIZE_CONST_DIV_8 = TILE_SIZE_CONST / 8;
+  for (int i = 0; i < TILE_SIZE_ITERS_128; i++) {
+    pvals[i] = pvals[i] / tgroupExpSum;
+    smemPtrFlt4[simd_lane_id + i * THREADS_PER_SIMDGROUP] = float4(0.f);
+  }
+}
 
-      for (size_t tile_start = simd_group_id;
-           tile_start < TILE_SIZE_CONST_DIV_8;
-           tile_start += NSIMDGROUPS) {
-        simdgroup_matrix<T, 8, 8> tmp;
-        ulong simdgroup_matrix_offset =
-            matrix_load_loop_iter * NSIMDGROUPS * SIMDGROUP_MATRIX_LOAD_FACTOR +
-            simd_group_id * SIMDGROUP_MATRIX_LOAD_FACTOR;
-        ulong2 matrixOrigin =
-            ulong2(col * SIMDGROUP_MATRIX_LOAD_FACTOR, simdgroup_matrix_offset);
-        simdgroup_load(tmp, baseV, DK, matrixOrigin, true);
-        const ulong2 matrixOriginSmem = ulong2(simdgroup_matrix_offset, 0);
-        const ulong elemsPerRowSmem = TILE_SIZE_CONST;
-        simdgroup_store(tmp, smemV, elemsPerRowSmem, matrixOriginSmem, false);
-        matrix_load_loop_iter++;
-      };
+threadgroup T* smemV = (threadgroup T*)threadgroup_block;
 
-      threadgroup_barrier(mem_flags::mem_threadgroup);
+const size_t v_batch_offset = tid.z * params.N_KV_HEADS * L * DK;
+const size_t v_head_offset = kv_head_offset_factor * L * DK;
 
-      if (TILE_SIZE_CONST == 64) {
-        T2 local_p_hat = T2(pvals[0].x, pvals[0].y);
-        uint loop_iter = 0;
-        threadgroup float* oPartialSmem =
-            smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
+const size_t v_tile_offset = tid.y * TILE_SIZE_CONST * DK;
+const size_t v_offset = v_batch_offset + v_head_offset + v_tile_offset;
+device T* baseV = (device T*)V + v_offset;
+
+threadgroup float* smemOpartial = (threadgroup float*)(smemV + totalSmemV);
+
+if (!LAST_TILE || LAST_TILE_ALIGNED) {
+#pragma clang loop unroll(full)
+  for (size_t col = 0; col < MATRIX_COLS; col++) {
+    uint matrix_load_loop_iter = 0;
+    constexpr const size_t TILE_SIZE_CONST_DIV_8 = TILE_SIZE_CONST / 8;
+
+    for (size_t tile_start = simd_group_id; tile_start < TILE_SIZE_CONST_DIV_8;
+         tile_start += NSIMDGROUPS) {
+      simdgroup_matrix<T, 8, 8> tmp;
+      ulong simdgroup_matrix_offset =
+          matrix_load_loop_iter * NSIMDGROUPS * SIMDGROUP_MATRIX_LOAD_FACTOR +
+          simd_group_id * SIMDGROUP_MATRIX_LOAD_FACTOR;
+      ulong2 matrixOrigin =
+          ulong2(col * SIMDGROUP_MATRIX_LOAD_FACTOR, simdgroup_matrix_offset);
+      simdgroup_load(tmp, baseV, DK, matrixOrigin, true);
+      const ulong2 matrixOriginSmem = ulong2(simdgroup_matrix_offset, 0);
+      const ulong elemsPerRowSmem = TILE_SIZE_CONST;
+      simdgroup_store(tmp, smemV, elemsPerRowSmem, matrixOriginSmem, false);
+      matrix_load_loop_iter++;
+    };
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    if (TILE_SIZE_CONST == 64) {
+      T2 local_p_hat = T2(pvals[0].x, pvals[0].y);
+      uint loop_iter = 0;
+      threadgroup float* oPartialSmem =
+          smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
 
 #pragma clang loop unroll(full)
-        for (size_t row = simd_group_id; row < SIMDGROUP_MATRIX_LOAD_FACTOR;
-             row += NSIMDGROUPS) {
-          threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * row);
-          threadgroup T2* smemV2 = (threadgroup T2*)smemV_row;
-          T2 v_local = *(smemV2 + simd_lane_id);
+      for (size_t row = simd_group_id; row < SIMDGROUP_MATRIX_LOAD_FACTOR;
+           row += NSIMDGROUPS) {
+        threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * row);
+        threadgroup T2* smemV2 = (threadgroup T2*)smemV_row;
+        T2 v_local = *(smemV2 + simd_lane_id);
 
-          T val = dot(local_p_hat, v_local);
-          simdgroup_barrier(mem_flags::mem_none);
+        T val = dot(local_p_hat, v_local);
+        simdgroup_barrier(mem_flags::mem_none);
 
-          T row_sum = simd_sum(val);
-          oPartialSmem[simd_group_id + loop_iter * NSIMDGROUPS] =
-              float(row_sum);
-          loop_iter++;
-        }
-      }
-
-      if (TILE_SIZE_CONST > 64) {
-        constexpr const size_t TILE_SIZE_CONST_DIV_128 =
-            (TILE_SIZE_CONST + 1) / 128;
-        threadgroup float* oPartialSmem =
-            smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
-        uint loop_iter = 0;
-        for (size_t row = simd_group_id; row < SIMDGROUP_MATRIX_LOAD_FACTOR;
-             row += NSIMDGROUPS) {
-          threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * row);
-
-          T row_sum = 0.f;
-          for (size_t i = 0; i < TILE_SIZE_CONST_DIV_128; i++) {
-            threadgroup T4* smemV2 = (threadgroup T4*)smemV_row;
-            T4 v_local = *(smemV2 + simd_lane_id + i * THREADS_PER_SIMDGROUP);
-            T4 p_local = T4(pvals[i]);
-            T val = dot(p_local, v_local);
-            row_sum += val;
-          }
-          simdgroup_barrier(mem_flags::mem_none);
-          row_sum = simd_sum(row_sum);
-          oPartialSmem[simd_group_id + loop_iter * NSIMDGROUPS] =
-              float(row_sum);
-          loop_iter++;
-        }
+        T row_sum = simd_sum(val);
+        oPartialSmem[simd_group_id + loop_iter * NSIMDGROUPS] = float(row_sum);
+        loop_iter++;
       }
     }
-  } else {
-    const int32_t START_ROW = tid.y * TILE_SIZE_CONST;
-    const int32_t MAX_START_ROW = L - SIMDGROUP_MATRIX_LOAD_FACTOR + 1;
-    const device T* baseVThisHead = V + v_batch_offset + v_head_offset;
-    constexpr const int ROWS_PER_ITER = 8;
+
+    if (TILE_SIZE_CONST > 64) {
+      constexpr const size_t TILE_SIZE_CONST_DIV_128 =
+          (TILE_SIZE_CONST + 1) / 128;
+      threadgroup float* oPartialSmem =
+          smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
+      uint loop_iter = 0;
+      for (size_t row = simd_group_id; row < SIMDGROUP_MATRIX_LOAD_FACTOR;
+           row += NSIMDGROUPS) {
+        threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * row);
+
+        T row_sum = 0.f;
+        for (size_t i = 0; i < TILE_SIZE_CONST_DIV_128; i++) {
+          threadgroup T4* smemV2 = (threadgroup T4*)smemV_row;
+          T4 v_local = *(smemV2 + simd_lane_id + i * THREADS_PER_SIMDGROUP);
+          T4 p_local = T4(pvals[i]);
+          T val = dot(p_local, v_local);
+          row_sum += val;
+        }
+        simdgroup_barrier(mem_flags::mem_none);
+        row_sum = simd_sum(row_sum);
+        oPartialSmem[simd_group_id + loop_iter * NSIMDGROUPS] = float(row_sum);
+        loop_iter++;
+      }
+    }
+  }
+} else {
+  const int32_t START_ROW = tid.y * TILE_SIZE_CONST;
+  const int32_t MAX_START_ROW = L - SIMDGROUP_MATRIX_LOAD_FACTOR + 1;
+  const device T* baseVThisHead = V + v_batch_offset + v_head_offset;
+  constexpr const int ROWS_PER_ITER = 8;
 #pragma clang loop unroll(full)
-    for (size_t col = 0; col < MATRIX_COLS; col++) {
-      uint smem_col_index = simd_group_id * SIMDGROUP_MATRIX_LOAD_FACTOR;
-      int32_t tile_start;
-      for (tile_start =
-               START_ROW + simd_group_id * SIMDGROUP_MATRIX_LOAD_FACTOR;
-           tile_start < MAX_START_ROW;
-           tile_start += NSIMDGROUPS * SIMDGROUP_MATRIX_LOAD_FACTOR) {
-        simdgroup_matrix<T, 8, 8> tmp;
-        ulong2 matrixOrigin =
-            ulong2(col * SIMDGROUP_MATRIX_LOAD_FACTOR, tile_start);
-        simdgroup_load(
-            tmp, baseVThisHead, DK, matrixOrigin, /* transpose */ true);
-        const ulong2 matrixOriginSmem = ulong2(smem_col_index, 0);
-        constexpr const ulong elemsPerRowSmem = TILE_SIZE_CONST;
-        simdgroup_store(
-            tmp,
-            smemV,
-            elemsPerRowSmem,
-            matrixOriginSmem,
-            /* transpose */ false);
-        smem_col_index += NSIMDGROUPS * SIMDGROUP_MATRIX_LOAD_FACTOR;
-      };
+  for (size_t col = 0; col < MATRIX_COLS; col++) {
+    uint smem_col_index = simd_group_id * SIMDGROUP_MATRIX_LOAD_FACTOR;
+    int32_t tile_start;
+    for (tile_start = START_ROW + simd_group_id * SIMDGROUP_MATRIX_LOAD_FACTOR;
+         tile_start < MAX_START_ROW;
+         tile_start += NSIMDGROUPS * SIMDGROUP_MATRIX_LOAD_FACTOR) {
+      simdgroup_matrix<T, 8, 8> tmp;
+      ulong2 matrixOrigin =
+          ulong2(col * SIMDGROUP_MATRIX_LOAD_FACTOR, tile_start);
+      simdgroup_load(
+          tmp, baseVThisHead, DK, matrixOrigin, /* transpose */ true);
+      const ulong2 matrixOriginSmem = ulong2(smem_col_index, 0);
+      constexpr const ulong elemsPerRowSmem = TILE_SIZE_CONST;
+      simdgroup_store(
+          tmp,
+          smemV,
+          elemsPerRowSmem,
+          matrixOriginSmem,
+          /* transpose */ false);
+      smem_col_index += NSIMDGROUPS * SIMDGROUP_MATRIX_LOAD_FACTOR;
+    };
 
-      tile_start =
-          ((L / SIMDGROUP_MATRIX_LOAD_FACTOR) * SIMDGROUP_MATRIX_LOAD_FACTOR);
+    tile_start =
+        ((L / SIMDGROUP_MATRIX_LOAD_FACTOR) * SIMDGROUP_MATRIX_LOAD_FACTOR);
 
-      const int32_t INT_L = int32_t(L);
-      for (int row_index = tile_start + simd_group_id; row_index < INT_L;
+    const int32_t INT_L = int32_t(L);
+    for (int row_index = tile_start + simd_group_id; row_index < INT_L;
+         row_index += NSIMDGROUPS) {
+      if (simd_lane_id < SIMDGROUP_MATRIX_LOAD_FACTOR) {
+        const uint elems_per_row_gmem = DK;
+        const uint col_index_v_gmem =
+            col * SIMDGROUP_MATRIX_LOAD_FACTOR + simd_lane_id;
+        const uint row_index_v_gmem = row_index;
+
+        const uint elems_per_row_smem = TILE_SIZE_CONST;
+        const uint col_index_v_smem = row_index % TILE_SIZE_CONST;
+        const uint row_index_v_smem = simd_lane_id;
+
+        const uint scalar_offset_gmem =
+            row_index_v_gmem * elems_per_row_gmem + col_index_v_gmem;
+        const uint scalar_offset_smem =
+            row_index_v_smem * elems_per_row_smem + col_index_v_smem;
+        T vdata = T(*(baseVThisHead + scalar_offset_gmem));
+        smemV[scalar_offset_smem] = vdata;
+        smem_col_index += NSIMDGROUPS;
+      }
+    }
+
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    if (TILE_SIZE_CONST == 64) {
+      T2 local_p_hat = T2(pvals[0].x, pvals[0].y);
+      threadgroup float* oPartialSmem =
+          smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
+      for (size_t smem_row_index = simd_group_id;
+           smem_row_index < ROWS_PER_ITER;
+           smem_row_index += NSIMDGROUPS) {
+        threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * smem_row_index);
+        threadgroup T2* smemV2 = (threadgroup T2*)smemV_row;
+        T2 v_local = *(smemV2 + simd_lane_id);
+        T val = dot(local_p_hat, v_local);
+        simdgroup_barrier(mem_flags::mem_none);
+        T row_sum = simd_sum(val);
+        oPartialSmem[smem_row_index] = float(row_sum);
+      }
+    }
+
+    if (TILE_SIZE_CONST > 64) {
+      threadgroup float* oPartialSmem =
+          smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
+      uint loop_count = 0;
+      for (size_t row_index = simd_group_id; row_index < ROWS_PER_ITER;
            row_index += NSIMDGROUPS) {
-        if (simd_lane_id < SIMDGROUP_MATRIX_LOAD_FACTOR) {
-          const uint elems_per_row_gmem = DK;
-          const uint col_index_v_gmem =
-              col * SIMDGROUP_MATRIX_LOAD_FACTOR + simd_lane_id;
-          const uint row_index_v_gmem = row_index;
-
-          const uint elems_per_row_smem = TILE_SIZE_CONST;
-          const uint col_index_v_smem = row_index % TILE_SIZE_CONST;
-          const uint row_index_v_smem = simd_lane_id;
-
-          const uint scalar_offset_gmem =
-              row_index_v_gmem * elems_per_row_gmem + col_index_v_gmem;
-          const uint scalar_offset_smem =
-              row_index_v_smem * elems_per_row_smem + col_index_v_smem;
-          T vdata = T(*(baseVThisHead + scalar_offset_gmem));
-          smemV[scalar_offset_smem] = vdata;
-          smem_col_index += NSIMDGROUPS;
+        T row_sum = 0.f;
+        for (size_t tile_iters = 0; tile_iters < TILE_SIZE_ITERS_128;
+             tile_iters++) {
+          threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * row_index);
+          threadgroup T4* smemV2 = (threadgroup T4*)smemV_row;
+          T4 v_local =
+              *(smemV2 + simd_lane_id + tile_iters * THREADS_PER_SIMDGROUP);
+          T4 p_local = T4(pvals[tile_iters]);
+          row_sum += dot(p_local, v_local);
         }
-      }
-
-      threadgroup_barrier(mem_flags::mem_threadgroup);
-
-      if (TILE_SIZE_CONST == 64) {
-        T2 local_p_hat = T2(pvals[0].x, pvals[0].y);
-        threadgroup float* oPartialSmem =
-            smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
-        for (size_t smem_row_index = simd_group_id;
-             smem_row_index < ROWS_PER_ITER;
-             smem_row_index += NSIMDGROUPS) {
-          threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * smem_row_index);
-          threadgroup T2* smemV2 = (threadgroup T2*)smemV_row;
-          T2 v_local = *(smemV2 + simd_lane_id);
-          T val = dot(local_p_hat, v_local);
-          simdgroup_barrier(mem_flags::mem_none);
-          T row_sum = simd_sum(val);
-          oPartialSmem[smem_row_index] = float(row_sum);
-        }
-      }
-
-      if (TILE_SIZE_CONST > 64) {
-        threadgroup float* oPartialSmem =
-            smemOpartial + SIMDGROUP_MATRIX_LOAD_FACTOR * col;
-        uint loop_count = 0;
-        for (size_t row_index = simd_group_id; row_index < ROWS_PER_ITER;
-             row_index += NSIMDGROUPS) {
-          T row_sum = 0.f;
-          for (size_t tile_iters = 0; tile_iters < TILE_SIZE_ITERS_128;
-               tile_iters++) {
-            threadgroup T* smemV_row = smemV + (TILE_SIZE_CONST * row_index);
-            threadgroup T4* smemV2 = (threadgroup T4*)smemV_row;
-            T4 v_local =
-                *(smemV2 + simd_lane_id + tile_iters * THREADS_PER_SIMDGROUP);
-            T4 p_local = T4(pvals[tile_iters]);
-            row_sum += dot(p_local, v_local);
-          }
-          simdgroup_barrier(mem_flags::mem_none);
-          row_sum = simd_sum(row_sum);
-          oPartialSmem[simd_group_id + NSIMDGROUPS * loop_count] =
-              float(row_sum);
-          loop_count++;
-        }
+        simdgroup_barrier(mem_flags::mem_none);
+        row_sum = simd_sum(row_sum);
+        oPartialSmem[simd_group_id + NSIMDGROUPS * loop_count] = float(row_sum);
+        loop_count++;
       }
     }
   }
+}
 
-  threadgroup_barrier(mem_flags::mem_threadgroup);
+threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  if (simd_group_id == 0) {
-    threadgroup float4* oPartialVec4 = (threadgroup float4*)smemOpartial;
-    float4 vals = *(oPartialVec4 + simd_lane_id);
-    device float* oPartialGmem =
-        O_partials + tid.x * DK * params.KV_TILES + tid.y * DK;
-    device float4* oPartialGmemVec4 = (device float4*)oPartialGmem;
-    oPartialGmemVec4[simd_lane_id] = vals;
-  }
+if (simd_group_id == 0) {
+  threadgroup float4* oPartialVec4 = (threadgroup float4*)smemOpartial;
+  float4 vals = *(oPartialVec4 + simd_lane_id);
+  device float* oPartialGmem =
+      O_partials + tid.x * DK * params.KV_TILES + tid.y * DK;
+  device float4* oPartialGmemVec4 = (device float4*)oPartialGmem;
+  oPartialGmemVec4[simd_lane_id] = vals;
+}
 
-  if (simd_group_id == 0 && simd_lane_id == 0) {
-    const uint tileIndex = tid.y;
-    const uint gmem_partial_scalar_offset =
-        tid.z * params.N_Q_HEADS * params.KV_TILES + tid.x * params.KV_TILES +
-        tileIndex;
-    p_lse[gmem_partial_scalar_offset] = lse;
-    p_maxes[gmem_partial_scalar_offset] = groupMax;
-  }
+if (simd_group_id == 0 && simd_lane_id == 0) {
+  const uint tileIndex = tid.y;
+  const uint gmem_partial_scalar_offset =
+      tid.z * params.N_Q_HEADS * params.KV_TILES + tid.x * params.KV_TILES +
+      tileIndex;
+  p_lse[gmem_partial_scalar_offset] = lse;
+  p_maxes[gmem_partial_scalar_offset] = groupMax;
+}
 }
 
 #define instantiate_fast_inference_sdpa_to_partials_kernel(                  \
