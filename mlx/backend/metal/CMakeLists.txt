@@ -35,6 +35,7 @@ make_jit_source(
   utils
   kernels/bf16.h
   kernels/complex.h
+  kernels/defines.h
 )
 make_jit_source(
   unary_ops
@@ -57,11 +58,14 @@ if (MLX_METAL_JIT)
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/jit_kernels.cpp
   )
+  make_jit_source(arange)
   make_jit_source(copy)
   make_jit_source(unary)
   make_jit_source(binary)
   make_jit_source(binary_two)
   make_jit_source(ternary)
+  make_jit_source(softmax)
+  make_jit_source(scan)
 else()
   target_sources(
     mlx

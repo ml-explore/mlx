@@ -10,7 +10,6 @@ set(
 
 set(
   KERNELS
-  "arange"
   "arg_reduce"
   "conv"
   "fft"
@@ -20,9 +19,7 @@ set(
   "rms_norm"
   "layer_norm"
   "rope"
-  "scan"
   "scaled_dot_product_attention"
-  "softmax"
   "sort"
 )
 
@@ -30,21 +27,27 @@ if (NOT MLX_METAL_JIT)
 set(
   KERNELS
   ${KERNELS}
+  "arange"
   "binary"
   "binary_two"
   "unary"
   "ternary"
   "copy"
+  "softmax"
+  "scan"
 )
 set(
   HEADERS 
   ${HEADERS}
+  arange.h
   unary_ops.h
   unary.h
   binary_ops.h
   binary.h
   ternary.h
   copy.h
+  softmax.h
+  scan.h
 )
 endif()
 

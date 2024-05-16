@@ -5,6 +5,7 @@
 #include <metal_math>
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/complex.h"
+#include "mlx/backend/metal/kernels/defines.h"
 
 typedef half float16_t;
 

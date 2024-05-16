@@ -5,6 +5,11 @@
 
 namespace mlx::core {
 
+MTL::ComputePipelineState* get_arange_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out);
+
 MTL::ComputePipelineState* get_unary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
@@ -30,6 +35,20 @@ MTL::ComputePipelineState* get_ternary_kernel(
 MTL::ComputePipelineState* get_copy_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const array& in,
+    const array& out);
+
+MTL::ComputePipelineState* get_softmax_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    bool precise,
+    const array& out);
+
+MTL::ComputePipelineState* get_scan_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    bool reverse,
+    bool inclusive,
     const array& in,
     const array& out);
 

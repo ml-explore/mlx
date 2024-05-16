@@ -1,4 +1,4 @@
-// Copyright © 2023-24 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
@@ -12,10 +12,13 @@ const char* reduction();
 const char* gather();
 const char* scatter();
 
+const char* arange();
 const char* unary();
 const char* binary();
 const char* binary_two();
 const char* copy();
 const char* ternary();
+const char* scan();
+const char* softmax();
 
 } // namespace mlx::core::metal
