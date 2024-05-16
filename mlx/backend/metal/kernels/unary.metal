@@ -1,7 +1,8 @@
 // Copyright © 2024 Apple Inc.
 
+// clang-format off
+#include "mlx/backend/metal/kernels/unary_ops.h"
 #include "mlx/backend/metal/kernels/unary.h"
-#include "mlx/backend/metal/kernels/unarys.h"
 
 #define instantiate_unary_v(name, type, op)                       \
   template [[host_name(name)]] [[kernel]] void unary_v<type, op>( \
@@ -18,7 +19,6 @@
       device const int& ndim,                                     \
       uint index [[thread_position_in_grid]]);
 
-// clang-format off
 #define instantiate_unary_all(name, tname, type, op) \
   instantiate_unary_v("v" #name #tname, type, op)    \
   instantiate_unary_g("g" #name #tname, type, op)

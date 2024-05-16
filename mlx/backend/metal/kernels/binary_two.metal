@@ -2,12 +2,12 @@
 #include <metal_integer>
 #include <metal_math>
 
+// clang-format off
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/binary_ops.h"
 #include "mlx/backend/metal/kernels/binary_two.h"
 #include "mlx/backend/metal/kernels/utils.h"
 
-// clang-format off
 #define instantiate_binary(name, itype, otype, op, bopt)       \
   template [[host_name(name)]] [[kernel]] void                 \
       binary_##bopt<itype, otype, op>(                         \

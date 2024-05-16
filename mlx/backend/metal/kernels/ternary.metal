@@ -3,12 +3,12 @@
 #include <metal_integer>
 #include <metal_math>
 
-#include "mlx/backend/metal/kernels/bf16.h"
-#include "mlx/backend/metal/kernels/ternary.h"
-#include "mlx/backend/metal/kernels/ternarys.h"
-#include "mlx/backend/metal/kernels/utils.h"
-
 // clang-format off
+#include "mlx/backend/metal/kernels/bf16.h"
+#include "mlx/backend/metal/kernels/utils.h"
+#include "mlx/backend/metal/kernels/ternary_ops.h"
+#include "mlx/backend/metal/kernels/ternary.h"
+
 #define instantiate_ternary_v(name, type, op)                          \
   template [[host_name("v_" name)]] [[kernel]] void ternary_v<type, op>( \
       device const bool* a,                                            \

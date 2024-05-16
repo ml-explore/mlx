@@ -1,10 +1,10 @@
 // Copyright © 2024 Apple Inc.
 
+// clang-format off
+#include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/copy.h"
-#include "mlx/backend/metal/kernels/utils.h"
 
-// clang-format off
 #define instantiate_copy(name, itype, otype, ctype)                        \
   template [[host_name(name)]] [[kernel]] void copy_##ctype<itype, otype>( \
       device const itype* src [[buffer(0)]],                               \
