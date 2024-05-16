@@ -889,20 +889,41 @@ template <
   }
 }
 
-template [[host_name(
-    "steel_gemm_attention_bm_16_bn_16_bk_64_float32")]] [[kernel]] void
-attention<float, 16, 16, 64, 2, 2, false, true, false, false, true>(
-    const device float* Q [[buffer(0)]],
-    const device float* K [[buffer(1)]],
-    const device float* V [[buffer(2)]],
-    device float* O [[buffer(3)]],
-    const constant MLXFastAttentionParams* params [[buffer(4)]],
-    const constant int* batch_shape [[buffer(6)]],
-    const constant size_t* batch_strides [[buffer(7)]],
-    uint simd_lane_id [[thread_index_in_simdgroup]],
-    uint simd_group_id [[simdgroup_index_in_threadgroup]],
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]]);
+#define instantiate_fast_inference_self_attention_kernel(                   \
+    itype, otype, bm, bn, bk, wm, wn)                                       \
+  template [[host_name("steel_gemm_attention_bm_" #bm "_bn_" #bn "_bk_" #bk \
+                       "_itype_" #itype)]] [[kernel]] void                  \
+  attention<itype, bm, bn, bk, wm, wn, false, true, false, false, true>(    \
+      const device itype* Q [[buffer(0)]],                                  \
+      const device itype* K [[buffer(1)]],                                  \
+      const device itype* V [[buffer(2)]],                                  \
+      device otype* O [[buffer(3)]],                                        \
+      const constant MLXFastAttentionParams* params [[buffer(4)]],          \
+      const constant int* batch_shape [[buffer(6)]],                        \
+      const constant size_t* batch_strides [[buffer(7)]],                   \
+      uint simd_lane_id [[thread_index_in_simdgroup]],                      \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]],                \
+      uint3 tid [[threadgroup_position_in_grid]],                           \
+      uint3 lid [[thread_position_in_threadgroup]]);
+
+instantiate_fast_inference_self_attention_kernel(
+    float,
+    float,
+    16,
+    16,
+    64,
+    2,
+    2);
+instantiate_fast_inference_self_attention_kernel(
+    float,
+    float,
+    16,
+    16,
+    128,
+    2,
+    2);
+instantiate_fast_inference_self_attention_kernel(half, half, 16, 16, 64, 2, 2);
+instantiate_fast_inference_self_attention_kernel(half, half, 16, 16, 128, 2, 2);
 
 template <
     typename T,
