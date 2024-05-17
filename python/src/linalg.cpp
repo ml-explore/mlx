@@ -260,4 +260,33 @@ void init_linalg(nb::module_& parent_module) {
         Returns:
             array: ``ainv`` such that ``dot(a, ainv) = dot(ainv, a) = eye(a.shape[0])``
       )pbdoc");
+  m.def(
+      "cholesky",
+      &cholesky,
+      "a"_a,
+      "upper"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cholesky(a: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the Cholesky decomposition of a real symmetric positive semi-definite matrix.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the Cholesky decomposition is computed for each matrix
+        in the last two dimensions of ``a``.
+
+        If the input matrix is not symmetric positive semi-definite, behaviour is undefined.
+
+        Args:
+            a (array): Input array.
+            upper (bool, optional): If ``True``, return the upper triangular Cholesky factor.
+              If ``False``, return the lower triangular Cholesky factor. Default: ``False``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: if ``upper = False``, it returns a lower trinagular ``L``matrix such that ``dot(L, L.T) = a``.
+              If ``upper = True``, it returns an upper triangular ``U`` matrix such that ``dot(U.T, U) = a``.
+      )pbdoc");
 }

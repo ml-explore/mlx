@@ -113,6 +113,7 @@ DEFAULT(Tan)
 DEFAULT(Tanh)
 DEFAULT(Transpose)
 DEFAULT(Inverse)
+DEFAULT(Cholesky)
 
 namespace {
 
