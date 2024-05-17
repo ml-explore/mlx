@@ -8,6 +8,7 @@ set(
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
 )
 
+
 set(
   KERNELS
   "arg_reduce"
@@ -35,20 +36,25 @@ set(
   "softmax"
   "sort"
   "scan"
+  "reduce"
 )
 set(
   HEADERS 
   ${HEADERS}
-  arange.h
-  unary_ops.h
-  unary.h
-  binary_ops.h
-  binary.h
-  ternary.h
-  copy.h
-  softmax.h
-  sort.h
-  scan.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/arange.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/unary_ops.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/unary.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/binary_ops.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/binary.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/ternary.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/copy.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/softmax.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/sort.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/scan.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_init.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_all.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_col.h
+  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_row.h
 )
 endif()
 
@@ -88,15 +94,6 @@ file(GLOB_RECURSE STEEL_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/steel/*.h)
 foreach(KERNEL ${STEEL_KERNELS})
   cmake_path(GET KERNEL STEM TARGET)
   build_kernel_base(${TARGET} ${KERNEL} "${STEEL_HEADERS}")
-  set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
-endforeach()
-
-file(GLOB_RECURSE REDUCE_KERNELS ${CMAKE_CURRENT_SOURCE_DIR}/reduction/*.metal)
-file(GLOB_RECURSE REDUCE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/reduction/*.h)
-
-foreach(KERNEL ${REDUCE_KERNELS})
-  cmake_path(GET KERNEL STEM TARGET)
-  build_kernel_base(${TARGET} ${KERNEL} "${REDUCE_HEADERS}")
   set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
 endforeach()
 

@@ -1,11 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/backend/metal/kernels/reduction/ops.h"
-#include "mlx/backend/metal/kernels/reduction/reduce_inst.h"
-#include "mlx/backend/metal/kernels/reduction/utils.h"
-
-using namespace metal;
-
 ///////////////////////////////////////////////////////////////////////////////
 // Small row reductions
 ///////////////////////////////////////////////////////////////////////////////
@@ -122,33 +116,6 @@ template <typename T, typename U, typename Op>
     out[out_idx] = total_val;
   }
 }
-
-#define instantiate_row_reduce_small(name, itype, otype, op)                \
-  template [[host_name("row_reduce_general_small_" #name)]] [[kernel]] void \
-  row_reduce_general_small<itype, otype, op>(                               \
-      const device itype* in [[buffer(0)]],                                 \
-      device otype* out [[buffer(1)]],                                      \
-      const constant size_t& reduction_size [[buffer(2)]],                  \
-      const constant size_t& out_size [[buffer(3)]],                        \
-      const constant size_t& non_row_reductions [[buffer(4)]],              \
-      const constant int* shape [[buffer(5)]],                              \
-      const constant size_t* strides [[buffer(6)]],                         \
-      const constant int& ndim [[buffer(7)]],                               \
-      uint lid [[thread_position_in_grid]]);                                \
-  template [[host_name("row_reduce_general_med_" #name)]] [[kernel]] void   \
-  row_reduce_general_med<itype, otype, op>(                                 \
-      const device itype* in [[buffer(0)]],                                 \
-      device otype* out [[buffer(1)]],                                      \
-      const constant size_t& reduction_size [[buffer(2)]],                  \
-      const constant size_t& out_size [[buffer(3)]],                        \
-      const constant size_t& non_row_reductions [[buffer(4)]],              \
-      const constant int* shape [[buffer(5)]],                              \
-      const constant size_t* strides [[buffer(6)]],                         \
-      const constant int& ndim [[buffer(7)]],                               \
-      uint tid [[threadgroup_position_in_grid]],                            \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                      \
-      uint simd_per_group [[dispatch_simdgroups_per_threadgroup]],          \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
 ///////////////////////////////////////////////////////////////////////////////
 // Large row reductions
@@ -318,61 +285,3 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
     out[(ceildiv(gsize.y, lsize.y) * tid.x) + tid.y] = total_val;
   }
 }
-
-#define instantiate_row_reduce_general(name, itype, otype, op)     \
-  instantiate_row_reduce_small(name, itype, otype, op) template    \
-      [[host_name("row_reduce_general_" #name)]] [[kernel]] void   \
-      row_reduce_general<itype, otype, op>(                        \
-          const device itype* in [[buffer(0)]],                    \
-          device mlx_atomic<otype>* out [[buffer(1)]],             \
-          const constant size_t& reduction_size [[buffer(2)]],     \
-          const constant size_t& out_size [[buffer(3)]],           \
-          const constant size_t& non_row_reductions [[buffer(4)]], \
-          const constant int* shape [[buffer(5)]],                 \
-          const constant size_t* strides [[buffer(6)]],            \
-          const constant int& ndim [[buffer(7)]],                  \
-          uint3 lid [[thread_position_in_threadgroup]],            \
-          uint3 lsize [[threads_per_threadgroup]],                 \
-          uint3 tid [[threadgroup_position_in_grid]],              \
-          uint simd_lane_id [[thread_index_in_simdgroup]],         \
-          uint simd_per_group [[simdgroups_per_threadgroup]],      \
-          uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-#define instantiate_row_reduce_general_no_atomics(name, itype, otype, op)   \
-  instantiate_row_reduce_small(name, itype, otype, op) template             \
-      [[host_name("row_reduce_general_no_atomics_" #name)]] [[kernel]] void \
-      row_reduce_general_no_atomics<itype, otype, op>(                      \
-          const device itype* in [[buffer(0)]],                             \
-          device otype* out [[buffer(1)]],                                  \
-          const constant size_t& reduction_size [[buffer(2)]],              \
-          const constant size_t& out_size [[buffer(3)]],                    \
-          const constant size_t& non_row_reductions [[buffer(4)]],          \
-          const constant int* shape [[buffer(5)]],                          \
-          const constant size_t* strides [[buffer(6)]],                     \
-          const constant int& ndim [[buffer(7)]],                           \
-          uint3 lid [[thread_position_in_threadgroup]],                     \
-          uint3 lsize [[threads_per_threadgroup]],                          \
-          uint3 gsize [[threads_per_grid]],                                 \
-          uint3 tid [[threadgroup_position_in_grid]],                       \
-          uint simd_lane_id [[thread_index_in_simdgroup]],                  \
-          uint simd_per_group [[simdgroups_per_threadgroup]],               \
-          uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-///////////////////////////////////////////////////////////////////////////////
-// Instantiations
-///////////////////////////////////////////////////////////////////////////////
-
-#define instantiate_same_row_reduce_helper(name, tname, type, op) \
-  instantiate_row_reduce_general(name##tname, type, type, op<type>)
-
-#define instantiate_same_row_reduce_na_helper(name, tname, type, op) \
-  instantiate_row_reduce_general_no_atomics(name##tname, type, type, op<type>)
-
-// clang-format off
-instantiate_reduce_ops(instantiate_same_row_reduce_helper, instantiate_reduce_helper_types)
-instantiate_reduce_ops(instantiate_same_row_reduce_na_helper, instantiate_reduce_helper_64b)
-
-instantiate_reduce_from_types(instantiate_row_reduce_general, and, bool, And)
-instantiate_reduce_from_types(instantiate_row_reduce_general, or, bool, Or)
-
-instantiate_row_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>) // clang-format on

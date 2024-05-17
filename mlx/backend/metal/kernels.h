@@ -68,4 +68,15 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
     int bn,
     int tn);
 
+MTL::ComputePipelineState* get_reduce_init_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out);
+
+MTL::ComputePipelineState* get_reduce_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& out);
+
 } // namespace mlx::core

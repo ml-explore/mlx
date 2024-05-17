@@ -1,11 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/backend/metal/kernels/reduction/ops.h"
-#include "mlx/backend/metal/kernels/reduction/reduce_inst.h"
-#include "mlx/backend/metal/kernels/reduction/utils.h"
-
-using namespace metal;
-
 ///////////////////////////////////////////////////////////////////////////////
 // All reduce helper
 ///////////////////////////////////////////////////////////////////////////////
@@ -139,50 +133,3 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
     out[thread_group_id] = total_val;
   }
 }
-
-#define instantiate_all_reduce(name, itype, otype, op)        \
-  template [[host_name("all_reduce_" #name)]] [[kernel]] void \
-  all_reduce<itype, otype, op>(                               \
-      const device itype* in [[buffer(0)]],                   \
-      device mlx_atomic<otype>* out [[buffer(1)]],            \
-      const device size_t& in_size [[buffer(2)]],             \
-      uint gid [[thread_position_in_grid]],                   \
-      uint lid [[thread_position_in_threadgroup]],            \
-      uint grid_size [[threads_per_grid]],                    \
-      uint simd_per_group [[simdgroups_per_threadgroup]],     \
-      uint simd_lane_id [[thread_index_in_simdgroup]],        \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
-#define instantiate_all_reduce_no_atomics(name, itype, otype, op)        \
-  template [[host_name("all_reduce_no_atomics_" #name)]] [[kernel]] void \
-  all_reduce_no_atomics<itype, otype, op>(                               \
-      const device itype* in [[buffer(0)]],                              \
-      device otype* out [[buffer(1)]],                                   \
-      const device size_t& in_size [[buffer(2)]],                        \
-      uint gid [[thread_position_in_grid]],                              \
-      uint lid [[thread_position_in_threadgroup]],                       \
-      uint grid_size [[threads_per_grid]],                               \
-      uint simd_per_group [[simdgroups_per_threadgroup]],                \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                   \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]],             \
-      uint thread_group_id [[threadgroup_position_in_grid]]);
-
-///////////////////////////////////////////////////////////////////////////////
-// Instantiations
-///////////////////////////////////////////////////////////////////////////////
-
-#define instantiate_same_all_reduce_helper(name, tname, type, op) \
-  instantiate_all_reduce(name##tname, type, type, op<type>)
-
-#define instantiate_same_all_reduce_na_helper(name, tname, type, op) \
-  instantiate_all_reduce_no_atomics(name##tname, type, type, op<type>)
-
-// clang-format off
-instantiate_reduce_ops(instantiate_same_all_reduce_helper, instantiate_reduce_helper_types)
-instantiate_reduce_ops(instantiate_same_all_reduce_na_helper, instantiate_reduce_helper_64b)
-
-instantiate_reduce_from_types(instantiate_all_reduce, and, bool, And)
-instantiate_reduce_from_types(instantiate_all_reduce, or, bool, Or)
-
-// special case bool with larger output type
-instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>) // clang-format on

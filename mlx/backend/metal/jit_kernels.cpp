@@ -8,6 +8,7 @@
 #include "mlx/backend/metal/jit/binary_two.h"
 #include "mlx/backend/metal/jit/copy.h"
 #include "mlx/backend/metal/jit/includes.h"
+#include "mlx/backend/metal/jit/reduce.h"
 #include "mlx/backend/metal/jit/scan.h"
 #include "mlx/backend/metal/jit/softmax.h"
 #include "mlx/backend/metal/jit/sort.h"
@@ -229,6 +230,48 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
                          get_type_string(idx.dtype()),
                          bn,
                          tn);
+    lib = d.get_library(lib_name, kernel_source.str());
+  }
+  return d.get_kernel(kernel_name, lib);
+}
+
+MTL::ComputePipelineState* get_reduce_init_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out) {
+  auto lib = d.get_library(kernel_name);
+  if (lib == nullptr) {
+    std::ostringstream kernel_source;
+    kernel_source << metal::utils() << metal::reduction()
+                  << fmt::format(
+                         reduce_init_kernels,
+                         kernel_name,
+                         get_type_string(out.dtype()),
+                         op_name(out));
+    lib = d.get_library(kernel_name, kernel_source.str());
+  }
+  return d.get_kernel(kernel_name, lib);
+}
+
+MTL::ComputePipelineState* get_reduce_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& out) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  std::cout << kernel_name << std::endl;
+  auto lib = d.get_library(lib_name);
+  if (lib == nullptr) {
+    bool non_atomic = out.dtype() == int64 || out.dtype() == uint64;
+    std::ostringstream kernel_source;
+    kernel_source << metal::utils() << metal::reduction() << metal::reduce()
+                  << fmt::format(
+                         non_atomic ? reduce_non_atomic_kernels
+                                    : reduce_kernels,
+                         lib_name,
+                         get_type_string(in.dtype()),
+                         get_type_string(out.dtype()),
+                         op_name(out));
     lib = d.get_library(lib_name, kernel_source.str());
   }
   return d.get_kernel(kernel_name, lib);

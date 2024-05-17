@@ -11,6 +11,8 @@
 #include "mlx/backend/metal/kernels/utils.h"
 #endif
 
+static constant constexpr const uint8_t simd_size = 32;
+
 union bool4_or_uint {
   bool4 b;
   unsigned int i;
@@ -23,6 +25,7 @@ struct None {
   }
 };
 
+template <typename U = bool>
 struct And {
   bool simd_reduce(bool val) {
     return simd_all(val);
@@ -60,6 +63,7 @@ struct And {
   }
 };
 
+template <typename U = bool>
 struct Or {
   bool simd_reduce(bool val) {
     return simd_any(val);
