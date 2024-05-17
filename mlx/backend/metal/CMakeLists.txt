@@ -66,6 +66,7 @@ if (MLX_METAL_JIT)
   make_jit_source(ternary)
   make_jit_source(softmax)
   make_jit_source(scan)
+  make_jit_source(sort)
 else()
   target_sources(
     mlx

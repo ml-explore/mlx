@@ -10,6 +10,7 @@
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/jit/scan.h"
 #include "mlx/backend/metal/jit/softmax.h"
+#include "mlx/backend/metal/jit/sort.h"
 #include "mlx/backend/metal/jit/ternary.h"
 #include "mlx/backend/metal/jit/unary.h"
 #include "mlx/backend/metal/kernels.h"
@@ -184,4 +185,53 @@ MTL::ComputePipelineState* get_scan_kernel(
   }
   return d.get_kernel(kernel_name, lib);
 }
+
+MTL::ComputePipelineState* get_sort_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& out,
+    int bn,
+    int tn) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name);
+  if (lib == nullptr) {
+    std::ostringstream kernel_source;
+    kernel_source << metal::utils() << metal::sort()
+                  << fmt::format(
+                         block_sort_kernels,
+                         lib_name,
+                         get_type_string(in.dtype()),
+                         get_type_string(out.dtype()),
+                         bn,
+                         tn);
+    lib = d.get_library(lib_name, kernel_source.str());
+  }
+  return d.get_kernel(kernel_name, lib);
+}
+
+MTL::ComputePipelineState* get_mb_sort_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& idx,
+    int bn,
+    int tn) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name);
+  if (lib == nullptr) {
+    std::ostringstream kernel_source;
+    kernel_source << metal::utils() << metal::sort()
+                  << fmt::format(
+                         multiblock_sort_kernels,
+                         lib_name,
+                         get_type_string(in.dtype()),
+                         get_type_string(idx.dtype()),
+                         bn,
+                         tn);
+    lib = d.get_library(lib_name, kernel_source.str());
+  }
+  return d.get_kernel(kernel_name, lib);
+}
+
 } // namespace mlx::core

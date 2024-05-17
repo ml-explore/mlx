@@ -20,5 +20,6 @@ const char* copy();
 const char* ternary();
 const char* scan();
 const char* softmax();
+const char* sort();
 
 } // namespace mlx::core::metal

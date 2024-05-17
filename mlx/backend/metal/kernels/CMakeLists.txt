@@ -20,7 +20,6 @@ set(
   "layer_norm"
   "rope"
   "scaled_dot_product_attention"
-  "sort"
 )
 
 if (NOT MLX_METAL_JIT)
@@ -34,6 +33,7 @@ set(
   "ternary"
   "copy"
   "softmax"
+  "sort"
   "scan"
 )
 set(
@@ -47,6 +47,7 @@ set(
   ternary.h
   copy.h
   softmax.h
+  sort.h
   scan.h
 )
 endif()
