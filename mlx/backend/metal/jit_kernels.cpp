@@ -259,7 +259,6 @@ MTL::ComputePipelineState* get_reduce_kernel(
     const array& in,
     const array& out) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  std::cout << kernel_name << std::endl;
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     bool non_atomic = out.dtype() == int64 || out.dtype() == uint64;
