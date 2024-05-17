@@ -13,6 +13,35 @@
 
 namespace mlx::core {
 
+namespace {
+
+// Delegate to the Cholesky factorization taking into account differences in
+// LAPACK implementations (basically how to pass the 'uplo' string to fortran).
+int spotrf_wrapper(char uplo, float* matrix, int N) {
+  int info;
+
+#ifdef LAPACK_FORTRAN_STRLEN_END
+  spotrf_(
+      /* uplo = */ &uplo,
+      /* n = */ &N,
+      /* a = */ matrix,
+      /* lda = */ &N,
+      /* info = */ &info,
+      /* uplo_len = */ static_cast<size_t>(1));
+#else
+  spotrf_(
+      /* uplo = */ &uplo,
+      /* n = */ &N,
+      /* a = */ matrix,
+      /* lda = */ &N,
+      /* info = */ &info);
+#endif
+
+  return info;
+}
+
+} // namespace
+
 void cholesky_impl(const array& a, array& factor, bool upper) {
   // Lapack uses the column-major convention. We take advantage of the fact that
   // the matrix should be symmetric:
@@ -33,17 +62,11 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
   const int N = a.shape(-1);
   const size_t num_matrices = a.size() / (N * N);
 
-  int info;
   float* matrix = factor.data<float>();
 
   for (int i = 0; i < num_matrices; i++) {
     // Compute Cholesky factorization.
-    spotrf_(
-        /* uplo = */ &uplo,
-        /* n = */ &N,
-        /* a = */ matrix,
-        /* lda = */ &N,
-        /* info = */ &info);
+    int info = spotrf_wrapper(uplo, matrix, N);
 
     // TODO: We do nothing when the matrix is not positive semi-definite
     // because throwing an error would result in a crash. If we figure out how
