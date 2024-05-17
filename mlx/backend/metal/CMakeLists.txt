@@ -67,7 +67,12 @@ if (MLX_METAL_JIT)
   make_jit_source(softmax)
   make_jit_source(scan)
   make_jit_source(sort)
-  make_jit_source(reduce)
+  make_jit_source(
+    reduce
+    kernels/reduction/reduce_all.h
+    kernels/reduction/reduce_col.h
+    kernels/reduction/reduce_row.h
+  )
 else()
   target_sources(
     mlx

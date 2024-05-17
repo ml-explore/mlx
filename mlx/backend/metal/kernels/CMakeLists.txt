@@ -41,20 +41,20 @@ set(
 set(
   HEADERS 
   ${HEADERS}
-  ${CMAKE_CURRENT_SOURCE_DIR}/arange.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/unary_ops.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/unary.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/binary_ops.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/binary.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/ternary.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/copy.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/softmax.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/sort.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/scan.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_init.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_all.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_col.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/reduction/reduce_row.h
+  arange.h
+  unary_ops.h
+  unary.h
+  binary_ops.h
+  binary.h
+  ternary.h
+  copy.h
+  softmax.h
+  sort.h
+  scan.h
+  reduction/reduce_init.h
+  reduction/reduce_all.h
+  reduction/reduce_col.h
+  reduction/reduce_row.h
 )
 endif()
 
