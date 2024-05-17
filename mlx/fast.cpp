@@ -566,16 +566,17 @@ array scaled_dot_product_attention(
   const bool supported_head_dim =
       query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128;
 
+  const bool supported_head_dim_self_attn =
+      query_head_dim == 64 || query_head_dim == 128;
   const size_t query_sequence_length = q.shape(2);
-  const bool full_self_attention = batch_dim == 1 &&
-      query_sequence_length >= 16 && !mask.has_value() && supported_head_dim &&
+  const bool full_self_attention = query_sequence_length >= 16 &&
+      !mask.has_value() && supported_head_dim_self_attn &&
       final_type != bfloat16 && stream.device == Device::gpu;
 
+  // fast decoding gpu shader
   bool implementation_supports_use_case = batch_dim == 1 &&
-      query_sequence_length == 1 && !mask.has_value() &&
-      query_head_dim == supported_head_dim && final_type != bfloat16 &&
-      stream.device == Device::gpu;
-  // TODO, disable sdpa kernel until further tuning
+      query_sequence_length == 1 && !mask.has_value() && supported_head_dim &&
+      final_type != bfloat16 && stream.device == Device::gpu;
   implementation_supports_use_case &= false;
   implementation_supports_use_case |= full_self_attention;
 
