@@ -99,7 +99,10 @@ jobs:
       - run:
           name: Build example extension
           command: |
-            cd examples/extensions && python3.8 -m pip install . 
+            source env/bin/activate
+            cd examples/extensions
+            pip install -r requirements.txt
+            python setup.py build_ext -j8
       - store_test_results:
           path: test-results
       - run:
