@@ -369,7 +369,7 @@ instantiate_metal_math_funcs(
     return static_cast<otype>(__metal_simd_xor(static_cast<ctype>(data)));     \
   }
 
-#ifdef METAL_3_1
+#if defined METAL_3_1 || (__METAL_VERSION__ >= 310)
 
 #define bfloat16_to_uint16(x) as_type<uint16_t>(x)
 #define uint16_to_bfloat16(x) as_type<bfloat16_t>(x)
