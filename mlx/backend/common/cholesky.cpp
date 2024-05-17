@@ -34,34 +34,36 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
   const size_t num_matrices = a.size() / (N * N);
 
   int info;
+  float* matrix = factor.data<float>();
 
   for (int i = 0; i < num_matrices; i++) {
     // Compute Cholesky factorization.
     spotrf_(
         /* uplo = */ &uplo,
         /* n = */ &N,
-        /* a = */ factor.data<float>() + N * N * i,
+        /* a = */ matrix,
         /* lda = */ &N,
         /* info = */ &info);
 
-    if (info != 0) {
-      std::stringstream ss;
-      if (info < 0)
-        ss << "cholesky_impl: failed with error code " << info;
-      else {
-        ss << "cholesky_impl: matrix is not positive definite.";
-      }
-      throw std::runtime_error(ss.str());
+    // TODO: We do nothing when the matrix is not positive semi-definite
+    // because throwing an error would result in a crash. If we figure out how
+    // to catch errors from the implementation we should throw.
+    if (info < 0) {
+      std::stringstream msg;
+      msg << "[cholesky] Cholesky decomposition failed with error code "
+          << info;
+      throw std::runtime_error(msg.str());
     }
 
-    // Zero out the upper/lower triangle.
-    for (int j = 0; j < N; j++) {
-      for (int k = 0; k < j; k++) {
-        if (upper)
-          factor.data<float>()[N * N * i + j * N + k] = 0.;
-        else
-          factor.data<float>()[N * N * i + k * N + j] = 0.;
+    // Zero out the upper/lower triangle while advancing the pointer to the
+    // next matrix at the same time.
+    for (int row = 0; row < N; row++) {
+      if (upper) {
+        std::fill(matrix, matrix + row, 0);
+      } else {
+        std::fill(matrix + row + 1, matrix + N, 0);
       }
+      matrix += N;
     }
   }
 }
