@@ -79,7 +79,7 @@ instantiate_gemm_shapes_helper(float32, float, float32, float);
       const constant int& ldd [[buffer(4)]],                        \
       uint2 gid [[thread_position_in_grid]]);                       \
   template [[host_name("steel_gemm_splitk_accum_" #oname "_" #aname \
-                       "_axpby")]] [[kernel]] void                  \
+                       "_axbpy")]] [[kernel]] void                  \
   gemm_splitk_accum_axpby<atype, otype>(                            \
       const device atype* C_split [[buffer(0)]],                    \
       device otype* D [[buffer(1)]],                                \
