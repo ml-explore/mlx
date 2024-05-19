@@ -103,4 +103,90 @@ MTL::ComputePipelineState* get_reduce_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array&,
+    bool,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    const array&,
+    bool,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool,
+    bool) {
+  return d.get_kernel(kernel_name);
+}
+
+MTL::ComputePipelineState* get_steel_gemm_splitk_accum_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    const array&,
+    bool) {
+  return d.get_kernel(kernel_name);
+}
+
+MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    const std::optional<array>& mask_out,
+    const std::optional<array>& mask_op,
+    bool,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool,
+    bool) {
+  return d.get_kernel(kernel_name);
+}
+
+MTL::ComputePipelineState* get_steel_conv_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool) {
+  return d.get_kernel(kernel_name);
+}
+
+MTL::ComputePipelineState* get_steel_conv_general_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    int,
+    int,
+    int,
+    int,
+    int) {
+  return d.get_kernel(kernel_name);
+}
+
 } // namespace mlx::core

@@ -1,6 +1,5 @@
 // Copyright © 2023 Apple Inc.
 
-#include <metal_atomic>
 #include <metal_simdgroup>
 
 #include "mlx/backend/metal/kernels/utils.h"
