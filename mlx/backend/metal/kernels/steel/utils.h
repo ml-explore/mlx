@@ -4,8 +4,6 @@
 
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/steel/defines.h"
-
 METAL_FUNC ulong2 elem_to_loc_broadcast(
     uint elem,
     constant const int* shape,

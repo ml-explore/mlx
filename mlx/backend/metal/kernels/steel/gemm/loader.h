@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "mlx/backend/metal/kernels/steel/utils.h"
+#include "mlx/backend/metal/kernels/steel/defines.h"
 
 ///////////////////////////////////////////////////////////////////////////////
 // Loading helper

@@ -91,6 +91,9 @@ if (MLX_METAL_JIT)
   make_jit_source(
     steel/conv/conv
     kernels/steel/utils.h
+    kernels/steel/defines.h
+    kernels/steel/gemm/mma.h
+    kernels/steel/gemm/transforms.h
     kernels/steel/conv/params.h
     kernels/steel/conv/loader.h
     kernels/steel/conv/loaders/loader_channel_l.h

@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-
 #include <fmt/format.h>
 
 #include "mlx/backend/common/compiled.h"
@@ -435,8 +434,7 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::conv()
-                  << metal::steel_conv_general()
+    kernel_source << metal::utils() << metal::conv() << metal::steel_conv()
                   << fmt::format(
                          steel_conv_kernels,
                          "name"_a = lib_name,
@@ -469,7 +467,7 @@ MTL::ComputePipelineState* get_steel_conv_general_kernel(
     kernel_source << metal::utils() << metal::conv()
                   << metal::steel_conv_general()
                   << fmt::format(
-                         steel_conv_kernels,
+                         steel_conv_general_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
                          "bm"_a = bm,
