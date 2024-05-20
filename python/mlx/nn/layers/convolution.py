@@ -10,10 +10,11 @@ from mlx.nn.layers.base import Module
 class Conv1d(Module):
     """Applies a 1-dimensional convolution over the multi-channel input sequence.
 
-    The channels are expected to be last i.e. the input shape should be ``NLC`` where:
-        - ``N`` is the batch dimension
-        - ``L`` is the sequence length
-        - ``C`` is the number of input channels
+    The channels are expected to be last i.e. the input shape should be ``NLC`` where
+
+    * ``N`` is the batch dimension
+    * ``L`` is the sequence length
+    * ``C`` is the number of input channels
 
     Args:
         in_channels (int): The number of input channels
@@ -72,10 +73,11 @@ class Conv2d(Module):
     """Applies a 2-dimensional convolution over the multi-channel input image.
 
     The channels are expected to be last i.e. the input shape should be ``NHWC`` where:
-        - ``N`` is the batch dimension
-        - ``H`` is the input image height
-        - ``W`` is the input image width
-        - ``C`` is the number of input channels
+
+    * ``N`` is the batch dimension
+    * ``H`` is the input image height
+    * ``W`` is the input image width
+    * ``C`` is the number of input channels
 
     Args:
         in_channels (int): The number of input channels.
@@ -136,12 +138,15 @@ class Conv2d(Module):
 
 class Conv3d(Module):
     """Applies a 3-dimensional convolution over the multi-channel input image.
+
     The channels are expected to be last i.e. the input shape should be ``NDHWC`` where:
-        - ``N`` is the batch dimension
-        - ``D`` is the input image depth
-        - ``H`` is the input image height
-        - ``W`` is the input image width
-        - ``C`` is the number of input channels
+
+    * ``N`` is the batch dimension
+    * ``D`` is the input image depth
+    * ``H`` is the input image height
+    * ``W`` is the input image width
+    * ``C`` is the number of input channels
+
     Args:
         in_channels (int): The number of input channels.
         out_channels (int): The number of output channels.
