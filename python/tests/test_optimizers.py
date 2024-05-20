@@ -329,9 +329,11 @@ class TestSchedulers(unittest.TestCase):
         self.assertAlmostEqual(lr, expected_lr, delta=1e-7)
 
         lr_schedule = opt.cosine_decay(0.1, 10, 0.05)
+        lr = lr_schedule(9)
+        expected_end_lr = 0.05
+        self.assertGreater(lr, expected_end_lr)
         lr = lr_schedule(20)
-        expected_lr = 0.05
-        self.assertEqual(lr, expected_lr)
+        self.assertEqual(lr, expected_end_lr)
 
     def test_schedule_joiner(self):
         boundaries = [2, 3, 4]
