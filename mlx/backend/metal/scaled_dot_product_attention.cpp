@@ -73,8 +73,6 @@ void sdpa_full_self_attention_metal(
   uint qseq = q.shape(-2);
   uint qheads = q.shape(-3);
 
-  constexpr const uint batch = 1;
-
   const uint64_t KV_sequence_length = k.shape(-2);
   const uint query_sequence_length = q.shape(-2);
   const uint n_q_heads = q.shape(1);

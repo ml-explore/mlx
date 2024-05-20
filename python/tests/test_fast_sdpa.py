@@ -108,10 +108,6 @@ class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
 
 class TestFastSDPA(mlx_tests.MLXTestCase):
     def test_fast_sdpa(self):
-
-        if True:
-            return
-
         # Not yet supported:
         # * K pre-transposed in kernel, V pre-transposed in kernel
         np.random.seed(0)
