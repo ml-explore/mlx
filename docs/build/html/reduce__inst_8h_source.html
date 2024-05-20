@@ -93,81 +93,84 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="preprocessor">#include &quot;<a class="code" href="defines_8h.html">mlx/backend/metal/kernels/defines.h</a>&quot;</span></div>
 <div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span><span class="preprocessor">#include &quot;<a class="code" href="backend_2metal_2kernels_2reduction_2ops_8h.html">mlx/backend/metal/kernels/reduction/ops.h</a>&quot;</span></div>
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span> </div>
-<div class="foldopen" id="foldopen00011" data-start="" data-end="">
-<div class="line"><a id="l00011" name="l00011"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a5294673da0e734544c8444e8af87c764">   11</a></span><span class="preprocessor">#define instantiate_reduce_helper_floats(inst_f, name, op)         \</span></div>
-<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span><span class="preprocessor">  inst_f(name, float16, half, op) inst_f(name, float32, float, op) \</span></div>
-<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span><span class="preprocessor">      inst_f(name, bfloat16, bfloat16_t, op)</span></div>
+<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="comment">// clang-format off</span></div>
+<div class="foldopen" id="foldopen00012" data-start="" data-end="">
+<div class="line"><a id="l00012" name="l00012"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a5294673da0e734544c8444e8af87c764">   12</a></span><span class="preprocessor">#define instantiate_reduce_helper_floats(inst_f, name, op)         \</span></div>
+<div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span><span class="preprocessor">  inst_f(name, float16, half, op) inst_f(name, float32, float, op) \</span></div>
+<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span><span class="preprocessor">  inst_f(name, bfloat16, bfloat16_t, op)</span></div>
 </div>
-<div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span> </div>
-<div class="foldopen" id="foldopen00015" data-start="" data-end="">
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a8f0294fcedd9f4ae582a49d2c6b2539d">   15</a></span><span class="preprocessor">#define instantiate_reduce_helper_uints(inst_f, name, op)             \</span></div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="preprocessor">  inst_f(name, uint8, uint8_t, op) inst_f(name, uint16, uint16_t, op) \</span></div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="preprocessor">      inst_f(name, uint32, uint32_t, op)</span></div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span> </div>
+<div class="foldopen" id="foldopen00016" data-start="" data-end="">
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a8f0294fcedd9f4ae582a49d2c6b2539d">   16</a></span><span class="preprocessor">#define instantiate_reduce_helper_uints(inst_f, name, op)             \</span></div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="preprocessor">  inst_f(name, uint8, uint8_t, op) inst_f(name, uint16, uint16_t, op) \</span></div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="preprocessor">  inst_f(name, uint32, uint32_t, op)</span></div>
 </div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span> </div>
-<div class="foldopen" id="foldopen00019" data-start="" data-end="">
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a3b665b5cd2a4bffab618143b736bd722">   19</a></span><span class="preprocessor">#define instantiate_reduce_helper_ints(inst_f, name, op)          \</span></div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="preprocessor">  inst_f(name, int8, int8_t, op) inst_f(name, int16, int16_t, op) \</span></div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="preprocessor">      inst_f(name, int32, int32_t, op)</span></div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span> </div>
+<div class="foldopen" id="foldopen00020" data-start="" data-end="">
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a3b665b5cd2a4bffab618143b736bd722">   20</a></span><span class="preprocessor">#define instantiate_reduce_helper_ints(inst_f, name, op)          \</span></div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="preprocessor">  inst_f(name, int8, int8_t, op) inst_f(name, int16, int16_t, op) \</span></div>
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span><span class="preprocessor">  inst_f(name, int32, int32_t, op)</span></div>
 </div>
-<div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span> </div>
-<div class="foldopen" id="foldopen00023" data-start="" data-end="">
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#aaf5acbc6baa20c2422f8864771bd046f">   23</a></span><span class="preprocessor">#define instantiate_reduce_helper_64b(inst_f, name, op) \</span></div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span><span class="preprocessor">  inst_f(name, int64, int64_t, op) inst_f(name, uint64, uint64_t, op)</span></div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span> </div>
+<div class="foldopen" id="foldopen00024" data-start="" data-end="">
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#aaf5acbc6baa20c2422f8864771bd046f">   24</a></span><span class="preprocessor">#define instantiate_reduce_helper_64b(inst_f, name, op) \</span></div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span><span class="preprocessor">  inst_f(name, int64, int64_t, op) inst_f(name, uint64, uint64_t, op)</span></div>
 </div>
-<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
-<div class="foldopen" id="foldopen00026" data-start="" data-end="">
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#acc929f2a0f9c70d46d8723ede3020f37">   26</a></span><span class="preprocessor">#define instantiate_reduce_helper_types(inst_f, name, op) \</span></div>
-<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="preprocessor">  instantiate_reduce_helper_floats(inst_f, name, op)      \</span></div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="preprocessor">      instantiate_reduce_helper_uints(inst_f, name, op)   \</span></div>
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">          instantiate_reduce_helper_ints(inst_f, name, op)</span></div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span> </div>
+<div class="foldopen" id="foldopen00027" data-start="" data-end="">
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#acc929f2a0f9c70d46d8723ede3020f37">   27</a></span><span class="preprocessor">#define instantiate_reduce_helper_types(inst_f, name, op) \</span></div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="preprocessor">  instantiate_reduce_helper_floats(inst_f, name, op)      \</span></div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="preprocessor">  instantiate_reduce_helper_uints(inst_f, name, op)   \</span></div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="preprocessor">  instantiate_reduce_helper_ints(inst_f, name, op)</span></div>
 </div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span> </div>
-<div class="foldopen" id="foldopen00031" data-start="" data-end="">
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a1f005addb1d2895cfdaa015b1e332dd4">   31</a></span><span class="preprocessor">#define instantiate_reduce_ops(inst_f, type_f)        \</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="preprocessor">  type_f(inst_f, sum, Sum) type_f(inst_f, prod, Prod) \</span></div>
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">      type_f(inst_f, min_, Min) type_f(inst_f, max_, Max)</span></div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
+<div class="foldopen" id="foldopen00032" data-start="" data-end="">
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a1f005addb1d2895cfdaa015b1e332dd4">   32</a></span><span class="preprocessor">#define instantiate_reduce_ops(inst_f, type_f)        \</span></div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span><span class="preprocessor">  type_f(inst_f, sum, Sum) type_f(inst_f, prod, Prod) \</span></div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="preprocessor">  type_f(inst_f, min_, Min) type_f(inst_f, max_, Max)</span></div>
 </div>
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span> </div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="comment">// Special case for bool reductions</span></div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a3ec546a1689f8f3af2d94877a4d19aa3">   36</a></span><span class="preprocessor">#define instantiate_reduce_from_types_helper( \</span></div>
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno">   37</span><span class="preprocessor">    inst_f, name, tname, itype, otype, op)    \</span></div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="preprocessor">  inst_f(name##tname, itype, otype, op)</span></div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span> </div>
-<div class="foldopen" id="foldopen00040" data-start="" data-end="">
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#ad84ee425af547740b942caf64f2369ae">   40</a></span><span class="preprocessor">#define instantiate_reduce_from_types(inst_f, name, otype, op)                  \</span></div>
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span><span class="preprocessor">  instantiate_reduce_from_types_helper(inst_f, name, bool_, bool, otype, op)    \</span></div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="preprocessor">      instantiate_reduce_from_types_helper(                                     \</span></div>
-<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="preprocessor">          inst_f, name, uint8, uint8_t, otype, op)                              \</span></div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="preprocessor">          instantiate_reduce_from_types_helper(                                 \</span></div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="preprocessor">              inst_f, name, uint16, uint16_t, otype, op)                        \</span></div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="preprocessor">              instantiate_reduce_from_types_helper(                             \</span></div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="preprocessor">                  inst_f, name, uint32, uint32_t, otype, op)                    \</span></div>
-<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="preprocessor">                  instantiate_reduce_from_types_helper(                         \</span></div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="preprocessor">                      inst_f, name, int8, int8_t, otype, op)                    \</span></div>
-<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="preprocessor">                      instantiate_reduce_from_types_helper(                     \</span></div>
-<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="preprocessor">                          inst_f, name, int16, int16_t, otype, op)              \</span></div>
-<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><span class="preprocessor">                          instantiate_reduce_from_types_helper(                 \</span></div>
-<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="preprocessor">                              inst_f, name, int32, int32_t, otype, op)          \</span></div>
-<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span><span class="preprocessor">                              instantiate_reduce_from_types_helper(             \</span></div>
-<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="preprocessor">                                  inst_f, name, int64, int64_t, otype, op)      \</span></div>
-<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="preprocessor">                                  instantiate_reduce_from_types_helper(         \</span></div>
-<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="preprocessor">                                      inst_f, name, float16, half, otype, op)   \</span></div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="preprocessor">                                      instantiate_reduce_from_types_helper(     \</span></div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="preprocessor">                                          inst_f,                               \</span></div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="preprocessor">                                          name,                                 \</span></div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="preprocessor">                                          float32,                              \</span></div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span><span class="preprocessor">                                          float,                                \</span></div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="preprocessor">                                          otype,                                \</span></div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span><span class="preprocessor">                                          op)                                   \</span></div>
-<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="preprocessor">                                          instantiate_reduce_from_types_helper( \</span></div>
-<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="preprocessor">                                              inst_f,                           \</span></div>
-<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="preprocessor">                                              name,                             \</span></div>
-<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span><span class="preprocessor">                                              bfloat16,                         \</span></div>
-<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span><span class="preprocessor">                                              bfloat16_t,                       \</span></div>
-<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span><span class="preprocessor">                                              otype,                            \</span></div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span><span class="preprocessor">                                              op)</span></div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span> </div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="comment">// Special case for bool reductions</span></div>
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#a3ec546a1689f8f3af2d94877a4d19aa3">   37</a></span><span class="preprocessor">#define instantiate_reduce_from_types_helper( \</span></div>
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span><span class="preprocessor">    inst_f, name, tname, itype, otype, op)    \</span></div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span><span class="preprocessor">    inst_f(name##tname, itype, otype, op)</span></div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
+<div class="foldopen" id="foldopen00041" data-start="" data-end="">
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="reduce__inst_8h.html#ad84ee425af547740b942caf64f2369ae">   41</a></span><span class="preprocessor">#define instantiate_reduce_from_types(inst_f, name, otype, op)  \</span></div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span><span class="preprocessor">    inst_f, name, bool_, bool, otype, op)                       \</span></div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="preprocessor">    inst_f, name, uint8, uint8_t, otype, op)                    \</span></div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span><span class="preprocessor">    inst_f, name, uint16, uint16_t, otype, op)                  \</span></div>
+<div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span><span class="preprocessor">    inst_f, name, uint32, uint32_t, otype, op)                  \</span></div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span><span class="preprocessor">    inst_f, name, int8, int8_t, otype, op)                      \</span></div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno">   53</span><span class="preprocessor">    inst_f, name, int16, int16_t, otype, op)                    \</span></div>
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno">   54</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span><span class="preprocessor">    inst_f, name, int32, int32_t, otype, op)                    \</span></div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno">   57</span><span class="preprocessor">    inst_f, name, int64, int64_t, otype, op)                    \</span></div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span><span class="preprocessor">    inst_f, name, float16, half, otype, op)                     \</span></div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span><span class="preprocessor">    inst_f,                                                     \</span></div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span><span class="preprocessor">    name,                                                       \</span></div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span><span class="preprocessor">    float32,                                                    \</span></div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span><span class="preprocessor">    float,                                                      \</span></div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span><span class="preprocessor">    otype,                                                      \</span></div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span><span class="preprocessor">    op)                                                         \</span></div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span><span class="preprocessor">  instantiate_reduce_from_types_helper(                         \</span></div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span><span class="preprocessor">    inst_f,                                                     \</span></div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span><span class="preprocessor">    name,                                                       \</span></div>
+<div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span><span class="preprocessor">    bfloat16,                                                   \</span></div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span><span class="preprocessor">    bfloat16_t,                                                 \</span></div>
+<div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span><span class="preprocessor">    otype,                                                      \</span></div>
+<div class="line"><a id="l00073" name="l00073"></a><span class="lineno">   73</span><span class="preprocessor">    op)</span></div>
 </div>
+<div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="comment">// clang-format on</span></div>
 <div class="ttc" id="abackend_2metal_2kernels_2reduction_2ops_8h_html"><div class="ttname"><a href="backend_2metal_2kernels_2reduction_2ops_8h.html">ops.h</a></div></div>
 <div class="ttc" id="adefines_8h_html"><div class="ttname"><a href="defines_8h.html">defines.h</a></div></div>
 </div><!-- fragment --></div><!-- contents -->
