@@ -3501,7 +3501,7 @@ void init_ops(nb::module_& m) {
               support matadata. The metadata will be returned as an
               additional dictionary.
         Returns:
-            result (array, dict):
+            array or dict:
                 A single array if loading from a ``.npy`` file or a dict
                 mapping names to arrays if loading from a ``.npz`` or
                 ``.safetensors`` file. If ``return_metadata` is ``True`` an
@@ -3584,7 +3584,7 @@ void init_ops(nb::module_& m) {
           y (array): The input selected from where condition is ``False``.
 
         Returns:
-            result (array): The output containing elements selected from
+            array: The output containing elements selected from
             ``x`` and ``y``.
       )pbdoc");
   m.def(
@@ -3613,7 +3613,7 @@ void init_ops(nb::module_& m) {
           decimals (int): Number of decimal places to round to. (default: 0)
 
         Returns:
-          result (array): An array of the same type as ``a`` rounded to the
+          array: An array of the same type as ``a`` rounded to the
           given number of decimals.
       )pbdoc");
   m.def(
@@ -3650,7 +3650,7 @@ void init_ops(nb::module_& m) {
             ``w``. (default: ``4``)
 
         Returns:
-          result (array): The result of the multiplication of ``x`` with ``w``.
+          array: The result of the multiplication of ``x`` with ``w``.
       )pbdoc");
   m.def(
       "quantize",
@@ -3705,11 +3705,11 @@ void init_ops(nb::module_& m) {
             ``w`` in the returned quantized matrix. (default: ``4``)
 
         Returns:
-          (tuple): A tuple containing
+          tuple: A tuple containing
 
-            - w_q (array): The quantized version of ``w``
-            - scales (array): The scale to multiply each element with, namely :math:`s`
-            - biases (array): The biases to add to each element, namely :math:`\beta`
+          * w_q (array): The quantized version of ``w``
+          * scales (array): The scale to multiply each element with, namely :math:`s`
+          * biases (array): The biases to add to each element, namely :math:`\beta`
       )pbdoc");
   m.def(
       "dequantize",
@@ -3745,7 +3745,7 @@ void init_ops(nb::module_& m) {
             ``w``. (default: ``4``)
 
         Returns:
-          result (array): The dequantized version of ``w``
+          array: The dequantized version of ``w``
       )pbdoc");
   m.def(
       "block_sparse_qmm",
@@ -3790,7 +3790,7 @@ void init_ops(nb::module_& m) {
             ``w``. (default: ``4``)
 
         Returns:
-          result (array): The result of the multiplication of ``x`` with ``w``
+          array: The result of the multiplication of ``x`` with ``w``
             after gathering using ``lhs_indices`` and ``rhs_indices``.
       )pbdoc");
   m.def(
@@ -3830,7 +3830,7 @@ void init_ops(nb::module_& m) {
             corresponding dimensions of ``a`` and ``b``. (default: 2)
 
         Returns:
-          result (array): The tensor dot product.
+          array: The tensor dot product.
       )pbdoc");
   m.def(
       "inner",
@@ -3849,7 +3849,7 @@ void init_ops(nb::module_& m) {
         b (array): Input array
 
       Returns:
-        result (array): The inner product.
+        array: The inner product.
     )pbdoc");
   m.def(
       "outer",
@@ -3868,7 +3868,7 @@ void init_ops(nb::module_& m) {
         b (array): Input array
 
       Returns:
-        result (array): The outer product.
+        array: The outer product.
     )pbdoc");
   m.def(
       "tile",
@@ -3895,7 +3895,7 @@ void init_ops(nb::module_& m) {
         reps (int or list(int)): The number of times to repeat ``a`` along each axis.
 
       Returns:
-        result (array): The tiled array.
+        array: The tiled array.
     )pbdoc");
   m.def(
       "addmm",

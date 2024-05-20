@@ -10,5 +10,6 @@ Linear Algebra
 
     inv
     norm
+    cholesky
     qr
     svd

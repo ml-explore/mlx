@@ -235,7 +235,7 @@ void init_linalg(nb::module_& parent_module) {
 
         Returns:
             tuple(array, array, array): The ``U``, ``S``, and ``Vt`` matrices, such that
-              ``A = U @ diag(S) @ Vt``
+            ``A = U @ diag(S) @ Vt``
       )pbdoc");
   m.def(
       "inv",
@@ -286,7 +286,8 @@ void init_linalg(nb::module_& parent_module) {
               in which case the default stream of the default device is used.
 
         Returns:
-            array: if ``upper = False``, it returns a lower trinagular ``L``matrix such that ``dot(L, L.T) = a``.
-              If ``upper = True``, it returns an upper triangular ``U`` matrix such that ``dot(U.T, U) = a``.
+          array: If ``upper = False``, it returns a lower trinagular ``L`` matrix such
+          that ``dot(L, L.T) = a``.  If ``upper = True``, it returns an upper triangular
+          ``U`` matrix such that ``dot(U.T, U) = a``.
       )pbdoc");
 }
