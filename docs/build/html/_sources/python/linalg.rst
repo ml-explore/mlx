@@ -8,5 +8,8 @@ Linear Algebra
 .. autosummary:: 
    :toctree: _autosummary 
 
+    inv
     norm
+    cholesky
     qr
+    svd
