@@ -13,5 +13,6 @@
    .. autosummary::
    
          ~Embedding.as_linear
+         ~Embedding.to_quantized
    
    
