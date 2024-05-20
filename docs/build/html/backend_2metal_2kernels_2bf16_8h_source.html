@@ -91,7 +91,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span> </div>
 <div class="line"><a id="l00007" name="l00007"></a><span class="lineno">    7</span><span class="keyword">using namespace </span><a class="code hl_namespace" href="namespacemetal.html">metal</a>;</div>
 <div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span> </div>
-<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span><span class="preprocessor">#if defined(__HAVE_BFLOAT__)</span></div>
+<div class="line"><a id="l00009" name="l00009"></a><span class="lineno">    9</span><span class="preprocessor">#if defined METAL_3_1 || (__METAL_VERSION__ &gt;= 310)</span></div>
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span> </div>
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">typedef</span> bfloat <a class="code hl_typedef" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a>;</div>
 <div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span> </div>
@@ -445,7 +445,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00312" name="l00312"></a><span class="lineno">  312</span> </div>
 <div class="line"><a id="l00313" name="l00313"></a><span class="lineno">  313</span><span class="preprocessor">#pragma METAL internals : disable</span></div>
 <div class="line"><a id="l00314" name="l00314"></a><span class="lineno">  314</span> </div>
-<div class="line"><a id="l00315" name="l00315"></a><span class="lineno">  315</span><span class="preprocessor">#endif </span><span class="comment">// defined(__HAVE_BFLOAT__)</span></div>
+<div class="line"><a id="l00315" name="l00315"></a><span class="lineno">  315</span><span class="preprocessor">#endif</span></div>
 <div class="line"><a id="l00316" name="l00316"></a><span class="lineno">  316</span> </div>
 <div class="line"><a id="l00317" name="l00317"></a><span class="lineno">  317</span><span class="preprocessor">#include &quot;<a class="code" href="bf16__math_8h.html">mlx/backend/metal/kernels/bf16_math.h</a>&quot;</span></div>
 <div class="ttc" id="abackend_2metal_2kernels_2bf16_8h_html_a31ce5e8e860295fa236e0d4b0befeae1"><div class="ttname"><a href="backend_2metal_2kernels_2bf16_8h.html#a31ce5e8e860295fa236e0d4b0befeae1">float_to_bfloat_bits</a></div><div class="ttdeci">constexpr METAL_FUNC uint16_t float_to_bfloat_bits(float x)</div><div class="ttdef"><b>Definition</b> bf16.h:19</div></div>

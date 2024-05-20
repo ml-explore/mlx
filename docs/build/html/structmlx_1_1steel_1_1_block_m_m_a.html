@@ -95,6 +95,12 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a85c57ad4092079f068683cb525fb08ee"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af94bafeb285c240051e86418fccb89fe" id="r_af94bafeb285c240051e86418fccb89fe"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af94bafeb285c240051e86418fccb89fe">store_result_safe</a> (device U *D, const int ldd, short2 dst_tile_dims) const</td></tr>
 <tr class="separator:af94bafeb285c240051e86418fccb89fe"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a823c56cbd2086f10272df7284a5247ae" id="r_a823c56cbd2086f10272df7284a5247ae"><td class="memTemplParams" colspan="2">template&lt;typename BinaryEpilogue &gt; </td></tr>
+<tr class="memitem:a823c56cbd2086f10272df7284a5247ae"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a823c56cbd2086f10272df7284a5247ae">apply_epilogue</a> (const device U *C, const int ldc, const int fdc, thread const BinaryEpilogue &amp;epilogue_op)</td></tr>
+<tr class="separator:a823c56cbd2086f10272df7284a5247ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9e48f2d51099ec00171506724faab54a" id="r_a9e48f2d51099ec00171506724faab54a"><td class="memTemplParams" colspan="2">template&lt;typename BinaryEpilogue &gt; </td></tr>
+<tr class="memitem:a9e48f2d51099ec00171506724faab54a"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9e48f2d51099ec00171506724faab54a">apply_epilogue_safe</a> (const device U *C, const int ldc, const int fdc, short2 dst_tile_dims, thread const BinaryEpilogue &amp;epilogue_op)</td></tr>
+<tr class="separator:a9e48f2d51099ec00171506724faab54a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7cf757e9785e23997b1417e024559ed3" id="r_a7cf757e9785e23997b1417e024559ed3"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7cf757e9785e23997b1417e024559ed3">store_result</a> (device U *D, const int ldd, const device U *C, const int ldc, const int fdc, thread const Epilogue &amp;epilogue_op) const</td></tr>
 <tr class="separator:a7cf757e9785e23997b1417e024559ed3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7b324c992750ed3aaa4c485f15b2f391" id="r_a7b324c992750ed3aaa4c485f15b2f391"><td class="memItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7b324c992750ed3aaa4c485f15b2f391">store_result_safe</a> (device U *D, const int ldd, const device U *C, const int ldc, const int fdc, short2 dst_tile_dims, thread const Epilogue &amp;epilogue_op) const</td></tr>
@@ -174,6 +180,97 @@ template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bo
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
+<a id="a823c56cbd2086f10272df7284a5247ae" name="a823c56cbd2086f10272df7284a5247ae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a823c56cbd2086f10272df7284a5247ae">&#9670;&#160;</a></span>apply_epilogue()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+<div class="memtemplate">
+template&lt;typename BinaryEpilogue &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::apply_epilogue </td>
+          <td>(</td>
+          <td class="paramtype">const device U *</td>          <td class="paramname"><span class="paramname"><em>C</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>ldc</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>fdc</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread const BinaryEpilogue &amp;</td>          <td class="paramname"><span class="paramname"><em>epilogue_op</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9e48f2d51099ec00171506724faab54a" name="a9e48f2d51099ec00171506724faab54a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9e48f2d51099ec00171506724faab54a">&#9670;&#160;</a></span>apply_epilogue_safe()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , int BM, int BN, int BK, int WM, int WN, bool transpose_a, bool transpose_b, short lda_tgp, short ldb_tgp, typename AccumType  = float, typename Epilogue  = TransformNone&lt;U, AccumType&gt;&gt; </div>
+<div class="memtemplate">
+template&lt;typename BinaryEpilogue &gt; </div>
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void <a class="el" href="structmlx_1_1steel_1_1_block_m_m_a.html">mlx::steel::BlockMMA</a>&lt; T, U, BM, BN, BK, WM, WN, transpose_a, transpose_b, lda_tgp, ldb_tgp, AccumType, Epilogue &gt;::apply_epilogue_safe </td>
+          <td>(</td>
+          <td class="paramtype">const device U *</td>          <td class="paramname"><span class="paramname"><em>C</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>ldc</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const int</td>          <td class="paramname"><span class="paramname"><em>fdc</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">short2</td>          <td class="paramname"><span class="paramname"><em>dst_tile_dims</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">thread const BinaryEpilogue &amp;</td>          <td class="paramname"><span class="paramname"><em>epilogue_op</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a6a2c2a6d5e767d52c41b42a9d36086b0" name="a6a2c2a6d5e767d52c41b42a9d36086b0"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a6a2c2a6d5e767d52c41b42a9d36086b0">&#9670;&#160;</a></span>mma()</h2>
 

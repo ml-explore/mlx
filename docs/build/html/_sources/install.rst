@@ -153,6 +153,8 @@ should point to the path to the built metal library.
      - OFF
    * - MLX_BUILD_METAL
      - ON
+   * - MLX_BUILD_CPU
+     - ON
    * - MLX_BUILD_PYTHON_BINDINGS
      - OFF
    * - MLX_METAL_DEBUG
@@ -179,9 +181,27 @@ should point to the path to the built metal library.
 
       xcrun -sdk macosx --show-sdk-version
 
+Binary Size Minimization
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+To produce a smaller binary use the CMake flags `CMAKE_BUILD_TYPE=MinSizeRel`
+and `BUILD_SHARED_LIBS=ON`.
+
+The MLX CMake build has several additional options to make smaller binaries.
+For example, if you don't need the CPU backend or support for safetensors and
+GGUF, you can do:
+
+.. code-block:: shell
+
+  cmake ..
+    -DCMAKE_BUILD_TYPE=MinSizeRel \
+    -DBUILD_SHARED_LIBS=ON \
+    -DMLX_BUILD_CPU=ON \
+    -DMLX_BUILD_SAFETENSORS=OFF \
+    -DMLX_BUILD_GGUF=OFF
+
 Troubleshooting
 ^^^^^^^^^^^^^^^
-
 
 Metal not found
 ~~~~~~~~~~~~~~~

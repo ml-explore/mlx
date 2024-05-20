@@ -12,5 +12,6 @@
 
    .. autosummary::
    
+         ~Linear.to_quantized
    
    

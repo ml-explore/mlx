@@ -10,6 +10,7 @@ Operations
 
    abs
    add
+   addmm
    all
    allclose
    any
@@ -26,6 +27,7 @@ Operations
    argpartition
    argsort
    array_equal
+   as_strided
    atleast_1d
    atleast_2d
    atleast_3d
@@ -76,6 +78,7 @@ Operations
    isnan
    isneginf
    isposinf
+   issubdtype
    left_shift
    less
    less_equal
@@ -106,11 +109,13 @@ Operations
    outer
    partition
    pad
+   power
    prod
    quantize
    quantized_matmul
    radians
    reciprocal
+   remainder
    repeat
    reshape
    right_shift
