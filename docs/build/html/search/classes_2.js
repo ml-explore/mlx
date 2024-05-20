@@ -9,8 +9,9 @@ var searchData=
   ['blockmaskedmm_6',['BlockMaskedMM',['../classmlx_1_1core_1_1_block_masked_m_m.html',1,'mlx::core']]],
   ['blockmma_7',['BlockMMA',['../structmlx_1_1steel_1_1_block_m_m_a.html',1,'mlx::steel']]],
   ['blocksparsemm_8',['BlockSparseMM',['../classmlx_1_1core_1_1_block_sparse_m_m.html',1,'mlx::core']]],
-  ['blockswizzle_9',['BlockSwizzle',['../structmlx_1_1steel_1_1_block_swizzle.html',1,'mlx::steel']]],
-  ['bool4_5for_5fuint_10',['bool4_or_uint',['../unionbool4__or__uint.html',1,'']]],
-  ['broadcast_11',['Broadcast',['../classmlx_1_1core_1_1_broadcast.html',1,'mlx::core']]],
-  ['buffer_12',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html',1,'mlx::core::allocator']]]
+  ['blocksparseqmm_9',['BlockSparseQMM',['../classmlx_1_1core_1_1_block_sparse_q_m_m.html',1,'mlx::core']]],
+  ['blockswizzle_10',['BlockSwizzle',['../structmlx_1_1steel_1_1_block_swizzle.html',1,'mlx::steel']]],
+  ['bool4_5for_5fuint_11',['bool4_or_uint',['../unionbool4__or__uint.html',1,'']]],
+  ['broadcast_12',['Broadcast',['../classmlx_1_1core_1_1_broadcast.html',1,'mlx::core']]],
+  ['buffer_13',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html',1,'mlx::core::allocator']]]
 ];
