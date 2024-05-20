@@ -10,7 +10,7 @@ from mlx.nn.layers.base import Module
 class Conv1d(Module):
     """Applies a 1-dimensional convolution over the multi-channel input sequence.
 
-    The channels are expected to be last i.e. the input shape should be ``NLC`` where
+    The channels are expected to be last i.e. the input shape should be ``NLC`` where:
 
     * ``N`` is the batch dimension
     * ``L`` is the sequence length
