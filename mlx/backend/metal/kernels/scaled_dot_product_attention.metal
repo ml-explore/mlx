@@ -117,7 +117,6 @@ struct BlockLoaderFA {
   METAL_FUNC void next() {
     src += tile_stride;
   }
-
   METAL_FUNC void next(short n) {
     src += n * tile_stride;
   }
@@ -262,7 +261,7 @@ struct BlockMMAFA {
 
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < TM; i++) {
-      short row = sm + i * TM_stride;
+      short row = sm + tm + i * TM_stride;
       float scale_value = Corrections[row];
 
       STEEL_PRAGMA_UNROLL
@@ -467,7 +466,7 @@ struct FastAttentionKernel {
 
   // maxes, rowsums, rescale
   STEEL_CONST short tgp_mem_size_corrections =
-      4 * (BM * sizeof(float) + float_padding); //
+      4 * (BM * sizeof(float) + float_padding);
 
   STEEL_CONST bool share_kv_smem = transpose_k != transpose_v;
 
@@ -598,13 +597,12 @@ struct FastAttentionKernel {
       uint simd_lane_id,
       short2 local_blocks,
       float alpha) {
-    // may need a cast
     if (simd_group_id == 0) {
-      short offset = BM + float_padding;
+      short row_offset = BM + float_padding;
       threadgroup float* maxes = Corrections;
-      threadgroup float* sums = Corrections + offset;
-      threadgroup float* o_rescale = sums + offset;
-      threadgroup float* output_scales = o_rescale + offset;
+      threadgroup float* sums = Corrections + row_offset;
+      threadgroup float* o_rescale = sums + row_offset;
+      threadgroup float* output_scales = o_rescale + row_offset;
 
       if (simd_lane_id < uint(local_blocks.y)) {
         float m_i_old = maxes[simd_lane_id];
@@ -616,6 +614,7 @@ struct FastAttentionKernel {
         short offset = simd_lane_id * (BN + tgp_padding);
 
         float m_ij = -INFINITY;
+
         for (short j = 0; j < local_blocks.x; j++) {
           float val = alpha * float(Ss[offset + j]);
           m_ij = max(m_ij, val);
@@ -771,6 +770,7 @@ struct FastAttentionKernel {
 
       threadgroup float* final_output_scales =
           Corrections + 3 * (BM + float_padding);
+
       mma_softmax_sv_op.rescale_output(final_output_scales);
 
       loader_v.next();
@@ -780,7 +780,6 @@ struct FastAttentionKernel {
     }
 
     threadgroup_barrier(mem_flags::mem_threadgroup);
-
     mma_softmax_sv_op.store_result_safe(O, params->ldo, short2(BK, tgp_bm));
   }
 };
@@ -849,7 +848,7 @@ template <
 
   if (attention_kernel::share_kv_smem) {
     threadgroup T Ks[attention_kernel::tgp_mem_size_k];
-    threadgroup T* Vs = Ks;
+    threadgroup T* Vs = Ks; //[attention_kernel::tgp_mem_size_v];
     attention_kernel::run(
         Q,
         K,
