@@ -32,6 +32,8 @@ struct MPIWrapper {
     LOAD_SYMBOL(MPI_Finalize, finalize);
     LOAD_SYMBOL(MPI_Comm_rank, rank);
     LOAD_SYMBOL(MPI_Comm_size, size);
+    LOAD_SYMBOL(MPI_Comm_split, comm_split);
+    LOAD_SYMBOL(MPI_Comm_free, comm_free);
     LOAD_SYMBOL(MPI_Allreduce, all_reduce);
     LOAD_SYMBOL(MPI_Allgather, all_gather);
 
@@ -125,6 +127,8 @@ struct MPIWrapper {
       int,
       MPI_Datatype,
       MPI_Comm);
+  int (*comm_split)(MPI_Comm, int, int, MPI_Comm*);
+  int (*comm_free)(MPI_Comm*);
 
   // Objects
   MPI_Comm comm_world_;
@@ -163,9 +167,16 @@ struct MPIGroup : public Group {
     }
   }
 
+  MPIGroup(MPI_Comm comm_) : is_global(false), comm(comm_) {
+    mpi().rank(comm, &rank_);
+    mpi().size(comm, &size_);
+  }
+
   ~MPIGroup() {
     if (is_global) {
       mpi().finalize_safe();
+    } else {
+      mpi().comm_free(&comm);
     }
   }
 
@@ -177,8 +188,15 @@ struct MPIGroup : public Group {
     return size_;
   }
 
-  virtual std::shared_ptr<Group> split(int n) override {
-    throw std::runtime_error("MPIGroup split not yet implemented");
+  virtual std::shared_ptr<Group> split(int color, int key = -1) override {
+    key = (key < 0) ? rank_ : key;
+    MPI_Comm new_comm;
+    int result = mpi().comm_split(comm, color, key, &new_comm);
+    if (result != MPI_SUCCESS) {
+      throw std::runtime_error("MPI could not split this group");
+    }
+
+    return std::make_shared<MPIGroup>(new_comm);
   }
 
   bool is_global;

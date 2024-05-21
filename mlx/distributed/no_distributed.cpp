@@ -13,7 +13,7 @@ struct DummyGroup : public Group {
   virtual int size() override {
     return 1;
   }
-  virtual std::shared_ptr<Group> split(int n) override {
+  virtual std::shared_ptr<Group> split(int color, int key = -1) override {
     throw std::runtime_error("Cannot split the distributed group further");
   }
 };

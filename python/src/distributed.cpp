@@ -23,7 +23,26 @@ void init_distributed(nb::module_& parent_module) {
         processes that can communicate.
       )pbcopy")
       .def("rank", &distributed::Group::rank, "Get the rank of this process")
-      .def("size", &distributed::Group::size, "Get the size of the group");
+      .def("size", &distributed::Group::size, "Get the size of the group")
+      .def(
+          "split",
+          &distributed::Group::split,
+          "color"_a,
+          "key"_a = -1,
+          nb::sig("def split(self, color: int, key: int = -1) -> Group"),
+          R"pbdoc(
+            Split the group to subgroups based on the provided color.
+
+            Processes that use the same color go to the same group. The ``key``
+            argument defines the rank in the new group. The smaller the key the
+            smaller the rank. If the key is negative then the rank in the
+            current group is used.
+
+            Args:
+              color (int): A value to group processes into subgroups.
+              key (int, optional): A key to optionally change the rank ordering
+                of the processes.
+          )pbdoc");
 
   m.def(
       "is_available",

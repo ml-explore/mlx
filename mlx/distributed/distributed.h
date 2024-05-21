@@ -26,7 +26,15 @@ bool is_available();
 struct Group {
   virtual int rank() = 0;
   virtual int size() = 0;
-  virtual std::shared_ptr<Group> split(int n) = 0;
+  /**
+   * Split the group according to the provided color. Namely processes that use
+   * the same color will go to the same group.
+   *
+   * The key defines the rank of the processes in the new group. The smaller
+   * the key the smaller the rank. If the provided key is negative, then the
+   * rank in the current group is used.
+   */
+  virtual std::shared_ptr<Group> split(int color, int key = -1) = 0;
 };
 
 /**
