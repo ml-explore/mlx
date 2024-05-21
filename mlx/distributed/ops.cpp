@@ -1,6 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
 #include "mlx/distributed/ops.h"
+#include "mlx/distributed/primitives.h"
 
 namespace mlx::core::distributed {
 

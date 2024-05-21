@@ -2,7 +2,9 @@
 
 #pragma once
 
-#include "mlx/distributed/primitives.h"
+#include <optional>
+
+#include "mlx/distributed/distributed.h"
 
 namespace mlx::core::distributed {
 
