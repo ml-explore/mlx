@@ -13,13 +13,10 @@ int main() {
   }
 
   auto global_group = distributed::init();
-  array x = ones({10});
-  array out = zeros({10});
-  eval(x, out);
+  std::cout << global_group.rank() << " / " << global_group.size() << std::endl;
 
-  std::cout << global_group->rank() << " / " << global_group->size()
-            << std::endl;
-  distributed::all_reduce_sum(global_group, x, out);
+  array x = ones({10});
+  array out = distributed::all_reduce_sum(x, global_group);
 
   std::cout << out << std::endl;
 }
