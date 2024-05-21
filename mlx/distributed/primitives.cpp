@@ -34,7 +34,7 @@ void AllReduce::eval_cpu(
 
   switch (reduce_type_) {
     case Sum:
-      distributed::all_reduce_sum(
+      distributed::detail::all_reduce_sum(
           group(), ensure_row_contiguous(inputs[0]), outputs[0]);
       break;
     default:
@@ -81,7 +81,7 @@ void AllGather::eval_cpu(
 
   outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
 
-  distributed::all_gather(
+  distributed::detail::all_gather(
       group(), ensure_row_contiguous(inputs[0]), outputs[0]);
 }
 

@@ -8,13 +8,6 @@
 
 namespace mlx::core::distributed {
 
-namespace detail {
-
-/* Return the communication stream. */
-Stream communication_stream();
-
-} // namespace detail
-
 /* Check if a communication backend is available */
 bool is_available();
 
@@ -43,6 +36,11 @@ struct Group {
  */
 std::shared_ptr<Group> init();
 
+namespace detail {
+
+/* Return the communication stream. */
+Stream communication_stream();
+
 /* Perform an all reduce sum operation */
 void all_reduce_sum(
     std::shared_ptr<Group> group,
@@ -54,5 +52,7 @@ void all_gather(
     std::shared_ptr<Group> group,
     const array& input,
     array& output);
+
+} // namespace detail
 
 } // namespace mlx::core::distributed

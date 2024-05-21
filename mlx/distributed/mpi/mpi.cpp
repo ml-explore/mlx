@@ -207,15 +207,6 @@ struct MPIGroup : public Group {
 
 } // namespace
 
-namespace detail {
-
-Stream communication_stream() {
-  static Stream comm_stream = new_stream(Device::cpu);
-  return comm_stream;
-}
-
-} // namespace detail
-
 bool is_available() {
   return mpi().is_available();
 }
@@ -230,6 +221,13 @@ std::shared_ptr<Group> init() {
   global_group = std::make_shared<MPIGroup>();
 
   return global_group;
+}
+
+namespace detail {
+
+Stream communication_stream() {
+  static Stream comm_stream = new_stream(Device::cpu);
+  return comm_stream;
 }
 
 void all_reduce_sum(
@@ -260,5 +258,7 @@ void all_gather(
       mpi().datatype(output),
       mpi_group->comm);
 }
+
+} // namespace detail
 
 } // namespace mlx::core::distributed

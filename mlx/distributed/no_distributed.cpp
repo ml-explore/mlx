@@ -20,21 +20,19 @@ struct DummyGroup : public Group {
 
 } // namespace
 
-namespace detail {
-
-Stream communication_stream() {
-  static Stream comm_stream = new_stream(Device::cpu);
-  return comm_stream;
-}
-
-} // namespace detail
-
 bool is_available() {
   return false;
 }
 
 std::shared_ptr<Group> init() {
   return std::make_shared<DummyGroup>();
+}
+
+namespace detail {
+
+Stream communication_stream() {
+  static Stream comm_stream = new_stream(Device::cpu);
+  return comm_stream;
 }
 
 void all_reduce_sum(
@@ -45,5 +43,7 @@ void all_gather(
     std::shared_ptr<Group> group,
     const array& input,
     array& output) {}
+
+} // namespace detail
 
 } // namespace mlx::core::distributed

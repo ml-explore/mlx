@@ -8,7 +8,7 @@ using namespace mlx::core;
 
 int main() {
   if (!distributed::is_available()) {
-    std::cout << "MLX is compiled without communication backend" << std::endl;
+    std::cout << "No communication backend found" << std::endl;
     return 1;
   }
 
