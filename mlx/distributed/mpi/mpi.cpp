@@ -61,10 +61,11 @@ struct MPIWrapper {
     return libmpi_handle_ != nullptr;
   }
 
-  void init_safe() {
-    if (is_available()) {
-      init(nullptr, nullptr);
+  bool init_safe() {
+    if (!is_available()) {
+      return false;
     }
+    return init(nullptr, nullptr) == MPI_SUCCESS;
   }
 
   void finalize_safe() {
@@ -155,72 +156,85 @@ MPIWrapper& mpi() {
   return wrapper;
 }
 
-struct MPIGroup : public Group {
-  MPIGroup() : is_global(true) {
-    if (mpi().is_available()) {
-      comm = mpi().world();
-      mpi().rank(comm, &rank_);
-      mpi().size(comm, &size_);
-    } else {
-      size_ = 1;
-      rank_ = 0;
-    }
-  }
-
-  MPIGroup(MPI_Comm comm_) : is_global(false), comm(comm_) {
-    mpi().rank(comm, &rank_);
-    mpi().size(comm, &size_);
-  }
-
-  ~MPIGroup() {
-    if (is_global) {
+struct MPIGroupImpl {
+  MPIGroupImpl(MPI_Comm comm, bool global)
+      : comm_(comm), global_(global), rank_(-1), size_(-1) {}
+  ~MPIGroupImpl() {
+    if (global_) {
       mpi().finalize_safe();
     } else {
-      mpi().comm_free(&comm);
+      mpi().comm_free(&comm_);
     }
   }
 
-  virtual int rank() override {
+  MPI_Comm comm() {
+    return comm_;
+  }
+
+  int rank() {
+    if (rank_ < 0) {
+      mpi().rank(comm_, &rank_);
+    }
     return rank_;
   }
 
-  virtual int size() override {
+  int size() {
+    if (size_ < 0) {
+      mpi().size(comm_, &size_);
+    }
     return size_;
   }
 
-  virtual std::shared_ptr<Group> split(int color, int key = -1) override {
-    key = (key < 0) ? rank_ : key;
-    MPI_Comm new_comm;
-    int result = mpi().comm_split(comm, color, key, &new_comm);
-    if (result != MPI_SUCCESS) {
-      throw std::runtime_error("MPI could not split this group");
-    }
-
-    return std::make_shared<MPIGroup>(new_comm);
-  }
-
-  bool is_global;
-  MPI_Comm comm;
+ private:
+  MPI_Comm comm_;
+  bool global_;
   int rank_;
   int size_;
 };
 
+MPI_Comm to_comm(Group& group) {
+  return std::static_pointer_cast<MPIGroupImpl>(group.raw_group())->comm();
+}
+
 } // namespace
+
+int Group::rank() {
+  return std::static_pointer_cast<MPIGroupImpl>(group_)->rank();
+}
+
+int Group::size() {
+  return std::static_pointer_cast<MPIGroupImpl>(group_)->size();
+}
+
+Group Group::split(int color, int key) {
+  auto mpi_group = std::static_pointer_cast<MPIGroupImpl>(group_);
+
+  key = (key < 0) ? rank() : key;
+
+  MPI_Comm new_comm;
+  int result = mpi().comm_split(mpi_group->comm(), color, key, &new_comm);
+  if (result != MPI_SUCCESS) {
+    throw std::runtime_error("MPI could not split this group");
+  }
+
+  return Group(std::make_shared<MPIGroupImpl>(new_comm, false));
+}
 
 bool is_available() {
   return mpi().is_available();
 }
 
-std::shared_ptr<Group> init() {
-  static std::shared_ptr<MPIGroup> global_group = nullptr;
-  if (global_group != nullptr) {
-    return global_group;
+Group init() {
+  static std::shared_ptr<MPIGroupImpl> global_group = nullptr;
+
+  if (global_group == nullptr) {
+    if (!mpi().init_safe()) {
+      throw std::runtime_error("Cannot initialize MPI");
+    }
+    global_group = std::make_shared<MPIGroupImpl>(mpi().world(), true);
   }
 
-  mpi().init_safe();
-  global_group = std::make_shared<MPIGroup>();
-
-  return global_group;
+  return Group(global_group);
 }
 
 namespace detail {
@@ -230,25 +244,17 @@ Stream communication_stream() {
   return comm_stream;
 }
 
-void all_reduce_sum(
-    std::shared_ptr<Group> group,
-    const array& input,
-    array& output) {
-  auto mpi_group = std::dynamic_pointer_cast<MPIGroup>(group);
+void all_reduce_sum(Group group, const array& input, array& output) {
   mpi().all_reduce(
       input.data<void>(),
       output.data<void>(),
       input.size(),
       mpi().datatype(input),
       mpi().op_sum(),
-      mpi_group->comm);
+      to_comm(group));
 }
 
-void all_gather(
-    std::shared_ptr<Group> group,
-    const array& input,
-    array& output) {
-  auto mpi_group = std::dynamic_pointer_cast<MPIGroup>(group);
+void all_gather(Group group, const array& input, array& output) {
   mpi().all_gather(
       input.data<void>(),
       input.size(),
@@ -256,7 +262,7 @@ void all_gather(
       output.data<void>(),
       input.size(),
       mpi().datatype(output),
-      mpi_group->comm);
+      to_comm(group));
 }
 
 } // namespace detail

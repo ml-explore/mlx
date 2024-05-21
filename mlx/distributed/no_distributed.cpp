@@ -4,28 +4,24 @@
 
 namespace mlx::core::distributed {
 
-namespace {
+int Group::rank() {
+  return 0;
+}
 
-struct DummyGroup : public Group {
-  virtual int rank() override {
-    return 0;
-  }
-  virtual int size() override {
-    return 1;
-  }
-  virtual std::shared_ptr<Group> split(int color, int key = -1) override {
-    throw std::runtime_error("Cannot split the distributed group further");
-  }
-};
+int Group::size() {
+  return 1;
+}
 
-} // namespace
+Group Group::split(int color, int key) {
+  throw std::runtime_error("Cannot split the distributed group further");
+}
 
 bool is_available() {
   return false;
 }
 
-std::shared_ptr<Group> init() {
-  return std::make_shared<DummyGroup>();
+Group init() {
+  return Group(nullptr);
 }
 
 namespace detail {
@@ -35,14 +31,8 @@ Stream communication_stream() {
   return comm_stream;
 }
 
-void all_reduce_sum(
-    std::shared_ptr<Group> group,
-    const array& input,
-    array& output) {}
-void all_gather(
-    std::shared_ptr<Group> group,
-    const array& input,
-    array& output) {}
+void all_reduce_sum(Group group, const array& input, array& output) {}
+void all_gather(Group group, const array& input, array& output) {}
 
 } // namespace detail
 

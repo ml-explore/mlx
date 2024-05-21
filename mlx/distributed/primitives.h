@@ -9,7 +9,7 @@ namespace mlx::core::distributed {
 
 class DistPrimitive : public Primitive {
  public:
-  DistPrimitive(std::shared_ptr<Group> group)
+  DistPrimitive(Group group)
       : Primitive(detail::communication_stream()), group_(group) {}
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -18,19 +18,19 @@ class DistPrimitive : public Primitive {
         "Communication primitives cannot be run on the GPU");
   }
 
-  const std::shared_ptr<Group>& group() const {
+  const Group& group() const {
     return group_;
   }
 
  private:
-  std::shared_ptr<Group> group_;
+  Group group_;
 };
 
 class AllReduce : public DistPrimitive {
  public:
   enum ReduceType { And, Or, Sum, Prod, Min, Max };
 
-  AllReduce(std::shared_ptr<Group> group, ReduceType reduce_type)
+  AllReduce(Group group, ReduceType reduce_type)
       : DistPrimitive(group), reduce_type_(reduce_type) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -77,7 +77,7 @@ class AllReduce : public DistPrimitive {
 
 class AllGather : public DistPrimitive {
  public:
-  AllGather(std::shared_ptr<Group> group) : DistPrimitive(group) {}
+  AllGather(Group group) : DistPrimitive(group) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;

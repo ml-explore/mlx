@@ -17,8 +17,11 @@ bool is_available();
  * order to define more granular communication.
  */
 struct Group {
-  virtual int rank() = 0;
-  virtual int size() = 0;
+  Group(std::shared_ptr<void> group) : group_(group) {}
+
+  int rank();
+  int size();
+
   /**
    * Split the group according to the provided color. Namely processes that use
    * the same color will go to the same group.
@@ -27,14 +30,21 @@ struct Group {
    * the key the smaller the rank. If the provided key is negative, then the
    * rank in the current group is used.
    */
-  virtual std::shared_ptr<Group> split(int color, int key = -1) = 0;
+  Group split(int color, int key = -1);
+
+  const std::shared_ptr<void>& raw_group() {
+    return group_;
+  }
+
+ private:
+  std::shared_ptr<void> group_{nullptr};
 };
 
 /**
  * Initialize the distributed backend and return the group containing all
  * discoverable processes.
  */
-std::shared_ptr<Group> init();
+Group init();
 
 namespace detail {
 
@@ -42,16 +52,10 @@ namespace detail {
 Stream communication_stream();
 
 /* Perform an all reduce sum operation */
-void all_reduce_sum(
-    std::shared_ptr<Group> group,
-    const array& input,
-    array& output);
+void all_reduce_sum(Group group, const array& input, array& output);
 
 /* Perform an all reduce sum operation */
-void all_gather(
-    std::shared_ptr<Group> group,
-    const array& input,
-    array& output);
+void all_gather(Group group, const array& input, array& output);
 
 } // namespace detail
 

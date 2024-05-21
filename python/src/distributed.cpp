@@ -60,10 +60,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "all_reduce_sum",
-      [](const array& x,
-         std::optional<std::shared_ptr<distributed::Group>> group) {
-        return distributed::all_reduce_sum(x, group.value_or(nullptr));
-      },
+      &distributed::all_reduce_sum,
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),
@@ -86,10 +83,7 @@ void init_distributed(nb::module_& parent_module) {
 
   m.def(
       "all_gather",
-      [](const array& x,
-         std::optional<std::shared_ptr<distributed::Group>> group) {
-        return distributed::all_gather(x, group.value_or(nullptr));
-      },
+      &distributed::all_gather,
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),

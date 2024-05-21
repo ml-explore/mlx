@@ -106,7 +106,7 @@ std::vector<array> AllGather::vjp(
   auto g = group();
   std::vector<int> starts(primals[0].ndim(), 0);
   auto stops = primals[0].shape();
-  starts[0] = g->rank() * stops[0];
+  starts[0] = g.rank() * stops[0];
   stops[0] += starts[0];
   return {slice(cotangents[0], starts, stops)};
 }

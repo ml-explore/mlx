@@ -4,12 +4,22 @@
 
 namespace mlx::core::distributed {
 
-array all_reduce_sum(const array& x, std::shared_ptr<Group> group) {
-  if (group == nullptr) {
-    group = distributed::init();
-  }
+namespace {
 
-  if (group->size() == 1) {
+Group to_group(std::optional<Group> group) {
+  if (group.has_value()) {
+    return group.value();
+  } else {
+    return distributed::init();
+  }
+}
+
+} // namespace
+
+array all_reduce_sum(const array& x, std::optional<Group> group_) {
+  auto group = to_group(group_);
+
+  if (group.size() == 1) {
     return x;
   }
 
@@ -20,20 +30,18 @@ array all_reduce_sum(const array& x, std::shared_ptr<Group> group) {
       {x});
 }
 
-array all_gather(const array& x, std::shared_ptr<Group> group) {
-  if (group == nullptr) {
-    group = distributed::init();
-  }
+array all_gather(const array& x, std::optional<Group> group_) {
+  auto group = to_group(group_);
 
-  if (group->size() == 1) {
+  if (group.size() == 1) {
     return x;
   }
 
   auto result_shape = x.shape();
   if (result_shape.size() == 0) {
-    result_shape.push_back(group->size());
+    result_shape.push_back(group.size());
   } else {
-    result_shape[0] *= group->size();
+    result_shape[0] *= group.size();
   }
   return array(
       std::move(result_shape),
