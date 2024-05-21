@@ -745,7 +745,7 @@ void conv_2D_gpu(
     const int O_per_group = conv_params.O / groups;
 
     if (is_idil_one && (C_per_group <= 4 || C_per_group % 16 == 0) &&
-        (O_per_group <= 16 || conv_params.O % 16 == 0)) {
+        (O_per_group <= 16 || O_per_group % 16 == 0)) {
       return implicit_gemm_conv_2D_gpu(s, d, in, wt, out, conv_params);
     } else {
       return explicit_gemm_conv_group_ND_gpu(s, d, in, wt, out, conv_params);
