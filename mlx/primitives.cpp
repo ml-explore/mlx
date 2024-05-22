@@ -2376,13 +2376,13 @@ bool QuantizedMatmul::is_equivalent(const Primitive& other) const {
       transpose_ == qm_other.transpose_;
 }
 
-std::pair<std::vector<array>, std::vector<int>> BlockSparseQMM::vmap(
+std::pair<std::vector<array>, std::vector<int>> GatherQMM::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  throw std::runtime_error("BlockSparseQMM::vmap NYI");
+  throw std::runtime_error("GatherQMM::vmap NYI");
 }
 
-std::vector<array> BlockSparseQMM::vjp(
+std::vector<array> GatherQMM::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
@@ -2406,7 +2406,7 @@ std::vector<array> BlockSparseQMM::vjp(
               flatten(zeros_like(x, stream()), 0, -3, stream()),
               lhs_indices,
               expand_dims(
-                  block_sparse_qmm(
+                  gather_qmm(
                       cotan,
                       w,
                       scales,
@@ -2428,27 +2428,27 @@ std::vector<array> BlockSparseQMM::vjp(
     // gradient wrt to the indices is undefined
     else if (arg > 3) {
       throw std::runtime_error(
-          "BlockSparseQMM::vjp cannot compute the gradient wrt the indices.");
+          "GatherQMM::vjp cannot compute the gradient wrt the indices.");
     }
 
     // gradient wrt to w_q, scales or biases
     else {
       throw std::runtime_error(
-          "BlockSparseQMM::vjp no gradient wrt the quantized matrix yet.");
+          "GatherQMM::vjp no gradient wrt the quantized matrix yet.");
     }
   }
   return vjps;
 }
 
-std::vector<array> BlockSparseQMM::jvp(
+std::vector<array> GatherQMM::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  throw std::runtime_error("BlockSparseQMM::jvp NYI");
+  throw std::runtime_error("GatherQMM::jvp NYI");
 }
 
-bool BlockSparseQMM::is_equivalent(const Primitive& other) const {
-  const BlockSparseQMM& qm_other = static_cast<const BlockSparseQMM&>(other);
+bool GatherQMM::is_equivalent(const Primitive& other) const {
+  const GatherQMM& qm_other = static_cast<const GatherQMM&>(other);
   return group_size_ == qm_other.group_size_ && bits_ == qm_other.bits_ &&
       transpose_ == qm_other.transpose_;
 }
@@ -3523,7 +3523,7 @@ std::vector<array> BlockMaskedMM::vjp(
   return vjps;
 }
 
-std::vector<array> BlockSparseMM::vjp(
+std::vector<array> GatherMM::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
@@ -3548,7 +3548,7 @@ std::vector<array> BlockSparseMM::vjp(
       base = reshape(base, {-1, M, K}, stream());
 
       // g : (out_batch_shape) + (M, K)
-      auto g = block_sparse_mm(cotan, bt, std::nullopt, rhs_indices, stream());
+      auto g = gather_mm(cotan, bt, std::nullopt, rhs_indices, stream());
       g = expand_dims(g, -3, stream());
       auto gacc = scatter_add(base, lhs_indices, g, 0, stream());
 
@@ -3563,14 +3563,14 @@ std::vector<array> BlockSparseMM::vjp(
       base = reshape(base, {-1, K, N}, stream());
 
       // g : (out_batch_shape) + (K, N)
-      auto g = block_sparse_mm(at, cotan, lhs_indices, std::nullopt, stream());
+      auto g = gather_mm(at, cotan, lhs_indices, std::nullopt, stream());
       g = expand_dims(g, -3, stream());
       auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
 
       vjps.push_back(reshape(gacc, base_shape, stream()));
     } else {
       throw std::invalid_argument(
-          "[BlockSparseMM] Cannot calculate VJP with respect to indices.");
+          "[GatherMM] Cannot calculate VJP with respect to indices.");
     }
   }
   return vjps;
