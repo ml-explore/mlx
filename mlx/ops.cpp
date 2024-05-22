@@ -3639,6 +3639,34 @@ array diag(const array& a, int k /* = 0 */, StreamOrDevice s /* = {} */) {
   }
 }
 
+array trace(
+    const array& a,
+    int offset,
+    int axis1,
+    int axis2,
+    Dtype dtype,
+    StreamOrDevice s /* = {} */) {
+  int ndim = a.ndim();
+  if (ndim < 2) {
+    std::ostringstream msg;
+    msg << "[trace] Array must have at least two dimensions, but got " << ndim
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  return astype(
+      sum(diagonal(a, offset, axis1, axis2), -1), dtype, to_stream(s));
+}
+array trace(
+    const array& a,
+    int offset,
+    int axis1,
+    int axis2,
+    StreamOrDevice s /* = {} */) {
+  auto dtype = a.dtype();
+  return trace(a, offset, axis1, axis2, dtype, to_stream(s));
+}
+
 std::vector<array> depends(
     const std::vector<array>& inputs,
     const std::vector<array>& dependencies) {

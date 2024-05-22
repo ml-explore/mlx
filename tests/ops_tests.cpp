@@ -3181,3 +3181,17 @@ TEST_CASE("test meshgrid") {
   CHECK(array_equal(out[0], expected_zero).item<bool>());
   CHECK(array_equal(out[1], expected_one).item<bool>());
 }
+
+TEST_CASE("test trace") {
+  auto in = eye(3);
+  auto out = trace(in, 0, 0, 1, float32).item<float>();
+  CHECK_EQ(out, 3.0);
+
+  in = array({1, 2, 3, 4, 5, 6, 7, 8, 9}, {3, 3}, int32);
+  out = trace(in, 0, 0, 1).item<int>();
+  CHECK_EQ(out, 15);
+
+  in = reshape(arange(8), {2, 2, 2});
+  auto out2 = trace(in, 0, 0, 1, float32);
+  CHECK(array_equal(out2, array({6, 8}, {2})).item<bool>());
+}
