@@ -4162,9 +4162,7 @@ array trace(
   auto dtype = a.dtype();
   return trace(a, offset, axis1, axis2, dtype, to_stream(s));
 }
-array trace(
-    const array& a,
-    StreamOrDevice s /* = {} */) {
+array trace(const array& a, StreamOrDevice s /* = {} */) {
   auto dtype = a.dtype();
   return trace(a, 0, 0, 1, dtype, to_stream(s));
 }
