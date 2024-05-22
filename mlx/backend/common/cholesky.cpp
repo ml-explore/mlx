@@ -98,12 +98,4 @@ void Cholesky::eval(const std::vector<array>& inputs, array& output) {
   cholesky_impl(inputs[0], output, upper_);
 }
 
-std::pair<std::vector<array>, std::vector<int>> Cholesky::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
-  auto ax = axes[0] >= 0 ? 0 : -1;
-  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
-  return {{linalg::cholesky(a, upper_, stream())}, {ax}};
-}
-
 } // namespace mlx::core

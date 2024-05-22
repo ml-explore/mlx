@@ -3,13 +3,8 @@ set(
   ${CMAKE_CURRENT_SOURCE_DIR}/atomic.h
   ${CMAKE_CURRENT_SOURCE_DIR}/bf16.h
   ${CMAKE_CURRENT_SOURCE_DIR}/bf16_math.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/binary.h
   ${CMAKE_CURRENT_SOURCE_DIR}/complex.h
   ${CMAKE_CURRENT_SOURCE_DIR}/defines.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/erf.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/expm1f.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/indexing.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/unary.h
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
 )
 
@@ -17,10 +12,7 @@ set(
   KERNELS
   "arange"
   "arg_reduce"
-  "binary"
-  "binary_two"
   "conv"
-  "copy"
   "fft"
   "gemv"
   "quantized"
@@ -32,11 +24,29 @@ set(
   "scaled_dot_product_attention"
   "softmax"
   "sort"
-  "ternary"
-  "unary"
-  "gather"
-  "scatter"
 )
+
+if (NOT MLX_METAL_JIT)
+set(
+  KERNELS
+  ${KERNELS}
+  "binary"
+  "binary_two"
+  "unary"
+  "ternary"
+  "copy"
+)
+set(
+  HEADERS 
+  ${HEADERS}
+  unary_ops.h
+  unary.h
+  binary_ops.h
+  binary.h
+  ternary.h
+  copy.h
+)
+endif()
 
 function(build_kernel_base TARGET SRCFILE DEPS)
   set(METAL_FLAGS -Wall -Wextra -fno-fast-math -D${MLX_METAL_VERSION})

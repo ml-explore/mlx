@@ -41,7 +41,7 @@ if (MLX_BUILD_GGUF)
     gguflib STATIC
     ${gguflib_SOURCE_DIR}/fp16.c
     ${gguflib_SOURCE_DIR}/gguflib.c)
-  target_link_libraries(mlx $<BUILD_INTERFACE:gguflib>)
+  target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:gguflib>)
   target_sources(
     mlx
     PRIVATE

@@ -2,9 +2,11 @@
 
 #pragma once
 
+#ifndef MLX_METAL_JIT
 #include <metal_atomic>
 #include <metal_stdlib>
 #include "mlx/backend/metal/kernels/bf16.h"
+#endif
 
 using namespace metal;
 

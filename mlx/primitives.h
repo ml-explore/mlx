@@ -870,7 +870,7 @@ class Equal : public UnaryPrimitive {
 
   void print(std::ostream& os) override {
     if (equal_nan_) {
-      os << "NanEqual";
+      os << "NaNEqual";
     } else {
       os << "Equal";
     }
