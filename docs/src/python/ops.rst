@@ -150,6 +150,7 @@ Operations
    tensordot
    tile
    topk
+   trace
    transpose
    tri
    tril
