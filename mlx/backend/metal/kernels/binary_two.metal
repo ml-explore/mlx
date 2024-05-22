@@ -3,10 +3,9 @@
 #include <metal_math>
 
 // clang-format off
-#include "mlx/backend/metal/kernels/bf16.h"
+#include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/binary_ops.h"
 #include "mlx/backend/metal/kernels/binary_two.h"
-#include "mlx/backend/metal/kernels/utils.h"
 
 #define instantiate_binary(name, itype, otype, op, bopt)       \
   template [[host_name(name)]] [[kernel]] void                 \
