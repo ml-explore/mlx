@@ -1,7 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
-
 #include <metal_math>
 
 /*

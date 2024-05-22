@@ -20,6 +20,7 @@ option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
 option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
 option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
+option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
@@ -109,7 +110,7 @@ elseif (MLX_BUILD_METAL)
     $<INSTALL_INTERFACE:include/metal_cpp>
   )
   target_link_libraries(
-    mlx
+    mlx PUBLIC
     ${METAL_LIB}
     ${FOUNDATION_LIB}
     ${QUARTZ_LIB})
@@ -122,7 +123,7 @@ if (MLX_BUILD_CPU)
   if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
     message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
     set(MLX_BUILD_ACCELERATE ON)
-    target_link_libraries(mlx ${ACCELERATE_LIBRARY})
+    target_link_libraries(mlx PUBLIC ${ACCELERATE_LIBRARY})
     add_compile_definitions(ACCELERATE_NEW_LAPACK)
   else()
     message(STATUS "Accelerate or arm neon not found, using default backend.")
@@ -145,7 +146,7 @@ if (MLX_BUILD_CPU)
     message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
     message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
     target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
-    target_link_libraries(mlx ${LAPACK_LIBRARIES})
+    target_link_libraries(mlx PUBLIC ${LAPACK_LIBRARIES})
     # List blas after lapack otherwise we may accidentally incldue an old version
     # of lapack.h from the include dirs of blas.
     find_package(BLAS REQUIRED)
@@ -160,7 +161,7 @@ if (MLX_BUILD_CPU)
     message(STATUS "Blas lib " ${BLAS_LIBRARIES})
     message(STATUS "Blas include " ${BLAS_INCLUDE_DIRS})
     target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
-    target_link_libraries(mlx ${BLAS_LIBRARIES})
+    target_link_libraries(mlx PUBLIC ${BLAS_LIBRARIES})
   endif()
 else()
   set(MLX_BUILD_ACCELERATE OFF)
@@ -174,6 +175,14 @@ target_include_directories(
   $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}>
   $<INSTALL_INTERFACE:include>
 )
+
+FetchContent_Declare(fmt
+  GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+  GIT_TAG 10.2.1 
+  EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(fmt)
+target_link_libraries(mlx PRIVATE fmt::fmt-header-only)
 
 if (MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")

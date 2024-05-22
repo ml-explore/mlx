@@ -1,54 +1,34 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2024 Apple Inc.
 
+// clang-format off
+#include "mlx/backend/metal/kernels/utils.h"
+#include "mlx/backend/metal/kernels/unary_ops.h"
 #include "mlx/backend/metal/kernels/unary.h"
 
-template <typename T, typename Op>
-[[kernel]] void unary_op_v(
-    device const T* in,
-    device T* out,
-    uint index [[thread_position_in_grid]]) {
-  out[index] = Op()(in[index]);
-}
-
-template <typename T, typename Op>
-[[kernel]] void unary_op_g(
-    device const T* in,
-    device T* out,
-    device const int* in_shape,
-    device const size_t* in_strides,
-    device const int& ndim,
-    uint index [[thread_position_in_grid]]) {
-  auto idx = elem_to_loc(index, in_shape, in_strides, ndim);
-  out[index] = Op()(in[idx]);
-}
-
-#define instantiate_unary_v(name, type, op)                          \
-  template [[host_name(name)]] [[kernel]] void unary_op_v<type, op>( \
-      device const type* in,                                         \
-      device type* out,                                              \
+#define instantiate_unary_v(name, type, op)                       \
+  template [[host_name(name)]] [[kernel]] void unary_v<type, op>( \
+      device const type* in,                                      \
+      device type* out,                                           \
       uint index [[thread_position_in_grid]]);
 
-#define instantiate_unary_g(name, type, op)                          \
-  template [[host_name(name)]] [[kernel]] void unary_op_g<type, op>( \
-      device const type* in,                                         \
-      device type* out,                                              \
-      device const int* in_shape,                                    \
-      device const size_t* in_strides,                               \
-      device const int& ndim,                                        \
+#define instantiate_unary_g(name, type, op)                       \
+  template [[host_name(name)]] [[kernel]] void unary_g<type, op>( \
+      device const type* in,                                      \
+      device type* out,                                           \
+      device const int* in_shape,                                 \
+      device const size_t* in_strides,                            \
+      device const int& ndim,                                     \
       uint index [[thread_position_in_grid]]);
 
-// clang-format off
 #define instantiate_unary_all(name, tname, type, op) \
   instantiate_unary_v("v" #name #tname, type, op)    \
-  instantiate_unary_g("g" #name #tname, type, op) // clang-format on
+  instantiate_unary_g("g" #name #tname, type, op)
 
-// clang-format off
 #define instantiate_unary_float(name, op)               \
   instantiate_unary_all(name, float16, half, op)        \
   instantiate_unary_all(name, float32, float, op)       \
-  instantiate_unary_all(name, bfloat16, bfloat16_t, op) // clang-format on
+  instantiate_unary_all(name, bfloat16, bfloat16_t, op)
 
-// clang-format off
 #define instantiate_unary_types(name, op)           \
   instantiate_unary_all(name, bool_, bool, op)      \
   instantiate_unary_all(name, uint8, uint8_t, op)   \
@@ -59,9 +39,8 @@ template <typename T, typename Op>
   instantiate_unary_all(name, int16, int16_t, op)   \
   instantiate_unary_all(name, int32, int32_t, op)   \
   instantiate_unary_all(name, int64, int64_t, op)   \
-  instantiate_unary_float(name, op) // clang-format on
+  instantiate_unary_float(name, op)
 
-// clang-format off
 instantiate_unary_types(abs, Abs)
 instantiate_unary_float(arccos, ArcCos)
 instantiate_unary_float(arccosh, ArcCosh)

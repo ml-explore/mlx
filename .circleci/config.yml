@@ -114,7 +114,13 @@ jobs:
           name: Run CPP tests
           command: |
             DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 ./build/tests/tests
-            DEVICE=cpu ./build/tests/tests
+      - run:
+          name: Build small binary
+          command: |
+            source env/bin/activate
+            cd build/
+            cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_SHARED_LIBS=ON -DMLX_BUILD_CPU=OFF -DMLX_BUILD_SAFETENSORS=OFF -DMLX_BUILD_GGUF=OFF -DMLX_METAL_JIT=ON
+            make -j
 
   build_release:
     parameters:

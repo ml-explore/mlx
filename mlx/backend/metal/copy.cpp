@@ -4,11 +4,13 @@
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/kernels/defines.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
+
+constexpr int MAX_COPY_SPECIALIZED_DIMS = 5;
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   if (ctype == CopyType::Vector) {
@@ -62,27 +64,34 @@ void copy_gpu_inplace(
   auto& strides_out_ = strides[1];
 
   auto& d = metal::device(s.device);
-  std::ostringstream kname;
-  switch (ctype) {
-    case CopyType::Scalar:
-      kname << "scopy";
-      break;
-    case CopyType::Vector:
-      kname << "vcopy";
-      break;
-    case CopyType::General:
-      kname << "gcopy";
-      break;
-    case CopyType::GeneralGeneral:
-      kname << "ggcopy";
-      break;
+  std::string kernel_name;
+  {
+    std::ostringstream kname;
+    switch (ctype) {
+      case CopyType::Scalar:
+        kname << "s";
+        break;
+      case CopyType::Vector:
+        kname << "v";
+        break;
+      case CopyType::General:
+        kname << "g";
+        break;
+      case CopyType::GeneralGeneral:
+        kname << "gg";
+        break;
+    }
+    if ((ctype == CopyType::General || ctype == CopyType::GeneralGeneral) &&
+        shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
+      kname << shape.size();
+    }
+    kname << "_copy";
+    kname << type_to_name(in) << type_to_name(out);
+    kernel_name = kname.str();
   }
-  kname << type_to_name(in) << type_to_name(out);
-  if ((ctype == CopyType::General || ctype == CopyType::GeneralGeneral) &&
-      shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
-    kname << "_" << shape.size();
-  }
-  auto kernel = d.get_kernel(kname.str());
+
+  auto kernel = get_copy_kernel(d, kernel_name, in, out);
+
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_in = in.data_shared_ptr() == nullptr;
@@ -106,7 +115,7 @@ void copy_gpu_inplace(
       set_vector_bytes(compute_encoder, strides_out, ndim, 4);
     }
 
-    if (ndim > MAX_BINARY_SPECIALIZED_DIMS) {
+    if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
       compute_encoder->setBytes(&ndim, sizeof(int), 5);
     }
 

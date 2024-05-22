@@ -1,6 +1,8 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
+#include <cassert>
+
 #include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
