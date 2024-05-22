@@ -324,12 +324,12 @@ void steel_matmul_conv_groups(
   };
 
   // clang-format off
-  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
-        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
-        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+  kname << "_has_batch_" << (has_batch ? 't' : 'n')
+        << "_use_out_source_" << (use_out_source ? 't' : 'n')
+        << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
-        << "_align_N_" << (align_N ? 't' : 'n') 
-        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_align_N_" << (align_N ? 't' : 'n')
+        << "_align_K_" << (align_K ? 't' : 'n')
         << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
@@ -575,12 +575,12 @@ void steel_matmul(
   };
 
   // clang-format off
-  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
-        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
-        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+  kname << "_has_batch_" << (has_batch ? 't' : 'n')
+        << "_use_out_source_" << (use_out_source ? 't' : 'n')
+        << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
-        << "_align_N_" << (align_N ? 't' : 'n') 
-        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_align_N_" << (align_N ? 't' : 'n')
+        << "_align_K_" << (align_K ? 't' : 'n')
         << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
@@ -1170,12 +1170,12 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
 
   // clang-format off
-  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
-        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
-        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+  kname << "_has_batch_" << (has_batch ? 't' : 'n')
+        << "_use_out_source_" << (use_out_source ? 't' : 'n')
+        << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
-        << "_align_N_" << (align_N ? 't' : 'n') 
-        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_align_N_" << (align_N ? 't' : 'n')
+        << "_align_K_" << (align_K ? 't' : 'n')
         << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();
@@ -1435,12 +1435,12 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   return;
 }
 
-void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   using namespace mlx::steel;
   // assert(inputs.size() == 2);
   if (!issubdtype(out.dtype(), floating)) {
     throw std::runtime_error(
-        "[matmul] Does not yet support non-floating point types.");
+        "[GatherMM] Does not yet support non-floating point types.");
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
@@ -1700,12 +1700,12 @@ void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   };
 
   // clang-format off
-  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
-        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
-        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+  kname << "_has_batch_" << (has_batch ? 't' : 'n')
+        << "_use_out_source_" << (use_out_source ? 't' : 'n')
+        << "_do_axpby_" << (do_axpby ? 't' : 'n')
         << "_align_M_" << (align_M ? 't' : 'n')
-        << "_align_N_" << (align_N ? 't' : 'n') 
-        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_align_N_" << (align_N ? 't' : 'n')
+        << "_align_K_" << (align_K ? 't' : 'n')
         << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
 
   std::string hash_name = kname.str();

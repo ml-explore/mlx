@@ -1158,7 +1158,7 @@ array dequantize(
     StreamOrDevice s = {});
 
 /** Compute matrix products with matrix-level gather. */
-array block_sparse_qmm(
+array gather_qmm(
     const array& x,
     const array& w,
     const array& scales,
@@ -1210,7 +1210,7 @@ array block_masked_mm(
     StreamOrDevice s = {});
 
 /** Compute matrix product with matrix-level gather */
-array block_sparse_mm(
+array gather_mm(
     array a,
     array b,
     std::optional<array> lhs_indices = std::nullopt,

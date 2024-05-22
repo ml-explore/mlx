@@ -196,7 +196,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
 }
 
-void BlockSparseQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 6);
 
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
