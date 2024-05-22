@@ -2,6 +2,7 @@
 
 import operator
 import pickle
+import sys
 import unittest
 import weakref
 from copy import copy, deepcopy
@@ -1193,6 +1194,10 @@ class TestArray(mlx_tests.MLXTestCase):
             a = mx.zeros((2, 2))
             a[0, 0, 0] = 1
 
+        with self.assertRaises(ValueError):
+            a = mx.zeros((5, 4, 3))
+            a[:, 0] = mx.ones((5, 1, 3))
+
         check_slices(np.zeros((2, 2, 2, 2)), 1, None, Ellipsis, None)
         check_slices(
             np.zeros((2, 2, 2, 2)), 1, np.array([0, 1]), Ellipsis, np.array([0, 1])
@@ -1250,6 +1255,25 @@ class TestArray(mlx_tests.MLXTestCase):
             slice(None, None, 2),
         )
 
+        check_slices(np.zeros((5, 4, 3)), np.ones((5, 3)), slice(None), 0)
+
+        check_slices(np.zeros((5, 4, 3)), np.ones((5, 1, 3)), slice(None), slice(0, 1))
+        check_slices(
+            np.ones((3, 4, 4, 4)), np.zeros((4, 4)), 0, slice(0, 4), 3, slice(0, 4)
+        )
+
+        x = mx.zeros((2, 3, 4, 5, 3))
+        x[..., 0] = 1.0
+        self.assertTrue(mx.array_equal(x[..., 0], mx.ones((2, 3, 4, 5))))
+
+        x = mx.zeros((2, 3, 4, 5, 3))
+        x[:, 0] = 1.0
+        self.assertTrue(mx.array_equal(x[:, 0], mx.ones((2, 4, 5, 3))))
+
+        x = mx.zeros((2, 2, 2, 2, 2, 2))
+        x[0, 0] = 1
+        self.assertTrue(mx.array_equal(x[0, 0], mx.ones((2, 2, 2, 2))))
+
     def test_array_at(self):
         a = mx.array(1)
         a = a.at[None].add(1)
@@ -1297,6 +1321,11 @@ class TestArray(mlx_tests.MLXTestCase):
         a[idx_x, :, 0] = 5
         a = a.at[idx_x, :, 0].minimum(update)
         self.assertEqualArray(a[idx_x, :, 0], mx.minimum(a[idx_x, :, 0], update))
+
+        update = mx.array([1.0, 2.0])[None, None, None]
+        src = mx.array([1.0, 2.0])[None, :]
+        src = src.at[0:1].add(update)
+        self.assertTrue(mx.array_equal(src, mx.array([[2.0, 4.0]])))
 
     def test_slice_negative_step(self):
         a_np = np.arange(20)
@@ -1497,6 +1526,17 @@ class TestArray(mlx_tests.MLXTestCase):
         e = cm.exception
         self.assertTrue("Item size 2 for PEP 3118 buffer format string" in str(e))
 
+        # Test buffer protocol with non-arrays ie bytes
+        a = ord("a") * 257 + mx.arange(10).astype(mx.int16)
+        ab = bytes(a)
+        self.assertEqual(len(ab), 20)
+        if sys.byteorder == "little":
+            self.assertEqual(b"aaaaaaaaaa", ab[1::2])
+            self.assertEqual(b"abcdefghij", ab[::2])
+        else:
+            self.assertEqual(b"aaaaaaaaaa", ab[::2])
+            self.assertEqual(b"abcdefghij", ab[1::2])
+
     def test_buffer_protocol_ref_counting(self):
         a = mx.arange(3)
         wr = weakref.ref(a)
@@ -1662,6 +1702,43 @@ class TestArray(mlx_tests.MLXTestCase):
         a = np.array([1.0, 2.0, 3.0], dtype=np.float16)
         b = pickle.loads(pickle.dumps(a))
         self.assertTrue(mx.array_equal(mx.array(a), mx.array(b)))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_multi_output_leak(self):
+        def fun():
+            a = mx.zeros((2**20))
+            mx.eval(a)
+            b, c = mx.divmod(a, a)
+            del b, c
+
+        fun()
+        mx.synchronize()
+        peak_1 = mx.metal.get_peak_memory()
+        fun()
+        mx.synchronize()
+        peak_2 = mx.metal.get_peak_memory()
+        self.assertEqual(peak_1, peak_2)
+
+    def test_add_numpy(self):
+        x = mx.array(1)
+        y = np.array(2, dtype=np.int32)
+        z = x + y
+        self.assertEqual(z.dtype, mx.int32)
+        self.assertEqual(z.item(), 3)
+
+    def test_dlpack(self):
+        x = mx.array(1, dtype=mx.int32)
+        y = np.from_dlpack(x)
+        self.assertTrue(mx.array_equal(y, x))
+
+        x = mx.array([[1.0, 2.0], [3.0, 4.0]])
+        y = np.from_dlpack(x)
+        self.assertTrue(mx.array_equal(y, x))
+
+        x = mx.arange(16).reshape(4, 4)
+        x = x[::2, ::2]
+        y = np.from_dlpack(x)
+        self.assertTrue(mx.array_equal(y, x))
 
 
 if __name__ == "__main__":

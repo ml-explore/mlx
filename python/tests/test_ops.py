@@ -893,6 +893,22 @@ class TestOps(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(result, expected))
 
+    def test_degrees(self):
+        a = mx.array(
+            [0, math.pi / 4, math.pi / 2, math.pi, 3 * math.pi / 4, 2 * math.pi]
+        )
+        result = mx.degrees(a)
+        expected = np.degrees(a, dtype=np.float32)
+
+        self.assertTrue(np.allclose(result, expected))
+
+    def test_radians(self):
+        a = mx.array([0.0, 45.0, 90.0, 180.0, 270.0, 360.0])
+        result = mx.radians(a)
+        expected = np.radians(a, dtype=np.float32)
+
+        self.assertTrue(np.allclose(result, expected))
+
     def test_log1p(self):
         a = mx.array([1, 0.5, 10, 100])
         result = mx.log1p(a)
@@ -1201,6 +1217,55 @@ class TestOps(mlx_tests.MLXTestCase):
                         y_ = mx.array(x_)
                         test_ops(getattr(np, op), getattr(mx, op), x_, y_, atol)
 
+    def test_unary_ops_from_non_array(self):
+        unary_ops = [
+            "abs",
+            "exp",
+            "log",
+            "square",
+            "sqrt",
+            "sin",
+            "cos",
+            "tan",
+            "sinh",
+            "cosh",
+            "tanh",
+            "sign",
+            "negative",
+            "expm1",
+            "arcsin",
+            "arccos",
+            "arctan",
+            "arcsinh",
+            "arctanh",
+            "degrees",
+            "radians",
+            "log2",
+            "log10",
+            "log1p",
+            "floor",
+            "ceil",
+            "conjugate",
+        ]
+
+        x = 0.5
+        x_np = np.random.rand(10).astype(np.float32)
+        for op in unary_ops:
+            with self.subTest(op=op):
+                # Test from scalar
+                expected = getattr(np, op)(x)
+                out = getattr(mx, op)(x)
+
+                # Check close
+                self.assertTrue(np.allclose(expected, out, equal_nan=True))
+
+                # Test from NumPy
+                expected = getattr(np, op)(x_np)
+                out = getattr(mx, op)(x_np)
+
+                # Check close
+                self.assertTrue(np.allclose(expected, np.array(out), equal_nan=True))
+
     def test_trig_ops(self):
         def test_ops(npop, mlxop, x, y, atol):
             r_np = npop(x)
@@ -1257,6 +1322,7 @@ class TestOps(mlx_tests.MLXTestCase):
             "arcsin": lambda primal, cotan: cotan / np.sqrt(1.0 - primal**2),
             "arccos": lambda primal, cotan: -cotan / np.sqrt(1.0 - primal**2),
             "arctan": lambda primal, cotan: cotan / (1.0 + primal**2),
+            "arctan2": lambda primal, cotan: cotan / (1.0 + primal**2),
             "arcsinh": lambda primal, cotan: cotan / np.sqrt(primal**2 + 1),
             "arccosh": lambda primal, cotan: cotan / np.sqrt(primal**2 - 1),
             "arctanh": lambda primal, cotan: cotan / (1.0 - primal**2),
@@ -2160,6 +2226,51 @@ class TestOps(mlx_tests.MLXTestCase):
                     np.issubdtype(getattr(np, a), getattr(np, b)),
                     f"mx and np don't aggree on {a}, {b}",
                 )
+
+    def test_bitwise_ops(self):
+        types = [
+            mx.uint8,
+            mx.uint16,
+            mx.uint32,
+            mx.uint64,
+            mx.int8,
+            mx.int16,
+            mx.int32,
+            mx.int64,
+        ]
+        a = mx.random.randint(0, 4096, (1000,))
+        b = mx.random.randint(0, 4096, (1000,))
+        for op in ["bitwise_and", "bitwise_or", "bitwise_xor"]:
+            for t in types:
+                a_mlx = a.astype(t)
+                b_mlx = b.astype(t)
+                a_np = np.array(a_mlx)
+                b_np = np.array(b_mlx)
+                out_mlx = getattr(mx, op)(a_mlx, b_mlx)
+                out_np = getattr(np, op)(a_np, b_np)
+                self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
+        for op in ["left_shift", "right_shift"]:
+            for t in types:
+                a_mlx = a.astype(t)
+                b_mlx = mx.random.randint(0, t.size, (1000,)).astype(t)
+                a_np = np.array(a_mlx)
+                b_np = np.array(b_mlx)
+                out_mlx = getattr(mx, op)(a_mlx, b_mlx)
+                out_np = getattr(np, op)(a_np, b_np)
+                self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
+
+    def test_conjugate(self):
+        shape = (3, 5, 7)
+        a = np.random.normal(size=shape) + 1j * np.random.normal(size=shape)
+        a = a.astype(np.complex64)
+        ops = ["conjugate", "conj"]
+        for op in ops:
+            out_mlx = getattr(mx, op)(mx.array(a))
+            out_np = getattr(np, op)(a)
+            self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
+        out_mlx = mx.array(a).conj()
+        out_np = a.conj()
+        self.assertTrue(np.array_equal(np.array(out_mlx), out_np))
 
 
 if __name__ == "__main__":

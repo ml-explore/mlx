@@ -6,7 +6,7 @@
 
 using namespace metal;
 
-#if defined(__HAVE_BFLOAT__)
+#if defined METAL_3_1 || (__METAL_VERSION__ >= 310)
 
 typedef bfloat bfloat16_t;
 
@@ -312,6 +312,6 @@ METAL_FUNC bool isnan(_MLX_BFloat16 x) {
 
 #pragma METAL internals : disable
 
-#endif // defined(__HAVE_BFLOAT__)
+#endif
 
 #include "mlx/backend/metal/kernels/bf16_math.h"

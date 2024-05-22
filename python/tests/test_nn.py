@@ -172,6 +172,19 @@ class TestBase(mlx_tests.MLXTestCase):
         self.assertFalse(m.update(params_dict).eval()._training)
         self.assertTrue(m.train()._training)
 
+    def test_quantize(self):
+        m = nn.Sequential(nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256))
+        nn.quantize(m)
+        self.assertTrue(isinstance(m.layers[0], nn.QuantizedEmbedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
+
+        m = nn.Sequential(nn.Embedding(5, 256), nn.ReLU(), nn.Linear(256, 256))
+        nn.quantize(m, class_predicate=lambda _, m: isinstance(m, nn.Linear))
+        self.assertTrue(isinstance(m.layers[0], nn.Embedding))
+        self.assertTrue(isinstance(m.layers[1], nn.ReLU))
+        self.assertTrue(isinstance(m.layers[2], nn.QuantizedLinear))
+
 
 class TestLayers(mlx_tests.MLXTestCase):
     def test_identity(self):
@@ -704,16 +717,22 @@ class TestLayers(mlx_tests.MLXTestCase):
         expected = np.array(
             [1.0093501, -0.16925684, 0.22918941, 0.60498625, 0.49459383]
         )
+        # From: jax.nn.gelu(np.array(inputs), approximate=True)
+        expected_approx = np.array(
+            [1.0091482, -0.1693441, 0.22918446, 0.60491, 0.4945476]
+        )
 
         out = nn.GELU()(mx.array(inputs))
         self.assertTrue(np.allclose(out, expected))
+        out_approx = nn.GELU(approx="precise")(mx.array(inputs))
+        self.assertTrue(np.allclose(out_approx, expected_approx))
 
         # Crudely check the approximations
         x = mx.arange(-6.0, 6.0, 12 / 100)
         y = nn.gelu(x)
         y_hat1 = nn.gelu_approx(x)
         y_hat2 = nn.gelu_fast_approx(x)
-        self.assertLess(mx.abs(y - y_hat1).max(), 0.0003)
+        self.assertLess(mx.abs(y - y_hat1).max(), 0.0005)
         self.assertLess(mx.abs(y - y_hat2).max(), 0.025)
 
     def test_sin_pe(self):
@@ -1605,6 +1624,26 @@ class TestLayers(mlx_tests.MLXTestCase):
         h_out, c_out = layer(inp, hidden=h_out[-1, :], cell=c_out[-1, :])
         self.assertEqual(h_out.shape, (44, 12))
         self.assertEqual(c_out.shape, (44, 12))
+
+    def test_quantized_embedding(self):
+        emb = nn.Embedding(32, 256)
+        qemb = nn.QuantizedEmbedding.from_embedding(emb, bits=8)
+        x = mx.array([2, 6, 9, 3, 0, 3])
+        y = emb(x)
+        yq = qemb(x)
+        self.assertLess((y - yq).abs().max(), qemb.scales.max())
+
+        x = mx.random.uniform(shape=(2, 256))
+        y = emb.as_linear(x)
+        yq = qemb.as_linear(x)
+
+        def cosine(a, b):
+            ab = (a * b).sum(-1)
+            aa = mx.linalg.norm(a, axis=-1)
+            bb = mx.linalg.norm(b, axis=-1)
+            return ab / aa / bb
+
+        self.assertGreater(cosine(y, yq).min(), 0.99)
 
 
 if __name__ == "__main__":

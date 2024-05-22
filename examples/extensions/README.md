@@ -1,5 +1,5 @@
 
-## Build the extensions
+## Build
 
 ```
 pip install -e .
@@ -16,3 +16,9 @@ And then run:
 ```
 python setup.py build_ext -j8 --inplace
 ```
+
+## Test
+
+```
+python test.py
+`

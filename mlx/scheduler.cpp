@@ -33,6 +33,21 @@ Stream new_stream() {
   return scheduler::scheduler().new_stream(default_device());
 }
 
+void synchronize(Stream s) {
+  auto p = std::make_shared<std::promise<void>>();
+  std::future<void> f = p->get_future();
+  if (s.device == mlx::core::Device::cpu) {
+    scheduler::enqueue(s, [p = std::move(p)]() { p->set_value(); });
+  } else {
+    scheduler::enqueue(s, metal::make_synchronize_task(s, std::move(p)));
+  }
+  f.wait();
+}
+
+void synchronize() {
+  synchronize(default_stream(default_device()));
+}
+
 namespace scheduler {
 
 /** A singleton scheduler to manage devices, streams, and task execution. */

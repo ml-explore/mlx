@@ -26,6 +26,7 @@ class BufferCache {
   size_t cache_size() {
     return pool_size_;
   }
+  void clear();
 
  private:
   struct BufferHolder {
@@ -37,7 +38,6 @@ class BufferCache {
     MTL::Buffer* buf;
   };
 
-  void clear();
   void add_at_head(BufferHolder* to_add);
   void remove_from_list(BufferHolder* to_remove);
 
@@ -62,11 +62,16 @@ class MetalAllocator : public allocator::Allocator {
   size_t get_peak_memory() {
     return peak_memory_;
   };
+  void reset_peak_memory() {
+    std::unique_lock lk(mutex_);
+    peak_memory_ = 0;
+  };
   size_t get_cache_memory() {
     return buffer_cache_.cache_size();
   };
   size_t set_cache_limit(size_t limit);
   size_t set_memory_limit(size_t limit, bool relaxed);
+  void clear_cache();
 
  private:
   MTL::Device* device_;

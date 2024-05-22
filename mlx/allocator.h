@@ -14,7 +14,7 @@ class Buffer {
   void* ptr_;
 
  public:
-  Buffer(void* ptr) : ptr_(ptr){};
+  Buffer(void* ptr) : ptr_(ptr) {};
 
   // Get the raw data pointer from the buffer
   void* raw_ptr();

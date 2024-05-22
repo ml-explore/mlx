@@ -37,10 +37,12 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/arg_reduce.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/common.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/erf.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/masked_mm.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/primitives.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/quantized.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
@@ -54,6 +56,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/qrf.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/svd.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/inverse.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cpp
   ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
 )
 

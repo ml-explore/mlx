@@ -5,10 +5,16 @@ add_custom_command(
               ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp
               ${CMAKE_C_COMPILER}
               ${PROJECT_SOURCE_DIR}
+              "-D${MLX_METAL_VERSION}"
     DEPENDS make_compiled_preamble.sh
             kernels/compiled_preamble.h
             kernels/unary.h
             kernels/binary.h
+            kernels/bf16.h
+            kernels/erf.h
+            kernels/expm1f.h
+            kernels/utils.h
+            kernels/bf16_math.h
 )
 
 add_custom_target(
@@ -26,6 +32,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp

@@ -87,7 +87,7 @@ auto py_value_and_grad(
       std::ostringstream msg;
       msg << error_msg_tag << " Can't compute the gradient of argument index "
           << argnums.back() << " because the function is called with only "
-          << args.size() << " arguments.";
+          << args.size() << " positional arguments.";
       throw std::invalid_argument(msg.str());
     }
 
@@ -614,6 +614,42 @@ void init_transforms(nb::module_& m) {
               or a tree of arrays. If a tree is given the nodes can be a Python
               :class:`list`, :class:`tuple` or :class:`dict`. Leaves which are not
               arrays are ignored.
+      )pbdoc");
+  m.def(
+      "async_eval",
+      [](const nb::args& args) {
+        std::vector<array> arrays = tree_flatten(args, false);
+        {
+          nb::gil_scoped_release nogil;
+          async_eval(arrays);
+        }
+      },
+      nb::arg(),
+      nb::sig("def async_eval(*args)"),
+      R"pbdoc(
+        Asynchronously evaluate an :class:`array` or tree of :class:`array`.
+
+        .. note::
+
+          This is an experimental API and may change in future versions.
+
+        Args:
+            *args (arrays or trees of arrays): Each argument can be a single array
+              or a tree of arrays. If a tree is given the nodes can be a Python
+              :class:`list`, :class:`tuple` or :class:`dict`. Leaves which are not
+              arrays are ignored.
+
+        Example:
+            >>> x = mx.array(1.0)
+            >>> y = mx.exp(x)
+            >>> mx.async_eval(y)
+            >>> print(y)
+            >>>
+            >>> y = mx.exp(x)
+            >>> mx.async_eval(y)
+            >>> z = y + 3
+            >>> mx.async_eval(z)
+            >>> print(z)
       )pbdoc");
   m.def(
       "jvp",

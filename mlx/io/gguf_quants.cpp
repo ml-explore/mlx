@@ -2,8 +2,9 @@
 
 #include <cstdint>
 #include <cstring>
+#include <numeric>
 
-#include <mlx/io/gguf.h>
+#include "mlx/io/gguf.h"
 
 namespace mlx::core {
 
@@ -118,16 +119,21 @@ void gguf_load_quantized(
 
   std::vector<int> weights_shape = shape;
   weights_shape.back() /= (weights_per_byte * 4);
+  auto w_nbytes = uint32.size *
+      std::accumulate(weights_shape.begin(),
+                      weights_shape.end(),
+                      1,
+                      std::multiplies<size_t>());
 
-  array weights(std::move(weights_shape), uint32, nullptr, {});
-  weights.set_data(allocator::malloc(weights.nbytes()));
+  array weights(allocator::malloc(w_nbytes), std::move(weights_shape), uint32);
 
   // For scales and bias
   shape[shape.size() - 1] = shape[shape.size() - 1] / weights_per_block;
-  array scales(shape, float16, nullptr, {});
-  array biases(std::move(shape), float16, nullptr, {});
-  scales.set_data(allocator::malloc(scales.nbytes()));
-  biases.set_data(allocator::malloc(biases.nbytes()));
+  auto sb_nbytes = float16.size *
+      std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
+
+  array scales(allocator::malloc(sb_nbytes), shape, float16);
+  array biases(allocator::malloc(sb_nbytes), std::move(shape), float16);
 
   if (tensor.type == GGUF_TYPE_Q4_0) {
     extract_q4_0_data(tensor, weights, scales, biases);

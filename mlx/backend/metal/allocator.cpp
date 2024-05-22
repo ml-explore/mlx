@@ -140,10 +140,15 @@ void BufferCache::remove_from_list(BufferCache::BufferHolder* to_remove) {
 
 MetalAllocator::MetalAllocator()
     : device_(device(mlx::core::Device::gpu).mtl_device()),
-      buffer_cache_(device_),
-      block_limit_(1.5 * device_->recommendedMaxWorkingSetSize()),
-      gc_limit_(0.95 * device_->recommendedMaxWorkingSetSize()),
-      max_pool_size_(block_limit_) {}
+      buffer_cache_(device_) {
+  auto memsize = std::get<size_t>(device_info()["memory_size"]);
+  block_limit_ =
+      std::min(1.5 * device_->recommendedMaxWorkingSetSize(), 0.95 * memsize);
+  gc_limit_ = std::min(
+      static_cast<size_t>(0.95 * device_->recommendedMaxWorkingSetSize()),
+      block_limit_);
+  max_pool_size_ = block_limit_;
+}
 
 size_t MetalAllocator::set_cache_limit(size_t limit) {
   std::swap(limit, max_pool_size_);
@@ -163,6 +168,15 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   // Metal doesn't like empty buffers
   if (size == 0) {
     return Buffer{nullptr};
+  }
+
+  // More helpful message if maximum buffer length is exceeded
+  if (size > device_->maxBufferLength()) {
+    std::ostringstream msg;
+    msg << "Attempting to allocate " << size << " bytes which is greater than"
+        << " the maximum allowed buffer size of " << device_->maxBufferLength()
+        << " bytes.";
+    throw std::runtime_error(msg.str());
   }
 
   // Align up memory
@@ -209,6 +223,11 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
   return Buffer{static_cast<void*>(buf)};
 }
 
+void MetalAllocator::clear_cache() {
+  std::unique_lock lk(mutex_);
+  buffer_cache_.clear();
+}
+
 void MetalAllocator::free(Buffer buffer) {
   auto buf = static_cast<MTL::Buffer*>(buffer.ptr());
   std::unique_lock lk(mutex_);
@@ -239,8 +258,14 @@ size_t get_active_memory() {
 size_t get_peak_memory() {
   return allocator().get_peak_memory();
 }
+void reset_peak_memory() {
+  allocator().reset_peak_memory();
+}
 size_t get_cache_memory() {
   return allocator().get_cache_memory();
+}
+void clear_cache() {
+  return allocator().clear_cache();
 }
 
 } // namespace metal

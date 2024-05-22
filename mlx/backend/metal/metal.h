@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <variant>
+
 #include "mlx/array.h"
 
 namespace mlx::core::metal {
@@ -18,10 +20,14 @@ size_t get_active_memory();
 
 /* Get the peak amount of used memory in bytes.
  *
- * The maximum memory used is recorded from the beginning of the program
- * execution.
+ * The maximum memory used recorded from the beginning of the program
+ * execution or since the last call to reset_peak_memory.
  * */
 size_t get_peak_memory();
+
+/* Reset the peak memory to zero.
+ * */
+void reset_peak_memory();
 
 /* Get the cache size in bytes.
  *
@@ -54,8 +60,15 @@ size_t set_memory_limit(size_t limit, bool relaxed = true);
  * */
 size_t set_cache_limit(size_t limit);
 
+/* Clear the memory cache. */
+void clear_cache();
+
 /** Capture a GPU trace, saving it to an absolute file `path` */
-bool start_capture(std::string path = "");
+void start_capture(std::string path = "");
 void stop_capture();
+
+/** Get information about the GPU and system settings. */
+std::unordered_map<std::string, std::variant<std::string, size_t>>
+device_info();
 
 } // namespace mlx::core::metal

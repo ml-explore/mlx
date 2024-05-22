@@ -497,12 +497,14 @@ TEST_CASE("test metal memory info") {
   {
     auto a = zeros({4096});
     eval(a);
+    synchronize();
     auto active_mem = metal::get_active_memory();
     CHECK(active_mem >= 4096 * 4);
     {
       auto b = zeros({4096});
       eval(b);
     }
+    synchronize();
     auto new_active_mem = metal::get_active_memory();
     CHECK_EQ(new_active_mem, active_mem);
     auto peak_mem = metal::get_peak_memory();
@@ -511,4 +513,7 @@ TEST_CASE("test metal memory info") {
     auto cache_mem = metal::get_cache_memory();
     CHECK(cache_mem >= 4096 * 4);
   }
+
+  metal::clear_cache();
+  CHECK_EQ(metal::get_cache_memory(), 0);
 }

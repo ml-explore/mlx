@@ -4,6 +4,7 @@
 #include <numeric>
 #include <set>
 #include <sstream>
+#include <stack>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -17,17 +18,14 @@
 
 namespace mlx::core {
 
-// Maximum allowed graph depth for eval
-constexpr uint32_t max_graph_depth = 100'000;
-
 /* This class is only meant to be used in eval
  * for synchronizing with the main thread. */
 class Synchronizer : public Primitive {
  public:
-  explicit Synchronizer(Stream stream) : Primitive(stream){};
+  explicit Synchronizer(Stream stream) : Primitive(stream) {};
 
-  void eval_cpu(const std::vector<array>&, std::vector<array>&) override{};
-  void eval_gpu(const std::vector<array>&, std::vector<array>&) override{};
+  void eval_cpu(const std::vector<array>&, std::vector<array>&) override {};
+  void eval_gpu(const std::vector<array>&, std::vector<array>&) override {};
 
   DEFINE_PRINT(Synchronize);
 };
@@ -38,105 +36,126 @@ class Synchronizer : public Primitive {
 // are currently under a function transformation.
 int detail::InTracing::tracing_counter{0};
 
-void eval(std::vector<array> outputs) {
-  std::function<void(const array&)> recurse;
+array eval_impl(std::vector<array> outputs, bool async) {
   std::queue<array> tape;
-  std::unordered_set<std::uintptr_t> cache;
-  std::unordered_map<std::uintptr_t, std::shared_future<void>> deps;
+
+  // stream events to use for synchronization
+  std::unordered_map<uint32_t, Event> events;
 
   // Make an effort to choose a good output stream
   Stream stream = default_stream(default_device());
   for (auto& o : outputs) {
-    if (!o.is_evaled() && o.has_primitive()) {
+    if (o.status() == array::Status::unscheduled && o.has_primitive()) {
       stream = o.primitive().stream();
       break;
     }
   }
 
+  std::unordered_set<uintptr_t> needs_signal;
+
   auto synchronizer = array(
       {}, bool_, std::make_shared<Synchronizer>(stream), std::move(outputs));
+  needs_signal.insert(synchronizer.id());
 
-  size_t depth_counter = 0;
-  recurse = [&](const array& a) {
-    if (depth_counter > max_graph_depth) {
-      throw std::runtime_error(
-          "[eval] Graph depth exceeded maximum allowed limit."
-          " Try evaluating the graph more frequently.");
-    }
+  // Make an event for the synchronizer stream
+  events.emplace(stream.index, Event{stream});
 
-    auto id = a.id();
-    if (cache.find(id) != cache.end()) {
-      return;
-    }
+  {
+    std::unordered_set<std::uintptr_t> cache;
+    std::stack<std::pair<std::reference_wrapper<array>, int>> dfs;
+    dfs.emplace(synchronizer, 0);
+    while (!dfs.empty()) {
+      auto& [a_ref, idx] = dfs.top();
+      auto& a = a_ref.get();
+      if (idx < a.inputs().size()) {
+        // Add an input, and continue
+        auto& in = a.inputs()[idx++];
 
-    // Recurse to the largest or smallest branch first.
-    depth_counter++;
-    for (auto& in : a.inputs()) {
-      recurse(in);
-      if (!in.is_evaled()) {
-        // If the input is being computed on a different stream, we need to
-        // manage the dependency.
-        if (a.primitive().stream() != in.primitive().stream()) {
-          deps.insert({in.output(0).id(), std::shared_future<void>{}});
+        // Ignore arrays already scheduled
+        if (in.status() == array::Status::scheduled) {
+          continue;
+        }
+
+        if (!in.is_available()) {
+          if (async && in.is_tracer()) {
+            throw std::invalid_argument(
+                "[async_eval] Not allowed inside a graph transformation.");
+          }
+          if (!in.has_primitive()) {
+            if (in.is_tracer()) {
+              throw std::invalid_argument(
+                  "[eval] Attempting to eval an array during function"
+                  " transformations like compile or vmap is not allowed.");
+            }
+            throw std::runtime_error(
+                "[eval] Attempting to eval an array without a primitive. "
+                "This may be a bug, please file an issue here: "
+                " https://github.com/ml-explore/mlx/issues.");
+          }
+          if (a.primitive().stream() != in.primitive().stream()) {
+            needs_signal.insert(in.id());
+          }
+        }
+
+        if (cache.find(in.id()) == cache.end()) {
+          dfs.emplace(in, 0);
+          cache.insert(in.id());
+          for (auto& s : in.siblings()) {
+            cache.insert(s.id());
+          }
+        }
+        continue;
+      }
+
+      // All inputs are done being processed, process this array
+      if (a.is_available() && !a.is_tracer() && a.has_primitive()) {
+        // If the array is evaluated and is no longer a tracer, detach it
+        a.detach();
+      } else if (a.status() == array::Status::unscheduled) {
+        tape.push(a);
+        // Lookup corresponding event and increment counter
+        auto& stream = a.primitive().stream();
+        auto e = events.find(stream.index);
+        if (e == events.end()) {
+          e = events.emplace(stream.index, Event{stream}).first;
+        }
+        e->second.set_value(e->second.value() + 1);
+        a.attach_event(e->second);
+        for (auto& s : a.siblings()) {
+          s.attach_event(e->second);
         }
       }
+      dfs.pop();
     }
-    depth_counter--;
+  }
 
-    cache.insert(id);
-    for (auto& s : a.siblings()) {
-      cache.insert(s.id());
-    }
-    if (!a.is_evaled() || (!a.is_tracer() && a.has_primitive())) {
-      if (!a.has_primitive()) {
-        throw std::invalid_argument(
-            "[eval] Attempting to eval an array without a primitive.");
-      }
-      tape.push(a);
-    }
-  };
-
-  recurse(synchronizer);
-  deps.insert({synchronizer.id(), std::shared_future<void>{}});
-
-  std::vector<std::shared_ptr<std::promise<void>>> ps;
   while (!tape.empty()) {
     auto arr = std::move(tape.front());
     tape.pop();
-    if (arr.is_evaled()) {
-      if (!arr.is_tracer() && arr.has_primitive()) {
-        arr.detach();
-      }
-      continue;
+
+    // Set the status of the array and siblings.
+    auto status = async ? array::Status::scheduled : array::Status::available;
+    arr.set_status(status);
+    for (auto& s : arr.siblings()) {
+      s.set_status(status);
     }
 
     auto stream = arr.primitive().stream();
     std::vector<std::shared_future<void>> arr_deps;
-    for (auto& in : arr.inputs()) {
-      if (auto it = deps.find(in.output(0).id()); it != deps.end()) {
-        arr_deps.push_back(it->second);
-      }
-    }
-    std::shared_ptr<std::promise<void>> p;
-    if (auto it = deps.find(arr.output(0).id()); it != deps.end()) {
-      p = std::make_shared<std::promise<void>>();
-      ps.push_back(p);
-      it->second = p->get_future().share();
-    }
+    bool signal = needs_signal.find(arr.id()) != needs_signal.end();
 
     if (arr.primitive().device() == Device::gpu) {
       if (!metal::is_available()) {
         throw std::runtime_error("Metal GPU is not available.");
       }
-      scheduler::enqueue(
-          stream, metal::make_task(arr, std::move(arr_deps), std::move(p)));
+      scheduler::enqueue(stream, metal::make_task(std::move(arr), signal));
     } else {
-      auto task = [arr,
-                   stream,
-                   deps = std::move(arr_deps),
-                   p = std::move(p)]() mutable {
-        for (auto& d : deps) {
-          d.wait();
+      auto task = [arr = std::move(arr), stream, signal]() mutable {
+        for (auto& input : arr.inputs()) {
+          if (input.event().valid() &&
+              input.event().stream() != arr.primitive().stream()) {
+            input.event().wait();
+          }
         }
         scheduler::notify_new_task(stream);
         auto outputs = arr.outputs();
@@ -144,16 +163,24 @@ void eval(std::vector<array> outputs) {
         if (!arr.is_tracer()) {
           arr.detach();
         }
-        if (p) {
-          p->set_value();
+        if (signal) {
+          arr.event().signal();
         }
+
         scheduler::notify_task_completion(stream);
       };
       scheduler::enqueue(stream, std::move(task));
     }
   }
+  return synchronizer;
+}
 
-  deps[synchronizer.id()].wait();
+void async_eval(std::vector<array> outputs) {
+  eval_impl(std::move(outputs), true);
+}
+
+void eval(std::vector<array> outputs) {
+  eval_impl(std::move(outputs), false).event().wait();
 }
 
 std::pair<std::vector<array>, std::vector<array>> vjp(
@@ -226,7 +253,7 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       return;
     }
     a.set_tracer(false);
-    for (auto s : a.siblings()) {
+    for (auto& s : a.siblings()) {
       s.set_tracer(false);
       cache.insert(s.id());
     }
@@ -383,7 +410,7 @@ std::pair<std::vector<array>, std::vector<array>> jvp(
       return;
     }
     a.set_tracer(false);
-    for (auto s : a.siblings()) {
+    for (auto& s : a.siblings()) {
       s.set_tracer(false);
       cache.insert(s.id());
     }

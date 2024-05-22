@@ -1,0 +1,50 @@
+################################################################################
+# Primary project setup.                                                       #
+################################################################################
+
+PROJECT_NAME           = "MLX"
+OUTPUT_DIRECTORY       = build
+XML_OUTPUT             = xml
+HTML_OUTPUT            = html
+STRIP_FROM_PATH        = ../
+INPUT                  = ../mlx
+FILE_PATTERNS          = *.h
+EXCLUDE_PATTERNS       = */private/*
+CREATE_SUBDIRS         = NO
+FULL_PATH_NAMES        = YES
+RECURSIVE              = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_PROGRAMLISTING     = YES
+
+################################################################################
+# Doxygen preprocessor / parser control.                                       #
+################################################################################
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = NO
+SKIP_FUNCTION_MACROS   = NO
+
+################################################################################
+# Compound extraction control.                                                 #
+################################################################################
+
+EXTRACT_ALL            = YES
+EXTRACT_PACKAGE        = YES
+EXTRACT_STATIC         = YES
+CASE_SENSE_NAMES       = NO
+
+################################################################################
+# Docstring control / customization.                                           #
+################################################################################
+
+JAVADOC_AUTOBRIEF      = YES
+
+################################################################################
+# Warning suppression.                                                         #
+################################################################################
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

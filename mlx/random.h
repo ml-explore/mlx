@@ -121,6 +121,15 @@ inline array normal(
   return normal(shape, float32, 0.0, 1.0, key, s);
 }
 
+/** Generate samples from a multivariate normal distribution. **/
+array multivariate_normal(
+    const array& mean,
+    const array& cov,
+    const std::vector<int>& shape,
+    Dtype dtype,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {});
+
 /** Generate integer samples uniformly at random */
 array randint(
     const array& low,

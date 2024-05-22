@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <functional>
 
 #include "mlx/array.h"
@@ -93,7 +92,13 @@ void array::detach() {
 }
 
 void array::eval() {
-  mlx::core::eval({*this});
+  // Ensure the array is ready to be read
+  if (status() == Status::scheduled) {
+    event().wait();
+    set_status(Status::available);
+  } else if (status() == Status::unscheduled) {
+    mlx::core::eval({*this});
+  }
 }
 
 bool array::is_tracer() const {
@@ -161,6 +166,39 @@ void array::move_shared_buffer(array other) {
   move_shared_buffer(other, other.strides(), other.flags(), other.data_size());
 }
 
+array::~array() {
+  if (array_desc_ == nullptr) {
+    return;
+  }
+
+  // Ignore arrays that will be detached
+  if (status() != array::Status::unscheduled) {
+    return;
+  }
+  // Break circular reference for non-detached arrays with siblings
+  if (auto n = siblings().size(); n > 0) {
+    bool do_detach = true;
+    // If all siblings have siblings.size() references except
+    // the one we are currently destroying (which has siblings.size() + 1)
+    // then there are no more external references
+    do_detach &= (array_desc_.use_count() == (n + 1));
+    for (auto& s : siblings()) {
+      do_detach &= (s.array_desc_.use_count() == n);
+      if (!do_detach) {
+        break;
+      }
+    }
+    if (do_detach) {
+      for (auto& s : siblings()) {
+        for (auto& ss : s.siblings()) {
+          ss.array_desc_ = nullptr;
+        }
+        s.array_desc_->siblings.clear();
+      }
+    }
+  }
+}
+
 void array::ArrayDesc::init() {
   strides.resize(shape.size());
   size = 1;
@@ -174,7 +212,7 @@ void array::ArrayDesc::init() {
 }
 
 array::ArrayDesc::ArrayDesc(std::vector<int> shape, Dtype dtype)
-    : shape(std::move(shape)), dtype(dtype) {
+    : shape(std::move(shape)), dtype(dtype), status(Status::available) {
   init();
 }
 
@@ -185,9 +223,40 @@ array::ArrayDesc::ArrayDesc(
     std::vector<array> inputs)
     : shape(std::move(shape)),
       dtype(dtype),
+      status(Status::unscheduled),
       primitive(std::move(primitive)),
       inputs(std::move(inputs)) {
   init();
+}
+
+array::ArrayDesc::~ArrayDesc() {
+  // When an array description is destroyed it will delete a bunch of arrays
+  // that may also destory their corresponding descriptions and so on and so
+  // forth.
+  //
+  // This calls recursively the destructor and can result in stack overflow, we
+  // instead put them in a vector and destroy them one at a time resulting in a
+  // max stack depth of 2.
+  std::vector<std::shared_ptr<ArrayDesc>> for_deletion;
+
+  for (array& a : inputs) {
+    if (a.array_desc_.use_count() == 1) {
+      for_deletion.push_back(std::move(a.array_desc_));
+    }
+  }
+
+  while (!for_deletion.empty()) {
+    // top is going to be deleted at the end of the block *after* the arrays
+    // with inputs have been moved into the vector
+    auto top = std::move(for_deletion.back());
+    for_deletion.pop_back();
+
+    for (array& a : top->inputs) {
+      if (a.array_desc_.use_count() == 1) {
+        for_deletion.push_back(std::move(a.array_desc_));
+      }
+    }
+  }
 }
 
 array::ArrayIterator::ArrayIterator(const array& arr, int idx)

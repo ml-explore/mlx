@@ -237,13 +237,17 @@ template <typename T, int N_READS = RMS_N_READS>
   gw += gid * axis_size + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
-      gx[i] = static_cast<T>(thread_g[i] * thread_w[i] * normalizer - thread_x[i] * meangwx * normalizer3);
+      gx[i] = static_cast<T>(
+          thread_g[i] * thread_w[i] * normalizer -
+          thread_x[i] * meangwx * normalizer3);
       gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
       if ((lid * N_READS + i) < axis_size) {
-        gx[i] = static_cast<T>(thread_g[i] * thread_w[i] * normalizer - thread_x[i] * meangwx * normalizer3);
+        gx[i] = static_cast<T>(
+            thread_g[i] * thread_w[i] * normalizer -
+            thread_x[i] * meangwx * normalizer3);
         gw[i] = static_cast<T>(thread_g[i] * thread_x[i] * normalizer);
       }
     }
@@ -342,7 +346,8 @@ template <typename T, int N_READS = RMS_N_READS>
         float wi = w[w_stride * (i + r)];
         float gi = g[i + r];
 
-        gx[i + r] = static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
+        gx[i + r] =
+            static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
         gw[i + r] = static_cast<T>(gi * xi * normalizer);
       }
     } else {
@@ -352,7 +357,8 @@ template <typename T, int N_READS = RMS_N_READS>
           float wi = w[w_stride * (i + r)];
           float gi = g[i + r];
 
-          gx[i + r] = static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
+          gx[i + r] =
+              static_cast<T>(gi * wi * normalizer - xi * meangwx * normalizer3);
           gw[i + r] = static_cast<T>(gi * xi * normalizer);
         }
       }
@@ -431,5 +437,4 @@ template <typename T, int N_READS = RMS_N_READS>
 
 instantiate_rms(float32, float)
 instantiate_rms(float16, half)
-instantiate_rms(bfloat16, bfloat16_t)
-    // clang-format on
+instantiate_rms(bfloat16, bfloat16_t) // clang-format on

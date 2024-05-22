@@ -248,7 +248,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
     def test_layer_norm(self):
         # Per dtype absolute tolerance
-        tolerances = {mx.float32: 3e-6, mx.float16: 3e-3, mx.bfloat16: 3e-2}
+        tolerances = {mx.float32: 1e-5, mx.float16: 5e-3, mx.bfloat16: 5e-2}
 
         dtypes = [mx.float32, mx.float16, mx.bfloat16]
         epss = [1e-3, 1e-5]

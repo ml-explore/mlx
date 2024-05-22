@@ -197,8 +197,8 @@ inline auto collapse_batches(const array& a, const array& b) {
   std::vector<int> B_bshape{b.shape().begin(), b.shape().end() - 2};
   if (A_bshape != B_bshape) {
     std::ostringstream msg;
-    msg << "[matmul] Got matrices with incorrectly broadcasted shapes: "
-        << "A " << a.shape() << ", B " << b.shape() << ".";
+    msg << "[matmul] Got matrices with incorrectly broadcasted shapes: " << "A "
+        << a.shape() << ", B " << b.shape() << ".";
     throw std::runtime_error(msg.str());
   }
 
@@ -227,9 +227,8 @@ inline auto collapse_batches(const array& a, const array& b, const array& c) {
   std::vector<int> C_bshape{c.shape().begin(), c.shape().end() - 2};
   if (A_bshape != B_bshape || A_bshape != C_bshape) {
     std::ostringstream msg;
-    msg << "[addmm] Got matrices with incorrectly broadcasted shapes: "
-        << "A " << a.shape() << ", B " << b.shape() << ", B " << c.shape()
-        << ".";
+    msg << "[addmm] Got matrices with incorrectly broadcasted shapes: " << "A "
+        << a.shape() << ", B " << b.shape() << ", B " << c.shape() << ".";
     throw std::runtime_error(msg.str());
   }
 
@@ -260,6 +259,138 @@ inline auto collapse_batches(const array& a, const array& b, const array& c) {
 ///////////////////////////////////////////////////////////////////////////////
 // Steel matmul fallback
 ///////////////////////////////////////////////////////////////////////////////
+
+void steel_matmul_conv_groups(
+    const Stream& s,
+    metal::Device& d,
+    const array& a,
+    const array& b,
+    array& out,
+    int M,
+    int N,
+    int K,
+    int lda,
+    int ldb,
+    int ldd,
+    bool transpose_a,
+    bool transpose_b,
+    int groups,
+    std::vector<array>& copies) {
+  using namespace mlx::steel;
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Regular kernel dispatch
+
+  // Determine dispatch kernel
+  int bm = 32, bn = 32, bk = 16;
+  int wm = 2, wn = 2;
+
+  if ((size_t)M * N >= 1ul << 20) {
+    if (!transpose_a && transpose_b) {
+      bm = 64;
+      bn = (out.dtype() == float32) ? 64 : 32;
+      bk = (out.dtype() == float32) ? 16 : 32;
+    } else {
+      bm = 64;
+      bn = 64;
+    }
+  }
+
+  // Prepare kernel name
+  std::ostringstream kname;
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
+        << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
+        << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = false;
+  const bool use_out_source = false;
+  const bool do_axpby = false;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = false;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
+
+  // Encode and dispatch kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Use problem size to determine threadblock swizzle
+  int tn = (N + bn - 1) / bn;
+  int tm = (M + bm - 1) / bm;
+
+  // TODO: Explore device-based tuning for swizzle
+  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+
+  // Prepare steel matmul params
+  GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ ldb,
+      /* const int ldd = */ ldd,
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const size_t batch_stride_a = */ size_t(K),
+      /* const size_t batch_stride_b = */ size_t(N) * K,
+      /* const size_t batch_stride_d = */ size_t(N),
+      /* const int swizzle_log = */ swizzle_log,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ 1};
+
+  // Prepare launch grid params
+  int tile = 1 << swizzle_log;
+  tm = (tm + tile - 1) / tile;
+  tn = tn * tile;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(tn, tm, groups);
+
+  std::vector<int> batch_shape = {1};
+  std::vector<size_t> batch_strides = {0};
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
+
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
+
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+
+  // Clear copies
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  return;
+}
 
 void steel_matmul(
     const Stream& s,
@@ -302,7 +433,7 @@ void steel_matmul(
     }
   }
 
-  int matrix_stride_out = M * N;
+  size_t matrix_stride_out = size_t(M) * N;
 
   /////////////////////////////////////////////////////////////////////////////
   // Split K specialization
@@ -332,11 +463,11 @@ void steel_matmul(
           << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
           << type_to_name(C_split) << "_bm" << bm << "_bn" << bn << "_bk" << bk
           << "_wm" << wm << "_wn" << wn << "_MN_"
-          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-          << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+          << ((K % bk == 0) ? "t" : "n") << "aligned";
 
     // Encode and dispatch gemm kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -360,12 +491,12 @@ void steel_matmul(
     MTL::Size group_dims = MTL::Size(32, wn, wm);
     MTL::Size grid_dims = MTL::Size(tn, tm, split_k_partitions);
 
-    set_array_buffer(compute_encoder, a, 0);
-    set_array_buffer(compute_encoder, b, 1);
-    set_array_buffer(compute_encoder, C_split, 2);
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_input_array(b, 1);
+    compute_encoder.set_output_array(C_split, 2);
 
     compute_encoder->setBytes(&params, sizeof(GEMMSpiltKParams), 3);
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
     // Do accum kernel
     {
@@ -380,8 +511,8 @@ void steel_matmul(
       compute_encoder->setComputePipelineState(kernel);
 
       // Set the arguments for the kernel
-      set_array_buffer(compute_encoder, C_split, 0);
-      set_array_buffer(compute_encoder, out, 1);
+      compute_encoder.set_input_array(C_split, 0);
+      compute_encoder.set_output_array(out, 1);
       compute_encoder->setBytes(&split_k_partitions, sizeof(int), 2);
       compute_encoder->setBytes(&split_k_partition_stride, sizeof(int), 3);
       compute_encoder->setBytes(&N, sizeof(int), 4);
@@ -390,7 +521,7 @@ void steel_matmul(
       MTL::Size grid_dims = MTL::Size(N, M, 1);
       MTL::Size group_dims = MTL::Size(std::min(1024, N * M), 1, 1);
 
-      compute_encoder->dispatchThreads(grid_dims, group_dims);
+      compute_encoder.dispatchThreads(grid_dims, group_dims);
     }
 
     d.get_command_buffer(s.index)->addCompletedHandler(
@@ -418,16 +549,46 @@ void steel_matmul(
 
   // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_gemm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = (batch_shape.size() > 1);
+  const bool use_out_source = false;
+  const bool do_axpby = false;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = false;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
   compute_encoder->setComputePipelineState(kernel);
 
   // Use problem size to determine threadblock swizzle
@@ -447,9 +608,9 @@ void steel_matmul(
       /* const int ldd = */ N,
       /* const int tiles_n = */ tn,
       /* const int tiles_m = */ tm,
-      /* const int batch_stride_a = */ int(A_batch_stride.back()),
-      /* const int batch_stride_b = */ int(B_batch_stride.back()),
-      /* const int batch_stride_d = */ matrix_stride_out,
+      /* const size_t batch_stride_a = */ A_batch_stride.back(),
+      /* const size_t batch_stride_b = */ B_batch_stride.back(),
+      /* const size_t batch_stride_d = */ matrix_stride_out,
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ int(batch_shape.size())};
@@ -467,18 +628,16 @@ void steel_matmul(
       batch_strides.end(), B_batch_stride.begin(), B_batch_stride.end());
 
   // Launch kernel
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
-  set_array_buffer(compute_encoder, out, 3);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(out, 3);
 
   compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
 
-  compute_encoder->setBytes(
-      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
-  compute_encoder->setBytes(
-      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
 
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
   // Clear copies
   d.get_command_buffer(s.index)->addCompletedHandler(
@@ -542,7 +701,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto [batch_shape, A_batch_stride, B_batch_stride] = collapse_batches(a, b);
 
-  auto batch_size_out = out.size() / (M * N);
+  auto batch_size_out = out.size() / (size_t(M) * size_t(N));
 
   // Collapse batches into M if needed
   if (batch_size_out > 1 && !a_transposed && batch_shape.size() == 1 &&
@@ -622,7 +781,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_nc" << !contiguous_kernel << "_axpby0";
 
     // Encode and dispatch kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -630,9 +789,9 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(bn, bm, 1);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
-    set_array_buffer(compute_encoder, mat, 0);
-    set_array_buffer(compute_encoder, vec, 1);
-    set_array_buffer(compute_encoder, out, 3);
+    compute_encoder.set_input_array(mat, 0);
+    compute_encoder.set_input_array(vec, 1);
+    compute_encoder.set_output_array(out, 3);
 
     compute_encoder->setBytes(&in_vector_len, sizeof(int), 4);
     compute_encoder->setBytes(&out_vector_len, sizeof(int), 5);
@@ -645,7 +804,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(
         batch_strides_mat.data(), batch_ndim * sizeof(size_t), 12);
 
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
     d.get_command_buffer(s.index)->addCompletedHandler(
         [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
@@ -750,7 +909,8 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [batch_shape, A_batch_stride, B_batch_stride, C_batch_stride] =
       collapse_batches(a, b, c);
 
-  auto batch_size_out = out.size() / (M * N);
+  size_t matrix_stride_out = size_t(M) * size_t(N);
+  auto batch_size_out = out.size() / (matrix_stride_out);
 
   // Collapse batches into M if needed
   if (batch_size_out > 1 && !transpose_a && batch_shape.size() == 1 &&
@@ -765,8 +925,6 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     C_batch_stride = {0};
     batch_shape = {1};
   }
-
-  int matrix_stride_out = M * N;
 
   /////////////////////////////////////////////////////////////////////////////
   // Gemv specialization
@@ -834,7 +992,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_nc" << !contiguous_kernel << "_axpby1";
 
     // Encode and dispatch kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -842,10 +1000,10 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(bn, bm, 1);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
-    set_array_buffer(compute_encoder, mat, 0);
-    set_array_buffer(compute_encoder, vec, 1);
-    set_array_buffer(compute_encoder, c, 2);
-    set_array_buffer(compute_encoder, out, 3);
+    compute_encoder.set_input_array(mat, 0);
+    compute_encoder.set_input_array(vec, 1);
+    compute_encoder.set_input_array(c, 2);
+    compute_encoder.set_output_array(out, 3);
 
     compute_encoder->setBytes(&in_vector_len, sizeof(int), 4);
     compute_encoder->setBytes(&out_vector_len, sizeof(int), 5);
@@ -855,18 +1013,15 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&beta_, sizeof(float), 8);
 
     compute_encoder->setBytes(&batch_ndim, sizeof(int), 9);
-    compute_encoder->setBytes(batch_shape.data(), batch_ndim * sizeof(int), 10);
-    compute_encoder->setBytes(
-        batch_strides_vec.data(), batch_ndim * sizeof(size_t), 11);
-    compute_encoder->setBytes(
-        batch_strides_mat.data(), batch_ndim * sizeof(size_t), 12);
-    compute_encoder->setBytes(
-        C_batch_stride.data(), batch_ndim * sizeof(size_t), 13);
+    set_vector_bytes(compute_encoder, batch_shape, 10);
+    set_vector_bytes(compute_encoder, batch_strides_vec, 11);
+    set_vector_bytes(compute_encoder, batch_strides_mat, 12);
+    set_vector_bytes(compute_encoder, C_batch_stride, 13);
 
     int bias_stride = c.strides()[c.ndim() - 1];
     compute_encoder->setBytes(&bias_stride, sizeof(int), 14);
 
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
     d.get_command_buffer(s.index)->addCompletedHandler(
         [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
@@ -903,11 +1058,11 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
           << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
           << type_to_name(C_split) << "_bm" << bm << "_bn" << bn << "_bk" << bk
           << "_wm" << wm << "_wn" << wn << "_MN_"
-          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-          << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned";
+          << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+          << ((K % bk == 0) ? "t" : "n") << "aligned";
 
     // Encode and dispatch gemm kernel
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
@@ -931,12 +1086,12 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(32, wn, wm);
     MTL::Size grid_dims = MTL::Size(tn, tm, split_k_partitions);
 
-    set_array_buffer(compute_encoder, a, 0);
-    set_array_buffer(compute_encoder, b, 1);
-    set_array_buffer(compute_encoder, C_split, 2);
+    compute_encoder.set_input_array(a, 0);
+    compute_encoder.set_input_array(b, 1);
+    compute_encoder.set_output_array(C_split, 2);
 
     compute_encoder->setBytes(&params, sizeof(GEMMSpiltKParams), 3);
-    compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
     // Do accum kernel
     {
@@ -946,12 +1101,12 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setComputePipelineState(kernel);
 
       // Set the arguments for the kernel
-      set_array_buffer(compute_encoder, C_split, 0);
-      set_array_buffer(compute_encoder, out, 1);
+      compute_encoder.set_input_array(C_split, 0);
+      compute_encoder.set_output_array(out, 1);
       compute_encoder->setBytes(&split_k_partitions, sizeof(int), 2);
       compute_encoder->setBytes(&split_k_partition_stride, sizeof(int), 3);
       compute_encoder->setBytes(&N, sizeof(int), 4);
-      set_array_buffer(compute_encoder, c, 5);
+      compute_encoder.set_input_array(c, 5);
       compute_encoder->setBytes(&ldc, sizeof(int), 6);
       compute_encoder->setBytes(&fdc, sizeof(int), 7);
       compute_encoder->setBytes(&alpha_, sizeof(float), 8);
@@ -961,7 +1116,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       MTL::Size grid_dims = MTL::Size(N, M, 1);
       MTL::Size group_dims = MTL::Size(std::min(1024, N * M), 1, 1);
 
-      compute_encoder->dispatchThreads(grid_dims, group_dims);
+      compute_encoder.dispatchThreads(grid_dims, group_dims);
     }
 
     d.get_command_buffer(s.index)->addCompletedHandler(
@@ -987,18 +1142,48 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   }
 
+  // Prepare kernel name
   std::ostringstream kname;
-  kname << "steel_addmm_" << (transpose_a ? 't' : 'n')
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
         << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
         << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
-        << "_wm" << wm << "_wn" << wn << "_MN_"
-        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned"
-        << "_K_" << ((K % bk == 0) ? "t" : "n") << "aligned"
-        << ((alpha_ == 1. && beta_ == 1.) ? "_add" : "_axpby");
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = (batch_shape.size() > 1);
+  const bool use_out_source = true;
+  const bool do_axpby = !(alpha_ == 1. && beta_ == 1.);
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = false;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
 
   // Encode and dispatch kernel
-  auto compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
   compute_encoder->setComputePipelineState(kernel);
 
   int tn = (N + bn - 1) / bn;
@@ -1017,9 +1202,9 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       /* const int ldd = */ N,
       /* const int tiles_n = */ tn,
       /* const int tiles_m = */ tm,
-      /* const int batch_stride_a = */ int(A_batch_stride.back()),
-      /* const int batch_stride_b = */ int(B_batch_stride.back()),
-      /* const int batch_stride_d = */ matrix_stride_out,
+      /* const size_t batch_stride_a = */ A_batch_stride.back(),
+      /* const size_t batch_stride_b = */ B_batch_stride.back(),
+      /* const size_t batch_stride_d = */ matrix_stride_out,
       /* const int swizzle_log = */ swizzle_log,
       /* const int gemm_k_iterations_aligned = */ (K / bk),
       /* const int batch_ndim = */ int(batch_shape.size())};
@@ -1027,7 +1212,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   GEMMAddMMParams params{
       /* const int ldc = */ ldc,
       /* const int fdc = */ fdc,
-      /* const int batch_stride_c = */ int(C_batch_stride.back()),
+      /* const size_t batch_stride_c = */ C_batch_stride.back(),
       /* const float alpha = */ alpha_,
       /* const float beta = */ beta_};
 
@@ -1045,21 +1230,554 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       batch_strides.end(), C_batch_stride.begin(), C_batch_stride.end());
 
   // Launch kernel
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
-  set_array_buffer(compute_encoder, c, 2);
-  set_array_buffer(compute_encoder, out, 3);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(c, 2);
+  compute_encoder.set_output_array(out, 3);
 
   compute_encoder->setBytes(&gemm_params, sizeof(GEMMParams), 4);
   compute_encoder->setBytes(&params, sizeof(GEMMAddMMParams), 5);
 
-  compute_encoder->setBytes(
-      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
-  compute_encoder->setBytes(
-      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
 
-  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  return;
+}
+
+void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  using namespace mlx::steel;
+  // assert(inputs.size() == 2);
+  if (!issubdtype(out.dtype(), floating)) {
+    throw std::runtime_error(
+        "[matmul] Does not yet support non-floating point types.");
+  }
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  // Return 0s if either input is empty
+  if (a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero = array(0, a_pre.dtype());
+    copy_gpu(zero, out, CopyType::Scalar, s);
+    auto command_buffer = d.get_command_buffer(s.index);
+    command_buffer->addCompletedHandler([zero](MTL::CommandBuffer*) {});
+    return;
+  }
+
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Init checks and prep
+
+  // Keep a vector with copies to be cleared in the completed buffer to release
+  // the arrays
+  std::vector<array> copies;
+  auto check_transpose = [&copies, &s](const array& arr) {
+    auto stx = arr.strides()[arr.ndim() - 2];
+    auto sty = arr.strides()[arr.ndim() - 1];
+    if (sty == 1) {
+      return std::make_tuple(false, stx, arr);
+    } else if (stx == 1) {
+      return std::make_tuple(true, sty, arr);
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy_gpu(arr, arr_copy, CopyType::General, s);
+      copies.push_back(arr_copy);
+      size_t stx = arr.shape(-1);
+      return std::make_tuple(false, stx, arr_copy);
+    }
+  };
+
+  auto [transpose_a, a_cols, a] = check_transpose(a_pre);
+  auto [transpose_b, b_cols, b] = check_transpose(b_pre);
+
+  int lda = a_cols;
+  int ldb = b_cols;
+
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Check and collapse batch dimensions
+
+  bool has_op_mask = inputs.size() > 3;
+  auto& out_mask = inputs[2];
+
+  std::vector<int> batch_shape{1};
+  size_t A_batch_str = 0;
+  size_t B_batch_str = 0;
+
+  std::vector<size_t> batch_strides;
+
+  if (out.ndim() > 2) {
+    auto get_batch_dims = [](const auto& v) {
+      return decltype(v){v.begin(), v.end() - 2};
+    };
+
+    std::vector<int> bshape{out.shape().begin(), out.shape().end() - 2};
+    std::vector<std::vector<size_t>> bstrides;
+
+    for (auto& arr : inputs) {
+      bstrides.emplace_back(arr.strides().begin(), arr.strides().end() - 2);
+    }
+
+    auto [bshape_c, bstrides_c] = collapse_contiguous_dims(bshape, bstrides);
+    batch_shape = bshape_c;
+    A_batch_str = bstrides_c[0].back();
+    B_batch_str = bstrides_c[1].back();
+
+    for (auto& bstr : bstrides_c) {
+      batch_strides.insert(batch_strides.end(), bstr.begin(), bstr.end());
+    }
+  } else {
+    batch_strides = std::vector<size_t>(inputs.size(), 0);
+  }
+
+  size_t matrix_stride_out = size_t(M) * N;
+  size_t batch_size_out = out.size() / (matrix_stride_out);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Regular kernel dispatch
+
+  // Determine dispatch kernel
+  int bm = block_size_, bn = block_size_, bk = 16;
+  int wm = 2, wn = 2;
+
+  // Prepare kernel name
+  std::ostringstream kname;
+  kname << "steel_block_masked_gemm_" << (transpose_a ? 't' : 'n')
+        << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
+        << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
+        << "_wm" << wm << "_wn" << wn << "_MN_"
+        << ((M % bm == 0 && N % bn == 0) ? "t" : "n") << "aligned" << "_K_"
+        << ((K % bk == 0) ? "t" : "n") << "aligned" << "_op_mask_"
+        << (has_op_mask ? "T" : "N");
+
+  // Encode and dispatch kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname.str());
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Use problem size to determine threadblock swizzle
+  int tn = (N + bn - 1) / bn;
+  int tm = (M + bm - 1) / bm;
+
+  // TODO: Explore device-based tuning for swizzle
+  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+
+  // Prepare steel matmul params
+  GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ ldb,
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const size_t batch_stride_a = */ A_batch_str,
+      /* const size_t batch_stride_b = */ B_batch_str,
+      /* const size_t batch_stride_d = */ matrix_stride_out,
+      /* const int swizzle_log = */ swizzle_log,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ int(batch_shape.size())};
+
+  // Prepare launch grid params
+  int tile = 1 << swizzle_log;
+  tm = (tm + tile - 1) / tile;
+  tn = tn * tile;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
+
+  std::vector<int> mask_strides;
+  mask_strides.push_back(*(out_mask.strides().end() - 1));
+  mask_strides.push_back(*(out_mask.strides().end() - 2));
+
+  if (has_op_mask) {
+    auto& lhs_mask = inputs[3];
+    mask_strides.push_back(*(lhs_mask.strides().end() - 1));
+    mask_strides.push_back(*(lhs_mask.strides().end() - 2));
+
+    compute_encoder.set_input_array(lhs_mask, 11);
+
+    auto& rhs_mask = inputs[4];
+    mask_strides.push_back(*(rhs_mask.strides().end() - 1));
+    mask_strides.push_back(*(rhs_mask.strides().end() - 2));
+
+    compute_encoder.set_input_array(rhs_mask, 12);
+  }
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(out, 3);
+
+  compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
+
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
+
+  compute_encoder.set_input_array(out_mask, 10);
+  set_vector_bytes(compute_encoder, mask_strides, 13);
+
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+
+  // Clear copies
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  return;
+}
+
+void BlockSparseMM::eval_gpu(const std::vector<array>& inputs, array& out) {
+  using namespace mlx::steel;
+  // assert(inputs.size() == 2);
+  if (!issubdtype(out.dtype(), floating)) {
+    throw std::runtime_error(
+        "[matmul] Does not yet support non-floating point types.");
+  }
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  auto& a_pre = inputs[0];
+  auto& b_pre = inputs[1];
+  // Return 0s if either input is empty
+  if (a_pre.size() == 0 || b_pre.size() == 0) {
+    array zero = array(0, a_pre.dtype());
+    copy_gpu(zero, out, CopyType::Scalar, s);
+    auto command_buffer = d.get_command_buffer(s.index);
+    command_buffer->addCompletedHandler([zero](MTL::CommandBuffer*) {});
+    return;
+  }
+
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Init checks and prep
+
+  // Keep a vector with copies to be cleared in the completed buffer to release
+  // the arrays
+  std::vector<array> copies;
+  auto check_transpose = [&copies, &s](const array& arr) {
+    auto stx = arr.strides()[arr.ndim() - 2];
+    auto sty = arr.strides()[arr.ndim() - 1];
+    if (sty == 1) {
+      return std::make_tuple(false, stx, arr);
+    } else if (stx == 1) {
+      return std::make_tuple(true, sty, arr);
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy_gpu(arr, arr_copy, CopyType::General, s);
+      copies.push_back(arr_copy);
+      size_t stx = arr.shape(-1);
+      return std::make_tuple(false, stx, arr_copy);
+    }
+  };
+
+  auto [transpose_a, a_cols, a] = check_transpose(a_pre);
+  auto [transpose_b, b_cols, b] = check_transpose(b_pre);
+
+  int lda = a_cols;
+  int ldb = b_cols;
+
+  int M = a.shape(-2);
+  int N = b.shape(-1);
+  int K = a.shape(-1);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Check and collapse batch dimensions
+
+  auto get_batch_dims = [](const auto& v) {
+    return decltype(v){v.begin(), v.end() - 2};
+  };
+
+  auto& lhs_indices = inputs[2];
+  auto& rhs_indices = inputs[3];
+
+  std::vector<int> batch_shape = get_batch_dims(out.shape());
+  std::vector<size_t> batch_strides;
+
+  batch_strides.insert(
+      batch_strides.end(),
+      lhs_indices.strides().begin(),
+      lhs_indices.strides().end());
+  size_t lhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
+
+  batch_strides.insert(
+      batch_strides.end(),
+      rhs_indices.strides().begin(),
+      rhs_indices.strides().end());
+  size_t rhs_indices_str = batch_strides.empty() ? 0 : batch_strides.back();
+
+  int batch_ndim = batch_shape.size();
+
+  if (batch_ndim == 0) {
+    batch_shape = {1};
+    batch_strides = {0};
+  }
+
+  int batch_ndim_A = a.ndim() - 2;
+  int batch_ndim_B = b.ndim() - 2;
+  std::vector<int> operand_batch_ndim = {batch_ndim_A, batch_ndim_B};
+
+  std::vector<int> batch_shape_A = get_batch_dims(a.shape());
+  std::vector<size_t> batch_strides_A = get_batch_dims(a.strides());
+  std::vector<int> batch_shape_B = get_batch_dims(b.shape());
+  std::vector<size_t> batch_strides_B = get_batch_dims(b.strides());
+
+  if (batch_ndim_A == 0) {
+    batch_shape_A = {1};
+    batch_strides_A = {0};
+  }
+
+  if (batch_ndim_B == 0) {
+    batch_shape_B = {1};
+    batch_strides_B = {0};
+  }
+
+  size_t matrix_stride_out = size_t(M) * N;
+  auto batch_size_out = out.size() / matrix_stride_out;
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Gemv specialization
+
+  // Route to gemv if needed
+  if (std::min(M, N) == 1) {
+    // Collect problem info
+    bool is_b_matrix = N != 1;
+
+    auto& mat = is_b_matrix ? b : a;
+    auto& vec = is_b_matrix ? a : b;
+    bool transpose_mat = is_b_matrix ? !transpose_b : transpose_a;
+    int in_vector_len = K;
+    int out_vector_len = is_b_matrix ? N : M;
+
+    int mat_cols = transpose_mat ? out_vector_len : in_vector_len;
+    int mat_rows = transpose_mat ? in_vector_len : out_vector_len;
+    int mat_ld = is_b_matrix ? b_cols : a_cols;
+
+    auto batch_strides_mat = is_b_matrix ? batch_strides_B : batch_strides_A;
+    auto batch_strides_vec = is_b_matrix ? batch_strides_A : batch_strides_B;
+
+    auto batch_shape_mat = is_b_matrix ? batch_shape_B : batch_shape_A;
+    auto batch_shape_vec = is_b_matrix ? batch_shape_A : batch_shape_B;
+
+    if (!is_b_matrix) {
+      batch_strides = rhs_indices.strides();
+      batch_strides.insert(
+          batch_strides.end(),
+          lhs_indices.strides().begin(),
+          lhs_indices.strides().end());
+    }
+
+    int batch_ndim = batch_shape.size();
+
+    // Determine dispatch kernel
+    int tm = 4, tn = 4;
+    int bm, bn, n_out_per_tgp;
+    std::ostringstream kname;
+
+    if (transpose_mat) {
+      bm = 8;
+      bn = 8;
+      if (out_vector_len >= 24576) {
+        bn = 128;
+      } else if (out_vector_len >= 16384) {
+        bn = 64;
+      } else if (out_vector_len >= 8192) {
+        bn = 16;
+      }
+
+      // Specialized kernel for very small outputs
+      tn = out_vector_len < tn ? 1 : tn;
+
+      n_out_per_tgp = bn * tn;
+      kname << "gemv_t_bs_" << type_to_name(out);
+
+    } else {
+      bm = out_vector_len >= 4096 ? 8 : 4;
+      bn = 32;
+
+      // Specialized kernel for very small outputs
+      tm = out_vector_len < tm ? 1 : tm;
+
+      n_out_per_tgp = bm * tm;
+      kname << "gemv_bs_" << type_to_name(out);
+    }
+
+    kname << "_bm" << bm << "_bn" << bn << "_tm" << tm << "_tn" << tn;
+
+    // Encode and dispatch kernel
+    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = d.get_kernel(kname.str());
+    compute_encoder->setComputePipelineState(kernel);
+
+    int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
+    MTL::Size group_dims = MTL::Size(bn, bm, 1);
+    MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
+
+    compute_encoder.set_input_array(mat, 0);
+    compute_encoder.set_input_array(vec, 1);
+    compute_encoder.set_output_array(out, 3);
+
+    compute_encoder->setBytes(&in_vector_len, sizeof(int), 4);
+    compute_encoder->setBytes(&out_vector_len, sizeof(int), 5);
+    compute_encoder->setBytes(&mat_ld, sizeof(int), 6);
+
+    compute_encoder->setBytes(&batch_ndim, sizeof(int), 9);
+    set_vector_bytes(compute_encoder, batch_shape, 10);
+    set_vector_bytes(compute_encoder, batch_strides, 11);
+
+    int batch_ndim_vec = batch_shape_vec.size();
+    compute_encoder->setBytes(&batch_ndim_vec, sizeof(int), 12);
+    set_vector_bytes(compute_encoder, batch_shape_vec, 13);
+    set_vector_bytes(compute_encoder, batch_strides_vec, 14);
+
+    int batch_ndim_mat = batch_shape_mat.size();
+    compute_encoder->setBytes(&batch_ndim_mat, sizeof(int), 15);
+    set_vector_bytes(compute_encoder, batch_shape_mat, 16);
+    set_vector_bytes(compute_encoder, batch_strides_mat, 17);
+
+    compute_encoder.set_input_array(lhs_indices, 18 + int(!is_b_matrix));
+    compute_encoder.set_input_array(rhs_indices, 18 + int(is_b_matrix));
+
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+    return;
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Regular kernel dispatch
+
+  // Determine dispatch kernel
+  int bm = 32, bn = 32, bk = 16;
+  int wm = 2, wn = 2;
+
+  if ((size_t)batch_size_out * M * N >= 1ul << 20) {
+    if (!transpose_a && transpose_b) {
+      bm = 64;
+      bn = (out.dtype() == float32) ? 64 : 32;
+      bk = (out.dtype() == float32) ? 16 : 32;
+    } else {
+      bm = 64;
+      bn = 64;
+    }
+  }
+
+  // Prepare kernel name
+  std::ostringstream kname;
+  kname << "steel_gemm_fused_" << (transpose_a ? 't' : 'n')
+        << (transpose_b ? 't' : 'n') << "_" << type_to_name(a) << "_"
+        << type_to_name(out) << "_bm" << bm << "_bn" << bn << "_bk" << bk
+        << "_wm" << wm << "_wn" << wn;
+
+  std::string base_name = kname.str();
+
+  const bool has_batch = batch_ndim > 1;
+  const bool use_out_source = false;
+  const bool do_axpby = false;
+  const bool align_M = (M % bm) == 0;
+  const bool align_N = (N % bn) == 0;
+  const bool align_K = (K % bk) == 0;
+  const bool do_gather = true;
+
+  metal::MTLFCList func_consts = {
+      {&has_batch, MTL::DataType::DataTypeBool, 10},
+      {&use_out_source, MTL::DataType::DataTypeBool, 100},
+      {&do_axpby, MTL::DataType::DataTypeBool, 110},
+      {&align_M, MTL::DataType::DataTypeBool, 200},
+      {&align_N, MTL::DataType::DataTypeBool, 201},
+      {&align_K, MTL::DataType::DataTypeBool, 202},
+      {&do_gather, MTL::DataType::DataTypeBool, 300},
+  };
+
+  // clang-format off
+  kname << "_has_batch_" << (has_batch ? 't' : 'n') 
+        << "_use_out_source_" << (use_out_source ? 't' : 'n') 
+        << "_do_axpby_" << (do_axpby ? 't' : 'n') 
+        << "_align_M_" << (align_M ? 't' : 'n')
+        << "_align_N_" << (align_N ? 't' : 'n') 
+        << "_align_K_" << (align_K ? 't' : 'n') 
+        << "_do_gather_" << (do_gather ? 't' : 'n'); // clang-format on
+
+  std::string hash_name = kname.str();
+
+  // Encode and dispatch kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Use problem size to determine threadblock swizzle
+  int tn = (N + bn - 1) / bn;
+  int tm = (M + bm - 1) / bm;
+
+  // TODO: Explore device-based tuning for swizzle
+  int swizzle_log = 0; // tm >= 6 ? 3 : (tm <= 3 ? 0 : 2);
+
+  // Prepare steel matmul params
+  GEMMParams params{
+      /* const int M = */ M,
+      /* const int N = */ N,
+      /* const int K = */ K,
+      /* const int lda = */ lda,
+      /* const int ldb = */ ldb,
+      /* const int ldd = */ N,
+      /* const int tiles_n = */ tn,
+      /* const int tiles_m = */ tm,
+      /* const size_t batch_stride_a = */ lhs_indices_str,
+      /* const size_t batch_stride_b = */ rhs_indices_str,
+      /* const size_t batch_stride_d = */ matrix_stride_out,
+      /* const int swizzle_log = */ swizzle_log,
+      /* const int gemm_k_iterations_aligned = */ (K / bk),
+      /* const int batch_ndim = */ batch_ndim};
+
+  // Prepare launch grid params
+  int tile = 1 << swizzle_log;
+  tm = (tm + tile - 1) / tile;
+  tn = tn * tile;
+
+  MTL::Size group_dims = MTL::Size(32, wn, wm);
+  MTL::Size grid_dims = MTL::Size(tn, tm, batch_size_out);
+
+  // Launch kernel
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_output_array(out, 3);
+
+  compute_encoder->setBytes(&params, sizeof(GEMMParams), 4);
+
+  set_vector_bytes(compute_encoder, batch_shape, 6);
+  set_vector_bytes(compute_encoder, batch_strides, 7);
+
+  compute_encoder.set_input_array(lhs_indices, 10);
+  compute_encoder.set_input_array(rhs_indices, 11);
+
+  std::vector operand_shape = batch_shape_A;
+  operand_shape.insert(
+      operand_shape.end(), batch_shape_B.begin(), batch_shape_B.end());
+
+  std::vector operand_strides = batch_strides_A;
+  operand_strides.insert(
+      operand_strides.end(), batch_strides_B.begin(), batch_strides_B.end());
+
+  operand_batch_ndim.push_back(0);
+
+  set_vector_bytes(compute_encoder, operand_shape, 13);
+  set_vector_bytes(compute_encoder, operand_strides, 14);
+  set_vector_bytes(compute_encoder, operand_batch_ndim, 15);
+
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+
+  // Clear copies
   d.get_command_buffer(s.index)->addCompletedHandler(
       [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
   return;

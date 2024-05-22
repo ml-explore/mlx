@@ -49,7 +49,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_" << idx_ndim;
   }
 
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
   compute_encoder->setComputePipelineState(kernel);
 
@@ -81,8 +81,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 
   // Set all the buffers
-  set_array_buffer(compute_encoder, src, 0);
-  set_array_buffer(compute_encoder, out, 1);
+  compute_encoder.set_input_array(src, 0);
+  compute_encoder.set_output_array(out, 1);
 
   // Set source info
   compute_encoder->setBytes(src.shape().data(), ndim * sizeof(int), 2);
@@ -103,11 +103,11 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Set index buffers
   for (int i = 1; i < nidx + 1; ++i) {
-    set_array_buffer(compute_encoder, inputs[i], 20 + i);
+    compute_encoder.set_input_array(inputs[i], 20 + i);
   }
 
   // Launch grid
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -183,7 +183,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   kname << "_" << nidx;
 
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kname.str());
 
   auto& upd = inputs.back();
@@ -192,8 +192,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   compute_encoder->setComputePipelineState(kernel);
 
   // Set all the buffers
-  set_array_buffer(compute_encoder, upd, 1);
-  set_array_buffer(compute_encoder, out, 2);
+  compute_encoder.set_input_array(upd, 1);
+  compute_encoder.set_output_array(out, 2);
 
   // Set update info
   uint upd_ndim = upd.ndim();
@@ -210,13 +210,13 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Set index buffers
     for (int i = 1; i < nidx + 1; ++i) {
-      set_array_buffer(compute_encoder, inputs[i], 20 + i);
+      compute_encoder.set_input_array(inputs[i], 20 + i);
     }
 
     // Launch grid
     MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
     MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
 
   } else {
     // Collect all idx shapes and strides into one place
@@ -280,13 +280,13 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Set index buffers
     for (int i = 1; i < nidx + 1; ++i) {
-      set_array_buffer(compute_encoder, inputs[i], 20 + i);
+      compute_encoder.set_input_array(inputs[i], 20 + i);
     }
 
     // Launch grid
     MTL::Size grid_dims = MTL::Size(upd_size, nthreads / upd_size, 1);
     MTL::Size group_dims = get_block_dims(upd_size, nthreads / upd_size, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 

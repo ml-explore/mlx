@@ -68,18 +68,18 @@ void binary_op(
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
   auto kernel = d.get_kernel(kname.str());
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   // - If a is donated it goes to the first output
   // - If b is donated it goes to the first output if a was not donated
   //   otherwise it goes to the second output
   bool donate_a = a.data_shared_ptr() == nullptr;
   bool donate_b = b.data_shared_ptr() == nullptr;
-  set_array_buffer(compute_encoder, donate_a ? outputs[0] : a, 0);
-  set_array_buffer(
-      compute_encoder, donate_b ? (donate_a ? outputs[1] : outputs[0]) : b, 1);
-  set_array_buffer(compute_encoder, outputs[0], 2);
-  set_array_buffer(compute_encoder, outputs[1], 3);
+  compute_encoder.set_input_array(donate_a ? outputs[0] : a, 0);
+  compute_encoder.set_input_array(
+      donate_b ? (donate_a ? outputs[1] : outputs[0]) : b, 1);
+  compute_encoder.set_output_array(outputs[0], 2);
+  compute_encoder.set_output_array(outputs[1], 3);
 
   if (bopt == BinaryOpType::General) {
     auto ndim = shape.size();
@@ -107,7 +107,7 @@ void binary_op(
     }
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
     size_t nthreads = out.data_size();
@@ -117,7 +117,7 @@ void binary_op(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -167,13 +167,13 @@ void binary_op(
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
   auto kernel = d.get_kernel(kname.str());
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_a = a.data_shared_ptr() == nullptr;
   bool donate_b = b.data_shared_ptr() == nullptr;
-  set_array_buffer(compute_encoder, donate_a ? out : a, 0);
-  set_array_buffer(compute_encoder, donate_b ? out : b, 1);
-  set_array_buffer(compute_encoder, out, 2);
+  compute_encoder.set_input_array(donate_a ? out : a, 0);
+  compute_encoder.set_input_array(donate_b ? out : b, 1);
+  compute_encoder.set_output_array(out, 2);
 
   if (bopt == BinaryOpType::General) {
     auto ndim = shape.size();
@@ -201,7 +201,7 @@ void binary_op(
     }
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
     size_t nthreads =
@@ -212,7 +212,7 @@ void binary_op(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -253,12 +253,12 @@ void ternary_op(
   auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
   auto kernel = d.get_kernel(kname.str());
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, a, 0);
-  set_array_buffer(compute_encoder, b, 1);
-  set_array_buffer(compute_encoder, c, 2);
-  set_array_buffer(compute_encoder, out, 3);
+  compute_encoder.set_input_array(a, 0);
+  compute_encoder.set_input_array(b, 1);
+  compute_encoder.set_input_array(c, 2);
+  compute_encoder.set_output_array(out, 3);
 
   if (topt == TernaryOpType::General) {
     auto ndim = shape.size();
@@ -288,7 +288,7 @@ void ternary_op(
     }
     MTL::Size group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     // Launch a 1D grid of threads
     size_t nthreads = out.data_size();
@@ -298,7 +298,7 @@ void ternary_op(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -339,11 +339,11 @@ void unary_op(
   }
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
 
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(
-      compute_encoder, in.data_shared_ptr() == nullptr ? out : in, 0);
-  set_array_buffer(compute_encoder, out, 1);
+  compute_encoder.set_input_array(
+      in.data_shared_ptr() == nullptr ? out : in, 0);
+  compute_encoder.set_output_array(out, 1);
   if (!contig) {
     compute_encoder->setBytes(in.shape().data(), in.ndim() * sizeof(int), 2);
     compute_encoder->setBytes(
@@ -351,7 +351,7 @@ void unary_op(
     int ndim = in.ndim();
     compute_encoder->setBytes(&ndim, sizeof(int), 4);
   }
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 } // namespace
@@ -365,7 +365,7 @@ void Add::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 template <typename T>
-void arange_set_scalars(T start, T next, MTL::ComputeCommandEncoder* enc) {
+void arange_set_scalars(T start, T next, CommandEncoder& enc) {
   enc->setBytes(&start, sizeof(T), 0);
   T step = next - start;
   enc->setBytes(&step, sizeof(T), 1);
@@ -384,7 +384,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
   MTL::Size group_dims = MTL::Size(
       std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
 
   switch (out.dtype()) {
@@ -427,8 +427,8 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
       throw std::runtime_error("[Arange::eval_gpu] Does not support complex64");
   }
 
-  set_array_buffer(compute_encoder, out, 2);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.set_output_array(out, 2);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 void ArcCos::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -449,6 +449,10 @@ void ArcSinh::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void ArcTan::eval_gpu(const std::vector<array>& inputs, array& out) {
   unary_op(inputs, out, "arctan");
+}
+
+void ArcTan2::eval_gpu(const std::vector<array>& inputs, array& out) {
+  binary_op(inputs, out, "arctan2");
 }
 
 void ArcTanh::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -487,7 +491,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   // ArgReduce
   int simd_size = 32;
   int n_reads = 4;
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   {
     auto kernel = d.get_kernel(op_name + type_to_name(in));
     NS::UInteger thread_group_size = std::min(
@@ -502,8 +506,8 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size grid_dims = MTL::Size(n_threads, 1, 1);
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(compute_encoder, in, 0);
-    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     if (ndim == 0) {
       // Pass place holders so metal doesn't complain
       int shape_ = 0;
@@ -519,7 +523,7 @@ void ArgReduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&ndim, sizeof(size_t), 5);
     compute_encoder->setBytes(&axis_stride, sizeof(size_t), 6);
     compute_encoder->setBytes(&axis_size, sizeof(size_t), 7);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 
@@ -531,6 +535,26 @@ void AsType::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void AsStrided::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
+}
+
+void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
+  switch (op_) {
+    case BitwiseBinary::And:
+      binary_op(inputs, out, "bitwise_and");
+      break;
+    case BitwiseBinary::Or:
+      binary_op(inputs, out, "bitwise_or");
+      break;
+    case BitwiseBinary::Xor:
+      binary_op(inputs, out, "bitwise_xor");
+      break;
+    case BitwiseBinary::LeftShift:
+      binary_op(inputs, out, "left_shift");
+      break;
+    case BitwiseBinary::RightShift:
+      binary_op(inputs, out, "right_shift");
+      break;
+  }
 }
 
 void Broadcast::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -552,12 +576,26 @@ void Concatenate::eval_gpu(const std::vector<array>& inputs, array& out) {
   flags.row_contiguous = false;
   flags.col_contiguous = false;
   flags.contiguous = false;
+  auto& d = metal::device(stream().device);
+  auto& compute_encoder = d.get_command_encoder(stream().index);
+  auto concurrent_ctx = compute_encoder.start_concurrent();
   for (int i = 0; i < inputs.size(); i++) {
     array out_slice(inputs[i].shape(), out.dtype(), nullptr, {});
     size_t data_offset = strides[axis_] * sizes[i];
     out_slice.copy_shared_buffer(
         out, strides, flags, out_slice.size(), data_offset);
     copy_gpu_inplace(inputs[i], out_slice, CopyType::GeneralGeneral, stream());
+  }
+}
+
+void Conjugate::eval_gpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  const auto& in = inputs[0];
+  if (out.dtype() == complex64) {
+    unary_op(inputs, out, "conj");
+  } else {
+    throw std::invalid_argument(
+        "[conjugate] conjugate must be called on complex input.");
   }
 }
 
@@ -791,10 +829,10 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
   MTL::Size grid_dims = MTL::Size(num_keys, half_size + odd, 1);
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
-  set_array_buffer(compute_encoder, keys, 0);
-  set_array_buffer(compute_encoder, out, 1);
+  compute_encoder.set_input_array(keys, 0);
+  compute_encoder.set_output_array(out, 1);
   compute_encoder->setBytes(&odd, sizeof(bool), 2);
   compute_encoder->setBytes(&bytes_per_key, sizeof(size_t), 3);
 
@@ -807,7 +845,7 @@ void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {
         keys.strides().data(), keys.ndim() * sizeof(size_t), 6);
   }
 
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
 void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -972,6 +1010,11 @@ void SVD::eval_gpu(
 
 void Inverse::eval_gpu(const std::vector<array>& inputs, array& output) {
   throw std::runtime_error("[Inverse::eval_gpu] Metal inversion NYI.");
+}
+
+void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error(
+      "[Cholesky::eval_gpu] Metal Cholesky decomposition NYI.");
 }
 
 } // namespace mlx::core

@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 
@@ -194,6 +194,40 @@ inline void matmul_bnns(const array& a_pre, const array& b_pre, array& out) {
   // TODO: Update to utilize BNNS broadcasting
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
   return matmul_bnns_general(a_pre, b_pre, out);
+}
+
+template <typename T>
+inline void mask_matrix(
+    T* data,
+    const bool* mask,
+    int tile_size,
+    const int X,
+    const int Y,
+    const size_t X_data_str,
+    const size_t Y_data_str,
+    const size_t X_mask_str,
+    const size_t Y_mask_str) {
+  int tX = (X + tile_size - 1) / tile_size;
+  int tY = (Y + tile_size - 1) / tile_size;
+
+  for (int i = 0; i < tX; i++) {
+    for (int j = 0; j < tY; j++) {
+      bool do_mask = mask[i * X_mask_str + j * Y_mask_str];
+      if (!do_mask) {
+        int loc_x = i * tile_size;
+        int loc_y = j * tile_size;
+        T* data_block = data + loc_x * X_data_str + loc_y * Y_data_str;
+
+        int size_x = std::min(tile_size, X - loc_x);
+        int size_y = std::min(tile_size, Y - loc_y);
+        for (int ii = 0; ii < size_x; ii++) {
+          for (int jj = 0; jj < size_y; jj++) {
+            data_block[ii * X_data_str + jj * Y_data_str] = T(0.);
+          }
+        }
+      }
+    }
+  }
 }
 
 } // namespace

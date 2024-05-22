@@ -24,9 +24,12 @@ struct StreamThread {
   std::thread thread;
 
   StreamThread(Stream stream)
-      : stop(false), stream(stream), thread(&StreamThread::thread_fn, this) {}
+      : stop(false), stream(stream), thread(&StreamThread::thread_fn, this) {
+    metal::new_stream(stream);
+  }
 
   ~StreamThread() {
+    synchronize(stream);
     {
       std::unique_lock<std::mutex> lk(mtx);
       stop = true;
@@ -36,7 +39,6 @@ struct StreamThread {
   }
 
   void thread_fn() {
-    bool initialized = false;
     while (true) {
       std::function<void()> task;
       {
@@ -47,15 +49,6 @@ struct StreamThread {
         }
         task = std::move(q.front());
         q.pop();
-      }
-
-      // thread_fn may be called from a static initializer and we cannot
-      // call metal-cpp until all static initializers have completed. waiting
-      // for a task to arrive means that user code is running so metal-cpp
-      // can safely be called.
-      if (!initialized) {
-        initialized = true;
-        metal::new_stream(stream);
       }
 
       task();

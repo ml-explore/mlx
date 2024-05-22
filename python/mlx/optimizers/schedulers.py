@@ -58,14 +58,14 @@ def step_decay(init: float, decay_rate: float, step_size: int) -> Callable:
     return schedule
 
 
-def cosine_decay(init: float, decay_steps: int, minimum: float = 0.0) -> Callable:
+def cosine_decay(init: float, decay_steps: int, end: float = 0.0) -> Callable:
     r"""Make a cosine decay scheduler.
 
     Args:
         init (float): Initial value.
         decay_steps (int): Number of steps to decay over. The decayed
             value is constant for steps beyond ``decay_steps``.
-        minimum (float, optional): Minimal value to decay to. Default: ``0``.
+        end (float, optional): Final value to decay to. Default: ``0``.
 
     Example:
 
@@ -83,7 +83,7 @@ def cosine_decay(init: float, decay_steps: int, minimum: float = 0.0) -> Callabl
     def scheduler(step):
         s = mx.minimum(step, decay_steps)
         decay = 0.5 * (1.0 + mx.cos((math.pi / decay_steps) * s))
-        return mx.maximum(init * decay, minimum)
+        return end + decay * (init - end)
 
     return scheduler
 

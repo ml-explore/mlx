@@ -22,6 +22,7 @@ extensions = [
     "sphinx.ext.autosummary",
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
+    "breathe",
 ]
 
 python_use_unqualified_type_names = True
@@ -32,6 +33,9 @@ intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
 }
+
+breathe_projects = {"mlx": "../build/xml"}
+breathe_default_project = "mlx"
 
 templates_path = ["_templates"]
 html_static_path = ["_static"]

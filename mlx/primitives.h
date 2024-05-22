@@ -154,7 +154,7 @@ class UnaryPrimitive : public Primitive {
 
 class Abs : public UnaryPrimitive {
  public:
-  explicit Abs(Stream stream) : UnaryPrimitive(stream){};
+  explicit Abs(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -171,7 +171,7 @@ class Abs : public UnaryPrimitive {
 
 class Add : public UnaryPrimitive {
  public:
-  explicit Add(Stream stream) : UnaryPrimitive(stream){};
+  explicit Add(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -189,7 +189,7 @@ class Add : public UnaryPrimitive {
 class AddMM : public UnaryPrimitive {
  public:
   explicit AddMM(Stream stream, float alpha, float beta)
-      : UnaryPrimitive(stream), alpha_(alpha), beta_(beta){};
+      : UnaryPrimitive(stream), alpha_(alpha), beta_(beta) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -213,7 +213,7 @@ class AddMM : public UnaryPrimitive {
 class Arange : public UnaryPrimitive {
  public:
   explicit Arange(Stream stream, double start, double stop, double step)
-      : UnaryPrimitive(stream), start_(start), stop_(stop), step_(step){};
+      : UnaryPrimitive(stream), start_(start), stop_(stop), step_(step) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -231,7 +231,7 @@ class Arange : public UnaryPrimitive {
 
 class ArcCos : public UnaryPrimitive {
  public:
-  explicit ArcCos(Stream stream) : UnaryPrimitive(stream){};
+  explicit ArcCos(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -248,7 +248,7 @@ class ArcCos : public UnaryPrimitive {
 
 class ArcCosh : public UnaryPrimitive {
  public:
-  explicit ArcCosh(Stream stream) : UnaryPrimitive(stream){};
+  explicit ArcCosh(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -265,7 +265,7 @@ class ArcCosh : public UnaryPrimitive {
 
 class ArcSin : public UnaryPrimitive {
  public:
-  explicit ArcSin(Stream stream) : UnaryPrimitive(stream){};
+  explicit ArcSin(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -282,7 +282,7 @@ class ArcSin : public UnaryPrimitive {
 
 class ArcSinh : public UnaryPrimitive {
  public:
-  explicit ArcSinh(Stream stream) : UnaryPrimitive(stream){};
+  explicit ArcSinh(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -299,7 +299,7 @@ class ArcSinh : public UnaryPrimitive {
 
 class ArcTan : public UnaryPrimitive {
  public:
-  explicit ArcTan(Stream stream) : UnaryPrimitive(stream){};
+  explicit ArcTan(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -314,9 +314,26 @@ class ArcTan : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class ArcTan2 : public UnaryPrimitive {
+ public:
+  explicit ArcTan2(Stream stream) : UnaryPrimitive(stream) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(ArcTan2)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class ArcTanh : public UnaryPrimitive {
  public:
-  explicit ArcTanh(Stream stream) : UnaryPrimitive(stream){};
+  explicit ArcTanh(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -334,7 +351,7 @@ class ArcTanh : public UnaryPrimitive {
 class ArgPartition : public UnaryPrimitive {
  public:
   explicit ArgPartition(Stream stream, int kth, int axis)
-      : UnaryPrimitive(stream), kth_(kth), axis_(axis){};
+      : UnaryPrimitive(stream), kth_(kth), axis_(axis) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -359,7 +376,7 @@ class ArgReduce : public UnaryPrimitive {
   };
 
   explicit ArgReduce(Stream stream, ReduceType reduce_type, int axis)
-      : UnaryPrimitive(stream), reduce_type_(reduce_type), axis_(axis){};
+      : UnaryPrimitive(stream), reduce_type_(reduce_type), axis_(axis) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -380,7 +397,7 @@ class ArgReduce : public UnaryPrimitive {
 class ArgSort : public UnaryPrimitive {
  public:
   explicit ArgSort(Stream stream, int axis)
-      : UnaryPrimitive(stream), axis_(axis){};
+      : UnaryPrimitive(stream), axis_(axis) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -399,7 +416,7 @@ class ArgSort : public UnaryPrimitive {
 class AsType : public UnaryPrimitive {
  public:
   explicit AsType(Stream stream, Dtype dtype)
-      : UnaryPrimitive(stream), dtype_(dtype){};
+      : UnaryPrimitive(stream), dtype_(dtype) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -426,7 +443,7 @@ class AsStrided : public UnaryPrimitive {
       : UnaryPrimitive(stream),
         shape_(std::move(shape)),
         strides_(std::move(strides)),
-        offset_(offset){};
+        offset_(offset) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -443,10 +460,72 @@ class AsStrided : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class BitwiseBinary : public UnaryPrimitive {
+ public:
+  enum Op { And, Or, Xor, LeftShift, RightShift };
+
+  explicit BitwiseBinary(Stream stream, Op op)
+      : UnaryPrimitive(stream), op_(op) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  bool is_equivalent(const Primitive& other) const override;
+  void print(std::ostream& os) override;
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
+  Op op_;
+};
+
+class BlockMaskedMM : public UnaryPrimitive {
+ public:
+  explicit BlockMaskedMM(Stream stream, int block_size)
+      : UnaryPrimitive(stream), block_size_(block_size) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(BlockMaskedMM)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int block_size_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class BlockSparseMM : public UnaryPrimitive {
+ public:
+  explicit BlockSparseMM(Stream stream) : UnaryPrimitive(stream) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  std::vector<array> vjp(
+      const std::vector<array>& primals,
+      const std::vector<array>& cotangents,
+      const std::vector<int>& argnums,
+      const std::vector<array>& outputs) override;
+
+  DEFINE_PRINT(BlockSparseMM)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class Broadcast : public UnaryPrimitive {
  public:
   explicit Broadcast(Stream stream, const std::vector<int>& shape)
-      : UnaryPrimitive(stream), shape_(shape){};
+      : UnaryPrimitive(stream), shape_(shape) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -464,7 +543,7 @@ class Broadcast : public UnaryPrimitive {
 
 class Ceil : public UnaryPrimitive {
  public:
-  explicit Ceil(Stream stream) : UnaryPrimitive(stream){};
+  explicit Ceil(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -525,7 +604,7 @@ class Compiled : public Primitive {
 class Concatenate : public UnaryPrimitive {
  public:
   explicit Concatenate(Stream stream, int axis)
-      : UnaryPrimitive(stream), axis_(axis){};
+      : UnaryPrimitive(stream), axis_(axis) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -538,6 +617,22 @@ class Concatenate : public UnaryPrimitive {
  private:
   int axis_;
 
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Conjugate : public UnaryPrimitive {
+ public:
+  explicit Conjugate(Stream stream) : UnaryPrimitive(stream) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Conjugate)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+
+ private:
   void eval(const std::vector<array>& inputs, array& out);
 };
 
@@ -557,7 +652,7 @@ class Convolution : public UnaryPrimitive {
         kernel_dilation_(kernel_dilation),
         input_dilation_(input_dilation),
         groups_(groups),
-        flip_(flip){};
+        flip_(flip) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -584,7 +679,7 @@ class Convolution : public UnaryPrimitive {
 
 class Copy : public UnaryPrimitive {
  public:
-  explicit Copy(Stream stream) : UnaryPrimitive(stream){};
+  explicit Copy(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -601,7 +696,7 @@ class Copy : public UnaryPrimitive {
 
 class Cos : public UnaryPrimitive {
  public:
-  explicit Cos(Stream stream) : UnaryPrimitive(stream){};
+  explicit Cos(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -618,7 +713,7 @@ class Cos : public UnaryPrimitive {
 
 class Cosh : public UnaryPrimitive {
  public:
-  explicit Cosh(Stream stream) : UnaryPrimitive(stream){};
+  explicit Cosh(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -689,7 +784,7 @@ class Depends : public Primitive {
 
 class Divide : public UnaryPrimitive {
  public:
-  explicit Divide(Stream stream) : UnaryPrimitive(stream){};
+  explicit Divide(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -706,7 +801,7 @@ class Divide : public UnaryPrimitive {
 
 class DivMod : public Primitive {
  public:
-  explicit DivMod(Stream stream) : Primitive(stream){};
+  explicit DivMod(Stream stream) : Primitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -728,7 +823,7 @@ class DivMod : public Primitive {
 
 class Select : public UnaryPrimitive {
  public:
-  explicit Select(Stream stream) : UnaryPrimitive(stream){};
+  explicit Select(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -745,7 +840,7 @@ class Select : public UnaryPrimitive {
 
 class Remainder : public UnaryPrimitive {
  public:
-  explicit Remainder(Stream stream) : UnaryPrimitive(stream){};
+  explicit Remainder(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -763,7 +858,7 @@ class Remainder : public UnaryPrimitive {
 class Equal : public UnaryPrimitive {
  public:
   explicit Equal(Stream stream, bool equal_nan = false)
-      : UnaryPrimitive(stream), equal_nan_(equal_nan){};
+      : UnaryPrimitive(stream), equal_nan_(equal_nan) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -788,7 +883,7 @@ class Equal : public UnaryPrimitive {
 
 class Erf : public UnaryPrimitive {
  public:
-  explicit Erf(Stream stream) : UnaryPrimitive(stream){};
+  explicit Erf(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -805,7 +900,7 @@ class Erf : public UnaryPrimitive {
 
 class ErfInv : public UnaryPrimitive {
  public:
-  explicit ErfInv(Stream stream) : UnaryPrimitive(stream){};
+  explicit ErfInv(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -822,7 +917,7 @@ class ErfInv : public UnaryPrimitive {
 
 class Exp : public UnaryPrimitive {
  public:
-  explicit Exp(Stream stream) : UnaryPrimitive(stream){};
+  explicit Exp(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -839,7 +934,7 @@ class Exp : public UnaryPrimitive {
 
 class Expm1 : public UnaryPrimitive {
  public:
-  explicit Expm1(Stream stream) : UnaryPrimitive(stream){};
+  explicit Expm1(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -860,7 +955,7 @@ class FFT : public UnaryPrimitive {
       const std::vector<size_t>& axes,
       bool inverse,
       bool real)
-      : UnaryPrimitive(stream), axes_(axes), inverse_(inverse), real_(real){};
+      : UnaryPrimitive(stream), axes_(axes), inverse_(inverse), real_(real) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -881,7 +976,7 @@ class FFT : public UnaryPrimitive {
 
 class Floor : public UnaryPrimitive {
  public:
-  explicit Floor(Stream stream) : UnaryPrimitive(stream){};
+  explicit Floor(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -898,7 +993,7 @@ class Floor : public UnaryPrimitive {
 
 class Full : public UnaryPrimitive {
  public:
-  explicit Full(Stream stream) : UnaryPrimitive(stream){};
+  explicit Full(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -918,7 +1013,7 @@ class Gather : public UnaryPrimitive {
       Stream stream,
       const std::vector<int>& axes,
       const std::vector<int>& slice_sizes)
-      : UnaryPrimitive(stream), axes_(axes), slice_sizes_(slice_sizes){};
+      : UnaryPrimitive(stream), axes_(axes), slice_sizes_(slice_sizes) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -936,7 +1031,7 @@ class Gather : public UnaryPrimitive {
 
 class Greater : public UnaryPrimitive {
  public:
-  explicit Greater(Stream stream) : UnaryPrimitive(stream){};
+  explicit Greater(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -953,7 +1048,7 @@ class Greater : public UnaryPrimitive {
 
 class GreaterEqual : public UnaryPrimitive {
  public:
-  explicit GreaterEqual(Stream stream) : UnaryPrimitive(stream){};
+  explicit GreaterEqual(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -970,7 +1065,7 @@ class GreaterEqual : public UnaryPrimitive {
 
 class Less : public UnaryPrimitive {
  public:
-  explicit Less(Stream stream) : UnaryPrimitive(stream){};
+  explicit Less(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -987,7 +1082,7 @@ class Less : public UnaryPrimitive {
 
 class LessEqual : public UnaryPrimitive {
  public:
-  explicit LessEqual(Stream stream) : UnaryPrimitive(stream){};
+  explicit LessEqual(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1012,7 +1107,7 @@ class Load : public UnaryPrimitive {
       : UnaryPrimitive(stream),
         reader_(reader),
         offset_(offset),
-        swap_endianness_(swap_endianness){};
+        swap_endianness_(swap_endianness) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1031,7 +1126,7 @@ class Log : public UnaryPrimitive {
   enum Base { two, ten, e };
 
   explicit Log(Stream stream, Base base)
-      : UnaryPrimitive(stream), base_(base){};
+      : UnaryPrimitive(stream), base_(base) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1062,7 +1157,7 @@ class Log : public UnaryPrimitive {
 
 class Log1p : public UnaryPrimitive {
  public:
-  explicit Log1p(Stream stream) : UnaryPrimitive(stream){};
+  explicit Log1p(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1078,7 +1173,7 @@ class Log1p : public UnaryPrimitive {
 
 class LogicalNot : public UnaryPrimitive {
  public:
-  explicit LogicalNot(Stream stream) : UnaryPrimitive(stream){};
+  explicit LogicalNot(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1095,7 +1190,7 @@ class LogicalNot : public UnaryPrimitive {
 
 class LogicalAnd : public UnaryPrimitive {
  public:
-  explicit LogicalAnd(Stream stream) : UnaryPrimitive(stream){};
+  explicit LogicalAnd(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1112,7 +1207,7 @@ class LogicalAnd : public UnaryPrimitive {
 
 class LogicalOr : public UnaryPrimitive {
  public:
-  explicit LogicalOr(Stream stream) : UnaryPrimitive(stream){};
+  explicit LogicalOr(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1129,7 +1224,7 @@ class LogicalOr : public UnaryPrimitive {
 
 class LogAddExp : public UnaryPrimitive {
  public:
-  explicit LogAddExp(Stream stream) : UnaryPrimitive(stream){};
+  explicit LogAddExp(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1146,7 +1241,7 @@ class LogAddExp : public UnaryPrimitive {
 
 class Matmul : public UnaryPrimitive {
  public:
-  explicit Matmul(Stream stream) : UnaryPrimitive(stream){};
+  explicit Matmul(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1164,7 +1259,7 @@ class Matmul : public UnaryPrimitive {
 
 class Maximum : public UnaryPrimitive {
  public:
-  explicit Maximum(Stream stream) : UnaryPrimitive(stream){};
+  explicit Maximum(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1181,7 +1276,7 @@ class Maximum : public UnaryPrimitive {
 
 class Minimum : public UnaryPrimitive {
  public:
-  explicit Minimum(Stream stream) : UnaryPrimitive(stream){};
+  explicit Minimum(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1198,7 +1293,7 @@ class Minimum : public UnaryPrimitive {
 
 class Multiply : public UnaryPrimitive {
  public:
-  explicit Multiply(Stream stream) : UnaryPrimitive(stream){};
+  explicit Multiply(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1215,7 +1310,7 @@ class Multiply : public UnaryPrimitive {
 
 class Negative : public UnaryPrimitive {
  public:
-  explicit Negative(Stream stream) : UnaryPrimitive(stream){};
+  explicit Negative(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1232,7 +1327,7 @@ class Negative : public UnaryPrimitive {
 
 class NotEqual : public UnaryPrimitive {
  public:
-  explicit NotEqual(Stream stream) : UnaryPrimitive(stream){};
+  explicit NotEqual(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1288,7 +1383,7 @@ class Pad : public UnaryPrimitive {
       : UnaryPrimitive(stream),
         axes_(axes),
         low_pad_size_(low_pad_size),
-        high_pad_size_(high_pad_size){};
+        high_pad_size_(high_pad_size) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1309,7 +1404,7 @@ class Pad : public UnaryPrimitive {
 class Partition : public UnaryPrimitive {
  public:
   explicit Partition(Stream stream, int kth, int axis)
-      : UnaryPrimitive(stream), kth_(kth), axis_(axis){};
+      : UnaryPrimitive(stream), kth_(kth), axis_(axis) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1329,7 +1424,7 @@ class Partition : public UnaryPrimitive {
 
 class Power : public UnaryPrimitive {
  public:
-  explicit Power(Stream stream) : UnaryPrimitive(stream){};
+  explicit Power(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1354,7 +1449,7 @@ class QuantizedMatmul : public UnaryPrimitive {
       : UnaryPrimitive(stream),
         group_size_(group_size),
         bits_(bits),
-        transpose_(transpose){};
+        transpose_(transpose) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1372,10 +1467,38 @@ class QuantizedMatmul : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class BlockSparseQMM : public UnaryPrimitive {
+ public:
+  explicit BlockSparseQMM(
+      Stream stream,
+      int group_size,
+      int bits,
+      bool transpose)
+      : UnaryPrimitive(stream),
+        group_size_(group_size),
+        bits_(bits),
+        transpose_(transpose) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(BlockSparseQMM)
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  int group_size_;
+  int bits_;
+  bool transpose_;
+
+  void eval(const std::vector<array>& inputs, array& out);
+};
+
 class RandomBits : public UnaryPrimitive {
  public:
   explicit RandomBits(Stream stream, const std::vector<int>& shape, int width)
-      : UnaryPrimitive(stream), shape_(shape), width_(width){};
+      : UnaryPrimitive(stream), shape_(shape), width_(width) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1394,7 +1517,7 @@ class RandomBits : public UnaryPrimitive {
 class Reshape : public UnaryPrimitive {
  public:
   explicit Reshape(Stream stream, const std::vector<int>& shape)
-      : UnaryPrimitive(stream), shape_(shape){};
+      : UnaryPrimitive(stream), shape_(shape) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1426,7 +1549,7 @@ class Reduce : public UnaryPrimitive {
       Stream stream,
       ReduceType reduce_type,
       const std::vector<int>& axes)
-      : UnaryPrimitive(stream), reduce_type_(reduce_type), axes_(axes){};
+      : UnaryPrimitive(stream), reduce_type_(reduce_type), axes_(axes) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1475,7 +1598,7 @@ class Reduce : public UnaryPrimitive {
 
 class Round : public UnaryPrimitive {
  public:
-  explicit Round(Stream stream) : UnaryPrimitive(stream){};
+  explicit Round(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1504,7 +1627,7 @@ class Scan : public UnaryPrimitive {
         reduce_type_(reduce_type),
         axis_(axis),
         reverse_(reverse),
-        inclusive_(inclusive){};
+        inclusive_(inclusive) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1549,7 +1672,7 @@ class Scatter : public UnaryPrimitive {
       Stream stream,
       ReduceType reduce_type,
       const std::vector<int>& axes)
-      : UnaryPrimitive(stream), reduce_type_(reduce_type), axes_(axes){};
+      : UnaryPrimitive(stream), reduce_type_(reduce_type), axes_(axes) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1584,7 +1707,7 @@ class Scatter : public UnaryPrimitive {
 
 class Sigmoid : public UnaryPrimitive {
  public:
-  explicit Sigmoid(Stream stream) : UnaryPrimitive(stream){};
+  explicit Sigmoid(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1601,7 +1724,7 @@ class Sigmoid : public UnaryPrimitive {
 
 class Sign : public UnaryPrimitive {
  public:
-  explicit Sign(Stream stream) : UnaryPrimitive(stream){};
+  explicit Sign(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1618,7 +1741,7 @@ class Sign : public UnaryPrimitive {
 
 class Sin : public UnaryPrimitive {
  public:
-  explicit Sin(Stream stream) : UnaryPrimitive(stream){};
+  explicit Sin(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1635,7 +1758,7 @@ class Sin : public UnaryPrimitive {
 
 class Sinh : public UnaryPrimitive {
  public:
-  explicit Sinh(Stream stream) : UnaryPrimitive(stream){};
+  explicit Sinh(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1660,7 +1783,7 @@ class Slice : public UnaryPrimitive {
       : UnaryPrimitive(stream),
         start_indices_(start_indices),
         end_indices_(end_indices),
-        strides_(strides){};
+        strides_(strides) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1696,7 +1819,7 @@ class SliceUpdate : public UnaryPrimitive {
       : UnaryPrimitive(stream),
         start_indices_(start_indices),
         end_indices_(end_indices),
-        strides_(strides){};
+        strides_(strides) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1719,7 +1842,7 @@ class SliceUpdate : public UnaryPrimitive {
 class Softmax : public UnaryPrimitive {
  public:
   explicit Softmax(Stream stream, bool precise)
-      : UnaryPrimitive(stream), precise_(precise){};
+      : UnaryPrimitive(stream), precise_(precise) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1739,7 +1862,7 @@ class Softmax : public UnaryPrimitive {
 class Sort : public UnaryPrimitive {
  public:
   explicit Sort(Stream stream, int axis)
-      : UnaryPrimitive(stream), axis_(axis){};
+      : UnaryPrimitive(stream), axis_(axis) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1759,7 +1882,7 @@ class Sort : public UnaryPrimitive {
 class Split : public Primitive {
  public:
   explicit Split(Stream stream, const std::vector<int>& indices, int axis)
-      : Primitive(stream), indices_(indices), axis_(axis){};
+      : Primitive(stream), indices_(indices), axis_(axis) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -1780,7 +1903,7 @@ class Split : public Primitive {
 
 class Square : public UnaryPrimitive {
  public:
-  explicit Square(Stream stream) : UnaryPrimitive(stream){};
+  explicit Square(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1798,7 +1921,7 @@ class Square : public UnaryPrimitive {
 class Sqrt : public UnaryPrimitive {
  public:
   explicit Sqrt(Stream stream, bool recip = false)
-      : UnaryPrimitive(stream), recip_(recip){};
+      : UnaryPrimitive(stream), recip_(recip) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1823,7 +1946,7 @@ class Sqrt : public UnaryPrimitive {
 
 class StopGradient : public UnaryPrimitive {
  public:
-  explicit StopGradient(Stream stream) : UnaryPrimitive(stream){};
+  explicit StopGradient(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1839,7 +1962,7 @@ class StopGradient : public UnaryPrimitive {
 
 class Subtract : public UnaryPrimitive {
  public:
-  explicit Subtract(Stream stream) : UnaryPrimitive(stream){};
+  explicit Subtract(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1856,7 +1979,7 @@ class Subtract : public UnaryPrimitive {
 
 class Tan : public UnaryPrimitive {
  public:
-  explicit Tan(Stream stream) : UnaryPrimitive(stream){};
+  explicit Tan(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1873,7 +1996,7 @@ class Tan : public UnaryPrimitive {
 
 class Tanh : public UnaryPrimitive {
  public:
-  explicit Tanh(Stream stream) : UnaryPrimitive(stream){};
+  explicit Tanh(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1890,7 +2013,7 @@ class Tanh : public UnaryPrimitive {
 
 class Uniform : public UnaryPrimitive {
  public:
-  explicit Uniform(Stream stream) : UnaryPrimitive(stream){};
+  explicit Uniform(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1906,7 +2029,7 @@ class Uniform : public UnaryPrimitive {
 class Transpose : public UnaryPrimitive {
  public:
   explicit Transpose(Stream stream, const std::vector<int>& axes)
-      : UnaryPrimitive(stream), axes_(axes){};
+      : UnaryPrimitive(stream), axes_(axes) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1925,7 +2048,7 @@ class Transpose : public UnaryPrimitive {
 /* QR Factorization primitive. */
 class QRF : public Primitive {
  public:
-  explicit QRF(Stream stream) : Primitive(stream){};
+  explicit QRF(Stream stream) : Primitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -1941,7 +2064,7 @@ class QRF : public Primitive {
 /* SVD primitive. */
 class SVD : public Primitive {
  public:
-  explicit SVD(Stream stream) : Primitive(stream){};
+  explicit SVD(Stream stream) : Primitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
@@ -1958,7 +2081,7 @@ class SVD : public Primitive {
 /* Matrix inversion primitive. */
 class Inverse : public UnaryPrimitive {
  public:
-  explicit Inverse(Stream stream) : UnaryPrimitive(stream){};
+  explicit Inverse(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& output) override;
   void eval_gpu(const std::vector<array>& inputs, array& output) override;
@@ -1968,6 +2091,22 @@ class Inverse : public UnaryPrimitive {
 
  private:
   void eval(const std::vector<array>& inputs, array& output);
+};
+
+class Cholesky : public UnaryPrimitive {
+ public:
+  explicit Cholesky(Stream stream, bool upper)
+      : UnaryPrimitive(stream), upper_(upper) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Cholesky)
+
+ private:
+  void eval(const std::vector<array>& inputs, array& output);
+  bool upper_;
 };
 
 } // namespace mlx::core

@@ -9,6 +9,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/dtype.h"
+#include "mlx/event.h"
 
 namespace mlx::core {
 
@@ -113,6 +114,15 @@ class array {
     return array_desc_->strides;
   };
 
+  /**
+   *  Get the stride of the corresponding dimension.
+   *
+   *  This function supports negative indexing and provides
+   *  bounds checking. */
+  size_t strides(int dim) const {
+    return strides().at(dim < 0 ? dim + ndim() : dim);
+  };
+
   /** Get the arrays data type. */
   Dtype dtype() const {
     return array_desc_->dtype;
@@ -199,7 +209,7 @@ class array {
     allocator::Buffer buffer;
     deleter_t d;
     Data(allocator::Buffer buffer, deleter_t d = allocator::free)
-        : buffer(buffer), d(d){};
+        : buffer(buffer), d(d) {};
     // Not copyable
     Data(const Data& d) = delete;
     Data& operator=(const Data& d) = delete;
@@ -251,21 +261,15 @@ class array {
     return array_desc_->siblings;
   };
 
+  /** The array's siblings. */
+  std::vector<array>& siblings() {
+    return array_desc_->siblings;
+  };
+
   void set_siblings(std::vector<array> siblings, uint16_t position) {
     array_desc_->siblings = std::move(siblings);
     array_desc_->position = position;
   }
-
-  /** The i-th output of the array's primitive. */
-  const array& output(int i) const {
-    if (i == array_desc_->position) {
-      return *this;
-    } else if (i < array_desc_->position) {
-      return siblings()[i];
-    } else {
-      return siblings()[i + 1];
-    }
-  };
 
   /** The outputs of the array's primitive (i.e. this array and
    * its siblings) in the order the primitive expects. */
@@ -315,9 +319,27 @@ class array {
     return static_cast<T*>(array_desc_->data_ptr);
   };
 
-  // Check if the array has been evaluated
-  bool is_evaled() const {
-    return array_desc_->data != nullptr;
+  enum Status { unscheduled, scheduled, available };
+
+  bool is_available() const {
+    return status() == Status::available;
+  }
+  const Status status() const {
+    return array_desc_->status;
+  }
+
+  void set_status(Status s) const {
+    array_desc_->status = s;
+  }
+
+  // Get the array's shared event
+  Event& event() const {
+    return array_desc_->event;
+  }
+
+  // Attach an event to a not yet evaluated array
+  void attach_event(Event e) const {
+    array_desc_->event = std::move(e);
   }
 
   // Mark the array as a tracer array (true) or not.
@@ -358,6 +380,8 @@ class array {
     array_desc_ = other.array_desc_;
   }
 
+  ~array();
+
  private:
   // Initialize the arrays data
   template <typename It>
@@ -369,6 +393,11 @@ class array {
     size_t size;
     Dtype dtype;
     std::shared_ptr<Primitive> primitive;
+
+    Status status;
+
+    // An event on the array used for synchronization
+    Event event;
 
     // Indicates an array is being used in a graph transform
     // and should not be detached from the graph
@@ -403,6 +432,8 @@ class array {
         Dtype dtype,
         std::shared_ptr<Primitive> primitive,
         std::vector<array> inputs);
+
+    ~ArrayDesc();
 
    private:
     // Initialize size, strides, and other metadata
@@ -468,10 +499,11 @@ T array::item() const {
   if (size() != 1) {
     throw std::invalid_argument("item can only be called on arrays of size 1.");
   }
-  if (!is_evaled()) {
+  if (status() == Status::unscheduled) {
     throw std::invalid_argument(
         "item() const can only be called on evaled arrays");
   }
+  const_cast<array*>(this)->eval();
   return *data<T>();
 }
 

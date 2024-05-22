@@ -6,6 +6,8 @@
 
 namespace mlx::core {
 
+void async_eval(std::vector<array> outputs);
+
 void eval(std::vector<array> outputs);
 
 template <typename... Arrays, typename = enable_for_arrays_t<Arrays...>>

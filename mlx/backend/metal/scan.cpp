@@ -52,10 +52,10 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << type_to_name(in) << "_" << type_to_name(out);
 
     auto kernel = d.get_kernel(kname.str());
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(compute_encoder, in, 0);
-    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     size_t size = in.shape(axis_);
     compute_encoder->setBytes(&size, sizeof(size_t), 2);
 
@@ -77,7 +77,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
         static_cast<int>(kernel->maxTotalThreadsPerThreadgroup()));
     MTL::Size grid_dims = MTL::Size(thread_groups * thread_group_size, 1, 1);
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     kname << "strided_scan_";
     if (reverse_) {
@@ -101,10 +101,10 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << type_to_name(in) << "_" << type_to_name(out);
 
     auto kernel = d.get_kernel(kname.str());
-    auto compute_encoder = d.get_command_encoder(s.index);
+    auto& compute_encoder = d.get_command_encoder(s.index);
     compute_encoder->setComputePipelineState(kernel);
-    set_array_buffer(compute_encoder, in, 0);
-    set_array_buffer(compute_encoder, out, 1);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
     size_t size = in.shape(axis_);
     size_t stride = in.strides()[axis_];
     compute_encoder->setBytes(&size, sizeof(size_t), 2);
@@ -119,7 +119,7 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     int grid_x = (stride + elements_per_tile_x - 1) / elements_per_tile_x;
     MTL::Size grid_dims = MTL::Size(grid_x * tile_x, grid_y * tile_y, 1);
     MTL::Size group_dims = MTL::Size(tile_x, tile_y, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 
   if (copies.size() > 0) {

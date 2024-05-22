@@ -236,4 +236,82 @@ void Subtract::eval(const std::vector<array>& inputs, array& out) {
   binary(a, b, out, detail::Subtract());
 }
 
+void BitwiseBinary::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto dispatch_type = [&a, &b, &out](auto op) {
+    switch (out.dtype()) {
+      case bool_:
+        binary_op<bool>(a, b, out, op);
+      case uint8:
+        binary_op<uint8_t>(a, b, out, op);
+        break;
+      case uint16:
+        binary_op<uint16_t>(a, b, out, op);
+        break;
+      case uint32:
+        binary_op<uint32_t>(a, b, out, op);
+        break;
+      case uint64:
+        binary_op<uint64_t>(a, b, out, op);
+        break;
+      case int8:
+        binary_op<int8_t>(a, b, out, op);
+        break;
+      case int16:
+        binary_op<int16_t>(a, b, out, op);
+        break;
+      case int32:
+        binary_op<int32_t>(a, b, out, op);
+        break;
+      case int64:
+        binary_op<int64_t>(a, b, out, op);
+        break;
+      default:
+        throw std::runtime_error(
+            "[BitwiseBinary::eval_cpu] Type not supported");
+        break;
+    }
+  };
+  switch (op_) {
+    case BitwiseBinary::And:
+      dispatch_type(detail::BitwiseAnd());
+      break;
+    case BitwiseBinary::Or:
+      dispatch_type(detail::BitwiseOr());
+      break;
+    case BitwiseBinary::Xor:
+      dispatch_type(detail::BitwiseXor());
+      break;
+    case BitwiseBinary::LeftShift:
+      dispatch_type(detail::LeftShift());
+      break;
+    case BitwiseBinary::RightShift:
+      dispatch_type(detail::RightShift());
+      break;
+  }
+}
+
+void ArcTan2::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 2);
+  const auto& a = inputs[0];
+  const auto& b = inputs[1];
+  if (out.dtype() == float32) {
+    binary_op<float>(a, b, out, detail::ArcTan2());
+  } else if (out.dtype() == float16) {
+    binary_op<float16_t>(a, b, out, detail::ArcTan2());
+  } else if (out.dtype() == bfloat16) {
+    binary_op<bfloat16_t>(a, b, out, detail::ArcTan2());
+  } else if (issubdtype(out.dtype(), inexact)) {
+    std::ostringstream err;
+    err << "[arctan2] Does not support " << out.dtype();
+    throw std::invalid_argument(err.str());
+  } else {
+    throw std::invalid_argument(
+        "[arctan2] Cannot compute inverse tangent for arrays"
+        " with non floating point type.");
+  }
+}
+
 } // namespace mlx::core

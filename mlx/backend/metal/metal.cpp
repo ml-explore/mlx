@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cstdlib>
-#include <future>
 #include <memory>
 
 #include "mlx/backend/metal/device.h"
@@ -28,24 +27,6 @@ int max_ops_per_buffer() {
 
 #define MAX_OPS_PER_BUFFER max_ops_per_buffer()
 
-MTL::CommandBuffer* increment_command_buffer(Stream s) {
-  auto& d = metal::device(s.device);
-  auto command_buffer = d.get_command_buffer(s.index);
-  if (command_buffer == nullptr ||
-      d.get_command_buffer_ops(s.index) >= MAX_OPS_PER_BUFFER) {
-    if (command_buffer != nullptr) {
-      d.end_encoding(s.index);
-      scheduler::notify_new_task(s);
-      command_buffer->addCompletedHandler(
-          [s](MTL::CommandBuffer*) { scheduler::notify_task_completion(s); });
-      d.commit_command_buffer(s.index);
-    }
-    command_buffer = d.new_command_buffer(s.index);
-  }
-  d.increment_command_buffer_ops(s.index);
-  return command_buffer;
-}
-
 inline void check_error(MTL::CommandBuffer* cbuf) {
   if (cbuf->status() == MTL::CommandBufferStatusError) {
     std::ostringstream msg;
@@ -55,17 +36,23 @@ inline void check_error(MTL::CommandBuffer* cbuf) {
   }
 }
 
-std::function<void()> make_task(
-    array& arr,
-    std::vector<std::shared_future<void>> deps,
-    std::shared_ptr<std::promise<void>> p) {
-  auto task = [arr, deps = std::move(deps), p = std::move(p)]() mutable {
+std::function<void()> make_task(array arr, bool signal) {
+  auto task = [arr = std::move(arr), signal]() mutable {
     auto pool = new_scoped_memory_pool();
-    for (auto& d : deps) {
-      d.wait();
-    }
     auto s = arr.primitive().stream();
-    auto command_buffer = increment_command_buffer(s);
+    auto& d = metal::device(s.device);
+    auto command_buffer = d.get_command_buffer(s.index);
+    d.increment_command_buffer_ops(s.index);
+
+    for (auto& input : arr.inputs()) {
+      if (input.event().valid() &&
+          input.event().stream() != arr.primitive().stream()) {
+        // TODO, consider committing the buffer and encoding a wait in the new
+        // buffer rather than on the task thread
+        input.event().wait();
+      }
+    }
+
     auto outputs = arr.outputs();
     {
       // If the array is a tracer hold a reference
@@ -89,17 +76,22 @@ std::function<void()> make_task(
       arr.detach();
     }
 
-    if (p) {
-      metal::device(s.device).end_encoding(s.index);
+    if (signal || d.get_command_buffer_ops(s.index) >= MAX_OPS_PER_BUFFER) {
+      d.end_encoding(s.index);
+      if (signal) {
+        command_buffer->encodeSignalEvent(
+            static_cast<MTL::Event*>(arr.event().raw_event().get()),
+            arr.event().value());
+      }
       scheduler::notify_new_task(s);
       command_buffer->addCompletedHandler(
-          [s, buffers = std::move(buffers), p = std::move(p)](
+          [s, buffers = std::move(buffers), event = arr.event()](
               MTL::CommandBuffer* cbuf) {
-            p->set_value();
             scheduler::notify_task_completion(s);
             check_error(cbuf);
           });
-      metal::device(s.device).commit_command_buffer(s.index);
+      d.commit_command_buffer(s.index);
+      d.get_command_buffer(s.index);
     } else {
       command_buffer->addCompletedHandler(
           [s, buffers = std::move(buffers)](MTL::CommandBuffer* cbuf) {
@@ -110,13 +102,29 @@ std::function<void()> make_task(
   return task;
 }
 
-bool start_capture(std::string path, id object) {
+std::function<void()> make_synchronize_task(
+    Stream s,
+    std::shared_ptr<std::promise<void>> p) {
+  return [s, p = std::move(p)]() {
+    auto& d = metal::device(s.device);
+    auto cb = d.get_command_buffer(s.index);
+    cb->retain();
+    d.end_encoding(s.index);
+    d.commit_command_buffer(s.index);
+    cb->waitUntilCompleted();
+    check_error(cb);
+    cb->release();
+    p->set_value();
+  };
+}
+
+void start_capture(std::string path, id object) {
   auto pool = new_scoped_memory_pool();
 
   auto descriptor = MTL::CaptureDescriptor::alloc()->init();
   descriptor->setCaptureObject(object);
 
-  if (path.length() > 0) {
+  if (!path.empty()) {
     auto string = NS::String::string(path.c_str(), NS::UTF8StringEncoding);
     auto url = NS::URL::fileURLWithPath(string);
     descriptor->setDestination(MTL::CaptureDestinationGPUTraceDocument);
@@ -124,15 +132,24 @@ bool start_capture(std::string path, id object) {
   }
 
   auto manager = MTL::CaptureManager::sharedCaptureManager();
-  return manager->startCapture(descriptor, nullptr);
+  NS::Error* error;
+  bool started = manager->startCapture(descriptor, &error);
+  descriptor->release();
+  if (!started) {
+    std::ostringstream msg;
+    msg << "[metal::start_capture] Failed to start: "
+        << error->localizedDescription()->utf8String();
+    throw std::runtime_error(msg.str());
+  }
 }
 
-bool start_capture(std::string path) {
+void start_capture(std::string path) {
   auto& device = metal::device(mlx::core::Device::gpu);
   return start_capture(path, device.mtl_device());
 }
 
 void stop_capture() {
+  auto pool = new_scoped_memory_pool();
   auto manager = MTL::CaptureManager::sharedCaptureManager();
   manager->stopCapture();
 }

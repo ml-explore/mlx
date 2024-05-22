@@ -1,5 +1,7 @@
 .. _optimizers:
 
+.. currentmodule:: mlx.optimizers
+
 Optimizers
 ==========
 
@@ -34,3 +36,8 @@ model's parameters and the **optimizer state**.
    optimizers/optimizer
    optimizers/common_optimizers
    optimizers/schedulers
+
+.. autosummary::
+   :toctree: _autosummary
+
+   clip_grad_norm

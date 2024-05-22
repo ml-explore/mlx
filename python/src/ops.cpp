@@ -158,7 +158,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "abs",
-      &mlx::core::abs,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::abs(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -175,7 +177,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sign",
-      &sign,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return sign(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -192,7 +196,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "negative",
-      &negative,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return negative(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -600,7 +606,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "square",
-      &square,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return square(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -617,7 +625,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sqrt",
-      &mlx::core::sqrt,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::sqrt(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -634,7 +644,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "rsqrt",
-      &rsqrt,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return rsqrt(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -651,7 +663,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "reciprocal",
-      &reciprocal,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return reciprocal(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -757,7 +771,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "exp",
-      &mlx::core::exp,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::exp(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -774,7 +790,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "expm1",
-      &mlx::core::expm1,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::expm1(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -793,7 +811,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "erf",
-      &mlx::core::erf,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::erf(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -813,7 +833,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "erfinv",
-      &mlx::core::erfinv,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::erfinv(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -830,7 +852,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sin",
-      &mlx::core::sin,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::sin(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -847,7 +871,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cos",
-      &mlx::core::cos,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::cos(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -864,7 +890,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "tan",
-      &mlx::core::tan,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::tan(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -881,7 +909,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arcsin",
-      &mlx::core::arcsin,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::arcsin(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -898,7 +928,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arccos",
-      &mlx::core::arccos,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::arccos(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -915,7 +947,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctan",
-      &mlx::core::arctan,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::arctan(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -931,8 +965,29 @@ void init_ops(nb::module_& m) {
             array: The inverse tangent of ``a``.
       )pbdoc");
   m.def(
+      "arctan2",
+      &mlx::core::arctan2,
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def arctan2(a: array, b: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise inverse tangent of the ratio of two arrays.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+
+        Returns:
+            array: The inverse tangent of the ratio of ``a`` and ``b``.
+      )pbdoc");
+  m.def(
       "sinh",
-      &mlx::core::sinh,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::sinh(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -949,7 +1004,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "cosh",
-      &mlx::core::cosh,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::cosh(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -966,7 +1023,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "tanh",
-      &mlx::core::tanh,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::tanh(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -983,7 +1042,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arcsinh",
-      &mlx::core::arcsinh,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::arcsinh(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1000,7 +1061,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arccosh",
-      &mlx::core::arccosh,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::arccosh(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1017,7 +1080,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "arctanh",
-      &mlx::core::arctanh,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::arctanh(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1033,8 +1098,48 @@ void init_ops(nb::module_& m) {
             array: The inverse hyperbolic tangent of ``a``.
       )pbdoc");
   m.def(
+      "degrees",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return degrees(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def degrees(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert angles from radians to degrees.
+
+      Args:
+          a (array): Input array.
+
+      Returns:
+          array: The angles in degrees.
+    )pbdoc");
+  m.def(
+      "radians",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::radians(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def radians(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Convert angles from degrees to radians.
+
+      Args:
+          a (array): Input array.
+
+      Returns:
+          array: The angles in radians.
+    )pbdoc");
+  m.def(
       "log",
-      &mlx::core::log,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::log(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1051,7 +1156,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "log2",
-      &mlx::core::log2,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::log2(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1068,7 +1175,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "log10",
-      &mlx::core::log10,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::log10(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1085,7 +1194,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "log1p",
-      &mlx::core::log1p,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::log1p(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1123,7 +1234,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "sigmoid",
-      &sigmoid,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return sigmoid(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1784,7 +1897,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "floor",
-      &mlx::core::floor,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::floor(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1801,7 +1916,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "ceil",
-      &mlx::core::ceil,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::ceil(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1818,7 +1935,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isnan",
-      &mlx::core::isnan,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::isnan(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1835,7 +1954,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isinf",
-      &mlx::core::isinf,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::isinf(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1852,7 +1973,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isposinf",
-      &isposinf,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return isposinf(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -1870,7 +1993,9 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "isneginf",
-      &isneginf,
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return isneginf(to_array(a), s);
+      },
       nb::arg(),
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -2402,7 +2527,7 @@ void init_ops(nb::module_& m) {
       },
       nb::arg(),
       "kth"_a,
-      "axis"_a = -1,
+      "axis"_a.none() = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -2729,7 +2854,7 @@ void init_ops(nb::module_& m) {
         if (strides) {
           a_strides = *strides;
         } else {
-          std::fill_n(std::back_inserter(a_strides), a_shape.size(), 1);
+          a_strides = std::vector<size_t>(a_shape.size(), 1);
           for (int i = a_shape.size() - 1; i > 0; i--) {
             a_strides[i - 1] = a_shape[i] * a_strides[i];
           }
@@ -2903,6 +3028,40 @@ void init_ops(nb::module_& m) {
             element of the input.
       )pbdoc");
   m.def(
+      "conj",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::conjugate(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conj(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the elementwise complex conjugate of the input.
+        Alias for `mx.conjugate`.
+
+        Args:
+          a (array): Input array
+      )pbdoc");
+  m.def(
+      "conjugate",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::conjugate(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conjugate(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Return the elementwise complex conjugate of the input.
+        Alias for `mx.conj`.
+
+        Args:
+          a (array): Input array
+      )pbdoc");
+  m.def(
       "convolve",
       [](const array& a,
          const array& v,
@@ -3071,6 +3230,78 @@ void init_ops(nb::module_& m) {
             array: The convolved array.
       )pbdoc");
   m.def(
+      "conv3d",
+      [](const array& input,
+         const array& weight,
+         const std::variant<int, std::tuple<int, int, int>>& stride,
+         const std::variant<int, std::tuple<int, int, int>>& padding,
+         const std::variant<int, std::tuple<int, int, int>>& dilation,
+         int groups,
+         StreamOrDevice s) {
+        std::tuple<int, int, int> stride_tuple{1, 1, 1};
+        std::tuple<int, int, int> padding_tuple{0, 0, 0};
+        std::tuple<int, int, int> dilation_tuple{1, 1, 1};
+
+        if (auto pv = std::get_if<int>(&stride); pv) {
+          stride_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
+        } else {
+          stride_tuple = std::get<std::tuple<int, int, int>>(stride);
+        }
+
+        if (auto pv = std::get_if<int>(&padding); pv) {
+          padding_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
+        } else {
+          padding_tuple = std::get<std::tuple<int, int, int>>(padding);
+        }
+
+        if (auto pv = std::get_if<int>(&dilation); pv) {
+          dilation_tuple = std::tuple<int, int, int>{*pv, *pv, *pv};
+        } else {
+          dilation_tuple = std::get<std::tuple<int, int, int>>(dilation);
+        }
+
+        return conv3d(
+            input,
+            weight,
+            stride_tuple,
+            padding_tuple,
+            dilation_tuple,
+            groups,
+            s);
+      },
+      nb::arg(),
+      nb::arg(),
+      "stride"_a = 1,
+      "padding"_a = 0,
+      "dilation"_a = 1,
+      "groups"_a = 1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def conv3d(input: array, weight: array, /, stride: Union[int, Tuple[int, int, int]] = 1, padding: Union[int, Tuple[int, int, int]] = 0, dilation: Union[int, Tuple[int, int, int]] = 1, groups: int = 1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        3D convolution over an input with several channels
+
+        Note: Only the default ``groups=1`` is currently supported.
+
+        Args:
+            input (array): input array of shape ``(N, D, H, W, C_in)``
+            weight (array): weight array of shape ``(C_out, D, H, W, C_in)``
+            stride (int or tuple(int), optional): :obj:`tuple` of size 3 with
+                kernel strides. All spatial dimensions get the same stride if
+                only one number is specified. Default: ``1``.
+            padding (int or tuple(int), optional): :obj:`tuple` of size 3 with
+                symmetric input padding. All spatial dimensions get the same
+                padding if only one number is specified. Default: ``0``.
+            dilation (int or tuple(int), optional): :obj:`tuple` of size 3 with
+                kernel dilation. All spatial dimensions get the same dilation
+                if only one number is specified. Default: ``1``
+            groups (int, optional): input feature groups. Default: ``1``.
+
+        Returns:
+            array: The convolved array.
+      )pbdoc");
+  m.def(
       "conv_general",
       [](const array& input,
          const array& weight,
@@ -3122,13 +3353,15 @@ void init_ops(nb::module_& m) {
         }
 
         return conv_general(
-            /* const array& input = */ input,
-            /* const array& weight = */ weight,
-            /* std::vector<int> stride = */ stride_vec,
-            /* std::vector<int> padding_lo = */ padding_lo_vec,
-            /* std::vector<int> padding_hi = */ padding_lo_vec,
-            /* std::vector<int> kernel_dilation = */ kernel_dilation_vec,
-            /* std::vector<int> input_dilation = */ input_dilation_vec,
+            /* array input = */ std::move(input),
+            /* array weight = */ std::move(weight),
+            /* std::vector<int> stride = */ std::move(stride_vec),
+            /* std::vector<int> padding_lo = */ std::move(padding_lo_vec),
+            /* std::vector<int> padding_hi = */ std::move(padding_hi_vec),
+            /* std::vector<int> kernel_dilation = */
+            std::move(kernel_dilation_vec),
+            /* std::vector<int> input_dilation = */
+            std::move(input_dilation_vec),
             /* int groups = */ groups,
             /* bool flip = */ flip,
             s);
@@ -3268,7 +3501,7 @@ void init_ops(nb::module_& m) {
               support matadata. The metadata will be returned as an
               additional dictionary.
         Returns:
-            result (array, dict):
+            array or dict:
                 A single array if loading from a ``.npy`` file or a dict
                 mapping names to arrays if loading from a ``.npz`` or
                 ``.safetensors`` file. If ``return_metadata` is ``True`` an
@@ -3351,13 +3584,13 @@ void init_ops(nb::module_& m) {
           y (array): The input selected from where condition is ``False``.
 
         Returns:
-            result (array): The output containing elements selected from
+            array: The output containing elements selected from
             ``x`` and ``y``.
       )pbdoc");
   m.def(
       "round",
-      [](const array& a, int decimals, StreamOrDevice s) {
-        return round(a, decimals, s);
+      [](const ScalarOrArray& a, int decimals, StreamOrDevice s) {
+        return round(to_array(a), decimals, s);
       },
       nb::arg(),
       "decimals"_a = 0,
@@ -3380,7 +3613,7 @@ void init_ops(nb::module_& m) {
           decimals (int): Number of decimal places to round to. (default: 0)
 
         Returns:
-          result (array): An array of the same type as ``a`` rounded to the
+          array: An array of the same type as ``a`` rounded to the
           given number of decimals.
       )pbdoc");
   m.def(
@@ -3417,7 +3650,7 @@ void init_ops(nb::module_& m) {
             ``w``. (default: ``4``)
 
         Returns:
-          result (array): The result of the multiplication of ``x`` with ``w``.
+          array: The result of the multiplication of ``x`` with ``w``.
       )pbdoc");
   m.def(
       "quantize",
@@ -3472,11 +3705,11 @@ void init_ops(nb::module_& m) {
             ``w`` in the returned quantized matrix. (default: ``4``)
 
         Returns:
-          (tuple): A tuple containing
+          tuple: A tuple containing
 
-            - w_q (array): The quantized version of ``w``
-            - scales (array): The scale to multiply each element with, namely :math:`s`
-            - biases (array): The biases to add to each element, namely :math:`\beta`
+          * w_q (array): The quantized version of ``w``
+          * scales (array): The scale to multiply each element with, namely :math:`s`
+          * biases (array): The biases to add to each element, namely :math:`\beta`
       )pbdoc");
   m.def(
       "dequantize",
@@ -3512,7 +3745,53 @@ void init_ops(nb::module_& m) {
             ``w``. (default: ``4``)
 
         Returns:
-          result (array): The dequantized version of ``w``
+          array: The dequantized version of ``w``
+      )pbdoc");
+  m.def(
+      "block_sparse_qmm",
+      &block_sparse_qmm,
+      nb::arg(),
+      nb::arg(),
+      "scales"_a,
+      "biases"_a,
+      "lhs_indices"_a = nb::none(),
+      "rhs_indices"_a = nb::none(),
+      "transpose"_a = true,
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def block_sparse_qmm(x: array, w: array, /, scales: array, biases: array, lhs_indices: Optional[array] = None, rhs_indices: Optional[array] = None, transpose: bool = True, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform quantized matrix multiplication with matrix-level gather.
+
+        This operation is the quantized equivalent to :func:`block_sparse_mm`.
+        Similar to :func:`block_sparse_mm`, the indices ``lhs_indices`` and
+        ``rhs_indices`` contain flat indices along the batch dimensions (i.e.
+        all but the last two dimensions) of ``x`` and ``w`` respectively.
+
+        Note that ``scales`` and ``biases`` must have the same batch dimensions
+        as ``w`` since they represent the same quantized matrix.
+
+        Args:
+          x (array): Input array
+          w (array): Quantized matrix packed in unsigned integers
+          scales (array): The scales to use per ``group_size`` elements of ``w``
+          biases (array): The biases to use per ``group_size`` elements of ``w``
+          lhs_indices (array, optional): Integer indices for ``x`` (default: ``None``)
+          rhs_indices (array, optional): Integer indices for ``w`` (default: ``None``)
+          transpose (bool, optional): Defines whether to multiply with the
+            transposed ``w`` or not, namely whether we are performing
+            ``x @ w.T`` or ``x @ w``. (default: ``True``)
+          group_size (int, optional): The size of the group in ``w`` that
+            shares a scale and bias. (default: ``64``)
+          bits (int, optional): The number of bits occupied by each element in
+            ``w``. (default: ``4``)
+
+        Returns:
+          array: The result of the multiplication of ``x`` with ``w``
+            after gathering using ``lhs_indices`` and ``rhs_indices``.
       )pbdoc");
   m.def(
       "tensordot",
@@ -3551,7 +3830,7 @@ void init_ops(nb::module_& m) {
             corresponding dimensions of ``a`` and ``b``. (default: 2)
 
         Returns:
-          result (array): The tensor dot product.
+          array: The tensor dot product.
       )pbdoc");
   m.def(
       "inner",
@@ -3570,7 +3849,7 @@ void init_ops(nb::module_& m) {
         b (array): Input array
 
       Returns:
-        result (array): The inner product.
+        array: The inner product.
     )pbdoc");
   m.def(
       "outer",
@@ -3589,11 +3868,13 @@ void init_ops(nb::module_& m) {
         b (array): Input array
 
       Returns:
-        result (array): The outer product.
+        array: The outer product.
     )pbdoc");
   m.def(
       "tile",
-      [](const array& a, const IntOrVec& reps, StreamOrDevice s) {
+      [](const array& a,
+         const std::variant<int, std::vector<int>>& reps,
+         StreamOrDevice s) {
         if (auto pv = std::get_if<int>(&reps); pv) {
           return tile(a, {*pv}, s);
         } else {
@@ -3614,7 +3895,7 @@ void init_ops(nb::module_& m) {
         reps (int or list(int)): The number of times to repeat ``a`` along each axis.
 
       Returns:
-        result (array): The tiled array.
+        array: The tiled array.
     )pbdoc");
   m.def(
       "addmm",
@@ -3644,6 +3925,76 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: ``alpha * (a @ b)  + beta * c``
+      )pbdoc");
+  m.def(
+      "block_masked_mm",
+      &block_masked_mm,
+      nb::arg(),
+      nb::arg(),
+      "block_size"_a = 64,
+      "mask_out"_a = nb::none(),
+      "mask_lhs"_a = nb::none(),
+      "mask_rhs"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def block_masked_mm(a: array, b: array, /, block_size: int = 64, mask_out: array, mask_lhs: array, mask_rhs: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Matrix multiplication with block masking.
+
+        Perform the (possibly batched) matrix multiplication of two arrays and with blocks
+        of size ``block_size x block_size`` optionally masked out.
+
+        Assuming ``a`` with shape (..., `M`, `K`) and b with shape (..., `K`, `N`)
+
+        * ``lhs_mask`` must have shape (..., :math:`\lceil` `M` / ``block_size`` :math:`\rceil`, :math:`\lceil` `K` / ``block_size`` :math:`\rceil`)
+
+        * ``rhs_mask`` must have shape (..., :math:`\lceil` `K` / ``block_size`` :math:`\rceil`, :math:`\lceil` `N` / ``block_size`` :math:`\rceil`)
+
+        * ``out_mask`` must have shape (..., :math:`\lceil` `M` / ``block_size`` :math:`\rceil`, :math:`\lceil` `N` / ``block_size`` :math:`\rceil`)
+
+        Note: Only ``block_size=64`` and ``block_size=32`` are currently supported
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+            block_size (int): Size of blocks to be masked. Must be ``32`` or ``64`` (default: ``64``)
+            mask_out (array, optional): Boolean mask for output (default: ``None``)
+            mask_lhs (array, optional): Boolean mask for a (default: ``None``)
+            mask_rhs (array, optional): Boolean mask for b (default: ``None``)
+
+      )pbdoc");
+  m.def(
+      "block_sparse_mm",
+      &block_sparse_mm,
+      nb::arg(),
+      nb::arg(),
+      "lhs_indices"_a = nb::none(),
+      "rhs_indices"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def block_sparse_mm(a: array, b: array, /, lhs_indices: array, rhs_indices: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Matrix multiplication with matrix-level gather.
+
+        Performs a gather of the operands with the given indices followed by a (possibly batched) matrix multiplication of two arrays.
+        This operation is more efficient than explicitly applying a :func:`take` followed by a :func:`matmul`.
+
+        The indices ``lhs_indices`` and ``rhs_indices`` contain flat indices along the batch dimensions (i.e. all but the last two dimensions) of ``a`` and ``b`` respectively.
+
+        For ``a`` with shape ``(A1, A2, ..., AS, M, K)``,
+        ``lhs_indices`` contains indices from the range ``[0, A1 * A2 * ... * AS)``
+
+        For ``b`` with shape ``(B1, B2, ..., BS, M, K)``,
+        ``rhs_indices`` contains indices from the range ``[0, B1 * B2 * ... * BS)``
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+            lhs_indices (array, optional): Integer indices for ``a`` (default: ``None``)
+            rhs_indices (array, optional): Integer indices for ``b`` (default: ``None``)
+
       )pbdoc");
   m.def(
       "diagonal",
@@ -3825,4 +4176,132 @@ void init_ops(nb::module_& m) {
           &issubdtype),
       ""_a,
       ""_a);
+  m.def(
+      "bitwise_and",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return bitwise_and(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bitwise_and(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise bitwise and.
+
+        Take the bitwise and of two arrays with numpy-style broadcasting
+        semantics. Either or both input arrays can also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise and ``a & b``.
+      )pbdoc");
+  m.def(
+      "bitwise_or",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return bitwise_or(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bitwise_or(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise bitwise or.
+
+        Take the bitwise or of two arrays with numpy-style broadcasting
+        semantics. Either or both input arrays can also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise or``a | b``.
+      )pbdoc");
+  m.def(
+      "bitwise_xor",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return bitwise_xor(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def bitwise_xor(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise bitwise xor.
+
+        Take the bitwise exclusive or of two arrays with numpy-style
+        broadcasting semantics. Either or both input arrays can also be
+        scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise xor ``a ^ b``.
+      )pbdoc");
+  m.def(
+      "left_shift",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return left_shift(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def left_shift(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise left shift.
+
+        Shift the bits of the first input to the left by the second using
+        numpy-style broadcasting semantics. Either or both input arrays can
+        also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise left shift ``a << b``.
+      )pbdoc");
+  m.def(
+      "right_shift",
+      [](const ScalarOrArray& a_, const ScalarOrArray& b_, StreamOrDevice s) {
+        auto [a, b] = to_arrays(a_, b_);
+        return right_shift(a, b, s);
+      },
+      nb::arg(),
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def right_shift(a: Union[scalar, array], b: Union[scalar, array], stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Element-wise right shift.
+
+        Shift the bits of the first input to the right by the second using
+        numpy-style broadcasting semantics. Either or both input arrays can
+        also be scalars.
+
+        Args:
+            a (array): Input array or scalar.
+            b (array): Input array or scalar.
+
+        Returns:
+            array: The bitwise right shift ``a >> b``.
+      )pbdoc");
 }

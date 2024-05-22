@@ -192,7 +192,7 @@ void _qmm_dispatch_typed(
 }
 
 void _qmm_dispatch(
-    array out,
+    array& out,
     const array& x,
     const array& w,
     const array& scales,
@@ -253,6 +253,81 @@ void _qmm_dispatch(
   }
 }
 
+void _bs_qmm_dispatch(
+    array& out,
+    const array& x,
+    const array& w,
+    const array& scales,
+    const array& biases,
+    const array& lhs_indices,
+    const array& rhs_indices,
+    int bits,
+    int group_size,
+    bool transposed_w) {
+  int K = x.shape(-1);
+  int M = x.shape(-2);
+  int N = out.shape(-1);
+
+  int w_els = w.shape(-1) * w.shape(-2);
+  int g_els = scales.shape(-1) * scales.shape(-2);
+
+  const uint32_t* lhs_indices_data = lhs_indices.data<uint32_t>();
+  const uint32_t* rhs_indices_data = rhs_indices.data<uint32_t>();
+
+  for (int i = 0; i < lhs_indices.size(); i++) {
+    int x_idx = lhs_indices_data[elem_to_loc(i, lhs_indices)];
+    int w_idx = rhs_indices_data[elem_to_loc(i, rhs_indices)];
+
+    switch (x.dtype()) {
+      case float32:
+        _qmm_dispatch_typed<float>(
+            out.data<float>() + i * M * N,
+            x.data<float>() + elem_to_loc(x_idx * M * K, x),
+            w.data<uint32_t>() + elem_to_loc(w_idx * w_els, w),
+            scales.data<float>() + elem_to_loc(w_idx * g_els, scales),
+            biases.data<float>() + elem_to_loc(w_idx * g_els, biases),
+            M,
+            N,
+            K,
+            bits,
+            group_size,
+            transposed_w);
+        break;
+      case float16:
+        _qmm_dispatch_typed<float16_t>(
+            out.data<float16_t>() + i * M * N,
+            x.data<float16_t>() + elem_to_loc(x_idx * M * K, x),
+            w.data<uint32_t>() + elem_to_loc(w_idx * w_els, w),
+            scales.data<float16_t>() + elem_to_loc(w_idx * g_els, scales),
+            biases.data<float16_t>() + elem_to_loc(w_idx * g_els, biases),
+            M,
+            N,
+            K,
+            bits,
+            group_size,
+            transposed_w);
+        break;
+      case bfloat16:
+        _qmm_dispatch_typed<bfloat16_t>(
+            out.data<bfloat16_t>() + i * M * N,
+            x.data<bfloat16_t>() + elem_to_loc(x_idx * M * K, x),
+            w.data<uint32_t>() + elem_to_loc(w_idx * w_els, w),
+            scales.data<bfloat16_t>() + elem_to_loc(w_idx * g_els, scales),
+            biases.data<bfloat16_t>() + elem_to_loc(w_idx * g_els, biases),
+            M,
+            N,
+            K,
+            bits,
+            group_size,
+            transposed_w);
+        break;
+      default:
+        throw std::invalid_argument(
+            "[quantized_matmul] only floating types are supported");
+    }
+  }
+}
+
 } // namespace
 
 void QuantizedMatmul::eval(const std::vector<array>& inputs, array& out) {
@@ -280,6 +355,47 @@ void QuantizedMatmul::eval(const std::vector<array>& inputs, array& out) {
 
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
   _qmm_dispatch(out, x, w, scales, biases, group_size_, bits_, transpose_);
+}
+
+void BlockSparseQMM::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 6);
+
+  auto& x_pre = inputs[0];
+  auto& w_pre = inputs[1];
+  auto& scales_pre = inputs[2];
+  auto& biases_pre = inputs[3];
+  auto& lhs_indices = inputs[4];
+  auto& rhs_indices = inputs[5];
+
+  auto ensure_row_contiguous_last_dims = [](const array& arr) {
+    auto stride_0 = arr.strides()[arr.ndim() - 2];
+    auto stride_1 = arr.strides()[arr.ndim() - 1];
+    if (stride_0 == arr.shape(-1) && stride_1 == 1) {
+      return arr;
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy(arr, arr_copy, CopyType::General);
+      return arr_copy;
+    }
+  };
+
+  auto x = ensure_row_contiguous_last_dims(x_pre);
+  auto w = ensure_row_contiguous_last_dims(w_pre);
+  auto scales = ensure_row_contiguous_last_dims(scales_pre);
+  auto biases = ensure_row_contiguous_last_dims(biases_pre);
+
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  _bs_qmm_dispatch(
+      out,
+      x,
+      w,
+      scales,
+      biases,
+      lhs_indices,
+      rhs_indices,
+      group_size_,
+      bits_,
+      transpose_);
 }
 
 } // namespace mlx::core

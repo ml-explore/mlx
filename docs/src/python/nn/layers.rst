@@ -15,6 +15,7 @@ Layers
    BatchNorm
    Conv1d
    Conv2d
+   Conv3d
    Dropout
    Dropout2d
    Dropout3d
@@ -31,6 +32,7 @@ Layers
    Mish
    MultiHeadAttention
    PReLU
+   QuantizedEmbedding
    QuantizedLinear
    RMSNorm
    ReLU

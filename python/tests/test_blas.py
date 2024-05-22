@@ -1,4 +1,4 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 import math
 import unittest
@@ -680,6 +680,328 @@ class TestBlas(mlx_tests.MLXTestCase):
         c = a @ b
         mx.eval(c)
         self.assertEqual(c.shape, (0, 0))
+
+    def test_block_masked_matmul(self):
+        def np_block_masked_mm(
+            a, b, block_size, out_mask=None, lhs_mask=None, rhs_mask=None
+        ):
+            # Get mask adjusted shapes
+            M = a.shape[-2]
+            N = b.shape[-1]
+            K = a.shape[-1]
+
+            # Expand mask dims
+            def expand_mask(mask, block_size, Y, X):
+                mask = np.expand_dims(mask, (-3, -1))
+                mask_shape = list(mask.shape)
+                mask_shape[-1] = block_size
+                x = mask_shape[-2] * block_size
+                mask_shape[-3] = block_size
+                y = mask_shape[-4] * block_size
+                mask = np.broadcast_to(mask, mask_shape)
+                mask_shape = mask_shape[:-4] + [y, x]
+                return mask.reshape(mask_shape)[..., :Y, :X]
+
+            if lhs_mask is not None:
+                lhs_mask = expand_mask(lhs_mask, block_size, M, K)
+                a = lhs_mask * a
+
+            if rhs_mask is not None:
+                rhs_mask = expand_mask(rhs_mask, block_size, K, N)
+                b = rhs_mask * b
+
+            out = a @ b
+
+            if out_mask is not None:
+                out_mask = expand_mask(out_mask, block_size, M, N)
+                out = out * out_mask
+            return out
+
+        def test_shape(
+            M,
+            N,
+            K,
+            block_size,
+            transpose=False,
+            np_dtype=np.float32,
+            batch_A=(),
+            batch_B=(),
+        ):
+            with self.subTest(
+                M=M,
+                N=N,
+                K=K,
+                block_size=block_size,
+                np_dtype=np_dtype,
+                transpose=transpose,
+                batch_A=batch_A,
+                batch_B=batch_B,
+            ):
+                tm = (M + block_size - 1) // block_size
+                tn = (N + block_size - 1) // block_size
+                tk = (K + block_size - 1) // block_size
+
+                a_np = np.random.normal(size=batch_A + (M, K)).astype(np_dtype)
+                b_np = np.random.normal(size=batch_B + (K, N)).astype(np_dtype)
+
+                batch_out = np.broadcast_shapes(batch_A, batch_B)
+
+                a_np_mask = np.random.normal(size=batch_A + (tm, tk)) < 0.0
+                b_np_mask = np.random.normal(size=batch_B + (tk, tn)) < 0.0
+                out_np_mask = np.random.normal(size=batch_out + (tm, tn)) < 0.0
+
+                a_mx, b_mx, a_mx_mask, b_mx_mask, out_mx_mask = map(
+                    mx.array, (a_np, b_np, a_np_mask, b_np_mask, out_np_mask)
+                )
+
+                if transpose:
+                    b_np = np.random.normal(size=batch_B + (N, K)).astype(np_dtype)
+                    b_mx = mx.array(b_np)
+
+                    b_np = np.swapaxes(b_np, -2, -1)
+                    b_mx = mx.swapaxes(b_mx, -2, -1)
+
+                out_np = np_block_masked_mm(
+                    a_np, b_np, block_size, out_np_mask, a_np_mask, b_np_mask
+                )
+                out_mx = mx.block_masked_mm(
+                    a_mx, b_mx, block_size, out_mx_mask, a_mx_mask, b_mx_mask
+                )
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+                out_np = np_block_masked_mm(a_np, b_np, block_size, out_np_mask)
+                out_mx = mx.block_masked_mm(a_mx, b_mx, block_size, out_mx_mask)
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+                out_np = np_block_masked_mm(
+                    a_np, b_np, block_size, None, a_np_mask, b_np_mask
+                )
+                out_mx = mx.block_masked_mm(
+                    a_mx, b_mx, block_size, None, a_mx_mask, b_mx_mask
+                )
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+        shapes = (
+            (16, 16, 16, 32),
+            (64, 64, 16, 32),
+            (128, 128, 128, 32),
+            (256, 256, 128, 64),
+        )
+
+        for M, N, K, block_size in shapes:
+            test_shape(M, N, K, block_size, transpose=False)
+            test_shape(M, N, K, block_size, transpose=True)
+
+        # Test broadcasting
+        test_shape(64, 64, 64, 32, transpose=False, batch_A=(1, 2), batch_B=(2, 2))
+
+        # Test gemv
+        a_np = np.random.normal(size=(64, 64)).astype(np.float32)
+        b_np = np.random.normal(size=(64,)).astype(np.float32)
+        mask_np = np.array([True, False]).astype(np.bool_)
+
+        a_mx = mx.array(a_np)
+        b_mx = mx.array(b_np)
+        mask_mx = mx.array(mask_np)
+
+        c_mx = mx.block_masked_mm(a_mx, b_mx, 32, mask_mx)
+        c_np = a_np @ b_np
+        c_np[32:] = 0.0
+
+        self.assertTrue(np.allclose(c_mx, c_np, atol=1e-5))
+
+    def test_block_sparse_matmul(self):
+        def np_block_sparse_mm(a, b, lhs_indices=None, rhs_indices=None):
+            a = a.reshape((-1, a.shape[-2], a.shape[-1]))
+            b = b.reshape((-1, b.shape[-2], b.shape[-1]))
+            lhs_indices = lhs_indices or np.arange(a.shape[0])
+            rhs_indices = rhs_indices or np.arange(b.shape[0])
+            a = a[lhs_indices, :, :]
+            b = b[rhs_indices, :, :]
+            out = a @ b
+            return out
+
+        def test_shape(
+            M,
+            N,
+            K,
+            np_dtype=np.float32,
+            batch_A=(),
+            batch_B=(),
+            lhs_indices=None,
+            rhs_indices=None,
+        ):
+            with self.subTest(
+                M=M,
+                N=N,
+                K=K,
+                np_dtype=np_dtype,
+                batch_A=batch_A,
+                batch_B=batch_B,
+                lhs_indices=lhs_indices,
+                rhs_indices=rhs_indices,
+            ):
+
+                a_np = np.random.normal(size=batch_A + (M, K)).astype(np_dtype)
+                b_np = np.random.normal(size=batch_B + (K, N)).astype(np_dtype)
+
+                a_mx = mx.array(a_np)
+                b_mx = mx.array(b_np)
+
+                out_np = np_block_sparse_mm(a_np, b_np, lhs_indices, rhs_indices)
+
+                lhs_indices_mx = None if lhs_indices is None else mx.array(lhs_indices)
+                rhs_indices_mx = None if rhs_indices is None else mx.array(rhs_indices)
+
+                out_mx = mx.block_sparse_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
+
+                self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+        inputs = (
+            {
+                "batch_A": (1,),
+                "lhs_indices": (0,),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (1,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (2,),
+                "lhs_indices": None,
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (3,),
+                "lhs_indices": (0, 2),
+                "batch_B": (1,),
+                "rhs_indices": (0,),
+            },
+            {
+                "batch_A": (5,),
+                "lhs_indices": (0, 2),
+                "batch_B": (3,),
+                "rhs_indices": (2, 1),
+            },
+            {
+                "batch_A": (4, 2),
+                "lhs_indices": (
+                    (7, 6),
+                    (5, 4),
+                    (1, 2),
+                ),
+                "batch_B": (4, 1),
+                "rhs_indices": ((2,), (0,), (1,)),
+            },
+        )
+
+        for kwargs in inputs:
+            test_shape(32, 32, 32, **kwargs)
+            test_shape(16, 1, 16, **kwargs)
+
+        # Add tests for broadcasting
+        a_np = np.random.normal(size=(5, 32, 32)).astype(np.float32)
+        b_np = np.random.normal(size=(3, 32, 32)).astype(np.float32)
+        a_mx = mx.array(a_np)
+        b_mx = mx.array(b_np)
+
+        # Numpy
+        a_np = a_np.reshape((5, 1, 32, 32))
+        b_np = b_np.reshape((1, 3, 32, 32))
+
+        a_np = np.broadcast_to(a_np, (5, 4, 32, 32))
+        b_np = np.broadcast_to(b_np, (2, 3, 32, 32)).swapaxes(1, 0)
+
+        lhs_indices = [0, 13, 12]
+        rhs_indices = [0, 3, 5]
+
+        out_np = np_block_sparse_mm(a_np, b_np, lhs_indices, rhs_indices)
+
+        # MLX
+        a_mx = a_mx.reshape((5, 1, 32, 32))
+        b_mx = b_mx.reshape((1, 3, 32, 32))
+
+        a_mx = mx.broadcast_to(a_mx, (5, 4, 32, 32))
+        b_mx = mx.broadcast_to(b_mx, (2, 3, 32, 32)).swapaxes(1, 0)
+
+        lhs_indices_mx = mx.array(lhs_indices)
+        rhs_indices_mx = mx.array(rhs_indices)
+
+        out_mx = mx.block_sparse_mm(a_mx, b_mx, lhs_indices_mx, rhs_indices_mx)
+
+        self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+        # Gemv test
+        a_np = np.random.normal(size=(5, 1, 32)).astype(np.float32)
+        b_np = np.random.normal(size=(3, 16, 32)).astype(np.float32)
+        a_mx = mx.array(a_np)
+        b_mx = mx.array(b_np)
+
+        lhs_indices = [3, 1]
+        rhs_indices = [0, 2]
+
+        b_np_t = np.swapaxes(b_np, -1, -2)
+        out_np = np_block_sparse_mm(a_np, b_np_t, lhs_indices, rhs_indices)
+
+        lhs_indices_mx = mx.array(lhs_indices)
+        rhs_indices_mx = mx.array(rhs_indices)
+
+        b_mx_t = mx.swapaxes(b_mx, -1, -2)
+        out_mx = mx.block_sparse_mm(a_mx, b_mx_t, lhs_indices_mx, rhs_indices_mx)
+
+        self.assertTrue(np.allclose(out_np, out_mx, atol=1e-5))
+
+    def test_block_sparse_matmul_grad(self):
+
+        lhs_indices = mx.array([[7, 6], [4, 1], [0, 2]], dtype=mx.uint32)
+        rhs_indices = mx.array([[2], [0], [1]], dtype=mx.uint32)
+
+        def f_ref(a, b):
+            lhs_indices_ = mx.broadcast_to(lhs_indices, (3, 2))
+            rhs_indices_ = mx.broadcast_to(rhs_indices, (3, 2))
+            M = a.shape[-2]
+            N = b.shape[-2]
+            K = a.shape[-1]
+
+            a = a.reshape((-1, M, K))
+            b = b.reshape((-1, K, N))
+
+            a = mx.take(a, lhs_indices_, 0)
+            b = mx.take(b, rhs_indices_, 0)
+
+            return a @ b
+
+        def f_test(a, b):
+            return mx.block_sparse_mm(a, b, lhs_indices, rhs_indices)
+
+        a_mx = mx.random.normal((4, 2, 32, 32))
+        b_mx = mx.random.normal((4, 1, 32, 32))
+
+        out_test = f_test(a_mx, b_mx)
+        out_ref = f_ref(a_mx, b_mx)
+
+        self.assertTrue(mx.allclose(out_test, out_ref, atol=1e-5))
+
+        cotan = mx.ones_like(out_test)
+        out_ref, dout_ref = mx.vjp(
+            f_ref,
+            [a_mx, b_mx],
+            [cotan],
+        )
+        out_test, dout_test = mx.vjp(
+            f_test,
+            [a_mx, b_mx],
+            [cotan],
+        )
+
+        for r, t in zip(dout_ref, dout_test):
+            self.assertEqual(r.shape, t.shape)
+            self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
 
 
 if __name__ == "__main__":

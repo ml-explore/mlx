@@ -161,6 +161,13 @@ struct ArcTan {
   };
 };
 
+struct ArcTan2 {
+  template <typename T>
+  T operator()(T y, T x) {
+    return std::atan2(y, x);
+  };
+};
+
 struct ArcTanh {
   template <typename T>
   T operator()(T x) {
@@ -200,6 +207,12 @@ struct Ceil {
   bool operator()(bool x) {
     return x;
   };
+};
+
+struct Conjugate {
+  complex64_t operator()(complex64_t x) {
+    return std::conj(x);
+  }
 };
 
 struct Cos {
@@ -604,6 +617,41 @@ struct Select {
   T operator()(bool condition, T x, T y) {
     return condition ? x : y;
   }
+};
+
+struct BitwiseAnd {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x & y;
+  };
+};
+
+struct BitwiseOr {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x | y;
+  };
+};
+
+struct BitwiseXor {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x ^ y;
+  };
+};
+
+struct LeftShift {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x << y;
+  };
+};
+
+struct RightShift {
+  template <typename T>
+  T operator()(T x, T y) {
+    return x >> y;
+  };
 };
 
 } // namespace mlx::core::detail

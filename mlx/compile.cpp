@@ -23,16 +23,17 @@ bool is_unary(const Primitive& p) {
       typeid(p) == typeid(ArcSinh) || typeid(p) == typeid(ArcTan) ||
       typeid(p) == typeid(ArcTanh) || typeid(p) == typeid(AsType) ||
       typeid(p) == typeid(Ceil) || typeid(p) == typeid(Cos) ||
-      typeid(p) == typeid(Cosh) || typeid(p) == typeid(Remainder) ||
-      typeid(p) == typeid(Erf) || typeid(p) == typeid(ErfInv) ||
-      typeid(p) == typeid(Exp) || typeid(p) == typeid(Floor) ||
-      typeid(p) == typeid(Log) || typeid(p) == typeid(Log1p) ||
-      typeid(p) == typeid(LogicalNot) || typeid(p) == typeid(Negative) ||
-      typeid(p) == typeid(Round) || typeid(p) == typeid(Sigmoid) ||
-      typeid(p) == typeid(Sign) || typeid(p) == typeid(Sin) ||
-      typeid(p) == typeid(Sinh) || typeid(p) == typeid(Square) ||
-      typeid(p) == typeid(Sqrt) || typeid(p) == typeid(Tan) ||
-      typeid(p) == typeid(Tanh) || typeid(p) == typeid(Expm1));
+      typeid(p) == typeid(Conjugate) || typeid(p) == typeid(Cosh) ||
+      typeid(p) == typeid(Remainder) || typeid(p) == typeid(Erf) ||
+      typeid(p) == typeid(ErfInv) || typeid(p) == typeid(Exp) ||
+      typeid(p) == typeid(Floor) || typeid(p) == typeid(Log) ||
+      typeid(p) == typeid(Log1p) || typeid(p) == typeid(LogicalNot) ||
+      typeid(p) == typeid(Negative) || typeid(p) == typeid(Round) ||
+      typeid(p) == typeid(Sigmoid) || typeid(p) == typeid(Sign) ||
+      typeid(p) == typeid(Sin) || typeid(p) == typeid(Sinh) ||
+      typeid(p) == typeid(Square) || typeid(p) == typeid(Sqrt) ||
+      typeid(p) == typeid(Tan) || typeid(p) == typeid(Tanh) ||
+      typeid(p) == typeid(Expm1));
 }
 
 bool is_binary(const Primitive& p) {
@@ -45,7 +46,8 @@ bool is_binary(const Primitive& p) {
       typeid(p) == typeid(LogAddExp) || typeid(p) == typeid(Maximum) ||
       typeid(p) == typeid(Minimum) || typeid(p) == typeid(Multiply) ||
       typeid(p) == typeid(NotEqual) || typeid(p) == typeid(Power) ||
-      typeid(p) == typeid(Subtract));
+      typeid(p) == typeid(Subtract) || typeid(p) == typeid(BitwiseBinary) ||
+      typeid(p) == typeid(ArcTan2));
 }
 
 bool is_ternary(const Primitive& p) {
@@ -352,7 +354,8 @@ void compile_simplify(
   // Helpers to identify identical scalars
   std::map<std::pair<uint64_t, Dtype::Val>, array> scalars;
   auto is_scalar = [](const array& a) {
-    return a.is_evaled() && a.ndim() == 0;
+    // Condition for when it's safe to read an array
+    return a.is_available() && a.ndim() == 0;
   };
   auto get_scalar_rep = [](const array& a) {
     uint64_t v = 0;

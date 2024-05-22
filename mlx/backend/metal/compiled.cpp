@@ -289,7 +289,7 @@ void Compiled::eval_gpu(
     }
   }
   auto kernel = d.get_kernel(kernel_name, lib);
-  auto compute_encoder = d.get_command_encoder(s.index);
+  auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
 
   // Put the inputs in
@@ -300,7 +300,7 @@ void Compiled::eval_gpu(
       continue;
     }
     auto& x = inputs[i];
-    set_array_buffer(compute_encoder, x, cnt++);
+    compute_encoder.set_input_array(x, cnt++);
     if (!contiguous && !is_scalar(x)) {
       compute_encoder->setBytes(
           strides[stride_idx].data(),
@@ -315,7 +315,7 @@ void Compiled::eval_gpu(
 
   // Put the outputs in
   for (auto& x : outputs) {
-    set_array_buffer(compute_encoder, x, cnt++);
+    compute_encoder.set_output_array(x, cnt++);
   }
 
   // Put the output shape and strides in
@@ -336,7 +336,7 @@ void Compiled::eval_gpu(
     MTL::Size grid_dims(nthreads, 1, 1);
     MTL::Size group_dims(
         std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
@@ -347,7 +347,7 @@ void Compiled::eval_gpu(
     }
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
-    compute_encoder->dispatchThreads(grid_dims, group_dims);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
 

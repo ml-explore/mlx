@@ -31,7 +31,7 @@ jobs:
           name: Install dependencies
           command: |
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
+            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
@@ -49,11 +49,6 @@ jobs:
           name: Run Python tests
           command: |
             python3 -m unittest discover python/tests -v
-      # TODO: Reenable when extension api becomes stable
-      # - run:
-      #     name: Build example extension
-      #     command: |
-      #       cd examples/extensions && python3 -m pip install . 
       - run:
           name: Build CPP only
           command: |
@@ -69,7 +64,7 @@ jobs:
         default: "15.2.0"
     macos:
       xcode: << parameters.xcode_version >>
-    resource_class: macos.m1.large.gen1
+    resource_class: macos.m1.medium.gen1
     steps:
       - checkout
       - run:
@@ -80,7 +75,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
+            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
             pip install numpy
             pip install torch
             pip install tensorflow
@@ -101,11 +96,13 @@ jobs:
             source env/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu
-      # TODO: Reenable when extension api becomes stable
-      # - run:
-      #     name: Build example extension
-      #     command: |
-      #       cd examples/extensions && python3.11 -m pip install . 
+      - run:
+          name: Build example extension
+          command: |
+            source env/bin/activate
+            cd examples/extensions
+            pip install -r requirements.txt
+            python setup.py build_ext -j8
       - store_test_results:
           path: test-results
       - run:
@@ -132,7 +129,7 @@ jobs:
         default: ""
     macos:
       xcode: << parameters.xcode_version >>
-    resource_class: macos.m1.large.gen1
+    resource_class: macos.m1.medium.gen1
     steps:
       - checkout
       - run:
@@ -143,7 +140,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
+            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
             pip install --upgrade setuptools
             pip install numpy
             pip install twine
@@ -207,7 +204,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@4148debcf91f5ccab0c3b8d67b5c3cabd61f407f
+            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
             pip install --upgrade setuptools
             pip install numpy
             pip install auditwheel

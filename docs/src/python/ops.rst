@@ -10,6 +10,7 @@ Operations
 
    abs
    add
+   addmm
    all
    allclose
    any
@@ -19,19 +20,28 @@ Operations
    arcsin
    arcsinh
    arctan
+   arctan2
    arctanh
    argmax
    argmin
    argpartition
    argsort
    array_equal
+   as_strided
    atleast_1d
    atleast_2d
    atleast_3d
+   bitwise_and
+   bitwise_or
+   bitwise_xor
+   block_masked_mm
+   block_sparse_mm
    broadcast_to
    ceil
    clip
    concatenate
+   conj
+   conjugate
    convolve
    conv1d
    conv2d
@@ -42,6 +52,7 @@ Operations
    cummin
    cumprod
    cumsum
+   degrees
    dequantize
    diag
    diagonal
@@ -67,6 +78,8 @@ Operations
    isnan
    isneginf
    isposinf
+   issubdtype
+   left_shift
    less
    less_equal
    linspace
@@ -90,17 +103,22 @@ Operations
    moveaxis
    multiply
    negative
+   not_equal
    ones
    ones_like
    outer
    partition
    pad
+   power
    prod
    quantize
    quantized_matmul
+   radians
    reciprocal
+   remainder
    repeat
    reshape
+   right_shift
    round
    rsqrt
    save

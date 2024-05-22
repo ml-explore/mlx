@@ -18,6 +18,7 @@ nanobind_add_module(
   ${CMAKE_CURRENT_SOURCE_DIR}/linalg.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/constants.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/trees.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
 )
 
 if (NOT MLX_PYTHON_BINDINGS_OUTPUT_DIRECTORY)

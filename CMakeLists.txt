@@ -15,12 +15,15 @@ option(MLX_BUILD_EXAMPLES "Build examples for mlx" ON)
 option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
 option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
 option(MLX_BUILD_METAL "Build metal backend" ON)
+option(MLX_BUILD_CPU "Build cpu backend" ON)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
+option(MLX_BUILD_GGUF "Include support for GGUF format" ON)
+option(MLX_BUILD_SAFETENSORS "Include support for safetensors format" ON)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.9.1)
+  set(MLX_VERSION 0.13.1)
 endif()
 
 # --------------------- Processor tests -------------------------
@@ -82,9 +85,13 @@ elseif (MLX_BUILD_METAL)
   message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
 
   if (${MACOS_VERSION} GREATER_EQUAL 14.2)
+    set(METAL_CPP_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/metal.14.2.diff)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14.2_iOS17.2.zip)
+    set(MLX_METAL_VERSION METAL_3_1)
   elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
+    set(METAL_CPP_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/metal.14.0.diff)
     set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS14_iOS17-beta.zip)
+    set(MLX_METAL_VERSION METAL_3_0)
   else()
     message(FATAL_ERROR "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON" )
   endif()
@@ -92,6 +99,7 @@ elseif (MLX_BUILD_METAL)
   FetchContent_Declare(
     metal_cpp
     URL ${METAL_CPP_URL}
+    PATCH_COMMAND /usr/bin/patch -N -i ${METAL_CPP_PATCH} || true
   )
 
   FetchContent_MakeAvailable(metal_cpp)
@@ -105,51 +113,57 @@ elseif (MLX_BUILD_METAL)
     ${METAL_LIB}
     ${FOUNDATION_LIB}
     ${QUARTZ_LIB})
+
+  add_compile_definitions(${MLX_METAL_VERSION})
 endif()
 
-find_library(ACCELERATE_LIBRARY Accelerate)
-if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
-  message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
-  set(MLX_BUILD_ACCELERATE ON)
-  target_link_libraries(mlx ${ACCELERATE_LIBRARY})
-  add_compile_definitions(ACCELERATE_NEW_LAPACK)
+if (MLX_BUILD_CPU)
+  find_library(ACCELERATE_LIBRARY Accelerate)
+  if (MLX_BUILD_ARM AND ACCELERATE_LIBRARY)
+    message(STATUS "Accelerate found ${ACCELERATE_LIBRARY}")
+    set(MLX_BUILD_ACCELERATE ON)
+    target_link_libraries(mlx ${ACCELERATE_LIBRARY})
+    add_compile_definitions(ACCELERATE_NEW_LAPACK)
+  else()
+    message(STATUS "Accelerate or arm neon not found, using default backend.")
+    set(MLX_BUILD_ACCELERATE OFF)
+    if(${CMAKE_HOST_APPLE})
+      # The blas shipped in macOS SDK is not supported, search homebrew for
+      # openblas instead.
+      set(BLA_VENDOR OpenBLAS)
+      set(LAPACK_ROOT "${LAPACK_ROOT};$ENV{LAPACK_ROOT};/usr/local/opt/openblas")
+    endif()
+    # Search and link with lapack.
+    find_package(LAPACK REQUIRED)
+    if (NOT LAPACK_FOUND)
+      message(FATAL_ERROR "Must have LAPACK installed")
+    endif()
+    find_path(LAPACK_INCLUDE_DIRS lapacke.h
+      /usr/include
+      /usr/local/include
+      /usr/local/opt/openblas/include)
+    message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
+    message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
+    target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
+    target_link_libraries(mlx ${LAPACK_LIBRARIES})
+    # List blas after lapack otherwise we may accidentally incldue an old version
+    # of lapack.h from the include dirs of blas.
+    find_package(BLAS REQUIRED)
+    if (NOT BLAS_FOUND)
+      message(FATAL_ERROR "Must have BLAS installed")
+    endif()
+    # TODO find a cleaner way to do this
+    find_path(BLAS_INCLUDE_DIRS cblas.h
+      /usr/include
+      /usr/local/include
+      $ENV{BLAS_HOME}/include)
+    message(STATUS "Blas lib " ${BLAS_LIBRARIES})
+    message(STATUS "Blas include " ${BLAS_INCLUDE_DIRS})
+    target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
+    target_link_libraries(mlx ${BLAS_LIBRARIES})
+  endif()
 else()
-  message(STATUS "Accelerate or arm neon not found, using default backend.")
   set(MLX_BUILD_ACCELERATE OFF)
-  if(${CMAKE_HOST_APPLE})
-    # The blas shipped in macOS SDK is not supported, search homebrew for
-    # openblas instead.
-    set(BLA_VENDOR OpenBLAS)
-    set(LAPACK_ROOT "${LAPACK_ROOT};$ENV{LAPACK_ROOT};/usr/local/opt/openblas")
-  endif()
-  # Search and link with lapack.
-  find_package(LAPACK REQUIRED)
-  if (NOT LAPACK_FOUND)
-    message(FATAL_ERROR "Must have LAPACK installed")
-  endif()
-  find_path(LAPACK_INCLUDE_DIRS lapacke.h
-    /usr/include
-    /usr/local/include
-    /usr/local/opt/openblas/include)
-  message(STATUS "Lapack lib " ${LAPACK_LIBRARIES})
-  message(STATUS "Lapack include " ${LAPACK_INCLUDE_DIRS})
-  target_include_directories(mlx PRIVATE ${LAPACK_INCLUDE_DIRS})
-  target_link_libraries(mlx ${LAPACK_LIBRARIES})
-  # List blas after lapack otherwise we may accidentally incldue an old version
-  # of lapack.h from the include dirs of blas.
-  find_package(BLAS REQUIRED)
-  if (NOT BLAS_FOUND)
-    message(FATAL_ERROR "Must have BLAS installed")
-  endif()
-  # TODO find a cleaner way to do this
-  find_path(BLAS_INCLUDE_DIRS cblas.h
-    /usr/include
-    /usr/local/include
-    $ENV{BLAS_HOME}/include)
-  message(STATUS "Blas lib " ${BLAS_LIBRARIES})
-  message(STATUS "Blas include " ${BLAS_INCLUDE_DIRS})
-  target_include_directories(mlx PRIVATE ${BLAS_INCLUDE_DIRS})
-  target_link_libraries(mlx ${BLAS_LIBRARIES})
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)

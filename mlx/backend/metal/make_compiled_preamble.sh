@@ -9,8 +9,9 @@
 OUTPUT_FILE=$1
 CC=$2
 SRCDIR=$3
+CFLAGS=$4
 
-CONTENT=$($CC -I $SRCDIR -E $SRCDIR/mlx/backend/metal/kernels/compiled_preamble.h 2>/dev/null)
+CONTENT=$($CC -I $SRCDIR -E $SRCDIR/mlx/backend/metal/kernels/compiled_preamble.h $CFLAGS 2>/dev/null)
 
 cat << EOF > "$OUTPUT_FILE"
 // Copyright © 2023-24 Apple Inc.

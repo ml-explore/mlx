@@ -669,19 +669,14 @@ void init_array(nb::module_& m) {
             return a.shape(0);
           })
       .def("__iter__", [](const array& a) { return ArrayPythonIterator(a); })
-      .def(
-          "__getstate__",
-          [](const array& a) {
-            if (a.dtype() == bfloat16) {
-            }
-            return mlx_to_np_array(a);
-          })
+      .def("__getstate__", &mlx_to_np_array)
       .def(
           "__setstate__",
           [](array& arr,
              const nb::ndarray<nb::ro, nb::c_contig, nb::device::cpu>& state) {
             new (&arr) array(nd_array_to_mlx(state, std::nullopt));
           })
+      .def("__dlpack__", [](const array& a) { return mlx_to_dlpack(a); })
       .def("__copy__", [](const array& self) { return array(self); })
       .def(
           "__deepcopy__",
@@ -946,10 +941,7 @@ void init_array(nb::module_& m) {
       .def(
           "__repr__",
           [](array& a) {
-            if (!a.is_evaled()) {
-              nb::gil_scoped_release nogil;
-              a.eval();
-            }
+            nb::gil_scoped_release nogil;
             std::ostringstream os;
             os << a;
             return os.str();
@@ -1020,11 +1012,7 @@ void init_array(nb::module_& m) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise and.");
             }
-            if (a.dtype() != bool_ && b.dtype() != bool_) {
-              throw std::invalid_argument(
-                  "Bitwise and not yet supported for integer types.");
-            }
-            return logical_and(a, b);
+            return bitwise_and(a, b);
           },
           "other"_a)
       .def(
@@ -1039,11 +1027,7 @@ void init_array(nb::module_& m) {
               throw std::invalid_argument(
                   "Floating point types not allowed with bitwise and.");
             }
-            if (a.dtype() != bool_ && b.dtype() != bool_) {
-              throw std::invalid_argument(
-                  "Bitwise and not yet supported for integer types.");
-            }
-            a.overwrite_descriptor(logical_and(a, b));
+            a.overwrite_descriptor(bitwise_and(a, b));
             return a;
           },
           "other"_a,
@@ -1060,11 +1044,7 @@ void init_array(nb::module_& m) {
               throw std::invalid_argument(
                   "Floating point types not allowed with or bitwise or.");
             }
-            if (a.dtype() != bool_ && b.dtype() != bool_) {
-              throw std::invalid_argument(
-                  "Bitwise or not yet supported for integer types.");
-            }
-            return logical_or(a, b);
+            return bitwise_or(a, b);
           },
           "other"_a)
       .def(
@@ -1079,11 +1059,71 @@ void init_array(nb::module_& m) {
               throw std::invalid_argument(
                   "Floating point types not allowed with or bitwise or.");
             }
-            if (a.dtype() != bool_ && b.dtype() != bool_) {
-              throw std::invalid_argument(
-                  "Bitwise or not yet supported for integer types.");
+            a.overwrite_descriptor(bitwise_or(a, b));
+            return a;
+          },
+          "other"_a,
+          nb::rv_policy::none)
+      .def(
+          "__lshift__",
+          [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              throw_invalid_operation("left shift", v);
             }
-            a.overwrite_descriptor(logical_or(a, b));
+            auto b = to_array(v, a.dtype());
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with left shift.");
+            }
+            return left_shift(a, b);
+          },
+          "other"_a)
+      .def(
+          "__ilshift__",
+          [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              throw_invalid_operation("inplace left shift", v);
+            }
+            auto b = to_array(v, a.dtype());
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with or left shift.");
+            }
+            a.overwrite_descriptor(left_shift(a, b));
+            return a;
+          },
+          "other"_a,
+          nb::rv_policy::none)
+      .def(
+          "__rshift__",
+          [](const array& a, const ScalarOrArray v) {
+            if (!is_comparable_with_array(v)) {
+              throw_invalid_operation("right shift", v);
+            }
+            auto b = to_array(v, a.dtype());
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with right shift.");
+            }
+            return right_shift(a, b);
+          },
+          "other"_a)
+      .def(
+          "__irshift__",
+          [](array& a, const ScalarOrArray v) -> array& {
+            if (!is_comparable_with_array(v)) {
+              throw_invalid_operation("inplace right shift", v);
+            }
+            auto b = to_array(v, a.dtype());
+            if (issubdtype(a.dtype(), inexact) ||
+                issubdtype(b.dtype(), inexact)) {
+              throw std::invalid_argument(
+                  "Floating point types not allowed with or right shift.");
+            }
+            a.overwrite_descriptor(right_shift(a, b));
             return a;
           },
           "other"_a,
@@ -1094,7 +1134,7 @@ void init_array(nb::module_& m) {
              int start_axis,
              int end_axis,
              const StreamOrDevice& s) {
-            return flatten(a, start_axis, end_axis);
+            return flatten(a, start_axis, end_axis, s);
           },
           "start_axis"_a = 0,
           "end_axis"_a = -1,
@@ -1539,5 +1579,13 @@ void init_array(nb::module_& m) {
           "stream"_a = nb::none(),
           R"pbdoc(
             Extract a diagonal or construct a diagonal matrix.
-        )pbdoc");
+        )pbdoc")
+      .def(
+          "conj",
+          [](const array& a, StreamOrDevice s) {
+            return mlx::core::conjugate(to_array(a), s);
+          },
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          "See :func:`conj`.");
 }

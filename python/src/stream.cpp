@@ -129,4 +129,18 @@ void init_stream(nb::module_& m) {
               # Operations here will use mx.cpu by default.
               pass
       )pbdoc");
+  m.def(
+      "synchronize",
+      [](const std::optional<Stream>& s) {
+        s ? synchronize(s.value()) : synchronize();
+      },
+      "stream"_a = nb::none(),
+      R"pbdoc(
+      Synchronize with the given stream.
+
+      Args:
+        stream (Stream, optional): The stream to synchronize with. If ``None``
+           then the default stream of the default device is used.
+           Default: ``None``.
+      )pbdoc");
 }

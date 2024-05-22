@@ -1,9 +1,10 @@
-# Copyright © 2023 Apple Inc.
+# Copyright © 2023-2024 Apple Inc.
 
 import math
 
 import mlx.core as mx
 from mlx.nn.layers.base import Module
+from mlx.nn.layers.quantized import QuantizedEmbedding
 
 
 class Embedding(Module):
@@ -14,7 +15,7 @@ class Embedding(Module):
 
     Args:
         num_embeddings (int): How many possible discrete tokens can we embed.
-                              Usually called the vocabulary size.
+           Usually called the vocabulary size.
         dims (int): The dimensionality of the embeddings.
     """
 
@@ -28,3 +29,16 @@ class Embedding(Module):
 
     def __call__(self, x):
         return self.weight[x]
+
+    def as_linear(self, x):
+        """
+        Call the embedding layer as a linear layer.
+
+        Use this for example when input embedding and output projection
+        weights are tied.
+        """
+        return x @ self.weight.T
+
+    def to_quantized(self, group_size: int = 64, bits: int = 4):
+        """Return a :obj:`QuantizedEmbedding` layer that approximates this embedding layer."""
+        return QuantizedEmbedding.from_embedding(self, group_size, bits)

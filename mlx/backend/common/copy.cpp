@@ -256,7 +256,7 @@ void copy_general_general(
   }
 
   int size = std::accumulate(
-      data_shape.begin() - 5, data_shape.end(), 1, std::multiplies<int>());
+      data_shape.end() - 5, data_shape.end(), 1, std::multiplies<int>());
   for (int i = 0; i < src.size(); i += size) {
     stride_t src_offset = i_offset + elem_to_loc(i, data_shape, i_strides);
     stride_t dst_offset = o_offset + elem_to_loc(i, dst.shape(), o_strides);

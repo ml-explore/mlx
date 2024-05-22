@@ -1154,6 +1154,56 @@ TEST_CASE("test arithmetic unary ops") {
     CHECK(allclose(cos(x), expected).item<bool>());
   }
 
+  // Test degrees
+  {
+    array x(0.0);
+    CHECK_EQ(degrees(x).item<float>(), 0.0);
+
+    x = array(M_PI_2);
+    CHECK(degrees(x).item<float>() == doctest::Approx(90.0));
+
+    CHECK(array_equal(degrees(array({})), array({})).item<bool>());
+
+    // Integer input type
+    x = array(0);
+    CHECK_EQ(x.dtype(), int32);
+    CHECK_EQ(degrees(x).item<float>(), 0.0);
+
+    // Input is irregularly strided
+    x = broadcast_to(array(M_PI_2), {2, 2, 2});
+    CHECK(allclose(degrees(x), full({2, 2, 2}, 90.0)).item<bool>());
+
+    float angles[] = {0.0f, M_PI_2, M_PI, 3.0f * M_PI_2};
+    x = split(array(angles, {2, 2}), 2, 1)[0];
+    auto expected = array({0.0f, 180.0f}, {2, 1});
+    CHECK(allclose(degrees(x), expected).item<bool>());
+  }
+
+  // Test radians
+  {
+    array x(0.0);
+    CHECK_EQ(radians(x).item<float>(), 0.0);
+
+    x = array(90.0);
+    CHECK(radians(x).item<float>() == doctest::Approx(M_PI_2));
+
+    CHECK(array_equal(radians(array({})), array({})).item<bool>());
+
+    // Integer input type
+    x = array(90);
+    CHECK_EQ(x.dtype(), int32);
+    CHECK(radians(x).item<float>() == doctest::Approx(M_PI_2));
+
+    // Input is irregularly strided
+    x = broadcast_to(array(90.0f), {2, 2, 2});
+    CHECK(allclose(radians(x), full({2, 2, 2}, M_PI_2)).item<bool>());
+
+    x = split(array({0.0f, 90.0f, 180.0f, 270.0f}, {2, 2}), 2, 1)[0];
+    float angles[] = {0.0f, M_PI};
+    auto expected = array(angles, {2, 1});
+    CHECK(allclose(radians(x), expected).item<bool>());
+  }
+
   // Test log
   {
     array x(0.0);
@@ -2258,29 +2308,26 @@ TEST_CASE("test pad") {
 
 TEST_CASE("test power") {
   CHECK_EQ(power(array(1), array(2)).item<int>(), 1);
-  CHECK_EQ((array(1) ^ 2).item<int>(), 1);
-  CHECK_EQ((1 ^ array(2)).item<int>(), 1);
-  CHECK_EQ((array(-1) ^ 2).item<int>(), 1);
-  CHECK_EQ((array(-1) ^ 3).item<int>(), -1);
+  CHECK_EQ((power(array(-1), array(2))).item<int>(), 1);
+  CHECK_EQ((power(array(-1), array(3))).item<int>(), -1);
 
-  // TODO Throws but exception not caught from calling thread
-  // CHECK_THROWS((x^-1).item<int>());
-
-  CHECK_EQ((array(true) ^ array(false)).item<bool>(), true);
-  CHECK_EQ((array(false) ^ array(false)).item<bool>(), true);
-  CHECK_EQ((array(true) ^ array(true)).item<bool>(), true);
-  CHECK_EQ((array(false) ^ array(true)).item<bool>(), false);
+  CHECK_EQ((power(array(true), array(false))).item<bool>(), true);
+  CHECK_EQ((power(array(false), array(false))).item<bool>(), true);
+  CHECK_EQ((power(array(true), array(true))).item<bool>(), true);
+  CHECK_EQ((power(array(false), array(true))).item<bool>(), false);
 
   auto x = array(2.0f);
-  CHECK_EQ((x ^ 0.5).item<float>(), doctest::Approx(std::pow(2.0f, 0.5f)));
-  CHECK_EQ((x ^ 2.0f).item<float>(), 4.0f);
+  CHECK_EQ(
+      (power(x, array(0.5))).item<float>(),
+      doctest::Approx(std::pow(2.0f, 0.5f)));
+  CHECK_EQ(power(x, array(2.0f)).item<float>(), 4.0f);
 
-  CHECK(std::isnan((array(-1.0f) ^ 0.5).item<float>()));
+  CHECK(std::isnan((power(array(-1.0f), array(0.5))).item<float>()));
 
   auto a = complex64_t{0.5, 0.5};
   auto b = complex64_t{0.5, 0.5};
   auto expected = std::pow(a, b);
-  auto out = (array(a) ^ array(b)).item<complex64_t>();
+  auto out = (power(array(a), array(b))).item<complex64_t>();
   CHECK(abs(out.real() - expected.real()) < 1e-7);
   CHECK(abs(out.imag() - expected.imag()) < 1e-7);
 }
@@ -3180,6 +3227,105 @@ TEST_CASE("test meshgrid") {
   expected_one = array({1, 2, 3}, {3, 1});
   CHECK(array_equal(out[0], expected_zero).item<bool>());
   CHECK(array_equal(out[1], expected_one).item<bool>());
+}
+
+TEST_CASE("test conv1d") {
+  auto in = astype(
+      array(
+          {0.5488135,
+           0.71518937,
+           0.60276338,
+           0.54488318,
+           0.4236548,
+           0.64589411},
+          {1, 3, 2}),
+      float16);
+
+  int kernel = 3;
+  int stride = 1;
+  int padding = 1;
+
+  {
+    int groups = 1;
+    auto wt = astype(
+        array(
+            {
+
+                0.43758721, 0.891773,   0.96366276, 0.38344152,
+                0.79172504, 0.52889492,
+
+                0.56804456, 0.92559664, 0.07103606, 0.0871293,
+                0.0202184,  0.83261985,
+
+                0.77815675, 0.87001215, 0.97861834, 0.79915856,
+                0.46147936, 0.78052918,
+
+                0.11827443, 0.63992102, 0.14335329, 0.94466892,
+                0.52184832, 0.41466194
+
+            },
+            {4, 3, 2}),
+        float16);
+
+    auto expected = array(
+        {1.5685,
+         0.5672,
+         1.8121,
+         1.2948,
+         2.3448,
+         1.6104,
+         2.7743,
+         1.6126,
+         1.4056,
+         0.9331,
+         1.8739,
+         1.0909},
+        {1, 3, 4});
+
+    auto out = conv1d(in, wt, stride, padding, /* dilation= */ 1, groups);
+    CHECK(allclose(out, expected, /* rtol = */ 1.0e-3).item<bool>());
+  }
+
+  {
+    int groups = 2;
+    auto wt = array(
+        {0.43758721,
+         0.891773,
+         0.96366276,
+
+         0.38344152,
+         0.79172504,
+         0.52889492,
+
+         0.56804456,
+         0.92559664,
+         0.07103606,
+
+         0.0871293,
+         0.0202184,
+         0.83261985
+
+        },
+        {4, 3, 1});
+
+    auto expected = array(
+        {1.0703,
+         0.7533,
+         0.7007,
+         0.4681,
+         1.1859,
+         0.9117,
+         0.9565,
+         0.6111,
+         0.6416,
+         0.5665,
+         0.9074,
+         0.0605},
+        {1, 3, 4});
+
+    auto out = conv1d(in, wt, stride, padding, /* dilation= */ 1, groups);
+    CHECK(allclose(out, expected, /* rtol = */ 1.0e-3).item<bool>());
+  }
 }
 
 TEST_CASE("test trace") {
