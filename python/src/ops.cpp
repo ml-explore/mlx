@@ -43,11 +43,11 @@ void init_ops(nb::module_& m) {
   // TODO, remove deprecation errors in a future release
   m.def("block_sparse_mm", [](nb::args, nb::kwargs) {
     throw std::invalid_argument(
-        "block_sparse_mm is deperecated. Please use gather_mm which has the same signature");
+        "block_sparse_mm is deprecated. Please use gather_mm which has the same signature");
   });
   m.def("block_sparse_qmm", [](nb::args, nb::kwargs) {
     throw std::invalid_argument(
-        "block_sparse_qmm is deperecated. Please use gather_qmm which has the same signature");
+        "block_sparse_qmm is deprecated. Please use gather_qmm which has the same signature");
   });
   m.def(
       "reshape",
