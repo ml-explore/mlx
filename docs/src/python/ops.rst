@@ -35,7 +35,6 @@ Operations
    bitwise_or
    bitwise_xor
    block_masked_mm
-   block_sparse_mm
    broadcast_to
    ceil
    clip
@@ -69,6 +68,8 @@ Operations
    floor
    floor_divide
    full
+   gather_mm
+   gather_qmm
    greater
    greater_equal
    identity
