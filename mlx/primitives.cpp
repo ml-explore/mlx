@@ -2406,7 +2406,7 @@ std::vector<array> GatherQMM::vjp(
               flatten(zeros_like(x, stream()), 0, -3, stream()),
               lhs_indices,
               expand_dims(
-                  block_sparse_qmm(
+                  gather_qmm(
                       cotan,
                       w,
                       scales,
@@ -3548,7 +3548,7 @@ std::vector<array> GatherMM::vjp(
       base = reshape(base, {-1, M, K}, stream());
 
       // g : (out_batch_shape) + (M, K)
-      auto g = block_sparse_mm(cotan, bt, std::nullopt, rhs_indices, stream());
+      auto g = gather_mm(cotan, bt, std::nullopt, rhs_indices, stream());
       g = expand_dims(g, -3, stream());
       auto gacc = scatter_add(base, lhs_indices, g, 0, stream());
 
@@ -3563,7 +3563,7 @@ std::vector<array> GatherMM::vjp(
       base = reshape(base, {-1, K, N}, stream());
 
       // g : (out_batch_shape) + (K, N)
-      auto g = block_sparse_mm(at, cotan, lhs_indices, std::nullopt, stream());
+      auto g = gather_mm(at, cotan, lhs_indices, std::nullopt, stream());
       g = expand_dims(g, -3, stream());
       auto gacc = scatter_add(base, rhs_indices, g, 0, stream());
 

@@ -3529,8 +3529,7 @@ array gather_qmm(
   auto out = array(
       std::move(out_shape),
       out_type,
-      std::make_shared<BlockSparseQMM>(
-          to_stream(s), group_size, bits, transpose),
+      std::make_shared<GatherQMM>(to_stream(s), group_size, bits, transpose),
       {astype(x, out_type, s),
        w,
        astype(scales, out_type, s),
@@ -4024,7 +4023,7 @@ array gather_mm(
   auto out = array(
       out_shape,
       out_type,
-      std::make_shared<BlockSparseMM>(to_stream(s)),
+      std::make_shared<GatherMM>(to_stream(s)),
       {a, b, lhs_indices, rhs_indices});
 
   // Remove the possibly inserted singleton dimensions
