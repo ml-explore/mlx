@@ -4150,8 +4150,12 @@ array trace(
         "[trace] axis1 and axis2 cannot be the same axis");
   }
 
-  return astype(
-      sum(diagonal(a, offset, axis1, axis2), -1), dtype, to_stream(s));
+  return sum(
+      astype(
+          diagonal(a, offset, axis1, axis2, to_stream(s)), dtype, to_stream(s)),
+      /* axis = */ -1,
+      /* keepdims = */ false,
+      to_stream(s));
 }
 array trace(
     const array& a,

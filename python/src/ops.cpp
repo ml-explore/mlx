@@ -4073,7 +4073,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def trace(a: array, offset: int = 0, axis1: int = 0, axis2: int = 1, dtype = Optional[Dtype] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def trace(a: array, /, offset: int = 0, axis1: int = 0, axis2: int = 1, dtype = Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Return the sum along a specified diagonal in the given array.
 
