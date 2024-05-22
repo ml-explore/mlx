@@ -1242,6 +1242,7 @@ array trace(
     int axis1,
     int axis2,
     StreamOrDevice s = {});
+array trace(const array& a, StreamOrDevice s = {});
 
 /**
  * Implements the identity function but allows injecting dependencies to other

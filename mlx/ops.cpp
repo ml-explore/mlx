@@ -4129,6 +4129,27 @@ array trace(
     throw std::invalid_argument(msg.str());
   }
 
+  auto ax1 = (axis1 < 0) ? axis1 + ndim : axis1;
+  if (ax1 < 0 || ax1 >= ndim) {
+    std::ostringstream msg;
+    msg << "[trace] Invalid axis1 " << axis1 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  auto ax2 = (axis2 < 0) ? axis2 + ndim : axis2;
+  if (ax2 < 0 || ax2 >= ndim) {
+    std::ostringstream msg;
+    msg << "[trace] Invalid axis2 " << axis2 << " for array with " << ndim
+        << " dimensions.";
+    throw std::out_of_range(msg.str());
+  }
+
+  if (ax1 == ax2) {
+    throw std::invalid_argument(
+        "[trace] axis1 and axis2 cannot be the same axis");
+  }
+
   return astype(
       sum(diagonal(a, offset, axis1, axis2), -1), dtype, to_stream(s));
 }
@@ -4140,6 +4161,12 @@ array trace(
     StreamOrDevice s /* = {} */) {
   auto dtype = a.dtype();
   return trace(a, offset, axis1, axis2, dtype, to_stream(s));
+}
+array trace(
+    const array& a,
+    StreamOrDevice s /* = {} */) {
+  auto dtype = a.dtype();
+  return trace(a, 0, 0, 1, dtype, to_stream(s));
 }
 
 std::vector<array> depends(
