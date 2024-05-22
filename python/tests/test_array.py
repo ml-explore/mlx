@@ -1740,6 +1740,11 @@ class TestArray(mlx_tests.MLXTestCase):
         y = np.from_dlpack(x)
         self.assertTrue(mx.array_equal(y, x))
 
+    def test_large_setitem(self):
+        data = mx.zeros((1, 6, int(2**30)), dtype=mx.bool_)
+        data[0, 5] = True
+        self.assertEqual(data[0, 1, 0], False)
+
 
 if __name__ == "__main__":
     unittest.main()
