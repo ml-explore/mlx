@@ -4150,11 +4150,10 @@ array trace(
   }
 
   return sum(
-      astype(
-          diagonal(a, offset, axis1, axis2, to_stream(s)), dtype, to_stream(s)),
+      astype(diagonal(a, offset, axis1, axis2, s), dtype, s),
       /* axis = */ -1,
       /* keepdims = */ false,
-      to_stream(s));
+      s);
 }
 array trace(
     const array& a,
@@ -4163,11 +4162,11 @@ array trace(
     int axis2,
     StreamOrDevice s /* = {} */) {
   auto dtype = a.dtype();
-  return trace(a, offset, axis1, axis2, dtype, to_stream(s));
+  return trace(a, offset, axis1, axis2, dtype, s);
 }
 array trace(const array& a, StreamOrDevice s /* = {} */) {
   auto dtype = a.dtype();
-  return trace(a, 0, 0, 1, dtype, to_stream(s));
+  return trace(a, 0, 0, 1, dtype, s);
 }
 
 std::vector<array> depends(
