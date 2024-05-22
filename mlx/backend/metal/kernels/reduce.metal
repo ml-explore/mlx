@@ -6,6 +6,7 @@
 // clang-format off
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/utils.h"
+#include "mlx/backend/metal/kernels/atomic.h"
 #include "mlx/backend/metal/kernels/reduction/ops.h"
 #include "mlx/backend/metal/kernels/reduction/reduce_init.h"
 #include "mlx/backend/metal/kernels/reduce.h"

@@ -51,6 +51,7 @@ set(
   softmax.h
   sort.h
   scan.h
+  reduction/ops.h
   reduction/reduce_init.h
   reduction/reduce_all.h
   reduction/reduce_col.h

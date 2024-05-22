@@ -45,7 +45,7 @@ make_jit_source(
 make_jit_source(binary_ops)
 make_jit_source(ternary_ops)
 make_jit_source(
-  reduction
+  reduce_utils
   kernels/atomic.h
   kernels/reduction/ops.h
 )

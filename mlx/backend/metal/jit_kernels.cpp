@@ -242,7 +242,7 @@ MTL::ComputePipelineState* get_reduce_init_kernel(
   auto lib = d.get_library(kernel_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduction()
+    kernel_source << metal::utils() << metal::reduce_utils()
                   << fmt::format(
                          reduce_init_kernels,
                          kernel_name,
@@ -263,7 +263,7 @@ MTL::ComputePipelineState* get_reduce_kernel(
   if (lib == nullptr) {
     bool non_atomic = out.dtype() == int64 || out.dtype() == uint64;
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduction() << metal::reduce()
+    kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce()
                   << fmt::format(
                          non_atomic ? reduce_non_atomic_kernels
                                     : reduce_kernels,

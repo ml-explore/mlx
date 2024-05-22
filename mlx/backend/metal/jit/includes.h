@@ -8,7 +8,7 @@ const char* utils();
 const char* binary_ops();
 const char* unary_ops();
 const char* ternary_ops();
-const char* reduction();
+const char* reduce_utils();
 const char* gather();
 const char* scatter();
 
