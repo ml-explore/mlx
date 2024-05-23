@@ -229,7 +229,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduction() << metal::scatter();
+    kernel_source << metal::utils() << metal::reduce_utils()
+                  << metal::scatter();
 
     std::string out_type_str = get_type_string(out.dtype());
     std::string idx_type_str =

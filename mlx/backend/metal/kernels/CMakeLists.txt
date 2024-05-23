@@ -8,9 +8,9 @@ set(
   ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
 )
 
+
 set(
   KERNELS
-  "arange"
   "arg_reduce"
   "conv"
   "fft"
@@ -20,31 +20,42 @@ set(
   "rms_norm"
   "layer_norm"
   "rope"
-  "scan"
   "scaled_dot_product_attention"
-  "softmax"
-  "sort"
 )
 
 if (NOT MLX_METAL_JIT)
 set(
   KERNELS
   ${KERNELS}
+  "arange"
   "binary"
   "binary_two"
   "unary"
   "ternary"
   "copy"
+  "softmax"
+  "sort"
+  "scan"
+  "reduce"
 )
 set(
   HEADERS 
   ${HEADERS}
+  arange.h
   unary_ops.h
   unary.h
   binary_ops.h
   binary.h
   ternary.h
   copy.h
+  softmax.h
+  sort.h
+  scan.h
+  reduction/ops.h
+  reduction/reduce_init.h
+  reduction/reduce_all.h
+  reduction/reduce_col.h
+  reduction/reduce_row.h
 )
 endif()
 
@@ -84,15 +95,6 @@ file(GLOB_RECURSE STEEL_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/steel/*.h)
 foreach(KERNEL ${STEEL_KERNELS})
   cmake_path(GET KERNEL STEM TARGET)
   build_kernel_base(${TARGET} ${KERNEL} "${STEEL_HEADERS}")
-  set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
-endforeach()
-
-file(GLOB_RECURSE REDUCE_KERNELS ${CMAKE_CURRENT_SOURCE_DIR}/reduction/*.metal)
-file(GLOB_RECURSE REDUCE_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/reduction/*.h)
-
-foreach(KERNEL ${REDUCE_KERNELS})
-  cmake_path(GET KERNEL STEM TARGET)
-  build_kernel_base(${TARGET} ${KERNEL} "${REDUCE_HEADERS}")
   set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
 endforeach()
 

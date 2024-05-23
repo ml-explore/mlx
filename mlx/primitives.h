@@ -1565,8 +1565,9 @@ class Reduce : public UnaryPrimitive {
     switch (reduce_type_) {
       case And:
         os << "And";
+        break;
       case Or:
-        os << "And";
+        os << "Or";
         break;
       case Sum:
         os << "Sum";
@@ -1581,7 +1582,6 @@ class Reduce : public UnaryPrimitive {
         os << "Max";
         break;
     }
-    os << " Reduce";
   }
   bool is_equivalent(const Primitive& other) const override;
 
@@ -1647,7 +1647,6 @@ class Scan : public UnaryPrimitive {
         os << "Max";
         break;
     }
-    os << " Reduce";
   }
   bool is_equivalent(const Primitive& other) const override;
 

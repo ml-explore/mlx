@@ -5,11 +5,7 @@
 #include <metal_atomic>
 #include <metal_simdgroup>
 
-#ifndef MLX_METAL_JIT
-#include "mlx/backend/metal/kernels/atomic.h"
-#include "mlx/backend/metal/kernels/bf16.h"
-#include "mlx/backend/metal/kernels/utils.h"
-#endif
+static constant constexpr const uint8_t simd_size = 32;
 
 union bool4_or_uint {
   bool4 b;
@@ -23,6 +19,7 @@ struct None {
   }
 };
 
+template <typename U = bool>
 struct And {
   bool simd_reduce(bool val) {
     return simd_all(val);
@@ -60,6 +57,7 @@ struct And {
   }
 };
 
+template <typename U = bool>
 struct Or {
   bool simd_reduce(bool val) {
     return simd_any(val);

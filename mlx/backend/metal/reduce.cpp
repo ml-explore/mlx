@@ -6,6 +6,7 @@
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/reduce.h"
 #include "mlx/backend/metal/utils.h"
@@ -40,9 +41,12 @@ void all_reduce_dispatch(
     const Stream& s) {
   Dtype out_dtype = out.dtype();
   bool is_out_64b_int = is_64b_int(out_dtype);
-  auto kernel = (is_out_64b_int)
-      ? d.get_kernel("all_reduce_no_atomics_" + op_name + type_to_name(in))
-      : d.get_kernel("all_reduce_" + op_name + type_to_name(in));
+  std::string kernel_name = "all";
+  if (is_out_64b_int) {
+    kernel_name += "NoAtomics";
+  }
+  kernel_name += "_reduce_" + op_name + type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kernel_name, in, out);
 
   compute_encoder->setComputePipelineState(kernel);
 
@@ -158,18 +162,20 @@ void row_reduce_general_dispatch(
   bool is_med = non_row_reductions * reduction_size <= 256;
   is_out_64b_int &= !is_small && !is_med;
 
-  std::string small_desc = "_";
-  if (is_small) {
-    small_desc = "_small_";
+  std::string small_desc;
+  if (is_out_64b_int) {
+    small_desc = "NoAtomics";
+  } else if (is_small) {
+    small_desc = "Small";
   } else if (is_med) {
-    small_desc = "_med_";
+    small_desc = "Med";
+  } else {
+    small_desc = "";
   }
+  kname << "rowGeneral" << small_desc << "_reduce_" << op_name
+        << type_to_name(in);
 
-  small_desc = is_out_64b_int ? "_no_atomics_" : small_desc;
-
-  kname << "row_reduce_general" << small_desc << op_name << type_to_name(in);
-
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = get_reduce_kernel(d, kname.str(), in, out);
   compute_encoder->setComputePipelineState(kernel);
 
   // Get dispatch grid dims
@@ -335,8 +341,8 @@ void strided_reduce_general_dispatch(
   // Specialize for small dims
   if (reduction_size * non_col_reductions < 16) {
     // Select kernel
-    auto kernel =
-        d.get_kernel("col_reduce_small_" + op_name + type_to_name(in));
+    auto kernel = get_reduce_kernel(
+        d, "colSmall_reduce_" + op_name + type_to_name(in), in, out);
     compute_encoder->setComputePipelineState(kernel);
 
     // Select block dims
@@ -373,10 +379,12 @@ void strided_reduce_general_dispatch(
 
   // Select kernel
   bool is_out_64b_int = is_64b_int(out_dtype);
-  auto kernel = (is_out_64b_int)
-      ? d.get_kernel(
-            "col_reduce_general_no_atomics_" + op_name + type_to_name(in))
-      : d.get_kernel("col_reduce_general_" + op_name + type_to_name(in));
+  std::string kernel_name = "colGeneral";
+  if (is_out_64b_int) {
+    kernel_name += "NoAtomics";
+  }
+  kernel_name += "_reduce_" + op_name + type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kernel_name, in, out);
 
   compute_encoder->setComputePipelineState(kernel);
 
@@ -490,9 +498,11 @@ void strided_reduce_general_dispatch(
     }
     ndim = new_shape.size();
 
-    auto row_reduce_kernel = d.get_kernel(
-        "row_reduce_general_no_atomics_" + op_name +
-        type_to_name(intermediate));
+    std::string kernel_name =
+        "rowGeneralNoAtomics_reduce_" + op_name + type_to_name(intermediate);
+    auto row_reduce_kernel =
+        get_reduce_kernel(d, kernel_name, intermediate, out);
+
     compute_encoder->setComputePipelineState(row_reduce_kernel);
     compute_encoder.set_input_array(intermediate, 0);
     compute_encoder.set_output_array(out, 1);
@@ -575,7 +585,8 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& d = metal::device(s.device);
   auto& compute_encoder = d.get_command_encoder(s.index);
   {
-    auto kernel = d.get_kernel("i" + op_name + type_to_name(out));
+    auto kernel = get_reduce_init_kernel(
+        d, "i_reduce_" + op_name + type_to_name(out), out);
     size_t nthreads = out.size();
     MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();

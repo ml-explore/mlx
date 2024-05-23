@@ -6,6 +6,7 @@
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
@@ -27,7 +28,7 @@ void Arange::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
   auto& s = stream();
   auto& d = metal::device(s.device);
-  auto kernel = d.get_kernel("arange" + type_to_name(out));
+  auto kernel = get_arange_kernel(d, "arange" + type_to_name(out), out);
   size_t nthreads = out.size();
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
   MTL::Size group_dims = MTL::Size(

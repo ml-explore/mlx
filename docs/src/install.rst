@@ -200,7 +200,7 @@ GGUF, you can do:
     -DBUILD_SHARED_LIBS=ON \
     -DMLX_BUILD_CPU=OFF \
     -DMLX_BUILD_SAFETENSORS=OFF \
-    -DMLX_BUILD_GGUF=OFF
+    -DMLX_BUILD_GGUF=OFF \
     -DMLX_METAL_JIT=ON
 
 THE `MLX_METAL_JIT` flag minimizes the size of the MLX Metal library which
