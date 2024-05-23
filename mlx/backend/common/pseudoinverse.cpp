@@ -5,6 +5,9 @@
 #include "mlx/primitives.h"
 #include "mlx/ops.h"
 
+// #include "mlx/primitives.h"
+// #include "mlx/fast_primitives.h"
+
 namespace mlx::core {
 
 void pseudoinverse_impl(const array& a, array& pinv) {
@@ -22,6 +25,14 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   const int N = a.shape(-1);
   const int K = std::min(M, N);
 
+  const int pinv_shape_M = pinv.shape(-2);
+  const int pinv_shape_N = pinv.shape(-1);
+  if (pinv_shape_N != M) { // Failing because pinv is not 5x4 -- it is showing up as 4x5
+    std::stringstream ss;
+    ss << "unexpected N for pinv; got N " << pinv_shape_N << " but expected N is " << N;
+    throw std::runtime_error(ss.str());
+  }
+
   // A of shape M x N. The leading dimension is N since lapack receives Aᵀ.
   const int lda = N;
   // U of shape M x M. (N x N in lapack).
@@ -37,18 +48,13 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   // Σ^+ = 1 ./ Σ aka element-wise reciprocal of Σ diagonal matrix
   // then, compute A^+ = VΣ^+U^*
   // Work-in-progress
-  auto s_plus = transpose(1.0 / s); // TODO: Only run on diagonal elements
+  auto s_plus = 1.0 / s; // TODO: Only run on diagonal elements
   auto v = transpose(vt);
   auto ut = transpose(u);
-  // s_plus 4x4
-  // u      4x5
-  // ut     5x4
-  // v      5x5
-  // ut*s   5x4
-  // v*     5x4
-  auto inner = transpose(matmul(s_plus, u));
+  auto inner = matmul(ut, transpose(s_plus));
   auto result = matmul(v, inner);
-  copy(result, pinv, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
+  pinv = result;
 }
 
 void PseudoInverse::eval(const std::vector<array>& inputs, array& output) {

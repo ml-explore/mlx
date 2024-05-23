@@ -306,8 +306,19 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
-  return array(
-      a.shape(), a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+
+  const auto m = a.shape(-2);
+  const auto n = a.shape(-1);
+  const auto rank = a.ndim();
+
+  std::vector<int> u_shape = a.shape();
+  u_shape[rank - 2] = m;
+  u_shape[rank - 1] = m;
+
+  auto shape = a.shape();
+  std::reverse(shape.begin(), shape.end());
+  auto out_shape = shape;
+  return array(out_shape, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
 }
 
 } // namespace mlx::core::linalg

@@ -168,8 +168,11 @@ class TestLinalg(mlx_tests.MLXTestCase):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
     def test_pseudo_inverse(self):
+        import pdb
+
+        pdb.set_trace()
         A = mx.array([[1, 2, 3], [6, -5, 4], [-9, 8, 7]], dtype=mx.float32)
-        A_plus= mx.linalg.pinv(A, stream=mx.cpu)
+        A_plus = mx.linalg.pinv(A, stream=mx.cpu)
         self.assertTrue(mx.allclose(A @ A_plus @ A, A, rtol=0, atol=1e-6))
 
         # Multiple matrices
@@ -177,9 +180,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
         AB = mx.stack([A, B])
         invs = mx.linalg.inv(AB, stream=mx.cpu)
         for M, M_plus in zip(AB, invs):
-            self.assertTrue(
-                mx.allclose(M @ M_plus @ M, M, rtol=0, atol=1e-5)
-            )
+            self.assertTrue(mx.allclose(M @ M_plus @ M, M, rtol=0, atol=1e-5))
 
 
 if __name__ == "__main__":
