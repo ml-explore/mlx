@@ -199,6 +199,24 @@ struct BlockMMA {
   }
 
   /* Apply epilogue */
+  template <typename UnaryEpilogue>
+  METAL_FUNC void apply_epilogue(thread const UnaryEpilogue& epilogue_op) {
+    // Loop over all simdgroup tiles
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < TM; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < TN; j++) {
+        // Get accumulated result and associated offset in C
+        thread auto& accum = results[i * TN + j].thread_elements();
+
+        // Apply epilogue
+        accum[0] = epilogue_op.apply(accum[0]);
+        accum[1] = epilogue_op.apply(accum[1]);
+      }
+    }
+  }
+
+  /* Apply epilogue */
   template <typename BinaryEpilogue>
   METAL_FUNC void apply_epilogue(
       const device U* C,

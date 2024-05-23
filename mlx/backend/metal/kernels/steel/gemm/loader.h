@@ -58,6 +58,18 @@ struct BlockLoader {
         dst(dst_ + bi * dst_ld + bj),
         src(src_ + bi * src_ld + bj) {}
 
+  /* Apply operation to threadgroup without bound checking */
+  template <typename UnaryOp>
+  METAL_FUNC void apply_inplace_op(thread const UnaryOp& op) const {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < BROWS; i += TROWS) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < vec_size; j++) {
+        dst[i * dst_ld + j] = op.apply(dst[i * dst_ld + j]);
+      }
+    }
+  }
+
   /* Load from device memory into threadgroup memory - without bound checking */
   METAL_FUNC void load_unsafe() const {
     STEEL_PRAGMA_UNROLL
