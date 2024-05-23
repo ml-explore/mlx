@@ -527,9 +527,8 @@ array scaled_dot_product_attention(
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
    * * CPU implementation
-   * * batch size > 1
-   * * query sequence length > 1
-   * * query sequence length < 16 (e.g. for speculative decoding)
+   * * batch size > 1 for decoding or causal attention
+   * * query sequence length > 1 for decoding
    * * query sequence length > 16 && non-null mask (causal attention)
    * * non-null mask
    * * dtype is not fp32 or fp16
@@ -569,17 +568,21 @@ array scaled_dot_product_attention(
   const bool supported_head_dim_self_attn =
       query_head_dim == 64 || query_head_dim == 128;
   const size_t query_sequence_length = q.shape(2);
-  const bool full_self_attention = query_sequence_length >= 16 &&
+  const bool supports_full_self_attention = query_sequence_length >= 16 &&
       !mask.has_value() && supported_head_dim_self_attn &&
       n_q_heads == n_kv_heads && final_type != bfloat16 &&
       stream.device == Device::gpu;
 
   // fast decoding gpu shader
-  bool implementation_supports_use_case = batch_dim == 1 &&
-      query_sequence_length == 1 && !mask.has_value() && supported_head_dim &&
-      final_type != bfloat16 && stream.device == Device::gpu;
+  bool supports_sdpa = batch_dim == 1 && query_sequence_length == 1 &&
+      !mask.has_value() && supported_head_dim && final_type != bfloat16 &&
+      stream.device == Device::gpu;
+  bool implementation_supports_use_case =
+      supports_sdpa || supports_full_self_attention;
+
+  // disabling full self attention until perf is tuned;
+  // likewise for sdpa
   implementation_supports_use_case &= false;
-  implementation_supports_use_case |= full_self_attention;
 
   if (implementation_supports_use_case) {
     auto out_shape =

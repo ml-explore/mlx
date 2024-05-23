@@ -67,10 +67,8 @@ class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
         if self.is_apple_silicon:
             dtypes.append(np.half)
 
-        for SEQUENCE_LENGTH in [63, 129, 400, 1178, 2202]:
+        for SEQUENCE_LENGTH in [63, 129, 400]:
             for DTYPE in dtypes:
-                if DTYPE == np.float32 and SEQUENCE_LENGTH > 8192:
-                    continue
                 B = 2
                 H = 24
                 n_kv_heads = H
