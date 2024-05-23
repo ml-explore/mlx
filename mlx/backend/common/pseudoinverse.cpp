@@ -40,19 +40,58 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   // Vᵀ of shape N x N. (M x M in lapack).
   const int ldvt = M;
 
-  array u(std::vector<int>{M, N}, float32, nullptr, {});
+  array u(std::vector<int>{M, M}, float32, nullptr, {});
   array s(std::vector<int>{K, K}, float32, nullptr, {});
-  array vt(std::vector<int>{N, N}, float32, nullptr, {});
+  array vt(std::vector<int>{M, N}, float32, nullptr, {});
 
   svd_impl(a, u, s, vt);
+
+  auto u_slice = slice(u, {0, 0}, {u.shape(0), s.shape(0)});
+  auto vt_slice = slice(vt, {0, 0}, {M, K});
+
   // Σ^+ = 1 ./ Σ aka element-wise reciprocal of Σ diagonal matrix
   // then, compute A^+ = VΣ^+U^*
   // Work-in-progress
   auto s_plus = 1.0 / s; // TODO: Only run on diagonal elements
+  // s_plus = diag(s_plus);
+  // s_plus = diagonal(s_plus);
   auto v = transpose(vt);
+  auto v_slice = transpose(vt_slice);
+  auto u_slice_transpose = transpose(u_slice);
   auto ut = transpose(u);
-  auto inner = matmul(ut, transpose(s_plus));
-  auto result = matmul(v, inner);
+  // auto inner = matmul(ut, s_plus);
+  auto result = matmul(v_slice, matmul(s_plus, u_slice_transpose));
+  //.. result = matmul(  5x4  , matmul( 4x4  ,     4x4    ));
+
+
+  result = matmul(v, matmul(s_plus, ut));
+
+  // u   is  4x5
+  // s   is  4x4
+  // vt  is  5x5
+  // s_pinv is 4x4
+
+  // ut  is  5x4
+  // v   is  5x5
+
+  // need: V @ S_pinv @ Ut
+  // From Python / NumPy
+  // >>> U.shape
+  // (4, 4)
+
+  // >>> S.shape
+  // (4,)
+
+  // >>> Vt.shape
+  // (4, 5)
+
+  // >>> A_pinv = Vt.T @ S_pinv @ U.T
+  // >>> 5x4 =    5x4 @  4x4   @ 4x4
+  
+// Actual: 
+// A_pinv = Vt.T @ S_pinv @ U.T
+// matmul(matmul(v, s_pinv), ut)
+
   pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
   pinv = result;
 }

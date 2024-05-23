@@ -364,7 +364,6 @@ TEST_CASE("test matrix pseudo-inverse") {
   // Square pinv
   const auto A_square = array({1.0, 2.0, 3.0, 4.0}, {2, 2});
   const auto A_square_plus = transpose(linalg::pinv(A_square, Device::cpu));
-  const auto identity_square = eye(A_square.shape(0));
 
   const auto expected_square = matmul(matmul(A_square, A_square_plus), A_square);
 
@@ -373,8 +372,7 @@ TEST_CASE("test matrix pseudo-inverse") {
   // Rectangular pinv
   const auto prng_key = random::key(42);
   const auto A = random::normal({4, 5}, prng_key);
-  const auto A_plus = transpose(linalg::pinv(A, Device::cpu));
-  const auto identity = eye(A.shape(0));
+  const auto A_plus = linalg::pinv(A, Device::cpu);
 
   const auto expected = matmul(matmul(A, A_plus), A);
 
