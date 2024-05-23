@@ -3,6 +3,7 @@
 #include <dlfcn.h>
 #include <mpi.h>
 
+#include "mlx/backend/common/copy.h"
 #include "mlx/distributed/distributed.h"
 #include "mlx/scheduler.h"
 
@@ -19,6 +20,16 @@
 namespace mlx::core::distributed {
 
 namespace {
+
+array ensure_row_contiguous(const array& arr) {
+  if (arr.flags().row_contiguous) {
+    return arr;
+  } else {
+    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+    copy(arr, arr_copy, CopyType::General);
+    return arr_copy;
+  }
+}
 
 struct MPIWrapper {
   MPIWrapper() {
@@ -244,7 +255,8 @@ Stream communication_stream() {
   return comm_stream;
 }
 
-void all_reduce_sum(Group group, const array& input, array& output) {
+void all_reduce_sum(Group group, const array& input_, array& output) {
+  array input = ensure_row_contiguous(input_);
   mpi().all_reduce(
       input.data<void>(),
       output.data<void>(),
@@ -254,7 +266,8 @@ void all_reduce_sum(Group group, const array& input, array& output) {
       to_comm(group));
 }
 
-void all_gather(Group group, const array& input, array& output) {
+void all_gather(Group group, const array& input_, array& output) {
+  array input = ensure_row_contiguous(input_);
   mpi().all_gather(
       input.data<void>(),
       input.size(),

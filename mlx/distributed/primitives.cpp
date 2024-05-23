@@ -10,20 +10,6 @@
 
 namespace mlx::core::distributed {
 
-namespace {
-
-array ensure_row_contiguous(const array& arr) {
-  if (arr.flags().row_contiguous) {
-    return arr;
-  } else {
-    array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-    copy(arr, arr_copy, CopyType::General);
-    return arr_copy;
-  }
-}
-
-} // namespace
-
 void AllReduce::eval_cpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -34,8 +20,7 @@ void AllReduce::eval_cpu(
 
   switch (reduce_type_) {
     case Sum:
-      distributed::detail::all_reduce_sum(
-          group(), ensure_row_contiguous(inputs[0]), outputs[0]);
+      distributed::detail::all_reduce_sum(group(), inputs[0], outputs[0]);
       break;
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
@@ -81,8 +66,7 @@ void AllGather::eval_cpu(
 
   outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
 
-  distributed::detail::all_gather(
-      group(), ensure_row_contiguous(inputs[0]), outputs[0]);
+  distributed::detail::all_gather(group(), inputs[0], outputs[0]);
 }
 
 std::pair<std::vector<array>, std::vector<int>> AllGather::vmap(
