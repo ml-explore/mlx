@@ -133,9 +133,15 @@ implicit_gemm_conv_2d(
   const int c_col = tid_x * BN;
   const int K = gemm_params->K;
   const int N = gemm_params->N;
+  const int C_per_group = params->C / params->groups;
+
+  // Groups
+  A += tid.z * C_per_group;
+  B += tid.z * N * K;
+  C += tid.z * N;
 
   B += c_col * K;
-  C += c_row * N + c_col;
+  C += c_row * (N * params->groups) + c_col;
 
   const int2 offsets_a(0, c_row);
   const int2 offsets_b(0, c_col);
@@ -171,7 +177,8 @@ implicit_gemm_conv_2d(
   // Store results to device memory
   short tgp_bm = min(BM, gemm_params->M - c_row);
   short tgp_bn = min(BN, gemm_params->N - c_col);
-  mma_op.store_result_safe(C, N, short2(tgp_bn, tgp_bm));
+  const int ldc = N * params->groups;
+  mma_op.store_result_safe(C, ldc, short2(tgp_bn, tgp_bm));
 }
 
 #define instantiate_implicit_conv_2d(                                          \

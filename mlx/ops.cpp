@@ -3180,9 +3180,9 @@ array conv_general(
     bool flip /* = false */,
     StreamOrDevice s /* = {} */) {
   // Run checks
-  if (groups != 1 && in.ndim() != 3) {
+  if (groups != 1 && in.ndim() != 3 && in.ndim() != 4) {
     throw std::invalid_argument(
-        "[conv] Can only handle groups != 1 in 1D convolutions.");
+        "[conv] Can only handle groups != 1 in 1D or 2D convolutions.");
   }
 
   int spatial_dims = in.ndim() - 2;
