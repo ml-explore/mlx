@@ -17,24 +17,25 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T>
+template <typename T, typename mask_t>
 inline void mask_matrix(
     T* data,
-    const bool* mask,
+    const mask_t* mask,
     int block_size,
     const int X,
     const int Y,
     const size_t X_data_str,
     const size_t Y_data_str,
     const size_t X_mask_str,
-    const size_t Y_mask_str) {
+    const size_t Y_mask_str,
+    const size_t mask_offset) {
   int tX = (X + block_size - 1) / block_size;
   int tY = (Y + block_size - 1) / block_size;
 
   for (int i = 0; i < tX; i++) {
     for (int j = 0; j < tY; j++) {
-      bool do_mask = mask[i * X_mask_str + j * Y_mask_str];
-      if (!do_mask) {
+      mask_t do_mask = mask[mask_offset + i * X_mask_str + j * Y_mask_str];
+      if (do_mask != 1) {
         int loc_x = i * block_size;
         int loc_y = j * block_size;
         T* data_block = data + loc_x * X_data_str + loc_y * Y_data_str;
@@ -43,7 +44,11 @@ inline void mask_matrix(
         int size_y = std::min(block_size, Y - loc_y);
         for (int ii = 0; ii < size_x; ii++) {
           for (int jj = 0; jj < size_y; jj++) {
-            data_block[ii * X_data_str + jj * Y_data_str] = T(0.);
+            if constexpr (std::is_same_v<mask_t, bool>) {
+              data_block[ii * X_data_str + jj * Y_data_str] = T(0.);
+            } else {
+              data_block[ii * X_data_str + jj * Y_data_str] *= do_mask;
+            }
           }
         }
       }
@@ -62,36 +67,39 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
 
   auto& a_pre = inputs[0];
   auto& b_pre = inputs[1];
-  auto& out_mask = inputs[2];
 
-  auto check_transpose = [](const array& arr, bool do_copy) {
-    auto stx = arr.strides()[arr.ndim() - 2];
-    auto sty = arr.strides()[arr.ndim() - 1];
-    if (stx == arr.shape(-1) && sty == 1) {
-      if (do_copy) {
-        array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-        copy(arr, arr_copy, CopyType::Vector);
-        return std::make_tuple(false, stx, arr_copy);
-      }
-      return std::make_tuple(false, stx, arr);
-    } else if (stx == 1 && sty == arr.shape(-2)) {
-      if (do_copy) {
-        array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-        copy(arr, arr_copy, CopyType::Vector);
-        return std::make_tuple(true, sty, arr_copy);
-      }
-      return std::make_tuple(true, sty, arr);
-    } else {
-      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
-      copy(arr, arr_copy, CopyType::General);
-      size_t stx = arr.shape(-1);
-      return std::make_tuple(false, stx, arr_copy);
-    }
-  };
+  auto check_transpose =
+      [](const array& arr, bool do_copy, bool expand_all = false) {
+        auto stx = arr.strides()[arr.ndim() - 2];
+        auto sty = arr.strides()[arr.ndim() - 1];
+        if (!expand_all && stx == arr.shape(-1) && sty == 1) {
+          if (do_copy) {
+            array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+            copy(arr, arr_copy, CopyType::Vector);
+            return std::make_tuple(false, stx, arr_copy);
+          }
+          return std::make_tuple(false, stx, arr);
+        } else if (!expand_all && stx == 1 && sty == arr.shape(-2)) {
+          if (do_copy) {
+            array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+            copy(arr, arr_copy, CopyType::Vector);
+            return std::make_tuple(true, sty, arr_copy);
+          }
+          return std::make_tuple(true, sty, arr);
+        } else {
+          array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+          copy(arr, arr_copy, CopyType::General);
+          size_t stx = arr.shape(-1);
+          return std::make_tuple(false, stx, arr_copy);
+        }
+      };
 
   bool has_op_mask = inputs.size() > 3;
-  auto [a_transposed, lda, a] = check_transpose(a_pre, has_op_mask);
-  auto [b_transposed, ldb, b] = check_transpose(b_pre, has_op_mask);
+  bool has_out_mask = inputs.size() == 3 || inputs.size() == 5;
+  auto [a_transposed, lda, a] =
+      check_transpose(a_pre, has_op_mask, inputs.back().dtype() != bool_);
+  auto [b_transposed, ldb, b] =
+      check_transpose(b_pre, has_op_mask, inputs.back().dtype() != bool_);
 
   size_t M = a.shape(-2);
   size_t N = b.shape(-1);
@@ -114,27 +122,42 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
                        int Y,
                        size_t X_data_str,
                        size_t Y_data_str) {
-    const bool* mask_ptr = mask.data<bool>() +
-        elem_to_loc(mask.shape(-1) * mask.shape(-2) * batch_idx,
-                    mask.shape(),
-                    mask.strides());
+    size_t mask_offset = elem_to_loc(
+        mask.shape(-1) * mask.shape(-2) * batch_idx,
+        mask.shape(),
+        mask.strides());
 
     size_t X_mask_str = mask.strides()[mask.ndim() - 2];
     size_t Y_mask_str = mask.strides()[mask.ndim() - 1];
 
-    return mask_matrix(
-        data,
-        mask_ptr,
-        block_size,
-        X,
-        Y,
-        X_data_str,
-        Y_data_str,
-        X_mask_str,
-        Y_mask_str);
+    if (mask.dtype() == bool_) {
+      return mask_matrix(
+          data,
+          mask.data<bool>(),
+          block_size,
+          X,
+          Y,
+          X_data_str,
+          Y_data_str,
+          X_mask_str,
+          Y_mask_str,
+          mask_offset);
+    } else {
+      return mask_matrix(
+          data,
+          mask.data<float>(),
+          block_size,
+          X,
+          Y,
+          X_data_str,
+          Y_data_str,
+          X_mask_str,
+          Y_mask_str,
+          mask_offset);
+    }
   };
 
-  for (int i = 0; i < (a.size() / (M * K)); ++i) {
+  for (int i = 0; i < (out.size() / (M * size_t(N))); ++i) {
     // Adjust pointer
     float* ai =
         a.data<float>() + elem_to_loc(M * K * i, a.shape(), a.strides());
@@ -144,7 +167,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
 
     // Zero out blocks in a and b if needed
     if (has_op_mask) {
-      auto& a_mask = inputs[3];
+      auto& a_mask = inputs[inputs.size() - 2];
       mask_array(
           a_mask,
           ai,
@@ -155,7 +178,7 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
           a_transposed ? 1 : lda,
           a_transposed ? lda : 1);
 
-      auto& b_mask = inputs[4];
+      auto& b_mask = inputs[inputs.size() - 1];
       mask_array(
           b_mask,
           bi,
@@ -186,7 +209,9 @@ void BlockMaskedMM::eval(const std::vector<array>& inputs, array& out) {
     );
 
     // Zero out blocks in out
-    mask_array(out_mask, ci, block_size_, i, M, N, N, 1);
+    if (has_out_mask) {
+      mask_array(inputs[2], ci, block_size_, i, M, N, N, 1);
+    }
   }
 }
 
