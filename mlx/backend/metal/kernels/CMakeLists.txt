@@ -110,6 +110,9 @@ if (NOT MLX_METAL_JIT)
     steel/conv/kernels/steel_conv.h
     steel/conv/kernels/steel_conv_general.h
     steel/gemm/gemm.h
+    steel/gemm/mma.h
+    steel/gemm/loader.h
+    steel/gemm/transforms.h
     steel/gemm/kernels/steel_gemm_fused.h
     steel/gemm/kernels/steel_gemm_masked.h
     steel/gemm/kernels/steel_gemm_splitk.h
