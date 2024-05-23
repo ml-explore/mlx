@@ -2,11 +2,6 @@
 
 #pragma once
 
-#ifndef MLX_METAL_JIT
-#include "mlx/backend/metal/kernels/steel/conv/params.h"
-#include "mlx/backend/metal/kernels/steel/utils.h"
-#endif
-
 #include "mlx/backend/metal/kernels/steel/defines.h"
 
 ///////////////////////////////////////////////////////////////////////////////

@@ -8,6 +8,7 @@
 #include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/steel/conv/conv.h"
 #include "mlx/backend/metal/kernels/steel/conv/params.h"
+#include "mlx/backend/metal/kernels/steel/utils.h"
 #include "mlx/backend/metal/kernels/steel/conv/kernels/steel_conv_general.h"
 
 using namespace metal;
