@@ -25,6 +25,7 @@ else()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/no_cpu)
 endif()
 
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/distributed)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/io)
 if (MLX_BUILD_ACCELERATE)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/backend/accelerate)

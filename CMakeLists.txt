@@ -167,6 +167,11 @@ else()
   set(MLX_BUILD_ACCELERATE OFF)
 endif()
 
+find_package(MPI)
+if (MPI_FOUND)
+    target_include_directories(mlx PRIVATE ${MPI_INCLUDE_PATH})
+endif()
+
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
 
 target_include_directories(
