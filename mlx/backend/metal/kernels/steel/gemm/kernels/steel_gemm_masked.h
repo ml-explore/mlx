@@ -423,7 +423,6 @@ block_masked_gemm(
   }
 }
 
-
 template <
     typename T,
     int BM,
