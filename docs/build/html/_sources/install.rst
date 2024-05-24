@@ -163,6 +163,8 @@ should point to the path to the built metal library.
      - ON
    * - MLX_BUILD_GGUF
      - ON
+   * - MLX_METAL_JIT
+     - OFF
 
 .. note::
 
@@ -196,9 +198,18 @@ GGUF, you can do:
   cmake ..
     -DCMAKE_BUILD_TYPE=MinSizeRel \
     -DBUILD_SHARED_LIBS=ON \
-    -DMLX_BUILD_CPU=ON \
+    -DMLX_BUILD_CPU=OFF \
     -DMLX_BUILD_SAFETENSORS=OFF \
-    -DMLX_BUILD_GGUF=OFF
+    -DMLX_BUILD_GGUF=OFF \
+    -DMLX_METAL_JIT=ON
+
+THE `MLX_METAL_JIT` flag minimizes the size of the MLX Metal library which
+contains pre-built GPU kernels. This substantially reduces the size of the
+Metal library by run-time compiling kernels the first time they are used in MLX
+on a given machine. Note run-time compilation incurs a cold-start cost which can
+be anwywhere from a few hundred millisecond to a few seconds depending on the
+application. Once a kernel is compiled, it will be cached by the system. The
+Metal kernel cache persists accross reboots.
 
 Troubleshooting
 ^^^^^^^^^^^^^^^
