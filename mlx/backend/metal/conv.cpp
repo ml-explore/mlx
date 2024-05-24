@@ -7,6 +7,7 @@
 
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/conv/params.h"
 #include "mlx/backend/metal/matmul.h"
@@ -335,7 +336,17 @@ void implicit_gemm_conv_2D_gpu(
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel = get_steel_conv_kernel(
+      d,
+      kname.str(),
+      out,
+      bm,
+      bn,
+      bk,
+      wm,
+      wn,
+      n_channel_specialization,
+      small_filter);
   compute_encoder->setComputePipelineState(kernel);
 
   // Deduce grid launch dimensions
@@ -488,7 +499,8 @@ void implicit_gemm_conv_2D_general_gpu(
 
   // Encode and dispatch kernel
   auto& compute_encoder = d.get_command_encoder(s.index);
-  auto kernel = d.get_kernel(kname.str());
+  auto kernel =
+      get_steel_conv_general_kernel(d, kname.str(), out, bm, bn, bk, wm, wn);
   compute_encoder->setComputePipelineState(kernel);
 
   // Deduce grid launch dimensions

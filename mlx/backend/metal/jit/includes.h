@@ -23,4 +23,12 @@ const char* softmax();
 const char* sort();
 const char* reduce();
 
+const char* gemm();
+const char* steel_gemm_fused();
+const char* steel_gemm_masked();
+const char* steel_gemm_splitk();
+const char* conv();
+const char* steel_conv();
+const char* steel_conv_general();
+
 } // namespace mlx::core::metal

@@ -8,9 +8,10 @@
 OUTPUT_DIR=$1
 CC=$2
 SRC_DIR=$3
-SRC_NAME=$4
+SRC_FILE=$4
 CFLAGS=$5
-INPUT_FILE=${SRC_DIR}/mlx/backend/metal/kernels/${SRC_NAME}.h
+SRC_NAME=$(basename -- "${SRC_FILE}")
+INPUT_FILE=${SRC_DIR}/mlx/backend/metal/kernels/${SRC_FILE}.h
 OUTPUT_FILE=${OUTPUT_DIR}/${SRC_NAME}.cpp
 
 mkdir -p $OUTPUT_DIR

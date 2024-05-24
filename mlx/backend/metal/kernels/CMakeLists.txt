@@ -1,13 +1,12 @@
 set(
   HEADERS
-  ${CMAKE_CURRENT_SOURCE_DIR}/atomic.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/bf16.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/bf16_math.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/complex.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/defines.h
-  ${CMAKE_CURRENT_SOURCE_DIR}/utils.h
+  bf16.h
+  bf16_math.h
+  complex.h
+  defines.h
+  utils.h
+  steel/conv/params.h
 )
-
 
 set(
   KERNELS
@@ -41,6 +40,7 @@ set(
 set(
   HEADERS 
   ${HEADERS}
+  atomic.h
   arange.h
   unary_ops.h
   unary.h
@@ -89,14 +89,40 @@ foreach(KERNEL ${KERNELS})
   set(KERNEL_AIR ${KERNEL}.air ${KERNEL_AIR})
 endforeach()
 
-file(GLOB_RECURSE STEEL_KERNELS ${CMAKE_CURRENT_SOURCE_DIR}/steel/*.metal)
-file(GLOB_RECURSE STEEL_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/steel/*.h)
-
-foreach(KERNEL ${STEEL_KERNELS})
-  cmake_path(GET KERNEL STEM TARGET)
-  build_kernel_base(${TARGET} ${KERNEL} "${STEEL_HEADERS}")
-  set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
-endforeach()
+if (NOT MLX_METAL_JIT)
+  set(
+    STEEL_KERNELS
+    ${CMAKE_CURRENT_SOURCE_DIR}/steel/conv/kernels/steel_conv.metal
+    ${CMAKE_CURRENT_SOURCE_DIR}/steel/conv/kernels/steel_conv_general.metal
+    ${CMAKE_CURRENT_SOURCE_DIR}/steel/gemm/kernels/steel_gemm_fused.metal
+    ${CMAKE_CURRENT_SOURCE_DIR}/steel/gemm/kernels/steel_gemm_masked.metal
+    ${CMAKE_CURRENT_SOURCE_DIR}/steel/gemm/kernels/steel_gemm_splitk.metal
+  )
+  set(
+    STEEL_HEADERS 
+    steel/defines.h
+    steel/utils.h
+    steel/conv/conv.h
+    steel/conv/loader.h
+    steel/conv/loaders/loader_channel_l.h
+    steel/conv/loaders/loader_channel_n.h
+    steel/conv/loaders/loader_general.h
+    steel/conv/kernels/steel_conv.h
+    steel/conv/kernels/steel_conv_general.h
+    steel/gemm/gemm.h
+    steel/gemm/mma.h
+    steel/gemm/loader.h
+    steel/gemm/transforms.h
+    steel/gemm/kernels/steel_gemm_fused.h
+    steel/gemm/kernels/steel_gemm_masked.h
+    steel/gemm/kernels/steel_gemm_splitk.h
+  )
+  foreach(KERNEL ${STEEL_KERNELS})
+    cmake_path(GET KERNEL STEM TARGET)
+    build_kernel_base(${TARGET} ${KERNEL} "${STEEL_HEADERS}")
+    set(KERNEL_AIR ${TARGET}.air ${KERNEL_AIR})
+  endforeach()
+endif()
 
 add_custom_command(
   OUTPUT ${MLX_METAL_PATH}/mlx.metallib

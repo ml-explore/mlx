@@ -79,4 +79,78 @@ MTL::ComputePipelineState* get_reduce_kernel(
     const array& in,
     const array& out);
 
+MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& hash_name,
+    const metal::MTLFCList& func_consts,
+    const array& out,
+    bool transpose_a,
+    bool transpose_b,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn);
+
+MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& out,
+    bool transpose_a,
+    bool transpose_b,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn,
+    bool mn_aligned,
+    bool k_aligned);
+
+MTL::ComputePipelineState* get_steel_gemm_splitk_accum_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& in,
+    const array& out,
+    bool axbpy);
+
+MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    const std::optional<array>& mask_out,
+    const std::optional<array>& mask_op,
+    bool transpose_a,
+    bool transpose_b,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn,
+    bool mn_aligned,
+    bool k_aligned);
+
+MTL::ComputePipelineState* get_steel_conv_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn,
+    int n_channel_specialization,
+    bool small_filter);
+
+MTL::ComputePipelineState* get_steel_conv_general_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    int bm,
+    int bn,
+    int bk,
+    int wm,
+    int wn);
+
 } // namespace mlx::core
