@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.nn.Conv1d &#8212; MLX 0.13.1 documentation</title>
+    <title>mlx.nn.Conv1d &#8212; MLX 0.14.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../../_static/documentation_options.js?v=aec58b01"></script>
+    <script src="../../../_static/documentation_options.js?v=8eac8a5b"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.13.1 documentation - Home"/>
-    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.13.1 documentation - Home"/>`);</script>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.14.0 documentation - Home"/>
+    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.14.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -271,7 +271,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.block_sparse_mm.html">mlx.core.block_sparse_mm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.broadcast_to.html">mlx.core.broadcast_to</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.ceil.html">mlx.core.ceil</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.clip.html">mlx.core.clip</a></li>
@@ -305,6 +304,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.floor.html">mlx.core.floor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.floor_divide.html">mlx.core.floor_divide</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.full.html">mlx.core.full</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.gather_mm.html">mlx.core.gather_mm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.gather_qmm.html">mlx.core.gather_qmm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.identity.html">mlx.core.identity</a></li>
@@ -385,6 +386,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.tensordot.html">mlx.core.tensordot</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.tile.html">mlx.core.tile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.topk.html">mlx.core.topk</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.trace.html">mlx.core.trace</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.transpose.html">mlx.core.transpose</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.tri.html">mlx.core.tri</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.tril.html">mlx.core.tril</a></li>
@@ -814,7 +816,7 @@ document.write(`
 <dt class="sig sig-object py" id="mlx.nn.Conv1d">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">Conv1d</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">in_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">out_channels</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">kernel_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">stride</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">padding</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dilation</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bias</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.Conv1d" title="Link to this definition">#</a></dt>
 <dd><p>Applies a 1-dimensional convolution over the multi-channel input sequence.</p>
-<p>The channels are expected to be last i.e. the input shape should be <code class="docutils literal notranslate"><span class="pre">NLC</span></code> where</p>
+<p>The channels are expected to be last i.e. the input shape should be <code class="docutils literal notranslate"><span class="pre">NLC</span></code> where:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">N</span></code> is the batch dimension</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">L</span></code> is the sequence length</p></li>
