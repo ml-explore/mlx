@@ -4321,8 +4321,9 @@ array bitwise_impl(
   }
   auto inputs =
       broadcast_arrays(astype(a, out_type, s), astype(b, out_type, s), s);
+  auto& out_shape = inputs[0].shape();
   return array(
-      a.shape(),
+      out_shape,
       out_type,
       std::make_shared<BitwiseBinary>(to_stream(s), op),
       std::move(inputs));
