@@ -3968,9 +3968,9 @@ void init_ops(nb::module_& m) {
             a (array): Input array or scalar.
             b (array): Input array or scalar.
             block_size (int): Size of blocks to be masked. Must be ``32`` or ``64`` (default: ``64``)
-            mask_out (array, optional): Boolean mask for output (default: ``None``)
-            mask_lhs (array, optional): Boolean mask for a (default: ``None``)
-            mask_rhs (array, optional): Boolean mask for b (default: ``None``)
+            mask_out (array, optional): Mask for output (default: ``None``)
+            mask_lhs (array, optional): Mask for a (default: ``None``)
+            mask_rhs (array, optional): Mask for b (default: ``None``)
 
       )pbdoc");
   m.def(
