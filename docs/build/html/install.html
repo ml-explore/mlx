@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Build and Install &#8212; MLX 0.13.1 documentation</title>
+    <title>Build and Install &#8212; MLX 0.14.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="_static/documentation_options.js?v=aec58b01"></script>
+    <script src="_static/documentation_options.js?v=8eac8a5b"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.13.1 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.13.1 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.14.0 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.14.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -271,7 +271,6 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.bitwise_or.html">mlx.core.bitwise_or</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.bitwise_xor.html">mlx.core.bitwise_xor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.block_masked_mm.html">mlx.core.block_masked_mm</a></li>
-<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.block_sparse_mm.html">mlx.core.block_sparse_mm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.broadcast_to.html">mlx.core.broadcast_to</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.ceil.html">mlx.core.ceil</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.clip.html">mlx.core.clip</a></li>
@@ -305,6 +304,8 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.floor.html">mlx.core.floor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.floor_divide.html">mlx.core.floor_divide</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.full.html">mlx.core.full</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.gather_mm.html">mlx.core.gather_mm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.gather_qmm.html">mlx.core.gather_qmm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.greater.html">mlx.core.greater</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.identity.html">mlx.core.identity</a></li>
@@ -385,6 +386,7 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.tensordot.html">mlx.core.tensordot</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.tile.html">mlx.core.tile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.topk.html">mlx.core.topk</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.trace.html">mlx.core.trace</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.transpose.html">mlx.core.transpose</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.tri.html">mlx.core.tri</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.tril.html">mlx.core.tril</a></li>
@@ -971,6 +973,9 @@ should point to the path to the built metal library.</p>
 <tr class="row-even"><td><p>MLX_BUILD_GGUF</p></td>
 <td><p>ON</p></td>
 </tr>
+<tr class="row-odd"><td><p>MLX_METAL_JIT</p></td>
+<td><p>OFF</p></td>
+</tr>
 </tbody>
 </table>
 <div class="admonition note">
@@ -997,11 +1002,19 @@ GGUF, you can do:</p>
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>cmake<span class="w"> </span>..
 <span class="w">  </span>-DCMAKE_BUILD_TYPE<span class="o">=</span>MinSizeRel<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-DBUILD_SHARED_LIBS<span class="o">=</span>ON<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-DMLX_BUILD_CPU<span class="o">=</span>ON<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DMLX_BUILD_CPU<span class="o">=</span>OFF<span class="w"> </span><span class="se">\</span>
 <span class="w">  </span>-DMLX_BUILD_SAFETENSORS<span class="o">=</span>OFF<span class="w"> </span><span class="se">\</span>
-<span class="w">  </span>-DMLX_BUILD_GGUF<span class="o">=</span>OFF
+<span class="w">  </span>-DMLX_BUILD_GGUF<span class="o">=</span>OFF<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-DMLX_METAL_JIT<span class="o">=</span>ON
 </pre></div>
 </div>
+<p>THE <cite>MLX_METAL_JIT</cite> flag minimizes the size of the MLX Metal library which
+contains pre-built GPU kernels. This substantially reduces the size of the
+Metal library by run-time compiling kernels the first time they are used in MLX
+on a given machine. Note run-time compilation incurs a cold-start cost which can
+be anwywhere from a few hundred millisecond to a few seconds depending on the
+application. Once a kernel is compiled, it will be cached by the system. The
+Metal kernel cache persists accross reboots.</p>
 </section>
 </section>
 <section id="id2">
