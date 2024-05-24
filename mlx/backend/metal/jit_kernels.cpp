@@ -395,16 +395,19 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    auto out_mask_type = mask_out.has_value() ? get_type_string(*mask_out) : "nomask_t";
-    auto op_mask_type = mask_op.has_value() ? get_type_string(*mask_op) : "nomask_t";
+    auto out_mask_type = mask_out.has_value()
+        ? get_type_string((*mask_out).dtype())
+        : "nomask_t";
+    auto op_mask_type =
+        mask_op.has_value() ? get_type_string((*mask_op).dtype()) : "nomask_t";
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_masked()
                   << fmt::format(
                          steel_gemm_masked_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
-                         "outmasktype" = out_mask_type,
-                         "opmasktype" = op_mask_type,
+                         "outmasktype"_a = out_mask_type,
+                         "opmasktype"_a = op_mask_type,
                          "bm"_a = bm,
                          "bn"_a = bn,
                          "bk"_a = bk,
