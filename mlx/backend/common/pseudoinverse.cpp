@@ -7,6 +7,12 @@
 #include "mlx/linalg.h"
 #include "mlx/random.h"
 
+#ifdef ACCELERATE_NEW_LAPACK
+#include <Accelerate/Accelerate.h>
+#else
+#include <lapack.h>
+#endif
+
 // #include "mlx/primitives.h"
 // #include "mlx/fast_primitives.h"
 
@@ -144,16 +150,14 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   array result({N, K}, float32, nullptr, {});
   result.set_data(allocator::malloc_or_wait(result.nbytes()));
 
-  // svd_impl(a, u, s, vt);
-
-  auto outs = linalg::svd(a);
-  auto U = outs[0];
-  auto S = outs[1];
-  auto Vt = outs[2];
-  auto V = slice(transpose(Vt), {0, 0}, {N, K});
-  result = matmul(V, matmul(diag(1.0 / S), transpose(U)));
-  pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
-  pinv = result;
+  // auto outs = linalg::svd(a);
+  // auto U = outs[0];
+  // auto S = outs[1];
+  // auto Vt = outs[2];
+  // auto V = slice(transpose(Vt), {0, 0}, {N, K});
+  // result = matmul(V, matmul(diag(1.0 / S), transpose(U)));
+  // pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
+  // pinv = result;
 
   // array v({N, K}, float32, nullptr, {});
   // auto x = slice(transpose(vt), {0, 0}, {N, K});
@@ -180,7 +184,43 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   // auto result = matmul(v_slice, matmul(s_pinv, u_slice_transpose));
   // pinv = matmul(matmul(v, diag(1.0/s)),  transpose(u));
 
-  // pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
+
+  // Compute SVD
+  // LAPACKE_dgesvd(LAPACK_ROW_MAJOR, 'A', 'A', m, n, A, lda, s, u, ldu, vt, ldvt, superb);
+  svd_impl(a, u, s, vt);
+
+  // Invert the singular values
+  float *s_data = s.data<float>();
+  for (int i = 0; i < k; i++) {
+      if (s_data[i] > 1e-10) {
+          s_data[i] = 1.0 / s_data[i];
+      } else {
+          s_data[i] = 0.0;
+      }
+  }
+
+  // Compute U * Sigma^+
+  // A of shape M x N. The leading dimension is N since lapack receives Aᵀ.
+  const int lda = n;
+  // U of shape M x M. (N x N in lapack).
+  const int ldu = n;
+  // Vᵀ of shape N x N. (M x M in lapack).
+  const int ldvt = m;
+
+
+  float *u_data = u.data<float>();
+  for (int i = 0; i < m; i++) {
+      for (int j = 0; j < k; j++) {
+          u_data[i * ldu + j] *= s_data[j];
+      }
+  }
+
+  // Compute A^+ = V^T * (U * Sigma^+)
+  pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
+  float *pinv_data = pinv.data<float>();
+  float *vt_data = vt.data<float>();
+  cblas_sgemm(CblasRowMajor, CblasTrans, CblasNoTrans, n, m, k, 1.0, vt_data, ldvt, u_data, ldu, 0.0, pinv_data, m);
+
   // copy(vt, pinv, vt.flags().row_contiguous ? CopyType::Vector : CopyType::General);
 }
 
