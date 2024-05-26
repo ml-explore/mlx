@@ -4,9 +4,14 @@
 #include "mlx/backend/common/svd.h"
 #include "mlx/primitives.h"
 #include "mlx/ops.h"
+#include "mlx/linalg.h"
+#include "mlx/random.h"
 
 // #include "mlx/primitives.h"
 // #include "mlx/fast_primitives.h"
+
+using namespace mlx::core::linalg;
+using namespace mlx::core::random;
 
 namespace mlx::core {
 
@@ -20,80 +25,163 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   // reciprocal of each non-zero element on the diagonal, leaving the zeros in
   // place, and then transposing the matrix
 
-  // Rows and cols of the original matrix in row-major order.
+  // Is zero: // const auto outs = mlx::core::linalg::svd(a);
+  // const auto& U = outs[0];
+  // const auto& S = outs[1];
+  // const auto& Vt_full = outs[2];
+
+  // // lapack clobbers the input, so we have to make a copy.
+  // array in(a.shape(), float32, nullptr, {});
+  // copy(a, in, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+
+  // svd_impl(in, U, S, Vt_full);
+
+  // auto Vt = slice(Vt_full, {0, 0}, {K, N});
+
+  // auto S_pinv = diag(1.0 / S);
+  // auto Ut = transpose(U);
+  // auto V = transpose(Vt);
+  // auto a_pinv = matmul(V, matmul(S_pinv, Ut));
+  // // auto A_again = matmul(matmul(a, a_pinv), a);
+  // // auto isClose = allclose(a, A_again).item<bool>();
+
+  // pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
+  // pinv = matmul(V, matmul(S_pinv, Ut));
+  // pinv = a_pinv;
+
+  // const auto m = a.shape(-2);
+  // const auto n = a.shape(-1);
+  // const auto k = std::min(m, n);
+  // const auto rank = a.ndim();
+
+  // std::vector<int> u_shape = a.shape();
+  // u_shape[rank - 2] = m;
+  // u_shape[rank - 1] = m;
+
+  
+  // std::vector<int> s_shape = a.shape();
+  // s_shape.pop_back();
+  // s_shape[rank - 2] = std::min(m, n);
+
+  // std::vector<int> vt_shape = a.shape();
+  // vt_shape[rank - 2] = n;
+  // vt_shape[rank - 1] = n;
+
+  // // array u(std::vector<int>{m, m}, float32, nullptr, {});
+  // // array s(std::vector<int>{k, 1}, float32, nullptr, {});
+  // // array vt_full(std::vector<int>{n, n}, float32, nullptr, {});
+
+  // array u(u_shape, float32, nullptr, {});
+  // array s(s_shape, float32, nullptr, {});
+  // array vt_full(vt_shape, float32, nullptr, {});
+
+  // // const auto& U = outs[0];
+  // // const auto& S = outs[1];
+  // // const auto& Vt_full = outs[2];
+
+  // // lapack clobbers the input, so we have to make a copy.
+  // array in(a.shape(), float32, nullptr, {});
+  // copy(a, in, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+
+  // svd_impl(in, u, s, vt_full);
+
+  // auto vt = slice(vt_full, {0, 0}, {k, n});
+
+  // const float *matrix = a.data<float>();
+
+  // auto s_pinv = diag(1.0 / s);
+  // auto ut = transpose(u);
+  // auto v = transpose(vt);
+  // auto a_pinv = matmul(v, matmul(s_pinv, ut));
+  // // auto A_again = matmul(matmul(a, a_pinv), a);
+  // // auto isClose = allclose(a, A_again).item<bool>();
+
+  // pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
+  // pinv = matmul(v, matmul(s_pinv, ut));
+
+  // /// Hack to a.t
+  // auto at = transpose(a);
+  // copy(at, pinv, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+
+  // const auto prng_key = random::key(42);
+  // const auto rand_pinv = random::normal(a_pinv.shape(), prng_key);
+  
+  // //copy(rand_pinv, pinv, rand_pinv.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+
+  // // pinv = rand_pinv;
+
+  /////////////////////////////////////////////// OLD COMMIT ////////////////////////
+  
+  const auto m = a.shape(-2);
+  const auto n = a.shape(-1);
+  const auto k = std::min(m, n);
+  const auto rank = a.ndim();
+
+  std::vector<int> u_shape = a.shape();
+  u_shape[rank - 2] = m;
+  u_shape[rank - 1] = m;
+
+  
+  std::vector<int> s_shape = a.shape();
+  s_shape.pop_back();
+  s_shape[rank - 2] = std::min(m, n);
+
+  std::vector<int> vt_shape = a.shape();
+  vt_shape[rank - 2] = n;
+  vt_shape[rank - 1] = n;
+
   const int M = a.shape(-2);
   const int N = a.shape(-1);
   const int K = std::min(M, N);
 
-  const int pinv_shape_M = pinv.shape(-2);
-  const int pinv_shape_N = pinv.shape(-1);
-  if (pinv_shape_N != M) { // Failing because pinv is not 5x4 -- it is showing up as 4x5
-    std::stringstream ss;
-    ss << "unexpected N for pinv; got N " << pinv_shape_N << " but expected N is " << N;
-    throw std::runtime_error(ss.str());
-  }
+  // array u(u_shape, float32, nullptr, {});
+  // array s(s_shape, float32, nullptr, {});
+  // array vt(vt_shape, float32, nullptr, {});
 
-  // A of shape M x N. The leading dimension is N since lapack receives Aᵀ.
-  const int lda = N;
-  // U of shape M x M. (N x N in lapack).
-  const int ldu = N;
-  // Vᵀ of shape N x N. (M x M in lapack).
-  const int ldvt = M;
+  array u(u_shape, float32, nullptr, {});
+  array s(s_shape, float32, nullptr, {});
+  array vt(vt_shape, float32, nullptr, {});
+  array result({N, K}, float32, nullptr, {});
+  result.set_data(allocator::malloc_or_wait(result.nbytes()));
 
-  array u(std::vector<int>{M, M}, float32, nullptr, {});
-  array s(std::vector<int>{K, K}, float32, nullptr, {});
-  array vt(std::vector<int>{M, N}, float32, nullptr, {});
+  // svd_impl(a, u, s, vt);
 
-  svd_impl(a, u, s, vt);
-
-  auto u_slice = slice(u, {0, 0}, {u.shape(0), s.shape(0)});
-  auto vt_slice = slice(vt, {0, 0}, {M, K});
-
-  // Σ^+ = 1 ./ Σ aka element-wise reciprocal of Σ diagonal matrix
-  // then, compute A^+ = VΣ^+U^*
-  // Work-in-progress
-  auto s_plus = 1.0 / s; // TODO: Only run on diagonal elements
-  // s_plus = diag(s_plus);
-  // s_plus = diagonal(s_plus);
-  auto v = transpose(vt);
-  auto v_slice = transpose(vt_slice);
-  auto u_slice_transpose = transpose(u_slice);
-  auto ut = transpose(u);
-  // auto inner = matmul(ut, s_plus);
-  auto result = matmul(v_slice, matmul(s_plus, u_slice_transpose));
-  //.. result = matmul(  5x4  , matmul( 4x4  ,     4x4    ));
-
-
-  result = matmul(v, matmul(s_plus, ut));
-
-  // u   is  4x5
-  // s   is  4x4
-  // vt  is  5x5
-  // s_pinv is 4x4
-
-  // ut  is  5x4
-  // v   is  5x5
-
-  // need: V @ S_pinv @ Ut
-  // From Python / NumPy
-  // >>> U.shape
-  // (4, 4)
-
-  // >>> S.shape
-  // (4,)
-
-  // >>> Vt.shape
-  // (4, 5)
-
-  // >>> A_pinv = Vt.T @ S_pinv @ U.T
-  // >>> 5x4 =    5x4 @  4x4   @ 4x4
-  
-// Actual: 
-// A_pinv = Vt.T @ S_pinv @ U.T
-// matmul(matmul(v, s_pinv), ut)
-
+  auto outs = linalg::svd(a);
+  auto U = outs[0];
+  auto S = outs[1];
+  auto Vt = outs[2];
+  auto V = slice(transpose(Vt), {0, 0}, {N, K});
+  result = matmul(V, matmul(diag(1.0 / S), transpose(U)));
   pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
   pinv = result;
+
+  // array v({N, K}, float32, nullptr, {});
+  // auto x = slice(transpose(vt), {0, 0}, {N, K});
+
+  // result = matmul(x, matmul(diag(1.0 / s), transpose(u)));
+
+  // copy(slice(transpose(vt), {0, 0}, {N, K}), v, CopyType::General);
+  // copy(vt, v, vt.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  // v = transpose(v);
+
+  // auto result = matmul(matmul(v_slice, diag(1.0/s)),  transpose(u));
+  // // Σ^+ = 1 ./ Σ aka element-wise reciprocal of Σ diagonal matrix
+  // // then, compute A^+ = VΣ^+U^*
+  // // Work-in-progress
+  // auto s_pinv = diag(1.0 / s);
+  // // auto s_plus = 1.0 / s; // TODO: Only run on diagonal elements
+  // // s_plus = diag(s_plus);
+  // // s_plus = diagonal(s_plus);
+  // auto v = transpose(vt);
+  // auto v_slice = transpose(vt_slice);
+  // auto u_slice_transpose = transpose(u_slice);
+  // auto ut = transpose(u);
+  // // auto inner = matmul(ut, s_plus);
+  // auto result = matmul(v_slice, matmul(s_pinv, u_slice_transpose));
+  // pinv = matmul(matmul(v, diag(1.0/s)),  transpose(u));
+
+  // pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
+  // copy(vt, pinv, vt.flags().row_contiguous ? CopyType::Vector : CopyType::General);
 }
 
 void PseudoInverse::eval(const std::vector<array>& inputs, array& output) {

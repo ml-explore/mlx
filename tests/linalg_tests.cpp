@@ -361,6 +361,20 @@ TEST_CASE("test matrix pseudo-inverse") {
   CHECK_NOTHROW(
       linalg::pinv(array({1.0, 2.0, 3.0, 4.0, 5.0, 6.0}, {2, 3}), Device::cpu));
 
+  // Rectangular pinv
+  const auto prng_key = random::key(42);
+  const auto A = random::normal({4, 5}, prng_key);
+  const auto A_zeros = zeros_like(A, Device::cpu);
+  CHECK_FALSE(allclose(A_zeros, A, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
+
+  const auto A_pinv = linalg::pinv(A, Device::cpu);
+  const auto zeros = zeros_like(A_pinv, Device::cpu);
+  CHECK_FALSE(allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
+
+  const auto expected = matmul(matmul(A, A_pinv), A);
+
+  CHECK(allclose(expected, A, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
+
   // Square pinv
   const auto A_square = array({1.0, 2.0, 3.0, 4.0}, {2, 2});
   const auto A_square_plus = transpose(linalg::pinv(A_square, Device::cpu));
@@ -368,13 +382,4 @@ TEST_CASE("test matrix pseudo-inverse") {
   const auto expected_square = matmul(matmul(A_square, A_square_plus), A_square);
 
   CHECK(allclose(expected_square, A_square, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
-
-  // Rectangular pinv
-  const auto prng_key = random::key(42);
-  const auto A = random::normal({4, 5}, prng_key);
-  const auto A_plus = linalg::pinv(A, Device::cpu);
-
-  const auto expected = matmul(matmul(A, A_plus), A);
-
-  CHECK(allclose(expected, A, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
 }

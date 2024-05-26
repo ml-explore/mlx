@@ -309,16 +309,33 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
 
   const auto m = a.shape(-2);
   const auto n = a.shape(-1);
-  const auto rank = a.ndim();
+  const auto k = std::min(m, n);
 
-  std::vector<int> u_shape = a.shape();
-  u_shape[rank - 2] = m;
-  u_shape[rank - 1] = m;
+// TODO: ndim > 2
+//// Expect:
+// >>> expect pinv_shape
+// [4, 6, 5]
+//// When:
+// >>> a.shape
+// (4, 5, 6)
+// TODO: logic:
+// >>> pinv_shape = a.shape
+// >>> m = a.shape[-2]
+// >>> n = a.shape[-1]
+// >>> k = min(m, n)
+// >>> rank = len(a.shape)
+// >>> pinv_shape = list(a.shape)
+// >>> pinv_shape[rank - 2] = n
+// >>> pinv_shape[rank - 1] = k
 
-  auto shape = a.shape();
-  std::reverse(shape.begin(), shape.end());
-  auto out_shape = shape;
-  return array(out_shape, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+  auto out = array::make_arrays(
+      {a.shape(), a.shape()},
+      {a.dtype(), a.dtype()},
+      std::make_unique<PseudoInverse>(to_stream(s)),
+      {astype(a, a.dtype(), s)});
+  //return std::make_pair(out[0], out[1]);
+
+  return array({n, k}, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
 }
 
 } // namespace mlx::core::linalg
