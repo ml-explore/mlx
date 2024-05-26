@@ -294,11 +294,10 @@ void init_linalg(nb::module_& parent_module) {
       "pinv",
       &pinv,
       "a"_a,
-      py::kw_only(),
-      "stream"_a = none,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig("def pinv(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        pinv(a: array, *, stream: Union[None, Stream, Device] = None) -> array
-
         Compute the Moore-Penrose pseudo inverse of a matrix.
 
         // TODO: Description details
