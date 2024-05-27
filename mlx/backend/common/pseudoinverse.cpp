@@ -55,14 +55,14 @@ void pseudoinverse_impl(const array& a, array& pinv) {
       m,
       k,
       m,
-      1.0f,
+      1.0f, // alpha
       sigma_inv,
-      m,
+      m, // ld_sigma_inv
       u.data<float>(),
-      m,
-      0.0f,
+      m, // ldu
+      0.0f, // beta
       u_sigma_inv.data<float>(),
-      k);
+      k); // ld_u_sigma_inv
 
   // Compute A^+ = V * (Sigma^+ * U.T)
   pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
@@ -76,13 +76,13 @@ void pseudoinverse_impl(const array& a, array& pinv) {
         m,
         1.0f, // alpha
         vt.data<float>() + elem_to_loc(n * m * i, vt.shape(), vt.strides()),
-        n, // lda,
+        n, // ldv
         u_sigma_inv.data<float>() +
             elem_to_loc(m * k * i, u_sigma_inv.shape(), u_sigma_inv.strides()),
-        m, // ldb,
+        k, // ld_u_sigma_inv
         0.0f, // beta
         pinv.data<float>() + n * k * i,
-        pinv.shape(-1) // ldc
+        pinv.shape(-1) // ld_pinv
     );
   }
 }
