@@ -35,7 +35,7 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   array vt(vt_shape, float32, nullptr, {});
   svd_impl(a, u, s, vt);
 
-  // // Invert the singular values
+  // Invert the singular values
   float* s_data = s.data<float>();
   // Create a diagonal matrix for the inverted singular values
   float* sigma_inv = (float*)calloc(k * k, sizeof(float));
@@ -48,10 +48,6 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   // Compute Sigma^+ * U.T
   array u_sigma_inv({m, k}, float32, nullptr, {});
   u_sigma_inv.set_data(allocator::malloc_or_wait(u_sigma_inv.nbytes()));
-  float* u_sigma_inv_data = u_sigma_inv.data<float>();
-
-  float* u_data = u.data<float>();
-  const int ld_sigma_inv = m;
   cblas_sgemm(
       CblasRowMajor,
       CblasNoTrans,
@@ -61,18 +57,15 @@ void pseudoinverse_impl(const array& a, array& pinv) {
       m,
       1.0f,
       sigma_inv,
-      ld_sigma_inv,
-      u_data,
+      m,
+      u.data<float>(),
       m,
       0.0f,
-      u_sigma_inv_data,
+      u_sigma_inv.data<float>(),
       k);
 
-  // Compute A^+ = V^T * (Sigma^+ * U.T)
+  // Compute A^+ = V * (Sigma^+ * U.T)
   pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
-  float* pinv_data = pinv.data<float>();
-  float* vt_data = vt.data<float>();
-
   for (int i = 0; i < (vt.size() / (n * m)); ++i) {
     cblas_sgemm(
         CblasRowMajor,

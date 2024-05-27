@@ -2106,7 +2106,7 @@ class Cholesky : public UnaryPrimitive {
 
 class PseudoInverse : public UnaryPrimitive {
  public:
-  explicit PseudoInverse(Stream stream) : UnaryPrimitive(stream){};
+  explicit PseudoInverse(Stream stream) : UnaryPrimitive(stream) {};
 
   void eval_cpu(const std::vector<array>& inputs, array& output) override;
   void eval_gpu(const std::vector<array>& inputs, array& output) override;
