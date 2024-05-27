@@ -296,11 +296,15 @@ void init_linalg(nb::module_& parent_module) {
       "a"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig("def pinv(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      nb::sig(
+          "def pinv(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Compute the Moore-Penrose pseudo inverse of a matrix.
+        Compute the (Moore-Penrose) pseudo-inverse of a matrix.
 
-        // TODO: Description details
+        This function calculates a generalized inverse of a matrix using its
+        singular-value decomposition. This function supports arrays with at least 2 dimensions.
+        When the input has more than two dimensions, the inverse is computed for each
+        matrix in the last two dimensions of ``a``.
 
         Args:
             a (array): Input array.
