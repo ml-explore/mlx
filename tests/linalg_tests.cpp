@@ -315,7 +315,7 @@ TEST_CASE("test matrix inversion") {
   const auto prng_key = random::key(42);
   const auto A = random::normal({5, 5}, prng_key);
   const auto A_inv = linalg::inv(A, Device::cpu);
-  const auto identity = eye(A.shape(0)); // TODO: Adi: Is used?
+  const auto identity = eye(A.shape(0));
 
   CHECK(allclose(matmul(A, A_inv), identity, /* rtol = */ 0, /* atol = */ 1e-6)
             .item<bool>());
@@ -372,7 +372,8 @@ TEST_CASE("test matrix pseudo-inverse") {
   const auto A = random::normal({4, 5}, prng_key);
   const auto A_pinv = linalg::pinv(A, Device::cpu);
   const auto zeros = zeros_like(A_pinv, Device::cpu);
-  CHECK_FALSE(allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
+  CHECK_FALSE(
+      allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
   const auto A_again = matmul(matmul(A, A_pinv), A);
   CHECK(allclose(A_again, A).item<bool>());
 }
