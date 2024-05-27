@@ -106,14 +106,6 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   size_t _N = b.shape(-1);
   size_t _K = _a.shape(-1);
 
-  if (_M == 0 || _N == 0) {
-    return;
-  }
-  if (_K == 0) {
-    std::memset(static_cast<void*>(pinv.data<float>()), 0, pinv.nbytes());
-    return;
-  }
-
   for (int i = 0; i < (_a.size() / (_M * _K)); ++i) {
     cblas_sgemm(
         CblasRowMajor,
