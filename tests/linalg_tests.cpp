@@ -376,4 +376,14 @@ TEST_CASE("test matrix pseudo-inverse") {
       allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
   const auto A_again = matmul(matmul(A, A_pinv), A);
   CHECK(allclose(A_again, A).item<bool>());
+
+  // Rectangular pinv
+  const auto prng_key2 = random::key(10);
+  const auto A_wide = random::normal({6, 5}, prng_key2);
+  const auto A_wide_pinv = linalg::pinv(A_wide, Device::cpu);
+  const auto zeros2 = zeros_like(A_wide_pinv, Device::cpu);
+  CHECK_FALSE(allclose(zeros2, A_wide_pinv, /* rtol = */ 0, /* atol = */ 1e-6)
+                  .item<bool>());
+  const auto A_wide_again = matmul(matmul(A_wide, A_wide_pinv), A_wide);
+  CHECK(allclose(A_wide_again, A_wide).item<bool>());
 }
