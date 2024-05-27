@@ -1,24 +1,13 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/svd.h"
-#include "mlx/linalg.h"
-#include "mlx/ops.h"
-#include "mlx/primitives.h"
-#include "mlx/random.h"
-#include "mlx/utils.h"
+#include "mlx/backend/common/utils.h"
 
 #ifdef ACCELERATE_NEW_LAPACK
 #include <Accelerate/Accelerate.h>
 #else
 #include <lapack.h>
 #endif
-
-// #include "mlx/primitives.h"
-// #include "mlx/fast_primitives.h"
-
-using namespace mlx::core::linalg;
-using namespace mlx::core::random;
 
 namespace mlx::core {
 
@@ -56,7 +45,7 @@ void pseudoinverse_impl(const array& a, array& pinv) {
     }
   }
 
-  // Compute Sigma^+ @ U.T
+  // Compute Sigma^+ * U.T
   array u_sigma_inv({m, k}, float32, nullptr, {});
   u_sigma_inv.set_data(allocator::malloc_or_wait(u_sigma_inv.nbytes()));
   float* u_sigma_inv_data = u_sigma_inv.data<float>();
@@ -87,8 +76,8 @@ void pseudoinverse_impl(const array& a, array& pinv) {
   for (int i = 0; i < (vt.size() / (n * m)); ++i) {
     cblas_sgemm(
         CblasRowMajor,
-        true ? CblasTrans : CblasNoTrans, // transA
-        false ? CblasTrans : CblasNoTrans, // transB
+        CblasTrans,
+        CblasNoTrans,
         n,
         k,
         m,
