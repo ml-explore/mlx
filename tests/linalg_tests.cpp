@@ -366,6 +366,8 @@ TEST_CASE("test matrix pseudo-inverse") {
     const auto A_pinv = linalg::pinv(A, Device::cpu);
     const auto A_again = matmul(matmul(A, A_pinv), A);
     CHECK(allclose(A_again, A).item<bool>());
+    const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
+    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
   }
   { // Rectangular matrix m < n
     const auto prng_key = random::key(42);
@@ -376,6 +378,8 @@ TEST_CASE("test matrix pseudo-inverse") {
                     .item<bool>());
     const auto A_again = matmul(matmul(A, A_pinv), A);
     CHECK(allclose(A_again, A).item<bool>());
+    const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
+    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
   }
   { // Rectangular matrix m > n
     const auto prng_key = random::key(10);
@@ -386,5 +390,7 @@ TEST_CASE("test matrix pseudo-inverse") {
                     .item<bool>());
     const auto A_again = matmul(matmul(A, A_pinv), A);
     CHECK(allclose(A_again, A).item<bool>());
+    const auto A_pinv_again = matmul(matmul(A_pinv, A), A_pinv);
+    CHECK(allclose(A_pinv_again, A_pinv).item<bool>());
   }
 }
