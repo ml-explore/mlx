@@ -46,7 +46,7 @@ void all_reduce_dispatch(
     kernel_name += "NoAtomics";
   }
   kernel_name += "_reduce_" + op_name + type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kernel_name, in, out);
+  auto kernel = get_reduce_kernel(d, kernel_name, op_name, in, out);
 
   compute_encoder->setComputePipelineState(kernel);
 
@@ -175,7 +175,7 @@ void row_reduce_general_dispatch(
   kname << "rowGeneral" << small_desc << "_reduce_" << op_name
         << type_to_name(in);
 
-  auto kernel = get_reduce_kernel(d, kname.str(), in, out);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
 
   // Get dispatch grid dims
@@ -342,7 +342,7 @@ void strided_reduce_general_dispatch(
   if (reduction_size * non_col_reductions < 16) {
     // Select kernel
     auto kernel = get_reduce_kernel(
-        d, "colSmall_reduce_" + op_name + type_to_name(in), in, out);
+        d, "colSmall_reduce_" + op_name + type_to_name(in), op_name, in, out);
     compute_encoder->setComputePipelineState(kernel);
 
     // Select block dims
@@ -384,7 +384,7 @@ void strided_reduce_general_dispatch(
     kernel_name += "NoAtomics";
   }
   kernel_name += "_reduce_" + op_name + type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kernel_name, in, out);
+  auto kernel = get_reduce_kernel(d, kernel_name, op_name, in, out);
 
   compute_encoder->setComputePipelineState(kernel);
 
@@ -501,7 +501,7 @@ void strided_reduce_general_dispatch(
     std::string kernel_name =
         "rowGeneralNoAtomics_reduce_" + op_name + type_to_name(intermediate);
     auto row_reduce_kernel =
-        get_reduce_kernel(d, kernel_name, intermediate, out);
+        get_reduce_kernel(d, kernel_name, op_name, intermediate, out);
 
     compute_encoder->setComputePipelineState(row_reduce_kernel);
     compute_encoder.set_input_array(intermediate, 0);
@@ -573,10 +573,10 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
       op_name = out.dtype() == bool_ ? "and" : "prod";
       break;
     case Reduce::Min:
-      op_name = out.dtype() == bool_ ? "and" : "min_";
+      op_name = out.dtype() == bool_ ? "and" : "min";
       break;
     case Reduce::Max:
-      op_name = out.dtype() == bool_ ? "or" : "max_";
+      op_name = out.dtype() == bool_ ? "or" : "max";
       break;
   }
 
