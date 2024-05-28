@@ -56,10 +56,13 @@ inline void build_kernel(
     } else {
       add_indices = true;
       os << "    device const " << get_type_string(x.dtype()) << "* " << xname
-         << " [[buffer(" << cnt++ << ")]]," << std::endl
-         << "    constant const size_t* " << xname << "_strides [[buffer("
-         << cnt++ << ")]]," << std::endl;
+         << " [[buffer(" << cnt++ << ")]]," << std::endl;
     }
+  }
+
+  if (add_indices) {
+    os << "    constant const size_t* in_strides [[buffer(" << cnt++
+       << ")]],\n";
   }
 
   // Add the output arguments
@@ -110,7 +113,9 @@ inline void build_kernel(
   }
 
   // Read the inputs in tmps
-  for (auto& x : inputs) {
+  int nc_in_count = 0;
+  for (int i = 0; i < inputs.size(); ++i) {
+    auto& x = inputs[i];
     auto& xname = namer.get_name(x);
 
     if (is_constant(x)) {
@@ -124,17 +129,20 @@ inline void build_kernel(
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
          << xname << "[index];" << std::endl;
     } else if (!dynamic_dims) {
+      int offset = nc_in_count * ndim;
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
          << xname << "[";
-      os << "index_0 * " << xname << "_strides[0]";
+      os << "index_0 * " << "in_strides[" << offset << "]";
       for (int i = 1; i < ndim; i++) {
-        os << " + index_" << i << " * " << xname << "_strides[" << i << "]";
+        os << " + index_" << i << " * " << "in_strides[" << offset + i << "]";
       }
       os << "];" << std::endl;
+      nc_in_count++;
     } else {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-         << xname << "[elem_to_loc(index, output_shape, " << xname
-         << "_strides, ndim)];" << std::endl;
+         << xname << "[elem_to_loc(index, output_shape, in_strides + "
+         << nc_in_count * ndim << ", ndim)];" << std::endl;
+      nc_in_count++;
     }
   }
 
@@ -296,6 +304,7 @@ void Compiled::eval_gpu(
   // Put the inputs in
   int cnt = 0;
   int stride_idx = 1; // idx 0 is the output strides
+  std::vector<size_t> in_strides;
   for (int i = 0; i < inputs.size(); i++) {
     if (constant_ids_.find(inputs_[i].id()) != constant_ids_.end()) {
       continue;
@@ -303,12 +312,16 @@ void Compiled::eval_gpu(
     auto& x = inputs[i];
     compute_encoder.set_input_array(x, cnt++);
     if (!contiguous && !is_scalar(x)) {
-      compute_encoder->setBytes(
-          strides[stride_idx].data(),
-          strides[stride_idx].size() * sizeof(size_t),
-          cnt++);
+      in_strides.insert(
+          in_strides.end(),
+          strides[stride_idx].begin(),
+          strides[stride_idx].end());
       stride_idx++;
     }
+  }
+  if (!in_strides.empty()) {
+    compute_encoder->setBytes(
+        in_strides.data(), in_strides.size() * sizeof(size_t), cnt++);
   }
 
   compiled_allocate_outputs(
