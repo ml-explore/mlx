@@ -28,6 +28,7 @@ const char* get_kernel_preamble() {
 return R"preamble(
 $INCLUDES
 $CONTENT
+using namespace mlx::core;
 using namespace mlx::core::detail;
 )preamble";
 }
