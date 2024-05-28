@@ -113,9 +113,9 @@ void pseudoinverse_impl(const array& a, array& pinv) {
         n, // K,
         1.0f, // alpha,
         v_sigma_inv.data<float>(), // A,
-        k, // lda, lda must be >= MAX(M,1):
+        k, // lda, lda must be >= MAX(M,1)
         u.data<float>(), // B,
-        m, // ldb, ldb must be >= MAX(N,1):
+        m, // ldb, ldb must be >= MAX(N,1)
         0.0f, // beta,
         pinv.data<float>(), // C,
         m // ldc  ldc must be >= MAX(N,1)
