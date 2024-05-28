@@ -38,8 +38,8 @@
 #define instantiate_reduce_ops(inst_f, type_f) \
   type_f(inst_f, sum, Sum)                     \
   type_f(inst_f, prod, Prod)                   \
-  type_f(inst_f, min_, Min)                    \
-  type_f(inst_f, max_, Max)
+  type_f(inst_f, min, Min)                     \
+  type_f(inst_f, max, Max)
 
 // Special case for bool reductions
 #define instantiate_reduce_from_types_helper( \
