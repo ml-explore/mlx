@@ -88,9 +88,13 @@ array eval_impl(std::vector<array> outputs, bool async) {
                   " transformations like compile or vmap is not allowed.");
             }
             throw std::runtime_error(
-                "[eval] Attempting to eval an array without a primitive. "
-                "This may be a bug, please file an issue here: "
-                " https://github.com/ml-explore/mlx/issues.");
+                "[eval] Attempting to eval an array without a primitive.\n"
+                "If you are compiling a function, make sure all the inputs "
+                "and outputs are captured:\n"
+                "https://ml-explore.github.io/mlx/build/html/usage/compile.html#pure-functions.\n"
+                "If you are not using compile, this may be a bug. "
+                "Please file an issue here:\n"
+                "https://github.com/ml-explore/mlx/issues.");
           }
           if (a.primitive().stream() != in.primitive().stream()) {
             needs_signal.insert(in.id());
