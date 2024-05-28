@@ -1,8 +1,6 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/svd.h"
-#include "mlx/backend/common/utils.h"
 #ifdef ACCELERATE_NEW_LAPACK
 #include <Accelerate/Accelerate.h>
 #else
@@ -50,79 +48,78 @@ void pseudoinverse_impl(const array& a, array& pinv) {
     array u_sigma_inv({m, k}, float32, nullptr, {});
     u_sigma_inv.set_data(allocator::malloc_or_wait(u_sigma_inv.nbytes()));
     cblas_sgemm(
-        CblasRowMajor,              // layout
-        CblasNoTrans,               // TransA,
-        CblasTrans,                 // TransB,
-        m,                          // M,
-        k,                          // N,
-        m,                          // K,
-        1.0f,                       // alpha,
-        sigma_inv,                  // A,
-        k,                          // lda,
-        u.data<float>(),            // B,
-        m,                          // ldb,
-        0.0f,                       // beta,
-        u_sigma_inv.data<float>(),  // C,
-        k                           // ldc
-        );
+        CblasRowMajor, // layout
+        CblasNoTrans, // TransA,
+        CblasTrans, // TransB,
+        m, // M,
+        k, // N,
+        m, // K,
+        1.0f, // alpha,
+        sigma_inv, // A,
+        k, // lda, lda must be >= MAX(M,1)
+        u.data<float>(), // B,
+        m, // ldb, ldb must be >= MAX(N,1)
+        0.0f, // beta,
+        u_sigma_inv.data<float>(), // C,
+        k // ldc  ldc must be >= MAX(N,1)
+    );
 
     // Compute A^+ = V * (Sigma^+ * U.T)
     pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
     cblas_sgemm(
-        CblasRowMajor, 	           // layout
-        CblasTrans, 	             // TransA,
-        CblasNoTrans, 	           // TransB,
-        n, 	                       // M,
-        k, 	                       // N,
-        m, 	                       // K,
-        1.0f, 	                   // alpha,
-        vt.data<float>(), 	       // A,
-        n, 	                       // lda,
+        CblasRowMajor, // layout
+        CblasTrans, // TransA,
+        CblasNoTrans, // TransB,
+        n, // M,
+        k, // N,
+        m, // K,
+        1.0f, // alpha,
+        vt.data<float>(), // A,
+        n, // lda, lda must be >= MAX(M,1)
         u_sigma_inv.data<float>(), // B,
-        m, 	                       // ldb,
-        0.0f, 	                   // beta,
-        pinv.data<float>(),        // C,
-        k                          // ldc
-      );
+        m, // ldb, ldb must be >= MAX(N,1)
+        0.0f, // beta,
+        pinv.data<float>(), // C,
+        k // ldc  ldc must be >= MAX(N,1)
+    );
   } else {
-    // Compute Sigma^+ * U.T
-    array u_sigma_inv({k, m}, float32, nullptr, {});
-    u_sigma_inv.set_data(allocator::malloc_or_wait(u_sigma_inv.nbytes()));
+    // Compute Vt.T * Sigma^+
+    array v_sigma_inv({k, n}, float32, nullptr, {});
+    v_sigma_inv.set_data(allocator::malloc_or_wait(v_sigma_inv.nbytes()));
     cblas_sgemm(
-      CblasRowMajor,	            // layout
-      CblasNoTrans,	              // TransA,
-      CblasTrans,	                // TransB,
-      k,	                        // M,
-      m,	                        // N,
-      k,	                        // K,
-      1.0f,	                      // alpha,
-      sigma_inv,	                // A,
-      m,	                        // lda,
-      u.data<float>(),	          // B,
-      m,	                        // ldb,
-      0.0f,	                      // beta,
-      u_sigma_inv.data<float>(),	// C,
-      m	                          // ldc
-        );
-    // // Compute A^+ = V * (Sigma^+ * U.T)
+        CblasRowMajor, // layout
+        CblasTrans, // TransA,
+        CblasNoTrans, // TransB,
+        k, // M,
+        n, // N,
+        k, // K,
+        1.0f, // alpha,
+        vt.data<float>(), // A,
+        k, // lda, lda must be >= MAX(M,1)
+        sigma_inv, // B,
+        n, // ldb, ldb must be >= MAX(N,1)
+        0.0f, // beta,
+        v_sigma_inv.data<float>(), // C,
+        n // ldc  ldc must be >= MAX(N,1)
+    );
+    // // Compute A^+ = (V * Sigma^+) * U.T
     pinv.set_data(allocator::malloc_or_wait(pinv.nbytes()));
-    // cblas_sgemm(
-    //     CblasRowMajor,            // layout
-    //     CblasTrans,               // TransA,
-    //     CblasNoTrans,             // TransB,
-    //     k,                        // M,
-    //     m,                        // N,
-    //     n,                        // K,
-    //     1.0f,                     // alpha,
-    //     vt.data<float>(),         // A,
-    //     n,                        // lda,
-    //     u_sigma_inv.data<float>(),// B,
-    //     n,                        // ldb,
-    //     0.0f,                     // beta,
-    //     pinv.data<float>(),       // C,
-    //     m                         // ldc
-    // );
-    copy(u_sigma_inv, pinv, u_sigma_inv.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+    cblas_sgemm(
+        CblasRowMajor, // layout
+        CblasNoTrans, // TransA,
+        CblasTrans, // TransB,
+        k, // M,
+        m, // N,
+        n, // K,
+        1.0f, // alpha,
+        v_sigma_inv.data<float>(), // A,
+        k, // lda, lda must be >= MAX(M,1):
+        u.data<float>(), // B,
+        m, // ldb, ldb must be >= MAX(N,1):
+        0.0f, // beta,
+        pinv.data<float>(), // C,
+        m // ldc  ldc must be >= MAX(N,1)
+    );
   }
 }
 

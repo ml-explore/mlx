@@ -361,30 +361,30 @@ TEST_CASE("test matrix pseudo-inverse") {
   CHECK_NOTHROW(
       linalg::pinv(array({1.0, 2.0, 3.0, 4.0, 5.0, 6.0}, {2, 3}), Device::cpu));
 
-  // Square pinv
-  const auto A_square = array({1.0, 2.0, 3.0, 4.0}, {2, 2});
-  const auto A_square_pinv = linalg::pinv(A_square, Device::cpu);
-  const auto A_square_again = matmul(matmul(A_square, A_square_pinv), A_square);
-  CHECK(allclose(A_square_again, A_square).item<bool>());
-
-  // Rectangular pinv
-  const auto prng_key = random::key(42);
-  const auto A = random::normal({4, 5}, prng_key);
-  const auto A_pinv = linalg::pinv(A, Device::cpu);
-  const auto zeros = zeros_like(A_pinv, Device::cpu);
-  CHECK_FALSE(
-      allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6).item<bool>());
-  const auto A_again = matmul(matmul(A, A_pinv), A);
-  CHECK(allclose(A_again, A).item<bool>());
-
-    // Rectangular pinv
-    const auto prng_key2 = random::key(10);
-    const auto A_wide = random::normal({6, 5}, prng_key2);
-    const auto A_wide_pinv = linalg::pinv(A_wide, Device::cpu);
-    const auto zeros2 = zeros_like(A_wide_pinv, Device::cpu);
-    CHECK_FALSE(allclose(zeros2, A_wide_pinv, /* rtol = */ 0, /* atol = */
-    1e-6)
+  { // Square m == n
+    const auto A = array({1.0, 2.0, 3.0, 4.0}, {2, 2});
+    const auto A_pinv = linalg::pinv(A, Device::cpu);
+    const auto A_again = matmul(matmul(A, A_pinv), A);
+    CHECK(allclose(A_again, A).item<bool>());
+  }
+  { // Rectangular matrix m < n
+    const auto prng_key = random::key(42);
+    const auto A = random::normal({4, 5}, prng_key);
+    const auto A_pinv = linalg::pinv(A, Device::cpu);
+    const auto zeros = zeros_like(A_pinv, Device::cpu);
+    CHECK_FALSE(allclose(zeros, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6)
                     .item<bool>());
-    const auto A_wide_again = matmul(matmul(A_wide, A_wide_pinv), A_wide);
-    CHECK(allclose(A_wide_again, A_wide).item<bool>());
+    const auto A_again = matmul(matmul(A, A_pinv), A);
+    CHECK(allclose(A_again, A).item<bool>());
+  }
+  { // Rectangular matrix m > n
+    const auto prng_key = random::key(10);
+    const auto A = random::normal({6, 5}, prng_key);
+    const auto A_pinv = linalg::pinv(A, Device::cpu);
+    const auto zeros2 = zeros_like(A_pinv, Device::cpu);
+    CHECK_FALSE(allclose(zeros2, A_pinv, /* rtol = */ 0, /* atol = */ 1e-6)
+                    .item<bool>());
+    const auto A_again = matmul(matmul(A, A_pinv), A);
+    CHECK(allclose(A_again, A).item<bool>());
+  }
 }
