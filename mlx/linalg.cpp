@@ -311,8 +311,13 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
   const auto n = a.shape(-1);
   const auto k = std::min(m, n);
 
-  return array(
-      {n, k}, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+  if (m <= n) {
+    return array(
+        {n, k}, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+  } else {
+    return array(
+        {k, m}, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+  }
 }
 
 } // namespace mlx::core::linalg
