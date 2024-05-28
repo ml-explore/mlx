@@ -119,9 +119,11 @@ inline void build_kernel(
     auto& xname = namer.get_name(x);
 
     if (is_constant(x)) {
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = ";
+      auto type_str = get_type_string(x.dtype());
+      os << "  auto tmp_" << xname << " = static_cast<"
+         << get_type_string(x.dtype()) << ">(";
       print_constant(os, x);
-      os << ";" << std::endl;
+      os << ");" << std::endl;
     } else if (is_scalar(x)) {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
          << xname << "[0];" << std::endl;
