@@ -327,7 +327,6 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
   const auto U_slice = slice(U, {0, 0}, {m, k});
   const auto Vt_slice = slice(Vt, {0, 0}, {k, n});
   return matmul(matmul(transpose(Vt_slice), diag(1.0 / S)), transpose(U_slice));
-  ;
 }
 
 } // namespace mlx::core::linalg
