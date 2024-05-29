@@ -360,12 +360,10 @@ void init_array(nb::module_& m) {
           [](const array& a) {
             if (metal::is_available()) {
               // Metal device is available
-              constexpr int kDLMetal = 8;
-              return nb::make_tuple(kDLMetal, 0);
+              return nb::make_tuple(8, 0);
             } else {
               // CPU device
-              constexpr int kDLCPU = 1;
-              return nb::make_tuple(kDLCPU, 0);
+              return nb::make_tuple(1, 0);
             }
           })
       .def("__copy__", [](const array& self) { return array(self); })
