@@ -310,14 +310,24 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
   const auto m = a.shape(-2);
   const auto n = a.shape(-1);
   const auto k = std::min(m, n);
+  const auto rank = a.ndim();
 
+  auto outs = linalg::svd(a, Device::cpu);
+  auto U = outs[0];
+  auto S = outs[1];
+  auto Vt = outs[2];
+
+  std::vector<int> pinv_shape;
   if (m <= n) {
-    return array(
-        {n, k}, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+    pinv_shape = {n, k};
   } else {
-    return array(
-        {k, m}, a.dtype(), std::make_unique<PseudoInverse>(to_stream(s)), {a});
+    pinv_shape = {k, m};
   }
+  array pinv(pinv_shape, a.dtype(), nullptr, {});
+  const auto U_slice = slice(U, {0, 0}, {m, k});
+  const auto Vt_slice = slice(Vt, {0, 0}, {k, n});
+  return matmul(matmul(transpose(Vt_slice), diag(1.0 / S)), transpose(U_slice));
+  ;
 }
 
 } // namespace mlx::core::linalg

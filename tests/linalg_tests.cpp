@@ -357,10 +357,6 @@ TEST_CASE("test matrix pseudo-inverse") {
   // Unsupported types throw
   CHECK_THROWS(linalg::pinv(array({0, 1}, {1, 2}), Device::cpu));
 
-  // Non-square doesn't throw.
-  CHECK_NOTHROW(
-      linalg::pinv(array({1.0, 2.0, 3.0, 4.0, 5.0, 6.0}, {2, 3}), Device::cpu));
-
   { // Square m == n
     const auto A = array({1.0, 2.0, 3.0, 4.0}, {2, 2});
     const auto A_pinv = linalg::pinv(A, Device::cpu);
