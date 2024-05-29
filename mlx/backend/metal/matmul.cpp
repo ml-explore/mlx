@@ -910,15 +910,19 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
 
+  int M = a_pre.shape(-2);
+  int N = b_pre.shape(-1);
+  int K = a_pre.shape(-1);
+
   // Keep a vector with copies to be cleared in the completed buffer to release
   // the arrays
   std::vector<array> copies;
-  auto check_transpose = [&copies, &s](const array& arr) {
+  auto check_transpose = [&copies, &s](const array& arr, bool is_vector) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
-    if (sty == 1) {
+    if (sty == 1 && (!is_vector || stx == arr.shape(-1))) {
       return std::make_tuple(false, stx, arr);
-    } else if (stx == 1) {
+    } else if (stx == 1 && (!is_vector || sty == arr.shape(-2))) {
       return std::make_tuple(true, sty, arr);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
@@ -929,12 +933,8 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   };
 
-  auto [transpose_a, a_cols, a] = check_transpose(a_pre);
-  auto [transpose_b, b_cols, b] = check_transpose(b_pre);
-
-  int M = a.shape(-2);
-  int N = b.shape(-1);
-  int K = a.shape(-1);
+  auto [transpose_a, a_cols, a] = check_transpose(a_pre, M == 1);
+  auto [transpose_b, b_cols, b] = check_transpose(b_pre, N == 1);
 
   array c = c_pre;
   int ldc = c.strides()[c.ndim() - 2];
@@ -1344,15 +1344,19 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
 
+  int M = a_pre.shape(-2);
+  int N = b_pre.shape(-1);
+  int K = a_pre.shape(-1);
+
   // Keep a vector with copies to be cleared in the completed buffer to release
   // the arrays
   std::vector<array> copies;
-  auto check_transpose = [&copies, &s](const array& arr) {
+  auto check_transpose = [&copies, &s](const array& arr, bool is_vector) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
-    if (sty == 1) {
+    if (sty == 1 && (!is_vector || stx == arr.shape(-1))) {
       return std::make_tuple(false, stx, arr);
-    } else if (stx == 1) {
+    } else if (stx == 1 && (!is_vector || sty == arr.shape(-2))) {
       return std::make_tuple(true, sty, arr);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
@@ -1363,15 +1367,11 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   };
 
-  auto [transpose_a, a_cols, a] = check_transpose(a_pre);
-  auto [transpose_b, b_cols, b] = check_transpose(b_pre);
+  auto [transpose_a, a_cols, a] = check_transpose(a_pre, M == 1);
+  auto [transpose_b, b_cols, b] = check_transpose(b_pre, N == 1);
 
   int lda = a_cols;
   int ldb = b_cols;
-
-  int M = a.shape(-2);
-  int N = b.shape(-1);
-  int K = a.shape(-1);
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
@@ -1554,15 +1554,19 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
 
+  int M = a_pre.shape(-2);
+  int N = b_pre.shape(-1);
+  int K = a_pre.shape(-1);
+
   // Keep a vector with copies to be cleared in the completed buffer to release
   // the arrays
   std::vector<array> copies;
-  auto check_transpose = [&copies, &s](const array& arr) {
+  auto check_transpose = [&copies, &s](const array& arr, bool is_vector) {
     auto stx = arr.strides()[arr.ndim() - 2];
     auto sty = arr.strides()[arr.ndim() - 1];
-    if (sty == 1) {
+    if (sty == 1 && (!is_vector || stx == arr.shape(-1))) {
       return std::make_tuple(false, stx, arr);
-    } else if (stx == 1) {
+    } else if (stx == 1 && (!is_vector || sty == arr.shape(-2))) {
       return std::make_tuple(true, sty, arr);
     } else {
       array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
@@ -1573,15 +1577,11 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   };
 
-  auto [transpose_a, a_cols, a] = check_transpose(a_pre);
-  auto [transpose_b, b_cols, b] = check_transpose(b_pre);
+  auto [transpose_a, a_cols, a] = check_transpose(a_pre, M == 1);
+  auto [transpose_b, b_cols, b] = check_transpose(b_pre, N == 1);
 
   int lda = a_cols;
   int ldb = b_cols;
-
-  int M = a.shape(-2);
-  int N = b.shape(-1);
-  int K = a.shape(-1);
 
   /////////////////////////////////////////////////////////////////////////////
   // Check and collapse batch dimensions
