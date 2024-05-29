@@ -10,11 +10,13 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "mlx/backend/metal/metal.h"
 #include "python/src/buffer.h"
 #include "python/src/convert.h"
 #include "python/src/indexing.h"
 #include "python/src/utils.h"
 
+#include "mlx/device.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
 #include "mlx/utils.h"
@@ -353,6 +355,19 @@ void init_array(nb::module_& m) {
             new (&arr) array(nd_array_to_mlx(state, std::nullopt));
           })
       .def("__dlpack__", [](const array& a) { return mlx_to_dlpack(a); })
+      .def(
+          "__dlpack_device__",
+          [](const array& a) {
+            if (metal::is_available()) {
+              // Metal device is available
+              constexpr int kDLMetal = 8;
+              return kDLMetal;
+            } else {
+              // CPU device
+              constexpr int kDLCPU = 1;
+              return kDLCPU;
+            }
+          })
       .def("__copy__", [](const array& self) { return array(self); })
       .def(
           "__deepcopy__",

@@ -161,6 +161,18 @@ class TestInequality(mlx_tests.MLXTestCase):
         self.assertTrue(a != b)
         self.assertTrue(a != c)
 
+    def test_dlx_device_type(self):
+        a = mx.array([1, 2, 3])
+        device_type = a.__dlpack_device__()
+        self.assertIn(device_type, [1, 8])
+
+        if device_type == 8:
+            # Additional check if Metal is supposed to be available
+            self.assertTrue(mx.metal.is_available())
+        elif device_type == 1:
+            # Additional check if CPU is the fallback
+            self.assertFalse(mx.metal.is_available())
+
     def test_tuple_not_equals_array(self):
         a = mx.array([1, 2, 3])
         b = (1, 2, 3)
