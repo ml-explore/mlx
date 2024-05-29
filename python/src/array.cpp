@@ -361,11 +361,11 @@ void init_array(nb::module_& m) {
             if (metal::is_available()) {
               // Metal device is available
               constexpr int kDLMetal = 8;
-              return kDLMetal;
+              return nb::make_tuple(kDLMetal, 0);
             } else {
               // CPU device
               constexpr int kDLCPU = 1;
-              return kDLCPU;
+              return nb::make_tuple(kDLCPU, 0);
             }
           })
       .def("__copy__", [](const array& self) { return array(self); })
