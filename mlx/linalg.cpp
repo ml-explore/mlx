@@ -312,7 +312,7 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
   const auto k = std::min(m, n);
   const auto rank = a.ndim();
 
-  auto outs = linalg::svd(a, Device::cpu);
+  auto outs = linalg::svd(a, s);
   auto U = outs[0];
   auto S = outs[1];
   auto Vt = outs[2];
