@@ -4,6 +4,12 @@ Conversion to NumPy and Other Frameworks
 ========================================
 
 MLX array implements the `Python Buffer Protocol <https://docs.python.org/3/c-api/buffer.html>`_.
+
+MLX array supports conversion between other frameworks through either:  
+
+1. The `Python Buffer Protocol <https://docs.python.org/3/c-api/buffer.html>`_. 
+2. `DLPack <https://dmlc.github.io/dlpack/latest/>`_.  
+
 Let's convert an array to NumPy and back.
 
 .. code-block:: python
