@@ -1754,12 +1754,34 @@ class TestOps(mlx_tests.MLXTestCase):
                     self.assertTrue(np.array_equal(d_np, d_mx))
                     self.assertEqual(c_mx.dtype, mx.uint32)
 
+        # Set random seed
+        np.random.seed(0)
+
         # Test multi-block sort
         a_np = np.random.normal(size=(32769,)).astype(np.float32)
         a_mx = mx.array(a_np)
 
         b_np = np.sort(a_np)
         b_mx = mx.sort(a_mx)
+
+        self.assertTrue(np.array_equal(b_np, b_mx))
+        self.assertEqual(b_mx.dtype, a_mx.dtype)
+
+        # Test multi-dum multi-block sort
+        a_np = np.random.normal(size=(2, 4, 32769)).astype(np.float32)
+        a_mx = mx.array(a_np)
+
+        b_np = np.sort(a_np, axis=-1)
+        b_mx = mx.sort(a_mx, axis=-1)
+
+        self.assertTrue(np.array_equal(b_np, b_mx))
+        self.assertEqual(b_mx.dtype, a_mx.dtype)
+
+        a_np = np.random.normal(size=(2, 32769, 4)).astype(np.float32)
+        a_mx = mx.array(a_np)
+
+        b_np = np.sort(a_np, axis=1)
+        b_mx = mx.sort(a_mx, axis=1)
 
         self.assertTrue(np.array_equal(b_np, b_mx))
         self.assertEqual(b_mx.dtype, a_mx.dtype)
