@@ -64,7 +64,6 @@ The squaring of ``x`` occurs externally to MLX, meaning that no gradient is inco
 It's important to note that a similar issue arises during array conversion and copying.
 For instance, a function defined as ``mx.array(np.array(x)**2).sum()`` would also result in an incorrect gradient,
 even though no in-place operations on MLX memory are executed.
-``mx.array`` supports dlpack as well.
 
 PyTorch
 -------
