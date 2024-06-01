@@ -16,7 +16,11 @@ void AllReduce::eval_cpu(
   assert(inputs.size() == 1);
   assert(outputs.size() == 1);
 
-  outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
+  if (inputs[0].is_donatable()) {
+    outputs[0].copy_shared_buffer(inputs[0]);
+  } else {
+    outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
+  }
 
   switch (reduce_type_) {
     case Sum:

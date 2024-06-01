@@ -260,7 +260,8 @@ Stream communication_stream() {
 void all_reduce_sum(Group group, const array& input_, array& output) {
   array input = ensure_row_contiguous(input_);
   mpi().all_reduce(
-      input.data<void>(),
+      (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
+                                                  : input.data<void>(),
       output.data<void>(),
       input.size(),
       mpi().datatype(input),
