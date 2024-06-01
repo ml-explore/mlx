@@ -168,6 +168,7 @@ MPIWrapper& mpi() {
 }
 
 struct MPIGroupImpl {
+  MPIGroupImpl() : comm_(nullptr), global_(true), rank_(0), size_(1) {}
   MPIGroupImpl(MPI_Comm comm, bool global)
       : comm_(comm), global_(global), rank_(-1), size_(-1) {}
   ~MPIGroupImpl() {
@@ -240,9 +241,10 @@ Group init() {
 
   if (global_group == nullptr) {
     if (!mpi().init_safe()) {
-      throw std::runtime_error("Cannot initialize MPI");
+      global_group = std::make_shared<MPIGroupImpl>();
+    } else {
+      global_group = std::make_shared<MPIGroupImpl>(mpi().world(), true);
     }
-    global_group = std::make_shared<MPIGroupImpl>(mpi().world(), true);
   }
 
   return Group(global_group);
