@@ -168,6 +168,7 @@ MPIWrapper& mpi() {
 }
 
 struct MPIGroupImpl {
+  MPIGroupImpl() : comm_(nullptr), global_(true), rank_(0), size_(1) {}
   MPIGroupImpl(MPI_Comm comm, bool global)
       : comm_(comm), global_(global), rank_(-1), size_(-1) {}
   ~MPIGroupImpl() {
@@ -235,14 +236,18 @@ bool is_available() {
   return mpi().is_available();
 }
 
-Group init() {
+Group init(bool strict /* = false */) {
   static std::shared_ptr<MPIGroupImpl> global_group = nullptr;
 
   if (global_group == nullptr) {
     if (!mpi().init_safe()) {
-      throw std::runtime_error("Cannot initialize MPI");
+      if (strict) {
+        throw std::runtime_error("Cannot initialize MPI");
+      }
+      global_group = std::make_shared<MPIGroupImpl>();
+    } else {
+      global_group = std::make_shared<MPIGroupImpl>(mpi().world(), true);
     }
-    global_group = std::make_shared<MPIGroupImpl>(mpi().world(), true);
   }
 
   return Group(global_group);
@@ -258,7 +263,8 @@ Stream communication_stream() {
 void all_reduce_sum(Group group, const array& input_, array& output) {
   array input = ensure_row_contiguous(input_);
   mpi().all_reduce(
-      input.data<void>(),
+      (input.data<void>() == output.data<void>()) ? MPI_IN_PLACE
+                                                  : input.data<void>(),
       output.data<void>(),
       input.size(),
       mpi().datatype(input),

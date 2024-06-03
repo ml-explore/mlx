@@ -54,8 +54,18 @@ void init_distributed(nb::module_& parent_module) {
   m.def(
       "init",
       &distributed::init,
+      "strict"_a = false,
+      nb::sig("def init(strict: bool = False) -> Group"),
       R"pbdoc(
         Initialize the communication backend and create the global communication group.
+
+        Args:
+          strict (bool, optional): If set to False it returns a singleton group
+            in case ``mx.distributed.is_available()`` returns False otherwise
+            it throws a runtime error. Default: ``False``
+
+        Returns:
+          Group: The group representing all the launched processes.
       )pbdoc");
 
   m.def(
