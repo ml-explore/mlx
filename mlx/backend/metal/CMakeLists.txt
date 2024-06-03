@@ -135,6 +135,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/normalization.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/rope.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/scan.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/slicing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/softmax.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/sort.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp

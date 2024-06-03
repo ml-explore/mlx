@@ -10,16 +10,14 @@ namespace mlx::core {
 
 constexpr int MAX_BINARY_SPECIALIZED_DIMS = 5;
 
-void binary_op(
+void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string op) {
-  assert(inputs.size() == 2);
+    const std::string op,
+    const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, outputs[0], bopt, true);
-  set_binary_op_output_data(a, b, outputs[1], bopt, true);
 
   auto& out = outputs[0];
   if (out.size() == 0) {
@@ -61,7 +59,6 @@ void binary_op(
     kernel_name = kname.str();
   }
 
-  auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 
   auto kernel = get_binary_two_kernel(d, kernel_name, a, outputs[0]);
@@ -120,15 +117,36 @@ void binary_op(
   }
 }
 
-void binary_op(
+void binary_op_gpu(
     const std::vector<array>& inputs,
-    array& out,
-    const std::string op) {
+    std::vector<array>& outputs,
+    const std::string op,
+    const Stream& s) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
   auto& b = inputs[1];
   auto bopt = get_binary_op_type(a, b);
-  set_binary_op_output_data(a, b, out, bopt, true);
+  set_binary_op_output_data(a, b, outputs[0], bopt, true);
+  set_binary_op_output_data(a, b, outputs[1], bopt, true);
+  binary_op_gpu_inplace(inputs, outputs, op, s);
+}
+
+void binary_op_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs,
+    const std::string op) {
+  auto& s = outputs[0].primitive().stream();
+  binary_op_gpu(inputs, outputs, op, s);
+}
+
+void binary_op_gpu_inplace(
+    const std::vector<array>& inputs,
+    array& out,
+    const std::string op,
+    const Stream& s) {
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto bopt = get_binary_op_type(a, b);
   if (out.size() == 0) {
     return;
   }
@@ -168,7 +186,6 @@ void binary_op(
     kernel_name = kname.str();
   }
 
-  auto& s = out.primitive().stream();
   auto& d = metal::device(s.device);
 
   auto kernel = get_binary_kernel(d, kernel_name, a, out);
@@ -221,102 +238,123 @@ void binary_op(
   }
 }
 
+void binary_op_gpu(
+    const std::vector<array>& inputs,
+    array& out,
+    const std::string op,
+    const Stream& s) {
+  assert(inputs.size() == 2);
+  auto& a = inputs[0];
+  auto& b = inputs[1];
+  auto bopt = get_binary_op_type(a, b);
+  set_binary_op_output_data(a, b, out, bopt, true);
+  binary_op_gpu_inplace(inputs, out, op, s);
+}
+
+void binary_op_gpu(
+    const std::vector<array>& inputs,
+    array& out,
+    const std::string op) {
+  auto& s = out.primitive().stream();
+  binary_op_gpu(inputs, out, op, s);
+}
+
 void Add::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "add");
+  binary_op_gpu(inputs, out, "add");
 }
 
 void ArcTan2::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "arctan2");
+  binary_op_gpu(inputs, out, "arctan2");
 }
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (op_) {
     case BitwiseBinary::And:
-      binary_op(inputs, out, "bitwise_and");
+      binary_op_gpu(inputs, out, "bitwise_and");
       break;
     case BitwiseBinary::Or:
-      binary_op(inputs, out, "bitwise_or");
+      binary_op_gpu(inputs, out, "bitwise_or");
       break;
     case BitwiseBinary::Xor:
-      binary_op(inputs, out, "bitwise_xor");
+      binary_op_gpu(inputs, out, "bitwise_xor");
       break;
     case BitwiseBinary::LeftShift:
-      binary_op(inputs, out, "left_shift");
+      binary_op_gpu(inputs, out, "left_shift");
       break;
     case BitwiseBinary::RightShift:
-      binary_op(inputs, out, "right_shift");
+      binary_op_gpu(inputs, out, "right_shift");
       break;
   }
 }
 
 void Divide::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "div");
+  binary_op_gpu(inputs, out, "div");
 }
 
 void DivMod::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  binary_op(inputs, outputs, "divmod");
+  binary_op_gpu(inputs, outputs, "divmod");
 }
 
 void Remainder::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "rem");
+  binary_op_gpu(inputs, out, "rem");
 }
 
 void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, equal_nan_ ? "naneq" : "eq");
+  binary_op_gpu(inputs, out, equal_nan_ ? "naneq" : "eq");
 }
 
 void Greater::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "ge");
+  binary_op_gpu(inputs, out, "ge");
 }
 
 void GreaterEqual::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "geq");
+  binary_op_gpu(inputs, out, "geq");
 }
 
 void Less::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "le");
+  binary_op_gpu(inputs, out, "le");
 }
 
 void LessEqual::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "leq");
+  binary_op_gpu(inputs, out, "leq");
 }
 
 void LogicalAnd::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "land");
+  binary_op_gpu(inputs, out, "land");
 }
 
 void LogicalOr::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "lor");
+  binary_op_gpu(inputs, out, "lor");
 }
 
 void LogAddExp::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "lae");
+  binary_op_gpu(inputs, out, "lae");
 }
 
 void Maximum::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "max");
+  binary_op_gpu(inputs, out, "max");
 }
 
 void Minimum::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "min");
+  binary_op_gpu(inputs, out, "min");
 }
 
 void Multiply::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "mul");
+  binary_op_gpu(inputs, out, "mul");
 }
 
 void NotEqual::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "neq");
+  binary_op_gpu(inputs, out, "neq");
 }
 
 void Power::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "pow");
+  binary_op_gpu(inputs, out, "pow");
 }
 
 void Subtract::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op(inputs, out, "sub");
+  binary_op_gpu(inputs, out, "sub");
 }
 
 } // namespace mlx::core
