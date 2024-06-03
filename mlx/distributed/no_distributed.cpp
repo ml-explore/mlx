@@ -20,7 +20,7 @@ bool is_available() {
   return false;
 }
 
-Group init() {
+Group init(bool strict) {
   return Group(nullptr);
 }
 
