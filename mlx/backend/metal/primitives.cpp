@@ -216,23 +216,7 @@ void Pad::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Padding value, input and output must be of the same type
   assert(val.dtype() == in.dtype() && in.dtype() == out.dtype());
 
-  // Fill output with val
-  copy_gpu(val, out, CopyType::Scalar, stream());
-
-  // Find offset for start of input values
-  size_t data_offset = 0;
-  for (int i = 0; i < axes_.size(); i++) {
-    auto ax = axes_[i] < 0 ? out.ndim() + axes_[i] : axes_[i];
-    data_offset += out.strides()[ax] * low_pad_size_[i];
-  }
-
-  // Extract slice from output where input will be pasted
-  array out_slice(in.shape(), out.dtype(), nullptr, {});
-  out_slice.copy_shared_buffer(
-      out, out.strides(), out.flags(), out_slice.size(), data_offset);
-
-  // Copy input values into the slice
-  copy_gpu_inplace(in, out_slice, CopyType::GeneralGeneral, stream());
+  pad_gpu(in, val, out, axes_, low_pad_size_, stream());
 }
 
 void RandomBits::eval_gpu(const std::vector<array>& inputs, array& out) {

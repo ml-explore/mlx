@@ -1,3 +1,5 @@
+// Copyright © 2024 Apple Inc.
+
 #include "mlx/backend/common/utils.h"
 
 namespace mlx::core {

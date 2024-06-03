@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2024 Apple Inc.
 
 #pragma once
 
@@ -17,6 +17,14 @@ void concatenate_gpu(
     const std::vector<array>& inputs,
     array& out,
     int axis,
+    const Stream& s);
+
+void pad_gpu(
+    const array& in,
+    const array& val,
+    array& out,
+    std::vector<int> axes,
+    std::vector<int> low_pad_size,
     const Stream& s);
 
 } // namespace mlx::core
