@@ -19,6 +19,140 @@
 namespace mlx::core::fast {
 
 namespace {
+void sdpa_full_self_attention_metal(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    const float alpha,
+    array& out,
+    std::vector<array>& temporaries) {
+  std::ostringstream kname_self_attention;
+  kname_self_attention << "steel_gemm_attention_";
+
+  constexpr const int bm = 16;
+  constexpr const int bn = 16;
+  const int bk = q.shape(-1); // already forced to be 64 or 128
+
+  if (bk != 64 && bk != 128) {
+    throw std::runtime_error(
+        "[ScaledDotProductAttention::eval_gpu]: hidden dim: expected either 64, 128");
+  }
+
+  constexpr const int wm = 2;
+  constexpr const int wn = 2;
+
+  std::string delimiter = "_";
+
+  kname_self_attention << "bm_" + std::to_string(bm) + delimiter;
+  kname_self_attention << "bn_" + std::to_string(bn) + delimiter;
+  kname_self_attention << "bk_" + std::to_string(bk) + delimiter;
+
+  for (const auto& arr : {k, v, out}) {
+    if (arr.dtype() != q.dtype()) {
+      throw std::runtime_error(
+          "[ScaledDotProductAttention::eval_gpu]: expected matching dtypes for q,k,v,o");
+    }
+  }
+
+  if (q.dtype() == float32) {
+    kname_self_attention << "itype" + delimiter + "float";
+  } else if (q.dtype() == float16) {
+    kname_self_attention << "itype" + delimiter + "half";
+  } else {
+    throw std::runtime_error(
+        "[ScaledDotProductAttention::eval_gpu]: unexpected dtype found for queries: expected either float32 or float16.");
+  }
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname_self_attention.str());
+  compute_encoder->setComputePipelineState(kernel);
+
+  uint hidden_dim = q.shape(-1);
+  uint qseq = q.shape(-2);
+  uint qheads = q.shape(-3);
+
+  const uint64_t KV_sequence_length = k.shape(-2);
+  const uint query_sequence_length = q.shape(-2);
+  const uint n_q_heads = q.shape(1);
+  const uint n_kv_heads = k.shape(1);
+
+  const int M = q.shape(-2);
+  const int N = M;
+  const int K = q.shape(-1);
+  const size_t batch_size_out = q.shape(0) * q.shape(1);
+
+  const std::vector<int> batch_shape = {q.shape(0) * q.shape(1)};
+  const int dk = q.shape(-1);
+  const int ldq = dk;
+  const int ldk = dk;
+  const int ldv = dk;
+  const int lds = bn;
+  const int ldo = dk;
+
+  int tn = 1;
+  int tm = (M + bm - 1) / bm;
+
+  const int batch_stride_q = dk * query_sequence_length;
+  const int batch_stride_k = dk * query_sequence_length;
+  const int batch_stride_v = dk * query_sequence_length;
+  const int batch_stride_o = dk * query_sequence_length;
+  const int swizzle_log = 0;
+  const int gemm_n_iterations_aligned = (N + bn - 1) / bn;
+  const int gemm_k_iterations_aligned = (K + bk - 1) / bk;
+  const int gemm_sv_m_block_iterations = (M + bm - 1) / bm;
+  const int batch_ndim = int(batch_shape.size());
+
+  MLXFastAttentionParams params{
+      (int)M,
+      (int)N,
+      (int)K,
+      ldq,
+      ldk,
+      ldv,
+      lds,
+      ldo,
+      tn,
+      tm,
+      batch_stride_q,
+      batch_stride_k,
+      batch_stride_v,
+      batch_stride_o,
+      swizzle_log,
+      gemm_n_iterations_aligned,
+      gemm_k_iterations_aligned,
+      gemm_sv_m_block_iterations,
+      batch_ndim,
+      alpha};
+
+  const std::vector<size_t> batch_strides = {
+      (size_t)batch_stride_q,
+      (size_t)batch_stride_k,
+      (size_t)batch_stride_v,
+      (size_t)batch_stride_o};
+
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_output_array(out, 3);
+
+  compute_encoder->setBytes(&params, sizeof(MLXFastAttentionParams), 4);
+  compute_encoder->setBytes(
+      batch_shape.data(), sizeof(int) * batch_shape.size(), 6);
+
+  compute_encoder->setBytes(
+      batch_strides.data(), sizeof(size_t) * batch_strides.size(), 7);
+
+  MTL::Size grid_dims = MTL::Size(1, tm, batch_size_out);
+  MTL::Size group_dims = MTL::Size(32, wm, wn);
+
+  compute_encoder->dispatchThreadgroups(grid_dims, group_dims);
+
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [temporaries](MTL::CommandBuffer*) mutable { temporaries.clear(); });
+  return;
+}
 
 void sdpa_metal(
     const Stream& s,
@@ -170,6 +304,12 @@ void ScaledDotProductAttention::eval_gpu(
   auto v = check_transpose(v_pre);
 
   const int heads = q.shape(-3);
+
+  uint query_sequence_length = q.shape(-2);
+  if (query_sequence_length >= 16) {
+    return sdpa_full_self_attention_metal(
+        s, d, q, k, v, scale_, out, temporaries);
+  }
   int tile_size = 64;
   const int kv_seq_len = k.shape(-2);
   if (kv_seq_len > 8000) {

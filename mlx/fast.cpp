@@ -527,11 +527,13 @@ array scaled_dot_product_attention(
   /* generic implementation for use cases that Metal implementation does not
    * support. For non-supported cases listed below, use MLX primitives:
    * * CPU implementation
-   * * batch size > 1
-   * * query sequence length > 1
+   * * batch size > 1 for decoding or causal attention
+   * * query sequence length > 1 for decoding
+   * * query sequence length > 16 && non-null mask (causal attention)
    * * non-null mask
    * * dtype is not fp32 or fp16
    */
+
   bool needs_mask = mask.has_value();
   auto fallback = [scale, needs_mask, final_type, n_q_heads, n_kv_heads, &s](
                       const std::vector<array>& inputs) {
@@ -559,15 +561,29 @@ array scaled_dot_product_attention(
   };
 
   auto stream = to_stream(s);
-  constexpr const int supported_head_dim = 128;
   const size_t query_head_dim = q.shape(-1);
+  const bool supported_head_dim =
+      query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128;
+
+  const bool supported_head_dim_self_attn =
+      query_head_dim == 64 || query_head_dim == 128;
   const size_t query_sequence_length = q.shape(2);
-  bool implementation_supports_use_case = batch_dim == 1 &&
-      query_sequence_length == 1 && !mask.has_value() &&
-      query_head_dim == supported_head_dim && final_type != bfloat16 &&
+  const bool supports_full_self_attention = query_sequence_length >= 16 &&
+      !mask.has_value() && supported_head_dim_self_attn &&
+      n_q_heads == n_kv_heads && final_type != bfloat16 &&
       stream.device == Device::gpu;
-  // TODO, update routing conditions post further tuning
+
+  // fast decoding gpu shader
+  bool supports_sdpa = batch_dim == 1 && query_sequence_length == 1 &&
+      !mask.has_value() && supported_head_dim && final_type != bfloat16 &&
+      stream.device == Device::gpu;
+  bool implementation_supports_use_case =
+      supports_sdpa || supports_full_self_attention;
+
+  // disabling full self attention until perf is tuned;
+  // likewise for sdpa
   implementation_supports_use_case &= false;
+
   if (implementation_supports_use_case) {
     auto out_shape =
         std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
