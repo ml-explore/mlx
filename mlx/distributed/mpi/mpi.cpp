@@ -236,7 +236,7 @@ bool is_available() {
   return mpi().is_available();
 }
 
-Group init(bool strict) {
+Group init(bool strict /* = false */) {
   static std::shared_ptr<MPIGroupImpl> global_group = nullptr;
 
   if (global_group == nullptr) {
