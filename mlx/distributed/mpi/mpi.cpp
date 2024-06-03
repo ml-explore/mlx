@@ -236,11 +236,14 @@ bool is_available() {
   return mpi().is_available();
 }
 
-Group init() {
+Group init(bool strict) {
   static std::shared_ptr<MPIGroupImpl> global_group = nullptr;
 
   if (global_group == nullptr) {
     if (!mpi().init_safe()) {
+      if (strict) {
+        throw std::runtime_error("Cannot initialize MPI");
+      }
       global_group = std::make_shared<MPIGroupImpl>();
     } else {
       global_group = std::make_shared<MPIGroupImpl>(mpi().world(), true);

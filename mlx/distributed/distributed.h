@@ -43,8 +43,12 @@ struct Group {
 /**
  * Initialize the distributed backend and return the group containing all
  * discoverable processes.
+ *
+ * If strict is true then throw an error if we couldn't initialize the
+ * distributed subsystem. Otherwise simply return a singleton group which will
+ * render communication operations as no-op.
  */
-Group init();
+Group init(bool strict = false);
 
 namespace detail {
 
