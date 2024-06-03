@@ -1,6 +1,7 @@
 #include <metal_simdgroup>
 #include <metal_stdlib>
 
+#include "mlx/backend/metal/kernels/steel/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils.h"
 
