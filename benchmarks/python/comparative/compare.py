@@ -16,7 +16,9 @@ def run_or_raise(*args, **kwargs):
         result = run(*args, capture_output=True, **kwargs)
         return float(result.stdout)
     except ValueError:
-        raise ValueError(f"stdout: {result.stdout}\nstderr: {result.stderr}")
+        raise ValueError(
+            f"stdout: {result.stdout.decode()}\nstderr: {result.stderr.decode()}"
+        )
 
 
 def compare(args):
