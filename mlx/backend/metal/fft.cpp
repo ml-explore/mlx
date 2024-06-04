@@ -598,8 +598,7 @@ void fft_op(
 
       flags.col_contiguous = is_row_contiguous;
       flags.row_contiguous = is_col_contiguous;
-      // This is probably over-conservative
-      flags.contiguous = false;
+      flags.contiguous = data_size == x_copy.size();
 
       x_copy.set_data(
           allocator::malloc_or_wait(x.nbytes()), data_size, strides, flags);

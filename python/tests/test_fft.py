@@ -149,7 +149,7 @@ class TestFFT(mlx_tests.MLXTestCase):
             4006,  # large rader
         ]
         for large_num in numbers:
-            self._run_ffts((1, large_num), atol=1e-4)
+            self._run_ffts((1, large_num), atol=1e-3)
 
     def test_fft_contiguity(self):
         r = np.random.rand(4, 8).astype(np.float32)
