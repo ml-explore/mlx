@@ -185,7 +185,7 @@ def prelu(x: torch.Tensor) -> torch.Tensor:
 def mish(x: torch.Tensor) -> torch.Tensor:
     y = x
     for _ in range(100):
-        return torch.nn.functional.mish(y)
+        y = torch.nn.functional.mish(y)
     sync_if_needed(x)
 
 
@@ -280,6 +280,14 @@ def topk(axis, x):
     ys = []
     for i in range(10):
         ys.append(torch.topk(x, k, dim=axis)[0])
+    sync_if_needed(x)
+
+
+@torch.no_grad()
+def step_function(x):
+    y = x
+    for i in range(100):
+        y = torch.where(y < 0, 0, 1)
     sync_if_needed(x)
 
 
@@ -446,5 +454,11 @@ if __name__ == "__main__":
     elif args.benchmark == "topk":
         print(bench(topk, axis, x))
 
+    elif args.benchmark == "step":
+        print(bench(step_function, x))
+
+    elif args.benchmark == "selu":
+        print(bench(selu, x))
+
     else:
-        raise ValueError("Unknown benchmark")
+        raise ValueError(f"Unknown benchmark `{args.benchmark}`.")
