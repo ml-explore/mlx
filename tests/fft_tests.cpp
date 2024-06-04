@@ -4,8 +4,6 @@
 
 #include "mlx/mlx.h"
 
-#include <iostream>
-
 using namespace mlx::core;
 
 TEST_CASE("test fft basics") {
@@ -270,7 +268,7 @@ TEST_CASE("test fft grads") {
   jvp_out = jvp(rfft_fn, zeros_like(tangent), tangent).second;
   CHECK(array_equal(fft::rfft(tangent), jvp_out).item<bool>());
 
-  // // Inverse real
+  // Inverse real
   auto irfft_fn = [](array x) { return fft::irfft(x); };
   cotangent = astype(arange(10), float32);
   vjp_out = vjp(irfft_fn, astype(zeros({6}), complex64), cotangent).second;
@@ -283,9 +281,7 @@ TEST_CASE("test fft grads") {
 
   tangent = astype(arange(10), complex64);
   jvp_out = jvp(irfft_fn, zeros_like(tangent), tangent).second;
-  array out = fft::irfft(tangent);
-  array diff = out - jvp_out;
-  CHECK(array_equal(out, jvp_out).item<bool>());
+  CHECK(array_equal(fft::irfft(tangent), jvp_out).item<bool>());
 
   // Check ND vjps run properly
   vjp_out = vjp([](array x) { return fft::fftn(x); },

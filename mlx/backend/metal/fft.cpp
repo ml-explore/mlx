@@ -4,20 +4,22 @@
 #include <numeric>
 #include <set>
 
+#include <vecLib/vDSP.h>
+#include <vecLib/vForce.h>
+
 #include "mlx/3rdparty/pocketfft.h"
 #include "mlx/backend/common/binary.h"
+#include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/ops.h"
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/metal/binary.h"
 #include "mlx/backend/metal/copy.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/unary.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/mlx.h"
 #include "mlx/primitives.h"
-
-#include <vecLib/vDSP.h>
-#include <vecLib/vForce.h>
 
 namespace mlx::core {
 
@@ -53,77 +55,6 @@ std::vector<int> prime_factors(int n) {
   return factors;
 }
 
-struct FFTPlan {
-  int n = 0;
-  // Number of steps for each radix in the Stockham decomposition
-  std::vector<int> stockham;
-  // Number of steps for each radix in the Rader decomposition
-  std::vector<int> rader;
-  // Rader factor, 1 if no rader factors
-  int rader_n = 1;
-  int bluestein_n = -1;
-  // Four step FFT
-  bool four_step = false;
-  int n1 = 0;
-  int n2 = 0;
-};
-
-int compute_elems_per_thread(FFTPlan plan) {
-  // Heuristics for selecting an efficient number
-  // of threads to use for a particular mixed-radix FFT.
-  auto n = plan.n;
-
-  std::vector<int> steps;
-  auto radices = supported_radices();
-  steps.insert(steps.end(), plan.stockham.begin(), plan.stockham.end());
-  steps.insert(steps.end(), plan.rader.begin(), plan.rader.end());
-  std::set<int> used_radices;
-  for (int i = 0; i < steps.size(); i++) {
-    int radix = radices[i % radices.size()];
-    if (steps[i] > 0) {
-      used_radices.insert(radix);
-    }
-  }
-
-  // Manual tuning for 7/11/13
-  if (used_radices.find(7) != used_radices.end() &&
-      (used_radices.find(11) != used_radices.end() ||
-       used_radices.find(13) != used_radices.end())) {
-    return 7;
-  } else if (
-      used_radices.find(11) != used_radices.end() &&
-      used_radices.find(13) != used_radices.end()) {
-    return 11;
-  }
-
-  // TODO(alexbarron) Some really weird stuff is going on
-  // for certain `elems_per_thread` on large composite n.
-  // Possibly a compiler issue?
-  if (n == 3159)
-    return 13;
-  if (n == 3645)
-    return 5;
-  if (n == 3969)
-    return 7;
-  if (n == 1982)
-    return 5;
-
-  if (used_radices.size() == 1) {
-    return *(used_radices.begin());
-  }
-  if (used_radices.size() == 2) {
-    if (used_radices.find(11) != used_radices.end() ||
-        used_radices.find(13) != used_radices.end()) {
-      return std::accumulate(used_radices.begin(), used_radices.end(), 0) / 2;
-    }
-    std::vector<int> radix_vec(used_radices.begin(), used_radices.end());
-    return radix_vec[1];
-  }
-  // In all other cases use the second smallest radix.
-  std::vector<int> radix_vec(used_radices.begin(), used_radices.end());
-  return radix_vec[1];
-}
-
 struct FourStepParams {
   bool required = false;
   bool first_step = true;
@@ -141,6 +72,21 @@ void fft_op(
     const FourStepParams four_step_params,
     bool inplace,
     const Stream& s);
+
+struct FFTPlan {
+  int n = 0;
+  // Number of steps for each radix in the Stockham decomposition
+  std::vector<int> stockham;
+  // Number of steps for each radix in the Rader decomposition
+  std::vector<int> rader;
+  // Rader factor, 1 if no rader factors
+  int rader_n = 1;
+  int bluestein_n = -1;
+  // Four step FFT
+  bool four_step = false;
+  int n1 = 0;
+  int n2 = 0;
+};
 
 int next_fast_n(int n) {
   return next_power_of_2(n);
@@ -230,6 +176,62 @@ FFTPlan plan_fft(int n) {
 
   plan.stockham = plan_stockham_fft(remaining_n);
   return plan;
+}
+
+int compute_elems_per_thread(FFTPlan plan) {
+  // Heuristics for selecting an efficient number
+  // of threads to use for a particular mixed-radix FFT.
+  auto n = plan.n;
+
+  std::vector<int> steps;
+  auto radices = supported_radices();
+  steps.insert(steps.end(), plan.stockham.begin(), plan.stockham.end());
+  steps.insert(steps.end(), plan.rader.begin(), plan.rader.end());
+  std::set<int> used_radices;
+  for (int i = 0; i < steps.size(); i++) {
+    int radix = radices[i % radices.size()];
+    if (steps[i] > 0) {
+      used_radices.insert(radix);
+    }
+  }
+
+  // Manual tuning for 7/11/13
+  if (used_radices.find(7) != used_radices.end() &&
+      (used_radices.find(11) != used_radices.end() ||
+       used_radices.find(13) != used_radices.end())) {
+    return 7;
+  } else if (
+      used_radices.find(11) != used_radices.end() &&
+      used_radices.find(13) != used_radices.end()) {
+    return 11;
+  }
+
+  // TODO(alexbarron) Some really weird stuff is going on
+  // for certain `elems_per_thread` on large composite n.
+  // Possibly a compiler issue?
+  if (n == 3159)
+    return 13;
+  if (n == 3645)
+    return 5;
+  if (n == 3969)
+    return 7;
+  if (n == 1982)
+    return 5;
+
+  if (used_radices.size() == 1) {
+    return *(used_radices.begin());
+  }
+  if (used_radices.size() == 2) {
+    if (used_radices.find(11) != used_radices.end() ||
+        used_radices.find(13) != used_radices.end()) {
+      return std::accumulate(used_radices.begin(), used_radices.end(), 0) / 2;
+    }
+    std::vector<int> radix_vec(used_radices.begin(), used_radices.end());
+    return radix_vec[1];
+  }
+  // In all other cases use the second smallest radix.
+  std::vector<int> radix_vec(used_radices.begin(), used_radices.end());
+  return radix_vec[1];
 }
 
 void compute_bluestein_constants(
@@ -704,6 +706,8 @@ void fft_op(
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto in_type_str = in.dtype() == float32 ? "float" : "float2";
   auto out_type_str = out.dtype() == float32 ? "float" : "float2";
+  // Only required by four step
+  int step = -1;
   {
     std::ostringstream kname;
     std::string inv_string = inverse ? "true" : "false";
@@ -715,7 +719,7 @@ void fft_op(
       kname << "rader_fft_mem_" << threadgroup_mem_size << "_" << in_type_str
             << "_" << out_type_str;
     } else if (four_step_params.required) {
-      auto step = four_step_params.first_step ? "0" : "1";
+      step = four_step_params.first_step ? 0 : 1;
       kname << "four_step_mem_" << threadgroup_mem_size << "_" << in_type_str
             << "_" << out_type_str << "_" << step << "_" << real_string;
     } else {
@@ -726,7 +730,16 @@ void fft_op(
     // We use a specialized kernel for each FFT size
     kname << "_n" << fft_size << "_inv_" << inverse;
     std::string hash_name = kname.str();
-    auto kernel = d.get_kernel(base_name, "mlx", hash_name, func_consts);
+    auto kernel = get_fft_kernel(
+        d,
+        base_name,
+        hash_name,
+        threadgroup_mem_size,
+        in_type_str,
+        out_type_str,
+        step,
+        real,
+        func_consts);
 
     compute_encoder->setComputePipelineState(kernel);
     compute_encoder.set_input_array(in_contiguous, 0);

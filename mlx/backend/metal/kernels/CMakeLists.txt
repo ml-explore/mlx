@@ -48,6 +48,7 @@ set(
   binary.h
   ternary.h
   copy.h
+  fft.h
   fft/radix.h
   fft/readwrite.h
   softmax.h

@@ -64,6 +64,11 @@ if (MLX_METAL_JIT)
   make_jit_source(unary)
   make_jit_source(binary)
   make_jit_source(binary_two)
+  make_jit_source(
+    fft
+    kernels/fft/radix.h
+    kernels/fft/readwrite.h
+  )
   make_jit_source(ternary)
   make_jit_source(softmax)
   make_jit_source(scan)
