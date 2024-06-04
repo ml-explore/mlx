@@ -81,7 +81,9 @@ array fft_impl(
   if (any_greater) {
     // Pad with zeros
     auto tmp = zeros(in_shape, a.dtype(), s);
-    in = scatter(tmp, std::vector<array>{}, in, std::vector<int>{}, s);
+    // GPU scatter for complex64 is NYI
+    in =
+        scatter(tmp, std::vector<array>{}, in, std::vector<int>{}, Device::cpu);
   }
 
   auto out_shape = in_shape;

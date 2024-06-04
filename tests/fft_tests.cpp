@@ -4,11 +4,11 @@
 
 #include "mlx/mlx.h"
 
+#include <iostream>
+
 using namespace mlx::core;
 
 TEST_CASE("test fft basics") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
   array x(1.0);
   CHECK_THROWS(fft::fft(x));
   CHECK_THROWS(fft::ifft(x));
@@ -94,13 +94,9 @@ TEST_CASE("test fft basics") {
     CHECK(array_equal(y, array(expected_1, {2, 2})).item<bool>());
     CHECK(array_equal(fft::ifft(y, 1), x).item<bool>());
   }
-  set_default_device(device);
 }
 
 TEST_CASE("test real ffts") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   auto x = array({1.0});
   auto y = fft::rfft(x);
   CHECK_EQ(y.dtype(), complex64);
@@ -124,14 +120,9 @@ TEST_CASE("test real ffts") {
   CHECK_EQ(y.size(), 2);
   CHECK_EQ(y.dtype(), float32);
   CHECK(array_equal(y, array({0.5f, -0.5f})).item<bool>());
-
-  set_default_device(device);
 }
 
 TEST_CASE("test fftn") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   auto x = zeros({5, 5, 5});
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, 3}), std::invalid_argument);
   CHECK_THROWS_AS(fft::fftn(x, {}, {0, -4}), std::invalid_argument);
@@ -204,8 +195,6 @@ TEST_CASE("test fftn") {
     CHECK_EQ(y.shape(), std::vector<int>{5, 8});
     CHECK_EQ(y.dtype(), float32);
   }
-
-  set_default_device(device);
 }
 
 TEST_CASE("test fft with provided shape") {
@@ -234,9 +223,6 @@ TEST_CASE("test fft with provided shape") {
 }
 
 TEST_CASE("test fft vmap") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   auto fft_fn = [](array x) { return fft::fft(x); };
   auto x = reshape(arange(8), {2, 4});
   auto y = vmap(fft_fn)(x);
@@ -252,14 +238,9 @@ TEST_CASE("test fft vmap") {
 
   y = vmap(rfft_fn, 1, 1)(x);
   CHECK(array_equal(y, fft::rfft(x, 0)).item<bool>());
-
-  set_default_device(device);
 }
 
 TEST_CASE("test fft grads") {
-  auto device = default_device();
-  set_default_device(Device::cpu);
-
   // Regular
   auto fft_fn = [](array x) { return fft::fft(x); };
   auto cotangent = astype(arange(10), complex64);
@@ -289,7 +270,7 @@ TEST_CASE("test fft grads") {
   jvp_out = jvp(rfft_fn, zeros_like(tangent), tangent).second;
   CHECK(array_equal(fft::rfft(tangent), jvp_out).item<bool>());
 
-  // Inverse real
+  // // Inverse real
   auto irfft_fn = [](array x) { return fft::irfft(x); };
   cotangent = astype(arange(10), float32);
   vjp_out = vjp(irfft_fn, astype(zeros({6}), complex64), cotangent).second;
@@ -302,7 +283,9 @@ TEST_CASE("test fft grads") {
 
   tangent = astype(arange(10), complex64);
   jvp_out = jvp(irfft_fn, zeros_like(tangent), tangent).second;
-  CHECK(array_equal(fft::irfft(tangent), jvp_out).item<bool>());
+  array out = fft::irfft(tangent);
+  array diff = out - jvp_out;
+  CHECK(array_equal(out, jvp_out).item<bool>());
 
   // Check ND vjps run properly
   vjp_out = vjp([](array x) { return fft::fftn(x); },
@@ -328,6 +311,4 @@ TEST_CASE("test fft grads") {
                 zeros({5, 8}))
                 .second;
   CHECK_EQ(vjp_out.shape(), std::vector<int>{5, 5});
-
-  set_default_device(device);
 }

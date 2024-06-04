@@ -48,6 +48,8 @@ set(
   binary.h
   ternary.h
   copy.h
+  fft/radix.h
+  fft/readwrite.h
   softmax.h
   sort.h
   scan.h
