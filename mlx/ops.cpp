@@ -4379,6 +4379,9 @@ array operator>>(const array& a, const array& b) {
 }
 
 array view(const array& a, const Dtype& dtype, StreamOrDevice s /* = {} */) {
+  if (a.dtype() == dtype) {
+    return a;
+  }
   auto out_shape = a.shape();
   auto ibytes = size_of(a.dtype());
   auto obytes = size_of(dtype);

@@ -612,7 +612,13 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
     auto tmp = array(in.shape(), in.dtype(), nullptr, {});
     tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
     copy_inplace(in, tmp, CopyType::General);
-    out.move_shared_buffer(tmp, out.strides(), out.flags(), out.size());
+
+    auto flags = out.flags();
+    flags.contiguous = true;
+    flags.row_contiguous = true;
+    auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
+    flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
+    out.move_shared_buffer(tmp, out.strides(), flags, out.size());
   }
 }
 
