@@ -1,6 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cmath>
-#include <iostream> // TODO
 #include <numeric>
 
 #include "doctest/doctest.h"
