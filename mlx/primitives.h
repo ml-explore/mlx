@@ -2021,6 +2021,22 @@ class Uniform : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class View : public UnaryPrimitive {
+ public:
+  explicit View(Stream stream, Dtype dtype)
+      : UnaryPrimitive(stream), dtype_(dtype) {};
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  void print(std::ostream& os) override;
+  bool is_equivalent(const Primitive& other) const override;
+
+ private:
+  Dtype dtype_;
+};
+
 class Transpose : public UnaryPrimitive {
  public:
   explicit Transpose(Stream stream, const std::vector<int>& axes)

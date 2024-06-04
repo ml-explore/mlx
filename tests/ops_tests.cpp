@@ -3473,3 +3473,15 @@ TEST_CASE("test trace") {
   auto out4 = trace(in, 0, 1, 2, float32);
   CHECK(array_equal(out4, array({3, 11}, {2})).item<bool>());
 }
+
+TEST_CASE("test view") {
+  auto in = array(3);
+  CHECK_THROWS(view(in, int64));
+
+  in = array({1, 2, 3});
+  CHECK_THROWS(view(in, int64));
+
+  in = array({1, 2, 3, 4}, int64);
+  auto out = view(in, int32);
+  CHECK(array_equal(out, array({1, 0, 2, 0, 3, 0, 4, 0})).item<bool>());
+}

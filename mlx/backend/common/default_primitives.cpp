@@ -5,7 +5,6 @@
 #else
 #include <cblas.h>
 #endif
-
 #include <cstring>
 
 #include "mlx/array.h"

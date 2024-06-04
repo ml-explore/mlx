@@ -1300,6 +1300,7 @@ array operator<<(const array& a, const array& b);
 array right_shift(const array& a, const array& b, StreamOrDevice s = {});
 array operator>>(const array& a, const array& b);
 
+array view(const array& a, const Dtype& dtype, StreamOrDevice s = {});
 /** @} */
 
 } // namespace mlx::core

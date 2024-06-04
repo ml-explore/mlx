@@ -590,4 +590,36 @@ void Tanh::eval(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void View::eval_cpu(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 1);
+  auto& in = inputs[0];
+  auto ibytes = size_of(in.dtype());
+  auto obytes = size_of(out.dtype());
+  // Conditions for buffer copying (disjunction):
+  // - type size is the same
+  // - type size is smaller and the last axis is contiguous
+  // - the entire array is row contiguous
+  if (ibytes == obytes || obytes < ibytes && in.strides().back() == 1 ||
+      in.flags().row_contiguous) {
+    auto strides = in.strides();
+    for (int i = 0; i < strides.size() - 1; ++i) {
+      strides[i] *= ibytes;
+      strides[i] /= obytes;
+    }
+    out.copy_shared_buffer(
+        in, strides, in.flags(), in.data_size() * obytes / ibytes);
+  } else {
+    auto tmp = array(in.shape(), in.dtype(), nullptr, {});
+    tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
+    copy_inplace(in, tmp, CopyType::General);
+
+    auto flags = out.flags();
+    flags.contiguous = true;
+    flags.row_contiguous = true;
+    auto max_dim = std::max_element(out.shape().begin(), out.shape().end());
+    flags.col_contiguous = out.size() <= 1 || out.size() == *max_dim;
+    out.move_shared_buffer(tmp, out.strides(), flags, out.size());
+  }
+}
+
 } // namespace mlx::core
