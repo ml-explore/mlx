@@ -1533,6 +1533,12 @@ class TestOps(mlx_tests.MLXTestCase):
             b = mx.array([1, 2])
             mx.concatenate([a, b], axis=0)
 
+        # Cocnatenate with 0-sized array
+        a = mx.zeros((2, 0, 2))
+        b = mx.zeros((2, 2, 2))
+        out = mx.concatenate([a, b], axis=1)
+        self.assertTrue(mx.array_equal(out, b))
+
     def test_meshgrid(self):
         x = mx.array([1, 2, 3], dtype=mx.int32)
         y = np.array([1, 2, 3], dtype=np.int32)
