@@ -33,9 +33,6 @@ void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
-  if (out.size() == 0) {
-    return;
-  }
   if (ctype == CopyType::GeneralGeneral) {
     ctype = CopyType::General;
   }
@@ -57,6 +54,10 @@ void copy_gpu_inplace(
     int64_t out_offset,
     CopyType ctype,
     const Stream& s) {
+  if (out.size() == 0) {
+    return;
+  }
+
   // Try to collapse contiguous dims
   auto [shape, strides] = collapse_contiguous_dims(
       data_shape, std::vector{strides_in_pre, strides_out_pre});
