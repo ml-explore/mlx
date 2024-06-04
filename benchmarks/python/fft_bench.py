@@ -35,7 +35,6 @@ def run_bench(system_size):
 
 
 def time_fft():
-
     with mx.stream(mx.cpu):
         cpu_bandwidths = run_bench(system_size=int(2**22))
 

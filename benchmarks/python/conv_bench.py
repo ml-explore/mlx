@@ -54,7 +54,6 @@ def make_pt_conv_2D(strides=(1, 1), padding=(0, 0), groups=1):
 
 
 def bench_shape(N, H, W, C, kH, kW, O, strides, padding, groups, np_dtype):
-
     scale = 1.0 / math.sqrt(kH * kH * C)
     a_np = np.random.uniform(0, 0.5, (N, H, W, C)).astype(np_dtype)
     b_np = np.random.uniform(-scale, scale, (O, kH, kW, int(C / groups))).astype(

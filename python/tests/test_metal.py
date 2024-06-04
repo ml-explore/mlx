@@ -7,7 +7,6 @@ import mlx_tests
 
 
 class TestMetal(mlx_tests.MLXTestCase):
-
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_memory_info(self):
         old_limit = mx.metal.set_cache_limit(0)
