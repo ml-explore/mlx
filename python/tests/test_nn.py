@@ -55,9 +55,7 @@ class TestBase(mlx_tests.MLXTestCase):
         m.apply_to_modules(assert_training)
 
     def test_module_attributes(self):
-
         class Model(nn.Module):
-
             def __init__(self):
                 super().__init__()
                 self.val = None

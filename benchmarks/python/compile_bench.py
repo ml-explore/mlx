@@ -9,7 +9,6 @@ from time_utils import time_fn
 
 
 def bench_gelu():
-
     def gelu(x):
         return x * (1 + mx.erf(x / math.sqrt(2))) / 2
 
@@ -51,7 +50,6 @@ def bench_gelu():
 
 
 def bench_layernorm():
-
     weight = mx.random.uniform(shape=(4096,)).astype(mx.float16)
     bias = mx.random.uniform(shape=(4096,)).astype(mx.float16)
     mx.eval(weight, bias)

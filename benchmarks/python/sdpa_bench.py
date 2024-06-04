@@ -10,7 +10,6 @@ SEQ_INCREMENT = 50
 
 
 def time_self_attention_primitives():
-
     mx.random.seed(3)
     B = 2
     H = 38
@@ -32,7 +31,6 @@ def time_self_attention_primitives():
 
 
 def time_self_attention_sdpa():
-
     mx.random.seed(3)
     B = 2
     H = 38
