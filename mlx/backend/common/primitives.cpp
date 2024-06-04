@@ -11,6 +11,7 @@
 #include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/ops.h"
+#include "mlx/backend/common/slicing.h"
 #include "mlx/backend/common/threefry.h"
 #include "mlx/backend/common/unary.h"
 #include "mlx/backend/common/utils.h"
@@ -492,7 +493,8 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
   auto& in = inputs[0];
 
   // Calculate out strides, initial offset and if copy needs to be made
-  auto [copy_needed, data_offset, inp_strides] = prepare_slice(in);
+  auto [copy_needed, data_offset, inp_strides] =
+      prepare_slice(in, start_indices_, strides_);
 
   // Do copy if needed
   if (copy_needed) {

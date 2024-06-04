@@ -6,4 +6,5 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/../common/common.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../common/compiled.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/../common/compiled_nocpu.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/../common/slicing.cpp
 )
