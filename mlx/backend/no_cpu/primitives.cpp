@@ -106,5 +106,6 @@ NO_CPU(Tan)
 NO_CPU(Tanh)
 NO_CPU(Transpose)
 NO_CPU(Inverse)
+NO_CPU(View)
 
 } // namespace mlx::core

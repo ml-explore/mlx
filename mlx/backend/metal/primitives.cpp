@@ -422,4 +422,29 @@ void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
       "[Cholesky::eval_gpu] Metal Cholesky decomposition NYI.");
 }
 
+void View::eval_gpu(const std::vector<array>& inputs, array& out) {
+  auto& in = inputs[0];
+  auto ibytes = size_of(in.dtype());
+  auto obytes = size_of(out.dtype());
+  // Conditions for buffer copying (disjunction):
+  // - type size is the same
+  // - type size is smaller and the last axis is contiguous
+  // - the entire array is row contiguous
+  if (ibytes == obytes || obytes < ibytes && in.strides().back() == 1 ||
+      in.flags().row_contiguous) {
+    auto strides = in.strides();
+    for (int i = 0; i < strides.size() - 1; ++i) {
+      strides[i] *= ibytes;
+      strides[i] /= obytes;
+    }
+    out.copy_shared_buffer(
+        in, strides, in.flags(), in.data_size() * ibytes / obytes);
+  } else {
+    auto tmp = array(in.shape(), in.dtype(), nullptr, {});
+    tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
+    copy_gpu_inplace(in, tmp, CopyType::General, stream());
+    out.move_shared_buffer(tmp, out.strides(), out.flags(), out.size());
+  }
+}
+
 } // namespace mlx::core

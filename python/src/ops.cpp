@@ -4356,4 +4356,32 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The bitwise right shift ``a >> b``.
       )pbdoc");
+  m.def(
+      "view",
+      [](const ScalarOrArray& a, const Dtype& dtype, StreamOrDevice s) {
+        return view(to_array(a), dtype, s);
+      },
+      nb::arg(),
+      "dtype"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def view(a: Union[scalar, array], dtype: Dtype, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        View the array as a different type.
+
+        The output shape changes along the last axis if the input array's
+        type and the input ``dtype`` do not have the same size.
+
+        Note: the view op does not imply that the input and output arrays share
+        their underlying data. The view only gaurantees that the binary
+        representation of each element (or group of elements) is the same.
+
+        Args:
+            a (array): Input array or scalar.
+            dtype (Dtype): The data type to change to.
+
+        Returns:
+            array: The array with the new type.
+      )pbdoc");
 }

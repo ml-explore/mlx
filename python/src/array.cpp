@@ -1276,5 +1276,14 @@ void init_array(nb::module_& m) {
           },
           nb::kw_only(),
           "stream"_a = nb::none(),
-          "See :func:`conj`.");
+          "See :func:`conj`.")
+      .def(
+          "view",
+          [](const ScalarOrArray& a, const Dtype& dtype, StreamOrDevice s) {
+            return view(to_array(a), dtype, s);
+          },
+          "dtype"_a,
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          "See :func:`view`.");
 }
