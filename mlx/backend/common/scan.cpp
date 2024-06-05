@@ -234,7 +234,7 @@ void scan_dispatch(
       auto op = [](U* o, const U* y, const T* x) { *o = (*x < *y) ? *y : *x; };
       auto init = (issubdtype(input.dtype(), floating))
           ? static_cast<U>(-std::numeric_limits<float>::infinity())
-          : std::numeric_limits<U>::max();
+          : std::numeric_limits<U>::min();
       auto opcs = DefaultContiguousScan<T, U, decltype(op)>(op, init);
       auto opss = DefaultStridedScan<T, U, decltype(op)>(op, init);
       scan_op<T, U>(opcs, opss, input, output, axis, reverse, inclusive);

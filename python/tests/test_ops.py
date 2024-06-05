@@ -1678,6 +1678,7 @@ class TestOps(mlx_tests.MLXTestCase):
                 c_mlx = mxop(a_mlx, axis=axis)
                 self.assertTrue(np.allclose(c_npy, c_mlx, rtol=1e-3, atol=1e-3))
 
+        a_mlx = mx.random.randint(shape=(32, 32, 32), low=-100, high=100)
         for op in ["cumsum", "cumprod", "cummax", "cummin"]:
             mxop = getattr(mx, op)
             c1 = mxop(a_mlx, axis=2)
