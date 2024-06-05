@@ -927,7 +927,86 @@ array take_along_axis(
     int axis,
     StreamOrDevice s = {});
 
-/** Scatter updates to given linear indices */
+/** Scatter updates to given linear indices.
+
+indices and axes together determine which locations of a are updated with the
+values in updates. Assuming 1-d indices and axes for simplicity, indices[i] are
+the indices on axis axes[i] to which the values in updates[i, ...] will be
+applied (according to the selected ReduceType).  This implies that
+indices.size() == axes.size() so that we can assign each (array of) indices to
+an axis. Missing indices/axes are assumed to be zero.
+
+To avoid ambiguity in how values are applied to a, we enforce that the rank of
+updates is equal to the sum of the rank of the indices and the rank of a, ie
+updates.ndim() == indices.ndim() + a.ndim(). This means that the leading
+updates.ndim() dimensions of updates correspond to the dimensions of indices,
+and the remaining a.ndim() dimensions are the values that will be applied to a.
+
+For example,
+
+  auto in = zeros({4, 4}, float32);
+  auto indices = array({2});
+  auto updates = reshape(arange(1, 3, float32), {1, 1, 2});
+  std::vector<int> axes{0};
+
+  scatter(in, {indices}, updates, axes)
+
+will produce:
+
+  array([[0, 0, 0, 0],
+        [0, 0, 0, 0],
+        [1, 2, 0, 0],
+        [0, 0, 0, 0]], dtype=float32)
+
+ie scattering the two-element row vector [1, 2] starting at the (2, 0)
+position of a.
+
+Adding another element to indices will scatter into another location of
+a, and also requires the leading dimensions of updates to match
+those of indices:
+
+  auto in = zeros({4, 4}, float32);
+  auto indices = array({2, 0});
+  auto updates = reshape(arange(1, 5, float32), {2, 1, 2});
+  std::vector<int> axes{0};
+
+will produce:
+
+  array([[3, 4, 0, 0],
+        [0, 0, 0, 0],
+        [1, 2, 0, 0],
+        [0, 0, 0, 0]], dtype=float32)
+
+Adding another pair of items to indices/axes overrides the zero default
+and allows controlling the scatter location on a further axis (in this
+case columns):
+
+  auto in = zeros({4, 4}, float32);
+  auto indices = std::vector{array({2, 0}), array({1, 2})};
+  auto updates = reshape(arange(1, 5, float32), {2, 1, 2});
+  std::vector<int> axes{0, 1};
+
+will produce:
+
+  array([[0, 0, 3, 4],
+        [0, 0, 0, 0],
+        [0, 1, 2, 0],
+        [0, 0, 0, 0]], dtype=float32)
+
+Items in indices are broadcasted together, which means that:
+
+  auto indices = std::vector{array({2, 0}), array({1})};
+
+would be equivalent to:
+
+  auto indices = std::vector{array({2, 0}), array({1, 1})};
+
+It is possible to introduce out-of-bounds accesses to a,
+for example by scattering a 2-element row starting on the last
+column of a. The resulting behavior is currently undefined, typically
+leading to either wrap-around to the next col/row or out-of-bounds
+memory access.
+*/
 array scatter(
     const array& a,
     const std::vector<array>& indices,
