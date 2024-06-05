@@ -309,6 +309,7 @@ template <
         }
       }
     }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Share the prefix
     if (simd_group_id == simd_groups - 1 && simd_lane_id == simd_size - 1) {
