@@ -65,16 +65,16 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Compute the thread grid
     int n_reads = (in.itemsize() <= 4) ? 4 : 2;
-    int elements_per_simd = n_reads * 32;
+    constexpr int simd_size = 32;
+    int elements_per_simd = n_reads * simd_size;
     int thread_groups = in.size() / size;
     int thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-    if (size < n_reads * 1024) {
-      thread_group_size = ((size + elements_per_simd - 1) / elements_per_simd) *
-          elements_per_simd;
-    } else if (size < n_reads * 2048) {
+    if (size <= n_reads * 1024) {
       thread_group_size =
-          ((size / 2 + elements_per_simd - 1) / elements_per_simd) *
-          elements_per_simd;
+          ((size + elements_per_simd - 1) / elements_per_simd) * simd_size;
+    } else if (size <= n_reads * 2048) {
+      thread_group_size =
+          ((size / 2 + elements_per_simd - 1) / elements_per_simd) * simd_size;
     }
     thread_group_size = std::min(
         thread_group_size,
