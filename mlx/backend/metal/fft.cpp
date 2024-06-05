@@ -1,17 +1,11 @@
 // Copyright © 2023 Apple Inc.
 #include <cassert>
+#include <complex>
 #include <map>
 #include <numeric>
 #include <set>
 
-#include <vecLib/vDSP.h>
-#include <vecLib/vForce.h>
-
 #include "mlx/3rdparty/pocketfft.h"
-#include "mlx/backend/common/binary.h"
-#include "mlx/backend/common/copy.h"
-#include "mlx/backend/common/ops.h"
-#include "mlx/backend/common/unary.h"
 #include "mlx/backend/metal/binary.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/kernels.h"
@@ -234,92 +228,7 @@ int compute_elems_per_thread(FFTPlan plan) {
   return radix_vec[1];
 }
 
-void compute_bluestein_constants(
-    int n,
-    int bluestein_n,
-    array& w_q,
-    array& w_k) {
-  // We need to calculate the Bluestein twiddle factors
-  // in double precision for the overall numerical stability
-  // of Bluestein's FFT algorithm to be acceptable.
-  //
-  // Metal doesn't support float64, so instead we
-  // manually implement the required operations using accelerate on cpu.
-  //
-  // In numpy:
-  // w_k = np.exp(-1j * np.pi / N * (np.arange(-N + 1, N) ** 2))
-  // w_q = np.fft.fft(1/w_k)
-  // return w_k, w_q
-  size_t fft_size = w_q.shape(0);
-
-  int length = 2 * n - 1;
-
-  std::vector<double> x(length);
-  std::vector<double> y(length);
-
-  std::iota(x.begin(), x.end(), -n + 1);
-  vDSP_vsqD(x.data(), 1, y.data(), 1, x.size());
-  double theta = (double)1.0 / (double)n;
-  vDSP_vsmulD(y.data(), 1, &theta, x.data(), 1, x.size());
-
-  std::vector<double> real_part(length);
-  std::vector<double> imag_part(length);
-  vvcospi(real_part.data(), x.data(), &length);
-  vvsinpi(imag_part.data(), x.data(), &length);
-
-  double minus_1 = -1.0;
-  vDSP_vsmulD(x.data(), 1, &minus_1, y.data(), 1, x.size());
-
-  // compute w_k
-  std::vector<double> real_part_w_k(n);
-  std::vector<double> imag_part_w_k(n);
-  vvcospi(real_part_w_k.data(), y.data() + length - n, &n);
-  vvsinpi(imag_part_w_k.data(), y.data() + length - n, &n);
-
-  auto convert_float = [](double real, double imag) {
-    return std::complex<float>(real, imag);
-  };
-
-  std::vector<std::complex<float>> w_k_input(n, 0.0);
-  std::transform(
-      real_part_w_k.begin(),
-      real_part_w_k.end(),
-      imag_part_w_k.begin(),
-      w_k_input.begin(),
-      convert_float);
-
-  w_k.set_data(allocator::malloc_or_wait(w_k.nbytes()));
-
-  auto w_k_ptr =
-      reinterpret_cast<std::complex<float>*>(w_k.data<complex64_t>());
-  memcpy(w_k_ptr, w_k_input.data(), n * w_k.itemsize());
-
-  // convert back to float now we've done the sincos
-  std::vector<std::complex<float>> fft_input(fft_size, 0.0);
-  std::transform(
-      real_part.begin(),
-      real_part.end(),
-      imag_part.begin(),
-      fft_input.begin(),
-      convert_float);
-
-  w_q.set_data(allocator::malloc_or_wait(w_q.nbytes()));
-  auto w_q_ptr =
-      reinterpret_cast<std::complex<float>*>(w_q.data<complex64_t>());
-
-  std::ptrdiff_t item_size = w_q.itemsize();
-
-  pocketfft::c2c(
-      /* shape= */ {fft_size},
-      /* stride_in= */ {item_size},
-      /* stride_out= */ {item_size},
-      /* axes= */ {0},
-      /* forward= */ true,
-      /* data_in= */ fft_input.data(),
-      /* data_out= */ w_q_ptr,
-      /* scale= */ 1.0f);
-}
-
+// Rader
 int mod_exp(int x, int y, int n) {
   int out = 1;
   while (y) {
@@ -365,37 +274,79 @@ std::tuple<array, array, array> compute_raders_constants(
   array g_q_arr(g_q.begin(), {rader_n - 1});
   array g_minus_q_arr(g_minus_q.begin(), {rader_n - 1});
 
-  CopyType ctype =
-      g_minus_q_arr.flags().contiguous ? CopyType::Vector : CopyType::General;
-  array g_minus_q_float({rader_n - 1}, complex64, nullptr, {});
-  copy(g_minus_q_arr, g_minus_q_float, ctype);
-
-  array pi_i =
-      array({complex64_t{0.0f, (float)(-2.0 * M_PI / rader_n)}}, complex64);
-  array temp_mul({rader_n - 1}, complex64, nullptr, {});
-  binary(g_minus_q_float, pi_i, temp_mul, detail::Multiply());
-
-  array temp_exp({rader_n - 1}, complex64, nullptr, {});
-  unary_fp(temp_mul, temp_exp, detail::Exp());
+  std::vector<std::complex<float>> b_q(rader_n - 1);
+  for (int i = 0; i < rader_n - 1; i++) {
+    float pi_i = (float)g_minus_q[i] * -2.0 * M_PI / rader_n;
+    b_q[i] = std::exp(std::complex<float>(0, pi_i));
+  }
 
   array b_q_fft({rader_n - 1}, complex64, nullptr, {});
   b_q_fft.set_data(allocator::malloc_or_wait(b_q_fft.nbytes()));
   auto b_q_fft_ptr =
       reinterpret_cast<std::complex<float>*>(b_q_fft.data<complex64_t>());
-  auto temp_exp_ptr =
-      reinterpret_cast<std::complex<float>*>(temp_exp.data<complex64_t>());
   std::ptrdiff_t item_size = b_q_fft.itemsize();
   size_t fft_size = rader_n - 1;
+  // This FFT is always small (<4096, batch 1) so save some overhead
+  // and do it on the CPU
   pocketfft::c2c(
       /* shape= */ {fft_size},
       /* stride_in= */ {item_size},
       /* stride_out= */ {item_size},
       /* axes= */ {0},
       /* forward= */ true,
-      /* data_in= */ temp_exp_ptr,
+      /* data_in= */ b_q.data(),
       /* data_out= */ b_q_fft_ptr,
       /* scale= */ 1.0f);
   return std::make_tuple(b_q_fft, g_q_arr, g_minus_q_arr);
+}
+
+// Bluestein
+std::pair<array, array> compute_bluestein_constants(int n, int bluestein_n) {
+  // We need to calculate the Bluestein twiddle factors
+  // in double precision for the overall numerical stability
+  // of Bluestein's FFT algorithm to be acceptable.
+  //
+  // Metal doesn't support float64, so instead we
+  // manually implement the required operations on cpu.
+  //
+  // In numpy:
+  // w_k = np.exp(-1j * np.pi / N * (np.arange(-N + 1, N) ** 2))
+  // w_q = np.fft.fft(1/w_k)
+  // return w_k, w_q
+  int length = 2 * n - 1;
+
+  std::vector<std::complex<float>> w_k_vec(n);
+  std::vector<std::complex<float>> w_q_vec(bluestein_n, 0);
+
+  for (int i = -n + 1; i < n; i++) {
+    double theta = pow(i, 2) * M_PI / (double)n;
+    w_q_vec[i + n - 1] = std::exp(std::complex<double>(0, theta));
+    if (i >= 0) {
+      w_k_vec[i] = std::exp(std::complex<double>(0, -theta));
+    }
+  }
+
+  array w_k({n}, complex64, nullptr, {});
+  w_k.set_data(allocator::malloc_or_wait(w_k.nbytes()));
+  std::copy(w_k_vec.begin(), w_k_vec.end(), w_k.data<complex64_t>());
+
+  array w_q({bluestein_n}, complex64, nullptr, {});
+  w_q.set_data(allocator::malloc_or_wait(w_q.nbytes()));
+  auto w_q_ptr =
+      reinterpret_cast<std::complex<float>*>(w_q.data<complex64_t>());
+
+  std::ptrdiff_t item_size = w_q.itemsize();
+  size_t fft_size = bluestein_n;
+  pocketfft::c2c(
+      /* shape= */ {fft_size},
+      /* stride_in= */ {item_size},
+      /* stride_out= */ {item_size},
+      /* axes= */ {0},
+      /* forward= */ true,
+      /* data_in= */ w_q_vec.data(),
+      /* data_out= */ w_q_ptr,
+      /* scale= */ 1.0f);
+  return std::make_tuple(w_k, w_q);
 }
 
 void multi_upload_bluestein_fft(
@@ -410,9 +361,7 @@ void multi_upload_bluestein_fft(
   // TODO(alexbarron) Implement fused kernels for mutli upload bluestein's
   // algorithm
   int n = inverse ? out.shape(axis) : in.shape(axis);
-  array w_k({n}, complex64, nullptr, {});
-  array w_q({plan.bluestein_n}, complex64, nullptr, {});
-  compute_bluestein_constants(n, plan.bluestein_n, w_q, w_k);
+  auto [w_k, w_q] = compute_bluestein_constants(n, plan.bluestein_n);
 
   // Broadcast w_q and w_k to the batch size
   std::vector<size_t> b_strides(in.ndim(), 0);
@@ -747,9 +696,7 @@ void fft_op(
 
     if (plan.bluestein_n > 0) {
       // Precomputed twiddle factors for Bluestein's
-      array w_q({plan.bluestein_n}, complex64, nullptr, {});
-      array w_k({(int)n}, complex64, nullptr, {});
-      compute_bluestein_constants(n, plan.bluestein_n, w_q, w_k);
+      auto [w_k, w_q] = compute_bluestein_constants(n, plan.bluestein_n);
       copies.push_back(w_q);
       copies.push_back(w_k);
 

@@ -60,7 +60,7 @@ def run_bench(system_size, fft_sizes, backend="mlx", dim=1):
 
 
 def time_fft():
-    x = np.array(range(2, 18))
+    x = np.array(range(2, 512))
     system_size = int(2**26)
 
     print("MLX GPU")

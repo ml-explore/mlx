@@ -1,4 +1,3 @@
-
 // Copyright © 2024 Apple Inc.
 
 // Metal FFT using Stockham's algorithm
