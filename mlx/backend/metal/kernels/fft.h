@@ -8,11 +8,9 @@
 
 #include <metal_common>
 
-#include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/fft/radix.h"
 #include "mlx/backend/metal/kernels/fft/readwrite.h"
 #include "mlx/backend/metal/kernels/steel/defines.h"
-#include "mlx/backend/metal/kernels/utils.h"
 
 using namespace metal;
 

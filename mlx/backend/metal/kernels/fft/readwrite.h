@@ -1,4 +1,8 @@
+// Copyright © 2024 Apple Inc.
+
 #include <metal_common>
+
+#include "mlx/backend/metal/kernels/fft/radix.h"
 
 /* FFT helpers for reading and writing from/to device memory.
 

@@ -1,3 +1,5 @@
+// Copyright © 2024 Apple Inc.
+
 /* Radix kernels
 
 We provide optimized, single threaded Radix codelets
@@ -8,9 +10,29 @@ For n=8,10,12 we combine smaller codelets.
 For n=7,11,13 we use Rader's algorithm which decomposes
 them into (n-1)=6,10,12 codelets. */
 
-#include <metal_common>
+#pragma once
 
-#include "mlx/backend/metal/kernels/utils.h"
+#include <metal_common>
+#include <metal_math>
+
+#include "mlx/backend/metal/kernels/bf16.h"
+
+METAL_FUNC float2 complex_mul(float2 a, float2 b) {
+  return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+// Complex mul followed by conjugate
+METAL_FUNC float2 complex_mul_conj(float2 a, float2 b) {
+  return float2(a.x * b.x - a.y * b.y, -a.x * b.y - a.y * b.x);
+}
+
+// Compute an FFT twiddle factor
+METAL_FUNC float2 get_twiddle(int k, int p) {
+  float theta = -2.0f * k * M_PI_F / p;
+
+  float2 twiddle = {metal::fast::cos(theta), metal::fast::sin(theta)};
+  return twiddle;
+}
 
 METAL_FUNC void radix2(thread float2* x, thread float2* y) {
   y[0] = x[0] + x[1];
