@@ -38,22 +38,25 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "reverse_";
   }
   kname << ((inclusive_) ? "inclusive_" : "exclusive_");
+
+  std::string reduce_type;
   switch (reduce_type_) {
     case Scan::Sum:
-      kname << "sum_";
+      reduce_type = "sum";
       break;
     case Scan::Prod:
-      kname << "prod_";
+      reduce_type = "prod";
       break;
     case Scan::Max:
-      kname << "max_";
+      reduce_type = "max";
       break;
     case Scan::Min:
-      kname << "min_";
+      reduce_type = "min";
       break;
   }
-  kname << type_to_name(in) << "_" << type_to_name(out);
-  auto kernel = get_scan_kernel(d, kname.str(), reverse_, inclusive_, in, out);
+  kname << reduce_type << "_" << type_to_name(in) << "_" << type_to_name(out);
+  auto kernel = get_scan_kernel(
+      d, kname.str(), reverse_, inclusive_, reduce_type, in, out);
 
   if (contiguous) {
     auto& compute_encoder = d.get_command_encoder(s.index);

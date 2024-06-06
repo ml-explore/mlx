@@ -49,6 +49,7 @@ MTL::ComputePipelineState* get_scan_kernel(
     const std::string& kernel_name,
     bool reverse,
     bool inclusive,
+    const std::string& reduce_type,
     const array& in,
     const array& out);
 
