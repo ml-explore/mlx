@@ -17,7 +17,7 @@ Group to_group(std::optional<Group> group) {
 
 } // namespace
 
-array all_reduce_sum(const array& x, std::optional<Group> group_) {
+array all_sum(const array& x, std::optional<Group> group_) {
   auto group = to_group(group_);
 
   if (group.size() == 1) {

@@ -31,7 +31,7 @@ Stream communication_stream() {
   return comm_stream;
 }
 
-void all_reduce_sum(Group group, const array& input, array& output) {}
+void all_sum(Group group, const array& input, array& output) {}
 void all_gather(Group group, const array& input, array& output) {}
 
 } // namespace detail

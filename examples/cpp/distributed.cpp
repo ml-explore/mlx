@@ -16,7 +16,7 @@ int main() {
   std::cout << global_group.rank() << " / " << global_group.size() << std::endl;
 
   array x = ones({10});
-  array out = distributed::all_reduce_sum(x, global_group);
+  array out = distributed::all_sum(x, global_group);
 
   std::cout << out << std::endl;
 }

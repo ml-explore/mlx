@@ -69,13 +69,13 @@ void init_distributed(nb::module_& parent_module) {
       )pbdoc");
 
   m.def(
-      "all_reduce_sum",
-      &distributed::all_reduce_sum,
+      "all_sum",
+      &distributed::all_sum,
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),
       nb::sig(
-          "def all_reduce_sum(x: array, *, group: Optional[Group] = None) -> array"),
+          "def all_sum(x: array, *, group: Optional[Group] = None) -> array"),
       R"pbdoc(
         All reduce sum.
 
