@@ -23,13 +23,14 @@ machine. The minimal distributed program in MLX is as simple as:
 
 .. code:: python
 
-   import mlx.core as mx
+    import mlx.core as mx
 
-   x = mx.distributed.all_reduce_sum(mx.ones(10))
-   print(x)
+    world = mx.distributed.init()
+    x = mx.distributed.all_reduce_sum(mx.ones(10))
+    print(world.rank(), x)
 
-The program above computes sums the array ``mx.ones(10)`` across all
-distributed processes. If simply launched with ``python``, however, only one
+The program above sums the array ``mx.ones(10)`` across all
+distributed processes. If simply run with ``python``, however, only one
 process is launched and no distributed communication takes place.
 
 To launch the program in distributed mode we need to use ``mpirun`` or
@@ -39,8 +40,8 @@ following:
 .. code:: shell
 
     $ mpirun -np 2 python test.py
-    array([2, 2, 2, ..., 2, 2, 2], dtype=float32)
-    array([2, 2, 2, ..., 2, 2, 2], dtype=float32)
+    1 array([2, 2, 2, ..., 2, 2, 2], dtype=float32)
+    0 array([2, 2, 2, ..., 2, 2, 2], dtype=float32)
 
 The above launches two processes on the same (local) machine and we can see
 both standard output streams. The processes send the array of 1s to each other
@@ -50,15 +51,15 @@ print 4 etc.
 Installing MPI
 ---------------
 
-MPI can be installed with homebrew, using the anaconda package manager or
+MPI can be installed with Homebrew, using the Anaconda package manager or
 compiled from source. Most of our testing is done using ``openmpi`` installed
-with the anaconda package manager as follows:
+with the Anaconda package manager as follows:
 
 .. code:: shell
 
     $ conda install openmpi
 
-Installing with homebrew may require specifying the location of ``libmpi.dyld``
+Installing with Homebrew may require specifying the location of ``libmpi.dyld``
 so that MLX can find it and load it at runtime. This can simply be achieved by
 passing the ``DYLD_LIBRARY_PATH`` environment variable to ``mpirun``.
 
@@ -76,14 +77,18 @@ debug connectivity issues is the following:
 * ``ssh hostname`` works from all machines to all machines without asking for
   password or host confirmation
 * ``mpirun`` is accessible on all machines. You can call ``mpirun`` using its
-  full path to force a specific prefix on all machines.
+  full path to force all machines to use a specific path.
 * Ensure that the ``hostname`` used by MPI is the one that you have configured
-  in the ``.ssh/config`` files on all machines. MPI could be using ``foo`` from
-  a ``hostname`` defined as ``foo.bar.com`` if the ``hostname`` of the current
-  machine is ``baz.bar.com``.
+  in the ``.ssh/config`` files on all machines.
+
+.. note::
+  For an example hostname ``foo.bar.com`` MPI could be using only ``foo`` as
+  the hostname passed to ssh, especially if the current host's name is also
+  ``*.bar.com``.
 
 An easy way to pass the host names to MPI is using a host file. A host file
-looks like the following:
+looks like the following, where ``host1`` and ``host2`` should be the fully
+qualified domain names or IPs for these hosts.
 
 .. code::
 
@@ -91,8 +96,8 @@ looks like the following:
     host2 slots=1
 
 When using MLX, it is very likely that you want to use 1 slot per host, ie one
-process per host.  Moreover, the hostfile needs to also contain the current
-host if you wlso ant to run on the local host. Passing the host file to
+process per host.  The hostfile also needs to contain the current
+host if you want to run on the local host. Passing the host file to
 ``mpirun`` is simply done using the ``--hostfile`` command line argument.
 
 Training Example
