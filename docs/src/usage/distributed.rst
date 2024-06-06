@@ -82,9 +82,8 @@ debug connectivity issues is the following:
   in the ``.ssh/config`` files on all machines.
 
 .. note::
-  For an example hostname ``foo.bar.com`` MPI could be using only ``foo`` as
-  the hostname passed to ssh, especially if the current host's name is also
-  ``*.bar.com``.
+  For an example hostname ``foo.bar.com`` MPI can use only ``foo`` as
+  the hostname passed to ssh if the current hostname matches ``*.bar.com``.
 
 An easy way to pass the host names to MPI is using a host file. A host file
 looks like the following, where ``host1`` and ``host2`` should be the fully
