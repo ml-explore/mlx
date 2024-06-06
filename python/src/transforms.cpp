@@ -536,7 +536,6 @@ struct PyCompiledFun {
 class PyCheckpointedFun {
  public:
   PyCheckpointedFun(nb::callable fun) : fun_(std::move(fun)) {}
-
   ~PyCheckpointedFun() {
     nb::gil_scoped_acquire gil;
 
@@ -962,11 +961,21 @@ void init_transforms(nb::module_& m) {
         variable ``MLX_DISABLE_COMPILE`` if set.
       )pbdoc");
   m.def(
+      "clear_compiler_cache",
+      &clear_compiler_cache,
+      R"pbdoc(
+        Clear the compiler cache causing all compiled function to recompile if
+        they are called again.
+      )pbdoc");
+  m.def(
       "checkpoint",
       [](nb::callable fun) { return nb::cpp_function(PyCheckpointedFun{fun}); },
       "fun"_a);
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(nb::cpp_function([]() { tree_cache().clear(); }));
+  atexit.attr("register")(nb::cpp_function([]() {
+    tree_cache().clear();
+    clear_compiler_cache();
+  }));
 }

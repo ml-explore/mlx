@@ -266,6 +266,10 @@ class CompilerCache {
     cache_.erase(fun_id);
   }
 
+  std::unordered_map<std::uintptr_t, std::vector<CacheEntry>>& entries() {
+    return cache_;
+  }
+
  private:
   CompilerCache() {
     // Make sure the allocator is fully
@@ -881,6 +885,10 @@ void enable_compile() {
 
 void set_compile_mode(CompileMode mode) {
   detail::compile_mode() = mode;
+}
+
+void clear_compiler_cache() {
+  detail::compiler_cache().entries().clear();
 }
 
 } // namespace mlx::core
