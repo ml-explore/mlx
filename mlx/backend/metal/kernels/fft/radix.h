@@ -16,7 +16,6 @@ them into (n-1)=6,10,12 codelets. */
 #include <metal_math>
 #include <metal_stdlib>
 
-
 METAL_FUNC float2 complex_mul(float2 a, float2 b) {
   return float2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
 }
