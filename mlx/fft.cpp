@@ -81,7 +81,8 @@ array fft_impl(
   if (any_greater) {
     // Pad with zeros
     auto tmp = zeros(in_shape, a.dtype(), s);
-    in = scatter(tmp, std::vector<array>{}, in, std::vector<int>{}, s);
+    std::vector<int> starts(in.ndim(), 0);
+    in = slice_update(tmp, in, starts, in.shape());
   }
 
   auto out_shape = in_shape;
