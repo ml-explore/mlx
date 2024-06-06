@@ -26,7 +26,7 @@ machine. The minimal distributed program in MLX is as simple as:
     import mlx.core as mx
 
     world = mx.distributed.init()
-    x = mx.distributed.all_reduce_sum(mx.ones(10))
+    x = mx.distributed.all_sum(mx.ones(10))
     print(world.rank(), x)
 
 The program above sums the array ``mx.ones(10)`` across all
@@ -126,13 +126,13 @@ dataset and optimizer initialization.
         mx.eval(loss, model.parameters())
 
 All we have to do to average the gradients across machines is perform an
-:func:`all_reduce_sum` and divide by the size of the :class:`Group`. Namely we
+:func:`all_sum` and divide by the size of the :class:`Group`. Namely we
 have to :func:`mlx.utils.tree_map` the gradients with following function.
 
 .. code:: python
 
-    def all_reduce_avg(x):
-        return mx.distributed.all_reduce_sum(x) / mx.distributed.init().size()
+    def all_avg(x):
+        return mx.distributed.all_sum(x) / mx.distributed.init().size()
 
 Putting everything together our training loop step looks as follows with
 everything else remaining the same.
@@ -146,7 +146,7 @@ everything else remaining the same.
         if N == 1:
             return grads
         return tree_map(
-                lambda x: mx.distributed.all_reduce_sum(x) / N,
+                lambda x: mx.distributed.all_sum(x) / N,
                 grads)
 
     def step(model, x, y):

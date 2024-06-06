@@ -15,5 +15,5 @@ made available.
     Group
     is_available
     init
-    all_reduce_sum
+    all_sum
     all_gather
