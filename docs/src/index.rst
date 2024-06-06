@@ -43,6 +43,7 @@ are the CPU and GPU.
    usage/function_transforms
    usage/compile
    usage/numpy
+   usage/distributed
    usage/using_streams
 
 .. toctree::
@@ -69,6 +70,7 @@ are the CPU and GPU.
    python/metal
    python/nn
    python/optimizers
+   python/distributed
    python/tree_utils
 
 .. toctree::

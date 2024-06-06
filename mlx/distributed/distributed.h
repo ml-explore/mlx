@@ -56,7 +56,7 @@ namespace detail {
 Stream communication_stream();
 
 /* Perform an all reduce sum operation */
-void all_reduce_sum(Group group, const array& input, array& output);
+void all_sum(Group group, const array& input, array& output);
 
 /* Perform an all reduce sum operation */
 void all_gather(Group group, const array& input, array& output);

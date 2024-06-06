@@ -24,7 +24,7 @@ void AllReduce::eval_cpu(
 
   switch (reduce_type_) {
     case Sum:
-      distributed::detail::all_reduce_sum(group(), inputs[0], outputs[0]);
+      distributed::detail::all_sum(group(), inputs[0], outputs[0]);
       break;
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
@@ -36,7 +36,7 @@ std::pair<std::vector<array>, std::vector<int>> AllReduce::vmap(
     const std::vector<int>& axes) {
   switch (reduce_type_) {
     case Sum:
-      return {{all_reduce_sum(inputs[0], group())}, axes};
+      return {{all_sum(inputs[0], group())}, axes};
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
   }
@@ -48,7 +48,7 @@ std::vector<array> AllReduce::jvp(
     const std::vector<int>& argnums) {
   switch (reduce_type_) {
     case Sum:
-      return {all_reduce_sum(tangents[0], group())};
+      return {all_sum(tangents[0], group())};
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
   }
