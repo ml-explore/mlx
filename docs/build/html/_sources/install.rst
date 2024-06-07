@@ -186,8 +186,8 @@ should point to the path to the built metal library.
 Binary Size Minimization
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-To produce a smaller binary use the CMake flags `CMAKE_BUILD_TYPE=MinSizeRel`
-and `BUILD_SHARED_LIBS=ON`.
+To produce a smaller binary use the CMake flags ``CMAKE_BUILD_TYPE=MinSizeRel``
+and ``BUILD_SHARED_LIBS=ON``.
 
 The MLX CMake build has several additional options to make smaller binaries.
 For example, if you don't need the CPU backend or support for safetensors and
@@ -203,7 +203,7 @@ GGUF, you can do:
     -DMLX_BUILD_GGUF=OFF \
     -DMLX_METAL_JIT=ON
 
-THE `MLX_METAL_JIT` flag minimizes the size of the MLX Metal library which
+THE ``MLX_METAL_JIT`` flag minimizes the size of the MLX Metal library which
 contains pre-built GPU kernels. This substantially reduces the size of the
 Metal library by run-time compiling kernels the first time they are used in MLX
 on a given machine. Note run-time compilation incurs a cold-start cost which can
