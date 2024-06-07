@@ -21,10 +21,15 @@ Layers
    Dropout3d
    Embedding
    GELU
+   GLU
    GroupNorm
    GRU
+   HardShrink
+   HardTanh
+   Hardswish
    InstanceNorm
    LayerNorm
+   LeakyReLU
    Linear
    LSTM
    MaxPool1d
@@ -36,13 +41,19 @@ Layers
    QuantizedLinear
    RMSNorm
    ReLU
+   ReLU6
    RNN
    RoPE
    SELU
    Sequential
    SiLU
    SinusoidalPositionalEncoding
+   Softmin
    Softshrink
+   Softsign
+   Softmax
+   Softplus
    Step
+   Tanh
    Transformer
    Upsample
