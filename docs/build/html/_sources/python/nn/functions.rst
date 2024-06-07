@@ -17,6 +17,8 @@ simple functions.
    gelu_approx
    gelu_fast_approx
    glu
+   hard_shrink
+   hard_tanh
    hardswish
    leaky_relu
    log_sigmoid
@@ -29,6 +31,7 @@ simple functions.
    sigmoid
    silu
    softmax
+   softmin
    softplus
    softshrink
    step
