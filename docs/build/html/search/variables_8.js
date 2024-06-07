@@ -1,0 +1,27 @@
+var searchData=
+[
+  ['i_0',['i',['../structpocketfft_1_1detail_1_1cmplx.html#a35d2dce1b7de5f37d7029e639bc7f23d',1,'pocketfft::detail::cmplx::i'],['../unionmlx_1_1core_1_1detail_1_1_int_or_float.html#aa6d4b02e99df90a321e0eeeb98e71b49',1,'mlx::core::detail::IntOrFloat::i'],['../unionbool4__or__uint.html#ab24d95aaf4203ddf3e6b1ed19397ced7',1,'bool4_or_uint::i']]],
+  ['idil_1',['idil',['../struct_m_l_x_conv_params.html#af900fdb4c4d4ea35eed02940dee8d4d1',1,'MLXConvParams']]],
+  ['imag_2',['imag',['../structcomplex64__t.html#a94037c0cf8451aaff7cb4d154a8426de',1,'complex64_t']]],
+  ['in_3',['in',['../struct_read_writer.html#ab6057215920138f28fd00f0e7ea8afa4',1,'ReadWriter']]],
+  ['in_5fstrides_4',['in_strides',['../struct_m_l_x_conv_params.html#ab25eade6573784985dbea1216f9068cf',1,'MLXConvParams']]],
+  ['index_5',['index',['../structmlx_1_1core_1_1_device.html#a5e345748fe318a267833ab7398b364ac',1,'mlx::core::Device::index'],['../structmlx_1_1core_1_1_stream.html#a9d0dafc1899333e1176eb2bbc0a8b626',1,'mlx::core::Stream::index']]],
+  ['inexact_6',['inexact',['../namespacemlx_1_1core.html#a54c6fae21b7f2fea8e6f80011ef38534',1,'mlx::core']]],
+  ['init_7',['init',['../struct_and.html#ab55eac58830ae01c45f18377eff021ea',1,'And::init'],['../struct_or.html#a6734c64e8048a209047fa18dd8bd49e8',1,'Or::init'],['../struct_sum.html#a433bf0fe3ce751c18e5269bbc19daa65',1,'Sum::init'],['../struct_prod.html#ac99f3882b6c3c0c17d70a82f2f2f2c56',1,'Prod::init'],['../struct_min.html#a322a8241f9e9f60ffa040e68c02af97c',1,'Min::init'],['../struct_max.html#aa985471d570c1009e5cbb174efcb9131',1,'Max::init'],['../struct_cum_sum.html#a987f7a15eded60081b74abc103d3054b',1,'CumSum::init'],['../struct_cum_prod.html#acf2ae2daa84d477b413deea679cab9e5',1,'CumProd::init'],['../struct_cum_prod_3_01bool_01_4.html#ae7a8b0ba9e6898356b87b18766e76d2c',1,'CumProd&lt; bool &gt;::init'],['../struct_cum_max.html#a16480052a2eeb4340e546838aab59cc4',1,'CumMax::init'],['../struct_cum_min.html#a8b67f739c620d0cc194b533190990ab9',1,'CumMin::init'],['../struct_less_than.html#abf97a6b0163048e4ba96460939dbd3a3',1,'LessThan::init']]],
+  ['inp_5fjump_5fc_8',['inp_jump_c',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#a78d30e843d65d1829623afb0b607f0a5',1,'mlx::steel::ImplicitGemmConv2DParams']]],
+  ['inp_5fjump_5fh_9',['inp_jump_h',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#a03685a4066cdb11ffb647408e2c5b122',1,'mlx::steel::ImplicitGemmConv2DParams']]],
+  ['inp_5fjump_5fw_10',['inp_jump_w',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#acf168c72f4a86b72b8f5f386f07c9d8c',1,'mlx::steel::ImplicitGemmConv2DParams']]],
+  ['int16_11',['int16',['../namespacemlx_1_1core.html#a71ebba4ad1afa730962f0692c4f42f07',1,'mlx::core']]],
+  ['int32_12',['int32',['../namespacemlx_1_1core.html#a5d6373aad1444edc9de1eb07bfe5cad3',1,'mlx::core']]],
+  ['int64_13',['int64',['../namespacemlx_1_1core.html#a9019bdc191054ada0a502c7c34cef5b8',1,'mlx::core']]],
+  ['int8_14',['int8',['../namespacemlx_1_1core.html#a892e934e146dd938d144cee8813ca672',1,'mlx::core']]],
+  ['integer_15',['integer',['../namespacemlx_1_1core.html#a074d000f25ae3ed77450e6a5fec4b38b',1,'mlx::core']]],
+  ['inv_16',['inv',['../struct_read_writer.html#a773fa8524515bdc2ff8b0e2060741813',1,'ReadWriter']]],
+  ['inv_5f_17',['inv_',['../backend_2metal_2kernels_2fft_8h.html#a23a773ae455da5d0b9b5508ee2e7694b',1,'fft.h']]],
+  ['inv_5falpha_18',['INV_ALPHA',['../struct_m_l_x_scaled_dot_product_attention_params.html#a7461e0e17cdc7d3fed80bb00d58d8644',1,'MLXScaledDotProductAttentionParams']]],
+  ['is_19',['iS',['../struct_m_l_x_conv_params.html#a72e1c3b4da0f70622cf18036bbf97fe6',1,'MLXConvParams']]],
+  ['is_5farray_5fv_20',['is_array_v',['../namespacemlx_1_1core.html#a01b0d64a75dfa2e95d6c7b5c53d708af',1,'mlx::core']]],
+  ['is_5farrays_5fv_21',['is_arrays_v',['../namespacemlx_1_1core.html#a94c1057929b390e5613304afa16dfbda',1,'mlx::core']]],
+  ['is_5fmetal_5fatomic_22',['is_metal_atomic',['../atomic_8h.html#a91a8bdcae647947a83c6689d7f252d24',1,'atomic.h']]],
+  ['is_5fpower_5fof_5f2_5f_23',['is_power_of_2_',['../backend_2metal_2kernels_2fft_8h.html#abeb0f8d030ee27c89882b87eed13be2d',1,'fft.h']]]
+];

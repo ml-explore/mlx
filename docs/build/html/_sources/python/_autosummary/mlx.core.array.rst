@@ -55,6 +55,7 @@
       ~array.tolist
       ~array.transpose
       ~array.var
+      ~array.view
    
    
 

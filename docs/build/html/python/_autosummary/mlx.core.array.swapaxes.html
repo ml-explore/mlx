@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.core.array.swapaxes &#8212; MLX 0.14.0 documentation</title>
+    <title>mlx.core.array.swapaxes &#8212; MLX 0.15.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../_static/documentation_options.js?v=8eac8a5b"></script>
+    <script src="../../_static/documentation_options.js?v=7276bfb7"></script>
     <script src="../../_static/doctools.js?v=888ff710"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.14.0 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.14.0 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.15.0 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.15.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -163,6 +163,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../usage/function_transforms.html">Function Transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/compile.html">Compilation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/numpy.html">Conversion to NumPy and Other Frameworks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../usage/distributed.html">Distributed Communication</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../usage/using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -392,6 +393,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.tril.html">mlx.core.tril</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.triu.html">mlx.core.triu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.var.html">mlx.core.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.view.html">mlx.core.view</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.where.html">mlx.core.where</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.zeros.html">mlx.core.zeros</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.zeros_like.html">mlx.core.zeros_like</a></li>
@@ -506,10 +508,15 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Dropout3d.html">mlx.nn.Dropout3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.GELU.html">mlx.nn.GELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.GLU.html">mlx.nn.GLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.GroupNorm.html">mlx.nn.GroupNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.GRU.html">mlx.nn.GRU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.HardShrink.html">mlx.nn.HardShrink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.HardTanh.html">mlx.nn.HardTanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Hardswish.html">mlx.nn.Hardswish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.InstanceNorm.html">mlx.nn.InstanceNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.LayerNorm.html">mlx.nn.LayerNorm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.LeakyReLU.html">mlx.nn.LeakyReLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.LSTM.html">mlx.nn.LSTM</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.MaxPool1d.html">mlx.nn.MaxPool1d</a></li>
@@ -521,14 +528,20 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.QuantizedLinear.html">mlx.nn.QuantizedLinear</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.RMSNorm.html">mlx.nn.RMSNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.ReLU6.html">mlx.nn.ReLU6</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.RNN.html">mlx.nn.RNN</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.RoPE.html">mlx.nn.RoPE</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.SELU.html">mlx.nn.SELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Sequential.html">mlx.nn.Sequential</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.SinusoidalPositionalEncoding.html">mlx.nn.SinusoidalPositionalEncoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Softmin.html">mlx.nn.Softmin</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Softshrink.html">mlx.nn.Softshrink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Softsign.html">mlx.nn.Softsign</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Softmax.html">mlx.nn.Softmax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Softplus.html">mlx.nn.Softplus</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Tanh.html">mlx.nn.Tanh</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Transformer.html">mlx.nn.Transformer</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Upsample.html">mlx.nn.Upsample</a></li>
 </ul>
@@ -539,6 +552,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.glu.html">mlx.nn.glu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.hard_shrink.html">mlx.nn.hard_shrink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.hard_tanh.html">mlx.nn.hard_tanh</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.hardswish.html">mlx.nn.hardswish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.leaky_relu.html">mlx.nn.leaky_relu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.log_sigmoid.html">mlx.nn.log_sigmoid</a></li>
@@ -551,6 +566,7 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.sigmoid.html">mlx.nn.sigmoid</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.softmax.html">mlx.nn.softmax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.softmin.html">mlx.nn.softmin</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.softplus.html">mlx.nn.softplus</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.softshrink.html">mlx.nn.softshrink</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
@@ -618,7 +634,15 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.optimizers.clip_grad_norm.html">mlx.optimizers.clip_grad_norm</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-21"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../distributed.html">Distributed Communication</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-21"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.Group.html">mlx.core.distributed.Group</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.is_available.html">mlx.core.distributed.is_available</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.init.html">mlx.core.distributed.init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.all_sum.html">mlx.core.distributed.all_sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.all_gather.html">mlx.core.distributed.all_gather</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-22"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>

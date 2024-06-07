@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; MLX 0.14.0 documentation</title>
+    <title>Index &#8212; MLX 0.15.0 documentation</title>
   
   
   
@@ -35,7 +35,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="_static/documentation_options.js?v=8eac8a5b"></script>
+    <script src="_static/documentation_options.js?v=7276bfb7"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -128,8 +128,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.14.0 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.14.0 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.15.0 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.15.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -160,6 +160,7 @@
 <li class="toctree-l1"><a class="reference internal" href="usage/function_transforms.html">Function Transforms</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/compile.html">Compilation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/numpy.html">Conversion to NumPy and Other Frameworks</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage/distributed.html">Distributed Communication</a></li>
 <li class="toctree-l1"><a class="reference internal" href="usage/using_streams.html">Using Streams</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Examples</span></p>
@@ -389,6 +390,7 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.tril.html">mlx.core.tril</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.triu.html">mlx.core.triu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.var.html">mlx.core.var</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.view.html">mlx.core.view</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.where.html">mlx.core.where</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.zeros.html">mlx.core.zeros</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.zeros_like.html">mlx.core.zeros_like</a></li>
@@ -503,10 +505,15 @@
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Dropout3d.html">mlx.nn.Dropout3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Embedding.html">mlx.nn.Embedding</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.GELU.html">mlx.nn.GELU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.GLU.html">mlx.nn.GLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.GroupNorm.html">mlx.nn.GroupNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.GRU.html">mlx.nn.GRU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.HardShrink.html">mlx.nn.HardShrink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.HardTanh.html">mlx.nn.HardTanh</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Hardswish.html">mlx.nn.Hardswish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.InstanceNorm.html">mlx.nn.InstanceNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.LayerNorm.html">mlx.nn.LayerNorm</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.LeakyReLU.html">mlx.nn.LeakyReLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Linear.html">mlx.nn.Linear</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.LSTM.html">mlx.nn.LSTM</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.MaxPool1d.html">mlx.nn.MaxPool1d</a></li>
@@ -518,14 +525,20 @@
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.QuantizedLinear.html">mlx.nn.QuantizedLinear</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.RMSNorm.html">mlx.nn.RMSNorm</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.ReLU.html">mlx.nn.ReLU</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.ReLU6.html">mlx.nn.ReLU6</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.RNN.html">mlx.nn.RNN</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.RoPE.html">mlx.nn.RoPE</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.SELU.html">mlx.nn.SELU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Sequential.html">mlx.nn.Sequential</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.SiLU.html">mlx.nn.SiLU</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.SinusoidalPositionalEncoding.html">mlx.nn.SinusoidalPositionalEncoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Softmin.html">mlx.nn.Softmin</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Softshrink.html">mlx.nn.Softshrink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Softsign.html">mlx.nn.Softsign</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Softmax.html">mlx.nn.Softmax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Softplus.html">mlx.nn.Softplus</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Step.html">mlx.nn.Step</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Tanh.html">mlx.nn.Tanh</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Transformer.html">mlx.nn.Transformer</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary/mlx.nn.Upsample.html">mlx.nn.Upsample</a></li>
 </ul>
@@ -536,6 +549,8 @@
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.gelu_approx.html">mlx.nn.gelu_approx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.gelu_fast_approx.html">mlx.nn.gelu_fast_approx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.glu.html">mlx.nn.glu</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.hard_shrink.html">mlx.nn.hard_shrink</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.hard_tanh.html">mlx.nn.hard_tanh</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.hardswish.html">mlx.nn.hardswish</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.leaky_relu.html">mlx.nn.leaky_relu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.log_sigmoid.html">mlx.nn.log_sigmoid</a></li>
@@ -548,6 +563,7 @@
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.sigmoid.html">mlx.nn.sigmoid</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.silu.html">mlx.nn.silu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softmax.html">mlx.nn.softmax</a></li>
+<li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softmin.html">mlx.nn.softmin</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softplus.html">mlx.nn.softplus</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.softshrink.html">mlx.nn.softshrink</a></li>
 <li class="toctree-l3"><a class="reference internal" href="python/nn/_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
@@ -615,7 +631,15 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.optimizers.clip_grad_norm.html">mlx.optimizers.clip_grad_norm</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-21"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/distributed.html">Distributed Communication</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-21"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.distributed.Group.html">mlx.core.distributed.Group</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.distributed.is_available.html">mlx.core.distributed.is_available</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.distributed.init.html">mlx.core.distributed.init</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.distributed.all_sum.html">mlx.core.distributed.all_sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.distributed.all_gather.html">mlx.core.distributed.all_gather</a></li>
+</ul>
+</li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="python/tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-22"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>
@@ -792,6 +816,8 @@ document.write(`
 </li>
         <li><a href="python/_autosummary/mlx.core.DtypeCategory.html#mlx.core.DtypeCategory.__init__">(DtypeCategory method)</a>
 </li>
+        <li><a href="python/_autosummary/mlx.core.distributed.Group.html#mlx.core.distributed.Group.__init__">(Group method)</a>
+</li>
         <li><a href="python/_autosummary/stream_class.html#mlx.core.Stream.__init__">(Stream method)</a>
 </li>
       </ul></li>
@@ -839,6 +865,10 @@ document.write(`
         <li><a href="python/_autosummary/mlx.core.all.html#mlx.core.all">(in module mlx.core)</a>
 </li>
       </ul></li>
+      <li><a href="python/_autosummary/mlx.core.distributed.all_gather.html#mlx.core.distributed.all_gather">all_gather() (in module mlx.core.distributed)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.distributed.all_sum.html#mlx.core.distributed.all_sum">all_sum() (in module mlx.core.distributed)</a>
+</li>
       <li><a href="cpp/ops.html#_CPPv48allcloseRK5arrayRK5arrayddb14StreamOrDevice">allclose (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.allclose.html#mlx.core.allclose">allclose() (in module mlx.core)</a>
@@ -871,10 +901,10 @@ document.write(`
 </li>
       <li><a href="cpp/ops.html#_CPPv46arcsinRK5array14StreamOrDevice">arcsin (C++ function)</a>
 </li>
-      <li><a href="python/_autosummary/mlx.core.arcsin.html#mlx.core.arcsin">arcsin() (in module mlx.core)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/_autosummary/mlx.core.arcsin.html#mlx.core.arcsin">arcsin() (in module mlx.core)</a>
+</li>
       <li><a href="cpp/ops.html#_CPPv47arcsinhRK5array14StreamOrDevice">arcsinh (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.arcsinh.html#mlx.core.arcsinh">arcsinh() (in module mlx.core)</a>
@@ -967,21 +997,15 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.bitwise_or.html#mlx.core.bitwise_or">bitwise_or() (in module mlx.core)</a>
 </li>
-      <li><a href="cpp/ops.html#_CPPv411bitwise_xorRK5arrayRK5array14StreamOrDevice">bitwise_xor (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="cpp/ops.html#_CPPv411bitwise_xorRK5arrayRK5array14StreamOrDevice">bitwise_xor (C++ function)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.bitwise_xor.html#mlx.core.bitwise_xor">bitwise_xor() (in module mlx.core)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv415block_masked_mm5array5arrayiNSt8optionalI5arrayEENSt8optionalI5arrayEENSt8optionalI5arrayEE14StreamOrDevice">block_masked_mm (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.block_masked_mm.html#mlx.core.block_masked_mm">block_masked_mm() (in module mlx.core)</a>
-</li>
-      <li><a href="cpp/ops.html#_CPPv415block_sparse_mm5array5arrayNSt8optionalI5arrayEENSt8optionalI5arrayEE14StreamOrDevice">block_sparse_mm (C++ function)</a>
-</li>
-      <li><a href="python/_autosummary/mlx.core.block_sparse_mm.html#mlx.core.block_sparse_mm">block_sparse_mm() (in module mlx.core)</a>
-</li>
-      <li><a href="cpp/ops.html#_CPPv416block_sparse_qmmRK5arrayRK5arrayRK5arrayRK5arrayNSt8optionalI5arrayEENSt8optionalI5arrayEEbii14StreamOrDevice">block_sparse_qmm (C++ function)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv416broadcast_arraysRKNSt6vectorI5arrayEE14StreamOrDevice">broadcast_arrays (C++ function)</a>
 </li>
@@ -1267,7 +1291,11 @@ document.write(`
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="cpp/ops.html#_CPPv46gatherRK5arrayRK5arrayiRKNSt6vectorIiEE14StreamOrDevice">gather (C++ function)</a>, <a href="cpp/ops.html#_CPPv46gatherRK5arrayRKNSt6vectorI5arrayEERKNSt6vectorIiEERKNSt6vectorIiEE14StreamOrDevice">[1]</a>
 </li>
+      <li><a href="cpp/ops.html#_CPPv49gather_mm5array5arrayNSt8optionalI5arrayEENSt8optionalI5arrayEE14StreamOrDevice">gather_mm (C++ function)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.gather_mm.html#mlx.core.gather_mm">gather_mm() (in module mlx.core)</a>
+</li>
+      <li><a href="cpp/ops.html#_CPPv410gather_qmmRK5arrayRK5arrayRK5arrayRK5arrayNSt8optionalI5arrayEENSt8optionalI5arrayEEbii14StreamOrDevice">gather_qmm (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.gather_qmm.html#mlx.core.gather_qmm">gather_qmm() (in module mlx.core)</a>
 </li>
@@ -1293,6 +1321,8 @@ document.write(`
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.init.glorot_uniform.html#mlx.nn.init.glorot_uniform">glorot_uniform() (in module mlx.nn.init)</a>
 </li>
+      <li><a href="python/nn/_autosummary/mlx.nn.GLU.html#mlx.nn.GLU">GLU (class in mlx.nn)</a>
+</li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.glu.html#mlx.nn.glu">glu (class in mlx.nn)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.grad.html#mlx.core.grad">grad() (in module mlx.core)</a>
@@ -1304,6 +1334,8 @@ document.write(`
       <li><a href="cpp/ops.html#_CPPv413greater_equalRK5arrayRK5array14StreamOrDevice">greater_equal (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.greater_equal.html#mlx.core.greater_equal">greater_equal() (in module mlx.core)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.distributed.Group.html#mlx.core.distributed.Group">Group (class in mlx.core.distributed)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.GroupNorm.html#mlx.nn.GroupNorm">GroupNorm (class in mlx.nn)</a>
 </li>
@@ -1317,12 +1349,22 @@ document.write(`
 <h2 id="H">H</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="python/nn/_autosummary_functions/mlx.nn.hardswish.html#mlx.nn.hardswish">hardswish (class in mlx.nn)</a>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.hard_shrink.html#mlx.nn.hard_shrink">hard_shrink (class in mlx.nn)</a>
 </li>
-      <li><a href="python/nn/_autosummary/mlx.nn.init.he_normal.html#mlx.nn.init.he_normal">he_normal() (in module mlx.nn.init)</a>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.hard_tanh.html#mlx.nn.hard_tanh">hard_tanh (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.HardShrink.html#mlx.nn.HardShrink">HardShrink (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Hardswish.html#mlx.nn.Hardswish">Hardswish (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.hardswish.html#mlx.nn.hardswish">hardswish (class in mlx.nn)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/nn/_autosummary/mlx.nn.HardTanh.html#mlx.nn.HardTanh">HardTanh (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.init.he_normal.html#mlx.nn.init.he_normal">he_normal() (in module mlx.nn.init)</a>
+</li>
       <li><a href="python/nn/_autosummary/mlx.nn.init.he_uniform.html#mlx.nn.init.he_uniform">he_uniform() (in module mlx.nn.init)</a>
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.losses.hinge_loss.html#mlx.nn.losses.hinge_loss">hinge_loss (class in mlx.nn.losses)</a>
@@ -1349,8 +1391,12 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.fft.ifftn.html#mlx.core.fft.ifftn">ifftn() (in module mlx.core.fft)</a>
 </li>
-      <li><a href="python/optimizers/_autosummary/mlx.optimizers.Optimizer.init.html#mlx.optimizers.Optimizer.init">init() (Optimizer method)</a>
+      <li><a href="python/_autosummary/mlx.core.distributed.init.html#mlx.core.distributed.init">init() (in module mlx.core.distributed)</a>
+
+      <ul>
+        <li><a href="python/optimizers/_autosummary/mlx.optimizers.Optimizer.init.html#mlx.optimizers.Optimizer.init">(Optimizer method)</a>
 </li>
+      </ul></li>
       <li><a href="cpp/ops.html#_CPPv45innerRK5arrayRK5array14StreamOrDevice">inner (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.inner.html#mlx.core.inner">inner() (in module mlx.core)</a>
@@ -1367,8 +1413,12 @@ document.write(`
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="python/_autosummary/mlx.core.metal.is_available.html#mlx.core.metal.is_available">is_available() (in module mlx.core.metal)</a>
+      <li><a href="python/_autosummary/mlx.core.distributed.is_available.html#mlx.core.distributed.is_available">is_available() (in module mlx.core.distributed)</a>
+
+      <ul>
+        <li><a href="python/_autosummary/mlx.core.metal.is_available.html#mlx.core.metal.is_available">(in module mlx.core.metal)</a>
 </li>
+      </ul></li>
       <li><a href="cpp/ops.html#_CPPv47iscloseRK5arrayRK5arrayddb14StreamOrDevice">isclose (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.isclose.html#mlx.core.isclose">isclose() (in module mlx.core)</a>
@@ -1434,6 +1484,8 @@ document.write(`
       <li><a href="python/nn/_autosummary/mlx.nn.Module.leaf_modules.html#mlx.nn.Module.leaf_modules">leaf_modules() (Module method)</a>
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.leaky_relu.html#mlx.nn.leaky_relu">leaky_relu (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.LeakyReLU.html#mlx.nn.LeakyReLU">LeakyReLU (class in mlx.nn)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv410left_shiftRK5arrayRK5array14StreamOrDevice">left_shift (C++ function)</a>
 </li>
@@ -1785,6 +1837,8 @@ document.write(`
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.relu.html#mlx.nn.relu">relu (class in mlx.nn)</a>
 </li>
+      <li><a href="python/nn/_autosummary/mlx.nn.ReLU6.html#mlx.nn.ReLU6">ReLU6 (class in mlx.nn)</a>
+</li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.relu6.html#mlx.nn.relu6">relu6 (class in mlx.nn)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv49remainderRK5arrayRK5array14StreamOrDevice">remainder (C++ function)</a>
@@ -1936,20 +1990,28 @@ document.write(`
       <li><a href="python/nn/_autosummary_functions/mlx.nn.losses.smooth_l1_loss.html#mlx.nn.losses.smooth_l1_loss">smooth_l1_loss (class in mlx.nn.losses)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv47softmaxRK5arrayRKNSt6vectorIiEEb14StreamOrDevice">softmax (C++ function)</a>, <a href="cpp/ops.html#_CPPv47softmaxRK5arrayb14StreamOrDevice">[1]</a>, <a href="cpp/ops.html#_CPPv47softmaxRK5arrayib14StreamOrDevice">[2]</a>
-
-      <ul>
-        <li><a href="python/nn/_autosummary_functions/mlx.nn.softmax.html#mlx.nn.softmax">(class in mlx.nn)</a>
 </li>
-      </ul></li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Softmax.html#mlx.nn.Softmax">Softmax (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.softmax.html#mlx.nn.softmax">softmax (class in mlx.nn)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.softmax.html#mlx.core.softmax">softmax() (in module mlx.core)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Softmin.html#mlx.nn.Softmin">Softmin (class in mlx.nn)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.softmin.html#mlx.nn.softmin">softmin (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Softplus.html#mlx.nn.Softplus">Softplus (class in mlx.nn)</a>
+</li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.softplus.html#mlx.nn.softplus">softplus (class in mlx.nn)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.Softshrink.html#mlx.nn.Softshrink">Softshrink (class in mlx.nn)</a>
 </li>
       <li><a href="python/nn/_autosummary_functions/mlx.nn.softshrink.html#mlx.nn.softshrink">softshrink (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Softsign.html#mlx.nn.Softsign">Softsign (class in mlx.nn)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv44sortRK5array14StreamOrDevice">sort (C++ function)</a>, <a href="cpp/ops.html#_CPPv44sortRK5arrayi14StreamOrDevice">[1]</a>
 </li>
@@ -2066,11 +2128,11 @@ document.write(`
       <li><a href="python/_autosummary/mlx.core.tan.html#mlx.core.tan">tan() (in module mlx.core)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv44tanhRK5array14StreamOrDevice">tanh (C++ function)</a>
-
-      <ul>
-        <li><a href="python/nn/_autosummary_functions/mlx.nn.tanh.html#mlx.nn.tanh">(class in mlx.nn)</a>
 </li>
-      </ul></li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Tanh.html#mlx.nn.Tanh">Tanh (class in mlx.nn)</a>
+</li>
+      <li><a href="python/nn/_autosummary_functions/mlx.nn.tanh.html#mlx.nn.tanh">tanh (class in mlx.nn)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.tanh.html#mlx.core.tanh">tanh() (in module mlx.core)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv49tensordotRK5arrayRK5arrayKi14StreamOrDevice">tensordot (C++ function)</a>, <a href="cpp/ops.html#_CPPv49tensordotRK5arrayRK5arrayRKNSt6vectorIiEERKNSt6vectorIiEE14StreamOrDevice">[1]</a>
@@ -2087,12 +2149,14 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.topk.html#mlx.core.topk">topk() (in module mlx.core)</a>
 </li>
-      <li><a href="python/_autosummary/mlx.core.trace.html#mlx.core.trace">trace() (in module mlx.core)</a>
+      <li><a href="cpp/ops.html#_CPPv45traceRK5array14StreamOrDevice">trace (C++ function)</a>, <a href="cpp/ops.html#_CPPv45traceRK5arrayiii14StreamOrDevice">[1]</a>, <a href="cpp/ops.html#_CPPv45traceRK5arrayiii5Dtype14StreamOrDevice">[2]</a>
 </li>
-      <li><a href="python/nn/_autosummary/mlx.nn.Module.train.html#mlx.nn.Module.train">train() (Module method)</a>
+      <li><a href="python/_autosummary/mlx.core.trace.html#mlx.core.trace">trace() (in module mlx.core)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/nn/_autosummary/mlx.nn.Module.train.html#mlx.nn.Module.train">train() (Module method)</a>
+</li>
       <li><a href="python/nn/_autosummary/mlx.nn.Module.trainable_parameters.html#mlx.nn.Module.trainable_parameters">trainable_parameters() (Module method)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.Module.training.html#mlx.nn.Module.training">training (Module property)</a>
@@ -2173,14 +2237,18 @@ document.write(`
       </ul></li>
       <li><a href="cpp/ops.html#_CPPv43varRK5array14StreamOrDevice">var (C++ function)</a>, <a href="cpp/ops.html#_CPPv43varRK5arrayRKNSt6vectorIiEEbi14StreamOrDevice">[1]</a>, <a href="cpp/ops.html#_CPPv43varRK5arraybi14StreamOrDevice">[2]</a>, <a href="cpp/ops.html#_CPPv43varRK5arrayibi14StreamOrDevice">[3]</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="python/_autosummary/mlx.core.array.var.html#mlx.core.array.var">var() (array method)</a>
 
       <ul>
         <li><a href="python/_autosummary/mlx.core.var.html#mlx.core.var">(in module mlx.core)</a>
 </li>
       </ul></li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="cpp/ops.html#_CPPv44viewRK5arrayRK5Dtype14StreamOrDevice">view (C++ function)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.view.html#mlx.core.view">view() (in module mlx.core)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.vjp.html#mlx.core.vjp">vjp() (in module mlx.core)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.vmap.html#mlx.core.vmap">vmap() (in module mlx.core)</a>
