@@ -156,6 +156,7 @@ Operations
    tril
    triu
    var
+   view
    where
    zeros
    zeros_like
