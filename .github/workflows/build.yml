@@ -1,0 +1,41 @@
+name: build
+
+on:
+  pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.8
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
+
+      - name: Build C++
+        run: |
+         mkdir -p build && cd build
+         cmake .. && make -j
+         make test
+
+      - name: Build Python
+        run: |
+          pip install .
+
+      - name: Build Python with tests
+        run: |
+          pip install ".[testing]"
+          python3 -m unittest discover python/tests
