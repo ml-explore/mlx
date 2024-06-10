@@ -23,7 +23,7 @@ template <typename U = bool>
 struct And {
   bool simd_reduce(bool val) {
     return simd_all(val);
-  };
+  }
 
   static constexpr constant bool init = true;
 
@@ -61,7 +61,7 @@ template <typename U = bool>
 struct Or {
   bool simd_reduce(bool val) {
     return simd_any(val);
-  };
+  }
 
   static constexpr constant bool init = false;
 
@@ -100,7 +100,7 @@ struct Sum {
   template <typename T>
   T simd_reduce(T val) {
     return simd_sum(val);
-  };
+  }
 
   static constexpr constant U init = U(0);
 
@@ -120,7 +120,7 @@ struct Prod {
   template <typename T>
   T simd_reduce(T val) {
     return simd_product(val);
-  };
+  }
 
   static constexpr constant U init = U(1);
 
@@ -140,7 +140,7 @@ struct Min {
   template <typename T>
   T simd_reduce(T val) {
     return simd_min(val);
-  };
+  }
 
   static constexpr constant U init = Limits<U>::max;
 
@@ -160,7 +160,7 @@ struct Max {
   template <typename T>
   T simd_reduce(T val) {
     return simd_max(val);
-  };
+  }
 
   static constexpr constant U init = Limits<U>::min;
 

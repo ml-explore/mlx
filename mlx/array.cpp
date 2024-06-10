@@ -206,7 +206,7 @@ void array::ArrayDesc::init() {
     strides[i] = size;
     size *= shape[i];
   }
-  for (auto& in : inputs) {
+  for (const auto& in : inputs) {
     is_tracer |= in.is_tracer();
   }
 }
@@ -231,7 +231,7 @@ array::ArrayDesc::ArrayDesc(
 
 array::ArrayDesc::~ArrayDesc() {
   // When an array description is destroyed it will delete a bunch of arrays
-  // that may also destory their corresponding descriptions and so on and so
+  // that may also destroy their corresponding descriptions and so on and so
   // forth.
   //
   // This calls recursively the destructor and can result in stack overflow, we
