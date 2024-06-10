@@ -19,15 +19,38 @@ using namespace metal;
 
 MLX_MTL_CONST int SIMD_SIZE = 32;
 
+struct _NoMask {
+  char x;
+
+  constexpr METAL_FUNC operator bool() {
+    return true;
+  }
+  constexpr METAL_FUNC operator bool() const threadgroup {
+    return true;
+  }
+  constexpr METAL_FUNC operator bool() const device {
+    return true;
+  }
+  constexpr METAL_FUNC operator bool() const constant {
+    return true;
+  }
+};
+
+typedef struct _NoMask nomask_t;
+
 template <
     typename T,
     const int BM, /* Threadgroup rows (in threads) */
     const int BN, /* Threadgroup cols (in threads) */
     const int TM, /* Thread rows (in elements) */
     const int TN, /* Thread cols (in elements) */
-    const bool kDoAxpby> /* Do out = alpha * out + beta * bias */
+    const bool kDoAxpby, /* Do out = alpha * out + beta * bias */
+    typename out_mask_t = nomask_t, /* Do out masking */
+    typename op_mask_t = nomask_t> /* Do op masking */
 struct GEMVKernel {
-  static_assert(BN == SIMD_SIZE, "gemv block must have a width of SIMD_SIZE");
+  static_assert(
+      BN == 8 || BN == 16 || BN == 32,
+      "gemv block must have a width of 8, 16, or 32");
 
   // - The matrix of size (M = out_vec_size, N = in_vec_size) is divided up
   //   into blocks of (BM * TM, BN * TN) divided among threadgroups
@@ -51,6 +74,45 @@ struct GEMVKernel {
 
   MLX_MTL_CONST short tgp_mem_size = BN * TN * 2;
 
+  MLX_MTL_CONST bool has_operand_mask = !metal::is_same_v<op_mask_t, nomask_t>;
+  MLX_MTL_CONST bool has_output_mask = !metal::is_same_v<out_mask_t, nomask_t>;
+
+  MLX_MTL_CONST bool has_mul_operand_mask =
+      has_operand_mask && !metal::is_same_v<op_mask_t, bool>;
+  MLX_MTL_CONST bool has_mul_output_mask =
+      has_output_mask && !metal::is_same_v<out_mask_t, bool>;
+
+  static METAL_FUNC void
+  load_unsafe(const device T* src, thread T dst[TN], const int src_offset = 0) {
+    MLX_MTL_PRAGMA_UNROLL
+    for (int tn = 0; tn < TN; tn++) {
+      dst[tn] = src[src_offset + tn];
+    }
+  }
+
+  static METAL_FUNC void load_safe(
+      const device T* src,
+      thread T dst[TN],
+      const int src_offset = 0,
+      const int src_size = TN) {
+    MLX_MTL_PRAGMA_UNROLL
+    for (int tn = 0; tn < TN; tn++) {
+      dst[tn] = src[src_offset + tn];
+    }
+
+    if (src_offset + TN <= src_size) {
+      MLX_MTL_PRAGMA_UNROLL
+      for (int tn = 0; tn < TN; tn++) {
+        dst[tn] = src[src_offset + tn];
+      }
+    } else { // Edgecase
+      MLX_MTL_PRAGMA_UNROLL
+      for (int tn = 0; tn < TN; tn++) {
+        dst[tn] = src_offset + tn < src_size ? src[src_offset + tn] : 0;
+      }
+    }
+  }
+
   static METAL_FUNC void run(
       const device T* mat [[buffer(0)]],
       const device T* in_vec [[buffer(1)]],
@@ -58,7 +120,7 @@ struct GEMVKernel {
       device T* out_vec [[buffer(3)]],
       const constant int& in_vec_size [[buffer(4)]],
       const constant int& out_vec_size [[buffer(5)]],
-      const constant int& marix_ld [[buffer(6)]],
+      const constant int& matrix_ld [[buffer(6)]],
       const constant float& alpha [[buffer(7)]],
       const constant float& beta [[buffer(8)]],
       const constant int& bias_stride [[buffer(14)]],
@@ -69,9 +131,6 @@ struct GEMVKernel {
       uint simd_lid [[thread_index_in_simdgroup]]) {
     // Appease compiler
     (void)lid;
-
-    // Threadgroup in_vec cache
-    threadgroup T* in_vec_block = tgp_memory + simd_lid * TN * 2;
 
     // Thread local accumulation results
     thread T result[TM] = {0};
@@ -89,54 +148,67 @@ struct GEMVKernel {
     out_row = out_row + TM <= out_vec_size ? out_row : out_vec_size - TM;
 
     // Advance matrix
-    mat += out_row * marix_ld;
+    mat += out_row * matrix_ld;
+
+    constexpr const uniform<int> loop_stride = make_uniform(BN * TN);
+    const uniform<int> in_size = make_uniform(in_vec_size);
+    const uniform<int> n_iter = in_size / loop_stride;
+    const uniform<int> last_iter = loop_stride * n_iter;
+    const uniform<int> leftover = in_size - last_iter;
+
+    int bn = simd_lid * TN;
 
     // Loop over in_vec in blocks of BN * TN
-    for (int bn = simd_lid * TN; bn < in_vec_size; bn += BN * TN) {
-      threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (int i = 0; i < n_iter; ++i) {
+      load_unsafe(in_vec, v_coeff, bn);
 
-      // Prefetch in_vector for threadgroup use
-      if (simd_gid == 0) {
-        // Main load loop
-        if (bn + TN <= in_vec_size) {
-          MLX_MTL_PRAGMA_UNROLL
-          for (int tn = 0; tn < TN; tn++) {
-            in_vec_block[tn] = in_vec[bn + tn];
-          }
+      // Per thread work loop
+      int mat_offset = 0;
+      MLX_MTL_PRAGMA_UNROLL
+      for (int tm = 0; tm < TM; tm++) {
+        // Load for the row
+        load_unsafe(mat, inter, mat_offset + bn);
 
-        } else { // Edgecase
-
-          MLX_MTL_PRAGMA_UNROLL
-          for (int tn = 0; tn < TN; tn++) {
-            in_vec_block[tn] = bn + tn < in_vec_size ? in_vec[bn + tn] : 0;
-          }
+        // Accumulate results
+        MLX_MTL_PRAGMA_UNROLL
+        for (int tn = 0; tn < TN; tn++) {
+          result[tm] += inter[tn] * v_coeff[tn];
         }
+
+        mat_offset += matrix_ld;
       }
 
-      threadgroup_barrier(mem_flags::mem_threadgroup);
+      bn += BN * TN;
+    }
 
-      // Load for all rows
-      MLX_MTL_PRAGMA_UNROLL
-      for (int tn = 0; tn < TN; tn++) {
-        v_coeff[tn] = in_vec_block[tn];
+    if (leftover > 0) {
+      if (bn + TN <= in_size) {
+        MLX_MTL_PRAGMA_UNROLL
+        for (int tn = 0; tn < TN; tn++) {
+          v_coeff[tn] = in_vec[bn + tn];
+        }
+      } else { // Edgecase
+        MLX_MTL_PRAGMA_UNROLL
+        for (int tn = 0; tn < TN; tn++) {
+          v_coeff[tn] = bn + tn < in_size ? in_vec[bn + tn] : 0;
+        }
       }
 
       // Per thread work loop
       MLX_MTL_PRAGMA_UNROLL
       for (int tm = 0; tm < TM; tm++) {
         // Load for the row
-        if (bn + TN <= in_vec_size) {
+        if (bn + TN <= in_size) {
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[tm * marix_ld + bn + tn];
+            inter[tn] = mat[tm * matrix_ld + bn + tn];
           }
 
         } else { // Edgecase
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
-            int col_idx =
-                (bn + tn) < in_vec_size ? (bn + tn) : (in_vec_size - 1);
-            inter[tn] = mat[tm * marix_ld + col_idx];
+            int col_idx = (bn + tn) < in_size ? (bn + tn) : (leftover - 1);
+            inter[tn] = mat[tm * matrix_ld + col_idx];
           }
         }
 
@@ -151,7 +223,10 @@ struct GEMVKernel {
     // Simdgroup accumulations
     MLX_MTL_PRAGMA_UNROLL
     for (int tm = 0; tm < TM; tm++) {
-      result[tm] = simd_sum(result[tm]);
+      MLX_MTL_PRAGMA_UNROLL
+      for (ushort si = (BN / 2); si >= 1; si >>= 1) {
+        result[tm] += simd_shuffle_down(result[tm], si);
+      }
     }
 
     // Write outputs
