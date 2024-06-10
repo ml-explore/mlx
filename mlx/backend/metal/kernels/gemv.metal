@@ -95,11 +95,6 @@ struct GEMVKernel {
       thread T dst[TN],
       const int src_offset = 0,
       const int src_size = TN) {
-    MLX_MTL_PRAGMA_UNROLL
-    for (int tn = 0; tn < TN; tn++) {
-      dst[tn] = src[src_offset + tn];
-    }
-
     if (src_offset + TN <= src_size) {
       MLX_MTL_PRAGMA_UNROLL
       for (int tn = 0; tn < TN; tn++) {
@@ -182,35 +177,13 @@ struct GEMVKernel {
     }
 
     if (leftover > 0) {
-      if (bn + TN <= in_size) {
-        MLX_MTL_PRAGMA_UNROLL
-        for (int tn = 0; tn < TN; tn++) {
-          v_coeff[tn] = in_vec[bn + tn];
-        }
-      } else { // Edgecase
-        MLX_MTL_PRAGMA_UNROLL
-        for (int tn = 0; tn < TN; tn++) {
-          v_coeff[tn] = bn + tn < in_size ? in_vec[bn + tn] : 0;
-        }
-      }
+      load_safe(in_vec, v_coeff, bn, in_size);
 
       // Per thread work loop
       MLX_MTL_PRAGMA_UNROLL
       for (int tm = 0; tm < TM; tm++) {
         // Load for the row
-        if (bn + TN <= in_size) {
-          MLX_MTL_PRAGMA_UNROLL
-          for (int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[tm * matrix_ld + bn + tn];
-          }
-
-        } else { // Edgecase
-          MLX_MTL_PRAGMA_UNROLL
-          for (int tn = 0; tn < TN; tn++) {
-            int col_idx = (bn + tn) < in_size ? (bn + tn) : (leftover - 1);
-            inter[tn] = mat[tm * matrix_ld + col_idx];
-          }
-        }
+        load_safe(&mat[tm * matrix_ld], inter, bn, in_size);
 
         // Accumulate results
         MLX_MTL_PRAGMA_UNROLL
@@ -308,43 +281,50 @@ struct GEMVTKernel {
     int out_col = (tid.x * BN + lid.x) * TN;
     int in_row = lid.y * TM;
 
+    constexpr const uniform<int> loop_stride = make_uniform(BM * TM);
+    const uniform<int> in_size = make_uniform(in_vec_size);
+    const uniform<int> n_iter = in_size / loop_stride;
+    const uniform<int> last_iter = loop_stride * n_iter;
+    const uniform<int> leftover = in_size - last_iter;
+
     // Edgecase handling
     if (out_col < out_vec_size) {
       out_col = out_col + TN < out_vec_size ? out_col : out_vec_size - TN;
 
       // Per thread accumulation main loop
       int bm = in_row;
-      for (; bm < in_vec_size; bm += BM * TM) {
+      for (int i = 0; i < n_iter; ++i) {
         // Adding a threadgroup_barrier improves performance slightly
         // This is possibly it may help exploit cache better
         threadgroup_barrier(mem_flags::mem_none);
 
-        if (bm + TM <= in_vec_size) {
-          MLX_MTL_PRAGMA_UNROLL
-          for (int tm = 0; tm < TM; tm++) {
-            v_coeff[tm] = in_vec[bm + tm];
+        MLX_MTL_PRAGMA_UNROLL
+        for (int tm = 0; tm < TM; tm++) {
+          v_coeff[tm] = in_vec[bm + tm];
+        }
+
+        MLX_MTL_PRAGMA_UNROLL
+        for (int tm = 0; tm < TM; tm++) {
+          for (int tn = 0; tn < TN; tn++) {
+            inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
           }
-
-          MLX_MTL_PRAGMA_UNROLL
-          for (int tm = 0; tm < TM; tm++) {
-            for (int tn = 0; tn < TN; tn++) {
-              inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
-            }
-            for (int tn = 0; tn < TN; tn++) {
-              result[tn] += v_coeff[tm] * inter[tn];
-            }
+          for (int tn = 0; tn < TN; tn++) {
+            result[tn] += v_coeff[tm] * inter[tn];
           }
+        }
 
-        } else { // Edgecase handling
-          for (int tm = 0; bm + tm < in_vec_size; tm++) {
-            v_coeff[tm] = in_vec[bm + tm];
+        bm += BM * TM;
+      }
 
-            for (int tn = 0; tn < TN; tn++) {
-              inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
-            }
-            for (int tn = 0; tn < TN; tn++) {
-              result[tn] += v_coeff[tm] * inter[tn];
-            }
+      if (leftover > 0) {
+        for (int tm = 0; bm + tm < in_vec_size; tm++) {
+          v_coeff[tm] = in_vec[bm + tm];
+
+          for (int tn = 0; tn < TN; tn++) {
+            inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
+          }
+          for (int tn = 0; tn < TN; tn++) {
+            result[tn] += v_coeff[tm] * inter[tn];
           }
         }
       }
