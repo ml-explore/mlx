@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <fmt/format.h>
+
 #include "mlx/array.h"
 #include "mlx/backend/metal/device.h"
 
@@ -159,11 +161,34 @@ MTL::ComputePipelineState* get_fft_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& hash_name,
-    const int tg_mem_size,
-    const std::string& in_type,
-    const std::string& out_type,
-    int step,
-    bool real,
-    const metal::MTLFCList& func_consts);
+    const metal::MTLFCList& func_consts,
+    const std::string& template_def);
+
+MTL::ComputePipelineState* get_quantized_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string& template_def);
+
+// Create a GPU kernel template definition for JIT compilation
+template <typename... Args>
+std::string
+get_template_definition(std::string name, std::string func, Args... args) {
+  std::ostringstream s;
+  s << func << "<";
+  bool first = true;
+  auto add_arg = [&s, &first](const auto& arg) {
+    if (!first) {
+      s << ", ";
+    }
+    first = false;
+    s << fmt::format("{}", arg);
+  };
+  (add_arg(args), ...);
+  s << ">";
+  std::string base_string = R"(
+template [[host_name("{0}")]] [[kernel]] decltype({1}) {1};
+  )";
+  return fmt::format(base_string, name, s.str());
+}
 
 } // namespace mlx::core

@@ -112,6 +112,7 @@ if (MLX_METAL_JIT)
     kernels/steel/defines.h
     kernels/steel/conv/loaders/loader_general.h
   )
+  make_jit_source(quantized)
 else()
   target_sources(
     mlx

@@ -12,9 +12,7 @@ set(
   KERNELS
   "arg_reduce"
   "conv"
-  "fft"
   "gemv"
-  "quantized"
   "random"
   "rms_norm"
   "layer_norm"
@@ -32,6 +30,8 @@ set(
   "unary"
   "ternary"
   "copy"
+  "fft"
+  "quantized"
   "softmax"
   "sort"
   "scan"
@@ -51,6 +51,7 @@ set(
   fft.h
   fft/radix.h
   fft/readwrite.h
+  quantized.h
   softmax.h
   sort.h
   scan.h
