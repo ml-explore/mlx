@@ -295,7 +295,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         out.strides().data(), out.strides().size() * sizeof(size_t), 4);
 
     size_t out_ndim = out.ndim();
-    compute_encoder->setBytes(&out_ndim, sizeof(int), 5);
+    compute_encoder->setBytes(&out_ndim, sizeof(out_ndim), 5);
     if (upd_ndim <= 1) {
       // Placeholder so Metal doesn't compalain
       int shape_ = 0;
