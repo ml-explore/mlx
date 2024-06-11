@@ -293,7 +293,18 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         out.shape().data(), out.shape().size() * sizeof(int), 3);
     compute_encoder->setBytes(
         out.strides().data(), out.strides().size() * sizeof(size_t), 4);
-    compute_encoder->setBytes(&upd_size, sizeof(size_t), 5);
+
+    size_t out_ndim = out.ndim();
+    compute_encoder->setBytes(&out_ndim, sizeof(out_ndim), 5);
+    if (upd_ndim <= 1) {
+      // Placeholder so Metal doesn't compalain
+      int shape_ = 0;
+      compute_encoder->setBytes(&shape_, sizeof(int), 6);
+    } else {
+      compute_encoder->setBytes(upd.shape().data(), upd_ndim * sizeof(int), 6);
+    }
+    compute_encoder->setBytes(&upd_ndim, sizeof(size_t), 7);
+    compute_encoder->setBytes(&upd_size, sizeof(size_t), 8);
 
     // Set index buffers
     for (int i = 0; i < nidx; ++i) {
