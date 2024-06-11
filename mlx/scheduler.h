@@ -84,7 +84,7 @@ class Scheduler {
   Scheduler& operator=(const Scheduler&) = delete;
   Scheduler& operator=(Scheduler&&) = delete;
 
-  Stream new_stream(const Device& d) const {
+  Stream new_stream(const Device& d) {
     auto stream = Stream(streams_.size(), d);
     streams_.push_back(new StreamThread{stream});
     return stream;
@@ -97,7 +97,7 @@ class Scheduler {
     return default_streams_.at(d.type);
   }
 
-  void set_default_stream(const Stream& s) const {
+  void set_default_stream(const Stream& s) {
     default_streams_.at(s.device.type) = s;
   }
 
