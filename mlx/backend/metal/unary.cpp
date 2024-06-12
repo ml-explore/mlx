@@ -5,6 +5,11 @@
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
+#define UNARY_GPU(func)                                               \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
+    unary_op_gpu(inputs, out, op_name());                             \
+  }
+
 namespace mlx::core {
 
 void unary_op_gpu_inplace(
@@ -21,7 +26,7 @@ void unary_op_gpu_inplace(
   auto& d = metal::device(s.device);
 
   std::string kernel_name = (contig ? "v" : "g") + op + type_to_name(out);
-  auto kernel = get_unary_kernel(d, kernel_name, out);
+  auto kernel = get_unary_kernel(d, kernel_name, out.dtype(), op);
 
   size_t nthreads = contig ? in.data_size() : in.size();
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
@@ -77,148 +82,57 @@ void unary_op_gpu(
   unary_op_gpu(inputs, out, op, s);
 }
 
-void Abs::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "abs");
-}
-
-void ArcCos::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "arccos");
-}
-
-void ArcCosh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "arccosh");
-}
-
-void ArcSin::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "arcsin");
-}
-
-void ArcSinh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "arcsinh");
-}
-
-void ArcTan::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "arctan");
-}
-
-void ArcTanh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "arctanh");
-}
-
-void Conjugate::eval_gpu(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 1);
-  const auto& in = inputs[0];
-  if (out.dtype() == complex64) {
-    unary_op_gpu(inputs, out, "conj");
-  } else {
-    throw std::invalid_argument(
-        "[conjugate] conjugate must be called on complex input.");
-  }
-}
-
-void Cos::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "cos");
-}
-
-void Cosh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "cosh");
-}
-
-void Erf::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "erf");
-}
-
-void ErfInv::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "erfinv");
-}
-
-void Exp::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "exp");
-}
-
-void Expm1::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "expm1");
-}
+UNARY_GPU(Abs)
+UNARY_GPU(ArcCos)
+UNARY_GPU(ArcCosh)
+UNARY_GPU(ArcSin)
+UNARY_GPU(ArcSinh)
+UNARY_GPU(ArcTan)
+UNARY_GPU(ArcTanh)
+UNARY_GPU(Conjugate)
+UNARY_GPU(Cos)
+UNARY_GPU(Cosh)
+UNARY_GPU(Erf)
+UNARY_GPU(ErfInv)
+UNARY_GPU(Exp)
+UNARY_GPU(Expm1)
+UNARY_GPU(Log1p)
+UNARY_GPU(LogicalNot)
+UNARY_GPU(Floor)
+UNARY_GPU(Ceil)
+UNARY_GPU(Negative)
+UNARY_GPU(Sigmoid)
+UNARY_GPU(Sign)
+UNARY_GPU(Sin)
+UNARY_GPU(Sinh)
+UNARY_GPU(Square)
+UNARY_GPU(Sqrt)
+UNARY_GPU(Tan)
+UNARY_GPU(Tanh)
 
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (base_) {
     case Base::e:
-      unary_op_gpu(inputs, out, "log");
+      unary_op_gpu(inputs, out, op_name());
       break;
     case Base::two:
-      unary_op_gpu(inputs, out, "log2");
+      unary_op_gpu(inputs, out, op_name());
       break;
     case Base::ten:
-      unary_op_gpu(inputs, out, "log10");
+      unary_op_gpu(inputs, out, op_name());
       break;
   }
-}
-
-void Log1p::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "log1p");
-}
-
-void LogicalNot::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "lnot");
-}
-
-void Floor::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "floor");
-}
-
-void Ceil::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "ceil");
-}
-
-void Negative::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "neg");
 }
 
 void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (issubdtype(in.dtype(), inexact)) {
-    unary_op_gpu(inputs, out, "round");
+    unary_op_gpu(inputs, out, op_name());
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);
   }
-}
-
-void Sigmoid::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "sigmoid");
-}
-
-void Sign::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "sign");
-}
-
-void Sin::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "sin");
-}
-
-void Sinh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "sinh");
-}
-
-void Square::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "square");
-}
-
-void Sqrt::eval_gpu(const std::vector<array>& inputs, array& out) {
-  if (recip_) {
-    unary_op_gpu(inputs, out, "rsqrt");
-  } else {
-    unary_op_gpu(inputs, out, "sqrt");
-  }
-}
-
-void Tan::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "tan");
-}
-
-void Tanh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  unary_op_gpu(inputs, out, "tanh");
 }
 
 } // namespace mlx::core

@@ -49,7 +49,7 @@ void ternary_op_gpu_inplace(
 
   auto& d = metal::device(s.device);
 
-  auto kernel = get_ternary_kernel(d, kernel_name, out);
+  auto kernel = get_ternary_kernel(d, kernel_name, out.dtype(), op);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
@@ -122,7 +122,7 @@ void ternary_op_gpu(
 }
 
 void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
-  ternary_op_gpu(inputs, out, "select");
+  ternary_op_gpu(inputs, out, op_name());
 }
 
 } // namespace mlx::core

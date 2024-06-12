@@ -391,16 +391,16 @@ void multi_upload_bluestein_fft(
     std::vector<int> rstrides(in.ndim(), 1);
     rstarts[axis] = in.shape(axis) - back_offset;
     rstrides[axis] = -1;
-    unary_op_gpu({in}, conj_temp, "conj", s);
+    unary_op_gpu({in}, conj_temp, "Conjugate", s);
     slice_gpu(in, slice_temp, rstarts, rstrides, s);
     concatenate_gpu({conj_temp, slice_temp}, temp, (int)axis, s);
   } else if (inverse) {
-    unary_op_gpu({in}, temp, "conj", s);
+    unary_op_gpu({in}, temp, "Conjugate", s);
   } else {
     temp.copy_shared_buffer(in);
   }
 
-  binary_op_gpu({temp, w_k_broadcast}, temp1, "mul", s);
+  binary_op_gpu({temp, w_k_broadcast}, temp1, "Multiply", s);
 
   std::vector<std::pair<int, int>> pads;
   auto padded_shape = out.shape();
@@ -419,7 +419,7 @@ void multi_upload_bluestein_fft(
       /*inplace=*/false,
       s);
 
-  binary_op_gpu_inplace({pad_temp1, w_q_broadcast}, pad_temp, "mul", s);
+  binary_op_gpu_inplace({pad_temp1, w_q_broadcast}, pad_temp, "Multiply", s);
 
   fft_op(
       pad_temp,
@@ -437,7 +437,7 @@ void multi_upload_bluestein_fft(
   starts[axis] = plan.bluestein_n - offset - n;
   slice_gpu(pad_temp1, temp, starts, strides, s);
 
-  binary_op_gpu_inplace({temp, w_k_broadcast}, temp1, "mul", s);
+  binary_op_gpu_inplace({temp, w_k_broadcast}, temp1, "Multiply", s);
 
   if (real && !inverse) {
     std::vector<int> rstarts(in.ndim(), 0);
@@ -451,11 +451,11 @@ void multi_upload_bluestein_fft(
     copies.push_back(inv_n);
 
     copy_gpu(temp1, temp_float, CopyType::General, s);
-    binary_op_gpu({temp_float, inv_n}, out, "mul", s);
+    binary_op_gpu({temp_float, inv_n}, out, "Multiply", s);
   } else if (inverse) {
     auto inv_n = array({1.0f / n}, {1}, complex64);
-    unary_op_gpu({temp1}, temp, "conj", s);
-    binary_op_gpu({temp, inv_n}, out, "mul", s);
+    unary_op_gpu({temp1}, temp, "Conjugate", s);
+    binary_op_gpu({temp, inv_n}, out, "Multiply", s);
     copies.push_back(inv_n);
   } else {
     out.copy_shared_buffer(temp1);
