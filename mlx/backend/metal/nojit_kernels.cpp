@@ -195,13 +195,16 @@ MTL::ComputePipelineState* get_fft_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const std::string& hash_name,
-    const int tg_mem_size,
-    const std::string& in_type,
-    const std::string& out_type,
-    int step,
-    bool real,
-    const metal::MTLFCList& func_consts) {
+    const metal::MTLFCList& func_consts,
+    const std::string&) {
   return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
+}
+
+MTL::ComputePipelineState* get_quantized_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const std::string&) {
+  return d.get_kernel(kernel_name);
 }
 
 } // namespace mlx::core

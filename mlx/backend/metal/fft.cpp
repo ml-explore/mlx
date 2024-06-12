@@ -661,34 +661,45 @@ void fft_op(
     std::ostringstream kname;
     std::string inv_string = inverse ? "true" : "false";
     std::string real_string = real ? "true" : "false";
+    std::string func_name;
     if (plan.bluestein_n > 0) {
       kname << "bluestein_fft_mem_" << threadgroup_mem_size << "_"
             << in_type_str << "_" << out_type_str;
+      func_name = "bluestein_fft";
     } else if (plan.rader_n > 1) {
       kname << "rader_fft_mem_" << threadgroup_mem_size << "_" << in_type_str
             << "_" << out_type_str;
+      func_name = "rader_fft";
     } else if (four_step_params.required) {
       step = four_step_params.first_step ? 0 : 1;
       kname << "four_step_mem_" << threadgroup_mem_size << "_" << in_type_str
             << "_" << out_type_str << "_" << step << "_" << real_string;
+      func_name = "four_step_fft";
     } else {
       kname << "fft_mem_" << threadgroup_mem_size << "_" << in_type_str << "_"
             << out_type_str;
+      func_name = "fft";
     }
     std::string base_name = kname.str();
     // We use a specialized kernel for each FFT size
     kname << "_n" << fft_size << "_inv_" << inverse;
     std::string hash_name = kname.str();
-    auto kernel = get_fft_kernel(
-        d,
-        base_name,
-        hash_name,
-        threadgroup_mem_size,
-        in_type_str,
-        out_type_str,
-        step,
-        real,
-        func_consts);
+    auto template_def = func_name == "four_step_fft" ? get_template_definition(
+                                                           base_name,
+                                                           func_name,
+                                                           threadgroup_mem_size,
+                                                           in_type_str,
+                                                           out_type_str,
+                                                           step,
+                                                           real)
+                                                     : get_template_definition(
+                                                           base_name,
+                                                           func_name,
+                                                           threadgroup_mem_size,
+                                                           in_type_str,
+                                                           out_type_str);
+    auto kernel =
+        get_fft_kernel(d, base_name, hash_name, func_consts, template_def);
 
     compute_encoder->setComputePipelineState(kernel);
     compute_encoder.set_input_array(in_contiguous, 0);
