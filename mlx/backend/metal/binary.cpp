@@ -6,6 +6,17 @@
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
+#define BINARY_GPU(func)                                              \
+  void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
+    binary_op_gpu(inputs, out, get_primitive_string(this));           \
+  }
+
+#define BINARY_GPU_MULTI(func)                                         \
+  void func::eval_gpu(                                                 \
+      const std::vector<array>& inputs, std::vector<array>& outputs) { \
+    binary_op_gpu(inputs, outputs, get_primitive_string(this));        \
+  }
+
 namespace mlx::core {
 
 constexpr int MAX_BINARY_SPECIALIZED_DIMS = 5;
@@ -61,7 +72,8 @@ void binary_op_gpu_inplace(
 
   auto& d = metal::device(s.device);
 
-  auto kernel = get_binary_two_kernel(d, kernel_name, a, outputs[0]);
+  auto kernel =
+      get_binary_two_kernel(d, kernel_name, a.dtype(), outputs[0].dtype(), op);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
@@ -188,7 +200,7 @@ void binary_op_gpu_inplace(
 
   auto& d = metal::device(s.device);
 
-  auto kernel = get_binary_kernel(d, kernel_name, a, out);
+  auto kernel = get_binary_kernel(d, kernel_name, a.dtype(), out.dtype(), op);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   bool donate_a = a.data_shared_ptr() == nullptr;
@@ -259,102 +271,44 @@ void binary_op_gpu(
   binary_op_gpu(inputs, out, op, s);
 }
 
-void Add::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "add");
-}
-
-void ArcTan2::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "arctan2");
-}
+BINARY_GPU(Add)
+BINARY_GPU(ArcTan2)
+BINARY_GPU(Divide)
+BINARY_GPU_MULTI(DivMod)
+BINARY_GPU(Remainder)
+BINARY_GPU(Equal)
+BINARY_GPU(Greater)
+BINARY_GPU(GreaterEqual)
+BINARY_GPU(Less)
+BINARY_GPU(LessEqual)
+BINARY_GPU(LogicalAnd)
+BINARY_GPU(LogicalOr)
+BINARY_GPU(LogAddExp)
+BINARY_GPU(Maximum)
+BINARY_GPU(Minimum)
+BINARY_GPU(Multiply)
+BINARY_GPU(NotEqual)
+BINARY_GPU(Power)
+BINARY_GPU(Subtract)
 
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (op_) {
     case BitwiseBinary::And:
-      binary_op_gpu(inputs, out, "bitwise_and");
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::Or:
-      binary_op_gpu(inputs, out, "bitwise_or");
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::Xor:
-      binary_op_gpu(inputs, out, "bitwise_xor");
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::LeftShift:
-      binary_op_gpu(inputs, out, "left_shift");
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::RightShift:
-      binary_op_gpu(inputs, out, "right_shift");
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
   }
-}
-
-void Divide::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "div");
-}
-
-void DivMod::eval_gpu(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
-  binary_op_gpu(inputs, outputs, "divmod");
-}
-
-void Remainder::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "rem");
-}
-
-void Equal::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, equal_nan_ ? "naneq" : "eq");
-}
-
-void Greater::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "ge");
-}
-
-void GreaterEqual::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "geq");
-}
-
-void Less::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "le");
-}
-
-void LessEqual::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "leq");
-}
-
-void LogicalAnd::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "land");
-}
-
-void LogicalOr::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "lor");
-}
-
-void LogAddExp::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "lae");
-}
-
-void Maximum::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "max");
-}
-
-void Minimum::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "min");
-}
-
-void Multiply::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "mul");
-}
-
-void NotEqual::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "neq");
-}
-
-void Power::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "pow");
-}
-
-void Subtract::eval_gpu(const std::vector<array>& inputs, array& out) {
-  binary_op_gpu(inputs, out, "sub");
 }
 
 } // namespace mlx::core
