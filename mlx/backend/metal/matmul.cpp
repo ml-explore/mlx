@@ -786,38 +786,47 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Determine dispatch kernel
     int tm = 4, tn = 4;
-    int bm, bn, n_out_per_tgp;
+    int sm = 1, sn = 32;
+    int bm = 1, bn = 1;
+    int n_out_per_tgp;
     std::ostringstream kname;
 
     if (transpose_mat) {
-      bm = 8;
-      bn = 8;
-      if (out_vector_len >= 24576) {
-        bn = 128;
-      } else if (out_vector_len >= 16384) {
-        bn = 64;
-      } else if (out_vector_len >= 8192) {
+      if (in_vector_len >= 8192 && out_vector_len >= 2048) {
+        sm = 4;
+        sn = 8;
+      } else {
+        sm = 8;
+        sn = 4;
+      }
+
+      if (out_vector_len >= 2048) {
         bn = 16;
+      } else if (out_vector_len >= 512) {
+        bn = 4;
+      } else {
+        bn = 2;
       }
 
       // Specialized kernel for very small outputs
       tn = out_vector_len < tn ? 1 : tn;
 
-      n_out_per_tgp = bn * tn;
+      n_out_per_tgp = bn * sn * tn;
       kname << "gemv_t_" << type_to_name(out);
 
     } else {
       bm = out_vector_len >= 4096 ? 8 : 4;
-      bn = 32;
+      sn = 32;
 
       // Specialized kernel for very small outputs
       tm = out_vector_len < tm ? 1 : tm;
 
-      n_out_per_tgp = bm * tm;
+      n_out_per_tgp = bm * sm * tm;
       kname << "gemv_" << type_to_name(out);
     }
 
-    kname << "_bm" << bm << "_bn" << bn << "_tm" << tm << "_tn" << tn;
+    kname << "_bm" << bm << "_bn" << bn << "_sm" << sm << "_sn" << sn << "_tm"
+          << tm << "_tn" << tn;
     kname << "_nc" << !contiguous_kernel << "_axpby0";
 
     // Encode and dispatch kernel
@@ -826,7 +835,7 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setComputePipelineState(kernel);
 
     int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
-    MTL::Size group_dims = MTL::Size(bn, bm, 1);
+    MTL::Size group_dims = MTL::Size(32, bn, bm);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
     compute_encoder.set_input_array(mat, 0);
@@ -997,38 +1006,47 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Determine dispatch kernel
     int tm = 4, tn = 4;
-    int bm, bn, n_out_per_tgp;
+    int sm = 1, sn = 32;
+    int bm = 1, bn = 1;
+    int n_out_per_tgp;
     std::ostringstream kname;
 
     if (transpose_mat) {
-      bm = 8;
-      bn = 8;
-      if (out_vector_len >= 24576) {
-        bn = 128;
-      } else if (out_vector_len >= 16384) {
-        bn = 64;
-      } else if (out_vector_len >= 8192) {
+      if (in_vector_len >= 8192 && out_vector_len >= 2048) {
+        sm = 4;
+        sn = 8;
+      } else {
+        sm = 8;
+        sn = 4;
+      }
+
+      if (out_vector_len >= 2048) {
         bn = 16;
+      } else if (out_vector_len >= 512) {
+        bn = 4;
+      } else {
+        bn = 2;
       }
 
       // Specialized kernel for very small outputs
       tn = out_vector_len < tn ? 1 : tn;
 
-      n_out_per_tgp = bn * tn;
+      n_out_per_tgp = bn * sn * tn;
       kname << "gemv_t_" << type_to_name(out);
 
     } else {
       bm = out_vector_len >= 4096 ? 8 : 4;
-      bn = 32;
+      sn = 32;
 
       // Specialized kernel for very small outputs
       tm = out_vector_len < tm ? 1 : tm;
 
-      n_out_per_tgp = bm * tm;
+      n_out_per_tgp = bm * sm * tm;
       kname << "gemv_" << type_to_name(out);
     }
 
-    kname << "_bm" << bm << "_bn" << bn << "_tm" << tm << "_tn" << tn;
+    kname << "_bm" << bm << "_bn" << bn << "_sm" << sm << "_sn" << sn << "_tm"
+          << tm << "_tn" << tn;
     kname << "_nc" << !contiguous_kernel << "_axpby1";
 
     // Encode and dispatch kernel
@@ -1037,7 +1055,7 @@ void AddMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setComputePipelineState(kernel);
 
     int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
-    MTL::Size group_dims = MTL::Size(bn, bm, 1);
+    MTL::Size group_dims = MTL::Size(32, bn, bm);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
     compute_encoder.set_input_array(mat, 0);
@@ -1673,38 +1691,47 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // Determine dispatch kernel
     int tm = 4, tn = 4;
-    int bm, bn, n_out_per_tgp;
+    int sm = 1, sn = 32;
+    int bm = 1, bn = 1;
+    int n_out_per_tgp;
     std::ostringstream kname;
 
     if (transpose_mat) {
-      bm = 8;
-      bn = 8;
-      if (out_vector_len >= 24576) {
-        bn = 128;
-      } else if (out_vector_len >= 16384) {
-        bn = 64;
-      } else if (out_vector_len >= 8192) {
+      if (in_vector_len >= 8192 && out_vector_len >= 2048) {
+        sm = 4;
+        sn = 8;
+      } else {
+        sm = 8;
+        sn = 4;
+      }
+
+      if (out_vector_len >= 2048) {
         bn = 16;
+      } else if (out_vector_len >= 512) {
+        bn = 4;
+      } else {
+        bn = 2;
       }
 
       // Specialized kernel for very small outputs
       tn = out_vector_len < tn ? 1 : tn;
 
-      n_out_per_tgp = bn * tn;
-      kname << "gemv_t_bs_" << type_to_name(out);
+      n_out_per_tgp = bn * sn * tn;
+      kname << "gemv_t_gather_" << type_to_name(out);
 
     } else {
       bm = out_vector_len >= 4096 ? 8 : 4;
-      bn = 32;
+      sn = 32;
 
       // Specialized kernel for very small outputs
       tm = out_vector_len < tm ? 1 : tm;
 
-      n_out_per_tgp = bm * tm;
-      kname << "gemv_bs_" << type_to_name(out);
+      n_out_per_tgp = bm * sm * tm;
+      kname << "gemv_gather_" << type_to_name(out);
     }
 
-    kname << "_bm" << bm << "_bn" << bn << "_tm" << tm << "_tn" << tn;
+    kname << "_bm" << bm << "_bn" << bn << "_sm" << sm << "_sn" << sn << "_tm"
+          << tm << "_tn" << tn;
 
     // Encode and dispatch kernel
     auto& compute_encoder = d.get_command_encoder(s.index);
@@ -1712,7 +1739,7 @@ void GatherMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setComputePipelineState(kernel);
 
     int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
-    MTL::Size group_dims = MTL::Size(bn, bm, 1);
+    MTL::Size group_dims = MTL::Size(32, bn, bm);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
     compute_encoder.set_input_array(mat, 0);

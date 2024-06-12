@@ -263,7 +263,9 @@ class TestBlas(mlx_tests.MLXTestCase):
         mlx_mat_f=lambda x: x,
         mlx_vec_f=lambda x: x,
     ):
-        with self.subTest(shape=shape_mat):
+        with self.subTest(
+            shape_mat=shape_mat, shape_vec=shape_vec, mat_first=mat_first
+        ):
             np.random.seed(42)
             scale = max(np.sum(shape_mat), 32)
             mat_npy = np.random.normal(0.0, 1.0 / scale, shape_mat).astype(np_dtype)
