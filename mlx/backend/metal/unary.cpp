@@ -7,7 +7,7 @@
 
 #define UNARY_GPU(func)                                               \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    unary_op_gpu(inputs, out, op_name());                             \
+    unary_op_gpu(inputs, out, get_primitive_string(this));            \
   }
 
 namespace mlx::core {
@@ -113,13 +113,13 @@ UNARY_GPU(Tanh)
 void Log::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (base_) {
     case Base::e:
-      unary_op_gpu(inputs, out, op_name());
+      unary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case Base::two:
-      unary_op_gpu(inputs, out, op_name());
+      unary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case Base::ten:
-      unary_op_gpu(inputs, out, op_name());
+      unary_op_gpu(inputs, out, get_primitive_string(this));
       break;
   }
 }
@@ -128,7 +128,7 @@ void Round::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
   if (issubdtype(in.dtype(), inexact)) {
-    unary_op_gpu(inputs, out, op_name());
+    unary_op_gpu(inputs, out, get_primitive_string(this));
   } else {
     // No-op integer types
     out.copy_shared_buffer(in);

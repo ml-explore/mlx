@@ -8,13 +8,13 @@
 
 #define BINARY_GPU(func)                                              \
   void func::eval_gpu(const std::vector<array>& inputs, array& out) { \
-    binary_op_gpu(inputs, out, op_name());                            \
+    binary_op_gpu(inputs, out, get_primitive_string(this));           \
   }
 
 #define BINARY_GPU_MULTI(func)                                         \
   void func::eval_gpu(                                                 \
       const std::vector<array>& inputs, std::vector<array>& outputs) { \
-    binary_op_gpu(inputs, outputs, op_name());                         \
+    binary_op_gpu(inputs, outputs, get_primitive_string(this));        \
   }
 
 namespace mlx::core {
@@ -294,19 +294,19 @@ BINARY_GPU(Subtract)
 void BitwiseBinary::eval_gpu(const std::vector<array>& inputs, array& out) {
   switch (op_) {
     case BitwiseBinary::And:
-      binary_op_gpu(inputs, out, op_name());
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::Or:
-      binary_op_gpu(inputs, out, op_name());
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::Xor:
-      binary_op_gpu(inputs, out, op_name());
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::LeftShift:
-      binary_op_gpu(inputs, out, op_name());
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
     case BitwiseBinary::RightShift:
-      binary_op_gpu(inputs, out, op_name());
+      binary_op_gpu(inputs, out, get_primitive_string(this));
       break;
   }
 }

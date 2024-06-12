@@ -122,7 +122,7 @@ void ternary_op_gpu(
 }
 
 void Select::eval_gpu(const std::vector<array>& inputs, array& out) {
-  ternary_op_gpu(inputs, out, op_name());
+  ternary_op_gpu(inputs, out, get_primitive_string(this));
 }
 
 } // namespace mlx::core

@@ -119,13 +119,6 @@ class Primitive {
   Primitive& operator=(const Primitive& other) = delete;
   Primitive& operator=(Primitive&& other) = delete;
 
-  /** Return the Primitive name as a string */
-  inline std::string op_name() {
-    std::ostringstream op_t;
-    print(op_t);
-    return op_t.str();
-  };
-
  private:
   // Every primitive stores the stream it should run in
   Stream stream_;

@@ -9,12 +9,12 @@
 #include "mlx/backend/metal/kernels/ternary_ops.h"
 #include "mlx/backend/metal/kernels/ternary.h"
 
-#define instantiate_ternary_all(op, tname, type) \
-  instantiate_kernel("v_" #op #tname, ternary_v, type, op) \
-  instantiate_kernel("g_" #op #tname, ternary_g, type, op) \
-  instantiate_kernel("g1_" #op #tname, ternary_g_nd1, type, op) \
-  instantiate_kernel("g2_" #op #tname, ternary_g_nd2, type, op) \
-  instantiate_kernel("g3_" #op #tname, ternary_g_nd3, type, op) \
+#define instantiate_ternary_all(op, tname, type)                  \
+  instantiate_kernel("v_" #op #tname, ternary_v, type, op)        \
+  instantiate_kernel("g_" #op #tname, ternary_g, type, op)        \
+  instantiate_kernel("g1_" #op #tname, ternary_g_nd1, type, op)   \
+  instantiate_kernel("g2_" #op #tname, ternary_g_nd2, type, op)   \
+  instantiate_kernel("g3_" #op #tname, ternary_g_nd3, type, op)   \
   instantiate_kernel("g4_" #op #tname, ternary_g_nd, type, op, 4) \
   instantiate_kernel("g5_" #op #tname, ternary_g_nd, type, op, 5)
 
