@@ -513,7 +513,8 @@ MTL::ComputePipelineState* get_quantized_kernel(
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    kernel_source << metal::quantized() << template_def;
+    kernel_source << metal::utils() << metal::gemm() << metal::quantized()
+                  << template_def;
     lib = d.get_library(lib_name, kernel_source.str());
   }
   return d.get_kernel(kernel_name, lib);

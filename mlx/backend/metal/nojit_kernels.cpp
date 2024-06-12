@@ -196,14 +196,14 @@ MTL::ComputePipelineState* get_fft_kernel(
     const std::string& kernel_name,
     const std::string& hash_name,
     const metal::MTLFCList& func_consts,
-    const std::string& template_def) {
+    const std::string&) {
   return d.get_kernel(kernel_name, "mlx", hash_name, func_consts);
 }
 
 MTL::ComputePipelineState* get_quantized_kernel(
     metal::Device& d,
     const std::string& kernel_name,
-    const std::string& template_def) {
+    const std::string&) {
   return d.get_kernel(kernel_name);
 }
 

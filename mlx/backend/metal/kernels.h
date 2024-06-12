@@ -181,7 +181,7 @@ get_template_definition(std::string name, std::string func, Args... args) {
       s << ", ";
     }
     first = false;
-    s << fmt::format("{}", arg);
+    s << arg;
   };
   (add_arg(args), ...);
   s << ">";

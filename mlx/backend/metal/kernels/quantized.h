@@ -3,12 +3,6 @@
 #include <metal_simdgroup>
 #include <metal_stdlib>
 
-#include "mlx/backend/metal/kernels/bf16.h"
-#include "mlx/backend/metal/kernels/defines.h"
-#include "mlx/backend/metal/kernels/utils.h"
-
-#include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
-
 using namespace metal;
 
 #define MLX_MTL_CONST static constant constexpr const

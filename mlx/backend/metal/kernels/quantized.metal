@@ -1,7 +1,11 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include "mlx/backend/metal/kernels/bf16.h"
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/quantized.h"
+#include "mlx/backend/metal/kernels/utils.h"
+
+#include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
 
 #define instantiate_qmv_fast(itype, group_size, bits)       \
   instantiate_kernel(                                       \
