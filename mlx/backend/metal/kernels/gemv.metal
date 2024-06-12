@@ -326,7 +326,7 @@ struct GEMVTKernel {
       }
 
       if (leftover > 0) {
-        for (int tm = 0; bm + tm < in_vec_size; tm++) {
+        for (int tm = 0; tm < TM && bm + tm < in_vec_size; tm++) {
           v_coeff[tm] = in_vec[bm + tm];
 
           MLX_MTL_PRAGMA_UNROLL
@@ -352,7 +352,7 @@ struct GEMVTKernel {
     }
 
     // Threadgroup accumulation and writing out results
-    if (thrM == 0 && out_col < out_vec_size) {
+    if (cm == 0 && out_col < out_vec_size) {
       MLX_MTL_PRAGMA_UNROLL
       for (int j = 0; j < TN; j++) {
         if (kDoAxpby) {
