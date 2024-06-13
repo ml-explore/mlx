@@ -185,9 +185,9 @@ struct GEMVKernel {
         !has_output_mask ? 0 : m_block_idx * out_mask_strides[1];
 
     int mat_mask_offset =
-        !has_operand_mask ? 0 : m_block_idx * mat_mask_strides[0];
+        !has_operand_mask ? 0 : m_block_idx * mat_mask_strides[1];
     int vec_mask_offset = 0;
-    const int mat_mask_step = !has_operand_mask ? 0 : mat_mask_strides[1];
+    const int mat_mask_step = !has_operand_mask ? 0 : mat_mask_strides[0];
     const int vec_mask_step = !has_operand_mask ? 0 : vec_mask_strides[1];
 
     T out_scale{1};
@@ -217,6 +217,7 @@ struct GEMVKernel {
     // Advance matrix
     mat += out_row * matrix_ld;
 
+    // Prepare for loop
     constexpr const uniform<int> loop_stride = make_uniform(blockN);
     const uniform<int> in_size = make_uniform(in_vec_size);
     const uniform<int> n_iter = in_size / loop_stride;
@@ -444,6 +445,55 @@ struct GEMVTKernel {
 
     int out_col = tid.x * blockN + bn;
 
+    // Prepare mask offsets
+    const constant int* out_mask_strides = mask_strides;
+    const constant int* mat_mask_strides =
+        mask_strides + (has_output_mask ? 2 : 0);
+    const constant int* vec_mask_strides =
+        mat_mask_strides + (has_operand_mask ? 2 : 0);
+
+    const int n_block_idx = blockM > blockN ? out_col / blockM : int(tid.x);
+
+    const int out_mask_offset =
+        !has_output_mask ? 0 : n_block_idx * out_mask_strides[0];
+
+    int mat_mask_offset =
+        !has_operand_mask ? 0 : n_block_idx * mat_mask_strides[0];
+    int vec_mask_offset = 0;
+    const int mat_mask_step = !has_operand_mask ? 0 : mat_mask_strides[1];
+    const int vec_mask_step = !has_operand_mask ? 0 : vec_mask_strides[0];
+
+    T out_scale{1};
+
+    // Check output mask
+    if (has_output_mask) {
+      auto mask_out = out_mask[out_mask_offset];
+
+      // Write zeros and return if mask is 0
+      if (!mask_out) {
+        if (cm == 0 && out_col < out_vec_size) {
+          if (out_col + TN <= out_vec_size) {
+            MLX_MTL_PRAGMA_UNROLL
+            for (int tn = 0; tn < TN; tn++) {
+              out_vec[out_col + tn] = T(0.);
+            }
+          } else {
+            for (int tn = 0; tn < TN && (out_col + tn) < out_vec_size; tn++) {
+              out_vec[out_col + tn] = T(0.);
+            }
+          }
+        }
+
+        return;
+      }
+
+      // Store scalar if multiplicative mask
+      if (has_mul_output_mask) {
+        out_scale = T(mask_out);
+      }
+    }
+
+    // Prepare for loop
     constexpr const uniform<int> loop_stride = make_uniform(blockM);
     const uniform<int> in_size = make_uniform(in_vec_size);
     const uniform<int> n_iter = in_size / loop_stride;
@@ -452,7 +502,7 @@ struct GEMVTKernel {
 
     // Edgecase handling
     if (out_col < out_vec_size) {
-      out_col = out_col + TN < out_vec_size ? out_col : out_vec_size - TN;
+      out_col = (out_col + TN) <= out_vec_size ? out_col : out_vec_size - TN;
 
       // Per thread accumulation main loop
       for (int i = 0; i < n_iter; ++i) {
@@ -460,27 +510,60 @@ struct GEMVTKernel {
         // This is possibly it may help exploit cache better
         threadgroup_barrier(mem_flags::mem_none);
 
-        MLX_MTL_PRAGMA_UNROLL
-        for (int tm = 0; tm < TM; tm++) {
-          v_coeff[tm] = in_vec[bm + tm];
-        }
-
-        MLX_MTL_PRAGMA_UNROLL
-        for (int tm = 0; tm < TM; tm++) {
-          for (int tn = 0; tn < TN; tn++) {
-            inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
+        if (!has_operand_mask ||
+            (bool(mat_mask[mat_mask_offset]) &&
+             bool(vec_mask[vec_mask_offset]))) {
+          T block_scale{1};
+          if (has_mul_operand_mask) {
+            block_scale =
+                T(mat_mask[mat_mask_offset]) * T(vec_mask[vec_mask_offset]);
           }
-          for (int tn = 0; tn < TN; tn++) {
-            result[tn] += v_coeff[tm] * inter[tn];
+
+          MLX_MTL_PRAGMA_UNROLL
+          for (int tm = 0; tm < TM; tm++) {
+            v_coeff[tm] = in_vec[bm + tm];
+          }
+
+          // Apply scale
+          if (has_mul_operand_mask) {
+            MLX_MTL_PRAGMA_UNROLL
+            for (int tm = 0; tm < TM; tm++) {
+              v_coeff[tm] *= block_scale;
+            }
+          }
+
+          MLX_MTL_PRAGMA_UNROLL
+          for (int tm = 0; tm < TM; tm++) {
+            for (int tn = 0; tn < TN; tn++) {
+              inter[tn] = mat[(bm + tm) * marix_ld + out_col + tn];
+            }
+            for (int tn = 0; tn < TN; tn++) {
+              result[tn] += v_coeff[tm] * inter[tn];
+            }
           }
         }
 
         bm += blockM;
+        mat_mask_offset += mat_mask_step;
+        vec_mask_offset += vec_mask_step;
       }
 
-      if (leftover > 0) {
+      if (leftover > 0 &&
+          (!has_operand_mask ||
+           (bool(mat_mask[mat_mask_offset]) &&
+            bool(vec_mask[vec_mask_offset])))) {
+        T block_scale{1};
+        if (has_mul_operand_mask) {
+          block_scale =
+              T(mat_mask[mat_mask_offset]) * T(vec_mask[vec_mask_offset]);
+        }
+
         for (int tm = 0; tm < TM && bm + tm < in_vec_size; tm++) {
           v_coeff[tm] = in_vec[bm + tm];
+
+          if (has_mul_operand_mask) {
+            v_coeff[tm] *= block_scale;
+          }
 
           MLX_MTL_PRAGMA_UNROLL
           for (int tn = 0; tn < TN; tn++) {
@@ -492,6 +575,14 @@ struct GEMVTKernel {
             result[tn] += v_coeff[tm] * inter[tn];
           }
         }
+      }
+    }
+
+    // Apply out scale
+    if (has_mul_output_mask) {
+      MLX_MTL_PRAGMA_UNROLL
+      for (int tm = 0; tm < TM; tm++) {
+        result[tm] *= out_scale;
       }
     }
 
@@ -837,8 +928,9 @@ template <
   instantiate_gemv_t(name, itype, 1, 2,  8, 4, 4, 1) \
   instantiate_gemv_t(name, itype, 1, 2,  8, 4, 4, 4) \
   instantiate_gemv_t(name, itype, 1, 4,  8, 4, 4, 4) \
-  instantiate_gemv_t(name, itype, 1, 16, 8, 4, 4, 4) \
-  instantiate_gemv_t(name, itype, 1, 16, 4, 8, 4, 4) // clang-format on
+  instantiate_gemv_t(name, itype, 2, 2,  8, 4, 4, 1) \
+  instantiate_gemv_t(name, itype, 2, 2,  8, 4, 4, 4) \
+  instantiate_gemv_t(name, itype, 2, 4,  8, 4, 4, 4) // clang-format on
 
 // clang-format off
 instantiate_gemv_t_blocks(float32, float);

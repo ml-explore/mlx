@@ -1522,17 +1522,11 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     std::ostringstream kname;
 
     if (transpose_mat) {
-      if (in_vector_len >= 8192 && out_vector_len >= 2048) {
-        sm = 4;
-        sn = 8;
-      } else {
-        sm = 8;
-        sn = 4;
-      }
+      sm = 8;
+      sn = 4;
+      bm = block_size_ == 32 ? 1 : 2;
 
-      if (out_vector_len >= 2048) {
-        bn = 16;
-      } else if (out_vector_len >= 512) {
+      if (out_vector_len >= 512) {
         bn = 4;
       } else {
         bn = 2;
@@ -1545,7 +1539,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       kname << "gemv_t";
 
     } else {
-      // bm = out_vector_len >= 4096 ? 4 : 2;
       bm = 2;
       if (block_size_ == 32) {
         sm = 4;

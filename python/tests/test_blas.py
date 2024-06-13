@@ -898,12 +898,14 @@ class TestBlas(mlx_tests.MLXTestCase):
             (64, 64, 16, 32),
             (128, 128, 128, 32),
             (256, 256, 128, 64),
+            (1, 128, 128, 32),
+            (256, 1, 128, 64),
         )
 
         for M, N, K, block_size in shapes:
             test_shape(M, N, K, block_size)
 
-        # Test broadcasting
+        # # Test broadcasting
         test_shape(64, 64, 64, 32, batch_A=(1, 2), batch_B=(2, 2))
 
         # Test gemv
