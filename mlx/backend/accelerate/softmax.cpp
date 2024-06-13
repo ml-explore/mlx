@@ -123,7 +123,7 @@ struct AccelerateSimdOps {
 
   VT max(VT a, VT b) {
     return simd_max(a, b);
-  };
+  }
 
   VT exp(VT x) {
     return simd_fast_exp(x);
@@ -170,7 +170,7 @@ struct NeonFp16SimdOps {
 
   VT max(VT a, VT b) {
     return vmaxq_f16(a, b);
-  };
+  }
 
   VT exp(VT x) {
     return neon_fast_exp(x);

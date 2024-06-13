@@ -181,7 +181,7 @@ void merge_one(array& dst, array& src, ParentsMap& parents_map) {
   }
   // Remove the source from the map to avoid fusing with it again
   parents_map.erase(src_parents);
-};
+}
 
 // Helper that merges two arrays in the graph by setting the parents of the
 // source to point to the destination. The arrays are assumed to be coming from
@@ -194,7 +194,7 @@ void merge(array& dst, array& src, ParentsMap& parents_map) {
   for (int i = 0; i < sources.size(); ++i) {
     merge_one(dests[i], sources[i], parents_map);
   }
-};
+}
 
 template <typename T, typename... U>
 std::uintptr_t get_function_address(const std::function<T(U...)>& fun) {
@@ -260,7 +260,7 @@ class CompilerCache {
     // Otherwise append a new cache entry
     entries.push_back(CacheEntry{});
     return entries.back();
-  };
+  }
 
   void erase(std::uintptr_t fun_id) {
     cache_.erase(fun_id);

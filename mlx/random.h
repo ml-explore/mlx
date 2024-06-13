@@ -148,7 +148,7 @@ array randint(
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
   return randint(array(low), array(high), shape, dtype, key, to_stream(s));
-};
+}
 
 /** Generate binary variables with probability to be true equal to p */
 array bernoulli(
@@ -167,7 +167,7 @@ array bernoulli(
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
   return bernoulli(array(p), key, s);
-};
+}
 
 template <typename T>
 array bernoulli(
@@ -176,7 +176,7 @@ array bernoulli(
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {}) {
   return bernoulli(array(p), shape, key, s);
-};
+}
 
 array bernoulli(
     const std::optional<array>& key = std::nullopt,

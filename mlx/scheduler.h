@@ -31,7 +31,7 @@ struct StreamThread {
   ~StreamThread() {
     synchronize(stream);
     {
-      std::unique_lock<std::mutex> lk(mtx);
+      std::lock_guard<std::mutex> lk(mtx);
       stop = true;
     }
     cond.notify_one();
@@ -58,7 +58,7 @@ struct StreamThread {
   template <typename F>
   void enqueue(F&& f) {
     {
-      std::unique_lock<std::mutex> lk(mtx);
+      std::lock_guard<std::mutex> lk(mtx);
       if (stop) {
         throw std::runtime_error(
             "Cannot enqueue work after stream is stopped.");
@@ -93,7 +93,7 @@ class Scheduler {
   template <typename F>
   void enqueue(const Stream& stream, F&& f);
 
-  Stream get_default_stream(const Device& d) {
+  Stream get_default_stream(const Device& d) const {
     return default_streams_.at(d.type);
   }
 
@@ -103,7 +103,7 @@ class Scheduler {
 
   void notify_new_task(const Stream& stream) {
     {
-      std::unique_lock<std::mutex> lk(mtx);
+      std::lock_guard<std::mutex> lk(mtx);
       n_active_tasks_++;
     }
     completion_cv.notify_all();
@@ -111,7 +111,7 @@ class Scheduler {
 
   void notify_task_completion(const Stream& stream) {
     {
-      std::unique_lock<std::mutex> lk(mtx);
+      std::lock_guard<std::mutex> lk(mtx);
       n_active_tasks_--;
     }
     completion_cv.notify_all();
