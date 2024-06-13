@@ -17,8 +17,6 @@ using namespace metal;
 
 #define MLX_MTL_CONST static constant constexpr const
 
-MLX_MTL_CONST int SIMD_SIZE = 32;
-
 template <
     typename T,
     const int BM, /* Threadgroup rows (in simdgroups) */
@@ -38,14 +36,13 @@ struct GEMVKernel {
   static_assert(SM * SN == 32, "simdgroup can only have 32 threads");
 
   static_assert(
-      threadsN == 8 || threadsN == 16 || threadsN == 32,
+      SN == 8 || SN == 16 || SN == 32,
       "gemv block must have a width of 8, 16, or 32");
 
   // - The matrix of size (M = out_vec_size, K = in_vec_size) is divided up
   //   into blocks of (blockM, blockN) divided among threadgroups
   // - Every thread works on a block of (TM, TN)
-  // - We assume each thead group is launched with (threadsN, threadsM, 1)
-  // threads
+  // - We assume each threadgroup has (threadsN, threadsM, 1) threads
   //
   // 1. A thread loads TN elements each from mat along TM rows
   //    and the corresponding scalar from the vector
@@ -62,7 +59,8 @@ struct GEMVKernel {
   //   * The last thread that partially overlaps with the matrix is shifted
   //     inwards such that the thread block fits exactly in the matrix
 
-  MLX_MTL_CONST short tgp_mem_size = BN > 1 ? BN*(blockM + TM) : 1;
+  MLX_MTL_CONST short tgp_mem_size = BN > 1 ? BN*(blockM + TM) : 0;
+  MLX_MTL_CONST bool needs_tgp_reduction = BN > 1;
 
   static METAL_FUNC void
   load_unsafe(const device T* src, thread T dst[TN], const int src_offset = 0) {
@@ -116,6 +114,8 @@ struct GEMVKernel {
 
     const int thrM = SN != 32 ? simd_lid / SN : 0;
     const int thrN = SN != 32 ? simd_lid % SN : int(simd_lid);
+
+    const int sgN = BN != 1 ? (simd_gid % BN) : 0;
 
     const int simdM = BN != 1 ? SM * (simd_gid / BN) : int(SM * simd_gid);
     const int simdN = BN != 1 ? SN * (simd_gid % BN) : 0;
@@ -191,8 +191,31 @@ struct GEMVKernel {
       }
     }
 
+    // Threadgroup accumulation results
+    if (needs_tgp_reduction) {
+      threadgroup T* tgp_results = tgp_memory + sgN * (blockM + TM) + bm;
+      if (thrN == 0) {
+        MLX_MTL_PRAGMA_UNROLL
+        for (int tm = 0; tm < TM; tm++) {
+          tgp_results[tm] = result[tm];
+        }
+
+        threadgroup_barrier(mem_flags::mem_none);
+
+        if (sgN == 0) {
+          MLX_MTL_PRAGMA_UNROLL
+          for (int sgn = 1; sgn < BN; sgn++) {
+            MLX_MTL_PRAGMA_UNROLL
+            for (int tm = 0; tm < TM; tm++) {
+              result[tm] += tgp_results[sgn * (blockM + TM) + tm];
+            }
+          }
+        }
+      }
+    }
+
     // Write outputs
-    if (simd_lid == 0) {
+    if (simdN == 0 && thrN == 0) {
       MLX_MTL_PRAGMA_UNROLL
       for (int tm = 0; tm < TM; tm++) {
         if (kDoAxpby) {
@@ -231,8 +254,7 @@ struct GEMVTKernel {
   // - The matrix of size (M = in_vec_size, N = out_vec_size) is divided up
   //   into blocks of (blockM, blockN) divided among threadgroups
   // - Every thread works on a block of (TM, TN)
-  // - We assume each thead group is launched with (threadsN, threadsM, 1)
-  // threads
+  // - We assume each threadgroup has (threadsN, threadsM, 1) threads
   //
   // 1. A thread loads TN elements each from mat along TM contiguous rows
   //    and the corresponding scalar from the vector
@@ -248,7 +270,8 @@ struct GEMVTKernel {
   //   * The last thread that partially overlaps with the matrix is shifted
   //     inwards such that the thread block fits exactly in the matrix
 
-  MLX_MTL_CONST short tgp_mem_size = BM > 1 ? BM*(blockN + TN) : 1;
+  MLX_MTL_CONST short tgp_mem_size = BM > 1 ? BM*(blockN + TN) : 0;
+  MLX_MTL_CONST bool needs_tgp_reduction = BM > 1;
 
   static METAL_FUNC void run(
       const device T* mat [[buffer(0)]],
@@ -277,17 +300,17 @@ struct GEMVTKernel {
     const int thrM = SN != 32 ? simd_lid / SN : 0;
     const int thrN = SN != 32 ? simd_lid % SN : int(simd_lid);
 
-    const int simdM = BN != 1 ? SM * (simd_gid / BN) : int(SM * simd_gid);
-    const int simdN = BN != 1 ? SN * (simd_gid % BN) : 0;
+    const int sgM = BN != 1 ? (simd_gid / BN) : int(simd_gid);
+    const int sgN = BN != 1 ? (simd_gid % BN) : 0;
+
+    const int simdM = SM * sgM;
+    const int simdN = SN * sgN;
 
     int cm = (simdM + thrM);
     int cn = (simdN + thrN);
 
     int bm = cm * TM;
     int bn = cn * TN;
-
-    // Threadgroup accumulation results
-    // threadgroup T* tgp_results = tgp_memory + bn * threadsM;
 
     int out_col = tid.x * blockN + bn;
 
@@ -351,6 +374,29 @@ struct GEMVTKernel {
       }
     }
 
+    // Threadgroup accumulation results
+    if (needs_tgp_reduction) {
+      threadgroup T* tgp_results = tgp_memory + sgM * (blockN + TN) + bn;
+      if (thrM == 0) {
+        MLX_MTL_PRAGMA_UNROLL
+        for (int tn = 0; tn < TN; tn++) {
+          tgp_results[tn] = result[tn];
+        }
+
+        threadgroup_barrier(mem_flags::mem_none);
+
+        if (sgM == 0) {
+          MLX_MTL_PRAGMA_UNROLL
+          for (int sgm = 1; sgm < BM; sgm++) {
+            MLX_MTL_PRAGMA_UNROLL
+            for (int tn = 0; tn < TN; tn++) {
+              result[tn] += tgp_results[sgm * (blockN + TN) + tn];
+            }
+          }
+        }
+      }
+    }
+
     // Threadgroup accumulation and writing out results
     if (cm == 0 && out_col < out_vec_size) {
       MLX_MTL_PRAGMA_UNROLL
@@ -401,7 +447,8 @@ template <
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel = GEMVKernel<T, BM, BN, SM, SN, TM, TN, kDoAxpby>;
-  threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
+  threadgroup T tgp_memory
+      [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   // Update batch offsets
   if (kDoNCBatch) {
@@ -434,7 +481,7 @@ template <
       alpha,
       beta,
       bias_stride,
-      tgp_memory,
+      gemv_kernel::tgp_mem_size == 0 ? nullptr : tgp_memory,
       tid,
       lid,
       simd_gid,
@@ -518,7 +565,8 @@ template <
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel = GEMVKernel<T, BM, BN, SM, SN, TM, TN, false>;
-  threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
+  threadgroup T tgp_memory
+      [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   uint32_t indx_vec;
   uint32_t indx_mat;
@@ -566,7 +614,7 @@ template <
       alpha,
       beta,
       batch_ndim, // Not used
-      tgp_memory,
+      gemv_kernel::tgp_mem_size == 0 ? nullptr : tgp_memory,
       tid,
       lid,
       simd_gid,
@@ -647,7 +695,8 @@ template <
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel = GEMVTKernel<T, BM, BN, SM, SN, TM, TN, kDoAxpby>;
-  threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
+  threadgroup T tgp_memory
+      [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   // Update batch offsets
   if (kDoNCBatch) {
@@ -680,7 +729,7 @@ template <
       alpha,
       beta,
       bias_stride,
-      tgp_memory,
+      gemv_kernel::tgp_mem_size == 0 ? nullptr : tgp_memory,
       tid,
       lid,
       simd_gid,
@@ -722,14 +771,11 @@ template <
 
 // clang-format off
 #define instantiate_gemv_t_blocks(name, itype) \
-  instantiate_gemv_t(name, itype, 1, 2,  4, 8, 4, 1) \
-  instantiate_gemv_t(name, itype, 1, 2,  4, 8, 4, 4) \
-  instantiate_gemv_t(name, itype, 1, 4,  4, 8, 4, 4) \
-  instantiate_gemv_t(name, itype, 1, 16, 4, 8, 4, 4) \
   instantiate_gemv_t(name, itype, 1, 2,  8, 4, 4, 1) \
   instantiate_gemv_t(name, itype, 1, 2,  8, 4, 4, 4) \
   instantiate_gemv_t(name, itype, 1, 4,  8, 4, 4, 4) \
-  instantiate_gemv_t(name, itype, 1, 16, 8, 4, 4, 4) // clang-format on
+  instantiate_gemv_t(name, itype, 1, 16, 8, 4, 4, 4) \
+  instantiate_gemv_t(name, itype, 1, 16, 4, 8, 4, 4) // clang-format on
 
 // clang-format off
 instantiate_gemv_t_blocks(float32, float);
@@ -770,7 +816,8 @@ template <
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
   using gemv_kernel = GEMVTKernel<T, BM, BN, SM, SN, TM, TN, false>;
-  threadgroup T tgp_memory[gemv_kernel::tgp_mem_size];
+  threadgroup T tgp_memory
+      [gemv_kernel::tgp_mem_size == 0 ? 1 : gemv_kernel::tgp_mem_size];
 
   uint32_t indx_vec;
   uint32_t indx_mat;
@@ -818,7 +865,7 @@ template <
       alpha,
       beta,
       batch_ndim, // Not used,
-      tgp_memory,
+      gemv_kernel::tgp_mem_size == 0 ? nullptr : tgp_memory,
       tid,
       lid,
       simd_gid,
@@ -854,25 +901,16 @@ template <
       uint simd_gid [[simdgroup_index_in_threadgroup]],                   \
       uint simd_lid [[thread_index_in_simdgroup]]);
 
-#define instantiate_gemv_t_bs_blocks(name, itype)                             \
-  instantiate_gemv_t_bs_helper(name, itype, 1, 2, 4, 8, 4, 1)                 \
-      instantiate_gemv_t_bs_helper(name, itype, 1, 2, 4, 8, 4, 4)             \
-          instantiate_gemv_t_bs_helper(name, itype, 1, 4, 4, 8, 4, 4)         \
-              instantiate_gemv_t_bs_helper(name, itype, 1, 16, 4, 8, 4, 4)    \
-                  instantiate_gemv_t_bs_helper(name, itype, 1, 2, 8, 4, 4, 1) \
-                      instantiate_gemv_t_bs_helper(                           \
-                          name, itype, 1, 2, 8, 4, 4, 4)                      \
-                          instantiate_gemv_t_bs_helper(                       \
-                              name, itype, 1, 4, 8, 4, 4, 4)                  \
-                              instantiate_gemv_t_bs_helper(                   \
-                                  name,                                       \
-                                  itype,                                      \
-                                  1,                                          \
-                                  16,                                         \
-                                  8,                                          \
-                                  4,                                          \
-                                  4,                                          \
-                                  4) // clang-format on
+// clang-format off
+#define instantiate_gemv_t_bs_blocks(name, itype)              \
+  instantiate_gemv_t_bs_helper(name, itype, 1,  2, 4, 8, 4, 1) \
+  instantiate_gemv_t_bs_helper(name, itype, 1,  2, 4, 8, 4, 4) \
+  instantiate_gemv_t_bs_helper(name, itype, 1,  4, 4, 8, 4, 4) \
+  instantiate_gemv_t_bs_helper(name, itype, 1, 16, 4, 8, 4, 4) \
+  instantiate_gemv_t_bs_helper(name, itype, 1,  2, 8, 4, 4, 1) \
+  instantiate_gemv_t_bs_helper(name, itype, 1,  2, 8, 4, 4, 4) \
+  instantiate_gemv_t_bs_helper(name, itype, 1,  4, 8, 4, 4, 4) \
+  instantiate_gemv_t_bs_helper(name, itype, 1, 16, 8, 4, 4, 4) // clang-format on
 
 // clang-format off
 instantiate_gemv_t_bs_blocks(float32, float);
