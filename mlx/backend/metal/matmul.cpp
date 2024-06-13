@@ -847,11 +847,9 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&mat_ld, sizeof(int), 6);
 
     compute_encoder->setBytes(&batch_ndim, sizeof(int), 9);
-    compute_encoder->setBytes(batch_shape.data(), batch_ndim * sizeof(int), 10);
-    compute_encoder->setBytes(
-        batch_strides_vec.data(), batch_ndim * sizeof(size_t), 11);
-    compute_encoder->setBytes(
-        batch_strides_mat.data(), batch_ndim * sizeof(size_t), 12);
+    set_vector_bytes(compute_encoder, batch_shape, 10);
+    set_vector_bytes(compute_encoder, batch_strides_vec, 11);
+    set_vector_bytes(compute_encoder, batch_strides_mat, 12);
 
     compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 
@@ -1397,17 +1395,26 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   bool has_op_mask = inputs.size() > 3;
   bool has_out_mask = inputs.size() == 3 || inputs.size() == 5;
 
+  // Prepare kernel name
+  std::string out_mask_nm = has_out_mask ? type_to_name(inputs[2]) : "nomask";
+  std::string op_mask_nm = has_op_mask ? type_to_name(inputs.back()) : "nomask";
+
+  auto get_batch_dims = [](const auto& v) {
+    return decltype(v){v.begin(), v.end() - 2};
+  };
+
   std::vector<int> batch_shape{1};
+  std::vector<size_t> A_batch_stride{0};
+  std::vector<size_t> B_batch_stride{0};
+  std::vector<size_t> outmask_bstride{0};
+  std::vector<size_t> Amask_bstride{0};
+  std::vector<size_t> Bmask_bstride{0};
   size_t A_batch_str = 0;
   size_t B_batch_str = 0;
 
   std::vector<size_t> batch_strides;
 
   if (out.ndim() > 2) {
-    auto get_batch_dims = [](const auto& v) {
-      return decltype(v){v.begin(), v.end() - 2};
-    };
-
     std::vector<int> bshape{out.shape().begin(), out.shape().end() - 2};
     std::vector<std::vector<size_t>> bstrides;
 
@@ -1423,12 +1430,185 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     for (auto& bstr : bstrides_c) {
       batch_strides.insert(batch_strides.end(), bstr.begin(), bstr.end());
     }
+
+    A_batch_stride = bstrides_c[0];
+    B_batch_stride = bstrides_c[1];
+
+    if (has_out_mask) {
+      outmask_bstride = bstrides_c[2];
+    }
+    if (has_op_mask) {
+      Amask_bstride = bstrides_c[has_out_mask + 2];
+      Bmask_bstride = bstrides_c[has_out_mask + 3];
+    }
+
   } else {
     batch_strides = std::vector<size_t>(inputs.size(), 0);
   }
 
   size_t matrix_stride_out = size_t(M) * N;
   size_t batch_size_out = out.size() / (matrix_stride_out);
+
+  /////////////////////////////////////////////////////////////////////////////
+  // Gemv specialization
+
+  // Route to gemv if needed
+  if (std::min(M, N) == 1) {
+    // Collect problem info
+    bool is_b_matrix = N != 1;
+
+    auto& mat = is_b_matrix ? b : a;
+    auto& vec = is_b_matrix ? a : b;
+    bool transpose_mat = is_b_matrix ? !transpose_b : transpose_a;
+    int in_vector_len = K;
+    int out_vector_len = is_b_matrix ? N : M;
+
+    int mat_cols = transpose_mat ? out_vector_len : in_vector_len;
+    int mat_rows = transpose_mat ? in_vector_len : out_vector_len;
+    int mat_ld = is_b_matrix ? b_cols : a_cols;
+
+    auto batch_strides_mat = is_b_matrix ? B_batch_stride : A_batch_stride;
+    auto batch_strides_vec = is_b_matrix ? A_batch_stride : B_batch_stride;
+
+    auto mask_bstrides_mat = is_b_matrix ? Bmask_bstride : Amask_bstride;
+    auto mask_bstrides_vec = is_b_matrix ? Amask_bstride : Bmask_bstride;
+
+    auto mat_mask_idx = int(has_out_mask) + (is_b_matrix ? 3 : 2);
+    auto vec_mask_idx = int(has_out_mask) + (is_b_matrix ? 2 : 3);
+
+    std::vector<int> mask_strides;
+    std::vector<size_t> mask_batch_strides;
+    if (has_out_mask) {
+      auto& out_mask = inputs[2];
+      mask_strides.push_back(*(out_mask.strides().end() - 1));
+      mask_strides.push_back(*(out_mask.strides().end() - 2));
+      mask_batch_strides.insert(
+          mask_batch_strides.end(),
+          outmask_bstride.begin(),
+          outmask_bstride.end());
+    }
+    if (has_op_mask) {
+      auto& mat_mask = inputs[mat_mask_idx];
+      mask_strides.push_back(*(mat_mask.strides().end() - 1));
+      mask_strides.push_back(*(mat_mask.strides().end() - 2));
+
+      mask_batch_strides.insert(
+          mask_batch_strides.end(),
+          mask_bstrides_mat.begin(),
+          mask_bstrides_mat.end());
+
+      auto& vec_mask = inputs[vec_mask_idx];
+      mask_strides.push_back(*(vec_mask.strides().end() - 1));
+      mask_strides.push_back(*(vec_mask.strides().end() - 2));
+      mask_batch_strides.insert(
+          mask_batch_strides.end(),
+          mask_bstrides_vec.begin(),
+          mask_bstrides_vec.end());
+    }
+
+    int stride_mat = batch_strides_mat.back();
+    int stride_vec = batch_strides_vec.back();
+
+    // Determine if inputs have simple batching / broadcasting
+    bool contiguous_kernel = (batch_shape.size() == 1);
+
+    int batch_ndim = batch_shape.size();
+
+    // Determine dispatch kernel
+    int tm = 4, tn = 4;
+    int sm = 1, sn = 32;
+    int bm = 1, bn = 1;
+    int n_out_per_tgp;
+    std::ostringstream kname;
+
+    if (transpose_mat) {
+      if (in_vector_len >= 8192 && out_vector_len >= 2048) {
+        sm = 4;
+        sn = 8;
+      } else {
+        sm = 8;
+        sn = 4;
+      }
+
+      if (out_vector_len >= 2048) {
+        bn = 16;
+      } else if (out_vector_len >= 512) {
+        bn = 4;
+      } else {
+        bn = 2;
+      }
+
+      // Specialized kernel for very small outputs
+      tn = out_vector_len < tn ? 1 : tn;
+
+      n_out_per_tgp = bn * sn * tn;
+      kname << "gemv_t";
+
+    } else {
+      // bm = out_vector_len >= 4096 ? 4 : 2;
+      bm = 2;
+      if (block_size_ == 32) {
+        sm = 4;
+        sn = 8;
+      } else {
+        sm = 2;
+        sn = 16;
+      }
+
+      // Specialized kernel for very small outputs
+      tm = out_vector_len < tm ? 1 : tm;
+
+      n_out_per_tgp = bm * sm * tm;
+      kname << "gemv";
+    }
+
+    kname << "_outmask_" << out_mask_nm;
+    kname << "_opmask_" << op_mask_nm;
+    kname << "_" << type_to_name(out);
+    kname << "_bm" << bm << "_bn" << bn;
+    kname << "_sm" << sm << "_sn" << sn;
+    kname << "_tm" << tm << "_tn" << tn;
+    kname << "_nc" << !contiguous_kernel;
+
+    // Encode and dispatch kernel
+    auto& compute_encoder = d.get_command_encoder(s.index);
+    auto kernel = d.get_kernel(kname.str());
+    compute_encoder->setComputePipelineState(kernel);
+
+    int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;
+    MTL::Size group_dims = MTL::Size(32, bn, bm);
+    MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
+
+    compute_encoder.set_input_array(mat, 0);
+    compute_encoder.set_input_array(vec, 1);
+    compute_encoder.set_output_array(out, 3);
+
+    compute_encoder->setBytes(&in_vector_len, sizeof(int), 4);
+    compute_encoder->setBytes(&out_vector_len, sizeof(int), 5);
+    compute_encoder->setBytes(&mat_ld, sizeof(int), 6);
+    compute_encoder->setBytes(&batch_ndim, sizeof(int), 9);
+    set_vector_bytes(compute_encoder, batch_shape, 10);
+    set_vector_bytes(compute_encoder, batch_strides_vec, 11);
+    set_vector_bytes(compute_encoder, batch_strides_mat, 12);
+
+    if (has_out_mask) {
+      compute_encoder.set_input_array(inputs[2], 20);
+    }
+
+    if (has_op_mask) {
+      compute_encoder.set_input_array(inputs[mat_mask_idx], 21);
+      compute_encoder.set_input_array(inputs[vec_mask_idx], 22);
+    }
+
+    set_vector_bytes(compute_encoder, mask_strides, 23);
+    set_vector_bytes(compute_encoder, mask_batch_strides, 24);
+
+    compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+    return;
+  }
 
   /////////////////////////////////////////////////////////////////////////////
   // Regular kernel dispatch
@@ -1438,10 +1618,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
   int wm = 2, wn = 2;
   bool mn_aligned = M % bm == 0 && N % bn == 0;
   bool k_aligned = K % bk == 0;
-
-  // Prepare kernel name
-  std::string out_mask_nm = has_out_mask ? type_to_name(inputs[2]) : "nomask";
-  std::string op_mask_nm = has_op_mask ? type_to_name(inputs.back()) : "nomask";
 
   std::ostringstream kname;
   kname << "steel_gemm_block_outmask_" << out_mask_nm << "_opmask_"

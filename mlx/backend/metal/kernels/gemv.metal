@@ -903,14 +903,11 @@ template <
 
 // clang-format off
 #define instantiate_gemv_t_bs_blocks(name, itype)              \
-  instantiate_gemv_t_bs_helper(name, itype, 1,  2, 4, 8, 4, 1) \
-  instantiate_gemv_t_bs_helper(name, itype, 1,  2, 4, 8, 4, 4) \
-  instantiate_gemv_t_bs_helper(name, itype, 1,  4, 4, 8, 4, 4) \
-  instantiate_gemv_t_bs_helper(name, itype, 1, 16, 4, 8, 4, 4) \
   instantiate_gemv_t_bs_helper(name, itype, 1,  2, 8, 4, 4, 1) \
   instantiate_gemv_t_bs_helper(name, itype, 1,  2, 8, 4, 4, 4) \
   instantiate_gemv_t_bs_helper(name, itype, 1,  4, 8, 4, 4, 4) \
-  instantiate_gemv_t_bs_helper(name, itype, 1, 16, 8, 4, 4, 4) // clang-format on
+  instantiate_gemv_t_bs_helper(name, itype, 1, 16, 8, 4, 4, 4) \
+  instantiate_gemv_t_bs_helper(name, itype, 1, 16, 4, 8, 4, 4) // clang-format on
 
 // clang-format off
 instantiate_gemv_t_bs_blocks(float32, float);
