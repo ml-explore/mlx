@@ -169,7 +169,19 @@ endif()
 
 find_package(MPI)
 if (MPI_FOUND)
+  execute_process(
+    COMMAND zsh "-c" "mpirun --version"
+    OUTPUT_VARIABLE MPI_VERSION
+    COMMAND_ERROR_IS_FATAL ANY
+  )
+  if (${MPI_VERSION} MATCHES ".*Open MPI.*")
     target_include_directories(mlx PRIVATE ${MPI_INCLUDE_PATH})
+  else()
+    message(
+      WARNING
+      "MPI which is not OpenMPI found. Building without MPI."
+    )
+  endif() 
 endif()
 
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/mlx)
