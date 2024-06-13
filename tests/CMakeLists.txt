@@ -1,7 +1,7 @@
 FetchContent_Declare(
   doctest
   GIT_REPOSITORY "https://github.com/onqtam/doctest"
-  GIT_TAG "b7c21ec5ceeadb4951b00396fc1e4642dd347e5f"
+  GIT_TAG "ae7a13539fb71f270b87eb2e874fbac80bc8dda2"
 )
 FetchContent_MakeAvailable(doctest)
 
