@@ -3645,8 +3645,8 @@ std::vector<array> BlockMaskedMM::vjp(
   const int align_K = tk * block_size_ - K;
 
   // Potential intermediates
-  auto unmasked_lhs_grad = primals[0];
-  auto unmasked_rhs_grad = primals[1];
+  array unmasked_lhs_grad = primals[0];
+  array unmasked_rhs_grad = primals[1];
 
   bool unmasked_lhs_grad_calculated = false;
   bool unmasked_rhs_grad_calculated = false;

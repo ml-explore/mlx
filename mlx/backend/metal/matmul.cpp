@@ -1422,24 +1422,24 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       bstrides.emplace_back(arr.strides().begin(), arr.strides().end() - 2);
     }
 
-    auto [bshape_c, bstrides_c] = collapse_contiguous_dims(bshape, bstrides);
-    batch_shape = bshape_c;
-    A_batch_str = bstrides_c[0].back();
-    B_batch_str = bstrides_c[1].back();
+    // auto [bshape_c, bstrides_c] = collapse_contiguous_dims(bshape, bstrides);
+    batch_shape = bshape;
+    A_batch_str = bstrides[0].back();
+    B_batch_str = bstrides[1].back();
 
-    for (auto& bstr : bstrides_c) {
+    for (auto& bstr : bstrides) {
       batch_strides.insert(batch_strides.end(), bstr.begin(), bstr.end());
     }
 
-    A_batch_stride = bstrides_c[0];
-    B_batch_stride = bstrides_c[1];
+    A_batch_stride = bstrides[0];
+    B_batch_stride = bstrides[1];
 
     if (has_out_mask) {
-      outmask_bstride = bstrides_c[2];
+      outmask_bstride = bstrides[2];
     }
     if (has_op_mask) {
-      Amask_bstride = bstrides_c[has_out_mask + 2];
-      Bmask_bstride = bstrides_c[has_out_mask + 3];
+      Amask_bstride = bstrides[has_out_mask + 2];
+      Bmask_bstride = bstrides[has_out_mask + 3];
     }
 
   } else {
@@ -1475,39 +1475,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     auto mat_mask_idx = int(has_out_mask) + (is_b_matrix ? 3 : 2);
     auto vec_mask_idx = int(has_out_mask) + (is_b_matrix ? 2 : 3);
-
-    std::vector<int> mask_strides;
-    std::vector<size_t> mask_batch_strides;
-    if (has_out_mask) {
-      auto& out_mask = inputs[2];
-      mask_strides.push_back(*(out_mask.strides().end() - 1));
-      mask_strides.push_back(*(out_mask.strides().end() - 2));
-      mask_batch_strides.insert(
-          mask_batch_strides.end(),
-          outmask_bstride.begin(),
-          outmask_bstride.end());
-    }
-    if (has_op_mask) {
-      auto& mat_mask = inputs[mat_mask_idx];
-      mask_strides.push_back(*(mat_mask.strides().end() - 1));
-      mask_strides.push_back(*(mat_mask.strides().end() - 2));
-
-      mask_batch_strides.insert(
-          mask_batch_strides.end(),
-          mask_bstrides_mat.begin(),
-          mask_bstrides_mat.end());
-
-      auto& vec_mask = inputs[vec_mask_idx];
-      mask_strides.push_back(*(vec_mask.strides().end() - 1));
-      mask_strides.push_back(*(vec_mask.strides().end() - 2));
-      mask_batch_strides.insert(
-          mask_batch_strides.end(),
-          mask_bstrides_vec.begin(),
-          mask_bstrides_vec.end());
-    }
-
-    int stride_mat = batch_strides_mat.back();
-    int stride_vec = batch_strides_vec.back();
 
     // Determine if inputs have simple batching / broadcasting
     bool contiguous_kernel = (batch_shape.size() == 1);
@@ -1572,6 +1539,67 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     MTL::Size group_dims = MTL::Size(32, bn, bm);
     MTL::Size grid_dims = MTL::Size(n_tgp, 1, batch_size_out);
 
+    // Get mask params
+    std::vector<int> mask_strides;
+    std::vector<size_t> mask_batch_strides;
+    if (has_out_mask) {
+      auto& out_mask_pre = inputs[2];
+      auto out_mask = out_mask_pre;
+
+      // Make a copy if needed
+      if (out_mask_pre.strides(is_b_matrix ? -1 : -2) != 1) {
+        array out_mask_copy(
+            out_mask_pre.shape(), out_mask_pre.dtype(), nullptr, {});
+        copy_gpu(out_mask_pre, out_mask_copy, CopyType::General, s);
+        copies.push_back(out_mask_copy);
+        out_mask = out_mask_copy;
+      }
+
+      mask_strides.push_back(*(out_mask.strides().end() - 1));
+      mask_strides.push_back(*(out_mask.strides().end() - 2));
+      mask_batch_strides.insert(
+          mask_batch_strides.end(),
+          outmask_bstride.begin(),
+          outmask_bstride.end());
+
+      compute_encoder.set_input_array(out_mask, 20);
+    }
+
+    if (has_op_mask) {
+      auto& mat_mask = inputs[mat_mask_idx];
+      mask_strides.push_back(*(mat_mask.strides().end() - 1));
+      mask_strides.push_back(*(mat_mask.strides().end() - 2));
+
+      mask_batch_strides.insert(
+          mask_batch_strides.end(),
+          mask_bstrides_mat.begin(),
+          mask_bstrides_mat.end());
+
+      compute_encoder.set_input_array(mat_mask, 21);
+
+      auto& vec_mask_pre = inputs[vec_mask_idx];
+      auto vec_mask = vec_mask_pre;
+
+      // Make a copy if needed
+      if (vec_mask_pre.strides(is_b_matrix ? -1 : -2) != 1) {
+        array vec_mask_copy(
+            vec_mask_pre.shape(), vec_mask_pre.dtype(), nullptr, {});
+        copy_gpu(vec_mask_pre, vec_mask_copy, CopyType::General, s);
+        copies.push_back(vec_mask_copy);
+        vec_mask = vec_mask_copy;
+      }
+
+      mask_strides.push_back(*(vec_mask.strides().end() - 1));
+      mask_strides.push_back(*(vec_mask.strides().end() - 2));
+      mask_batch_strides.insert(
+          mask_batch_strides.end(),
+          mask_bstrides_vec.begin(),
+          mask_bstrides_vec.end());
+
+      compute_encoder.set_input_array(vec_mask, 22);
+    }
+
+    // Get gemv params
     compute_encoder.set_input_array(mat, 0);
     compute_encoder.set_input_array(vec, 1);
     compute_encoder.set_output_array(out, 3);
@@ -1583,15 +1611,6 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     set_vector_bytes(compute_encoder, batch_shape, 10);
     set_vector_bytes(compute_encoder, batch_strides_vec, 11);
     set_vector_bytes(compute_encoder, batch_strides_mat, 12);
-
-    if (has_out_mask) {
-      compute_encoder.set_input_array(inputs[2], 20);
-    }
-
-    if (has_op_mask) {
-      compute_encoder.set_input_array(inputs[mat_mask_idx], 21);
-      compute_encoder.set_input_array(inputs[vec_mask_idx], 22);
-    }
 
     set_vector_bytes(compute_encoder, mask_strides, 23);
     set_vector_bytes(compute_encoder, mask_batch_strides, 24);
