@@ -452,11 +452,10 @@ struct GEMVTKernel {
     const constant int* vec_mask_strides =
         mat_mask_strides + (has_operand_mask ? 2 : 0);
 
-    const int n_block_idx =
-        tid.x; // blockM > blockN ? out_col / blockM : int(tid.x);
+    const int n_block_idx = blockM > blockN ? out_col / blockM : int(tid.x);
 
     const int out_mask_offset =
-        !has_output_mask ? 0 : n_block_idx * out_mask_strides[0];
+        !has_output_mask ? 0 : n_block_idx; // * out_mask_strides[0];
 
     int mat_mask_offset =
         !has_operand_mask ? 0 : n_block_idx * mat_mask_strides[0];

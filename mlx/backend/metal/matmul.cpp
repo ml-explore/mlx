@@ -1560,12 +1560,14 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     if (has_op_mask) {
       auto& mat_mask = inputs[mat_mask_idx];
-      bool flip_dims =
-          (is_b_matrix && transpose_b) || (!is_b_matrix && transpose_a);
-      // N
-      mask_strides.push_back(mat_mask.strides(flip_dims ? -2 : -1));
-      // M
-      mask_strides.push_back(mat_mask.strides(flip_dims ? -1 : -2));
+
+      if (transpose_mat) {
+        mask_strides.push_back(mat_mask.strides(!is_b_matrix ? -2 : -1));
+        mask_strides.push_back(mat_mask.strides(!is_b_matrix ? -1 : -2));
+      } else {
+        mask_strides.push_back(mat_mask.strides(is_b_matrix ? -2 : -1));
+        mask_strides.push_back(mat_mask.strides(is_b_matrix ? -1 : -2));
+      }
 
       mask_batch_strides.insert(
           mask_batch_strides.end(),

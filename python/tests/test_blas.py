@@ -796,12 +796,18 @@ class TestBlas(mlx_tests.MLXTestCase):
             out_ref, dout_ref = mx.vjp(f_ref, [a, b], [cotan])
             out_test, dout_test = mx.vjp(f_test, [a, b], [cotan])
 
-            mx.eval((out_ref, dout_ref, out_test, dout_test))
+            # mx.eval((out_ref, dout_ref, out_test, dout_test))
 
             self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-5).item())
 
             for r, t in zip(dout_ref, dout_test):
                 self.assertEqual(r.shape, t.shape)
+                if not mx.allclose(r, t, atol=1e-4).item():
+                    print(r)
+                    print(t)
+                    print(out_mask)
+                    print(a_mask)
+                    print(b_mask)
                 self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
 
         def run_test_mask_vjp(a, b, block_size, out_mask, a_mask, b_mask, cotan):
@@ -870,39 +876,39 @@ class TestBlas(mlx_tests.MLXTestCase):
                 b_mx_bool_mask, b_mx_mask = make_mask(tk, tn, batch_B, np_dtype)
                 out_mx_bool_mask, out_mx_mask = make_mask(tm, tn, batch_out, np_dtype)
 
-                # # Boolean block masks
-                # run_test(
-                #     a_mx,
-                #     b_mx,
-                #     block_size,
-                #     out_mx_bool_mask,
-                #     a_mx_bool_mask,
-                #     b_mx_bool_mask,
-                #     cotan,
-                # )
-                # run_test(a_mx, b_mx, block_size, out_mx_bool_mask, None, None, cotan)
-                # run_test(
-                #     a_mx, b_mx, block_size, None, a_mx_bool_mask, b_mx_bool_mask, cotan
-                # )
+                # Boolean block masks
+                run_test(
+                    a_mx,
+                    b_mx,
+                    block_size,
+                    out_mx_bool_mask,
+                    a_mx_bool_mask,
+                    b_mx_bool_mask,
+                    cotan,
+                )
+                run_test(a_mx, b_mx, block_size, out_mx_bool_mask, None, None, cotan)
+                run_test(
+                    a_mx, b_mx, block_size, None, a_mx_bool_mask, b_mx_bool_mask, cotan
+                )
 
-                # # Float block masks
+                # Float block masks
                 run_test(
                     a_mx, b_mx, block_size, out_mx_mask, a_mx_mask, b_mx_mask, cotan
                 )
-                # run_test(a_mx, b_mx, block_size, None, a_mx_mask, b_mx_mask, cotan)
-                # run_test_mask_vjp(
-                #     a_mx, b_mx, block_size, out_mx_mask, a_mx_mask, b_mx_mask, cotan
-                # )
-                # run_test_mask_vjp(
-                #     a_mx, b_mx, block_size, None, a_mx_mask, b_mx_mask, cotan
-                # )
+                run_test(a_mx, b_mx, block_size, None, a_mx_mask, b_mx_mask, cotan)
+                run_test_mask_vjp(
+                    a_mx, b_mx, block_size, out_mx_mask, a_mx_mask, b_mx_mask, cotan
+                )
+                run_test_mask_vjp(
+                    a_mx, b_mx, block_size, None, a_mx_mask, b_mx_mask, cotan
+                )
 
         shapes = (
-            # (16, 16, 16, 32),
-            # (64, 64, 16, 32),
-            # (128, 128, 128, 32),
-            # (256, 256, 128, 64),
-            # (1, 128, 128, 32),
+            (16, 16, 16, 32),
+            (64, 64, 16, 32),
+            (128, 128, 128, 32),
+            (256, 256, 128, 64),
+            (1, 128, 128, 32),
             (256, 1, 128, 64),
         )
 
@@ -918,10 +924,12 @@ class TestBlas(mlx_tests.MLXTestCase):
         a_mask_np = np.random.normal(size=(4, 8)).astype(np.float32)
         b_mask_np = np.ones((4, 1)).astype(np.bool_)
         d_mask_np = np.ones((1, 8)).astype(np.bool_)
+        c_mask_np = np.random.normal(size=(8, 1)).astype(np.float32)
         e_mask_np = np.random.normal(size=(1, 4)).astype(np.float32)
 
         a_mask_np[a_mask_np < 0.0] = 0.0
         e_mask_np[e_mask_np < 0.0] = 0.0
+        c_mask_np[c_mask_np < 0.0] = 0.0
 
         a_mx = mx.array(a_np)
         b_mx = mx.array(b_np)
@@ -930,16 +938,21 @@ class TestBlas(mlx_tests.MLXTestCase):
         b_mask_mx = mx.array(b_mask_np)
         d_mask_mx = mx.array(d_mask_np)
         e_mask_mx = mx.array(e_mask_np)
+        c_mask_mx = mx.array(c_mask_np)
 
-        c_mx = mx.block_masked_mm(a_mx.T, b_mx, 32, None, a_mask_mx.T, b_mask_mx).T
+        c_mx = mx.block_masked_mm(a_mx.T, b_mx, 32, c_mask_mx, a_mask_mx.T, b_mask_mx)
         e_mx = mx.block_masked_mm(d_mx, a_mx.T, 32, e_mask_mx, d_mask_mx, a_mask_mx.T)
 
         a_mask_np = np.broadcast_to(np.expand_dims(a_mask_np, (-3, -1)), (4, 32, 8, 32))
         a_mask_np = a_mask_np.reshape((128, 256))
         a_np *= a_mask_np
 
-        c_np = (a_np.T @ b_np).T
+        c_np = a_np.T @ b_np
         e_np = d_np @ a_np.T
+
+        c_mask_np = np.broadcast_to(np.expand_dims(c_mask_np, (-2)), (8, 32, 1))
+        c_mask_np = c_mask_np.reshape((256, 1))
+        c_np *= c_mask_np
 
         e_mask_np = np.broadcast_to(np.expand_dims(e_mask_np, (-1)), (1, 4, 32))
         e_mask_np = e_mask_np.reshape((1, 128))
