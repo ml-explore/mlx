@@ -796,8 +796,6 @@ class TestBlas(mlx_tests.MLXTestCase):
             out_ref, dout_ref = mx.vjp(f_ref, [a, b], [cotan])
             out_test, dout_test = mx.vjp(f_test, [a, b], [cotan])
 
-            # mx.eval((out_ref, dout_ref, out_test, dout_test))
-
             self.assertTrue(mx.allclose(out_ref[0], out_test[0], atol=1e-5).item())
 
             for r, t in zip(dout_ref, dout_test):
@@ -909,8 +907,10 @@ class TestBlas(mlx_tests.MLXTestCase):
         for M, N, K, block_size in shapes:
             test_shape(M, N, K, block_size)
 
-        # # Test broadcasting
+        # Test broadcasting
         test_shape(64, 64, 64, 32, batch_A=(1, 2), batch_B=(2, 2))
+        test_shape(1, 128, 128, 32, batch_A=(1, 2), batch_B=(2, 2))
+        test_shape(128, 1, 128, 32, batch_A=(1, 2), batch_B=(2, 2))
 
         a_np = np.ones((128, 256)).astype(np.float32)
         b_np = np.ones((128, 1)).astype(np.float32)
