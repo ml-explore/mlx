@@ -802,12 +802,6 @@ class TestBlas(mlx_tests.MLXTestCase):
 
             for r, t in zip(dout_ref, dout_test):
                 self.assertEqual(r.shape, t.shape)
-                if not mx.allclose(r, t, atol=1e-4).item():
-                    print(r)
-                    print(t)
-                    print(out_mask)
-                    print(a_mask)
-                    print(b_mask)
                 self.assertTrue(mx.allclose(r, t, atol=1e-4).item())
 
         def run_test_mask_vjp(a, b, block_size, out_mask, a_mask, b_mask, cotan):
@@ -916,7 +910,7 @@ class TestBlas(mlx_tests.MLXTestCase):
             test_shape(M, N, K, block_size)
 
         # # Test broadcasting
-        # test_shape(64, 64, 64, 32, batch_A=(1, 2), batch_B=(2, 2))
+        test_shape(64, 64, 64, 32, batch_A=(1, 2), batch_B=(2, 2))
 
         a_np = np.ones((128, 256)).astype(np.float32)
         b_np = np.ones((128, 1)).astype(np.float32)

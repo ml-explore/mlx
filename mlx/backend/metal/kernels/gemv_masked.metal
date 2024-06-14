@@ -448,7 +448,7 @@ struct GEMVTKernel {
     // Prepare mask offsets
     const constant int* out_mask_strides = mask_strides;
     const constant int* mat_mask_strides =
-        mask_strides + (has_output_mask ? 2 : 0);
+        out_mask_strides + (has_output_mask ? 2 : 0);
     const constant int* vec_mask_strides =
         mat_mask_strides + (has_operand_mask ? 2 : 0);
 
