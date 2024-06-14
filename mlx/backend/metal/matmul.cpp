@@ -1491,13 +1491,10 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (transpose_mat) {
       sm = 8;
       sn = 4;
-      bm = block_size_ == 32 ? 1 : 2;
-
-      if (out_vector_len >= 512) {
-        bn = 4;
-      } else {
-        bn = 2;
-      }
+      bm = 1;
+      bn = 1;
+      tm = block_size_ == 32 ? 4 : 8;
+      tn = 8;
 
       // Specialized kernel for very small outputs
       tn = out_vector_len < tn ? 1 : tn;
@@ -1543,20 +1540,16 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     std::vector<int> mask_strides;
     std::vector<size_t> mask_batch_strides;
     if (has_out_mask) {
-      auto& out_mask_pre = inputs[2];
-      auto out_mask = out_mask_pre;
+      auto& out_mask = inputs[2];
 
-      // Make a copy if needed
-      if (out_mask_pre.strides(is_b_matrix ? -1 : -2) != 1) {
-        array out_mask_copy(
-            out_mask_pre.shape(), out_mask_pre.dtype(), nullptr, {});
-        copy_gpu(out_mask_pre, out_mask_copy, CopyType::General, s);
-        copies.push_back(out_mask_copy);
-        out_mask = out_mask_copy;
+      if (transpose_mat) {
+        mask_strides.push_back(out_mask.strides(out.shape(-2) == 1 ? -1 : -2));
+        mask_strides.push_back(out_mask.strides(out.shape(-2) == 1 ? -2 : -1));
+      } else {
+        mask_strides.push_back(out_mask.strides(out.shape(-1) == 1 ? -1 : -2));
+        mask_strides.push_back(out_mask.strides(out.shape(-1) == 1 ? -2 : -1));
       }
 
-      mask_strides.push_back(*(out_mask.strides().end() - 1));
-      mask_strides.push_back(*(out_mask.strides().end() - 2));
       mask_batch_strides.insert(
           mask_batch_strides.end(),
           outmask_bstride.begin(),
@@ -1567,8 +1560,12 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     if (has_op_mask) {
       auto& mat_mask = inputs[mat_mask_idx];
-      mask_strides.push_back(*(mat_mask.strides().end() - 1));
-      mask_strides.push_back(*(mat_mask.strides().end() - 2));
+      bool flip_dims =
+          (is_b_matrix && transpose_b) || (!is_b_matrix && transpose_a);
+      // N
+      mask_strides.push_back(mat_mask.strides(flip_dims ? -2 : -1));
+      // M
+      mask_strides.push_back(mat_mask.strides(flip_dims ? -1 : -2));
 
       mask_batch_strides.insert(
           mask_batch_strides.end(),
@@ -1577,20 +1574,15 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 
       compute_encoder.set_input_array(mat_mask, 21);
 
-      auto& vec_mask_pre = inputs[vec_mask_idx];
-      auto vec_mask = vec_mask_pre;
-
-      // Make a copy if needed
-      if (vec_mask_pre.strides(is_b_matrix ? -1 : -2) != 1) {
-        array vec_mask_copy(
-            vec_mask_pre.shape(), vec_mask_pre.dtype(), nullptr, {});
-        copy_gpu(vec_mask_pre, vec_mask_copy, CopyType::General, s);
-        copies.push_back(vec_mask_copy);
-        vec_mask = vec_mask_copy;
+      auto& vec_mask = inputs[vec_mask_idx];
+      if (transpose_mat) {
+        mask_strides.push_back(vec_mask.strides(vec.shape(-2) == 1 ? -1 : -2));
+        mask_strides.push_back(vec_mask.strides(vec.shape(-2) == 1 ? -2 : -1));
+      } else {
+        mask_strides.push_back(vec_mask.strides(vec.shape(-1) == 1 ? -1 : -2));
+        mask_strides.push_back(vec_mask.strides(vec.shape(-1) == 1 ? -2 : -1));
       }
 
-      mask_strides.push_back(*(vec_mask.strides().end() - 1));
-      mask_strides.push_back(*(vec_mask.strides().end() - 2));
       mask_batch_strides.insert(
           mask_batch_strides.end(),
           mask_bstrides_vec.begin(),
