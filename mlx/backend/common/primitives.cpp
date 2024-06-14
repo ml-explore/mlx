@@ -8,7 +8,6 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/arange.h"
-#include "mlx/backend/common/binary.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/backend/common/ops.h"
 #include "mlx/backend/common/slicing.h"
@@ -312,20 +311,6 @@ void LogicalNot::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   auto& in = inputs[0];
   unary(in, out, detail::LogicalNot());
-}
-
-void LogicalAnd::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2); // LogicalAnd requires two input arrays
-  auto& in1 = inputs[0];
-  auto& in2 = inputs[1];
-  binary(in1, in2, out, detail::LogicalAnd());
-}
-
-void LogicalOr::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 2); // LogicalOr requires two input arrays
-  auto& in1 = inputs[0];
-  auto& in2 = inputs[1];
-  binary(in1, in2, out, detail::LogicalOr());
 }
 
 void Negative::eval(const std::vector<array>& inputs, array& out) {
