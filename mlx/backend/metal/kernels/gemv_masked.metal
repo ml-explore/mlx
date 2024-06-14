@@ -775,7 +775,8 @@ template <
   instantiate_gemv(name, itype, 2, 1, 4,  8, 1, 4) \
   instantiate_gemv(name, itype, 2, 1, 4,  8, 4, 4) \
   instantiate_gemv(name, itype, 2, 1, 2, 16, 1, 4) \
-  instantiate_gemv(name, itype, 2, 1, 2, 16, 4, 4) // clang-format on
+  instantiate_gemv(name, itype, 2, 1, 2, 16, 4, 4) \
+  instantiate_gemv(name, itype, 4, 1, 2, 16, 4, 4) // clang-format on
 
 instantiate_gemv_blocks(float32, float);
 instantiate_gemv_blocks(float16, half);
@@ -926,10 +927,11 @@ template <
 // clang-format off
 #define instantiate_gemv_t_blocks(name, itype) \
   instantiate_gemv_t(name, itype, 1, 1,  8, 4, 4, 1) \
-  instantiate_gemv_t(name, itype, 1, 1,  8, 4, 4, 8) \
+  instantiate_gemv_t(name, itype, 1, 2,  8, 4, 4, 4) \
   instantiate_gemv_t(name, itype, 1, 1,  8, 4, 8, 1) \
-  instantiate_gemv_t(name, itype, 1, 1,  8, 4, 8, 8) \
-  instantiate_gemv_t(name, itype, 1, 4,  8, 4, 8, 8) // clang-format on
+  instantiate_gemv_t(name, itype, 1, 1,  8, 4, 8, 4) \
+  instantiate_gemv_t(name, itype, 1, 2,  8, 4, 8, 4) \
+  instantiate_gemv_t(name, itype, 1, 4,  8, 4, 8, 4) // clang-format on
 
 // clang-format off
 instantiate_gemv_t_blocks(float32, float);

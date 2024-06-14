@@ -1492,9 +1492,9 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       sm = 8;
       sn = 4;
       bm = 1;
-      bn = 1;
+      bn = (block_size_ == 64 && out_vector_len >= 2048) ? 4 : 2;
       tm = block_size_ == 32 ? 4 : 8;
-      tn = 8;
+      tn = 4;
 
       // Specialized kernel for very small outputs
       tn = out_vector_len < tn ? 1 : tn;
@@ -1503,13 +1503,14 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       kname << "gemv_t";
 
     } else {
-      bm = 2;
       if (block_size_ == 32) {
         sm = 4;
         sn = 8;
+        bm = 2;
       } else {
         sm = 2;
         sn = 16;
+        bm = out_vector_len >= 512 ? 4 : 2;
       }
 
       // Specialized kernel for very small outputs
