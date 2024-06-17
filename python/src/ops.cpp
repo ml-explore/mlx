@@ -3748,7 +3748,7 @@ void init_ops(nb::module_& m) {
           array: The dequantized version of ``w``
       )pbdoc");
   m.def(
-      "gater_qmm",
+      "gather_qmm",
       &gather_qmm,
       nb::arg(),
       nb::arg(),
