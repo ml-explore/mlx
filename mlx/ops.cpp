@@ -3631,7 +3631,8 @@ array outer(const array& a, const array& b, StreamOrDevice s /* = {} */) {
 }
 
 array inner(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  if (a.ndim() == 0 || b.ndim() == 0) {
+  if (a.ndim() == 0 || b.ndim() == 0 || 
+      a.shape() == std::vector({1}) || b.shape() == std::vector({1})) {
     return multiply(a, b, s);
   }
   if (a.shape(-1) != b.shape(-1)) {

@@ -2781,6 +2781,10 @@ TEST_CASE("inner") {
   z = inner(eye(2), array(7.));
   expected = array({7., 0., 0., 7.}, {2, 2});
   CHECK(array_equal(z, expected).item<bool>());
+
+  z = inner(eye(2), array({7.}, {1}));
+  expected = array({7., 0., 0., 7.}, {2, 2});
+  CHECK(array_equal(z, expected).item<bool>());
 }
 
 TEST_CASE("test divmod") {
