@@ -122,7 +122,7 @@ nb::ndarray<NDParams...> mlx_to_nd_array_impl(
       a.data<T>(),
       a.ndim(),
       shape.data(),
-      nb::none(),
+      nullptr,
       strides.data(),
       t.value_or(nb::dtype<T>()));
 }

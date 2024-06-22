@@ -32,7 +32,7 @@ jobs:
           command: |
             pip install --upgrade cmake
             pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
-            pip install "numpy<2.0.0"
+            pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
       - run:
@@ -77,7 +77,7 @@ jobs:
             pip install --upgrade pip
             pip install --upgrade cmake
             pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
-            pip install "numpy<2.0.0"
+            pip install numpy
             pip install torch
             pip install tensorflow
             pip install unittest-xml-reporting
@@ -151,7 +151,7 @@ jobs:
             pip install --upgrade cmake
             pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
             pip install --upgrade setuptools
-            pip install "numpy<2.0.0"
+            pip install numpy
             pip install twine
             pip install build
       - run:
@@ -215,7 +215,7 @@ jobs:
             pip install --upgrade cmake
             pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
             pip install --upgrade setuptools
-            pip install "numpy<2.0.0"
+            pip install numpy
             pip install auditwheel
             pip install patchelf
             pip install build
