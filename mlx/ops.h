@@ -1171,6 +1171,7 @@ array conv_general(
     std::vector<int> input_dilation = {},
     int groups = 1,
     bool flip = false,
+    bool transpose = false,
     StreamOrDevice s = {});
 
 /** General convolution with a filter */
@@ -1183,6 +1184,7 @@ inline array conv_general(
     std::vector<int> input_dilation = {},
     int groups = 1,
     bool flip = false,
+    bool transpose = false,
     StreamOrDevice s = {}) {
   return conv_general(
       /* const array& input = */ input,
@@ -1194,6 +1196,7 @@ inline array conv_general(
       /* std::vector<int> input_dilation = */ input_dilation,
       /* int groups = */ groups,
       /* bool flip = */ flip,
+      /* bool transpose = */ transpose,
       /* StreamOrDevice s = */ s);
 }
 
@@ -1219,6 +1222,36 @@ array conv2d(
 
 /** 3D convolution with a filter */
 array conv3d(
+    const array& input,
+    const array& weight,
+    const std::tuple<int, int, int>& stride = {1, 1, 1},
+    const std::tuple<int, int, int>& padding = {0, 0, 0},
+    const std::tuple<int, int, int>& dilation = {1, 1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
+
+/** 1D transposed convolution with a filter */
+array conv_transpose1d(
+    const array& input,
+    const array& weight,
+    int stride = 1,
+    int padding = 0,
+    int dilation = 1,
+    int groups = 1,
+    StreamOrDevice s = {});
+
+/** 2D transposed convolution with a filter */
+array conv_transpose2d(
+    const array& input,
+    const array& weight,
+    const std::pair<int, int>& stride = {1, 1},
+    const std::pair<int, int>& padding = {0, 0},
+    const std::pair<int, int>& dilation = {1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
+
+/** 3D transposed convolution with a filter */
+array conv_transpose3d(
     const array& input,
     const array& weight,
     const std::tuple<int, int, int>& stride = {1, 1, 1},
