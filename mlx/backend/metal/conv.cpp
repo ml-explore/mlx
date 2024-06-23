@@ -911,7 +911,91 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Throw error
   else {
     throw std::invalid_argument(
-        "[Convolution::eval_gpu] Only supports 1D or 2D convolutions.");
+        "[Convolution::eval_gpu] Only supports 1D, 2D or 3D convolutions.");
+  }
+
+  // Clear copies
+  if (copies.size() > 0) {
+    auto command_buffer = d.get_command_buffer(s.index);
+    command_buffer->addCompletedHandler(
+        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  }
+}
+
+void ConvolutionTranspose::eval_gpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  // Ensure contiguity
+  std::vector<array> copies;
+  auto in = inputs[0];
+  auto wt = inputs[1];
+  if (!in.flags().row_contiguous) {
+    array arr_copy(in.shape(), in.dtype(), nullptr, {});
+    copy_gpu(in, arr_copy, CopyType::General, s);
+    copies.push_back(arr_copy);
+    in = arr_copy;
+  }
+  if (!wt.flags().row_contiguous) {
+    array arr_copy(wt.shape(), wt.dtype(), nullptr, {});
+    copy_gpu(wt, arr_copy, CopyType::General, s);
+    copies.push_back(arr_copy);
+    wt = arr_copy;
+  }
+
+  // 3D conv
+  if (out.ndim() == 5) {
+    conv_3D_gpu(
+        s,
+        d,
+        in,
+        wt,
+        out,
+        padding_,
+        kernel_strides_,
+        kernel_dilation_,
+        input_dilation_,
+        flip_,
+        copies);
+  }
+  // 2D conv
+  else if (out.ndim() == 4) {
+    conv_2D_gpu(
+        s,
+        d,
+        in,
+        wt,
+        out,
+        padding_,
+        kernel_strides_,
+        kernel_dilation_,
+        input_dilation_,
+        groups_,
+        flip_,
+        copies);
+  }
+  // 1D conv
+  else if (out.ndim() == 3) {
+    conv_1D_gpu(
+        s,
+        d,
+        in,
+        wt,
+        out,
+        padding_,
+        kernel_strides_,
+        kernel_dilation_,
+        input_dilation_,
+        groups_,
+        flip_);
+  }
+  // Throw error
+  else {
+    throw std::invalid_argument(
+        "[ConvolutionTranspose::eval_gpu] Only supports 1D, 2D, or 3D convolutions.");
   }
 
   // Clear copies

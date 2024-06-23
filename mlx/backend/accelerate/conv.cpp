@@ -17,4 +17,10 @@ void Convolution::eval_cpu(const std::vector<array>& inputs, array& out) {
   // TODO: Add accelerate based optimizations for CPU conv
 }
 
+void ConvolutionTranspose::eval_cpu(
+    const std::vector<array>& inputs,
+    array& out) {
+  eval(inputs, out);
+}
+
 } // namespace mlx::core

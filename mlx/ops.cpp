@@ -3249,6 +3249,7 @@ array conv1d(
       /* std::vector<int> input_dilation = */ {1},
       /* int groups = */ groups,
       /* bool flip = */ false,
+      /* bool transpose = */ false,
       s);
 }
 
@@ -3271,6 +3272,7 @@ array conv2d(
       /* std::vector<int> input_dilation = */ {1, 1},
       /* int groups = */ groups,
       /* bool flip = */ false,
+      /* bool transpose = */ false,
       s);
 }
 
@@ -3295,6 +3297,79 @@ array conv3d(
       /* std::vector<int> input_dilation = */ {1, 1, 1},
       /* int groups = */ groups,
       /* bool flip = */ false,
+      /* bool transpose = */ false,
+      s);
+}
+
+/** 1D transposed convolution with a filter */
+array conv_transpose1d(
+    const array& in_,
+    const array& wt_,
+    int stride /* = 1 */,
+    int padding /* = 0 */,
+    int dilation /* = 1 */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  return conv_general(
+      /* const array& input = */ in_,
+      /* const array& weight = */ wt_,
+      /* std::vector<int> stride = */ {stride},
+      /* std::vector<int> padding = */ {padding},
+      /* std::vector<int> kernel_dilation = */ {dilation},
+      /* std::vector<int> input_dilation = */ {1},
+      /* int groups = */ groups,
+      /* bool flip = */ false,
+      /* bool transpose = */ true,
+      s);
+}
+
+/** 2D transposed convolution with a filter */
+array conv_transpose2d(
+    const array& in_,
+    const array& wt_,
+    const std::pair<int, int>& stride /* = {1, 1} */,
+    const std::pair<int, int>& padding /* = {0, 0} */,
+    const std::pair<int, int>& dilation /* = {1, 1} */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  return conv_general(
+      /* const array& input = */ in_,
+      /* const array& weight = */ wt_,
+      /* std::vector<int> stride = */
+      {stride.first, stride.second},
+      /* std::vector<int> padding = */
+      {padding.first, padding.second},
+      /* std::vector<int> kernel_dilation = */
+      {dilation.first, dilation.second},
+      /* std::vector<int> input_dilation = */ {1, 1},
+      /* int groups = */ groups,
+      /* bool flip = */ false,
+      /* bool transpose = */ true,
+      s);
+}
+
+/** 3D transposed convolution with a filter */
+array conv_transpose3d(
+    const array& in_,
+    const array& wt_,
+    const std::tuple<int, int, int>& stride /* = {1, 1, 1} */,
+    const std::tuple<int, int, int>& padding /* = {0, 0, 0} */,
+    const std::tuple<int, int, int>& dilation /* = {1, 1, 1} */,
+    int groups /* = 1 */,
+    StreamOrDevice s /* = {} */) {
+  return conv_general(
+      /* const array& input = */ in_,
+      /* const array& weight = */ wt_,
+      /* std::vector<int> stride = */
+      {std::get<0>(stride), std::get<1>(stride), std::get<2>(stride)},
+      /* std::vector<int> padding_lo = */
+      {std::get<0>(padding), std::get<1>(padding), std::get<2>(padding)},
+      /* std::vector<int> kernel_dilation = */
+      {std::get<0>(dilation), std::get<1>(dilation), std::get<2>(dilation)},
+      /* std::vector<int> input_dilation = */ {1, 1, 1},
+      /* int groups = */ groups,
+      /* bool flip = */ false,
+      /* bool transpose = */ true,
       s);
 }
 
@@ -3309,9 +3384,10 @@ array conv_general(
     std::vector<int> input_dilation /* = {} */,
     int groups /* = 1 */,
     bool flip /* = false */,
+    bool transpose /* = false */,
     StreamOrDevice s /* = {} */) {
   // Run checks
-  if (groups != 1 && in.ndim() != 3 && in.ndim() != 4) {
+  if (groups != 1 && in.ndim() != 3 && in.ndim() != 4 && in.ndim() != 4) {
     throw std::invalid_argument(
         "[conv] Can only handle groups != 1 in 1D or 2D convolutions.");
   }
@@ -3322,6 +3398,39 @@ array conv_general(
     throw std::invalid_argument(
         "[conv] Only works for inputs with 1-3 spatial dimensions."
         " The inputs must be in the format [N, ..., C_in]");
+  }
+
+  if (transpose) {
+    if (groups != 1) {
+      throw std::invalid_argument(
+          "[conv] For transpose=1, only groups=1 is supported.");
+    }
+
+    if (std::any_of(input_dilation.begin(), input_dilation.end(), [](int i) {
+          return i != 1;
+        })) {
+      throw std::invalid_argument(
+          "[conv] For transpose=1, only input_dilation=1 is supported.");
+    }
+
+    std::vector<int> padding = padding_lo;
+
+    for (int i = 0; i < padding_lo.size(); ++i) {
+      int wt_size = 1 + kernel_dilation[i] * (wt.shape(1 + i) - 1);
+      padding_lo[i] = wt_size - padding[i] - 1;
+
+      int conv_output_shape = (in.shape(i + 1) - 1) * stride[i] -
+          2 * padding[i] + kernel_dilation[i] * (wt.shape(i + 1) - 1) + 1;
+
+      int in_size = 1 + input_dilation[i] * (conv_output_shape - 1);
+      int out_size = 1 + stride[i] * (in.shape(1 + i) - 1);
+      padding_hi[i] = in_size - out_size + padding[i];
+    }
+
+    auto stride_temp = stride;
+    stride = input_dilation;
+    input_dilation = stride_temp;
+    flip = !flip;
   }
 
   // Run checks
@@ -3396,18 +3505,33 @@ array conv_general(
       kernel_dilation,
       input_dilation);
 
-  return array(
-      out_shape,
-      in.dtype(),
-      std::make_shared<Convolution>(
-          to_stream(s),
-          stride,
-          padding_lo,
-          kernel_dilation,
-          input_dilation,
-          groups,
-          flip),
-      {in, wt});
+  if (transpose) {
+    return array(
+        out_shape,
+        in.dtype(),
+        std::make_shared<ConvolutionTranspose>(
+            to_stream(s),
+            stride,
+            padding_lo,
+            kernel_dilation,
+            input_dilation,
+            groups,
+            flip),
+        {in, wt});
+  } else {
+    return array(
+        out_shape,
+        in.dtype(),
+        std::make_shared<Convolution>(
+            to_stream(s),
+            stride,
+            padding_lo,
+            kernel_dilation,
+            input_dilation,
+            groups,
+            flip),
+        {in, wt});
+  }
 }
 
 array quantized_matmul(

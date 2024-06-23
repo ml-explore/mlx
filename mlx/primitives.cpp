@@ -952,12 +952,13 @@ std::vector<array> Convolution::vjp(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
           /* std::vector<int> stride = */ input_dilation_,
-          /* std::vector<int> padding_lo = */ padding_lo_,
-          /* std::vector<int> padding_hi = */ padding_hi_,
+          /* std::vector<int> padding_lo = */ padding_lo,
+          /* std::vector<int> padding_hi = */ padding_hi,
           /* std::vector<int> kernel_dilation = */ kernel_dilation_,
           /* std::vector<int> input_dilation = */ kernel_strides_,
           /* int groups = */ 1,
           /* bool flip = */ !flip_,
+          /* bool transpose = */ false,
           stream());
 
       // Handle negative padding
@@ -1017,6 +1018,7 @@ std::vector<array> Convolution::vjp(
             /* std::vector<int> input_dilation = */ input_dilation_,
             /* int groups = */ 1,
             /* bool flip = */ flip_,
+            /* bool transpose = */ false,
             stream());
         auto grad = swapaxes(grad_trans, 0, -1, stream());
         grads.push_back(grad);
@@ -1029,6 +1031,87 @@ std::vector<array> Convolution::vjp(
 
 bool Convolution::is_equivalent(const Primitive& other) const {
   const Convolution& c_other = static_cast<const Convolution&>(other);
+  return padding_ == c_other.padding_ &&
+      kernel_strides_ == c_other.kernel_strides_ &&
+      kernel_dilation_ == c_other.kernel_dilation_ &&
+      input_dilation_ == c_other.input_dilation_ &&
+      groups_ == c_other.groups_ && flip_ == c_other.flip_;
+}
+
+std::vector<array> ConvolutionTranspose::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>& outputs) {
+  assert(primals.size() == 2);
+  std::vector<array> grads;
+
+  if (groups_ != 1) {
+    throw std::invalid_argument(
+        "[ConvolutionTranspose] Backward pass not implemented for groups > 1.");
+  }
+
+  // Collect info
+  auto& in = primals[0];
+  auto& wt = primals[1];
+  auto& cotan = cotangents[0];
+  auto& out = outputs[0];
+  auto padding = padding_;
+
+  for (int i = 0; i < padding.size(); i++) {
+    int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
+    padding[i] = wt_size - padding_[i] - 1;
+  }
+
+  for (int a : argnums) {
+    // Grads for input
+    if (a == 0) {
+      auto wt_trans = swapaxes(wt, 0, -1, stream());
+
+      auto grad = conv_general(
+          /* const array& input = */ cotan,
+          /* const array& weight = */ wt_trans,
+          /* std::vector<int> stride = */ input_dilation_,
+          /* std::vector<int> padding_lo = */ padding,
+          /* std::vector<int> padding_hi = */ padding,
+          /* std::vector<int> kernel_dilation = */ kernel_dilation_,
+          /* std::vector<int> input_dilation = */ kernel_strides_,
+          /* int groups = */ 1,
+          /* bool flip = */ !flip_,
+          /* bool transpose = */ false,
+          stream());
+
+      grads.push_back(grad);
+    }
+    // Grads for weight
+    else if (a == 1) {
+      auto cotan_trans = swapaxes(cotan, 0, -1, stream());
+      auto in_trans = swapaxes(in, 0, -1, stream());
+
+      auto grad_trans = conv_general(
+          /* const array& input = */ cotan_trans,
+          /* const array& weight = */ in_trans,
+          /* std::vector<int> stride = */ kernel_dilation_,
+          /* std::vector<int> padding_lo = */ padding,
+          /* std::vector<int> padding_hi = */ padding,
+          /* std::vector<int> kernel_dilation = */ input_dilation_,
+          /* std::vector<int> input_dilation = */ kernel_strides_,
+          /* int groups = */ 1,
+          /* bool flip = */ !flip_,
+          /* bool transpose = */ false,
+          stream());
+      auto grad = swapaxes(grad_trans, 0, -1, stream());
+
+      grads.push_back(grad_trans);
+    }
+  }
+
+  return grads;
+}
+
+bool ConvolutionTranspose::is_equivalent(const Primitive& other) const {
+  const ConvolutionTranspose& c_other =
+      static_cast<const ConvolutionTranspose&>(other);
   return padding_ == c_other.padding_ &&
       kernel_strides_ == c_other.kernel_strides_ &&
       kernel_dilation_ == c_other.kernel_dilation_ &&
