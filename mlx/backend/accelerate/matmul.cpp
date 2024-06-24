@@ -2,8 +2,7 @@
 
 #include <cassert>
 
-#include <vecLib/BNNS/bnns.h>
-#include <vecLib/cblas_new.h>
+#include <Accelerate/Accelerate.h>
 
 #include "mlx/backend/accelerate/utils.h"
 #include "mlx/backend/common/copy.h"
