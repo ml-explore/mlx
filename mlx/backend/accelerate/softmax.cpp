@@ -57,21 +57,21 @@ inline simd_float16 simd_fast_exp(simd_float16 x) {
  * The ARM neon equivalent of the fast exp above.
  */
 inline float16x8_t neon_fast_exp(float16x8_t x) {
-  x = vmulq_f16(x, vdupq_n_f16(1.442695)); // multiply with log_2(e)
-  x = vmaxq_f16(x, vdupq_n_f16(-14)); // clamp under with -14
-  x = vminq_f16(x, vdupq_n_f16(14)); // clamp over with 14
+  x = vmulq_f16(x, vdupq_n_f16(float16_t(1.442695f))); // multiply with log_2(e)
+  x = vmaxq_f16(x, vdupq_n_f16(float16_t(-14.f))); // clamp under with -14
+  x = vminq_f16(x, vdupq_n_f16(float16_t(14.f))); // clamp over with 14
 
-  float16x8_t ipart = vrndmq_f16(vaddq_f16(x, vdupq_n_f16(0.5)));
+  float16x8_t ipart = vrndmq_f16(vaddq_f16(x, vdupq_n_f16(float16_t(0.5f))));
   float16x8_t fpart = vsubq_f16(x, ipart);
 
-  x = vdupq_n_f16(1.535336188319500e-4f);
-  x = vfmaq_f16(vdupq_n_f16(1.339887440266574e-3f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(1.339887440266574e-3f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(9.618437357674640e-3f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(5.550332471162809e-2f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(2.402264791363012e-1f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(6.931472028550421e-1f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(1.000000000000000f), x, fpart);
+  x = vdupq_n_f16(float16_t(1.535336188319500e-4f));
+  x = vfmaq_f16(vdupq_n_f16(float16_t(1.339887440266574e-3f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(1.339887440266574e-3f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(9.618437357674640e-3f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(5.550332471162809e-2f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(2.402264791363012e-1f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(6.931472028550421e-1f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(1.000000000000000f)), x, fpart);
 
   // generate 2**ipart in the floating point representation using integer
   // bitshifting
