@@ -91,9 +91,10 @@ elseif (MLX_BUILD_METAL)
   set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18-beta.zip)
   # Get the metal version
   execute_process(
-    COMMAND zsh "-c" "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal -E -x metal -P - | tail -1"
+    COMMAND zsh "-c" "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal -E -x metal -P - | tail -1 | tr -d '\n'"
     OUTPUT_VARIABLE MLX_METAL_VERSION
     COMMAND_ERROR_IS_FATAL ANY)
+
   FetchContent_Declare(
     metal_cpp
     URL ${METAL_CPP_URL}
