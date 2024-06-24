@@ -8,7 +8,7 @@ set(
 )
 
 function(build_kernel_base TARGET SRCFILE DEPS)
-  set(METAL_FLAGS -Wall -Wextra -fno-fast-math -D${MLX_METAL_VERSION})
+  set(METAL_FLAGS -Wall -Wextra -fno-fast-math)
   if(MLX_METAL_DEBUG)
     set(METAL_FLAGS ${METAL_FLAGS}
         -gline-tables-only

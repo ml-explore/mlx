@@ -30,10 +30,10 @@ constexpr int MAX_DISPATCHES_PER_ENCODER = 2;
 constexpr const char* default_mtllib_path = METAL_PATH;
 
 constexpr auto get_metal_version() {
-#if defined METAL_3_2
+#if (MLX_METAL_VERSION >= 320)
   return MTL::LanguageVersion3_2;
-#elif defined METAL_3_1
-  return MTL::LanguageVersion3_1;
+#elif (MLX_METAL_VERSION >= 310)
+  awe return MTL::LanguageVersion3_1;
 #else
   return MTL::LanguageVersion3_0;
 #endif

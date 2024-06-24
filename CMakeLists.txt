@@ -83,19 +83,17 @@ elseif (MLX_BUILD_METAL)
                   OUTPUT_VARIABLE MACOS_VERSION
                   COMMAND_ERROR_IS_FATAL ANY)
 
+  if (${MACOS_VERSION} LESS 14.0)
+    message(FATAL_ERROR "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON" )
+  endif()
   message(STATUS "Building with SDK for macOS version ${MACOS_VERSION}")
 
   set(METAL_CPP_URL https://developer.apple.com/metal/cpp/files/metal-cpp_macOS15_iOS18-beta.zip)
-  if (${MACOS_VERSION} GREATER_EQUAL 15.0)
-    set(MLX_METAL_VERSION METAL_3_2)
-  elseif (${MACOS_VERSION} GREATER_EQUAL 14.2)
-    set(MLX_METAL_VERSION METAL_3_1)
-  elseif (${MACOS_VERSION} GREATER_EQUAL 14.0)
-    set(MLX_METAL_VERSION METAL_3_0)
-  else()
-    message(FATAL_ERROR "MLX requires macOS SDK >= 14.0 to be built with MLX_BUILD_METAL=ON" )
-  endif()
-
+  # Get the metal version
+  execute_process(
+    COMMAND zsh "-c" "echo \"__METAL_VERSION__\" | xcrun -sdk macosx metal -E -x metal -P - | tail -1"
+    OUTPUT_VARIABLE MLX_METAL_VERSION
+    COMMAND_ERROR_IS_FATAL ANY)
   FetchContent_Declare(
     metal_cpp
     URL ${METAL_CPP_URL}
@@ -113,7 +111,7 @@ elseif (MLX_BUILD_METAL)
     ${FOUNDATION_LIB}
     ${QUARTZ_LIB})
 
-  add_compile_definitions(${MLX_METAL_VERSION})
+  add_compile_definitions("MLX_METAL_VERSION=${MLX_METAL_VERSION}")
 endif()
 
 if (MLX_BUILD_CPU)

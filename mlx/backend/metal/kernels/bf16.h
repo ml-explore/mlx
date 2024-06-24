@@ -6,7 +6,7 @@
 
 using namespace metal;
 
-#if defined METAL_3_1 || defined METAL_3_2 || (__METAL_VERSION__ >= 310)
+#if (MLX_METAL_VERSION >= 310) || (__METAL_VERSION__ >= 310)
 
 typedef bfloat bfloat16_t;
 
