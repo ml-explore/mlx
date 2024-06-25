@@ -376,12 +376,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
             NeonFp16SimdOps<float16_t, float16x8_t>,
             8>(in, out);
 #else // __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
-        softmax<
-            float16_t,
-            float,
-            simd_float16,
-            AccelerateSimdOps<float, simd_float16>,
-            16>(in, out);
+        eval(inputs, out); // Redirect to common backend for consistency
 #endif // __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
       }
       break;
