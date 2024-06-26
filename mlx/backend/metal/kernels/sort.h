@@ -235,19 +235,21 @@ struct KernelMergeSort {
       const device T* inp,
       device U* out,
       const constant int& size_sorted_axis,
-      const constant int& stride_sorted_axis,
-      const constant int& stride_segment_axis,
+      const constant int& in_stride_sorted_axis,
+      const constant int& out_stride_sorted_axis,
+      const constant int& in_stride_segment_axis,
+      const constant int& out_stride_segment_axis,
       threadgroup val_t* tgp_vals,
       threadgroup idx_t* tgp_idxs,
       uint3 tid [[threadgroup_position_in_grid]],
       uint3 lid [[thread_position_in_threadgroup]]) {
     // tid.y tells us the segment index
-    inp += tid.y * stride_segment_axis;
-    out += tid.y * stride_segment_axis;
+    inp += tid.y * in_stride_segment_axis;
+    out += tid.y * out_stride_segment_axis;
 
     // Copy into threadgroup memory
     for (short i = lid.x; i < N_PER_BLOCK; i += BLOCK_THREADS) {
-      tgp_vals[i] = i < size_sorted_axis ? inp[i * stride_sorted_axis]
+      tgp_vals[i] = i < size_sorted_axis ? inp[i * in_stride_sorted_axis]
                                          : val_t(CompareOp::init);
       if (ARG_SORT) {
         tgp_idxs[i] = i;
@@ -264,9 +266,9 @@ struct KernelMergeSort {
     // Write output
     for (int i = lid.x; i < size_sorted_axis; i += BLOCK_THREADS) {
       if (ARG_SORT) {
-        out[i * stride_sorted_axis] = tgp_idxs[i];
+        out[i * out_stride_sorted_axis] = tgp_idxs[i];
       } else {
-        out[i * stride_sorted_axis] = tgp_vals[i];
+        out[i * out_stride_sorted_axis] = tgp_vals[i];
       }
     }
   }
@@ -282,8 +284,10 @@ template <
     const device T* inp [[buffer(0)]],
     device U* out [[buffer(1)]],
     const constant int& size_sorted_axis [[buffer(2)]],
-    const constant int& stride_sorted_axis [[buffer(3)]],
-    const constant int& stride_segment_axis [[buffer(4)]],
+    const constant int& in_stride_sorted_axis [[buffer(3)]],
+    const constant int& out_stride_sorted_axis [[buffer(4)]],
+    const constant int& in_stride_segment_axis [[buffer(5)]],
+    const constant int& out_stride_segment_axis [[buffer(6)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]]) {
   using sort_kernel =
@@ -298,8 +302,10 @@ template <
         inp,
         out,
         size_sorted_axis,
-        stride_sorted_axis,
-        stride_segment_axis,
+        in_stride_sorted_axis,
+        out_stride_sorted_axis,
+        in_stride_segment_axis,
+        out_stride_segment_axis,
         tgp_vals,
         tgp_idxs,
         tid,
@@ -310,8 +316,10 @@ template <
         inp,
         out,
         size_sorted_axis,
-        stride_sorted_axis,
-        stride_segment_axis,
+        in_stride_sorted_axis,
+        out_stride_sorted_axis,
+        in_stride_segment_axis,
+        out_stride_segment_axis,
         tgp_vals,
         nullptr,
         tid,
@@ -331,10 +339,12 @@ template <
     const device T* inp [[buffer(0)]],
     device U* out [[buffer(1)]],
     const constant int& size_sorted_axis [[buffer(2)]],
-    const constant int& stride_sorted_axis [[buffer(3)]],
-    const constant int& nc_dim [[buffer(4)]],
-    const device int* nc_shape [[buffer(5)]],
-    const device size_t* nc_strides [[buffer(6)]],
+    const constant int& in_stride_sorted_axis [[buffer(3)]],
+    const constant int& out_stride_sorted_axis [[buffer(4)]],
+    const constant int& nc_dim [[buffer(5)]],
+    const device int* nc_shape [[buffer(6)]],
+    const device size_t* in_nc_strides [[buffer(7)]],
+    const device size_t* out_nc_strides [[buffer(8)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]]) {
   using sort_kernel =
@@ -342,9 +352,10 @@ template <
   using val_t = typename sort_kernel::val_t;
   using idx_t = typename sort_kernel::idx_t;
 
-  auto block_idx = elem_to_loc(tid.y, nc_shape, nc_strides, nc_dim);
-  inp += block_idx;
-  out += block_idx;
+  auto in_block_idx = elem_to_loc(tid.y, nc_shape, in_nc_strides, nc_dim);
+  auto out_block_idx = elem_to_loc(tid.y, nc_shape, out_nc_strides, nc_dim);
+  inp += in_block_idx;
+  out += out_block_idx;
 
   if (ARG_SORT) {
     threadgroup val_t tgp_vals[sort_kernel::N_PER_BLOCK];
@@ -353,7 +364,9 @@ template <
         inp,
         out,
         size_sorted_axis,
-        stride_sorted_axis,
+        in_stride_sorted_axis,
+        out_stride_sorted_axis,
+        zero_helper,
         zero_helper,
         tgp_vals,
         tgp_idxs,
@@ -365,7 +378,9 @@ template <
         inp,
         out,
         size_sorted_axis,
-        stride_sorted_axis,
+        in_stride_sorted_axis,
+        out_stride_sorted_axis,
+        zero_helper,
         zero_helper,
         tgp_vals,
         nullptr,
