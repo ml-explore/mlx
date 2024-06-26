@@ -536,7 +536,6 @@ struct PyCompiledFun {
 class PyCheckpointedFun {
  public:
   PyCheckpointedFun(nb::callable fun) : fun_(std::move(fun)) {}
-
   ~PyCheckpointedFun() {
     nb::gil_scoped_acquire gil;
 
@@ -968,5 +967,8 @@ void init_transforms(nb::module_& m) {
 
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");
-  atexit.attr("register")(nb::cpp_function([]() { tree_cache().clear(); }));
+  atexit.attr("register")(nb::cpp_function([]() {
+    tree_cache().clear();
+    detail::compile_clear_cache();
+  }));
 }

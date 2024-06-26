@@ -266,6 +266,10 @@ class CompilerCache {
     cache_.erase(fun_id);
   }
 
+  void clear() {
+    cache_.clear();
+  }
+
  private:
   CompilerCache() {
     // Make sure the allocator is fully
@@ -857,6 +861,10 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
 
 void compile_erase(std::uintptr_t fun_id) {
   detail::compiler_cache().erase(fun_id);
+}
+
+void compile_clear_cache() {
+  detail::compiler_cache().clear();
 }
 
 } // namespace detail
