@@ -24,11 +24,6 @@ void disable_compile();
  */
 void enable_compile();
 
-/** Clear the compiler cache causing a recompilation of all compiled functions
- * when called again.
- */
-void clear_compiler_cache();
-
 /** Set the compiler mode to the given value. */
 void set_compile_mode(CompileMode mode);
 } // namespace mlx::core
