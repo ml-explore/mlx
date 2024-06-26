@@ -18,7 +18,7 @@ function(make_jit_source SRC_FILE)
               ${CMAKE_C_COMPILER}
               ${PROJECT_SOURCE_DIR}
               ${SRC_FILE}
-              "-D${MLX_METAL_VERSION}"
+              "-DMLX_METAL_VERSION=${MLX_METAL_VERSION}"
     DEPENDS make_compiled_preamble.sh
             kernels/${SRC_FILE}.h
             ${ARGN}
