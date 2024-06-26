@@ -205,8 +205,8 @@ void compiled_allocate_outputs(
       // - Donatable
       // - Correct size
       // - Not a constant
-      if (in.flags().row_contiguous && in.nbytes() == outputs[o].nbytes() &&
-          in.is_donatable() &&
+      if (in.flags().row_contiguous && in.size() == outputs[o].size() &&
+          in.itemsize() == outputs[o].itemsize() && in.is_donatable() &&
           constant_ids_.find(inputs_[i].id()) == constant_ids_.end()) {
         if (move_buffers) {
           outputs[o].move_shared_buffer(
