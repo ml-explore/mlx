@@ -1827,6 +1827,18 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertTrue(np.array_equal(b_np, b_mx))
                 self.assertEqual(b_mx.dtype, a_mx.dtype)
 
+        # test 0 strides
+        a_np = np.array([1, 0, 2, 1, 3, 0, 4, 0])
+        a_mx = mx.array(a_np)
+        b_np = np.broadcast_to(a_np, (16, 8))
+        b_mx = mx.broadcast_to(a_mx, (16, 8))
+        mx.eval(b_mx)
+        for axis in (0, 1):
+            c_np = np.sort(b_np, axis=axis)
+            c_mx = mx.sort(b_mx, axis=axis)
+            self.assertTrue(np.array_equal(c_np, c_mx))
+            self.assertEqual(b_mx.dtype, c_mx.dtype)
+
     def test_partition(self):
         shape = (3, 4, 5)
         for dtype in ("int32", "float32"):
