@@ -1,9 +1,9 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #include <cassert>
 
+#include <Accelerate/Accelerate.h>
 #include <simd/vector.h>
-#include <vecLib/vDSP.h>
 
 #include "mlx/backend/common/copy.h"
 #include "mlx/primitives.h"

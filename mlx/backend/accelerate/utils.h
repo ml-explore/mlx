@@ -1,8 +1,8 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
-#include <vecLib/BNNS/bnns.h>
+#include <Accelerate/Accelerate.h>
 #include "mlx/dtype.h"
 
 namespace mlx::core {

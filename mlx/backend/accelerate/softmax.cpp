@@ -3,7 +3,10 @@
 #include <cassert>
 #include <limits>
 
+#if __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
 #include <arm_neon.h>
+#endif
+
 #include <simd/math.h>
 #include <simd/vector.h>
 
@@ -53,25 +56,26 @@ inline simd_float16 simd_fast_exp(simd_float16 x) {
   return (*(simd_float16*)&epart) * x;
 }
 
+#if __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
 /**
  * The ARM neon equivalent of the fast exp above.
  */
 inline float16x8_t neon_fast_exp(float16x8_t x) {
-  x = vmulq_f16(x, vdupq_n_f16(1.442695)); // multiply with log_2(e)
-  x = vmaxq_f16(x, vdupq_n_f16(-14)); // clamp under with -14
-  x = vminq_f16(x, vdupq_n_f16(14)); // clamp over with 14
+  x = vmulq_f16(x, vdupq_n_f16(float16_t(1.442695f))); // multiply with log_2(e)
+  x = vmaxq_f16(x, vdupq_n_f16(float16_t(-14.f))); // clamp under with -14
+  x = vminq_f16(x, vdupq_n_f16(float16_t(14.f))); // clamp over with 14
 
-  float16x8_t ipart = vrndmq_f16(vaddq_f16(x, vdupq_n_f16(0.5)));
+  float16x8_t ipart = vrndmq_f16(vaddq_f16(x, vdupq_n_f16(float16_t(0.5f))));
   float16x8_t fpart = vsubq_f16(x, ipart);
 
-  x = vdupq_n_f16(1.535336188319500e-4f);
-  x = vfmaq_f16(vdupq_n_f16(1.339887440266574e-3f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(1.339887440266574e-3f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(9.618437357674640e-3f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(5.550332471162809e-2f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(2.402264791363012e-1f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(6.931472028550421e-1f), x, fpart);
-  x = vfmaq_f16(vdupq_n_f16(1.000000000000000f), x, fpart);
+  x = vdupq_n_f16(float16_t(1.535336188319500e-4f));
+  x = vfmaq_f16(vdupq_n_f16(float16_t(1.339887440266574e-3f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(1.339887440266574e-3f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(9.618437357674640e-3f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(5.550332471162809e-2f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(2.402264791363012e-1f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(6.931472028550421e-1f)), x, fpart);
+  x = vfmaq_f16(vdupq_n_f16(float16_t(1.000000000000000f)), x, fpart);
 
   // generate 2**ipart in the floating point representation using integer
   // bitshifting
@@ -106,53 +110,6 @@ inline float16_t neon_reduce_add(float16x8_t x) {
   y = vpadd_f16(y, zero);
   return vget_lane_f16(y, 0);
 }
-
-template <typename T, typename VT>
-struct AccelerateSimdOps {
-  VT init(T a) {
-    return a;
-  }
-
-  VT load(const T* a) {
-    return *(VT*)a;
-  }
-
-  void store(T* dst, VT x) {
-    *(VT*)dst = x;
-  }
-
-  VT max(VT a, VT b) {
-    return simd_max(a, b);
-  }
-
-  VT exp(VT x) {
-    return simd_fast_exp(x);
-  }
-
-  VT add(VT a, VT b) {
-    return a + b;
-  }
-
-  VT sub(VT a, T b) {
-    return a - b;
-  }
-
-  VT mul(VT a, VT b) {
-    return a * b;
-  }
-
-  VT mul(VT a, T b) {
-    return a * b;
-  }
-
-  T reduce_max(VT x) {
-    return simd_reduce_max(x);
-  }
-
-  T reduce_add(VT x) {
-    return simd_reduce_add(x);
-  }
-};
 
 template <typename T, typename VT>
 struct NeonFp16SimdOps {
@@ -198,6 +155,55 @@ struct NeonFp16SimdOps {
 
   T reduce_add(VT x) {
     return neon_reduce_add(x);
+  }
+};
+
+#endif // __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
+
+template <typename T, typename VT>
+struct AccelerateSimdOps {
+  VT init(T a) {
+    return a;
+  }
+
+  VT load(const T* a) {
+    return *(VT*)a;
+  }
+
+  void store(T* dst, VT x) {
+    *(VT*)dst = x;
+  }
+
+  VT max(VT a, VT b) {
+    return simd_max(a, b);
+  }
+
+  VT exp(VT x) {
+    return simd_fast_exp(x);
+  }
+
+  VT add(VT a, VT b) {
+    return a + b;
+  }
+
+  VT sub(VT a, T b) {
+    return a - b;
+  }
+
+  VT mul(VT a, VT b) {
+    return a * b;
+  }
+
+  VT mul(VT a, T b) {
+    return a * b;
+  }
+
+  T reduce_max(VT x) {
+    return simd_reduce_max(x);
+  }
+
+  T reduce_add(VT x) {
+    return simd_reduce_add(x);
   }
 };
 
@@ -362,12 +368,16 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
             AccelerateSimdOps<float, simd_float16>,
             16>(in, out);
       } else {
+#if __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
         softmax<
             float16_t,
             float16_t,
             float16x8_t,
             NeonFp16SimdOps<float16_t, float16x8_t>,
             8>(in, out);
+#else // __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
+        eval(inputs, out); // Redirect to common backend for consistency
+#endif // __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
       }
       break;
     case bfloat16:

@@ -3,8 +3,7 @@
 #include <cassert>
 #include <cmath>
 
-#include <vecLib/vDSP.h>
-#include <vecLib/vForce.h>
+#include <Accelerate/Accelerate.h>
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/binary.h"
