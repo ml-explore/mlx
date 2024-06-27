@@ -273,6 +273,10 @@ void Full::eval(const std::vector<array>& inputs, array& out) {
   copy(in, out, ctype);
 }
 
+void Hadamard::eval(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("CPU Hadamard NYI");
+}
+
 void Log::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];

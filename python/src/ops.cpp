@@ -4375,4 +4375,29 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The array with the new type.
       )pbdoc");
+  m.def(
+      "hadamard_transform",
+      &hadamard,
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def hadamard_transform(a: array, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform the Walsh-Hadamard transform.
+
+        Equivalent to:
+        ```python
+        from scipy.linalg import hadamard
+
+        y = hadamard(len(x)) @ x
+        ```
+
+        Args:
+            a (array): Input array or scalar.
+            dtype (Dtype): The data type to change to.
+
+        Returns:
+            array: The array with the new type.
+      )pbdoc");
 }
