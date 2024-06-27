@@ -24,7 +24,7 @@ option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.15.1)
+  set(MLX_VERSION 0.15.2)
 endif()
 
 # --------------------- Processor tests -------------------------
