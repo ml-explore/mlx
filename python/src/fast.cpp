@@ -83,7 +83,7 @@ void init_fast(nb::module_& parent_module) {
       "offset"_a,
       "stream"_a = nb::none(),
       nb::sig(
-          "def rope(a: array, dims: int, *, traditinoal: bool, base: float, scale: float, offset: int, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rope(a: array, dims: int, *, traditional: bool, base: float, scale: float, offset: int, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Apply rotary positional encoding to the input.
 

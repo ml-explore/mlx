@@ -41,12 +41,13 @@ array bits(
   auto key = key_ ? *key_ : KeySequence::default_().next();
   if (key.dtype() != uint32) {
     std::ostringstream msg;
-    msg << "Expected key type uint32 but received " << key.dtype() << ".";
+    msg << "[bits] Expected key type uint32 but received " << key.dtype()
+        << ".";
     throw std::invalid_argument(msg.str());
   }
   if (key.shape() != std::vector<int>{2}) {
     std::ostringstream msg;
-    msg << "Expected key shape (2) but received " << key.shape() << ".";
+    msg << "[bits] Expected key shape (2) but received " << key.shape() << ".";
     throw std::invalid_argument(msg.str());
   }
 
@@ -110,7 +111,8 @@ array uniform(
     StreamOrDevice s /* = {} */) {
   if (!issubdtype(dtype, floating)) {
     throw std::invalid_argument(
-        "Can only generate uniform numbers with real floating point type.");
+        "[uniform] Can only generate uniform numbers with real "
+        "floating point type.");
   }
 
   auto stream = to_stream(s);
@@ -120,7 +122,7 @@ array uniform(
   auto out_shape = broadcast_shapes(shape, range.shape());
   if (out_shape != shape) {
     std::ostringstream msg;
-    msg << "Cannot generate random values of shape " << shape
+    msg << "[uniform] Cannot generate random values of shape " << shape
         << " from broadcasted shape " << out_shape << ".";
     throw std::invalid_argument(msg.str());
   }

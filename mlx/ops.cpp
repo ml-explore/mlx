@@ -76,7 +76,7 @@ std::pair<int, int> extract_quantized_matmul_dims(
   if (w.dtype() != uint32) {
     std::ostringstream msg;
     msg << "[" << tag << "] The weight matrix should be uint32 "
-        << "but received" << w.dtype();
+        << "but received " << w.dtype();
     throw std::invalid_argument(msg.str());
   }
 
