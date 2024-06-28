@@ -101,7 +101,7 @@ void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == float32) {
-    binary(
+    binary_op<float>(
         a,
         b,
         out,
@@ -116,7 +116,7 @@ void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vadd((const float*)a, 1, (const float*)b, 1, (float*)o, 1, n);
         });
   } else if (a.dtype() == int32) {
-    binary(
+    binary_op<int>(
         a,
         b,
         out,
@@ -131,7 +131,7 @@ void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vaddi((const int*)a, 1, (const int*)b, 1, (int*)o, 1, n);
         });
   } else {
-    binary(a, b, out, [](auto x, auto y) { return x + y; });
+    eval(inputs, out);
   }
 }
 
@@ -286,7 +286,7 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == int32) {
-    binary(
+    binary_op<int>(
         a,
         b,
         out,
@@ -299,7 +299,7 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vdivi((const int*)b, 1, (const int*)a, 1, (int*)o, 1, n);
         });
   } else if (a.dtype() == float32) {
-    binary(
+    binary_op<float>(
         a,
         b,
         out,
@@ -314,7 +314,7 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vdiv((const float*)b, 1, (const float*)a, 1, (float*)o, 1, n);
         });
   } else {
-    binary(a, b, out, [](auto x, auto y) { return x / y; });
+    eval(inputs, out);
   }
 }
 
@@ -325,12 +325,8 @@ void Exp::eval_cpu(const std::vector<array>& inputs, array& out) {
     set_unary_output_data(in, out);
     auto size = in.data_size();
     vvexpf(out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-  } else if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, [](auto x) { return std::exp(x); });
   } else {
-    throw std::invalid_argument(
-        "[exp] Cannot exponentiate elements in array"
-        " with non floating point type.");
+    eval(inputs, out);
   }
 }
 
@@ -392,12 +388,8 @@ void Log1p::eval_cpu(const std::vector<array>& inputs, array& out) {
     auto size = in.data_size();
     vvlog1pf(
         out.data<float>(), in.data<float>(), reinterpret_cast<int*>(&size));
-  } else if (issubdtype(out.dtype(), inexact)) {
-    unary_fp(in, out, [](auto x) { return std::log1p(x); });
   } else {
-    throw std::invalid_argument(
-        "[log1p] Cannot compute log of elements in array with"
-        " non floating point type.");
+    eval(inputs, out);
   }
 }
 
@@ -407,7 +399,7 @@ void Multiply::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == float32) {
-    binary(
+    binary_op<float>(
         a,
         b,
         out,
@@ -422,7 +414,7 @@ void Multiply::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vmul((const float*)a, 1, (const float*)b, 1, (float*)o, 1, n);
         });
   } else {
-    binary(a, b, out, [](auto x, auto y) { return x * y; });
+    eval(inputs, out);
   }
 }
 
@@ -433,7 +425,7 @@ void Negative::eval_cpu(const std::vector<array>& inputs, array& out) {
     set_unary_output_data(in, out);
     vDSP_vneg(in.data<float>(), 1, out.data<float>(), 1, in.data_size());
   } else {
-    unary(in, out, [](auto x) { return -x; });
+    eval(inputs, out);
   }
 }
 
@@ -520,7 +512,7 @@ void Square::eval_cpu(const std::vector<array>& inputs, array& out) {
     auto size = in.data_size();
     vDSP_vsq(in.data<float>(), 1, out.data<float>(), 1, size);
   } else {
-    unary(in, out, [](auto x) { return x * x; });
+    eval(inputs, out);
   }
 }
 
@@ -546,7 +538,7 @@ void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == float32) {
-    binary(
+    binary_op<float>(
         a,
         b,
         out,
@@ -564,7 +556,7 @@ void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vsub((const float*)b, 1, (const float*)a, 1, (float*)o, 1, n);
         });
   } else if (a.dtype() == int32) {
-    binary(
+    binary_op<int>(
         a,
         b,
         out,
@@ -576,7 +568,7 @@ void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
         },
         UseDefaultBinaryOp());
   } else {
-    binary(a, b, out, [](auto x, auto y) { return x - y; });
+    eval(inputs, out);
   }
 }
 

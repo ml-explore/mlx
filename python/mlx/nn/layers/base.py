@@ -157,8 +157,8 @@ class Module(dict):
 
         Args:
             file_or_weights (str or list(tuple(str, mx.array))): The path to
-                the weights ``.npz`` file (``.npz`` or ``.safetensors``) or a list of pairs of parameter names
-                and arrays.
+                the weights ``.npz`` file (``.npz`` or ``.safetensors``) or a list
+                of pairs of parameter names and arrays.
             strict (bool, optional): If ``True`` then checks that the provided
               weights exactly match the parameters of the model. Otherwise,
               only the weights actually contained in the model are loaded and
@@ -222,7 +222,7 @@ class Module(dict):
                 if v_new.shape != v.shape:
                     raise ValueError(
                         f"Expected shape {v.shape} but received "
-                        f" shape {v_new.shape} for parameter {k}"
+                        f"shape {v_new.shape} for parameter {k}"
                     )
 
         self.update(tree_unflatten(weights))
