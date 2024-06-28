@@ -101,7 +101,7 @@ void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == float32) {
-    binary_op<float, float>(
+    binary_op<float>(
         a,
         b,
         out,
@@ -116,7 +116,7 @@ void Add::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vadd((const float*)a, 1, (const float*)b, 1, (float*)o, 1, n);
         });
   } else if (a.dtype() == int32) {
-    binary_op<int, int>(
+    binary_op<int>(
         a,
         b,
         out,
@@ -286,7 +286,7 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == int32) {
-    binary_op<int, int>(
+    binary_op<int>(
         a,
         b,
         out,
@@ -299,7 +299,7 @@ void Divide::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vdivi((const int*)b, 1, (const int*)a, 1, (int*)o, 1, n);
         });
   } else if (a.dtype() == float32) {
-    binary_op<float, float>(
+    binary_op<float>(
         a,
         b,
         out,
@@ -399,7 +399,7 @@ void Multiply::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == float32) {
-    binary_op<float, float>(
+    binary_op<float>(
         a,
         b,
         out,
@@ -538,7 +538,7 @@ void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
   auto& b = inputs[1];
 
   if (a.dtype() == float32) {
-    binary_op<float, float>(
+    binary_op<float>(
         a,
         b,
         out,
@@ -556,7 +556,7 @@ void Subtract::eval_cpu(const std::vector<array>& inputs, array& out) {
           vDSP_vsub((const float*)b, 1, (const float*)a, 1, (float*)o, 1, n);
         });
   } else if (a.dtype() == int32) {
-    binary_op<int, int>(
+    binary_op<int>(
         a,
         b,
         out,
