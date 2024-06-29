@@ -27,6 +27,9 @@ _MTL_PRIVATE_DEF_SEL(
 _MTL_PRIVATE_DEF_SEL(rows, "rows");
 _MTL_PRIVATE_DEF_SEL(initWithBuffer_descriptor, "initWithBuffer:descriptor:");
 _MTL_PRIVATE_DEF_SEL(
+    initWithBuffer_offset_descriptor,
+    "initWithBuffer:offset:descriptor:");
+_MTL_PRIVATE_DEF_SEL(
     initWithDevice_,
     "initWithDevice:transposeLeft:transposeRight:"
     "resultRows:resultColumns:interiorColumns:alpha:beta:");
@@ -83,7 +86,13 @@ class Matrix : public NS::Referencing<Matrix> {
  public:
   static class Matrix* alloc();
   Matrix* init(MTL::Buffer* buffer, MatrixDescriptor* descriptor);
+  Matrix*
+  init(MTL::Buffer* buffer, NS::UInteger offset, MatrixDescriptor* descriptor);
   Matrix* init(const MTL::Buffer* buffer, MatrixDescriptor* descriptor);
+  Matrix* init(
+      const MTL::Buffer* buffer,
+      NS::UInteger offset,
+      MatrixDescriptor* descriptor);
 };
 
 class Kernel : public NS::Referencing<Kernel> {
@@ -208,9 +217,28 @@ _MTL_INLINE Matrix* Matrix::init(
 }
 
 _MTL_INLINE Matrix* Matrix::init(
+    MTL::Buffer* buffer,
+    NS::UInteger offset,
+    MatrixDescriptor* descriptor) {
+  return Object::sendMessage<Matrix*>(
+      this,
+      _MPS_PRIVATE_SEL(initWithBuffer_offset_descriptor),
+      buffer,
+      offset,
+      descriptor);
+}
+
+_MTL_INLINE Matrix* Matrix::init(
     const MTL::Buffer* buffer,
     MatrixDescriptor* descriptor) {
   return init(const_cast<MTL::Buffer*>(buffer), descriptor);
+}
+
+_MTL_INLINE Matrix* Matrix::init(
+    const MTL::Buffer* buffer,
+    NS::UInteger offset,
+    MatrixDescriptor* descriptor) {
+  return init(const_cast<MTL::Buffer*>(buffer), offset, descriptor);
 }
 
 _MTL_INLINE NS::String* Kernel::label() const {

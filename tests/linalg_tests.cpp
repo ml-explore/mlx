@@ -325,23 +325,27 @@ TEST_CASE("test matrix inversion") {
 
 TEST_CASE("test matrix cholesky") {
   // 0D and 1D throw
-  CHECK_THROWS(linalg::cholesky(array(0.0), /* upper = */ false, Device::cpu));
-  CHECK_THROWS(
-      linalg::cholesky(array({0.0, 1.0}), /* upper = */ false, Device::cpu));
+  CHECK_THROWS(linalg::cholesky(array(0.0), /* upper = */ false));
+  CHECK_THROWS(linalg::cholesky(array({0.0, 1.0}), /* upper = */ false));
 
   // Unsupported types throw
-  CHECK_THROWS(linalg::cholesky(
-      array({0, 1}, {1, 2}), /* upper = */ false, Device::cpu));
+  CHECK_THROWS(linalg::cholesky(array({0, 1}, {1, 2}), /* upper = */ false));
 
   // Non-square throws.
-  CHECK_THROWS(linalg::cholesky(
-      array({1, 2, 3, 4, 5, 6}, {2, 3}), /* upper = */ false, Device::cpu));
+  CHECK_THROWS(
+      linalg::cholesky(array({1, 2, 3, 4, 5, 6}, {2, 3}), /* upper = */ false));
 
   const auto prng_key = random::key(220398);
   const auto sqrtA = random::normal({5, 5}, prng_key);
   const auto A = matmul(sqrtA, transpose(sqrtA));
-  const auto L = linalg::cholesky(A, /* upper = */ false, Device::cpu);
-  const auto U = linalg::cholesky(A, /* upper = */ true, Device::cpu);
+  const auto L = linalg::cholesky(A, /* upper = */ false);
+  const auto U = linalg::cholesky(A, /* upper = */ true);
+
+  CHECK_EQ(L.dtype(), float32);
+  CHECK_EQ(U.dtype(), float32);
+
+  CHECK(allclose(tril(U, -1), zeros_like(U)).item<bool>());
+  CHECK(allclose(triu(L, 1), zeros_like(L)).item<bool>());
 
   CHECK(allclose(matmul(L, transpose(L)), A, /* rtol = */ 0, /* atol = */ 1e-6)
             .item<bool>());
