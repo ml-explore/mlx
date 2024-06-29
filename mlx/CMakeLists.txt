@@ -6,6 +6,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/compile.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/dtype.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/einsum.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fast.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ops.cpp

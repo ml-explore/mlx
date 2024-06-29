@@ -4375,4 +4375,29 @@ void init_ops(nb::module_& m) {
         Returns:
             array: The array with the new type.
       )pbdoc");
+  m.def(
+      "einsum",
+      [](const std::string& equation,
+         const nb::args& operands,
+         StreamOrDevice s) {
+        auto arrays_list = nb::cast<std::vector<array>>(operands);
+        return einsum(equation, arrays_list, s);
+      },
+      "equation"_a,
+      "operands"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def einsum(subscripts: str, *operands, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+
+      Perform the Einstein summation convention on the operands.
+
+      Args:
+        subscripts (str): The Einstein summation convention equation.
+        *operands (array): The input arrays.
+
+      Returns:
+        result (array): The output array.
+    )pbdoc");
 }
