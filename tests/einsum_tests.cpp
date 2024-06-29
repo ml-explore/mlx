@@ -8,7 +8,7 @@
 
 using namespace mlx::core;
 
-TEST_CASE("einsum_path") {
+TEST_CASE("test einsum path") {
   std::vector<EinsumPath> expected;
   expected.push_back({{1, 0}, {'j'}, "jk,ij->ik", true});
   expected.push_back({{1, 0}, {'k'}, "ik,kl->il", true});
@@ -108,4 +108,33 @@ TEST_CASE("einsum_path") {
     CHECK_EQ(x.at(i).removing, expected.at(i).removing);
     CHECK_EQ(x.at(i).can_dot, expected.at(i).can_dot);
   }
-};
+}
+
+TEST_CASE("test einsum") {
+  CHECK_THROWS(einsum("ijk", {full({2, 2}, 2.0f)}));
+  CHECK_THROWS(einsum("", {}));
+
+  auto x = einsum("jki", {full({2, 3, 4}, 3.0f)});
+  CHECK_EQ(x.shape(), std::vector<int>{4, 2, 3});
+  CHECK_EQ(x.dtype(), float32);
+  auto expected = full({4, 2, 3}, 3.0f);
+  CHECK_EQ(array_equal(x, expected).item<bool>(), true);
+  x = einsum("ij,jk->ik", {full({2, 2}, 2.0f), full({2, 2}, 3.0f)});
+  CHECK_EQ(x.shape(), std::vector<int>{2, 2});
+  CHECK_EQ(x.dtype(), float32);
+  expected = array({12.0f, 12.0f, 12.0f, 12.0f}, {2, 2});
+  CHECK_EQ(array_equal(x, expected).item<bool>(), true);
+  x = einsum("i,j->ij", {full({10}, 15.0f), full({10}, 20.0f)});
+  CHECK_EQ(x.shape(), std::vector<int>{10, 10});
+  CHECK_EQ(x.dtype(), float32);
+  expected = full({10, 10}, 300.0f);
+  CHECK_EQ(array_equal(x, expected).item<bool>(), true);
+  x = einsum(
+      "ijkl ,mlopq ->ikmop",
+      {full({4, 5, 9, 4}, 20.0f), full({14, 4, 16, 7, 5}, 10.0f)});
+  CHECK_EQ(x.shape(), std::vector<int>{4, 9, 14, 16, 7});
+  CHECK_EQ(x.dtype(), float32);
+  expected = full({4, 9, 14, 16, 7}, 20000.0f);
+  CHECK_EQ(x.shape(), expected.shape());
+  CHECK_EQ(array_equal(x, expected).item<bool>(), true);
+}
