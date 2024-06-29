@@ -3,12 +3,10 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
-#include <map>
 #include <numeric>
 #include <set>
 #include <sstream>
 
-#include "mlx/einsum.h"
 #include "mlx/ops.h"
 #include "mlx/primitives.h"
 #include "mlx/transforms.h"
@@ -3503,131 +3501,6 @@ array dequantize(
   w_full = reshape(w_full, sshape, s);
 
   return w_full;
-}
-
-array einsum(
-    std::string equation,
-    const std::vector<array>& operands,
-    StreamOrDevice s /* = {} */) {
-  std::vector<array> inputs = operands;
-  if (operands.size() == 0) {
-    throw std::invalid_argument("[einsum] At least one operand is required.");
-  }
-
-  auto path = einsum_path(equation, inputs);
-  for (auto step : path) {
-    std::vector<array> args;
-    for (auto pos : step.args) {
-      args.push_back(inputs.at(pos));
-      inputs.erase(inputs.begin() + pos);
-    }
-    if (step.can_dot) {
-      auto extract = einsum_parse(step.einsum_str);
-
-      std::vector<int> left_axes;
-      std::vector<int> right_axes;
-
-      for (int i = 0; i < extract.first.at(0).size(); i++) {
-        auto c = extract.first.at(0).at(i);
-        if (step.removing.find(c) != step.removing.end()) {
-          left_axes.push_back(i);
-        }
-      }
-      for (int i = 0; i < extract.first.at(1).size(); i++) {
-        auto c = extract.first.at(1).at(i);
-        if (step.removing.find(c) != step.removing.end()) {
-          right_axes.push_back(i);
-        }
-      }
-      inputs.emplace_back(
-          tensordot(args.at(0), args.at(1), {left_axes, right_axes}, s));
-    } else {
-      inputs.emplace_back(einsum_naive(step.einsum_str, args, s));
-    }
-  }
-  return inputs.front();
-}
-
-std::map<char, int> str_idx_map(const std::string inp) {
-  std::map<char, int> counts;
-  int i = 0;
-  for (auto c : inp) {
-    if (c != ' ' && counts.find(c) == counts.end()) {
-      counts[c] = i;
-      i += 1;
-    }
-  }
-  return counts;
-}
-
-array einsum_naive(
-    std::string equation,
-    const std::vector<array>& operands,
-    StreamOrDevice s /* = {} */) {
-  if (operands.empty()) {
-    throw std::runtime_error("[einsum] Must provide at least one operand");
-  }
-  auto extract = einsum_parse(equation);
-
-  if (operands.size() != extract.first.size()) {
-    throw std::runtime_error(
-        "[einsum] Number of operands (" + std::to_string(operands.size()) +
-        ") must match the number of input characters(" +
-        std::to_string(extract.first.size()) + ")");
-  }
-
-  std::map<char, int> input_map;
-  for (int i = 0; i < extract.first.size(); i++) {
-    auto arr = operands[i];
-    auto inp = extract.first[i];
-    for (int j = 0; j < std::min(arr.shape().size(), inp.size()); j++) {
-      input_map[inp[j]] = arr.shape(j);
-    }
-  }
-  std::vector<int> broad;
-  for (auto key : input_map) {
-    broad.push_back(key.second);
-  }
-  std::vector<array> inputs_arr;
-  for (int i = 0; i < operands.size(); i++) {
-    auto arr = operands[i];
-    auto ord_map = str_idx_map(extract.first[i]);
-    std::vector<int> new_shape;
-    for (auto key : input_map) {
-      if (ord_map.find(key.first) != ord_map.end()) {
-        new_shape.push_back(key.second);
-      } else {
-        new_shape.push_back(1);
-      }
-    }
-    std::vector<int> axis;
-    for (auto key : ord_map) {
-      axis.push_back(key.second);
-    }
-    inputs_arr.push_back(
-        broadcast_to(reshape(transpose(arr, axis, s), new_shape, s), broad, s));
-  }
-
-  auto ord_output = str_idx_map(extract.second);
-  std::vector<int> rhs_order;
-  for (auto key : ord_output) {
-    rhs_order.push_back(key.second);
-  }
-
-  std::vector<int> sum_axis;
-  int i = 0;
-  for (auto key : input_map) {
-    if (ord_output.find(key.first) == ord_output.end()) {
-      sum_axis.push_back(i);
-    }
-    i += 1;
-  }
-  // TODO: this should just start with the first and then accumulate
-  auto acc = ones_like(inputs_arr.at(0), s);
-  for (int i = 0; i < inputs_arr.size(); i++) {
-    acc = multiply(acc, inputs_arr[i], s);
-  }
-  return transpose(sum(acc, sum_axis, false, s), rhs_order, s);
 }
 
 array gather_qmm(

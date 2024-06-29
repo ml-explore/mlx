@@ -4407,24 +4407,27 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "einsum",
-      [](std::string equation, py::args args, StreamOrDevice s) {
-        auto arrays_list = args.cast<std::vector<array>>();
+      [](const std::string& equation,
+         const nb::args& operands,
+         StreamOrDevice s) {
+        auto arrays_list = nb::cast<std::vector<array>>(operands);
         return einsum(equation, arrays_list, s);
       },
       "equation"_a,
-      py::pos_only(),
-      py::kw_only(),
-      "stream"_a = none,
+      "operands"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def einsum(subscripts: str, *operands, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-      einsum(equation: str, operands: List[array], /, *, stream: Union[None, Stream, Device] = None) -> array
 
       Perform the Einstein summation convention on the operands.
 
       Args:
-        equation (str): The Einstein summation convention equation.
-        args (List[array]): The operands to the Einstein summation convention.
+        subscripts (str): The Einstein summation convention equation.
+        *operands (array): The input arrays.
 
       Returns:
-        result (array): The result of the Einstein summation convention.
+        result (array): The output array.
     )pbdoc");
 }
