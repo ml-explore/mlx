@@ -292,4 +292,41 @@ array cholesky(
       {a});
 }
 
+array pinv(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  const auto m = a.shape(-2);
+  const auto n = a.shape(-1);
+  const auto k = std::min(m, n);
+  const auto rank = a.ndim();
+
+  auto outs = linalg::svd(a, s);
+  auto U = outs[0];
+  auto S = outs[1];
+  auto Vt = outs[2];
+
+  std::vector<int> pinv_shape;
+  if (m <= n) {
+    pinv_shape = {n, k};
+  } else {
+    pinv_shape = {k, m};
+  }
+  array pinv(pinv_shape, a.dtype(), nullptr, {});
+  const auto U_slice = slice(U, {0, 0}, {m, k});
+  const auto Vt_slice = slice(Vt, {0, 0}, {k, n});
+  return matmul(matmul(transpose(Vt_slice), diag(1.0 / S)), transpose(U_slice));
+}
+
 } // namespace mlx::core::linalg
