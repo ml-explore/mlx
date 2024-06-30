@@ -77,7 +77,7 @@ class CMakeBuild(build_ext):
             ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
         )
 
-    def run(self):
+    def run(self) -> None:
         super().run()
 
         # Based on https://github.com/pypa/setuptools/blob/main/setuptools/command/build_ext.py#L102
