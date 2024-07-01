@@ -3588,6 +3588,36 @@ void init_ops(nb::module_& m) {
             ``x`` and ``y``.
       )pbdoc");
   m.def(
+      "nan_to_num",
+      [](const ScalarOrArray& a,
+         const ScalarOrArray& nan,
+         const ScalarOrArray& posinf,
+         const ScalarOrArray& neginf,
+         StreamOrDevice s) {
+        return nan_to_num(
+            to_array(a), to_array(nan), to_array(posinf), to_array(neginf), s);
+      },
+      nb::arg(),
+      "nan"_a = 0,
+      "posinf"_a = std::numeric_limits<float>::max(),
+      "neginf"_a = -std::numeric_limits<float>::max(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def nan_to_num(a: Union[scalar, array], nan: Optional[Union[int, float]] = 0, posinf: Optional[Union[int, float]] = float('inf'), neginf: Optional[Union[int, float]] = float('-inf'), /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Replace NaN with zero and infinities with large finite values or with numbers passed in by the user.
+
+        Args:
+            a (array): Input array
+            nan (float, optional): Value to replace NaN values with. (default: 0)
+            posinf (float, optional): Value to replace positive infinities with. (default: largest finite float value)
+            neginf (float, optional): Value to replace negative infinities with. (default: smallest (most negative) finite float value)
+
+        Returns:
+            array: An array of the same type as ``a`` with NaNs and infinities replaced.
+    )pbdoc");
+  m.def(
       "round",
       [](const ScalarOrArray& a, int decimals, StreamOrDevice s) {
         return round(to_array(a), decimals, s);
