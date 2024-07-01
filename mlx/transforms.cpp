@@ -290,6 +290,12 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
     recurse(out);
   }
 
+  // Set all the arrays in the tape to be tracers to allow for evaluating
+  // arrays in the vjp call.
+  for (auto& x : tape) {
+    x.set_tracer(true);
+  }
+
   // Run the tape backwards, computing vector-jacobian
   // products for each primitive
   std::unordered_map<std::uintptr_t, array> cotan_map;
@@ -341,6 +347,9 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
         cotan_map.insert({in_id, vjps[i]});
       }
     }
+
+    // Remove the tracer from a.
+    a.set_tracer(false);
   }
 
   std::vector<array> vjps;
