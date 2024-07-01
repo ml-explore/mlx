@@ -406,6 +406,14 @@ array where(
     const array& y,
     StreamOrDevice s = {});
 
+/** TODO */
+array nan_to_num(
+    const array& a,
+    const array& nan,
+    const array& posinf,
+    const array& neginf,
+    StreamOrDevice s = {});
+
 /** True if all elements in the array are true (or non-zero). **/
 array all(const array& a, bool keepdims, StreamOrDevice s = {});
 inline array all(const array& a, StreamOrDevice s = {}) {

@@ -1342,6 +1342,19 @@ array where(
       inputs);
 }
 
+array nan_to_num(
+    const array& a,
+    const array& nan,
+    const array& posinf,
+    const array& neginf,
+    StreamOrDevice s /* = {} */) {
+  auto out = where(isnan(a, s), nan, a, s);
+  out = where(isposinf(a, s), posinf, out, s);
+  out = where(isneginf(a, s), neginf, out, s);
+
+  return out;
+}
+
 array allclose(
     const array& a,
     const array& b,

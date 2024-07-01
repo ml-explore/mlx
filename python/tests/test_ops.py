@@ -1640,6 +1640,8 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(a_bwd[4:-2, 2:-4], df[0]).item())
 
     def test_where(self):
+        # print(mx.where(True, mx.array([[1, 2], [3, 4]]), 1))
+        # print(mx.where(True, 1, mx.array([[1, 2], [3, 4]])))
         self.assertCmpNumpy([True, mx.array([[1, 2], [3, 4]]), 1], mx.where, np.where)
         self.assertCmpNumpy([True, 1, mx.array([[1, 2], [3, 4]])], mx.where, np.where)
         self.assertCmpNumpy(
@@ -1650,6 +1652,16 @@ class TestOps(mlx_tests.MLXTestCase):
             ],
             mx.where,
             np.where,
+        )
+
+    def test_nan_to_num(self):
+        self.assertCmpNumpy(
+            [mx.array([6, float("nan"), 2, 0])], mx.nan_to_num, np.nan_to_num
+        )
+        self.assertCmpNumpy(
+            [mx.array([float("inf"), 65467.9, 2, float("-inf")])],
+            mx.nan_to_num,
+            np.nan_to_num,
         )
 
     def test_as_strided(self):
