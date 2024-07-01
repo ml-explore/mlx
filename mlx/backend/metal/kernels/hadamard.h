@@ -5,47 +5,7 @@
 
 using namespace metal;
 
-// Plan
-// - Optimize all 2^k up to 16384 (fp16)
-// - Arbitrary 2^r radix
-// - Threadgroup batching
-// - Add back up op based approach for arbitrary H
-// - Add 2 stage h12/h20/h28/h40 kernel
-
-// template <typename T, int M>
-// [[kernel]] void hadamard_arbitrary(
-//     const device T* in [[buffer(0)]],
-//     device T* out [[buffer(1)]],
-//     uint3 elem [[thread_position_in_grid]],
-//     uint3 grid [[threads_per_grid]]) {
-//   constexpr short radix = 4;
-
-//   int batch_idx = elem.x * M;
-//   short i = elem.y;
-
-//   T x[radix][M];
-//   STEEL_PRAGMA_UNROLL
-//   for (short c = 0; c < M; c++) {
-//     STEEL_PRAGMA_UNROLL
-//     for (short r = 0; r < radix; r++) {
-//       x[r][c] = in[batch_idx + c*N + i*radix + r];
-//     }
-//   }
-
-//   for (short r = 0; r < radix; r++) {
-//     hadamard_m(x[r]);
-//   }
-
-//   // Write back to device
-//   STEEL_PRAGMA_UNROLL
-//   for (short c = 0; c < M; c++) {
-//     STEEL_PRAGMA_UNROLL
-//     for (short r = 0; r < radix; r++) {
-//       out[batch_idx + i*radix + r] = x[r];
-//     }
-//   }
-// }
-
+// Thread local Hadamard transform for 2^R
 template <typename T, short R>
 METAL_FUNC void radix_func(thread T* x) {
   constexpr short logR = __builtin_ctz(R);
@@ -65,26 +25,62 @@ METAL_FUNC void radix_func(thread T* x) {
   }
 }
 
-// This will get us to full bandwidth for large powers of 2
-// Then add threadgroup batching for small powers
-// Then add the non-power of 2 options as a second stage
-// This limits us to half bandwidth but that seems reasonable given the other
-// measurements
-template <typename T, int N>
-[[kernel]] void hadamard(
+template <typename T, int N, int M>
+[[kernel]] void hadamard_m(
     const device T* in [[buffer(0)]],
     device T* out [[buffer(1)]],
     uint3 elem [[thread_position_in_grid]],
     uint3 grid [[threads_per_grid]]) {
   constexpr short read_width = 4;
-  constexpr short max_radix = 16;
+
+  int batch_idx = elem.x * M * N;
+  short i = elem.y;
+
+  T x[read_width][M];
+  STEEL_PRAGMA_UNROLL
+  for (short c = 0; c < M; c++) {
+    STEEL_PRAGMA_UNROLL
+    for (short r = 0; r < read_width; r++) {
+      x[r][c] = in[batch_idx + c * N + i * read_width + r];
+    }
+  }
+
+  for (short r = 0; r < read_width; r++) {
+    // This function is JIT compiled for M
+    // using the Hadamard matrix strings in `metal/hadamard.cpp`
+    hadamard_radix_m(x[r]);
+  }
+
+  // Write back to device
+  STEEL_PRAGMA_UNROLL
+  for (short c = 0; c < M; c++) {
+    STEEL_PRAGMA_UNROLL
+    for (short r = 0; r < read_width; r++) {
+      out[batch_idx + c * N + i * read_width + r] = x[r][c];
+    }
+  }
+}
+
+template <typename T, int N, int max_radix>
+[[kernel]] void hadamard_n(
+    const device T* in [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    uint3 elem [[thread_position_in_grid]],
+    uint3 grid [[threads_per_grid]]) {
+  constexpr short read_width = N == 2 ? 2 : 4;
   constexpr short num_threads = N / max_radix;
+  constexpr short logN = __builtin_ctz(N);
+  constexpr short logR = __builtin_ctz(max_radix);
+  constexpr short num_steps = logN / logR;
+  constexpr short logFinal = logN % logR;
+  constexpr short final_radix = 1 << (logFinal);
 
   int batch_idx = elem.x * N;
   short i = elem.y;
 
   threadgroup T buf[N];
 
+  // Read values from device
   STEEL_PRAGMA_UNROLL
   for (short j = 0; j < max_radix / read_width; j++) {
     short index = j * read_width * num_threads + i * read_width;
@@ -95,13 +91,6 @@ template <typename T, int N>
   }
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
-
-  // Perform the hadamard transform
-  constexpr short logN = __builtin_ctz(N);
-  constexpr short logR = __builtin_ctz(max_radix);
-  constexpr short num_steps = logN / logR;
-  constexpr short logFinal = logN % logR;
-  constexpr short final_radix = 1 << (logFinal);
 
   T x[max_radix];
   short h = 1;
@@ -123,9 +112,8 @@ template <typename T, int N>
       buf[j + h * r] = x[r];
     }
 
-    threadgroup_barrier(mem_flags::mem_threadgroup);
-
     h <<= logR;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
   // Do the final radix
@@ -153,6 +141,7 @@ template <typename T, int N>
     threadgroup_barrier(mem_flags::mem_threadgroup);
   }
 
+  // Write values to device
   STEEL_PRAGMA_UNROLL
   for (short j = 0; j < max_radix / read_width; j++) {
     short index = j * read_width * num_threads + i * read_width;

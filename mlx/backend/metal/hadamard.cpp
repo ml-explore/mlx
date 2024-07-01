@@ -14,18 +14,18 @@ namespace mlx::core {
 // From http://neilsloane.com/hadamard/
 
 constexpr std::string_view h12 = R"(
-+-----------
-++-+---+++-+
-+++-+---+++-
-+-++-+---+++
-++-++-+---++
-+++-++-+---+
-++++-++-+---
-+-+++-++-+--
-+--+++-++-+-
-+---+++-++-+
-++---+++-++-
-+-+---+++-++
++-++++++++++
+--+-+-+-+-+-
++++-++----++
++---+--+-++-
++++++-++----
++-+---+--+-+
+++--+++-++--
++--++---+--+
+++----+++-++
++--+-++---+-
+++++----+++-
++-+--+-++---
 )";
 
 constexpr std::string_view h20 = R"(
@@ -82,55 +82,13 @@ constexpr std::string_view h28 = R"(
 ++--++-+-++-+-+----++------+
 )";
 
-constexpr std::string_view h40 = R"(
-+-------------------+-------------------
-++-++----+-+-++++--+++-++----+-+-++++--+
-+++-++----+-+-++++--+++-++----+-+-++++--
-+-++-++----+-+-++++-+-++-++----+-+-++++-
-+--++-++----+-+-+++++--++-++----+-+-++++
-++--++-++----+-+-+++++--++-++----+-+-+++
-+++--++-++----+-+-+++++--++-++----+-+-++
-++++--++-++----+-+-+++++--++-++----+-+-+
-+++++--++-++----+-+-+++++--++-++----+-+-
-+-++++--++-++----+-++-++++--++-++----+-+
-++-++++--++-++----+-++-++++--++-++----+-
-+-+-++++--++-++----++-+-++++--++-++----+
-++-+-++++--++-++----++-+-++++--++-++----
-+-+-+-++++--++-++---+-+-+-++++--++-++---
-+--+-+-++++--++-++--+--+-+-++++--++-++--
-+---+-+-++++--++-++-+---+-+-++++--++-++-
-+----+-+-++++--++-+++----+-+-++++--++-++
-++----+-+-++++--++-+++----+-+-++++--++-+
-+++----+-+-++++--++-+++----+-+-++++--++-
-+-++----+-+-++++--+++-++----+-+-++++--++
-+--------------------+++++++++++++++++++
-++-++----+-+-++++--+--+--++++-+-+----++-
-+++-++----+-+-++++-----+--++++-+-+----++
-+-++-++----+-+-++++--+--+--++++-+-+----+
-+--++-++----+-+-++++-++--+--++++-+-+----
-++--++-++----+-+-+++--++--+--++++-+-+---
-+++--++-++----+-+-++---++--+--++++-+-+--
-++++--++-++----+-+-+----++--+--++++-+-+-
-+++++--++-++----+-+------++--+--++++-+-+
-+-++++--++-++----+-+-+----++--+--++++-+-
-++-++++--++-++----+---+----++--+--++++-+
-+-+-++++--++-++----+-+-+----++--+--++++-
-++-+-++++--++-++------+-+----++--+--++++
-+-+-+-++++--++-++----+-+-+----++--+--+++
-+--+-+-++++--++-++---++-+-+----++--+--++
-+---+-+-++++--++-++--+++-+-+----++--+--+
-+----+-+-++++--++-++-++++-+-+----++--+--
-++----+-+-++++--++-+--++++-+-+----++--+-
-+++----+-+-++++--++----++++-+-+----++--+
-+-++----+-+-++++--++-+--++++-+-+----++--
-)";
-
 inline const std::map<int, std::string_view> hadamard_matrices() {
-  return {{12, h12}, {20, h20}, {28, h28}, {40, h40}};
+  return {{12, h12}, {20, h20}, {28, h28}};
 }
 
 std::string gen_hadamard_codelet(int m) {
   // Generate a O(m^2) hadamard codelet for a given M
+  // using the hadamard matrices above
   //
   // e.g. m = 2
   // METAL_FUNC void hadamard_m(thread float *x) {
@@ -144,7 +102,7 @@ std::string gen_hadamard_codelet(int m) {
   auto& matrix = h_matrices[m];
 
   std::ostringstream source;
-  source << "METAL_FUNC void hadamard_m(thread float *x) {" << std::endl;
+  source << "METAL_FUNC void hadamard_radix_m(thread float *x) {" << std::endl;
   if (m == 1) {
     source << "}" << std::endl;
     return source.str();
@@ -171,13 +129,37 @@ std::string gen_hadamard_codelet(int m) {
   return source.str();
 }
 
+void launch_hadamard(
+    const array& in,
+    array& out,
+    int batch_size,
+    int threads_per,
+    const std::string kernel_name,
+    const Stream& s) {
+  auto& d = metal::device(s.device);
+
+  const auto& lib_name = kernel_name.substr(1);
+  auto lib = d.get_library(lib_name);
+  auto kernel = d.get_kernel(kernel_name, lib);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(out, 1);
+
+  MTL::Size group_dims = MTL::Size(1, threads_per, 1);
+  MTL::Size grid_dims = MTL::Size(batch_size, threads_per, 1);
+  compute_encoder->dispatchThreads(grid_dims, group_dims);
+}
+
 void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
-  auto& d = metal::device(s.device);
 
   auto& in = inputs[0];
 
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  // TODO ensure contiguity
 
   int n = in.shape(axis_);
   int m = 1;
@@ -192,43 +174,46 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   }
 
-  // std::cout << "m " << m << std::endl;
-  // std::cout << "n " << n << std::endl;
-
-  constexpr int max_radix = 16;
-  int batch_size = in.size() / n / m;
-  int threads_per = n / max_radix;
+  int max_radix = std::min(n, 16);
 
   std::ostringstream kname;
   kname << "hadamard_" << n << "_" << type_to_name(out);
   auto kernel_name = kname.str();
+  auto& d = metal::device(s.device);
   const auto& lib_name = kernel_name;
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
     auto codelet = gen_hadamard_codelet(m);
-    auto template_def = get_template_definition(
-        kernel_name, "hadamard", get_type_string(in.dtype()), n);
-    kernel_source << metal::utils() << codelet << metal::hadamard()
-                  << template_def;
-    // std::cout << "kernel source " << kernel_source.str() << std::endl;
+    kernel_source << metal::utils() << codelet << metal::hadamard();
+    kernel_source << get_template_definition(
+        "n" + kernel_name,
+        "hadamard_n",
+        get_type_string(in.dtype()),
+        n,
+        max_radix);
+    kernel_source << get_template_definition(
+        "m" + kernel_name, "hadamard_m", get_type_string(in.dtype()), n, m);
     lib = d.get_library(lib_name, kernel_source.str());
   }
-  auto kernel = d.get_kernel(kernel_name, lib);
 
-  // TODO ensure contiguity
+  int batch_size = in.size() / n;
+  int threads_per = n / max_radix;
 
-  auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
-  compute_encoder.set_input_array(in, 0);
-  compute_encoder.set_output_array(out, 1);
+  array temp(in.shape(), in.dtype(), nullptr, {});
+  temp.set_data(allocator::malloc_or_wait(temp.nbytes()));
+  std::vector<array> copies = {temp};
 
-  // std::cout << "batch size " << batch_size << std::endl;
-  // std::cout << "threads_per " << threads_per << std::endl;
+  launch_hadamard(in, temp, batch_size, threads_per, "n" + kernel_name, s);
 
-  MTL::Size group_dims = MTL::Size(1, threads_per, 1);
-  MTL::Size grid_dims = MTL::Size(batch_size, threads_per, 1);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
+  batch_size = in.size() / n / m;
+  // Read width of 4
+  constexpr int read_width = 4;
+  threads_per = n / read_width;
+  launch_hadamard(temp, out, batch_size, threads_per, "m" + kernel_name, s);
+
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
 }
 
 } // namespace mlx::core
