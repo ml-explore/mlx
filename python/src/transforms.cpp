@@ -593,7 +593,122 @@ class PyCheckpointedFun {
   nb::callable fun_;
 };
 
+class PyCustomVJPFun {
+ public:
+  PyCustomVJPFun(nb::callable fun) : fun_(std::move(fun)) {}
+  ~PyCustomVJPFun() {
+    nb::gil_scoped_acquire gil;
+
+    fun_.release().dec_ref();
+    if (vjp_fun_.has_value()) {
+      (*vjp_fun_).release().dec_ref();
+    }
+  }
+
+  struct InnerFunction {
+    nb::callable vjp_fun_;
+    nb::object input_structure_;
+    std::shared_ptr<nb::object> output_structure_;
+
+    InnerFunction(
+        nb::callable vjp_fun,
+        nb::object input_structure,
+        std::shared_ptr<nb::object> output_structure)
+        : vjp_fun_(std::move(vjp_fun)),
+          input_structure_(std::move(input_structure)),
+          output_structure_(std::move(output_structure)) {}
+    ~InnerFunction() {
+      nb::gil_scoped_acquire gil;
+
+      vjp_fun_.release().dec_ref();
+      input_structure_.release().dec_ref();
+      if (output_structure_.use_count() == 1) {
+        output_structure_->release().dec_ref();
+      }
+    }
+
+    std::vector<array> operator()(
+        const std::vector<array>& primals,
+        const std::vector<array>& cotangents,
+        const std::vector<array>& outputs) {
+      nb::gil_scoped_acquire gil;
+
+      auto new_inputs = nb::cast<nb::tuple>(
+          tree_unflatten_from_structure(input_structure_, primals));
+      auto args = nb::cast<nb::tuple>(new_inputs[0]);
+      auto new_cotangents =
+          tree_unflatten_from_structure(*output_structure_, cotangents);
+      auto new_outputs =
+          tree_unflatten_from_structure(*output_structure_, outputs);
+
+      if (args.size() == 1) {
+        return tree_flatten(
+            vjp_fun_(args[0], new_cotangents, new_outputs, **new_inputs[1]),
+            false);
+      } else {
+        return tree_flatten(
+            vjp_fun_(args, new_cotangents, new_outputs, **new_inputs[1]),
+            false);
+      }
+    }
+  };
+
+  nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
+    if (!vjp_fun_.has_value()) {
+      return fun_(*args, **kwargs);
+    }
+
+    // Extract the inputs and their structure in capturable vars
+    std::vector<array> input_arrays;
+    nb::object input_structure;
+    auto full_args = nb::make_tuple(args, kwargs);
+    std::tie(input_arrays, input_structure) =
+        tree_flatten_with_structure(full_args, false);
+
+    // The output structure will be stored here to be used in the custom vjp
+    // function
+    auto output_structure = std::make_shared<nb::object>();
+
+    // Make a function that calls fun_ in the forward pass and vjp_ in the
+    // backward pass. Then call it immediately and return the results.
+    auto custom_function = custom_vjp(
+        [fun = fun_, output_structure, input_structure](
+            const std::vector<array>& inputs) {
+          nb::gil_scoped_acquire gil;
+
+          auto new_inputs = nb::cast<nb::tuple>(
+              tree_unflatten_from_structure(input_structure, inputs));
+          std::vector<array> outputs;
+          std::tie(outputs, *output_structure) =
+              tree_flatten_with_structure(fun(*new_inputs[0], **new_inputs[1]));
+          return outputs;
+        },
+        InnerFunction(*vjp_fun_, input_structure, output_structure));
+
+    auto outputs = custom_function(input_arrays);
+    return tree_unflatten_from_structure(*output_structure, outputs);
+  }
+
+  PyCustomVJPFun& set_vjp(nb::callable vjp_fun) {
+    vjp_fun_ = vjp_fun;
+    return *this;
+  }
+
+ private:
+  nb::callable fun_;
+  std::optional<nb::callable> vjp_fun_;
+};
+
 void init_transforms(nb::module_& m) {
+  nb::class_<PyCustomVJPFun>(
+      m, "custom_vjp", R"pbdoc(Define custom vjp functions.)pbdoc")
+      .def(
+          nb::init<nb::callable>(),
+          "f"_a,
+          nb::sig("def __init__(self, f: callable)"))
+      .def("__call__", &PyCustomVJPFun::call_impl)
+      .def("vjp", &PyCustomVJPFun::set_vjp, "f"_a);
+
   m.def(
       "eval",
       [](const nb::args& args) {

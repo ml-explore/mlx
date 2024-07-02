@@ -1098,12 +1098,16 @@ std::vector<array> CustomVJP::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
+  // Extract the inpus to the VJP function
   std::vector<array> inputs(primals.begin(), primals.end() - outputs.size());
+
+  // Compute all the vjps
   auto all_vjps = vjp_fun_(inputs, cotangents, outputs);
   for (const auto& cot : cotangents) {
     all_vjps.emplace_back(cot);
   }
 
+  // Select the vjps requested
   std::vector<array> vjps;
   vjps.reserve(argnums.size());
   for (auto arg : argnums) {

@@ -33,8 +33,11 @@ class Synchronizer : public Primitive {
 // Initialize the static tracing counter from transforms_impl.h .
 //
 // This is used to implement the in_tracing() function the returns true if we
-// are currently under a function transformation.
+// are currently under a function transformation and the retain_graph()
+// function which returns true if we are forced to retain the graph during
+// evaluation.
 int detail::InTracing::tracing_counter{0};
+int detail::RetainGraph::tracing_counter{0};
 
 array eval_impl(std::vector<array> outputs, bool async) {
   std::queue<array> tape;
@@ -331,7 +334,11 @@ std::pair<std::vector<array>, std::vector<array>> vjp(
       }
     }
 
-    auto vjps = a.primitive().vjp(a.inputs(), cotangents, argnums, outputs);
+    std::vector<array> vjps;
+    {
+      detail::RetainGraph retain;
+      vjps = a.primitive().vjp(a.inputs(), cotangents, argnums, outputs);
+    }
     // Accumulate the vector-jacobian products for each input
     for (int i = 0; i < argnums.size(); ++i) {
       auto in_id = a.inputs()[argnums[i]].id();
