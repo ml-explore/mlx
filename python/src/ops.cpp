@@ -4377,14 +4377,15 @@ void init_ops(nb::module_& m) {
       )pbdoc");
   m.def(
       "hadamard_transform",
-      &hadamard,
+      &hadamard_transform,
       nb::arg(),
+      "scale"_a = 1.0,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def hadamard_transform(a: array, stream: Union[None, Stream, Device] = None) -> array"),
+          "def hadamard_transform(a: array, float scale = 1.0, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Perform the Walsh-Hadamard transform.
+        Perform the Walsh-Hadamard transform along the final axis.
 
         Equivalent to:
         ```python
@@ -4393,9 +4394,11 @@ void init_ops(nb::module_& m) {
         y = hadamard(len(x)) @ x
         ```
 
+        Supports sizes `n = m*2^k` where m in (1, 12, 20, 28).
+
         Args:
             a (array): Input array or scalar.
-            dtype (Dtype): The data type to change to.
+            scale (float): Scale the output by this factor.
 
         Returns:
             array: The array with the new type.

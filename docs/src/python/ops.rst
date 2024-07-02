@@ -72,6 +72,7 @@ Operations
    gather_qmm
    greater
    greater_equal
+   hadamard
    identity
    inner
    isclose

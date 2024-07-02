@@ -451,11 +451,14 @@ array flatten(const array& a, StreamOrDevice s /* = {} */) {
   return flatten(a, 0, a.ndim() - 1, s);
 }
 
-array hadamard(const array& a, StreamOrDevice s /* = {} */) {
+array hadamard_transform(
+    const array& a,
+    float scale /* = 1.0 */,
+    StreamOrDevice s /* = {} */) {
   return array(
       a.shape(),
       a.dtype(),
-      std::make_shared<Hadamard>(to_stream(s), a.ndim() - 1),
+      std::make_shared<Hadamard>(to_stream(s), scale),
       {a});
 }
 

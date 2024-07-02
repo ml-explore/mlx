@@ -6,8 +6,8 @@
 using namespace metal;
 
 // Thread local Hadamard transform for 2^R
-template <typename T, short R>
-METAL_FUNC void radix_func(thread T* x) {
+template <short R>
+METAL_FUNC void radix_func(thread float* x) {
   constexpr short logR = __builtin_ctz(R);
   short h = 1;
   STEEL_PRAGMA_UNROLL
@@ -16,8 +16,8 @@ METAL_FUNC void radix_func(thread T* x) {
     for (short i = 0; i < R / 2; i++) {
       short k = i & (h - 1);
       short j = ((i - k) << 1) + k;
-      T a = x[j];
-      T b = x[j + h];
+      float a = x[j];
+      float b = x[j + h];
       x[j] = a + b;
       x[j + h] = a - b;
     }
@@ -25,49 +25,19 @@ METAL_FUNC void radix_func(thread T* x) {
   }
 }
 
-template <typename T, int N, int M>
-[[kernel]] void hadamard_m(
-    const device T* in [[buffer(0)]],
-    device T* out [[buffer(1)]],
-    uint3 elem [[thread_position_in_grid]],
-    uint3 grid [[threads_per_grid]]) {
-  constexpr short read_width = 4;
-
-  int batch_idx = elem.x * M * N;
-  short i = elem.y;
-
-  T x[read_width][M];
-  STEEL_PRAGMA_UNROLL
-  for (short c = 0; c < M; c++) {
-    STEEL_PRAGMA_UNROLL
-    for (short r = 0; r < read_width; r++) {
-      x[r][c] = in[batch_idx + c * N + i * read_width + r];
-    }
-  }
-
-  for (short r = 0; r < read_width; r++) {
-    // This function is JIT compiled for M
-    // using the Hadamard matrix strings in `metal/hadamard.cpp`
-    hadamard_radix_m(x[r]);
-  }
-
-  // Write back to device
-  STEEL_PRAGMA_UNROLL
-  for (short c = 0; c < M; c++) {
-    STEEL_PRAGMA_UNROLL
-    for (short r = 0; r < read_width; r++) {
-      out[batch_idx + c * N + i * read_width + r] = x[r][c];
-    }
-  }
-}
-
-template <typename T, int N, int max_radix>
+template <typename T, int N, int max_radix, int read_width>
 [[kernel]] void hadamard_n(
     const device T* in [[buffer(0)]],
     device T* out [[buffer(1)]],
+    constant const float& scale,
     uint3 elem [[thread_position_in_grid]],
     uint3 grid [[threads_per_grid]]) {
-  constexpr short read_width = N == 2 ? 2 : 4;
+  // Compute a Hadamard transform of size N = 2^k
+  //
+  // Equivalent to:
+  //    from scipy.linalg import hadamard
+  //    y = hadamard(len(x)) @ x
+
   constexpr short num_threads = N / max_radix;
   constexpr short logN = __builtin_ctz(N);
   constexpr short logR = __builtin_ctz(max_radix);
@@ -92,7 +62,7 @@ template <typename T, int N, int max_radix>
 
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
-  T x[max_radix];
+  float x[max_radix];
   short h = 1;
 
   STEEL_PRAGMA_UNROLL
@@ -105,7 +75,7 @@ template <typename T, int N, int max_radix>
       x[r] = buf[j + h * r];
     }
 
-    radix_func<T, max_radix>(x);
+    radix_func<max_radix>(x);
 
     STEEL_PRAGMA_UNROLL
     for (short r = 0; r < max_radix; r++) {
@@ -117,10 +87,10 @@ template <typename T, int N, int max_radix>
   }
 
   // Do the final radix
-  // We need to do multiple per thread
   // e.g. max_radix = 16
   //      N = 1024 = 16 * 16 * 4
   if (final_radix > 1) {
+    // Each thread does multiple butterflies
     STEEL_PRAGMA_UNROLL
     for (int t = 0; t < max_radix / final_radix; t++) {
       short index = i + t * num_threads;
@@ -131,7 +101,7 @@ template <typename T, int N, int max_radix>
         x[r] = buf[j + h * r];
       }
 
-      radix_func<T, final_radix>(x);
+      radix_func<final_radix>(x);
 
       STEEL_PRAGMA_UNROLL
       for (short r = 0; r < final_radix; r++) {
@@ -147,7 +117,50 @@ template <typename T, int N, int max_radix>
     short index = j * read_width * num_threads + i * read_width;
     STEEL_PRAGMA_UNROLL
     for (short r = 0; r < read_width; r++) {
-      out[batch_idx + index + r] = buf[index + r];
+      out[batch_idx + index + r] = buf[index + r] * scale;
+    }
+  }
+}
+
+template <typename T, int N, int M, int read_width>
+[[kernel]] void hadamard_m(
+    const device T* in [[buffer(0)]],
+    device T* out [[buffer(1)]],
+    constant const float& scale,
+    uint3 elem [[thread_position_in_grid]],
+    uint3 grid [[threads_per_grid]]) {
+  // Compute a Hadamard transform of size M
+  // using a naive O(M^2) codelet.
+  //
+  // This kernel is the second stage in the computation
+  // of a Hadamard transform of size M*N where N = 2^k.
+
+  int index = elem.x * grid.y + elem.y;
+  short i = index % (N / read_width);
+  int batch_idx = index / (N / read_width) * M * N;
+
+  float x[read_width][M];
+  STEEL_PRAGMA_UNROLL
+  for (short c = 0; c < M; c++) {
+    STEEL_PRAGMA_UNROLL
+    for (short r = 0; r < read_width; r++) {
+      x[r][c] = in[batch_idx + c * N + i * read_width + r];
+    }
+  }
+
+  STEEL_PRAGMA_UNROLL
+  for (short r = 0; r < read_width; r++) {
+    // This function is JIT compiled for M
+    // using the Hadamard matrix strings in `metal/hadamard.cpp`
+    hadamard_radix_m(x[r]);
+  }
+
+  // Write back to device
+  STEEL_PRAGMA_UNROLL
+  for (short c = 0; c < M; c++) {
+    STEEL_PRAGMA_UNROLL
+    for (short r = 0; r < read_width; r++) {
+      out[batch_idx + c * N + i * read_width + r] = x[r][c] * scale;
     }
   }
 }

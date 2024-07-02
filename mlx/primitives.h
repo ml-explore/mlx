@@ -1065,8 +1065,8 @@ class GreaterEqual : public UnaryPrimitive {
 
 class Hadamard : public UnaryPrimitive {
  public:
-  explicit Hadamard(Stream stream, int axis)
-      : UnaryPrimitive(stream), axis_(axis) {}
+  explicit Hadamard(Stream stream, float scale)
+      : UnaryPrimitive(stream), scale_(scale) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1076,7 +1076,7 @@ class Hadamard : public UnaryPrimitive {
   DEFINE_INPUT_OUTPUT_SHAPE()
 
  private:
-  int axis_;
+  float scale_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };

@@ -3,7 +3,7 @@
 import math
 import os
 import unittest
-from itertools import permutations
+from itertools import permutations, product
 
 import mlx.core as mx
 import mlx_tests
@@ -2378,29 +2378,6 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertTrue(mx.array_equal(a_out, a, equal_nan=True))
 
     def test_hadamard(self):
-        # x = mx.array([[1, 0, 1, 0, 0, 1, 1, 0], [1, 0, 2, 0, 0, 1, 1, 0]]).astype(mx.float32)
-        # x = mx.array([1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1]).astype(mx.float32)
-        # y = mx.hadamard_transform(x)
-        # expected = mx.array([4, 2, 0, -2, 0, 2, 0, 2]).astype(mx.float32)
-        # # self.assertTrue(mx.array_equal(x, expected))
-        # print(y)
-
-        from scipy.linalg import hadamard
-
-        h12_str = """
-        +-++++++++++
-        --+-+-+-+-+-
-        +++-++----++
-        +---+--+-++-
-        +++++-++----
-        +-+---+--+-+
-        ++--+++-++--
-        +--++---+--+
-        ++----+++-++
-        +--+-++---+-
-        ++++----+++-
-        +-+--+-++---
-        """
         h28_str = """
         +------++----++-+--+-+--++--
         -+-----+++-----+-+--+-+--++-
@@ -2437,52 +2414,34 @@ class TestOps(mlx_tests.MLXTestCase):
                 [[1 if s == "+" else -1 for s in row] for row in h_str.split()]
             )
 
-        h12 = parse_h_string(h12_str)
+        def hadamard(N):
+            # Matches scipy.linalg.hadamard
+            H = np.array([[1]], dtype=np.int64)
+            for i in range(0, np.log2(N).astype(np.int64)):
+                H = np.vstack((np.hstack((H, H)), np.hstack((H, -H))))
+            return H
+
         h28 = parse_h_string(h28_str)
-        h = np.kron(h28, hadamard(1024))
 
         np.random.seed(7)
-        for k in range(1, 14):
-            # n = 2**k
-            n = 28 * 1024
-            b = 2
-            print(n)
-            x = np.random.randint(0, 2, size=(b, n)).astype(np.float32)
-            # x = np.concatenate([np.zeros(12), np.full(12, 1), np.full(12, 2), np.full(12, 3)])
-            y = mx.hadamard_transform(mx.array(x))
-            mx.eval(y)
-            print(h.shape, x.shape)
-            y_np = np.einsum("ij,bj->bi", h, x)
-            y_np = np.tensordot(h, x, (1, 1)).T
-            print(y_np)
-            np.testing.assert_allclose(y, y_np, atol=1e-4)
-            break
-
-        system_size = 2**20
-        for k in range(4, 14):
-            # n = 2**k
-            n = 28 * 1024
-            x_np = np.random.normal(size=(system_size // n, n)).astype(np.float32)
-            x = mx.array(x_np)
-            h = mx.array(h)
-            for _ in range(100):
-                y = mx.tensordot(h, x, [[1], [1]])
-                # y = mx.hadamard_transform(x)
+        tests = product([np.float32], [28], range(1, 14))
+        for dtype, m, k in tests:
+            # skip large m=28 cases because they're very slow in NumPy
+            if m > 1 and k > 10:
+                continue
+            with self.subTest(dtype=dtype, m=m, k=k):
+                n = m * 2**k
+                print(n)
+                b = 6
+                x = np.random.normal(size=(b, n)).astype(dtype)
+                # contiguity check
+                x = mx.array(x)[::2]
+                y = mx.hadamard_transform(x)
                 mx.eval(y)
-
-            import time
-
-            s = time.time()
-            for _ in range(100):
-                y = mx.tensordot(h, x, [[1], [1]])
-                # y = mx.hadamard_transform(x)
-                mx.eval(y)
-            e = time.time()
-            bandwidth_gb = (
-                (system_size * np.dtype(x_np.dtype).itemsize * 2 * 100) / (e - s) / 1e9
-            )
-            print(bandwidth_gb)
-            break
+                h = hadamard(2**k) if m == 1 else np.kron(h28, hadamard(2**k))
+                y_np = np.einsum("ij,bj->bi", h, x)
+                atol = 2e-4 if dtype == np.float32 else 5e-2 * k
+                np.testing.assert_allclose(y, y_np, atol=atol)
 
 
 if __name__ == "__main__":
