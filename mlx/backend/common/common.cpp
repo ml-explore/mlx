@@ -66,7 +66,7 @@ void Copy::eval(const std::vector<array>& inputs, array& out) {
   out.copy_shared_buffer(inputs[0]);
 }
 
-void CustomVJP::eval(
+void CustomTransforms::eval(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() > outputs.size());

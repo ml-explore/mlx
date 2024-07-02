@@ -785,14 +785,27 @@ std::function<array(const array&)> vmap(
   return [vfun](const array& a) { return vfun({a})[0]; };
 }
 
-std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
+std::function<std::vector<array>(const std::vector<array>&)> custom_transforms(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
-    std::function<std::vector<array>(
+    std::optional<std::function<std::vector<array>(
         const std::vector<array>&,
         const std::vector<array>&,
-        const std::vector<array>&)> fun_vjp) {
+        const std::vector<array>&)>> fun_vjp /* = std::nullopt */,
+    std::optional<std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<int>&)>> fun_jvp /* = std::nullopt */,
+    std::optional<std::function<std::pair<std::vector<array>, std::vector<int>>(
+        const std::vector<array>&,
+        const std::vector<int>&)>> fun_vmap /* = std::nullopt */) {
+  if (!fun_vjp.has_value() && !fun_jvp.has_value() && !fun_vmap.has_value()) {
+    return fun;
+  }
+
   return [fun = std::move(fun),
-          fun_vjp = std::move(fun_vjp)](const std::vector<array>& args) {
+          fun_vjp = std::move(fun_vjp),
+          fun_jvp = std::move(fun_jvp),
+          fun_vmap = std::move(fun_vmap)](const std::vector<array>& args) {
     // Compute the outputs
     auto outputs = fun(args);
     for (auto& out : outputs) {
@@ -821,9 +834,35 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
     return array::make_arrays(
         std::move(shapes),
         dtypes,
-        std::make_shared<CustomVJP>(to_stream(s), fun_vjp),
+        std::make_shared<CustomTransforms>(
+            to_stream(s),
+            outputs.size(),
+            fun_vjp.value_or(
+                [fun](auto primals, auto cotangents, auto outputs) {
+                  auto [__, vjps] = vjp(fun, primals, cotangents);
+                  return vjps;
+                }),
+            fun_jvp.value_or([fun](auto primals, auto tangents, auto argnums) {
+              auto [__, jvps] = jvp(fun, primals, tangents);
+              return jvps;
+            }),
+            fun_vmap.value_or(
+                [fun, out_size = outputs.size()](auto inputs, auto in_axes)
+                    -> std::pair<std::vector<array>, std::vector<int>> {
+                  std::vector<int> out_axes(out_size, 0);
+                  return {vmap(fun, in_axes, out_axes)(inputs), out_axes};
+                })),
         inputs);
   };
+}
+
+std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
+    std::function<std::vector<array>(const std::vector<array>&)> fun,
+    std::function<std::vector<array>(
+        const std::vector<array>&,
+        const std::vector<array>&,
+        const std::vector<array>&)> fun_vjp) {
+  return custom_transforms(fun, fun_vjp, std::nullopt, std::nullopt);
 }
 
 std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
