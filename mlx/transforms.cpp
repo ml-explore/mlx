@@ -785,7 +785,7 @@ std::function<array(const array&)> vmap(
   return [vfun](const array& a) { return vfun({a})[0]; };
 }
 
-std::function<std::vector<array>(const std::vector<array>&)> custom_transforms(
+std::function<std::vector<array>(const std::vector<array>&)> custom_function(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
     std::optional<std::function<std::vector<array>(
         const std::vector<array>&,
@@ -837,15 +837,37 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_transforms(
         std::make_shared<CustomTransforms>(
             to_stream(s),
             outputs.size(),
+
+            // We use the passed vjp function or compute it from the inputs and
+            // passed cotangents. Note that this may be less efficient than
+            // using `fun` directly because we may not be able to fully reuse
+            // the outputs of the forward pass.
             fun_vjp.value_or(
                 [fun](auto primals, auto cotangents, auto outputs) {
                   auto [__, vjps] = vjp(fun, primals, cotangents);
                   return vjps;
                 }),
+
+            // We use the passed jvp function or compute it from the primals
+            // and tangents. Similarly we can't take full advantage of the
+            // argnums so it is best to use `fun` directly if we don't need a
+            // custom transform.
             fun_jvp.value_or([fun](auto primals, auto tangents, auto argnums) {
-              auto [__, jvps] = jvp(fun, primals, tangents);
+              std::vector<array> selected_tangents;
+              for (const array& tan : tangents) {
+                selected_tangents.emplace_back(zeros_like(tan));
+              }
+              for (auto arg : argnums) {
+                selected_tangents[arg] = tangents[arg];
+              }
+              auto [__, jvps] = jvp(fun, primals, selected_tangents);
               return jvps;
             }),
+
+            // Same as above, we use the passed vmap function or we compute it
+            // from `fun`. The output axes is selected to be all 0s which again
+            // may be suboptimal but the only thing we can do without any
+            // information for `fun`.
             fun_vmap.value_or(
                 [fun, out_size = outputs.size()](auto inputs, auto in_axes)
                     -> std::pair<std::vector<array>, std::vector<int>> {
@@ -862,7 +884,7 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_vjp(
         const std::vector<array>&,
         const std::vector<array>&,
         const std::vector<array>&)> fun_vjp) {
-  return custom_transforms(fun, fun_vjp, std::nullopt, std::nullopt);
+  return custom_function(fun, fun_vjp, std::nullopt, std::nullopt);
 }
 
 std::function<std::vector<array>(const std::vector<array>&)> checkpoint(
