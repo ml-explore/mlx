@@ -593,31 +593,68 @@ class PyCheckpointedFun {
   nb::callable fun_;
 };
 
-class PyCustomVJPFun {
+class PyCustomFunction {
  public:
-  PyCustomVJPFun(nb::callable fun) : fun_(std::move(fun)) {}
-  ~PyCustomVJPFun() {
+  PyCustomFunction(nb::callable fun) : fun_(std::move(fun)) {}
+  ~PyCustomFunction() {
     nb::gil_scoped_acquire gil;
 
     fun_.release().dec_ref();
     if (vjp_fun_.has_value()) {
       (*vjp_fun_).release().dec_ref();
     }
+    if (jvp_fun_.has_value()) {
+      (*jvp_fun_).release().dec_ref();
+    }
   }
 
   struct InnerFunction {
-    nb::callable vjp_fun_;
+    nb::callable fun_;
     nb::object input_structure_;
     std::shared_ptr<nb::object> output_structure_;
 
     InnerFunction(
+        nb::callable fun,
+        nb::object input_structure,
+        std::shared_ptr<nb::object> output_structure)
+        : fun_(std::move(fun)),
+          input_structure_(std::move(input_structure)),
+          output_structure_(std::move(output_structure)) {}
+    ~InnerFunction() {
+      nb::gil_scoped_acquire gil;
+
+      fun_.release().dec_ref();
+      input_structure_.release().dec_ref();
+      if (output_structure_.use_count() == 1) {
+        output_structure_->release().dec_ref();
+      }
+    }
+
+    std::vector<array> operator()(const std::vector<array>& inputs) {
+      nb::gil_scoped_acquire gil;
+
+      auto new_inputs = nb::cast<nb::tuple>(
+          tree_unflatten_from_structure(input_structure_, inputs));
+      std::vector<array> outputs;
+      std::tie(outputs, *output_structure_) =
+          tree_flatten_with_structure(fun_(*new_inputs[0], **new_inputs[1]));
+      return outputs;
+    }
+  };
+
+  struct InnerVJPFunction {
+    nb::callable vjp_fun_;
+    nb::object input_structure_;
+    std::shared_ptr<nb::object> output_structure_;
+
+    InnerVJPFunction(
         nb::callable vjp_fun,
         nb::object input_structure,
         std::shared_ptr<nb::object> output_structure)
         : vjp_fun_(std::move(vjp_fun)),
           input_structure_(std::move(input_structure)),
           output_structure_(std::move(output_structure)) {}
-    ~InnerFunction() {
+    ~InnerVJPFunction() {
       nb::gil_scoped_acquire gil;
 
       vjp_fun_.release().dec_ref();
@@ -653,8 +690,134 @@ class PyCustomVJPFun {
     }
   };
 
+  struct InnerJVPFunction {
+    nb::callable jvp_fun_;
+    nb::object input_structure_;
+
+    InnerJVPFunction(nb::callable jvp_fun, nb::object input_structure)
+        : jvp_fun_(std::move(jvp_fun)),
+          input_structure_(std::move(input_structure)) {}
+    ~InnerJVPFunction() {
+      nb::gil_scoped_acquire gil;
+
+      jvp_fun_.release().dec_ref();
+      input_structure_.release().dec_ref();
+    }
+
+    std::vector<array> operator()(
+        const std::vector<array>& primals,
+        const std::vector<array>& tangents,
+        const std::vector<int>& argnums) {
+      nb::gil_scoped_acquire gil;
+
+      auto new_inputs = nb::cast<nb::tuple>(
+          tree_unflatten_from_structure(input_structure_, primals));
+      auto args = nb::cast<nb::tuple>(new_inputs[0]);
+      auto kwargs = nb::cast<nb::dict>(new_inputs[1]);
+      if (kwargs.size() > 0) {
+        throw std::invalid_argument(
+            "[custom jvp] Function should only accept positional arguments");
+      }
+
+      // Make a new pytree which has tangents or None when a tangent is not
+      // available.
+      std::vector<bool> have_tangents(primals.size(), false);
+      for (auto arg : argnums) {
+        have_tangents[arg] = true;
+      }
+      int array_index = 0;
+      int tangent_index = 0;
+      auto new_tangents =
+          nb::cast<nb::tuple>(tree_map(args, [&](nb::handle element) {
+            if (nb::isinstance<array>(element) &&
+                have_tangents[array_index++]) {
+              return nb::cast(tangents[tangent_index++]);
+            } else {
+              return nb::none();
+            }
+          }));
+
+      if (args.size() == 1) {
+        return tree_flatten(jvp_fun_(args[0], new_tangents[0]), false);
+      } else {
+        return tree_flatten(jvp_fun_(args, new_tangents), false);
+      }
+    }
+  };
+
+  struct InnerVmapFunction {
+    nb::callable vmap_fun_;
+    nb::object input_structure_;
+
+    InnerVmapFunction(nb::callable vmap_fun, nb::object input_structure)
+        : vmap_fun_(std::move(vmap_fun)),
+          input_structure_(std::move(input_structure)) {}
+    ~InnerVmapFunction() {
+      nb::gil_scoped_acquire gil;
+
+      vmap_fun_.release().dec_ref();
+      input_structure_.release().dec_ref();
+    }
+
+    std::pair<std::vector<array>, std::vector<int>> operator()(
+        const std::vector<array>& inputs,
+        const std::vector<int>& axes) {
+      nb::gil_scoped_acquire gil;
+
+      auto new_inputs = nb::cast<nb::tuple>(
+          tree_unflatten_from_structure(input_structure_, inputs));
+      auto args = nb::cast<nb::tuple>(new_inputs[0]);
+      auto kwargs = nb::cast<nb::dict>(new_inputs[1]);
+      if (kwargs.size() > 0) {
+        throw std::invalid_argument(
+            "[custom vmap] Function should only accept positional arguments");
+      }
+
+      int arr_index;
+      auto new_axes =
+          nb::cast<nb::tuple>(tree_map(args, [&](nb::handle element) {
+            int axis = axes[arr_index++];
+            if (nb::isinstance<array>(element) && axis >= 0) {
+              return nb::cast(axis);
+            } else {
+              return nb::none();
+            }
+          }));
+
+      nb::object result;
+      if (args.size() == 1) {
+        result = vmap_fun_(args[0], new_axes[0]);
+      } else {
+        result = vmap_fun_(args, new_axes);
+      }
+
+      if (!nb::isinstance<nb::tuple>(result)) {
+        throw std::invalid_argument(
+            "[custom vmap] Vmap function should return a tuple with 2 items.");
+      }
+      nb::tuple result_tuple = nb::cast<nb::tuple>(result);
+      if (result_tuple.size() != 2) {
+        throw std::invalid_argument(
+            "[custom vmap] Vmap function should return a tuple with 2 items.");
+      }
+
+      std::vector<array> outputs;
+      std::vector<int> output_axes;
+      tree_visit({result_tuple[0], result_tuple[1]}, [&](auto objects) {
+        if (nb::isinstance<array>(objects[0])) {
+          outputs.push_back(nb::cast<array>(objects[0]));
+          output_axes.push_back(
+              objects[1].is_none() ? -1 : nb::cast<int>(objects[1]));
+        }
+      });
+
+      return {outputs, output_axes};
+    }
+  };
+
   nb::object call_impl(const nb::args& args, const nb::kwargs& kwargs) {
-    if (!vjp_fun_.has_value()) {
+    if (!vjp_fun_.has_value() && !jvp_fun_.has_value() &&
+        !vmap_fun_.has_value()) {
       return fun_(*args, **kwargs);
     }
 
@@ -671,43 +834,77 @@ class PyCustomVJPFun {
 
     // Make a function that calls fun_ in the forward pass and vjp_ in the
     // backward pass. Then call it immediately and return the results.
-    auto custom_function = custom_vjp(
-        [fun = fun_, output_structure, input_structure](
-            const std::vector<array>& inputs) {
-          nb::gil_scoped_acquire gil;
+    auto f = custom_function(
+        InnerFunction(fun_, input_structure, output_structure),
+        make_vjp_function(input_structure, output_structure),
+        make_jvp_function(input_structure),
+        make_vmap_function(input_structure));
 
-          auto new_inputs = nb::cast<nb::tuple>(
-              tree_unflatten_from_structure(input_structure, inputs));
-          std::vector<array> outputs;
-          std::tie(outputs, *output_structure) =
-              tree_flatten_with_structure(fun(*new_inputs[0], **new_inputs[1]));
-          return outputs;
-        },
-        InnerFunction(*vjp_fun_, input_structure, output_structure));
-
-    auto outputs = custom_function(input_arrays);
+    auto outputs = f(input_arrays);
     return tree_unflatten_from_structure(*output_structure, outputs);
   }
 
-  PyCustomVJPFun& set_vjp(nb::callable vjp_fun) {
+  PyCustomFunction& set_vjp(nb::callable vjp_fun) {
     vjp_fun_ = vjp_fun;
     return *this;
   }
 
+  PyCustomFunction& set_jvp(nb::callable jvp_fun) {
+    jvp_fun_ = jvp_fun;
+    return *this;
+  }
+
+  PyCustomFunction& set_vmap(nb::callable vmap_fun) {
+    vmap_fun_ = vmap_fun;
+    return *this;
+  }
+
  private:
+  std::optional<InnerVJPFunction> make_vjp_function(
+      nb::object input_structure,
+      std::shared_ptr<nb::object> output_structure) {
+    if (!vjp_fun_.has_value()) {
+      return std::nullopt;
+    }
+
+    return InnerVJPFunction(*vjp_fun_, input_structure, output_structure);
+  }
+
+  std::optional<InnerJVPFunction> make_jvp_function(
+      nb::object input_structure) {
+    if (!jvp_fun_.has_value()) {
+      return std::nullopt;
+    }
+
+    return InnerJVPFunction(*jvp_fun_, input_structure);
+  }
+
+  std::optional<InnerVmapFunction> make_vmap_function(
+      nb::object input_structure) {
+    if (!vmap_fun_.has_value()) {
+      return std::nullopt;
+    }
+
+    return InnerVmapFunction(*vmap_fun_, input_structure);
+  }
+
   nb::callable fun_;
   std::optional<nb::callable> vjp_fun_;
+  std::optional<nb::callable> jvp_fun_;
+  std::optional<nb::callable> vmap_fun_;
 };
 
 void init_transforms(nb::module_& m) {
-  nb::class_<PyCustomVJPFun>(
-      m, "custom_vjp", R"pbdoc(Define custom vjp functions.)pbdoc")
+  nb::class_<PyCustomFunction>(
+      m, "custom_function", R"pbdoc(Define custom vjp functions.)pbdoc")
       .def(
           nb::init<nb::callable>(),
           "f"_a,
           nb::sig("def __init__(self, f: callable)"))
-      .def("__call__", &PyCustomVJPFun::call_impl)
-      .def("vjp", &PyCustomVJPFun::set_vjp, "f"_a);
+      .def("__call__", &PyCustomFunction::call_impl)
+      .def("vjp", &PyCustomFunction::set_vjp, "f"_a)
+      .def("jvp", &PyCustomFunction::set_jvp, "f"_a)
+      .def("vmap", &PyCustomFunction::set_vmap, "f"_a);
 
   m.def(
       "eval",

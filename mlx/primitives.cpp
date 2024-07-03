@@ -1130,9 +1130,10 @@ std::vector<array> CustomTransforms::jvp(
 
 std::pair<std::vector<array>, std::vector<int>> CustomTransforms::vmap(
     const std::vector<array>& inputs_,
-    const std::vector<int>& axes) {
+    const std::vector<int>& axes_) {
   // Extract the inpus to the vmap function
   std::vector<array> inputs(inputs_.begin(), inputs_.end() - num_outputs_);
+  std::vector<int> axes(axes_.begin(), axes_.end() - num_outputs_);
   return vmap_fun_(inputs, axes);
 }
 
