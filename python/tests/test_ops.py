@@ -2440,7 +2440,11 @@ class TestOps(mlx_tests.MLXTestCase):
                 with mx.stream(mx.gpu):
                     y = mx.hadamard_transform(x)
                 mx.eval(y)
-                h = self._hadamard(2**k) if m == 1 else np.kron(h28, hadamard(2**k))
+                h = (
+                    self._hadamard(2**k)
+                    if m == 1
+                    else np.kron(h28, self._hadamard(2**k))
+                )
                 y_np = np.einsum("ij,bj->bi", h, x)
                 atol = 2e-4 if dtype == np.float32 else 5e-2 * k
                 np.testing.assert_allclose(y, y_np, atol=atol)
