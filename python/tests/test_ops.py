@@ -2425,10 +2425,10 @@ class TestOps(mlx_tests.MLXTestCase):
         h28 = parse_h_string(h28_str)
 
         np.random.seed(7)
-        tests = product([np.float32], [28], range(1, 14))
+        tests = product([np.float32, np.float16], [1, 28], range(1, 15))
         for dtype, m, k in tests:
             # skip large m=28 cases because they're very slow in NumPy
-            if m > 1 and k > 10:
+            if (m > 1 and k > 10) or (dtype == np.float32 and k == 14):
                 continue
             with self.subTest(dtype=dtype, m=m, k=k):
                 n = m * 2**k
@@ -2437,7 +2437,8 @@ class TestOps(mlx_tests.MLXTestCase):
                 x = np.random.normal(size=(b, n)).astype(dtype)
                 # contiguity check
                 x = mx.array(x)[::2]
-                y = mx.hadamard_transform(x)
+                with mx.stream(mx.gpu):
+                    y = mx.hadamard_transform(x)
                 mx.eval(y)
                 h = hadamard(2**k) if m == 1 else np.kron(h28, hadamard(2**k))
                 y_np = np.einsum("ij,bj->bi", h, x)
