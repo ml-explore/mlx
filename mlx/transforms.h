@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include "mlx/array.h"
 
 namespace mlx::core {
