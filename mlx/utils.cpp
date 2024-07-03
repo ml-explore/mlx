@@ -172,7 +172,7 @@ inline size_t elem_to_loc(
 
 template <typename T>
 void print_subarray(std::ostream& os, const array& a, size_t index, int dim) {
-  int num_print = 24;
+  int num_print = 3;
   int n = a.shape(dim);
   size_t s = a.strides()[dim];
   bool is_last = dim == a.ndim() - 1;

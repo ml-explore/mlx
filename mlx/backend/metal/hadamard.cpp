@@ -9,8 +9,6 @@
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
-#include <iostream>
-
 namespace mlx::core {
 
 constexpr int MAX_HADAMARD_THREADS_PER_GROUP = 256;
