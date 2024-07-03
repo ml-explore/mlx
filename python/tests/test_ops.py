@@ -2445,6 +2445,7 @@ class TestOps(mlx_tests.MLXTestCase):
                 atol = 2e-4 if dtype == np.float32 else 5e-2 * k
                 np.testing.assert_allclose(y, y_np, atol=atol)
 
+    @unittest.skipIf(not mx.metal.is_available(), "Hadamard only implemented for GPU")
     def test_hadamard_grad_vmap(self):
         np.random.seed(4)
 
