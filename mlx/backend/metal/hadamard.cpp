@@ -12,7 +12,7 @@
 namespace mlx::core {
 
 constexpr int MAX_HADAMARD_THREADS_PER_GROUP = 256;
-constexpr int MAX_HADAMARD_SIZE = 8192;
+constexpr int MAX_HADAMARD_BYTES = 32768; // 32KB
 
 // From http://neilsloane.com/hadamard/
 constexpr std::string_view h12 = R"(
@@ -200,8 +200,7 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
           "[hadamard] Only supports n = m*2^k where m in (1, 12, 20, 28).");
     }
   }
-  if ((n > MAX_HADAMARD_SIZE && in.dtype() == float32) ||
-      n > MAX_HADAMARD_SIZE * 2) {
+  if (n * (int)size_of(in.dtype()) > MAX_HADAMARD_BYTES) {
     throw std::invalid_argument(
         "[hadamard] For n = m*2^k, 2^k > 8192 for FP32 or 2^k > 16384 for FP16/BF16 NYI");
   }

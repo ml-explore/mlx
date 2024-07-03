@@ -455,11 +455,12 @@ array hadamard_transform(
     const array& a,
     float scale /* = 1.0 */,
     StreamOrDevice s /* = {} */) {
+  auto dtype = issubdtype(a.dtype(), floating) ? a.dtype() : float32;
   return array(
       a.shape(),
-      a.dtype(),
+      dtype,
       std::make_shared<Hadamard>(to_stream(s), scale),
-      {a});
+      {astype(a, dtype, s)});
 }
 
 array squeeze(

@@ -1071,6 +1071,8 @@ class Hadamard : public UnaryPrimitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
+  DEFINE_VMAP()
+  DEFINE_GRADS()
   DEFINE_PRINT(Hadamard)
   DEFINE_DEFAULT_IS_EQUIVALENT()
   DEFINE_INPUT_OUTPUT_SHAPE()
