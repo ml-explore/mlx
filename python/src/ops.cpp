@@ -4394,7 +4394,8 @@ void init_ops(nb::module_& m) {
         y = hadamard(len(x)) @ x
         ```
 
-        Supports sizes `n = m*2^k` where m in (1, 12, 20, 28).
+        Supports sizes `n = m*2^k` where m in (1, 12, 20, 28)
+          and 2^k <= 8192 for FP32 and 2^k <= 16384 for FP16/BF16.
 
         Args:
             a (array): Input array or scalar.

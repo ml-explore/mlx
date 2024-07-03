@@ -2377,6 +2377,7 @@ class TestOps(mlx_tests.MLXTestCase):
             a_out = out.view(mx.int32)
             self.assertTrue(mx.array_equal(a_out, a, equal_nan=True))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Hadamard only implemented for GPU")
     def test_hadamard(self):
         h28_str = """
         +------++----++-+--+-+--++--
