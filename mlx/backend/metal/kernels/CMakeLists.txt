@@ -51,7 +51,7 @@ build_kernel(
 )
 
 set(
-  STEEL_HEADERS 
+  STEEL_HEADERS
   steel/defines.h
   steel/utils.h
   steel/conv/conv.h
@@ -74,6 +74,7 @@ if (NOT MLX_METAL_JIT)
 build_kernel(arange arange.h)
 build_kernel(binary binary.h binary_ops.h)
 build_kernel(binary_two binary_two.h)
+build_kernel(cholesky)
 build_kernel(copy copy.h)
 build_kernel(
   fft

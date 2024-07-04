@@ -53,7 +53,7 @@ make_jit_source(
 make_jit_source(scatter)
 make_jit_source(gather)
 
-if (MLX_METAL_JIT) 
+if (MLX_METAL_JIT)
   target_sources(
     mlx
     PRIVATE
@@ -126,6 +126,7 @@ target_sources(
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/allocator.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/binary.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
