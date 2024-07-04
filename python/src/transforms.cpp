@@ -593,6 +593,33 @@ class PyCheckpointedFun {
   nb::callable fun_;
 };
 
+/**
+ * PyCustomFunction is the class that implements the python decorator
+ * `mx.custom_function`.
+ *
+ * It implements a callable that instead of simply calling `fun` it creates a
+ * CustomTransforms primitive via the `custom_function` C++ op which allows us
+ * to redefine the vjp, jvp and vmap transformations.
+ *
+ * The implementation is verbose due to explicit handling of the destruction of
+ * various python objects to make sure that there is no double-free and that
+ * all of them are deleted while under GIL.
+ *
+ * Namely, for every one of the functions passed to the C++ `custom_function`
+ * we create a callable struct that holds the following python objects (when
+ * needed).
+ *
+ *    - An nb::callable which holds the passed function or transform
+ *    - An nb::object holding input structure, namely the `(args, kwargs)`
+ *      passed to the function in order to be able to recreate the arguments
+ *      from the input arrays.
+ *    - A std::shared_ptr<nb::object> holding the output structure name the
+ *      structure of the return value of `fun`. It is a shared_ptr so that it
+ *      can be set when the function is called and then used in the `vjp`
+ *      transform. We delete the object only when the shared_ptr is about to be
+ *      deleted see `output_structure_.use_count() == 1` to make sure that the
+ *      object is deleted under GIL.
+ */
 class PyCustomFunction {
  public:
   PyCustomFunction(nb::callable fun) : fun_(std::move(fun)) {}
@@ -605,6 +632,9 @@ class PyCustomFunction {
     }
     if (jvp_fun_.has_value()) {
       (*jvp_fun_).release().dec_ref();
+    }
+    if (vmap_fun_.has_value()) {
+      (*vmap_fun_).release().dec_ref();
     }
   }
 

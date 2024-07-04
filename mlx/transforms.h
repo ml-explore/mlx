@@ -184,7 +184,10 @@ std::function<std::vector<array>(const std::vector<array>&)> vmap(
  * Redefine the transformations of `fun` according to the provided functions.
  *
  * Namely when calling the vjp of `fun` then `fun_vjp` will be called,
- * `fun_jvp` for the jvp and so on and so forth.
+ * `fun_jvp` for the jvp and `fun_vmap` for vmap.
+ *
+ * If any transformation is not provided, then a default one is created by
+ * calling `vjp`, `jvp` and `vmap` on the function directly.
  */
 std::function<std::vector<array>(const std::vector<array>&)> custom_function(
     std::function<std::vector<array>(const std::vector<array>&)> fun,
