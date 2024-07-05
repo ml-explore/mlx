@@ -167,6 +167,39 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
+    def test_cross_product(self):
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.array([4.0, 5.0, 6.0])
+        expected = mx.array([-3.0, 6.0, -3.0])
+        result = mx.linalg.cross_product(a, b)
+        self.assertTrue(mx.allclose(result, expected))
+
+        # Test with negative values
+        a = mx.array([-1.0, -2.0, -3.0])
+        b = mx.array([4.0, -5.0, 6.0])
+        expected = mx.array([3.0, 6.0, 13.0])
+        result = mx.linalg.cross_product(a, b)
+        self.assertTrue(mx.allclose(result, expected))
+
+        # Test with integer values
+        a = mx.array([1, 2, 3])
+        b = mx.array([4, 5, 6])
+        expected = mx.array([-3, 6, -3])
+        result = mx.linalg.cross_product(a, b)
+        self.assertTrue(mx.allclose(result, expected))
+
+        # Test with different data types (should raise an exception)
+        a = mx.array([1.0, 2.0, 3.0], dtype=mx.float32)
+        b = mx.array([4, 5, 6], dtype=mx.int32)
+        with self.assertRaises(ValueError):
+            mx.linalg.cross_product(a, b)
+
+        # Test with incorrect vector size (should raise an exception)
+        a = mx.array([1.0, 2.0])
+        b = mx.array([4.0, 5.0])
+        with self.assertRaises(ValueError):
+            mx.linalg.cross_product(a, b)
+
 
 if __name__ == "__main__":
     unittest.main()
