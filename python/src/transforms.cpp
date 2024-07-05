@@ -926,7 +926,12 @@ class PyCustomFunction {
 
 void init_transforms(nb::module_& m) {
   nb::class_<PyCustomFunction>(
-      m, "custom_function", R"pbdoc(Define custom vjp functions.)pbdoc")
+      m,
+      "custom_function",
+      R"pbdoc(
+      Decorator to override the function transformations for a function.
+      Define custom vjp functions.
+      )pbdoc")
       .def(
           nb::init<nb::callable>(),
           "f"_a,
