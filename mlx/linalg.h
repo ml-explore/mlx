@@ -81,9 +81,6 @@ array cholesky_inv(const array& a, bool upper = false, StreamOrDevice s = {});
  * - The function takes two input arrays and returns the cross product.
  * - The function requires both input arrays to be of the same shape.
  */
-array cross_product(
-    const array& a,
-    const array& b,
-    StreamOrDevice s = {});
+array cross_product(const array& a, const array& b, StreamOrDevice s = {});
 
 } // namespace mlx::core::linalg

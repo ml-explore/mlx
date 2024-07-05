@@ -398,11 +398,8 @@ TEST_CASE("[mlx.core.linalg.cross_product] basic tests") {
   array a = array({1.0, 2.0, 3.0});
   array b = array({4.0, 5.0, 6.0});
 
-  array expected = array({
-    2.0 * 6.0 - 3.0 * 5.0,
-    3.0 * 4.0 - 1.0 * 6.0,
-    1.0 * 5.0 - 2.0 * 4.0
-  });
+  array expected = array(
+      {2.0 * 6.0 - 3.0 * 5.0, 3.0 * 4.0 - 1.0 * 6.0, 1.0 * 5.0 - 2.0 * 4.0});
 
   array result = cross_product(a, b);
   CHECK(allclose(result, expected).item<bool>());
@@ -411,11 +408,10 @@ TEST_CASE("[mlx.core.linalg.cross_product] basic tests") {
   a = array({-1.0, -2.0, -3.0});
   b = array({4.0, -5.0, 6.0});
 
-  expected = array({
-    -2.0 * 6.0 - (-3.0 * -5.0),
-    -3.0 * 4.0 - (-1.0 * 6.0),
-    -1.0 * -5.0 - (-2.0 * 4.0)
-  });
+  expected = array(
+      {-2.0 * 6.0 - (-3.0 * -5.0),
+       -3.0 * 4.0 - (-1.0 * 6.0),
+       -1.0 * -5.0 - (-2.0 * 4.0)});
 
   result = cross_product(a, b);
   CHECK(allclose(result, expected).item<bool>());
@@ -438,7 +434,7 @@ TEST_CASE("[mlx.core.linalg.cross_product] basic tests") {
   CHECK(allclose(result, expected).item<bool>());
 
   // Test for vectors of different data types (should throw)
-  array d = array({1.0, 2.0, 3.0}, dtype=float32);
-  array e = array({4, 5, 6}, dtype=int32);
+  array d = array({1.0, 2.0, 3.0}, dtype = float32);
+  array e = array({4, 5, 6}, dtype = int32);
   CHECK_THROWS(cross_product(d, e));
 }

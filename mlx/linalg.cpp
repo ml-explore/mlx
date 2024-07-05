@@ -387,13 +387,16 @@ array cross_product(
     const array& b,
     StreamOrDevice s /* = {} */) {
   if (a.shape().size() != 1 || b.shape().size() != 1) {
-    throw std::invalid_argument("[linalg::cross_product] Inputs must be 1D vectors.");
+    throw std::invalid_argument(
+        "[linalg::cross_product] Inputs must be 1D vectors.");
   }
   if (a.size() != 3 || b.size() != 3) {
-    throw std::invalid_argument("[linalg::cross_product] Cross product is defined for 3-dimensional vectors only.");
+    throw std::invalid_argument(
+        "[linalg::cross_product] Cross product is defined for 3-dimensional vectors only.");
   }
   if (a.dtype() != b.dtype()) {
-    throw std::invalid_argument("[linalg::cross_product] Input vectors must have the same data type.");
+    throw std::invalid_argument(
+        "[linalg::cross_product] Input vectors must have the same data type.");
   }
 
   auto dtype = at_least_float(a.dtype());
