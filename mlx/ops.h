@@ -406,12 +406,12 @@ array where(
     const array& y,
     StreamOrDevice s = {});
 
-/** TODO */
+/** Replace NaN and infinities with finite numbers. */
 array nan_to_num(
     const array& a,
-    const array& nan,
-    const array& posinf,
-    const array& neginf,
+    const float& nan,
+    const float& posinf,
+    const float& neginf,
     StreamOrDevice s = {});
 
 /** True if all elements in the array are true (or non-zero). **/

@@ -3590,17 +3590,33 @@ void init_ops(nb::module_& m) {
   m.def(
       "nan_to_num",
       [](const ScalarOrArray& a,
-         const ScalarOrArray& nan,
-         const ScalarOrArray& posinf,
-         const ScalarOrArray& neginf,
+         std::variant<std::monostate, int, float>& nan_,
+         std::variant<std::monostate, int, float>& posinf_,
+         std::variant<std::monostate, int, float>& neginf_,
          StreamOrDevice s) {
-        return nan_to_num(
-            to_array(a), to_array(nan), to_array(posinf), to_array(neginf), s);
+        // It seems very hard to figure out the dtype of a here, so I moved it
+        // to mlx/ops.cpp
+        if (std::holds_alternative<std::monostate>(posinf_)) {
+          posinf_ = std::numeric_limits<float>::max();
+        } else if (std::holds_alternative<int>(posinf_)) {
+          posinf_ = static_cast<float>(std::get<int>(posinf_));
+        }
+        if (std::holds_alternative<std::monostate>(neginf_)) {
+          neginf_ = -std::numeric_limits<float>::max();
+        } else if (std::holds_alternative<int>(neginf_)) {
+          neginf_ = static_cast<float>(std::get<int>(neginf_));
+        }
+
+        const float nan = std::get<float>(nan_);
+        const float posinf = std::get<float>(posinf_);
+        const float neginf = std::get<float>(neginf_);
+
+        return nan_to_num(to_array(a), nan, posinf, neginf, s);
       },
       nb::arg(),
-      "nan"_a = 0,
-      "posinf"_a = std::numeric_limits<float>::max(),
-      "neginf"_a = -std::numeric_limits<float>::max(),
+      "nan"_a = 0.0f,
+      "posinf"_a = nb::none(),
+      "neginf"_a = nb::none(),
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(

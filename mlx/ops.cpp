@@ -1344,13 +1344,39 @@ array where(
 
 array nan_to_num(
     const array& a,
-    const array& nan,
-    const array& posinf,
-    const array& neginf,
+    const float& nan,
+    const float& posinf,
+    const float& neginf,
     StreamOrDevice s /* = {} */) {
-  auto out = where(isnan(a, s), nan, a, s);
-  out = where(isposinf(a, s), posinf, out, s);
-  out = where(isneginf(a, s), neginf, out, s);
+  Dtype dtype = a.dtype();
+
+  if (!issubdtype(dtype, inexact)) {
+    return a;
+  }
+
+  nan_ = array(nan, dtype);
+  posinf_ = array(posinf, dtype);
+  neginf_ = array(neginf, dtype);
+
+  // How to find the max value of a the same dtype as a?
+
+  // Checking if input values are too large for float16 and bfloat16
+  if (nan_ == std::numeric_limits<dtype>::infinity() ||
+      nan_ == -std::numeric_limits<dtype>::infinity()) {
+    nan_ = array(0.0, dtype);
+  }
+  if (posinf_ == std::numeric_limits<dtype>::infinity() ||
+      posinf_ == -std::numeric_limits<dtype>::infinity()) {
+    posinf_ = array(std::numeric_limits<dtype>::max());
+  }
+  if (neginf_ == std::numeric_limits<dtype>::infinity() ||
+      neginf_ == -std::numeric_limits<dtype>::infinity()) {
+    neginf_ = array(-std::numeric_limits<dtype>::max());
+  }
+
+  auto out = where(isnan(a, s), nan_, a, s);
+  out = where(isposinf(a, s), posinf_, out, s);
+  out = where(isneginf(a, s), neginf_, out, s);
 
   return out;
 }

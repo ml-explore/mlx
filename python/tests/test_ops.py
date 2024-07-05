@@ -1640,8 +1640,6 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(a_bwd[4:-2, 2:-4], df[0]).item())
 
     def test_where(self):
-        # print(mx.where(True, mx.array([[1, 2], [3, 4]]), 1))
-        # print(mx.where(True, 1, mx.array([[1, 2], [3, 4]])))
         self.assertCmpNumpy([True, mx.array([[1, 2], [3, 4]]), 1], mx.where, np.where)
         self.assertCmpNumpy([True, 1, mx.array([[1, 2], [3, 4]])], mx.where, np.where)
         self.assertCmpNumpy(
@@ -1656,10 +1654,47 @@ class TestOps(mlx_tests.MLXTestCase):
 
     def test_nan_to_num(self):
         self.assertCmpNumpy(
-            [mx.array([6, float("nan"), 2, 0])], mx.nan_to_num, np.nan_to_num
+            [mx.array([6, float("inf"), 2, 0], dtype=mx.int32)],
+            mx.nan_to_num,
+            np.nan_to_num,
         )
         self.assertCmpNumpy(
-            [mx.array([float("inf"), 65467.9, 2, float("-inf")])],
+            [mx.array([float("inf"), 6.9, float("nan"), float("-inf")])],
+            mx.nan_to_num,
+            np.nan_to_num,
+        )
+        self.assertTrue(
+            np.array_equal(
+                np.nan_to_num(
+                    mx.array([float("inf"), 6.9, float("nan"), float("-inf")]),
+                    False,
+                    nan=0.0,
+                    posinf=1000,
+                    neginf=-1000,
+                ),
+                mx.nan_to_num(
+                    mx.array([float("inf"), 6.9, float("nan"), float("-inf")]),
+                    nan=0.0,
+                    posinf=1000,
+                    neginf=-1000,
+                ),
+            )
+        )
+        self.assertCmpNumpy(
+            [
+                mx.array(
+                    [float("inf"), 6.9, float("nan"), float("-inf")], dtype=mx.float16
+                )
+            ],
+            mx.nan_to_num,
+            np.nan_to_num,
+        )
+        self.assertCmpNumpy(
+            [
+                mx.array(
+                    [6, float("inf"), float("nan"), float("-inf")], dtype=mx.bfloat16
+                )
+            ],
             mx.nan_to_num,
             np.nan_to_num,
         )
