@@ -273,7 +273,18 @@ void Reshape::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto [copy_necessary, out_strides] = prepare_reshape(in, out);
 
   if (copy_necessary) {
-    copy_gpu(in, out, CopyType::General);
+    out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    auto out_strides = make_contiguous_strides<size_t>(in.shape());
+    copy_gpu_inplace(
+        in,
+        out,
+        in.shape(),
+        in.strides(),
+        out_strides,
+        0,
+        0,
+        CopyType::General,
+        stream());
   } else {
     shared_buffer_reshape(in, out_strides, out);
   }

@@ -154,11 +154,8 @@ void copy_gpu_inplace(
     array& out,
     CopyType ctype,
     const Stream& s) {
-  std::vector<size_t> out_strides = (in.shape() == out.shape())
-      ? out.strides()
-      : make_contiguous_strides<size_t>(in.shape());
   return copy_gpu_inplace(
-      in, out, in.shape(), in.strides(), out_strides, 0, 0, ctype, s);
+      in, out, in.shape(), in.strides(), out.strides(), 0, 0, ctype, s);
 }
 
 void copy_gpu_inplace(
@@ -168,9 +165,7 @@ void copy_gpu_inplace(
     int64_t ioffset,
     CopyType ctype,
     const Stream& s) {
-  std::vector<int64_t> ostrides = (in.shape() == out.shape())
-      ? std::vector<int64_t>{out.strides().begin(), out.strides().end()}
-      : make_contiguous_strides<int64_t>(in.shape());
+  std::vector<int64_t> ostrides{out.strides().begin(), out.strides().end()};
   return copy_gpu_inplace(
       in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s);
 }
