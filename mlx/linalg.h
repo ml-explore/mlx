@@ -74,4 +74,16 @@ array pinv(const array& a, StreamOrDevice s = {});
 
 array cholesky_inv(const array& a, bool upper = false, StreamOrDevice s = {});
 
+/**
+ * Compute the cross product of two vectors.
+ *
+ * - The cross product is defined only for 3-dimensional vectors.
+ * - The function takes two input arrays and returns the cross product.
+ * - The function requires both input arrays to be of the same shape.
+ */
+array cross_product(
+    const array& a,
+    const array& b,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::linalg

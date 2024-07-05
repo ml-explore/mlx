@@ -382,4 +382,29 @@ array cholesky_inv(
   }
 }
 
+array cross_product(
+    const array& a,
+    const array& b,
+    StreamOrDevice s /* = {} */) {
+  if (a.shape().size() != 1 || b.shape().size() != 1) {
+    throw std::invalid_argument("[linalg::cross_product] Inputs must be 1D vectors.");
+  }
+  if (a.size() != 3 || b.size() != 3) {
+    throw std::invalid_argument("[linalg::cross_product] Cross product is defined for 3-dimensional vectors only.");
+  }
+  if (a.dtype() != b.dtype()) {
+    throw std::invalid_argument("[linalg::cross_product] Input vectors must have the same data type.");
+  }
+
+  auto dtype = at_least_float(a.dtype());
+
+  // Cross product formula
+  array c = array::empty({3}, dtype, s);
+  c[0] = a[1] * b[2] - a[2] * b[1];
+  c[1] = a[2] * b[0] - a[0] * b[2];
+  c[2] = a[0] * b[1] - a[1] * b[0];
+
+  return c;
+}
+
 } // namespace mlx::core::linalg
