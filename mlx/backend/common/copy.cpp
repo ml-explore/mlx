@@ -4,6 +4,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/utils.h"
 
 namespace mlx::core {
 
@@ -142,29 +143,31 @@ void copy_general(
     const std::vector<int>& data_shape,
     const std::vector<stride_t>& i_strides,
     int64_t i_offset) {
-  switch (src.ndim()) {
+  auto [new_shape, new_strides] = collapse_contiguous_dims(
+      data_shape, std::vector<std::vector<stride_t>>{i_strides});
+  switch (new_shape.size()) {
     case 1:
       copy_general_dim1<SrcT, DstT, stride_t>(
-          src, dst, data_shape, i_strides, i_offset);
+          src, dst, new_shape, new_strides[0], i_offset);
       return;
     case 2:
       copy_general_dim2<SrcT, DstT, stride_t>(
-          src, dst, data_shape, i_strides, i_offset);
+          src, dst, new_shape, new_strides[0], i_offset);
       return;
     case 3:
       copy_general_dim3<SrcT, DstT, stride_t>(
-          src, dst, data_shape, i_strides, i_offset);
+          src, dst, new_shape, new_strides[0], i_offset);
       return;
     case 4:
       copy_general_dim4<SrcT, DstT, stride_t>(
-          src, dst, data_shape, i_strides, i_offset);
+          src, dst, new_shape, new_strides[0], i_offset);
       return;
   }
 
   auto src_ptr = src.data<SrcT>() + i_offset;
   auto dst_ptr = dst.data<DstT>();
   for (size_t i = 0; i < dst.size(); ++i) {
-    stride_t src_elem = elem_to_loc(i, data_shape, i_strides);
+    stride_t src_elem = elem_to_loc(i, new_shape, new_strides[0]);
     dst_ptr[i] = static_cast<DstT>(src_ptr[src_elem]);
   }
 }
@@ -195,10 +198,10 @@ inline void copy_general_general_dims(
     const std::vector<int>& data_shape,
     const std::vector<stride_t>& i_strides,
     const std::vector<stride_t>& o_strides,
-    stride_t i_offset,
-    stride_t o_offset) {
+    int64_t i_offset,
+    int64_t o_offset) {
   if constexpr (D > 1) {
-    int axis = src.ndim() - D;
+    int axis = data_shape.size() - D;
     auto stride_src = i_strides[axis];
     auto stride_dst = o_strides[axis];
     auto N = data_shape[axis];
@@ -209,7 +212,7 @@ inline void copy_general_general_dims(
       o_offset += stride_dst;
     }
   } else {
-    int axis = src.ndim() - 1;
+    int axis = data_shape.size() - 1;
     auto stride_src = i_strides[axis];
     auto stride_dst = o_strides[axis];
     auto N = data_shape[axis];
@@ -230,38 +233,76 @@ void copy_general_general(
     const std::vector<int>& data_shape,
     const std::vector<stride_t>& i_strides,
     const std::vector<stride_t>& o_strides,
-    stride_t i_offset,
-    stride_t o_offset) {
-  switch (src.ndim()) {
+    int64_t i_offset,
+    int64_t o_offset) {
+  auto [new_shape, new_strides] = collapse_contiguous_dims(
+      data_shape, std::vector<std::vector<stride_t>>{i_strides, o_strides});
+  switch (new_shape.size()) {
     case 1:
       copy_general_general_dims<SrcT, DstT, stride_t, 1>(
-          src, dst, data_shape, i_strides, o_strides, i_offset, o_offset);
+          src,
+          dst,
+          new_shape,
+          new_strides[0],
+          new_strides[1],
+          i_offset,
+          o_offset);
       return;
     case 2:
       copy_general_general_dims<SrcT, DstT, stride_t, 2>(
-          src, dst, data_shape, i_strides, o_strides, i_offset, o_offset);
+          src,
+          dst,
+          new_shape,
+          new_strides[0],
+          new_strides[1],
+          i_offset,
+          o_offset);
       return;
     case 3:
       copy_general_general_dims<SrcT, DstT, stride_t, 3>(
-          src, dst, data_shape, i_strides, o_strides, i_offset, o_offset);
+          src,
+          dst,
+          new_shape,
+          new_strides[0],
+          new_strides[1],
+          i_offset,
+          o_offset);
       return;
     case 4:
       copy_general_general_dims<SrcT, DstT, stride_t, 4>(
-          src, dst, data_shape, i_strides, o_strides, i_offset, o_offset);
+          src,
+          dst,
+          new_shape,
+          new_strides[0],
+          new_strides[1],
+          i_offset,
+          o_offset);
       return;
     case 5:
       copy_general_general_dims<SrcT, DstT, stride_t, 5>(
-          src, dst, data_shape, i_strides, o_strides, i_offset, o_offset);
+          src,
+          dst,
+          new_shape,
+          new_strides[0],
+          new_strides[1],
+          i_offset,
+          o_offset);
       return;
   }
 
   int size = std::accumulate(
-      data_shape.end() - 5, data_shape.end(), 1, std::multiplies<int>());
+      new_shape.end() - 5, new_shape.end(), 1, std::multiplies<int>());
   for (int i = 0; i < src.size(); i += size) {
-    stride_t src_offset = i_offset + elem_to_loc(i, data_shape, i_strides);
-    stride_t dst_offset = o_offset + elem_to_loc(i, dst.shape(), o_strides);
+    stride_t src_offset = i_offset + elem_to_loc(i, new_shape, new_strides[0]);
+    stride_t dst_offset = o_offset + elem_to_loc(i, new_shape, new_strides[1]);
     copy_general_general_dims<SrcT, DstT, stride_t, 5>(
-        src, dst, data_shape, i_strides, o_strides, src_offset, dst_offset);
+        src,
+        dst,
+        new_shape,
+        new_strides[0],
+        new_strides[1],
+        src_offset,
+        dst_offset);
   }
 }
 
@@ -444,8 +485,17 @@ void copy_inplace(
   }
 }
 
-template <>
-void copy_inplace<int64_t>(
+template void copy_inplace<size_t>(
+    const array& src,
+    array& dst,
+    const std::vector<int>& data_shape,
+    const std::vector<size_t>& i_strides,
+    const std::vector<size_t>& o_strides,
+    int64_t i_offset,
+    int64_t o_offset,
+    CopyType ctype);
+
+template void copy_inplace<int64_t>(
     const array& src,
     array& dst,
     const std::vector<int>& data_shape,
@@ -453,24 +503,6 @@ void copy_inplace<int64_t>(
     const std::vector<int64_t>& o_strides,
     int64_t i_offset,
     int64_t o_offset,
-    CopyType ctype) {
-  switch (ctype) {
-    case CopyType::General:
-    case CopyType::GeneralGeneral:
-      return copy_inplace_dispatch(
-          src,
-          dst,
-          ctype,
-          data_shape,
-          i_strides,
-          o_strides,
-          i_offset,
-          o_offset);
-
-    case CopyType::Scalar:
-    case CopyType::Vector:
-      return copy_inplace_dispatch(src, dst, ctype);
-  }
-}
+    CopyType ctype);
 
 } // namespace mlx::core
