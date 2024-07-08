@@ -1017,7 +1017,8 @@ void init_transforms(nb::module_& m) {
       .def(
           "vmap",
           &PyCustomFunction::set_vmap,
-          "f"_a nb::sig("def vmap(self, f_vmap: callable)"),
+          "f"_a,
+          nb::sig("def vmap(self, f_vmap: callable)"),
           R"pbdoc(
             Define a custom vectorization transformation for the wrapped function.
 
@@ -1331,10 +1332,10 @@ void init_transforms(nb::module_& m) {
          const nb::object& outputs,
          bool shapeless) {
         //  Try to get the name
-        auto n = fun.attr("__name__");
-        auto name = nb::hasattr(fun, "__name__")
-            ? nb::cast<std::string>(fun.attr("__name__"))
-            : "compiled";
+        auto n =
+            nb::hasattr(fun, "__name__") ? fun.attr("__name__") : nb::none();
+        auto name = n.is_none() ? "compiled"
+                                : nb::cast<std::string>(fun.attr("__name__"));
 
         // Try to get the signature
         std::ostringstream sig;
