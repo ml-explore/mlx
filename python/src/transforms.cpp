@@ -929,17 +929,113 @@ void init_transforms(nb::module_& m) {
       m,
       "custom_function",
       R"pbdoc(
-      Decorator to override the function transformations for a function.
-      Define custom vjp functions.
+      Set up a function for custom gradient and vmap definitions.
+
+      This class is meant to be used as a function decorator. Instances are
+      callables that behave identically to the wrapped function. However, when
+      a function transformation is used (e.g. computing gradients using
+      :func:`value_and_grad`) then the functions defined via :method:`vjp`,
+      :method:`jvp` and :method:`vmap` are used instead of the default
+      transformation.
+
+      Example usage:
+
+      .. code-block:: python
+
+          import mlx.core as mx
+
+          @mx.custom_function
+          def f(x, y):
+              return mx.sin(x) * y
+
+          @f.vjp
+          def f_vjp(primals, cotangent, output):
+              x, y = primals
+              return cotan * mx.cos(x) * y, cotan * mx.sin(x)
+
+          @f.jvp
+          def f_jvp(primals, tangents):
+            x, y = primals
+            dx, dy = tangents
+            return dx * mx.cos(x) * y + dy * mx.sin(x)
+
+          @f.vmap
+          def f_vmap(inputs, axes):
+            x, y = inputs
+            ax, ay = axes
+            if ay != ax and ax is not None:
+                y = y.swapaxes(ay, ax)
+            return mx.sin(x) * y, (ax or ay)
       )pbdoc")
       .def(
           nb::init<nb::callable>(),
           "f"_a,
           nb::sig("def __init__(self, f: callable)"))
       .def("__call__", &PyCustomFunction::call_impl)
-      .def("vjp", &PyCustomFunction::set_vjp, "f"_a)
-      .def("jvp", &PyCustomFunction::set_jvp, "f"_a)
-      .def("vmap", &PyCustomFunction::set_vmap, "f"_a);
+      .def(
+          "vjp",
+          &PyCustomFunction::set_vjp,
+          "f"_a,
+          nb::sig("def vjp(self, f_vjp: callable)"),
+          R"pbdoc(
+            Define a custom vjp for the wrapped function.
+
+            The vjp function takes three arguments:
+
+            - *primals*: A pytree that contains all the positional arguments to
+              the function. It could be a single array, a tuple of arrays or a
+              full blown tuple of dicts of arrays etc.
+            - *cotangents*: A pytree that matches the structure of the output
+              but contains the cotangents (usually the gradients of the loss
+              function with respect to the outputs).
+            - *outputs*: The outputs of the function to be used to avoid
+              recomputing them for the gradient computation.
+
+            The vjp function should return the same pytree structure as the
+            primals but containing the corresponding computed cotangents.
+          )pbdoc")
+      .def(
+          "jvp",
+          &PyCustomFunction::set_jvp,
+          "f"_a,
+          nb::sig("def jvp(self, f_jvp: callable)"),
+          R"pbdoc(
+            Define a custom jvp for the wrapped function.
+
+            The jvp function takes two arguments:
+
+            - *primals*: A pytree that contains all the positional arguments to
+              the function. It could be a single array, a tuple of arrays or a
+              full blown tuple of dicts of arrays etc.
+            - *tangents*: A pytree that matches the structure of the inputs but
+              instead contains the gradients wrt to each input. Tangents could
+              be ``None`` if some inputs don't have an associated gradient.
+
+            The jvp function should return the same pytree structure as the
+            outputs of the function but containing the tangents.
+          )pbdoc")
+      .def(
+          "vmap",
+          &PyCustomFunction::set_vmap,
+          "f"_a nb::sig("def vmap(self, f_vmap: callable)"),
+          R"pbdoc(
+            Define a custom vectorization transformation for the wrapped function.
+
+            The vmap function takes two arguments:
+
+            - *inputs*: A pytree that contains all the positional arguments to
+              the function. It could be a single array, a tuple of arrays or a
+              full blown tuple of dicts of arrays etc.
+            - *axes*: A pytree that matches the structure of the inputs but
+              instead contains the vectorization axis for each input or
+              ``None`` if an input is not vectorized.
+
+            The vmap function should return the outputs of the original
+            function but vectorized over the provided axes. It should also
+            return a pytree with the vectorization axes of each output. If some
+            outputs are no longer vectorized, then their vectorization axis
+            should be ``None``.
+          )pbdoc");
 
   m.def(
       "eval",
@@ -1236,7 +1332,9 @@ void init_transforms(nb::module_& m) {
          bool shapeless) {
         //  Try to get the name
         auto n = fun.attr("__name__");
-        auto name = n.is_none() ? "compiled" : nb::cast<std::string>(n);
+        auto name = nb::hasattr(fun, "__name__")
+            ? nb::cast<std::string>(fun.attr("__name__"))
+            : "compiled";
 
         // Try to get the signature
         std::ostringstream sig;
