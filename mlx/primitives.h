@@ -471,6 +471,7 @@ class BitwiseBinary : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
+  DEFINE_GRADS()
   bool is_equivalent(const Primitive& other) const override;
   void print(std::ostream& os) override;
   DEFINE_INPUT_OUTPUT_SHAPE()
