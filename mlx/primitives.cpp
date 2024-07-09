@@ -3983,4 +3983,9 @@ std::vector<array> Hadamard::jvp(
   return {hadamard_transform(tangents[0], scale_, stream())};
 }
 
+bool Hadamard::is_equivalent(const Primitive& other) const {
+  const Hadamard& h_other = static_cast<const Hadamard&>(other);
+  return scale_ == h_other.scale_;
+}
+
 } // namespace mlx::core

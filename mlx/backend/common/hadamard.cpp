@@ -1,10 +1,10 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/backend/common/hadamard.h"
-#include "mlx/backend/common/copy.h"
-#include "mlx/primitives.h"
+#include <cassert>
 
-#include <iostream>
+#include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/hadamard.h"
+#include "mlx/primitives.h"
 
 namespace mlx::core {
 

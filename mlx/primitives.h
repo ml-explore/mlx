@@ -1076,6 +1076,8 @@ class Hadamard : public UnaryPrimitive {
   DEFINE_PRINT(Hadamard)
   DEFINE_INPUT_OUTPUT_SHAPE()
 
+  bool is_equivalent(const Primitive& other) const override;
+
  private:
   float scale_;
 

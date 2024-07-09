@@ -4,7 +4,7 @@
 
 #include <map>
 
-#include "mlx/backend/metal/utils.h"
+#include "mlx/utils.h"
 
 namespace mlx::core {
 
