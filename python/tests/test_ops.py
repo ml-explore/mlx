@@ -2384,7 +2384,6 @@ class TestOps(mlx_tests.MLXTestCase):
             H = np.vstack((np.hstack((H, H)), np.hstack((H, -H))))
         return H
 
-    @unittest.skipIf(not mx.metal.is_available(), "Hadamard only implemented for GPU")
     def test_hadamard(self):
         h28_str = """
         +------++----++-+--+-+--++--
@@ -2448,35 +2447,33 @@ class TestOps(mlx_tests.MLXTestCase):
                 atol = 2e-4 if dtype == np.float32 else 5e-2 * k
                 np.testing.assert_allclose(y, y_np, atol=atol)
 
-    @unittest.skipIf(not mx.metal.is_available(), "Hadamard only implemented for GPU")
     def test_hadamard_grad_vmap(self):
         np.random.seed(4)
 
-        with mx.stream(mx.gpu):
-            for k in range(2, 8):
-                n = 2**k
-                x = np.random.normal(size=(n,))
-                h = self._hadamard(n)
-                c = np.random.normal(size=(n,))
-                x = mx.array(x).astype(mx.float32)
-                h = mx.array(h).astype(mx.float32)
-                c = mx.array(c).astype(mx.float32)
+        for k in range(2, 8):
+            n = 2**k
+            x = np.random.normal(size=(n,))
+            h = self._hadamard(n)
+            c = np.random.normal(size=(n,))
+            x = mx.array(x).astype(mx.float32)
+            h = mx.array(h).astype(mx.float32)
+            c = mx.array(c).astype(mx.float32)
 
-                def hadamard_transform(x):
-                    return h @ x
+            def hadamard_transform(x):
+                return h @ x
 
-                out = mx.vjp(hadamard_transform, [x], [c])
-                out_t = mx.vjp(mx.hadamard_transform, [x], [c])
+            out = mx.vjp(hadamard_transform, [x], [c])
+            out_t = mx.vjp(mx.hadamard_transform, [x], [c])
+            np.testing.assert_allclose(out, out_t, atol=1e-4)
+
+            for axis in (0, 1, 2):
+                vht = mx.vmap(mx.vmap(hadamard_transform, 0, 0), axis, axis)
+                vht_t = mx.vmap(mx.vmap(mx.hadamard_transform, 0, 0), axis, axis)
+
+                xb = mx.array(np.random.normal(size=(n, n, n)))
+                out = vht(xb)
+                out_t = vht_t(xb)
                 np.testing.assert_allclose(out, out_t, atol=1e-4)
-
-                for axis in (0, 1, 2):
-                    vht = mx.vmap(mx.vmap(hadamard_transform, 0, 0), axis, axis)
-                    vht_t = mx.vmap(mx.vmap(mx.hadamard_transform, 0, 0), axis, axis)
-
-                    xb = mx.array(np.random.normal(size=(n, n, n)))
-                    out = vht(xb)
-                    out_t = vht_t(xb)
-                    np.testing.assert_allclose(out, out_t, atol=1e-4)
 
 
 if __name__ == "__main__":
