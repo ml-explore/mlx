@@ -1,3 +1,4 @@
+// Copyright © 2024 Apple Inc.
 #include <metal_common>
 #include <metal_compute>
 

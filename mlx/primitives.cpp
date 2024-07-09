@@ -3959,7 +3959,7 @@ std::pair<std::vector<array>, std::vector<int>> Hadamard::vmap(
   if (axes[0] == inputs[0].ndim() - 1) {
     auto a = moveaxis(inputs[0], axes[0], 0, s);
     auto b = hadamard_transform(a, scale_, s);
-    return {{moveaxis(b, 0, axes[0], s)}, axes};
+    return {{b}, {0}};
   }
   return {{hadamard_transform(inputs[0], scale_, s)}, axes};
 }

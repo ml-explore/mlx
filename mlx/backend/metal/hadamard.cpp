@@ -1,92 +1,20 @@
+// Copyright © 2024 Apple Inc.
+
 #include <map>
 
 #include "mlx/backend/common/compiled.h"
+#include "mlx/backend/common/hadamard.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/kernels.h"
-#include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {
 
 constexpr int MAX_HADAMARD_THREADS_PER_GROUP = 256;
 constexpr int MAX_HADAMARD_BYTES = 32768; // 32KB
-
-// From http://neilsloane.com/hadamard/
-constexpr std::string_view h12 = R"(
-+-++++++++++
---+-+-+-+-+-
-+++-++----++
-+---+--+-++-
-+++++-++----
-+-+---+--+-+
-++--+++-++--
-+--++---+--+
-++----+++-++
-+--+-++---+-
-++++----+++-
-+-+--+-++---
-)";
-
-constexpr std::string_view h20 = R"(
-+----+----++--++-++-
--+----+---+++---+-++
---+----+---+++-+-+-+
----+----+---+++++-+-
-----+----++--++-++-+
--+++++-----+--+++--+
-+-+++-+---+-+--+++--
-++-++--+---+-+--+++-
-+++-+---+---+-+--+++
-++++-----++--+-+--++
---++-+-++-+-----++++
----++-+-++-+---+-+++
-+---++-+-+--+--++-++
-++---++-+----+-+++-+
--++---++-+----+++++-
--+--+--++-+----+----
-+-+-----++-+----+---
--+-+-+---+--+----+--
---+-+++------+----+-
-+--+--++------+----+
-)";
-
-constexpr std::string_view h28 = R"(
-+------++----++-+--+-+--++--
--+-----+++-----+-+--+-+--++-
---+-----+++---+-+-+----+--++
----+-----+++---+-+-+-+--+--+
-----+-----+++---+-+-+++--+--
------+-----++++--+-+--++--+-
-------++----++-+--+-+--++--+
---++++-+-------++--+++-+--+-
----++++-+-----+-++--+-+-+--+
-+---+++--+----++-++--+-+-+--
-++---++---+----++-++--+-+-+-
-+++---+----+----++-++--+-+-+
-++++--------+-+--++-++--+-+-
--++++--------+++--++--+--+-+
--+-++-++--++--+--------++++-
-+-+-++--+--++--+--------++++
--+-+-++--+--++--+----+---+++
-+-+-+-++--+--+---+---++---++
-++-+-+-++--+------+--+++---+
--++-+-+-++--+------+-++++---
-+-++-+---++--+------+-++++--
--++--++-+-++-+++----++------
-+-++--++-+-++-+++-----+-----
-++-++---+-+-++-+++-----+----
--++-++-+-+-+-+--+++-----+---
---++-++++-+-+----+++-----+--
-+--++-+-++-+-+----+++-----+-
-++--++-+-++-+-+----++------+
-)";
-
-inline const std::map<int, std::string_view> hadamard_matrices() {
-  return {{12, h12}, {20, h20}, {28, h28}};
-}
 
 std::string gen_hadamard_codelet(int m) {
   // Generate a O(m^2) hadamard codelet for a given M
@@ -184,22 +112,8 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
 
-  int n = in.shape(axis);
-  int m = 1;
-  if (!is_power_of_2(n)) {
-    auto h_matrices = hadamard_matrices();
-    for (auto [factor, _] : h_matrices) {
-      if (n % factor == 0) {
-        m = factor;
-        n /= factor;
-        break;
-      }
-    }
-    if (m == 1) {
-      throw std::invalid_argument(
-          "[hadamard] Only supports n = m*2^k where m in (1, 12, 20, 28).");
-    }
-  }
+  auto [n, m] = decompose_hadamard(in.shape(axis));
+
   if (n * (int)size_of(in.dtype()) > MAX_HADAMARD_BYTES) {
     throw std::invalid_argument(
         "[hadamard] For n = m*2^k, 2^k > 8192 for FP32 or 2^k > 16384 for FP16/BF16 NYI");

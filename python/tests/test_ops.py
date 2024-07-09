@@ -2428,24 +2428,23 @@ class TestOps(mlx_tests.MLXTestCase):
         tests = product([np.float32, np.float16, np.int32], [1, 28], range(1, 15))
         for dtype, m, k in tests:
             # skip large m=28 cases because they're very slow in NumPy
-            if (m > 1 and k > 10) or (dtype != np.float16 and k == 14):
+            if (m > 1 and k > 8) or (dtype != np.float16 and k == 14):
                 continue
             with self.subTest(dtype=dtype, m=m, k=k):
                 n = m * 2**k
-                print(n)
-                b = 6
+                b = 4
+                scale = 0.34
                 x = np.random.normal(size=(b, n)).astype(dtype)
                 # contiguity check
                 x = mx.array(x)[::2]
-                with mx.stream(mx.gpu):
-                    y = mx.hadamard_transform(x)
+                y = mx.hadamard_transform(x, scale=scale)
                 mx.eval(y)
                 h = (
                     self._hadamard(2**k)
                     if m == 1
                     else np.kron(h28, self._hadamard(2**k))
                 )
-                y_np = np.einsum("ij,bj->bi", h, x)
+                y_np = np.einsum("ij,bj->bi", h, x) * scale
                 atol = 2e-4 if dtype == np.float32 else 5e-2 * k
                 np.testing.assert_allclose(y, y_np, atol=atol)
 
