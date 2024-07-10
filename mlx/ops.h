@@ -131,6 +131,12 @@ array flatten(
 /** Flatten the array to 1D. */
 array flatten(const array& a, StreamOrDevice s = {});
 
+/** Multiply the array by the Hadamard matrix of corresponding size. */
+array hadamard_transform(
+    const array& a,
+    float scale = 1.0f,
+    StreamOrDevice s = {});
+
 /** Remove singleton dimensions at the given axes. */
 array squeeze(
     const array& a,

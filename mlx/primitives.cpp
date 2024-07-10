@@ -3976,4 +3976,42 @@ bool View::is_equivalent(const Primitive& other) const {
   return (dtype_ == a_other.dtype_);
 }
 
+std::pair<std::vector<array>, std::vector<int>> Hadamard::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  auto& s = stream();
+  if (axes[0] == inputs[0].ndim() - 1) {
+    auto a = moveaxis(inputs[0], axes[0], 0, s);
+    auto b = hadamard_transform(a, scale_, s);
+    return {{b}, {0}};
+  }
+  return {{hadamard_transform(inputs[0], scale_, s)}, axes};
+}
+
+std::vector<array> Hadamard::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return jvp(primals, cotangents, argnums);
+}
+
+std::vector<array> Hadamard::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {hadamard_transform(tangents[0], scale_, stream())};
+}
+
+bool Hadamard::is_equivalent(const Primitive& other) const {
+  const Hadamard& h_other = static_cast<const Hadamard&>(other);
+  return scale_ == h_other.scale_;
+}
+
 } // namespace mlx::core
