@@ -798,6 +798,7 @@ void conv_3D_gpu(
     const std::vector<int>& wt_strides,
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
+    const int groups,
     bool flip,
     std::vector<array>& copies) {
   // Make conv params
@@ -832,9 +833,13 @@ void conv_3D_gpu(
        out.strides()[2],
        out.strides()[3],
        out.strides()[4]},
-      /* const int groups = */ 1,
+      /* const int groups = */ groups,
       /* const bool flip = */ flip,
   };
+  if (groups > 1) {
+    return explicit_gemm_conv_group_ND_gpu(s, d, in, wt, out, conv_params);
+  }
+
   return explicit_gemm_conv_ND_gpu(s, d, in, wt, out, conv_params);
 }
 
@@ -874,6 +879,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         kernel_strides_,
         kernel_dilation_,
         input_dilation_,
+        groups_,
         flip_,
         copies);
   }
