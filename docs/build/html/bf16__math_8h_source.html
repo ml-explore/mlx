@@ -458,7 +458,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00370" name="l00370"></a><span class="lineno">  370</span><span class="preprocessor">  }</span></div>
 </div>
 <div class="line"><a id="l00371" name="l00371"></a><span class="lineno">  371</span> </div>
-<div class="line"><a id="l00372" name="l00372"></a><span class="lineno">  372</span><span class="preprocessor">#if defined METAL_3_1 || (__METAL_VERSION__ &gt;= 310)</span></div>
+<div class="line"><a id="l00372" name="l00372"></a><span class="lineno">  372</span><span class="preprocessor">#if (MLX_METAL_VERSION &gt;= 310) || (__METAL_VERSION__ &gt;= 310)</span></div>
 <div class="line"><a id="l00373" name="l00373"></a><span class="lineno">  373</span> </div>
 <div class="line"><a id="l00374" name="l00374"></a><span class="lineno">  374</span><span class="preprocessor">#define bfloat16_to_uint16(x) as_type&lt;uint16_t&gt;(x)</span></div>
 <div class="line"><a id="l00375" name="l00375"></a><span class="lineno">  375</span><span class="preprocessor">#define uint16_to_bfloat16(x) as_type&lt;bfloat16_t&gt;(x)</span></div>
