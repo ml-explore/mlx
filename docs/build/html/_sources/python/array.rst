@@ -24,6 +24,7 @@ Array
     array.any
     array.argmax
     array.argmin
+    array.conj
     array.cos
     array.cummax
     array.cummin
@@ -57,3 +58,4 @@ Array
     array.transpose
     array.T
     array.var
+    array.view

@@ -80,7 +80,7 @@ $(function() {
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="kernels_2sort_8h_source.html">sort.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="sort_8h_source.html">sort.h</a>&gt;</code></p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-types" name="pub-types"></a>
 Public Types</h2></td></tr>
@@ -93,8 +93,8 @@ Public Types</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-methods" name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
-<tr class="memitem:a9cd55b08c2fd235254e23ed1585da5ae" id="r_a9cd55b08c2fd235254e23ed1585da5ae"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9cd55b08c2fd235254e23ed1585da5ae">block_sort</a> (const device T *inp, device U *out, const constant int &amp;size_sorted_axis, const constant int &amp;stride_sorted_axis, const constant int &amp;stride_segment_axis, threadgroup <a class="el" href="#a4e3f09896275956fc4c23e1f157dca3b">val_t</a> *tgp_vals, threadgroup <a class="el" href="#a0df65b709ae7f153a2bf381179d55e00">idx_t</a> *tgp_idxs, uint3 tid, uint3 lid)</td></tr>
-<tr class="separator:a9cd55b08c2fd235254e23ed1585da5ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a56b644ec66f7fb5c01b280f124304be9" id="r_a56b644ec66f7fb5c01b280f124304be9"><td class="memItemLeft" align="right" valign="top">static METAL_FUNC void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a56b644ec66f7fb5c01b280f124304be9">block_sort</a> (const device T *inp, device U *out, const constant int &amp;size_sorted_axis, const constant int &amp;in_stride_sorted_axis, const constant int &amp;out_stride_sorted_axis, const constant int &amp;in_stride_segment_axis, const constant int &amp;out_stride_segment_axis, threadgroup <a class="el" href="#a4e3f09896275956fc4c23e1f157dca3b">val_t</a> *tgp_vals, threadgroup <a class="el" href="#a0df65b709ae7f153a2bf381179d55e00">idx_t</a> *tgp_idxs, uint3 tid, uint3 lid)</td></tr>
+<tr class="separator:a56b644ec66f7fb5c01b280f124304be9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -161,8 +161,8 @@ template&lt;typename T , typename U , bool ARG_SORT, short BLOCK_THREADS, short 
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a9cd55b08c2fd235254e23ed1585da5ae" name="a9cd55b08c2fd235254e23ed1585da5ae"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9cd55b08c2fd235254e23ed1585da5ae">&#9670;&#160;</a></span>block_sort()</h2>
+<a id="a56b644ec66f7fb5c01b280f124304be9" name="a56b644ec66f7fb5c01b280f124304be9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a56b644ec66f7fb5c01b280f124304be9">&#9670;&#160;</a></span>block_sort()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -190,12 +190,22 @@ template&lt;typename T , typename U , bool ARG_SORT, short BLOCK_THREADS, short 
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>stride_sorted_axis</em>, </span></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>in_stride_sorted_axis</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>stride_segment_axis</em>, </span></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_stride_sorted_axis</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>in_stride_segment_axis</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_stride_segment_axis</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -253,7 +263,7 @@ template&lt;typename T , typename U , bool ARG_SORT, short BLOCK_THREADS, short 
 </div>
 </div>
 <hr/>The documentation for this struct was generated from the following file:<ul>
-<li>mlx/backend/metal/kernels/<a class="el" href="kernels_2sort_8h_source.html">sort.h</a></li>
+<li>mlx/backend/metal/kernels/<a class="el" href="sort_8h_source.html">sort.h</a></li>
 </ul>
 </div><!-- contents -->
 <!-- start footer part -->

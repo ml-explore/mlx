@@ -1,7 +1,8 @@
 var searchData=
 [
-  ['kernel_0',['Kernel',['../class_m_p_s_1_1_kernel.html',1,'MPS']]],
-  ['kernelmergesort_1',['KernelMergeSort',['../struct_kernel_merge_sort.html',1,'']]],
-  ['kernelmultiblockmergesort_2',['KernelMultiBlockMergeSort',['../struct_kernel_multi_block_merge_sort.html',1,'']]],
-  ['keysequence_3',['KeySequence',['../classmlx_1_1core_1_1random_1_1_key_sequence.html',1,'mlx::core::random']]]
+  ['implicitgemmconv2dparams_0',['ImplicitGemmConv2DParams',['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html',1,'mlx::steel']]],
+  ['indices_1',['Indices',['../struct_indices.html',1,'']]],
+  ['intorfloat_2',['IntOrFloat',['../unionmlx_1_1core_1_1detail_1_1_int_or_float.html',1,'mlx::core::detail']]],
+  ['intracing_3',['InTracing',['../structmlx_1_1core_1_1detail_1_1_in_tracing.html',1,'mlx::core::detail']]],
+  ['inverse_4',['Inverse',['../classmlx_1_1core_1_1_inverse.html',1,'mlx::core']]]
 ];

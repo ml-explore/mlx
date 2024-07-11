@@ -106,10 +106,10 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {</div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>  <span class="keywordtype">int</span> lid = _lid;</div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span> </div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> SIMD_SIZE = 32;</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> <a class="code hl_variable" href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a> = 32;</div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span> </div>
-<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>  threadgroup AccT local_max[SIMD_SIZE];</div>
-<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>  threadgroup AccT local_normalizer[SIMD_SIZE];</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>  threadgroup AccT local_max[<a class="code hl_variable" href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a>];</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>  threadgroup AccT local_normalizer[<a class="code hl_variable" href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a>];</div>
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>  AccT ld[N_READS];</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
@@ -199,10 +199,10 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {</div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>  in += gid * axis_size;</div>
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span> </div>
-<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> SIMD_SIZE = 32;</div>
+<div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> <a class="code hl_variable" href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a> = 32;</div>
 <div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span> </div>
-<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>  threadgroup AccT local_max[SIMD_SIZE];</div>
-<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>  threadgroup AccT local_normalizer[SIMD_SIZE];</div>
+<div class="line"><a id="l00114" name="l00114"></a><span class="lineno">  114</span>  threadgroup AccT local_max[<a class="code hl_variable" href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a>];</div>
+<div class="line"><a id="l00115" name="l00115"></a><span class="lineno">  115</span>  threadgroup AccT local_normalizer[<a class="code hl_variable" href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a>];</div>
 <div class="line"><a id="l00116" name="l00116"></a><span class="lineno">  116</span> </div>
 <div class="line"><a id="l00117" name="l00117"></a><span class="lineno">  117</span>  <span class="comment">// Get the max and the normalizer in one go</span></div>
 <div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>  AccT prevmax;</div>
@@ -283,6 +283,7 @@ $(function() { codefold.init(0); });
 <div class="ttc" id="akernels_2softmax_8h_html_a440d4031ee5e86159a4dd715e44a438b"><div class="ttname"><a href="kernels_2softmax_8h.html#a440d4031ee5e86159a4dd715e44a438b">softmax_exp</a></div><div class="ttdeci">T softmax_exp(T x)</div><div class="ttdef"><b>Definition</b> softmax.h:4</div></div>
 <div class="ttc" id="akernels_2softmax_8h_html_a815fe70f879f318e5d6e99acf043f52b"><div class="ttname"><a href="kernels_2softmax_8h.html#a815fe70f879f318e5d6e99acf043f52b">softmax_single_row</a></div><div class="ttdeci">void softmax_single_row(const device T *in, device T *out, constant int &amp;axis_size, uint gid, uint _lid, uint simd_lane_id, uint simd_group_id)</div><div class="ttdef"><b>Definition</b> softmax.h:11</div></div>
 <div class="ttc" id="akernels_2softmax_8h_html_a8c47b0924ebfeebcca25f3dd17373276"><div class="ttname"><a href="kernels_2softmax_8h.html#a8c47b0924ebfeebcca25f3dd17373276">softmax_looped</a></div><div class="ttdeci">void softmax_looped(const device T *in, device T *out, constant int &amp;axis_size, uint gid, uint lid, uint lsize, uint simd_lane_id, uint simd_group_id)</div><div class="ttdef"><b>Definition</b> softmax.h:101</div></div>
+<div class="ttc" id="aquantized_8h_html_a62969a218d93680f5e35d0c61b160b99"><div class="ttname"><a href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a></div><div class="ttdeci">static constant constexpr const int SIMD_SIZE</div><div class="ttdef"><b>Definition</b> quantized.h:10</div></div>
 <div class="ttc" id="astruct_limits_html"><div class="ttname"><a href="struct_limits.html">Limits</a></div><div class="ttdef"><b>Definition</b> utils.h:17</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->

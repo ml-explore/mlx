@@ -195,7 +195,7 @@ GGUF, you can do:
 
 .. code-block:: shell
 
-  cmake ..
+  cmake .. \
     -DCMAKE_BUILD_TYPE=MinSizeRel \
     -DBUILD_SHARED_LIBS=ON \
     -DMLX_BUILD_CPU=OFF \
