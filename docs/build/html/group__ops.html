@@ -168,6 +168,9 @@ Functions</h2></td></tr>
 <tr class="memitem:gaa6adbc9c86f0ab27d8810a02e9e719fd" id="r_gaa6adbc9c86f0ab27d8810a02e9e719fd"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#gaa6adbc9c86f0ab27d8810a02e9e719fd">mlx::core::flatten</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:gaa6adbc9c86f0ab27d8810a02e9e719fd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Flatten the array to 1D.  <br /></td></tr>
 <tr class="separator:gaa6adbc9c86f0ab27d8810a02e9e719fd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga001919c0ee4a9c3d7948ed32cb4c58d6" id="r_ga001919c0ee4a9c3d7948ed32cb4c58d6"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ga001919c0ee4a9c3d7948ed32cb4c58d6">mlx::core::hadamard_transform</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, float scale=1.0f, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:ga001919c0ee4a9c3d7948ed32cb4c58d6"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classmlx_1_1core_1_1_multiply.html">Multiply</a> the array by the <a class="el" href="classmlx_1_1core_1_1_hadamard.html">Hadamard</a> matrix of corresponding size.  <br /></td></tr>
+<tr class="separator:ga001919c0ee4a9c3d7948ed32cb4c58d6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ga710daa7ec721bd4d3f326082cb195576" id="r_ga710daa7ec721bd4d3f326082cb195576"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ga710daa7ec721bd4d3f326082cb195576">mlx::core::squeeze</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const std::vector&lt; int &gt; &amp;axes, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:ga710daa7ec721bd4d3f326082cb195576"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove singleton dimensions at the given axes.  <br /></td></tr>
 <tr class="separator:ga710daa7ec721bd4d3f326082cb195576"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -4054,6 +4057,34 @@ template&lt;typename T &gt; </div>
 </div><div class="memdoc">
 
 <p>Returns bool array with (a &gt;= b) element-wise. </p>
+
+</div>
+</div>
+<a id="ga001919c0ee4a9c3d7948ed32cb4c58d6" name="ga001919c0ee4a9c3d7948ed32cb4c58d6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga001919c0ee4a9c3d7948ed32cb4c58d6">&#9670;&#160;</a></span>hadamard_transform()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::hadamard_transform </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float</td>          <td class="paramname"><span class="paramname"><em>scale</em><span class="paramdefsep"> = </span><span class="paramdefval">1.0f</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em><span class="paramdefsep"> = </span><span class="paramdefval">{}</span></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="classmlx_1_1core_1_1_multiply.html">Multiply</a> the array by the <a class="el" href="classmlx_1_1core_1_1_hadamard.html">Hadamard</a> matrix of corresponding size. </p>
 
 </div>
 </div>

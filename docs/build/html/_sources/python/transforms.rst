@@ -10,6 +10,7 @@ Transforms
 
    eval
    compile
+   custom_function
    disable_compile
    enable_compile
    grad
