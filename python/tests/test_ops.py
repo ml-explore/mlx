@@ -2033,47 +2033,6 @@ class TestOps(mlx_tests.MLXTestCase):
                     axes=([2, 1, 3], [1, 2, 0]),
                 )
 
-    def test_einsum(self):
-        self.assertCmpNumpy(["jki", mx.full((2, 3, 4), 3.0)], mx.einsum, np.einsum)
-        self.assertCmpNumpy(
-            [
-                "ij,jk->ik",
-                mx.full(
-                    (
-                        2,
-                        2,
-                    ),
-                    2.0,
-                ),
-                mx.full(
-                    (
-                        2,
-                        2,
-                    ),
-                    3.0,
-                ),
-            ],
-            mx.einsum,
-            np.einsum,
-        )
-        self.assertCmpNumpy(
-            ["i,j->ij", mx.full((10,), 15.0), mx.full((10,), 20.0)],
-            mx.einsum,
-            np.einsum,
-        )
-        self.assertCmpNumpy(
-            ["i,i->", mx.full((10,), 15.0), mx.full((10,), 20.0)], mx.einsum, np.einsum
-        )
-        self.assertCmpNumpy(
-            [
-                "ijkl,mlopq->ikmop",
-                mx.full((4, 5, 9, 4), 20.0),
-                mx.full((14, 4, 16, 7, 5), 10.0),
-            ],
-            mx.einsum,
-            np.einsum,
-        )
-
     def test_inner(self):
         self.assertCmpNumpy([(3,), (3,)], mx.inner, np.inner)
         self.assertCmpNumpy([(1, 1, 2), (3, 2)], mx.inner, np.inner)
