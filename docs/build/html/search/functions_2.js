@@ -25,8 +25,8 @@ var searchData=
   ['bitwisebinary_22',['BitwiseBinary',['../classmlx_1_1core_1_1_bitwise_binary.html#a0d8b3a94951621ffcdebc6fda748a172',1,'mlx::core::BitwiseBinary']]],
   ['block_5fmasked_5fgemm_23',['block_masked_gemm',['../steel__gemm__masked_8h.html#af805e998b2046ee30c2b4be813e3af97',1,'block_masked_gemm(const device T *A, const device T *B, device T *D, const constant GEMMParams *params, const constant int *batch_shape, const constant size_t *batch_strides, const device out_mask_t *out_mask, const device op_mask_t *lhs_mask, const device op_mask_t *rhs_mask, const constant int *mask_strides, uint simd_lane_id, uint simd_group_id, uint3 tid, uint3 lid):&#160;steel_gemm_masked.h'],['../steel__gemm__masked_8h.html#a477932e2ae9d49366f7ede6db63f9cac',1,'block_masked_gemm(const device T *A, const device T *B, device T *D, const constant GEMMParams *params, const constant int *batch_shape, const constant size_t *batch_strides, const device bool *out_mask, const device bool *lhs_mask, const device bool *rhs_mask, const constant int *mask_strides, uint simd_lane_id, uint simd_group_id, uint3 tid, uint3 lid):&#160;steel_gemm_masked.h']]],
   ['block_5fmasked_5fmm_24',['block_masked_mm',['../group__ops.html#ga6b76c8ea46b19e6866af155fa5910be6',1,'mlx::core']]],
-  ['block_5fsort_25',['block_sort',['../struct_kernel_merge_sort.html#a9cd55b08c2fd235254e23ed1585da5ae',1,'KernelMergeSort::block_sort()'],['../struct_kernel_multi_block_merge_sort.html#a322ed2eac315a561e0fd90af2fd577eb',1,'KernelMultiBlockMergeSort::block_sort()'],['../kernels_2sort_8h.html#ab31b85cfb26430a7bb04cab989a2cda0',1,'block_sort(const device T *inp, device U *out, const constant int &amp;size_sorted_axis, const constant int &amp;stride_sorted_axis, const constant int &amp;stride_segment_axis, uint3 tid, uint3 lid):&#160;sort.h']]],
-  ['block_5fsort_5fnc_26',['block_sort_nc',['../kernels_2sort_8h.html#a4b06549a9678ccc9bf9901a5b8f238f5',1,'sort.h']]],
+  ['block_5fsort_25',['block_sort',['../struct_kernel_merge_sort.html#a56b644ec66f7fb5c01b280f124304be9',1,'KernelMergeSort::block_sort()'],['../struct_kernel_multi_block_merge_sort.html#a322ed2eac315a561e0fd90af2fd577eb',1,'KernelMultiBlockMergeSort::block_sort()'],['../sort_8h.html#a93f14092416169c4449141043ac45ffd',1,'block_sort(const device T *inp, device U *out, const constant int &amp;size_sorted_axis, const constant int &amp;in_stride_sorted_axis, const constant int &amp;out_stride_sorted_axis, const constant int &amp;in_stride_segment_axis, const constant int &amp;out_stride_segment_axis, uint3 tid, uint3 lid):&#160;sort.h']]],
+  ['block_5fsort_5fnc_26',['block_sort_nc',['../sort_8h.html#a29229399f51e5c440ffe5c9b99b27598',1,'sort.h']]],
   ['blockloader_27',['BlockLoader',['../structmlx_1_1steel_1_1_block_loader.html#a37aca066e63dff238865b5923a2d4335',1,'mlx::steel::BlockLoader']]],
   ['blockmaskedmm_28',['BlockMaskedMM',['../classmlx_1_1core_1_1_block_masked_m_m.html#ad26509deb5306d0c5eb72477e9a57477',1,'mlx::core::BlockMaskedMM']]],
   ['blockmma_29',['BlockMMA',['../structmlx_1_1steel_1_1_block_m_m_a.html#aa14406b7298456ac45d23dd3c4642dd8',1,'mlx::steel::BlockMMA']]],
@@ -35,7 +35,12 @@ var searchData=
   ['broadcast_5farrays_32',['broadcast_arrays',['../group__ops.html#gab783890428b596f715dc7dd2057eae99',1,'mlx::core']]],
   ['broadcast_5fshapes_33',['broadcast_shapes',['../namespacemlx_1_1core.html#a075e07def338cd9d815182d0e6a656c0',1,'mlx::core']]],
   ['broadcast_5fto_34',['broadcast_to',['../group__ops.html#gad256e86cc1a6e6b3832e392baa90318d',1,'mlx::core']]],
-  ['buffer_35',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html#ac4fc2cc6aa1368cfb74aff329d9a1300',1,'mlx::core::allocator::Buffer']]],
-  ['buffer_36',['buffer',['../classmlx_1_1core_1_1array.html#ab3daf04c27c4593d9d73c397b8484a08',1,'mlx::core::array::buffer()'],['../classmlx_1_1core_1_1array.html#a634466ce661485394f2fdc3bd6796bcd',1,'mlx::core::array::buffer() const']]],
-  ['build_5flib_5fname_37',['build_lib_name',['../namespacemlx_1_1core.html#a3ef23f334cb9f68a2c50524bc67c913b',1,'mlx::core']]]
+  ['bs_5fqmm_5fn_35',['bs_qmm_n',['../quantized_8h.html#acfc43edcf0c742ddc090d22cb7229284',1,'quantized.h']]],
+  ['bs_5fqmm_5ft_36',['bs_qmm_t',['../quantized_8h.html#a3acc2ace766cb855f13da2d1834e7dc7',1,'quantized.h']]],
+  ['bs_5fqmv_37',['bs_qmv',['../quantized_8h.html#a03ba4a4a5fe9955319b0aa477d2d7d98',1,'quantized.h']]],
+  ['bs_5fqmv_5ffast_38',['bs_qmv_fast',['../quantized_8h.html#a6f92bb9f3d29d707bfc680bebe1c80f7',1,'quantized.h']]],
+  ['bs_5fqvm_39',['bs_qvm',['../quantized_8h.html#a3af1c89416632c9275b8218a33cb8a04',1,'quantized.h']]],
+  ['buffer_40',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html#ac4fc2cc6aa1368cfb74aff329d9a1300',1,'mlx::core::allocator::Buffer']]],
+  ['buffer_41',['buffer',['../classmlx_1_1core_1_1array.html#ab3daf04c27c4593d9d73c397b8484a08',1,'mlx::core::array::buffer()'],['../classmlx_1_1core_1_1array.html#a634466ce661485394f2fdc3bd6796bcd',1,'mlx::core::array::buffer() const']]],
+  ['build_5flib_5fname_42',['build_lib_name',['../namespacemlx_1_1core.html#a3ef23f334cb9f68a2c50524bc67c913b',1,'mlx::core']]]
 ];

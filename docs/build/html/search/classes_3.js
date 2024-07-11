@@ -41,5 +41,5 @@ var searchData=
   ['cumprod_3c_20bool_20_3e_38',['CumProd&lt; bool &gt;',['../struct_cum_prod_3_01bool_01_4.html',1,'']]],
   ['cumsum_39',['CumSum',['../struct_cum_sum.html',1,'']]],
   ['custom_40',['Custom',['../classmlx_1_1core_1_1fast_1_1_custom.html',1,'mlx::core::fast']]],
-  ['customvjp_41',['CustomVJP',['../classmlx_1_1core_1_1_custom_v_j_p.html',1,'mlx::core']]]
+  ['customtransforms_41',['CustomTransforms',['../classmlx_1_1core_1_1_custom_transforms.html',1,'mlx::core']]]
 ];
