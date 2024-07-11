@@ -18,7 +18,7 @@ std::vector<array> Custom::vjp(
   auto [_, vjps] = mlx::core::vjp(fallback_, primals, cotangents);
   std::vector<array> vjp_outs;
   for (int i = 0, j = 0; i < vjps.size(); ++i) {
-    if (i < argnums.size() && i == argnums[j]) {
+    if (j < argnums.size() && i == argnums[j]) {
       vjp_outs.push_back(vjps[i]);
       j++;
     }
@@ -30,15 +30,16 @@ std::vector<array> Custom::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  auto [_, jvps] = mlx::core::jvp(fallback_, primals, tangents);
-  std::vector<array> jvp_outs;
-  for (int i = 0, j = 0; i < jvps.size(); ++i) {
-    if (i < argnums.size() && i == argnums[j]) {
-      jvp_outs.push_back(jvps[i]);
-      j++;
+  std::vector<array> all_tangents;
+  for (int i = 0, j = 0; i < primals.size(); i++) {
+    if (j < argnums.size() && i == argnums[j]) {
+      all_tangents.emplace_back(tangents[j++]);
+    } else {
+      all_tangents.emplace_back(zeros_like(primals[i]));
     }
   }
-  return jvp_outs;
+  auto [_, jvps] = mlx::core::jvp(fallback_, primals, all_tangents);
+  return jvps;
 }
 
 std::pair<std::vector<array>, std::vector<int>> Custom::vmap(

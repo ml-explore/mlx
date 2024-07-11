@@ -852,15 +852,19 @@ std::function<std::vector<array>(const std::vector<array>&)> custom_function(
             // and tangents. Similarly we can't take full advantage of the
             // argnums so it is best to use `fun` directly if we don't need a
             // custom transform.
+            //
+            // TODO: Use stop_gradient to make full use of argnums and not
+            //       waste computation.
             fun_jvp.value_or([fun](auto primals, auto tangents, auto argnums) {
-              std::vector<array> selected_tangents;
-              for (const array& tan : tangents) {
-                selected_tangents.emplace_back(zeros_like(tan));
+              std::vector<array> all_tangents;
+              for (int i = 0, j = 0; i < primals.size(); i++) {
+                if (j < argnums.size() && i == argnums[j]) {
+                  all_tangents.emplace_back(tangents[j++]);
+                } else {
+                  all_tangents.emplace_back(zeros_like(primals[i]));
+                }
               }
-              for (auto arg : argnums) {
-                selected_tangents[arg] = tangents[arg];
-              }
-              auto [__, jvps] = jvp(fun, primals, selected_tangents);
+              auto [__, jvps] = jvp(fun, primals, all_tangents);
               return jvps;
             }),
 
