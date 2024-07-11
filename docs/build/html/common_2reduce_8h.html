@@ -78,7 +78,8 @@ $(function() {
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
 <a href="#namespaces">Namespaces</a> &#124;
-<a href="#enum-members">Enumerations</a>  </div>
+<a href="#enum-members">Enumerations</a> &#124;
+<a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">reduce.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
@@ -89,6 +90,10 @@ $(function() {
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
 Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1_reduction_plan.html">mlx::core::ReductionPlan</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1_default_strided_reduce.html">mlx::core::DefaultStridedReduce&lt; T, U, Op &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1_default_contiguous_reduce.html">mlx::core::DefaultContiguousReduce&lt; T, U, Op &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
@@ -111,22 +116,22 @@ Enumerations</h2></td></tr>
 <br />
  }</td></tr>
 <tr class="separator:a12412984a1cabfe1189942c898f8fe65"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a1555dc378c5254e79199421761f26f2b" id="r_a1555dc378c5254e79199421761f26f2b"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1core_1_1_reduction_plan.html">ReductionPlan</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a1555dc378c5254e79199421761f26f2b">mlx::core::get_reduction_plan</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const std::vector&lt; int &gt; axes)</td></tr>
+<tr class="separator:a1555dc378c5254e79199421761f26f2b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9a9254ce9975ec247a2718bc02d6f201" id="r_a9a9254ce9975ec247a2718bc02d6f201"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a9a9254ce9975ec247a2718bc02d6f201">mlx::core::nd_loop</a> (std::function&lt; void(int)&gt; callback, const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; size_t &gt; &amp;strides)</td></tr>
+<tr class="separator:a9a9254ce9975ec247a2718bc02d6f201"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a44c3ea6db6553c3f6552b9ba64a69494" id="r_a44c3ea6db6553c3f6552b9ba64a69494"><td class="memItemLeft" align="right" valign="top">std::pair&lt; std::vector&lt; int &gt;, std::vector&lt; size_t &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a44c3ea6db6553c3f6552b9ba64a69494">mlx::core::shapes_without_reduction_axes</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const std::vector&lt; int &gt; &amp;axes)</td></tr>
+<tr class="separator:a44c3ea6db6553c3f6552b9ba64a69494"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa08ffc1e8f2c58afb2d463496f827ef0" id="r_aa08ffc1e8f2c58afb2d463496f827ef0"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename OpS , typename OpC , typename Op &gt; </td></tr>
+<tr class="memitem:aa08ffc1e8f2c58afb2d463496f827ef0"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#aa08ffc1e8f2c58afb2d463496f827ef0">mlx::core::reduction_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::vector&lt; int &gt; &amp;axes, U init, OpS ops, OpC opc, Op <a class="el" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>)</td></tr>
+<tr class="separator:aa08ffc1e8f2c58afb2d463496f827ef0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a064d61b6ddc9e5d1e261a7e33de71083" id="r_a064d61b6ddc9e5d1e261a7e33de71083"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
+<tr class="memitem:a064d61b6ddc9e5d1e261a7e33de71083"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a064d61b6ddc9e5d1e261a7e33de71083">mlx::core::reduction_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::vector&lt; int &gt; &amp;axes, U init, Op <a class="el" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>)</td></tr>
+<tr class="separator:a064d61b6ddc9e5d1e261a7e33de71083"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
-<h2 class="groupheader">Variable Documentation</h2>
-<a id="a70228731d29946574b238d21fb4b360c" name="a70228731d29946574b238d21fb4b360c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a70228731d29946574b238d21fb4b360c">&#9670;&#160;</a></span>op</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">Op op</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-</div>
-</div>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

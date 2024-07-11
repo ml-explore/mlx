@@ -99,7 +99,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00012" name="l00012"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_custom.html#a4186fea23f7156c38960426821fca313">   12</a></span>  <span class="keyword">explicit</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_custom.html#a4186fea23f7156c38960426821fca313">Custom</a>(</div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>      <a class="code hl_struct" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>,</div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>      std::function&lt;std::vector&lt;array&gt;(std::vector&lt;array&gt;)&gt; fallback)</div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1_primitive.html">Primitive</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>), fallback_(fallback) {};</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1_primitive.html">Primitive</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>), fallback_(fallback) {}</div>
 </div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span> </div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_custom.html#a7f4c3a4c48c6807faa36fb31e39dad8d">   17</a></span>  <span class="keyword">virtual</span> std::pair&lt;std::vector&lt;array&gt;, std::vector&lt;int&gt;&gt; <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_custom.html#a7f4c3a4c48c6807faa36fb31e39dad8d">vmap</a>(</div>
@@ -130,14 +130,14 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>      <a class="code hl_struct" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>,</div>
 <div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>      std::function&lt;std::vector&lt;array&gt;(std::vector&lt;array&gt;)&gt; fallback,</div>
 <div class="line"><a id="l00041" name="l00041"></a><span class="lineno">   41</span>      <span class="keywordtype">float</span> eps)</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {};</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {}</div>
 </div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span> </div>
 <div class="foldopen" id="foldopen00044" data-start="{" data-end="}">
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html#a7da6e0cfd630958d9633b2e2bd97a54f">   44</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html#a7da6e0cfd630958d9633b2e2bd97a54f">eval_cpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)<span class="keyword"></span></div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span><span class="keyword">      override </span>{</div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <span class="keywordflow">throw</span> std::runtime_error(<span class="stringliteral">&quot;NYI&quot;</span>);</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>  };</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>  }</div>
 </div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html#ae7955e8d43c097eecae264e804b4d8ca">   48</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html#ae7955e8d43c097eecae264e804b4d8ca">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)</div>
 <div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>      <span class="keyword">override</span>;</div>
@@ -165,14 +165,14 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span>      <a class="code hl_struct" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>,</div>
 <div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>      std::function&lt;std::vector&lt;array&gt;(std::vector&lt;array&gt;)&gt; fallback,</div>
 <div class="line"><a id="l00070" name="l00070"></a><span class="lineno">   70</span>      <span class="keywordtype">float</span> eps)</div>
-<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {};</div>
+<div class="line"><a id="l00071" name="l00071"></a><span class="lineno">   71</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {}</div>
 </div>
 <div class="line"><a id="l00072" name="l00072"></a><span class="lineno">   72</span> </div>
 <div class="foldopen" id="foldopen00073" data-start="{" data-end="}">
 <div class="line"><a id="l00073" name="l00073"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm_v_j_p.html#adfc1d52bc266466ab29ee45fd8fab439">   73</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm_v_j_p.html#adfc1d52bc266466ab29ee45fd8fab439">eval_cpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)<span class="keyword"></span></div>
 <div class="line"><a id="l00074" name="l00074"></a><span class="lineno">   74</span><span class="keyword">      override </span>{</div>
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>    <span class="keywordflow">throw</span> std::runtime_error(<span class="stringliteral">&quot;NYI&quot;</span>);</div>
-<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>  };</div>
+<div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>  }</div>
 </div>
 <div class="line"><a id="l00077" name="l00077"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm_v_j_p.html#a48efb8fa84c4ba6cc9fb560ebbe01560">   77</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm_v_j_p.html#a48efb8fa84c4ba6cc9fb560ebbe01560">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)</div>
 <div class="line"><a id="l00078" name="l00078"></a><span class="lineno">   78</span>      <span class="keyword">override</span>;</div>
@@ -194,14 +194,14 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00091" name="l00091"></a><span class="lineno">   91</span>      <a class="code hl_struct" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>,</div>
 <div class="line"><a id="l00092" name="l00092"></a><span class="lineno">   92</span>      std::function&lt;std::vector&lt;array&gt;(std::vector&lt;array&gt;)&gt; fallback,</div>
 <div class="line"><a id="l00093" name="l00093"></a><span class="lineno">   93</span>      <span class="keywordtype">float</span> eps)</div>
-<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {};</div>
+<div class="line"><a id="l00094" name="l00094"></a><span class="lineno">   94</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {}</div>
 </div>
 <div class="line"><a id="l00095" name="l00095"></a><span class="lineno">   95</span> </div>
 <div class="foldopen" id="foldopen00096" data-start="{" data-end="}">
 <div class="line"><a id="l00096" name="l00096"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_layer_norm.html#a5d7a4c1c9ee84e327d1c371733108c05">   96</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_layer_norm.html#a5d7a4c1c9ee84e327d1c371733108c05">eval_cpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)<span class="keyword"></span></div>
 <div class="line"><a id="l00097" name="l00097"></a><span class="lineno">   97</span><span class="keyword">      override </span>{</div>
 <div class="line"><a id="l00098" name="l00098"></a><span class="lineno">   98</span>    <span class="keywordflow">throw</span> std::runtime_error(<span class="stringliteral">&quot;NYI&quot;</span>);</div>
-<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>  };</div>
+<div class="line"><a id="l00099" name="l00099"></a><span class="lineno">   99</span>  }</div>
 </div>
 <div class="line"><a id="l00100" name="l00100"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_layer_norm.html#a77abda7f47bffa2c037a5d60cccc1528">  100</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_layer_norm.html#a77abda7f47bffa2c037a5d60cccc1528">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)</div>
 <div class="line"><a id="l00101" name="l00101"></a><span class="lineno">  101</span>      <span class="keyword">override</span>;</div>
@@ -229,14 +229,14 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>      <a class="code hl_struct" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>,</div>
 <div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>      std::function&lt;std::vector&lt;array&gt;(std::vector&lt;array&gt;)&gt; fallback,</div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>      <span class="keywordtype">float</span> eps)</div>
-<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {};</div>
+<div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), eps_(eps) {}</div>
 </div>
 <div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span> </div>
 <div class="foldopen" id="foldopen00125" data-start="{" data-end="}">
 <div class="line"><a id="l00125" name="l00125"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_layer_norm_v_j_p.html#a0d8c4c6e7462befc38f7e08244fa1c2b">  125</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_layer_norm_v_j_p.html#a0d8c4c6e7462befc38f7e08244fa1c2b">eval_cpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)<span class="keyword"></span></div>
 <div class="line"><a id="l00126" name="l00126"></a><span class="lineno">  126</span><span class="keyword">      override </span>{</div>
 <div class="line"><a id="l00127" name="l00127"></a><span class="lineno">  127</span>    <span class="keywordflow">throw</span> std::runtime_error(<span class="stringliteral">&quot;NYI&quot;</span>);</div>
-<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>  };</div>
+<div class="line"><a id="l00128" name="l00128"></a><span class="lineno">  128</span>  }</div>
 </div>
 <div class="line"><a id="l00129" name="l00129"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_layer_norm_v_j_p.html#a954a003a4a27c8c4c60a5a14142a9cc3">  129</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_layer_norm_v_j_p.html#a954a003a4a27c8c4c60a5a14142a9cc3">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)</div>
 <div class="line"><a id="l00130" name="l00130"></a><span class="lineno">  130</span>      <span class="keyword">override</span>;</div>
@@ -269,14 +269,14 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00154" name="l00154"></a><span class="lineno">  154</span>        base_(base),</div>
 <div class="line"><a id="l00155" name="l00155"></a><span class="lineno">  155</span>        scale_(scale),</div>
 <div class="line"><a id="l00156" name="l00156"></a><span class="lineno">  156</span>        offset_(offset),</div>
-<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>        forward_(forward) {};</div>
+<div class="line"><a id="l00157" name="l00157"></a><span class="lineno">  157</span>        forward_(forward) {}</div>
 </div>
 <div class="line"><a id="l00158" name="l00158"></a><span class="lineno">  158</span> </div>
 <div class="foldopen" id="foldopen00159" data-start="{" data-end="}">
 <div class="line"><a id="l00159" name="l00159"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_ro_p_e.html#a05a7d595c6b9dadf7ddfd6e3fd402f0e">  159</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_ro_p_e.html#a05a7d595c6b9dadf7ddfd6e3fd402f0e">eval_cpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)<span class="keyword"></span></div>
 <div class="line"><a id="l00160" name="l00160"></a><span class="lineno">  160</span><span class="keyword">      override </span>{</div>
 <div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>    <span class="keywordflow">throw</span> std::runtime_error(<span class="stringliteral">&quot;NYI&quot;</span>);</div>
-<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>  };</div>
+<div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>  }</div>
 </div>
 <div class="line"><a id="l00163" name="l00163"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_ro_p_e.html#a913b6b00fc518b25ac3947e4e15790f2">  163</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_ro_p_e.html#a913b6b00fc518b25ac3947e4e15790f2">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)</div>
 <div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>      <span class="keyword">override</span>;</div>
@@ -310,21 +310,21 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00189" name="l00189"></a><span class="lineno">  189</span>      std::function&lt;std::vector&lt;array&gt;(std::vector&lt;array&gt;)&gt; fallback,</div>
 <div class="line"><a id="l00190" name="l00190"></a><span class="lineno">  190</span>      <span class="keyword">const</span> <span class="keywordtype">float</span> scale,</div>
 <div class="line"><a id="l00191" name="l00191"></a><span class="lineno">  191</span>      <span class="keyword">const</span> <span class="keywordtype">bool</span> needs_mask)</div>
-<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), scale_(scale), needs_mask_(needs_mask) {};</div>
+<div class="line"><a id="l00192" name="l00192"></a><span class="lineno">  192</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a>(<a class="code hl_function" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, fallback), scale_(scale), needs_mask_(needs_mask) {}</div>
 </div>
 <div class="line"><a id="l00193" name="l00193"></a><span class="lineno">  193</span> </div>
 <div class="foldopen" id="foldopen00194" data-start="{" data-end="}">
 <div class="line"><a id="l00194" name="l00194"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html#ae20851e002f7fcb6d4f97817596f6328">  194</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html#ae20851e002f7fcb6d4f97817596f6328">eval_cpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)<span class="keyword"></span></div>
 <div class="line"><a id="l00195" name="l00195"></a><span class="lineno">  195</span><span class="keyword">      override </span>{</div>
 <div class="line"><a id="l00196" name="l00196"></a><span class="lineno">  196</span>    <span class="keywordflow">throw</span> std::runtime_error(<span class="stringliteral">&quot;NYI&quot;</span>);</div>
-<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>  };</div>
+<div class="line"><a id="l00197" name="l00197"></a><span class="lineno">  197</span>  }</div>
 </div>
 <div class="line"><a id="l00198" name="l00198"></a><span class="lineno">  198</span> </div>
 <div class="foldopen" id="foldopen00199" data-start="{" data-end="}">
 <div class="line"><a id="l00199" name="l00199"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html#a505f38ba93a3499895f5312e0112e73d">  199</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html#a505f38ba93a3499895f5312e0112e73d">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)<span class="keyword"></span></div>
 <div class="line"><a id="l00200" name="l00200"></a><span class="lineno">  200</span><span class="keyword">      override </span>{</div>
 <div class="line"><a id="l00201" name="l00201"></a><span class="lineno">  201</span>    <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html#a505f38ba93a3499895f5312e0112e73d">eval_gpu</a>(inputs, outputs[0]);</div>
-<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>  };</div>
+<div class="line"><a id="l00202" name="l00202"></a><span class="lineno">  202</span>  }</div>
 </div>
 <div class="line"><a id="l00203" name="l00203"></a><span class="lineno">  203</span> </div>
 <div class="line"><a id="l00204" name="l00204"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html#ad51666e69f670e286293aff96eb435a9">  204</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html#ad51666e69f670e286293aff96eb435a9">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, <a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&amp; out);</div>
