@@ -118,6 +118,7 @@ NO_GPU_MULTI(RMSNorm)
 NO_GPU_MULTI(RMSNormVJP)
 NO_GPU_MULTI(RoPE)
 NO_GPU(ScaledDotProductAttention)
+NO_GPU_MULTI(AffineQuantize)
 } // namespace fast
 
 } // namespace mlx::core

@@ -212,4 +212,34 @@ class ScaledDotProductAttention : public Custom {
   bool needs_mask_;
 };
 
+class AffineQuantize : public Custom {
+ public:
+  explicit AffineQuantize(
+      Stream stream,
+      std::function<std::vector<array>(std::vector<array>)> fallback,
+      int group_size,
+      int bits,
+      bool dequantize)
+      : Custom(stream, fallback),
+        group_size_(group_size),
+        bits_(bits),
+        dequantize_(dequantize) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(AffineQuantize);
+
+ private:
+  std::function<std::vector<array>(std::vector<array>)> fallback_;
+  int group_size_;
+  int bits_;
+  bool dequantize_;
+};
+
 } // namespace mlx::core::fast

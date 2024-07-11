@@ -7,7 +7,10 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/utils.h"
+#include "mlx/fast_primitives.h"
 #include "mlx/primitives.h"
+
+#include <iostream>
 
 namespace mlx::core {
 
@@ -47,8 +50,8 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
-      kname << "qmv_" << type_string << "_gs_" << group_size_ << "_b_" << bits_
-            << "_fast";
+      kname << "qmv_fast_" << type_string << "_gs_" << group_size_ << "_b_"
+            << bits_;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
@@ -270,8 +273,8 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (B < 6 && O % 8 == 0 && D % 512 == 0 && D >= 512) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
-      kname << "bs_qmv_" << type_string << "_gs_" << group_size_ << "_b_"
-            << bits_ << "_fast";
+      kname << "bs_qmv_fast_" << type_string << "_gs_" << group_size_ << "_b_"
+            << bits_;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
@@ -511,6 +514,65 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
   }
+}
+
+void fast::AffineQuantize::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  auto& w_pre = inputs[0];
+  auto& scales_pre = inputs[1];
+  auto& biases_pre = inputs[2];
+
+  auto& out = outputs[0];
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  auto& s = stream();
+  auto& d = metal::device(s.device);
+
+  std::vector<array> copies;
+  auto ensure_row_contiguous = [&copies, &s](const array& arr) {
+    if (arr.flags().row_contiguous) {
+      return arr;
+    } else {
+      array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+      copy_gpu(arr, arr_copy, CopyType::General, s);
+      copies.push_back(arr_copy);
+      return arr_copy;
+    }
+  };
+  auto w = ensure_row_contiguous(w_pre);
+  auto scales = ensure_row_contiguous(scales_pre);
+  auto biases = ensure_row_contiguous(biases_pre);
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder.set_input_array(w, 0);
+  compute_encoder.set_input_array(scales, 1);
+  compute_encoder.set_input_array(biases, 2);
+  compute_encoder.set_output_array(out, 3);
+
+  std::ostringstream kname;
+  auto type_string = dequantize_ ? get_type_string(out.dtype())
+                                 : get_type_string(w_pre.dtype());
+  auto kernel_func = dequantize_ ? "affine_dequantize" : "affine_quantize";
+  kname << kernel_func << "_" << type_string << "_gs_" << group_size_ << "_b_"
+        << bits_;
+  auto template_def = get_template_definition(
+      kname.str(), kernel_func, type_string, group_size_, bits_);
+  auto kernel = get_quantized_kernel(d, kname.str(), template_def);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Treat uint32 as uint8 in kernel
+  constexpr int uint8_per_uint32 = 4;
+  int packs_per_int = 8 / bits_;
+  size_t nthreads =
+      dequantize_ ? w.size() * uint8_per_uint32 : w.size() / packs_per_int;
+
+  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  auto group_dims = MTL::Size(thread_group_size, 1, 1);
+  auto grid_dims = MTL::Size(nthreads, 1, 1);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
+
+  d.get_command_buffer(s.index)->addCompletedHandler(
+      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
 }
 
 } // namespace mlx::core

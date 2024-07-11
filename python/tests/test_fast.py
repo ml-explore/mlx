@@ -439,6 +439,21 @@ class TestFast(mlx_tests.MLXTestCase):
         )(x)
         self.assertTrue(mx.allclose(vmap_out, vmap_fast_out))
 
+    def test_affine_dequantize(self):
+        mx.random.seed(7)
+        x = mx.random.uniform(shape=(1, 512))
+        for bits in (8,):
+            with self.subTest(bits=bits):
+                with mx.stream(mx.cpu):
+                    w, scales, biases = mx.quantize(x, bits=bits)
+                    print("w", w, scales)
+                w, scales, biases = mx.quantize(x, bits=bits)
+                print("w", w, scales)
+                # out_f = mx.dequantize(w, scales, biases, bits=bits)
+                # with mx.stream(mx.cpu):
+                #     out = mx.dequantize(w, scales, biases, bits=bits)
+                # self.assertTrue(mx.allclose(out_f, out, atol=1e-4))
+
 
 if __name__ == "__main__":
     unittest.main()

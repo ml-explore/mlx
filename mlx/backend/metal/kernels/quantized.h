@@ -690,12 +690,12 @@ METAL_FUNC void qvm_impl(
 
 template <
     typename T,
-    const int BM,
-    const int BK,
-    const int BN,
     const int group_size,
     const int bits,
-    const bool aligned_N>
+    const bool aligned_N,
+    const int BM = 32,
+    const int BK = 32,
+    const int BN = 32>
 METAL_FUNC void qmm_t_impl(
     const device T* x,
     const device uint32_t* w,
@@ -812,11 +812,11 @@ METAL_FUNC void qmm_t_impl(
 
 template <
     typename T,
-    const int BM,
-    const int BK,
-    const int BN,
     const int group_size,
-    const int bits>
+    const int bits,
+    const int BM = 32,
+    const int BK = 32,
+    const int BN = 32>
 METAL_FUNC void qmm_n_impl(
     const device T* x,
     const device uint32_t* w,
@@ -1099,7 +1099,7 @@ template <
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BN * BK_padded];
 
-  qmm_t_impl<T, BM, BK, BN, group_size, bits, aligned_N>(
+  qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
       x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
 }
 
@@ -1131,7 +1131,7 @@ template <
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BK * BN_padded];
 
-  qmm_n_impl<T, BM, BK, BN, group_size, bits>(
+  qmm_n_impl<T, group_size, bits, BM, BK, BN>(
       x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
 }
 
@@ -1382,7 +1382,7 @@ template <
       s_strides,
       b_strides,
       tid);
-  qmm_t_impl<T, BM, BK, BN, group_size, bits, aligned_N>(
+  qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
       x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
 }
 
@@ -1450,6 +1450,64 @@ template <
       s_strides,
       b_strides,
       tid);
-  qmm_n_impl<T, BM, BK, BN, group_size, bits>(
+  qmm_n_impl<T, group_size, bits, BM, BK, BN>(
       x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void affine_quantize(
+    const device T* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    device uint8_t* out [[buffer(3)]],
+    uint index [[thread_position_in_grid]]) {
+  constexpr int uint8_bits = 8;
+  constexpr int packs_per_int = uint8_bits / bits;
+
+  int in_index = index * packs_per_int;
+  int gindex = in_index / group_size;
+  T scale = scales[gindex];
+  T bias = biases[gindex];
+
+  int output = 0;
+#pragma clang loop unroll(full)
+  for (int i = 0; i < packs_per_int; i++) {
+    int val = metal::round((w[in_index + i] - bias) / scale);
+    if (bits == 8) {
+      output = val;
+    } else {
+      output += val << (bits * i);
+    }
+  }
+  out[index] = output;
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void affine_dequantize(
+    const device uint8_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    device T* out [[buffer(3)]],
+    uint index [[thread_position_in_grid]]) {
+  constexpr int uint8_bits = 8;
+  constexpr int packs_per_int = uint8_bits / bits;
+
+  int oindex = index * packs_per_int;
+  int gindex = oindex / group_size;
+  T scale = scales[gindex];
+  T bias = biases[gindex];
+  uint val = w[index];
+
+#pragma clang loop unroll(full)
+  for (int i = 0; i < packs_per_int; i++) {
+    uint8_t d;
+    if (bits == 2) {
+      d = (val >> (bits * i)) & 0x03;
+    } else if (bits == 4) {
+      d = (val >> (bits * i)) & 0x0f;
+    } else if (bits == 8) {
+      d = val;
+    }
+    out[oindex + i] = scale * d + bias;
+  }
 }

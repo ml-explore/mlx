@@ -39,4 +39,20 @@ array scaled_dot_product_attention(
     const std::optional<array>& mask = std::nullopt,
     StreamOrDevice s = {});
 
+array affine_quantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size = 64,
+    int bits = 4,
+    StreamOrDevice s = {});
+
+array affine_dequantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size = 64,
+    int bits = 4,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::fast
