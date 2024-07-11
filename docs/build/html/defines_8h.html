@@ -88,6 +88,8 @@ $(function() {
 Macros</h2></td></tr>
 <tr class="memitem:a767ed9f2604de22b259cee02c4ce1d22" id="r_a767ed9f2604de22b259cee02c4ce1d22"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a767ed9f2604de22b259cee02c4ce1d22">MTL_CONST</a></td></tr>
 <tr class="separator:a767ed9f2604de22b259cee02c4ce1d22"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0cc4a821c1090d4183ff3a31da7e9f7b" id="r_a0cc4a821c1090d4183ff3a31da7e9f7b"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a0cc4a821c1090d4183ff3a31da7e9f7b">instantiate_kernel</a>(name,  func, ...)</td></tr>
+<tr class="separator:a0cc4a821c1090d4183ff3a31da7e9f7b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
@@ -103,6 +105,34 @@ Variables</h2></td></tr>
 <tr class="separator:a717a175676c3f96d74adfde7e751a541"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="a0cc4a821c1090d4183ff3a31da7e9f7b" name="a0cc4a821c1090d4183ff3a31da7e9f7b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0cc4a821c1090d4183ff3a31da7e9f7b">&#9670;&#160;</a></span>instantiate_kernel</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define instantiate_kernel</td>
+          <td>(</td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname">name, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname">func, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em>...</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">  <span class="keyword">template</span> [[host_name(                     \</div>
+<div class="line">      name)]] [[kernel]] <span class="keyword">decltype</span>(func&lt;__VA_ARGS__&gt;) func&lt;__VA_ARGS__&gt;;</div>
+</div><!-- fragment -->
+</div>
+</div>
 <a id="a767ed9f2604de22b259cee02c4ce1d22" name="a767ed9f2604de22b259cee02c4ce1d22"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a767ed9f2604de22b259cee02c4ce1d22">&#9670;&#160;</a></span>MTL_CONST</h2>
 
