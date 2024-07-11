@@ -17,5 +17,6 @@ var searchData=
   ['copy_5fkernels_14',['copy_kernels',['../metal_2jit_2copy_8h.html#a02dd446c4670b26ee069a70e951be785',1,'copy.h']]],
   ['cosine_15',['cosine',['../structpocketfft_1_1detail_1_1_exec_dcst.html#a185023fc1e386cc8f233b79c49c1fd8a',1,'pocketfft::detail::ExecDcst']]],
   ['cpu_16',['cpu',['../structmlx_1_1core_1_1_device.html#a69ee81924251dec96f1945c9d91506fd',1,'mlx::core::Device']]],
-  ['custom_5fvjp_17',['custom_vjp',['../namespacemlx_1_1core.html#a3fa1f0ad360f3e16c146384276b1c467',1,'mlx::core']]]
+  ['custom_5ffunction_17',['custom_function',['../namespacemlx_1_1core.html#a58c5b448f357b48e86599eb8eeea141d',1,'mlx::core']]],
+  ['custom_5fvjp_18',['custom_vjp',['../namespacemlx_1_1core.html#a3fa1f0ad360f3e16c146384276b1c467',1,'mlx::core']]]
 ];

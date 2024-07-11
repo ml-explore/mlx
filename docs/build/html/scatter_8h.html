@@ -86,16 +86,16 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:a43e2fe7efe7ade51b23c20c1862099b2" id="r_a43e2fe7efe7ade51b23c20c1862099b2"><td class="memTemplParams" colspan="2">template&lt;typename T , typename IdxT , typename Op , int NIDX&gt; </td></tr>
-<tr class="memitem:a43e2fe7efe7ade51b23c20c1862099b2"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a43e2fe7efe7ade51b23c20c1862099b2">scatter_1d_index_impl</a> (const device T *updates, device <a class="el" href="structmlx__atomic.html">mlx_atomic</a>&lt; T &gt; *out, const constant int *out_shape, const constant size_t *out_strides, const constant size_t &amp;upd_size, const thread array&lt; const device IdxT *, NIDX &gt; &amp;idx_buffers, uint2 gid)</td></tr>
-<tr class="separator:a43e2fe7efe7ade51b23c20c1862099b2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac1fd901b5ef9f39be32316a17297781e" id="r_ac1fd901b5ef9f39be32316a17297781e"><td class="memTemplParams" colspan="2">template&lt;typename T , typename IdxT , typename Op , int NIDX&gt; </td></tr>
+<tr class="memitem:ac1fd901b5ef9f39be32316a17297781e"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac1fd901b5ef9f39be32316a17297781e">scatter_1d_index_impl</a> (const device T *updates, device <a class="el" href="structmlx__atomic.html">mlx_atomic</a>&lt; T &gt; *out, const constant int *out_shape, const constant size_t *out_strides, const constant size_t &amp;out_ndim, const constant int *upd_shape, const constant size_t &amp;upd_ndim, const constant size_t &amp;upd_size, const thread array&lt; const device IdxT *, NIDX &gt; &amp;idx_buffers, uint2 gid)</td></tr>
+<tr class="separator:ac1fd901b5ef9f39be32316a17297781e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a75f61cc43682a72dd66a1da43a1809fe" id="r_a75f61cc43682a72dd66a1da43a1809fe"><td class="memTemplParams" colspan="2">template&lt;typename T , typename IdxT , typename Op , int NIDX&gt; </td></tr>
 <tr class="memitem:a75f61cc43682a72dd66a1da43a1809fe"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a75f61cc43682a72dd66a1da43a1809fe">scatter_impl</a> (const device T *updates, device <a class="el" href="structmlx__atomic.html">mlx_atomic</a>&lt; T &gt; *out, const constant int *upd_shape, const constant size_t *upd_strides, const constant size_t &amp;upd_ndim, const constant size_t &amp;upd_size, const constant int *out_shape, const constant size_t *out_strides, const constant size_t &amp;out_ndim, const constant int *axes, const thread <a class="el" href="struct_indices.html">Indices</a>&lt; IdxT, NIDX &gt; &amp;indices, uint2 gid)</td></tr>
 <tr class="separator:a75f61cc43682a72dd66a1da43a1809fe"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="a43e2fe7efe7ade51b23c20c1862099b2" name="a43e2fe7efe7ade51b23c20c1862099b2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a43e2fe7efe7ade51b23c20c1862099b2">&#9670;&#160;</a></span>scatter_1d_index_impl()</h2>
+<a id="ac1fd901b5ef9f39be32316a17297781e" name="ac1fd901b5ef9f39be32316a17297781e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac1fd901b5ef9f39be32316a17297781e">&#9670;&#160;</a></span>scatter_1d_index_impl()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -121,6 +121,21 @@ template&lt;typename T , typename IdxT , typename Op , int NIDX&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>out_strides</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_ndim</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>upd_shape</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>upd_ndim</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>

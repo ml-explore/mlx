@@ -9,9 +9,10 @@ var searchData=
   ['_7edevice_6',['~Device',['../classmlx_1_1core_1_1metal_1_1_device.html#a4f39c28c6cdd1d2da1918f5871bcba6e',1,'mlx::core::metal::Device']]],
   ['_7eintracing_7',['~InTracing',['../structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a',1,'mlx::core::detail::InTracing']]],
   ['_7eprimitive_8',['~Primitive',['../classmlx_1_1core_1_1_primitive.html#a29f70eb2d3b7e6c5fe52779c03f03777',1,'mlx::core::Primitive']]],
-  ['_7escheduler_9',['~Scheduler',['../classmlx_1_1core_1_1scheduler_1_1_scheduler.html#a6626c4a743a2b3004fc14042bc8b0edf',1,'mlx::core::scheduler::Scheduler']]],
-  ['_7estreamcontext_10',['~StreamContext',['../structmlx_1_1core_1_1_stream_context.html#ac5be1c576d22b3d0b0a6fcc7e6abe659',1,'mlx::core::StreamContext']]],
-  ['_7estreamthread_11',['~StreamThread',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a71de50591388b6e2cc6c57827e1a1ad4',1,'mlx::core::scheduler::StreamThread']]],
-  ['_7ethread_5fpool_12',['~thread_pool',['../classpocketfft_1_1detail_1_1threading_1_1thread__pool.html#a68f71e79fa93379fcc5819e533b45472',1,'pocketfft::detail::threading::thread_pool']]],
-  ['_7eunaryprimitive_13',['~UnaryPrimitive',['../classmlx_1_1core_1_1_unary_primitive.html#ac0677ab99a5ca660ed6ab7902ea364de',1,'mlx::core::UnaryPrimitive']]]
+  ['_7eretaingraph_9',['~RetainGraph',['../structmlx_1_1core_1_1detail_1_1_retain_graph.html#a6bd6dc2e1caf2f764f39856a72ff6cbc',1,'mlx::core::detail::RetainGraph']]],
+  ['_7escheduler_10',['~Scheduler',['../classmlx_1_1core_1_1scheduler_1_1_scheduler.html#a6626c4a743a2b3004fc14042bc8b0edf',1,'mlx::core::scheduler::Scheduler']]],
+  ['_7estreamcontext_11',['~StreamContext',['../structmlx_1_1core_1_1_stream_context.html#ac5be1c576d22b3d0b0a6fcc7e6abe659',1,'mlx::core::StreamContext']]],
+  ['_7estreamthread_12',['~StreamThread',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a71de50591388b6e2cc6c57827e1a1ad4',1,'mlx::core::scheduler::StreamThread']]],
+  ['_7ethread_5fpool_13',['~thread_pool',['../classpocketfft_1_1detail_1_1threading_1_1thread__pool.html#a68f71e79fa93379fcc5819e533b45472',1,'pocketfft::detail::threading::thread_pool']]],
+  ['_7eunaryprimitive_14',['~UnaryPrimitive',['../classmlx_1_1core_1_1_unary_primitive.html#ac0677ab99a5ca660ed6ab7902ea364de',1,'mlx::core::UnaryPrimitive']]]
 ];

@@ -112,43 +112,76 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span><span class="comment">// Erase cached compile functions</span></div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core_1_1detail.html#a69eb76a14f845ca000f1ccb2edda0175">   28</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1detail.html#a69eb76a14f845ca000f1ccb2edda0175">compile_erase</a>(std::uintptr_t fun_id);</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span> </div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="comment">// Create an InTracing object during tracing operations to signify to the rest</span></div>
-<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="comment">// of the codebase that we are during tracing so evals should not throw away</span></div>
-<div class="line"><a id="l00032" name="l00032"></a><span class="lineno">   32</span><span class="comment">// the graph.</span></div>
-<div class="foldopen" id="foldopen00033" data-start="{" data-end="};">
-<div class="line"><a id="l00033" name="l00033"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html">   33</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html">InTracing</a> {</div>
-<div class="foldopen" id="foldopen00034" data-start="{" data-end="}">
-<div class="line"><a id="l00034" name="l00034"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a7a77f19391498afa5dcea3509d241a70">   34</a></span>  <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a7a77f19391498afa5dcea3509d241a70">InTracing</a>() {</div>
-<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>    tracing_counter++;</div>
-<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span>  }</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span><span class="comment">// Clear the compiler cache causing a recompilation of all compiled functions</span></div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span><span class="comment">// when called again.</span></div>
+<div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core_1_1detail.html#a3fb927c209b946aefebb195993fbe4cf">   32</a></span><span class="keywordtype">void</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1detail.html#a3fb927c209b946aefebb195993fbe4cf">compile_clear_cache</a>();</div>
+<div class="line"><a id="l00033" name="l00033"></a><span class="lineno">   33</span> </div>
+<div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span><span class="comment">// Create an InTracing object during tracing operations to signify to the rest</span></div>
+<div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span><span class="comment">// of the codebase that we are during tracing so evals should not throw away</span></div>
+<div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span><span class="comment">// the graph.</span></div>
+<div class="foldopen" id="foldopen00037" data-start="{" data-end="};">
+<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html">   37</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html">InTracing</a> {</div>
+<div class="foldopen" id="foldopen00038" data-start="{" data-end="}">
+<div class="line"><a id="l00038" name="l00038"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a7a77f19391498afa5dcea3509d241a70">   38</a></span>  <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a7a77f19391498afa5dcea3509d241a70">InTracing</a>() {</div>
+<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>    tracing_counter++;</div>
+<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span>  }</div>
 </div>
-<div class="foldopen" id="foldopen00037" data-start="{" data-end="}">
-<div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a">   37</a></span>  <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a">~InTracing</a>() {</div>
-<div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span>    tracing_counter--;</div>
-<div class="line"><a id="l00039" name="l00039"></a><span class="lineno">   39</span>  }</div>
-</div>
-<div class="line"><a id="l00040" name="l00040"></a><span class="lineno">   40</span> </div>
 <div class="foldopen" id="foldopen00041" data-start="{" data-end="}">
-<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#ac52b8e2c3f808d3076c4e1ebaf9dc63d">   41</a></span>  <span class="keyword">static</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#ac52b8e2c3f808d3076c4e1ebaf9dc63d">in_tracing</a>() {</div>
-<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    <span class="keywordflow">return</span> tracing_counter &gt; 0;</div>
+<div class="line"><a id="l00041" name="l00041"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a">   41</a></span>  <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a">~InTracing</a>() {</div>
+<div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span>    tracing_counter--;</div>
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno">   43</span>  }</div>
 </div>
 <div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span> </div>
-<div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span> <span class="keyword">private</span>:</div>
-<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>  <span class="keyword">static</span> <span class="keywordtype">int</span> tracing_counter;</div>
-<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>};</div>
+<div class="foldopen" id="foldopen00045" data-start="{" data-end="}">
+<div class="line"><a id="l00045" name="l00045"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#ac52b8e2c3f808d3076c4e1ebaf9dc63d">   45</a></span>  <span class="keyword">static</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#ac52b8e2c3f808d3076c4e1ebaf9dc63d">in_tracing</a>() {</div>
+<div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>    <span class="keywordflow">return</span> tracing_counter &gt; 0;</div>
+<div class="line"><a id="l00047" name="l00047"></a><span class="lineno">   47</span>  }</div>
 </div>
 <div class="line"><a id="l00048" name="l00048"></a><span class="lineno">   48</span> </div>
-<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span>} <span class="comment">// namespace mlx::core::detail</span></div>
+<div class="line"><a id="l00049" name="l00049"></a><span class="lineno">   49</span> <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00050" name="l00050"></a><span class="lineno">   50</span>  <span class="keyword">static</span> <span class="keywordtype">int</span> tracing_counter;</div>
+<div class="line"><a id="l00051" name="l00051"></a><span class="lineno">   51</span>};</div>
+</div>
+<div class="line"><a id="l00052" name="l00052"></a><span class="lineno">   52</span> </div>
+<div class="foldopen" id="foldopen00053" data-start="{" data-end="};">
+<div class="line"><a id="l00053" name="l00053"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html">   53</a></span><span class="keyword">struct </span><a class="code hl_struct" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html">RetainGraph</a> {</div>
+<div class="foldopen" id="foldopen00054" data-start="{" data-end="}">
+<div class="line"><a id="l00054" name="l00054"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a7fac0244c14cc9e8f580bc1298ff68da">   54</a></span>  <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a7fac0244c14cc9e8f580bc1298ff68da">RetainGraph</a>() {</div>
+<div class="line"><a id="l00055" name="l00055"></a><span class="lineno">   55</span>    tracing_counter++;</div>
+<div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span>  }</div>
+</div>
+<div class="foldopen" id="foldopen00057" data-start="{" data-end="}">
+<div class="line"><a id="l00057" name="l00057"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a6bd6dc2e1caf2f764f39856a72ff6cbc">   57</a></span>  <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a6bd6dc2e1caf2f764f39856a72ff6cbc">~RetainGraph</a>() {</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>    tracing_counter--;</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>  }</div>
+</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span> </div>
+<div class="foldopen" id="foldopen00061" data-start="{" data-end="}">
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a12ead93cb70ebab865c5e9ce7718f814">   61</a></span>  <span class="keyword">static</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a12ead93cb70ebab865c5e9ce7718f814">retain_graph</a>() {</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>    <span class="keywordflow">return</span> tracing_counter &gt; 0;</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>  }</div>
+</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span> </div>
+<div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span> <span class="keyword">private</span>:</div>
+<div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span>  <span class="keyword">static</span> <span class="keywordtype">int</span> tracing_counter;</div>
+<div class="line"><a id="l00067" name="l00067"></a><span class="lineno">   67</span>};</div>
+</div>
+<div class="line"><a id="l00068" name="l00068"></a><span class="lineno">   68</span> </div>
+<div class="line"><a id="l00069" name="l00069"></a><span class="lineno">   69</span>} <span class="comment">// namespace mlx::core::detail</span></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1detail_html"><div class="ttname"><a href="namespacemlx_1_1core_1_1detail.html">mlx::core::detail</a></div><div class="ttdef"><b>Definition</b> ops.h:8</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1detail_html_a31a5582530faea230eb8acafc0f7e154"><div class="ttname"><a href="namespacemlx_1_1core_1_1detail.html#a31a5582530faea230eb8acafc0f7e154">mlx::core::detail::vmap_replace</a></div><div class="ttdeci">std::vector&lt; array &gt; vmap_replace(const std::vector&lt; array &gt; &amp;inputs, const std::vector&lt; array &gt; &amp;s_inputs, const std::vector&lt; array &gt; &amp;s_outputs, const std::vector&lt; int &gt; &amp;in_axes, const std::vector&lt; int &gt; &amp;out_axes)</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_1_1detail_html_a3fb927c209b946aefebb195993fbe4cf"><div class="ttname"><a href="namespacemlx_1_1core_1_1detail.html#a3fb927c209b946aefebb195993fbe4cf">mlx::core::detail::compile_clear_cache</a></div><div class="ttdeci">void compile_clear_cache()</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1detail_html_a4d14dee182dc9a8bea64efdaad310a1f"><div class="ttname"><a href="namespacemlx_1_1core_1_1detail.html#a4d14dee182dc9a8bea64efdaad310a1f">mlx::core::detail::compile</a></div><div class="ttdeci">std::function&lt; std::vector&lt; array &gt;(const std::vector&lt; array &gt; &amp;) compile)(const std::function&lt; std::vector&lt; array &gt;(const std::vector&lt; array &gt; &amp;)&gt; &amp;fun, std::uintptr_t fun_id, bool shapeless=false, std::vector&lt; uint64_t &gt; constants={})</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1detail_html_a5ba794afe1a557e0505887cfb481c515"><div class="ttname"><a href="namespacemlx_1_1core_1_1detail.html#a5ba794afe1a557e0505887cfb481c515">mlx::core::detail::vmap_trace</a></div><div class="ttdeci">std::pair&lt; std::vector&lt; array &gt;, std::vector&lt; array &gt; &gt; vmap_trace(const std::function&lt; std::vector&lt; array &gt;(const std::vector&lt; array &gt; &amp;)&gt; &amp;fun, const std::vector&lt; array &gt; &amp;inputs, const std::vector&lt; int &gt; &amp;in_axes)</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1detail_html_a69eb76a14f845ca000f1ccb2edda0175"><div class="ttname"><a href="namespacemlx_1_1core_1_1detail.html#a69eb76a14f845ca000f1ccb2edda0175">mlx::core::detail::compile_erase</a></div><div class="ttdeci">void compile_erase(std::uintptr_t fun_id)</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html">mlx::core::detail::InTracing</a></div><div class="ttdef"><b>Definition</b> transforms_impl.h:33</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html_a7a77f19391498afa5dcea3509d241a70"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a7a77f19391498afa5dcea3509d241a70">mlx::core::detail::InTracing::InTracing</a></div><div class="ttdeci">InTracing()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:34</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html_a83d57d7fa63bcb0ff72080191d0f177a"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a">mlx::core::detail::InTracing::~InTracing</a></div><div class="ttdeci">~InTracing()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:37</div></div>
-<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html_ac52b8e2c3f808d3076c4e1ebaf9dc63d"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#ac52b8e2c3f808d3076c4e1ebaf9dc63d">mlx::core::detail::InTracing::in_tracing</a></div><div class="ttdeci">static bool in_tracing()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:41</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html">mlx::core::detail::InTracing</a></div><div class="ttdef"><b>Definition</b> transforms_impl.h:37</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html_a7a77f19391498afa5dcea3509d241a70"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a7a77f19391498afa5dcea3509d241a70">mlx::core::detail::InTracing::InTracing</a></div><div class="ttdeci">InTracing()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:38</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html_a83d57d7fa63bcb0ff72080191d0f177a"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a">mlx::core::detail::InTracing::~InTracing</a></div><div class="ttdeci">~InTracing()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:41</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_in_tracing_html_ac52b8e2c3f808d3076c4e1ebaf9dc63d"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_in_tracing.html#ac52b8e2c3f808d3076c4e1ebaf9dc63d">mlx::core::detail::InTracing::in_tracing</a></div><div class="ttdeci">static bool in_tracing()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:45</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_retain_graph_html"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_retain_graph.html">mlx::core::detail::RetainGraph</a></div><div class="ttdef"><b>Definition</b> transforms_impl.h:53</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_retain_graph_html_a12ead93cb70ebab865c5e9ce7718f814"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a12ead93cb70ebab865c5e9ce7718f814">mlx::core::detail::RetainGraph::retain_graph</a></div><div class="ttdeci">static bool retain_graph()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:61</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_retain_graph_html_a6bd6dc2e1caf2f764f39856a72ff6cbc"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a6bd6dc2e1caf2f764f39856a72ff6cbc">mlx::core::detail::RetainGraph::~RetainGraph</a></div><div class="ttdeci">~RetainGraph()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:57</div></div>
+<div class="ttc" id="astructmlx_1_1core_1_1detail_1_1_retain_graph_html_a7fac0244c14cc9e8f580bc1298ff68da"><div class="ttname"><a href="structmlx_1_1core_1_1detail_1_1_retain_graph.html#a7fac0244c14cc9e8f580bc1298ff68da">mlx::core::detail::RetainGraph::RetainGraph</a></div><div class="ttdeci">RetainGraph()</div><div class="ttdef"><b>Definition</b> transforms_impl.h:54</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
