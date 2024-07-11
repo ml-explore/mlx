@@ -28,7 +28,7 @@ var searchData=
   ['thread_5fid_25',['thread_id',['../namespacepocketfft_1_1detail_1_1threading.html#aebe85d6273d92c7d3728e2c621ccc82b',1,'pocketfft::detail::threading']]],
   ['thread_5fmap_26',['thread_map',['../namespacepocketfft_1_1detail_1_1threading.html#a4fcf674db39f0e2c1c59d48491daed6e',1,'pocketfft::detail::threading']]],
   ['thread_5fpool_27',['thread_pool',['../classpocketfft_1_1detail_1_1threading_1_1thread__pool.html#a37a8121a99dd06a9d44b3e80ba0ea560',1,'pocketfft::detail::threading::thread_pool::thread_pool(size_t nthreads)'],['../classpocketfft_1_1detail_1_1threading_1_1thread__pool.html#aefaadaa60c0183b862ad96338177a5e0',1,'pocketfft::detail::threading::thread_pool::thread_pool()']]],
-  ['thread_5fswap_28',['thread_swap',['../kernels_2sort_8h.html#a6e8c2da4975a8001fd5ddf211a3058b7',1,'sort.h']]],
+  ['thread_5fswap_28',['thread_swap',['../sort_8h.html#a6e8c2da4975a8001fd5ddf211a3058b7',1,'sort.h']]],
   ['threefry2x32_5fhash_29',['threefry2x32_hash',['../namespacemlx_1_1core_1_1random.html#ac7e92c89a2bac1b0bed922a3d4c3c66b',1,'mlx::core::random']]],
   ['tile_30',['tile',['../group__ops.html#gab105a57b9a4d84496fe1e4d60e13d361',1,'mlx::core']]],
   ['to_5fbnns_5fdtype_31',['to_bnns_dtype',['../namespacemlx_1_1core.html#a7a4193f37b1de9c33c31d1da09c77edb',1,'mlx::core']]],
