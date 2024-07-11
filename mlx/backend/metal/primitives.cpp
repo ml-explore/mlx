@@ -171,7 +171,7 @@ void Copy::eval_gpu(const std::vector<array>& inputs, array& out) {
   eval(inputs, out);
 }
 
-void CustomVJP::eval_gpu(
+void CustomTransforms::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   eval(inputs, outputs);

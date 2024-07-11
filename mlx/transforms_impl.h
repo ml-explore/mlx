@@ -50,4 +50,20 @@ struct InTracing {
   static int tracing_counter;
 };
 
+struct RetainGraph {
+  RetainGraph() {
+    tracing_counter++;
+  }
+  ~RetainGraph() {
+    tracing_counter--;
+  }
+
+  static bool retain_graph() {
+    return tracing_counter > 0;
+  }
+
+ private:
+  static int tracing_counter;
+};
+
 } // namespace mlx::core::detail
