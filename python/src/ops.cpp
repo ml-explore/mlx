@@ -12,6 +12,7 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
+#include "mlx/einsum.h"
 #include "mlx/ops.h"
 #include "mlx/utils.h"
 #include "python/src/load.h"
@@ -4407,14 +4408,39 @@ void init_ops(nb::module_& m) {
             array: The transformed array.
       )pbdoc");
   m.def(
+      "einsum_path",
+      [](const std::string& equation, const nb::args& operands) {
+        auto arrays_list = nb::cast<std::vector<array>>(operands);
+        return einsum_path(equation, arrays_list);
+        /*std::vector<nb::tuple> tuple_path;
+        for (auto& p : path) {
+          tuple_path.push_back(nb::cast<nb::tuple>(p));
+        }
+        return */
+      },
+      "subscripts"_a,
+      "operands"_a,
+      nb::sig("def einsum_path(subscripts: str, *operands)"),
+      R"pbdoc(
+
+      Compute the contraction order for the given Einstein summation.
+
+      Args:
+        subscripts (str): The Einstein summation convention equation.
+        *operands (array): The input arrays.
+
+      Returns:
+        list(tuple(int, int)): The einsum path.
+    )pbdoc");
+  m.def(
       "einsum",
-      [](const std::string& equation,
+      [](const std::string& subscripts,
          const nb::args& operands,
          StreamOrDevice s) {
         auto arrays_list = nb::cast<std::vector<array>>(operands);
-        return einsum(equation, arrays_list, s);
+        return einsum(subscripts, arrays_list, s);
       },
-      "equation"_a,
+      "subscripts"_a,
       "operands"_a,
       nb::kw_only(),
       "stream"_a = nb::none(),
@@ -4429,6 +4455,6 @@ void init_ops(nb::module_& m) {
         *operands (array): The input arrays.
 
       Returns:
-        result (array): The output array.
+        array: The output array.
     )pbdoc");
 }
