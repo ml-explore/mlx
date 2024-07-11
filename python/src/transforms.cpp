@@ -938,6 +938,9 @@ void init_transforms(nb::module_& m) {
       :method:`jvp` and :method:`vmap` are used instead of the default
       transformation.
 
+      Note, all custom transformations are optional. Undefined transformations
+      fall back to the default behaviour.
+
       Example usage:
 
       .. code-block:: python
