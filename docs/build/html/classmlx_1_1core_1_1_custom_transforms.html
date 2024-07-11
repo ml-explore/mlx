@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.10.0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>MLX: mlx::core::CustomVJP Class Reference</title>
+<title>MLX: mlx::core::CustomTransforms Class Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -71,43 +71,49 @@ $(function() {
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="namespacemlx.html">mlx</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core.html">core</a></li><li class="navelem"><a class="el" href="classmlx_1_1core_1_1_custom_v_j_p.html">CustomVJP</a></li>  </ul>
+<li class="navelem"><a class="el" href="namespacemlx.html">mlx</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core.html">core</a></li><li class="navelem"><a class="el" href="classmlx_1_1core_1_1_custom_transforms.html">CustomTransforms</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
   <div class="summary">
 <a href="#pub-methods">Public Member Functions</a> &#124;
-<a href="classmlx_1_1core_1_1_custom_v_j_p-members.html">List of all members</a>  </div>
-  <div class="headertitle"><div class="title">mlx::core::CustomVJP Class Reference</div></div>
+<a href="classmlx_1_1core_1_1_custom_transforms-members.html">List of all members</a>  </div>
+  <div class="headertitle"><div class="title">mlx::core::CustomTransforms Class Reference</div></div>
 </div><!--header-->
 <div class="contents">
 
 <p><code>#include &lt;<a class="el" href="primitives_8h_source.html">primitives.h</a>&gt;</code></p>
 <div class="dynheader">
-Inheritance diagram for mlx::core::CustomVJP:</div>
+Inheritance diagram for mlx::core::CustomTransforms:</div>
 <div class="dyncontent">
  <div class="center">
-  <img src="classmlx_1_1core_1_1_custom_v_j_p.png" usemap="#mlx::core::CustomVJP_map" alt=""/>
-  <map id="mlx::core::CustomVJP_map" name="mlx::core::CustomVJP_map">
-<area href="classmlx_1_1core_1_1_primitive.html" alt="mlx::core::Primitive" shape="rect" coords="0,0,133,24"/>
+  <img src="classmlx_1_1core_1_1_custom_transforms.png" usemap="#mlx::core::CustomTransforms_map" alt=""/>
+  <map id="mlx::core::CustomTransforms_map" name="mlx::core::CustomTransforms_map">
+<area href="classmlx_1_1core_1_1_primitive.html" alt="mlx::core::Primitive" shape="rect" coords="0,0,172,24"/>
   </map>
 </div></div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:aefdce05534ff6159f661a9768aadb511" id="r_aefdce05534ff6159f661a9768aadb511"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aefdce05534ff6159f661a9768aadb511">CustomVJP</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;)&gt; fun)</td></tr>
-<tr class="separator:aefdce05534ff6159f661a9768aadb511"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:acd8488aa60e8be7afc91b3ce3f555f14" id="r_acd8488aa60e8be7afc91b3ce3f555f14"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acd8488aa60e8be7afc91b3ce3f555f14">eval_cpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
-<tr class="memdesc:acd8488aa60e8be7afc91b3ce3f555f14"><td class="mdescLeft">&#160;</td><td class="mdescRight">A primitive must know how to evaluate itself on the CPU/GPU for the given inputs and populate the output arrays.  <br /></td></tr>
-<tr class="separator:acd8488aa60e8be7afc91b3ce3f555f14"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac7208e2e77ab11d8ef054cf31f9c3d99" id="r_ac7208e2e77ab11d8ef054cf31f9c3d99"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac7208e2e77ab11d8ef054cf31f9c3d99">eval_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
-<tr class="separator:ac7208e2e77ab11d8ef054cf31f9c3d99"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a00a15e67da68356512670913863008f8" id="r_a00a15e67da68356512670913863008f8"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a00a15e67da68356512670913863008f8">vjp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;cotan, const std::vector&lt; int &gt; &amp;argnums, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
-<tr class="memdesc:a00a15e67da68356512670913863008f8"><td class="mdescLeft">&#160;</td><td class="mdescRight">The vector-Jacobian product.  <br /></td></tr>
-<tr class="separator:a00a15e67da68356512670913863008f8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1df084da022f3fd50f1d24379ec1c2f5" id="r_a1df084da022f3fd50f1d24379ec1c2f5"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1df084da022f3fd50f1d24379ec1c2f5">print</a> (std::ostream &amp;os) override</td></tr>
-<tr class="memdesc:a1df084da022f3fd50f1d24379ec1c2f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print the primitive.  <br /></td></tr>
-<tr class="separator:a1df084da022f3fd50f1d24379ec1c2f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab52abadb9c6f6db83d087c7b751be488" id="r_ab52abadb9c6f6db83d087c7b751be488"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab52abadb9c6f6db83d087c7b751be488">CustomTransforms</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, int num_outputs, std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;)&gt; <a class="el" href="#aa1da36cef632df767cd9809d6cf06209">vjp</a>, std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; int &gt; &amp;)&gt; <a class="el" href="#aa9f695100170d5cae999b3da138ce720">jvp</a>, std::function&lt; std::pair&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;, std::vector&lt; int &gt; &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; int &gt; &amp;)&gt; <a class="el" href="#a906a2ff30d9c5281fbf1fa927e4c021b">vmap</a>)</td></tr>
+<tr class="separator:ab52abadb9c6f6db83d087c7b751be488"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adba1c40c77a2138df6b5f75483f62184" id="r_adba1c40c77a2138df6b5f75483f62184"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#adba1c40c77a2138df6b5f75483f62184">eval_cpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
+<tr class="memdesc:adba1c40c77a2138df6b5f75483f62184"><td class="mdescLeft">&#160;</td><td class="mdescRight">A primitive must know how to evaluate itself on the CPU/GPU for the given inputs and populate the output arrays.  <br /></td></tr>
+<tr class="separator:adba1c40c77a2138df6b5f75483f62184"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7b3538681acbb20af3ed37b0877f6667" id="r_a7b3538681acbb20af3ed37b0877f6667"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7b3538681acbb20af3ed37b0877f6667">eval_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
+<tr class="separator:a7b3538681acbb20af3ed37b0877f6667"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa9f695100170d5cae999b3da138ce720" id="r_aa9f695100170d5cae999b3da138ce720"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa9f695100170d5cae999b3da138ce720">jvp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;tangents, const std::vector&lt; int &gt; &amp;argnums) override</td></tr>
+<tr class="memdesc:aa9f695100170d5cae999b3da138ce720"><td class="mdescLeft">&#160;</td><td class="mdescRight">The Jacobian-vector product.  <br /></td></tr>
+<tr class="separator:aa9f695100170d5cae999b3da138ce720"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa1da36cef632df767cd9809d6cf06209" id="r_aa1da36cef632df767cd9809d6cf06209"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa1da36cef632df767cd9809d6cf06209">vjp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;cotangents, const std::vector&lt; int &gt; &amp;argnums, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
+<tr class="memdesc:aa1da36cef632df767cd9809d6cf06209"><td class="mdescLeft">&#160;</td><td class="mdescRight">The vector-Jacobian product.  <br /></td></tr>
+<tr class="separator:aa1da36cef632df767cd9809d6cf06209"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a906a2ff30d9c5281fbf1fa927e4c021b" id="r_a906a2ff30d9c5281fbf1fa927e4c021b"><td class="memItemLeft" align="right" valign="top">virtual std::pair&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;, std::vector&lt; int &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a906a2ff30d9c5281fbf1fa927e4c021b">vmap</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, const std::vector&lt; int &gt; &amp;axes) override</td></tr>
+<tr class="memdesc:a906a2ff30d9c5281fbf1fa927e4c021b"><td class="mdescLeft">&#160;</td><td class="mdescRight">The primitive must know how to vectorize itself across the given axes.  <br /></td></tr>
+<tr class="separator:a906a2ff30d9c5281fbf1fa927e4c021b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2ddbacbc468271b11caee0ad97005298" id="r_a2ddbacbc468271b11caee0ad97005298"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2ddbacbc468271b11caee0ad97005298">print</a> (std::ostream &amp;os) override</td></tr>
+<tr class="memdesc:a2ddbacbc468271b11caee0ad97005298"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print the primitive.  <br /></td></tr>
+<tr class="separator:a2ddbacbc468271b11caee0ad97005298"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1_primitive"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1_primitive')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1_primitive.html">mlx::core::Primitive</a></td></tr>
 <tr class="memitem:afc69f22ee1f6e8a9ecc2c3a8f43b8fdb inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_afc69f22ee1f6e8a9ecc2c3a8f43b8fdb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#afc69f22ee1f6e8a9ecc2c3a8f43b8fdb">Primitive</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>)</td></tr>
 <tr class="separator:afc69f22ee1f6e8a9ecc2c3a8f43b8fdb inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -117,12 +123,6 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a46e6257397a662528f9f831842ac456a inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a46e6257397a662528f9f831842ac456a"><td class="memItemLeft" align="right" valign="top">const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a> ()</td></tr>
 <tr class="memdesc:a46e6257397a662528f9f831842ac456a inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">The stream the primitive will run on.  <br /></td></tr>
 <tr class="separator:a46e6257397a662528f9f831842ac456a inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9fecf38f53da08ba1947543c2b3158c2 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a9fecf38f53da08ba1947543c2b3158c2"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a9fecf38f53da08ba1947543c2b3158c2">jvp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;tangents, const std::vector&lt; int &gt; &amp;argnums)</td></tr>
-<tr class="memdesc:a9fecf38f53da08ba1947543c2b3158c2 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">The Jacobian-vector product.  <br /></td></tr>
-<tr class="separator:a9fecf38f53da08ba1947543c2b3158c2 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac632b9619dd7a6a0f177bd36202e8103 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_ac632b9619dd7a6a0f177bd36202e8103"><td class="memItemLeft" align="right" valign="top">virtual std::pair&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;, std::vector&lt; int &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#ac632b9619dd7a6a0f177bd36202e8103">vmap</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, const std::vector&lt; int &gt; &amp;axes)</td></tr>
-<tr class="memdesc:ac632b9619dd7a6a0f177bd36202e8103 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">The primitive must know how to vectorize itself across the given axes.  <br /></td></tr>
-<tr class="separator:ac632b9619dd7a6a0f177bd36202e8103 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a6140a502af4c2bbbc776ab26e9afebcd"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a6140a502af4c2bbbc776ab26e9afebcd">is_equivalent</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other) const</td></tr>
 <tr class="memdesc:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">Equivalence check defaults to false unless overridden by the primitive.  <br /></td></tr>
 <tr class="separator:a6140a502af4c2bbbc776ab26e9afebcd inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -141,8 +141,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a50bbddd43e1ba0cf5f127cd7aa756a9e inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="aefdce05534ff6159f661a9768aadb511" name="aefdce05534ff6159f661a9768aadb511"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aefdce05534ff6159f661a9768aadb511">&#9670;&#160;</a></span>CustomVJP()</h2>
+<a id="ab52abadb9c6f6db83d087c7b751be488" name="ab52abadb9c6f6db83d087c7b751be488"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab52abadb9c6f6db83d087c7b751be488">&#9670;&#160;</a></span>CustomTransforms()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -151,14 +151,29 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">mlx::core::CustomVJP::CustomVJP </td>
+          <td class="memname">mlx::core::CustomTransforms::CustomTransforms </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;)&gt;</td>          <td class="paramname"><span class="paramname"><em>fun</em></span>&#160;)</td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>num_outputs</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;)&gt;</td>          <td class="paramname"><span class="paramname"><em>vjp</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::function&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; int &gt; &amp;)&gt;</td>          <td class="paramname"><span class="paramname"><em>jvp</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::function&lt; std::pair&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;, std::vector&lt; int &gt; &gt;(const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;, const std::vector&lt; int &gt; &amp;)&gt;</td>          <td class="paramname"><span class="paramname"><em>vmap</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -171,8 +186,8 @@ Public Member Functions</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="acd8488aa60e8be7afc91b3ce3f555f14" name="acd8488aa60e8be7afc91b3ce3f555f14"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#acd8488aa60e8be7afc91b3ce3f555f14">&#9670;&#160;</a></span>eval_cpu()</h2>
+<a id="adba1c40c77a2138df6b5f75483f62184" name="adba1c40c77a2138df6b5f75483f62184"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adba1c40c77a2138df6b5f75483f62184">&#9670;&#160;</a></span>eval_cpu()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -181,7 +196,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">void mlx::core::CustomVJP::eval_cpu </td>
+          <td class="memname">void mlx::core::CustomTransforms::eval_cpu </td>
           <td>(</td>
           <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>inputs</em>, </span></td>
         </tr>
@@ -205,8 +220,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="ac7208e2e77ab11d8ef054cf31f9c3d99" name="ac7208e2e77ab11d8ef054cf31f9c3d99"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac7208e2e77ab11d8ef054cf31f9c3d99">&#9670;&#160;</a></span>eval_gpu()</h2>
+<a id="a7b3538681acbb20af3ed37b0877f6667" name="a7b3538681acbb20af3ed37b0877f6667"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7b3538681acbb20af3ed37b0877f6667">&#9670;&#160;</a></span>eval_gpu()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -215,7 +230,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">void mlx::core::CustomVJP::eval_gpu </td>
+          <td class="memname">void mlx::core::CustomTransforms::eval_gpu </td>
           <td>(</td>
           <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>inputs</em>, </span></td>
         </tr>
@@ -236,8 +251,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a1df084da022f3fd50f1d24379ec1c2f5" name="a1df084da022f3fd50f1d24379ec1c2f5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1df084da022f3fd50f1d24379ec1c2f5">&#9670;&#160;</a></span>print()</h2>
+<a id="aa9f695100170d5cae999b3da138ce720" name="aa9f695100170d5cae999b3da138ce720"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9f695100170d5cae999b3da138ce720">&#9670;&#160;</a></span>jvp()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -246,7 +261,45 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">void mlx::core::CustomVJP::print </td>
+          <td class="memname">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; mlx::core::CustomTransforms::jvp </td>
+          <td>(</td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>primals</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>tangents</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>argnums</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>The Jacobian-vector product. </p>
+
+<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#a9fecf38f53da08ba1947543c2b3158c2">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
+<a id="a2ddbacbc468271b11caee0ad97005298" name="a2ddbacbc468271b11caee0ad97005298"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2ddbacbc468271b11caee0ad97005298">&#9670;&#160;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::CustomTransforms::print </td>
           <td>(</td>
           <td class="paramtype">std::ostream &amp;</td>          <td class="paramname"><span class="paramname"><em>os</em></span></td><td>)</td>
           <td></td>
@@ -265,8 +318,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a00a15e67da68356512670913863008f8" name="a00a15e67da68356512670913863008f8"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a00a15e67da68356512670913863008f8">&#9670;&#160;</a></span>vjp()</h2>
+<a id="aa1da36cef632df767cd9809d6cf06209" name="aa1da36cef632df767cd9809d6cf06209"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa1da36cef632df767cd9809d6cf06209">&#9670;&#160;</a></span>vjp()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -275,7 +328,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; mlx::core::CustomVJP::vjp </td>
+          <td class="memname">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; mlx::core::CustomTransforms::vjp </td>
           <td>(</td>
           <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>primals</em>, </span></td>
         </tr>
@@ -305,6 +358,40 @@ Public Member Functions</h2></td></tr>
 <p>The vector-Jacobian product. </p>
 
 <p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#a1dcb6807326eeab62474c6a0e3836d42">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
+<a id="a906a2ff30d9c5281fbf1fa927e4c021b" name="a906a2ff30d9c5281fbf1fa927e4c021b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a906a2ff30d9c5281fbf1fa927e4c021b">&#9670;&#160;</a></span>vmap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::pair&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;, std::vector&lt; int &gt; &gt; mlx::core::CustomTransforms::vmap </td>
+          <td>(</td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>inputs</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>axes</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>The primitive must know how to vectorize itself across the given axes. </p>
+<p>The output is a pair containing the output arrays representing the vectorized computation and the axes which corresponds to the vectorized dimensions of each output. </p>
+
+<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#ac632b9619dd7a6a0f177bd36202e8103">mlx::core::Primitive</a>.</p>
 
 </div>
 </div>
