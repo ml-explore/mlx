@@ -12,5 +12,8 @@ var searchData=
   ['gpu_9',['gpu',['../structmlx_1_1core_1_1_device.html#a45ed081b56ae5d4ddd39c83a5d8a1616',1,'mlx::core::Device']]],
   ['grad_10',['grad',['../namespacemlx_1_1core.html#a99994806f81e83f98746c9e5ba4c3673',1,'mlx::core']]],
   ['grid_11',['grid',['../struct_read_writer.html#ac7a957f99873d3797081f5d620f3b2c8',1,'ReadWriter']]],
-  ['groups_12',['groups',['../struct_m_l_x_conv_params.html#af7a5590ac0974c7841c7f8b9fda0cbed',1,'MLXConvParams']]]
+  ['group_5fstep_5fcnt_12',['group_step_cnt',['../struct_quantized_block_loader.html#a234feacde36a4afc0d740332a3769fb6',1,'QuantizedBlockLoader']]],
+  ['group_5fsteps_13',['group_steps',['../struct_quantized_block_loader.html#a31e14175f3d4902d9fe5ab5a219f61ba',1,'QuantizedBlockLoader']]],
+  ['group_5fstride_14',['group_stride',['../struct_quantized_block_loader.html#a0ace7e3762ecfa5a4106e7dee7e1b6ab',1,'QuantizedBlockLoader']]],
+  ['groups_15',['groups',['../struct_m_l_x_conv_params.html#af7a5590ac0974c7841c7f8b9fda0cbed',1,'MLXConvParams']]]
 ];
