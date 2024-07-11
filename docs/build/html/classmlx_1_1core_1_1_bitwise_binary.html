@@ -119,6 +119,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:aa10be55f05bc1868bf4b375dc475f965" id="r_aa10be55f05bc1868bf4b375dc475f965"><td class="memItemLeft" align="right" valign="top">virtual std::pair&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;, std::vector&lt; int &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa10be55f05bc1868bf4b375dc475f965">vmap</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, const std::vector&lt; int &gt; &amp;axes) override</td></tr>
 <tr class="memdesc:aa10be55f05bc1868bf4b375dc475f965"><td class="mdescLeft">&#160;</td><td class="mdescRight">The primitive must know how to vectorize itself across the given axes.  <br /></td></tr>
 <tr class="separator:aa10be55f05bc1868bf4b375dc475f965"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1dae6ce5dc0498d20530403fe5c5531d" id="r_a1dae6ce5dc0498d20530403fe5c5531d"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a1dae6ce5dc0498d20530403fe5c5531d">jvp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;tangents, const std::vector&lt; int &gt; &amp;argnums) override</td></tr>
+<tr class="memdesc:a1dae6ce5dc0498d20530403fe5c5531d"><td class="mdescLeft">&#160;</td><td class="mdescRight">The Jacobian-vector product.  <br /></td></tr>
+<tr class="separator:a1dae6ce5dc0498d20530403fe5c5531d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6131ed1c317ff8700a3e9b13fdaa9d61" id="r_a6131ed1c317ff8700a3e9b13fdaa9d61"><td class="memItemLeft" align="right" valign="top">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6131ed1c317ff8700a3e9b13fdaa9d61">vjp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;cotangents, const std::vector&lt; int &gt; &amp;argnums, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
+<tr class="memdesc:a6131ed1c317ff8700a3e9b13fdaa9d61"><td class="mdescLeft">&#160;</td><td class="mdescRight">The vector-Jacobian product.  <br /></td></tr>
+<tr class="separator:a6131ed1c317ff8700a3e9b13fdaa9d61"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8cd6b916b4838a6c329cf4df8530c3b8" id="r_a8cd6b916b4838a6c329cf4df8530c3b8"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8cd6b916b4838a6c329cf4df8530c3b8">is_equivalent</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other) const override</td></tr>
 <tr class="memdesc:a8cd6b916b4838a6c329cf4df8530c3b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Equivalence check defaults to false unless overridden by the primitive.  <br /></td></tr>
 <tr class="separator:a8cd6b916b4838a6c329cf4df8530c3b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -156,12 +162,6 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a46e6257397a662528f9f831842ac456a inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a46e6257397a662528f9f831842ac456a"><td class="memItemLeft" align="right" valign="top">const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a> ()</td></tr>
 <tr class="memdesc:a46e6257397a662528f9f831842ac456a inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">The stream the primitive will run on.  <br /></td></tr>
 <tr class="separator:a46e6257397a662528f9f831842ac456a inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9fecf38f53da08ba1947543c2b3158c2 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a9fecf38f53da08ba1947543c2b3158c2"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a9fecf38f53da08ba1947543c2b3158c2">jvp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;tangents, const std::vector&lt; int &gt; &amp;argnums)</td></tr>
-<tr class="memdesc:a9fecf38f53da08ba1947543c2b3158c2 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">The Jacobian-vector product.  <br /></td></tr>
-<tr class="separator:a9fecf38f53da08ba1947543c2b3158c2 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1dcb6807326eeab62474c6a0e3836d42 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a1dcb6807326eeab62474c6a0e3836d42"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a1dcb6807326eeab62474c6a0e3836d42">vjp</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;primals, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;cotangents, const std::vector&lt; int &gt; &amp;argnums, const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs)</td></tr>
-<tr class="memdesc:a1dcb6807326eeab62474c6a0e3836d42 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="mdescLeft">&#160;</td><td class="mdescRight">The vector-Jacobian product.  <br /></td></tr>
-<tr class="separator:a1dcb6807326eeab62474c6a0e3836d42 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a29f70eb2d3b7e6c5fe52779c03f03777 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a29f70eb2d3b7e6c5fe52779c03f03777"><td class="memItemLeft" align="right" valign="top">virtual&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a29f70eb2d3b7e6c5fe52779c03f03777">~Primitive</a> ()=default</td></tr>
 <tr class="separator:a29f70eb2d3b7e6c5fe52779c03f03777 inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3349f745fae50ca7627f79a731a19e32 inherit pub_methods_classmlx_1_1core_1_1_primitive" id="r_a3349f745fae50ca7627f79a731a19e32"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_primitive.html#a3349f745fae50ca7627f79a731a19e32">Primitive</a> (const <a class="el" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> &amp;other)=delete</td></tr>
@@ -317,6 +317,44 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="a1dae6ce5dc0498d20530403fe5c5531d" name="a1dae6ce5dc0498d20530403fe5c5531d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1dae6ce5dc0498d20530403fe5c5531d">&#9670;&#160;</a></span>jvp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; mlx::core::BitwiseBinary::jvp </td>
+          <td>(</td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>primals</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>tangents</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>argnums</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>The Jacobian-vector product. </p>
+
+<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#a9fecf38f53da08ba1947543c2b3158c2">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
 <a id="a7d2dfa8884832fc1a94ce6400d0ed599" name="a7d2dfa8884832fc1a94ce6400d0ed599"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a7d2dfa8884832fc1a94ce6400d0ed599">&#9670;&#160;</a></span>output_shapes()</h2>
 
@@ -373,6 +411,49 @@ Public Member Functions</h2></td></tr>
 <p>Print the primitive. </p>
 
 <p>Implements <a class="el" href="classmlx_1_1core_1_1_primitive.html#ae1aff91354ce036596088a3e19474ecb">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
+<a id="a6131ed1c317ff8700a3e9b13fdaa9d61" name="a6131ed1c317ff8700a3e9b13fdaa9d61"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6131ed1c317ff8700a3e9b13fdaa9d61">&#9670;&#160;</a></span>vjp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; mlx::core::BitwiseBinary::vjp </td>
+          <td>(</td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>primals</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>cotangents</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>argnums</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>outputs</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>The vector-Jacobian product. </p>
+
+<p>Reimplemented from <a class="el" href="classmlx_1_1core_1_1_primitive.html#a1dcb6807326eeab62474c6a0e3836d42">mlx::core::Primitive</a>.</p>
 
 </div>
 </div>

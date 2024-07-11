@@ -5,7 +5,6 @@ var searchData=
   ['uint32_2',['uint32',['../namespacemlx_1_1core.html#ac63820d6fe10545907c33faf466a929e',1,'mlx::core']]],
   ['uint64_3',['uint64',['../namespacemlx_1_1core.html#a1f42e3dd4787d2ecec7114a12daefec8',1,'mlx::core']]],
   ['uint8_4',['uint8',['../namespacemlx_1_1core.html#a9778d50afbf456b0bd738751243b3b68',1,'mlx::core']]],
-  ['unary_5fkernels_5',['unary_kernels',['../metal_2jit_2unary_8h.html#a4f56f4dcc6eabd800b1def67a5864cec',1,'unary.h']]],
-  ['unsignedinteger_6',['unsignedinteger',['../namespacemlx_1_1core.html#a42e9706a5521bb25eaf12ccad94bfc81',1,'mlx::core']]],
-  ['use_5fout_5fsource_7',['use_out_source',['../steel__gemm__fused_8h.html#a3fe4e4382bda8a419557a5e6f77bc084',1,'steel_gemm_fused.h']]]
+  ['unsignedinteger_5',['unsignedinteger',['../namespacemlx_1_1core.html#a42e9706a5521bb25eaf12ccad94bfc81',1,'mlx::core']]],
+  ['use_5fout_5fsource_6',['use_out_source',['../steel__gemm__fused_8h.html#a3fe4e4382bda8a419557a5e6f77bc084',1,'steel_gemm_fused.h']]]
 ];
