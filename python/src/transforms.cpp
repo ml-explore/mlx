@@ -934,9 +934,9 @@ void init_transforms(nb::module_& m) {
       This class is meant to be used as a function decorator. Instances are
       callables that behave identically to the wrapped function. However, when
       a function transformation is used (e.g. computing gradients using
-      :func:`value_and_grad`) then the functions defined via :method:`vjp`,
-      :method:`jvp` and :method:`vmap` are used instead of the default
-      transformation.
+      :func:`value_and_grad`) then the functions defined via
+      :meth:`custom_function.vjp`, :meth:`custom_function.jvp` and
+      :meth:`custom_function.vmap` are used instead of the default transformation.
 
       Note, all custom transformations are optional. Undefined transformations
       fall back to the default behaviour.
