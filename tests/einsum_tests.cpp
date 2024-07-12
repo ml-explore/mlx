@@ -120,6 +120,7 @@ TEST_CASE("test einsum") {
   CHECK_THROWS(einsum("i->ii", {array({1, 2})}));
   CHECK_THROWS(einsum("12", {zeros({4, 4})}));
   CHECK_THROWS(einsum("ii->i", {zeros({3, 2})}));
+  //  CHECK_THROWS(einsum("ii->i", {zeros({3, 1})}));
 
   /*  auto x = einsum("jki", {full({2, 3, 4}, 3.0f)});
     CHECK_EQ(x.shape(), std::vector<int>{4, 2, 3});

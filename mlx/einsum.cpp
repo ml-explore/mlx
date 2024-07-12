@@ -186,18 +186,12 @@ std::pair<CharSet, CharSet> contract_all(
   return {new_result, idx_contracted};
 }
 
-std::vector<int> rangeHelper(int r) {
-  std::vector<int> result(r);
-  std::iota(result.begin(), result.end(), 0);
-  return result;
-}
-
 std::vector<PathNode> greedy_path(
     std::vector<Subscript> inputs,
     const Subscript& output,
     std::unordered_map<char, int> dim_dict,
     size_t memory_limit) {
-  // First get the full naive cost
+  // Get the full naive cost
   size_t naive_cost;
   {
     auto [new_term, contractions] = contract_all(inputs, output);
@@ -230,8 +224,8 @@ std::vector<PathNode> greedy_path(
       auto [new_term, contractions] = contract_two(p1, p2, inputs, output);
 
       // Ignore if:
-      // 1. The size of the new result is greater than the memory limit
-      // 2. The cost is larger than the naive cost
+      // - The size of the new result is greater than the memory limit
+      // - The cost is larger than the naive cost
       auto new_size = term_size(new_term, dim_dict);
       if (new_size > memory_limit) {
         continue;
@@ -366,22 +360,35 @@ bool can_dot(
 //   return counts;
 // }
 
-// Collapse repeated subscripts and return the resulting array and updated
-// subscript
+// Collapse repeated subscripts and return the resulting array. The subscript
+// is also updated in place. For example:
+// - Given an input with shape (4, 4) and subscript "ii", returns
+//   the diagonal of shape (4,) and updates the subscript to "i".
+// - Given an input with shape (4, 2, 4, 2) and subscript "ijij",
+//   returns an output with shape (4, 2) and updates the subscript
+//   to "ij".
 array collapse_repeats(array in, Subscript& subscript, StreamOrDevice s) {
-  std::unordered_map<char, std::pair<int, int>> counts;
+  // Build a list of (repeat chars, num repeats, first axis the char appears in)
   auto& str = subscript.str;
-  for (int i = 0; i < str.size(); ++i) {
-    auto [it, _] = counts.insert({str[i], {0, i}});
-    it->second.first++;
-  }
-
+  std::string new_str;
   std::vector<std::tuple<char, int, int>> repeats;
-  for (auto& v : counts) {
-    if (v.second.first >= 2) {
-      repeats.emplace_back(v.first, v.second.first, v.second.second);
+  {
+    std::unordered_map<char, std::pair<int, int>> counts;
+    for (int i = 0; i < str.size(); ++i) {
+      auto [it, _] = counts.insert({str[i], {0, i}});
+      if (it->second.first == 0) {
+        new_str.push_back(str[i]);
+      }
+      it->second.first++;
+    }
+
+    for (auto& v : counts) {
+      if (v.second.first >= 2) {
+        repeats.emplace_back(v.first, v.second.first, v.second.second);
+      }
     }
   }
+
   // Sort by the first axis of each repeat
   std::sort(repeats.begin(), repeats.end(), [](const auto& x, const auto& y) {
     return std::get<2>(x) < std::get<2>(y);
@@ -409,12 +416,10 @@ array collapse_repeats(array in, Subscript& subscript, StreamOrDevice s) {
 
   in = gather(in, indices, axes, slice_sizes, s);
 
-  // Remove dups from the subscript string
-  std::sort(axes.begin(), axes.end());
-  for (auto it = axes.rbegin(); it <= axes.rend() - 1; ++it) {
-    str.erase(*it, 1);
-  }
+  // Update subscript string with removed dups
+  str = new_str;
 
+  // Squeeze singleton dimensions left over from the gather
   for (auto& ax : axes) {
     ax += indices[0].ndim();
   }
@@ -426,64 +431,102 @@ array einsum_naive(
     const Subscript& output,
     std::vector<array> operands,
     StreamOrDevice s) {
-  // First deal with repeat indices
-  auto out = collapse_repeats(operands[0], inputs[0], s);
+  // Collapse repeat indices
+  for (int i = 0; i < inputs.size(); ++i) {
+    auto& in = inputs[i];
+    // TODO the inputs should have the same shape and the same char
+    if (in.set.size() < in.str.size()) {
+      operands[i] = collapse_repeats(operands[i], in, s);
+    }
+  }
+
+  // Map each character to an axis
+  std::unordered_map<char, int> char_to_ax;
+  for (auto& in : inputs) {
+    for (auto c : in.str) {
+      char_to_ax.insert({c, char_to_ax.size()});
+    }
+  }
+
+  // Expand and transpose inputs as needed
+  for (int i = 0; i < inputs.size(); ++i) {
+    auto& op = operands[i];
+
+    // Add missing dimensions at the end
+    std::cout << op.ndim() << " " << char_to_ax.size() << std::endl;
+    if (op.ndim() != char_to_ax.size()) {
+      auto shape = operands[i].shape();
+      shape.insert(shape.end(), char_to_ax.size() - shape.size(), 1);
+      op = reshape(op, std::move(shape), s);
+    }
+
+    // Transpose:
+    // - Build a vector of (char, ax) pairs for the current input
+    // - Sort the vector by the canonical axis in char_to_ax
+    // - Extract the sorted axis to get transpose order
+    std::vector<std::pair<char, int>> str_ax;
+    for (auto c : inputs[i].str) {
+      str_ax.emplace_back(c, str_ax.size());
+    }
+    for (auto [c, ax] : char_to_ax) {
+      if (inputs[i].set.find(c) == inputs[i].set.end()) {
+        str_ax.emplace_back(c, str_ax.size());
+      }
+    }
+    std::sort(
+        str_ax.begin(),
+        str_ax.end(),
+        [&char_to_ax](const auto& x, const auto& y) {
+          return char_to_ax[x.first] < char_to_ax[y.first];
+        });
+
+    // Skip the transpose if not needed
+    if (std::is_sorted(
+            str_ax.begin(), str_ax.end(), [](const auto& x, const auto& y) {
+              return x.second < y.second;
+            })) {
+      std::cout << "SKIP? " << std::endl;
+      break;
+    }
+
+    std::vector<int> reorder;
+    for (auto [c, ax] : str_ax) {
+      reorder.push_back(ax);
+    }
+    op = transpose(op, reorder, s);
+  }
+
+  // Multiply and sum
+  auto out = operands[0];
+  for (int i = 1; i < operands.size(); ++i) {
+    out = multiply(out, operands[i], s);
+  }
+  std::vector<int> sum_axes;
+  for (auto [c, ax] : char_to_ax) {
+    if (output.set.find(c) == output.set.end()) {
+      sum_axes.push_back(ax);
+    }
+  }
+  std::cout << "SUM AXES " << sum_axes << std::endl;
+  if (!sum_axes.empty()) {
+    out = sum(out, sum_axes, true, s);
+  }
+
+  // Transpose output if needed
+  std::vector<int> reorder;
+  for (auto c : output.str) {
+    reorder.push_back(char_to_ax[c]);
+  }
+  reorder.insert(reorder.end(), sum_axes.begin(), sum_axes.end());
+  out = transpose(out, reorder, s);
+
+  // Remove reduced axes
+  if (!sum_axes.empty()) {
+    out = squeeze(out, sum_axes, s);
+  }
+
   return out;
 }
-//  std::map<char, int> input_map;
-//  for (int i = 0; i < extract.first.size(); i++) {
-//    auto arr = operands[i];
-//    auto inp = extract.first[i];
-//    for (int j = 0; j < std::min(arr.shape().size(), inp.size()); j++) {
-//      input_map[inp[j]] = arr.shape(j);
-//    }
-//  }
-//
-//  std::vector<int> broad;
-//  for (auto key : input_map) {
-//    broad.push_back(key.second);
-//  }
-//  std::vector<array> inputs_arr;
-//  for (int i = 0; i < operands.size(); i++) {
-//    auto arr = operands[i];
-//    auto ord_map = str_idx_map(extract.first[i]);
-//    std::vector<int> new_shape;
-//    for (auto key : input_map) {
-//      if (ord_map.find(key.first) != ord_map.end()) {
-//        new_shape.push_back(key.second);
-//      } else {
-//        new_shape.push_back(1);
-//      }
-//    }
-//    std::vector<int> axis;
-//    for (auto key : ord_map) {
-//      axis.push_back(key.second);
-//    }
-//    inputs_arr.push_back(
-//        broadcast_to(reshape(transpose(arr, axis, s), new_shape, s), broad,
-//        s));
-//  }
-//
-//  auto ord_output = str_idx_map(extract.second);
-//  std::vector<int> rhs_order;
-//  for (auto key : ord_output) {
-//    rhs_order.push_back(key.second);
-//  }
-//
-//  std::vector<int> sum_axis;
-//  int i = 0;
-//  for (auto key : input_map) {
-//    if (ord_output.find(key.first) == ord_output.end()) {
-//      sum_axis.push_back(i);
-//    }
-//    i += 1;
-//  }
-//  auto acc = inputs_arr[0];
-//  for (int i = 1; i < inputs_arr.size(); i++) {
-//    acc = multiply(acc, inputs_arr[i], s);
-//  }
-//  return transpose(sum(acc, sum_axis, false, s), rhs_order, s);
-//}
 
 std::pair<std::vector<PathNode>, std::unordered_map<char, int>>
 einsum_path_helper(
@@ -544,6 +587,25 @@ einsum_path_helper(
           << " dimensions.";
       throw std::invalid_argument(msg.str());
     }
+
+    // Check repeat subscripts are valid
+    if (in_set.size() < in.size()) {
+      std::unordered_map<char, int> local_dims;
+      for (int j = 0; j < in.size(); ++j) {
+        auto dim = operands[i].shape(j);
+        auto inserted = local_dims.insert({in[j], dim});
+        if (!inserted.second) {
+          if (inserted.first->second != dim) {
+            std::ostringstream msg;
+            msg << "[" << fn_name << "] Dimensions of repeated subscripts "
+                << "do not have the same size (" << inserted.first->second
+                << " != " << dim << ").";
+            throw std::invalid_argument(msg.str());
+          }
+        }
+      }
+    }
+
     //    broadcast_indicies.push_back({});
     for (int j = 0; j < in.size(); j++) {
       auto c = in[j];
@@ -560,7 +622,7 @@ einsum_path_helper(
           throw std::invalid_argument(msg.str());
         }
         // Ensure the broadcasted size is used
-        it->second = std::max(dim_map[c], dim);
+        it->second = std::max(it->second, dim);
       } else {
         dim_map[c] = dim;
       }
