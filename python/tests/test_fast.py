@@ -551,3 +551,57 @@ class TestFast(mlx_tests.MLXTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+ParamShapes = dict[str, Sequence[int]]
+
+# Nice things we should have:
+# - A helper method to test equivalence between the fallback and metal kernel
+# - Automatic addition of `thread_position_in_grid` etc
+# - Optional row contiguity guarrantee
+# - Debug mode that prints full generated kernel
+# - If no output shapes are passed then trace the fallback kernel and use that output shape
+# - Allow specifying the max threadgroup size rather than a number?
+
+# How do we deal with passing output strides?
+# To begin with output is always fully contiguous
+# May also want to allow passing output strides
+
+# def metal_kernel(
+#     source: str,
+#     grid=tuple[int, int, int],
+#     threadgroup=tuple[int, int, int],
+#     output_shapes: ParamShapes | Callable[[ParamShapes], ParamShapes] | None = None,
+#     fallback: Callable[..., Any] | None = None,
+#     ensure_row_contiguous: bool = True,
+# ):
+#     pass
+
+
+# @metal_kernel(
+#     source="""
+#     int index = thread_position_in_grid.x;
+#     x[index] = a[index];
+#     y[index] = b[index];
+#     """,
+#     grid=(1, 1, 16),
+#     threadgroup=(1, 1, 4),
+#     ensure_row_contiguous=True
+#     output_shapes={"x": (34, 72), "y": (34, 72)},
+# )
+# def custom_kernel(a: array, b: array):
+#     # will be used as CPU/transform fallback and for vjp/jvp
+#     return a + b
+
+# metal_kernel(
+#     source="""
+#     int index = thread_position_in_grid.x;
+#     x[index] = a[index];
+#     y[index] = b[index];
+#     """,
+#     grid=(1, 1, 16),
+#     group=(1, 1, 4),
+#     output_shapes={"x": (34, 72), "y": (34, 72)},
+#     fallback=(),
+#     ensure_row_contiguous=True,
+# )(a=a, b=b, a_strides=a.strides())

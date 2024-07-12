@@ -913,4 +913,33 @@ array affine_dequantize(
   return fallback({w, scales, biases})[0];
 }
 
+std::map<std::string, array> custom_kernel(
+    std::map<std::string, array>& inputs,
+    const std::string& source,
+    std::map<std::string, std::vector<int>> output_shapes,
+    std::map<std::string, Dtype> output_dtypes,
+    std::tuple<int, int, int> grid,
+    std::tuple<int, int, int> threadgroup,
+    bool ensure_row_contiguous /* = true */,
+    StreamOrDevice s_ /* = {} */
+) {
+  auto s = to_stream(s_);
+  if (s.device == Device::gpu) {
+    std::vector<array> in_arrs;
+    std::vector<std::vector<int>> out_shapes;
+    std::vector<Dtype> out_dtypes;
+    for (auto [name, arr] : inputs) {
+      in_arrs.push_back(arr);
+    }
+    for (auto [name, shape] : output_shapes) {
+      out_shapes.push_back(shape);
+      out_dtypes.push_back(output_dtypes[name]);
+    }
+    return array::make_arrays(
+        out_shapes,
+        out_dtypes,
+        std::make_shared<CustomKernel>(s, source),
+        in_arrs);
+  }
+
 } // namespace mlx::core::fast

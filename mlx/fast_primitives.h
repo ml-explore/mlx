@@ -242,4 +242,33 @@ class AffineQuantize : public Custom {
   bool dequantize_;
 };
 
+class CustomKernel : public Primitive {
+ public:
+  CustomKernel(
+      Stream stream,
+      std::string source,
+      std::map<std::string, std::vector<int>> output_shapes,
+      std::optional<std::tuple<int, int, int>> grid,
+      std::optional<std::tuple<int, int, int>> threadgroup)
+      : Primitive(stream),
+        source_(source),
+        output_shapes_(output_shapes),
+        grid_(grid),
+        threadgroup_(threadgroup) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("NYI");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+ private:
+  std::string source_;
+  std::map<std::string, std::vector<int>> output_shapes_;
+  std::optional<std::tuple<int, int, int>> grid_;
+  std::optional<std::tuple<int, int, int>> threadgroup_;
+};
+
 } // namespace mlx::core::fast

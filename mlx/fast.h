@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <map>
 #include <optional>
 
 #include "mlx/utils.h"
@@ -61,6 +62,16 @@ array affine_dequantize(
     const array& biases,
     int group_size = 64,
     int bits = 4,
+    StreamOrDevice s = {});
+
+std::map<std::string, array> custom_kernel(
+    std::map<std::string, std::any>& inputs,
+    const std::string& source,
+    std::map<std::string, std::vector<int>> output_shapes,
+    std::map<std::string, Dtype> output_dtypes,
+    std::tuple<int, int, int> grid,
+    std::tuple<int, int, int> threadgroup,
+    bool ensure_row_contiguous = true,
     StreamOrDevice s = {});
 
 } // namespace mlx::core::fast
