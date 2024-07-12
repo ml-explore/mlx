@@ -612,7 +612,63 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_;
 }
 
-array affine_quantize(
+std::tuple<array, array, array>
+affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
+  auto s = to_stream(s_);
+
+  int el_per_int = 32 / bits;
+  auto fallback = [group_size, bits, el_per_int, s](
+                      const std::vector<array>& inputs) -> std::vector<array> {
+    auto& w = inputs[0];
+
+    array zero(0, w.dtype());
+    array n_bins((1 << bits) - 1, w.dtype()); // 2**bits - 1
+    array eps(1e-7, w.dtype());
+
+    array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
+
+    array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+    array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+    array mask = greater(abs(w_min, s), abs(w_max, s), s);
+    array scales =
+        maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
+    scales = where(mask, scales, negative(scales), s);
+    array edge = where(mask, w_min, w_max, s);
+    array q0 = round(divide(edge, scales, s), s);
+    scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
+    array biases = where(equal(q0, zero, s), zero, edge);
+
+    array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
+    packed_w = astype(
+        clip(
+            round(divide(subtract(packed_w, biases, s), scales, s), s),
+            zero,
+            n_bins),
+        uint32);
+    packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
+    packed_w = sum(
+        multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+    return {packed_w, scales, biases};
+  };
+
+  std::vector<array> outputs;
+  if (s.device == Device::gpu) {
+    auto wq_shape = w.shape();
+    wq_shape.back() = w.shape(-1) / el_per_int;
+    auto sshape = w.shape();
+    sshape.back() = w.shape(-1) / group_size;
+    outputs = array::make_arrays(
+        {wq_shape, sshape, sshape},
+        {uint32, w.dtype(), w.dtype()},
+        std::make_shared<AffineQuantize>(s, fallback, group_size, bits, false),
+        {w});
+  } else {
+    outputs = fallback({w});
+  }
+  return {outputs[0], outputs[1], outputs[2]};
+}
+
+array affine_quantize_with_params(
     const array& w,
     const array& scales,
     const array& biases,

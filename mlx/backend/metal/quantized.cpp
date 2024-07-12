@@ -519,10 +519,9 @@ void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
 void fast::AffineQuantize::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  auto& w_pre = inputs[0];
-  auto& scales_pre = inputs[1];
-  auto& biases_pre = inputs[2];
+  bool compute_scale_bias = inputs.size() == 1;
 
+  auto& w_pre = inputs[0];
   auto& out = outputs[0];
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
   auto& s = stream();
@@ -540,19 +539,33 @@ void fast::AffineQuantize::eval_gpu(
     }
   };
   auto w = ensure_row_contiguous(w_pre);
-  auto scales = ensure_row_contiguous(scales_pre);
-  auto biases = ensure_row_contiguous(biases_pre);
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder.set_input_array(w, 0);
-  compute_encoder.set_input_array(scales, 1);
-  compute_encoder.set_input_array(biases, 2);
-  compute_encoder.set_output_array(out, 3);
+  if (!compute_scale_bias) {
+    auto& scales_pre = inputs[1];
+    auto& biases_pre = inputs[2];
+    auto scales = ensure_row_contiguous(scales_pre);
+    auto biases = ensure_row_contiguous(biases_pre);
+    compute_encoder.set_input_array(scales, 1);
+    compute_encoder.set_input_array(biases, 2);
+    compute_encoder.set_output_array(out, 3);
+  } else {
+    auto& scales = outputs[1];
+    auto& biases = outputs[2];
+    scales.set_data(allocator::malloc_or_wait(scales.nbytes()));
+    biases.set_data(allocator::malloc_or_wait(biases.nbytes()));
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder.set_output_array(scales, 2);
+    compute_encoder.set_output_array(biases, 3);
+  }
 
   std::ostringstream kname;
   auto type_string = dequantize_ ? get_type_string(out.dtype())
                                  : get_type_string(w_pre.dtype());
   auto kernel_func = dequantize_ ? "affine_dequantize" : "affine_quantize";
+  kernel_func =
+      compute_scale_bias ? "affine_quantize" : "affine_quantize_with_params";
   kname << kernel_func << "_" << type_string << "_gs_" << group_size_ << "_b_"
         << bits_;
   auto template_def = get_template_definition(
@@ -562,9 +575,13 @@ void fast::AffineQuantize::eval_gpu(
 
   // Treat uint32 as uint8 in kernel
   constexpr int uint8_per_uint32 = 4;
+  constexpr int simd_size = 32;
   int packs_per_int = 8 / bits_;
+  int per_thread = compute_scale_bias
+      ? std::max(group_size_ / simd_size, packs_per_int)
+      : packs_per_int;
   size_t nthreads =
-      dequantize_ ? w.size() * uint8_per_uint32 : w.size() / packs_per_int;
+      dequantize_ ? w.size() * uint8_per_uint32 : w.size() / per_thread;
 
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   auto group_dims = MTL::Size(thread_group_size, 1, 1);

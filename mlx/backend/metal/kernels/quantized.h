@@ -1457,22 +1457,83 @@ template <
 template <typename T, const int group_size, const int bits>
 [[kernel]] void affine_quantize(
     const device T* w [[buffer(0)]],
+    device uint8_t* out [[buffer(1)]],
+    device T* scales [[buffer(2)]],
+    device T* biases [[buffer(3)]],
+    uint index [[thread_position_in_grid]]) {
+  constexpr T eps = (T)1e-7;
+  constexpr int simd_size = 32;
+  constexpr int uint8_bits = 8;
+  constexpr int packs_per_int = uint8_bits / bits;
+  constexpr T n_bins = (1 << bits) - 1;
+  constexpr int values_per_reduce = group_size / simd_size;
+  constexpr int values_per_thread =
+      values_per_reduce > packs_per_int ? values_per_reduce : packs_per_int;
+
+  int in_index = index * values_per_thread;
+
+  T w_thread[values_per_thread];
+  T w_min = Limits<T>::max;
+  T w_max = 0;
+#pragma clang loop unroll(full)
+  for (int i = 0; i < values_per_thread; i++) {
+    T val = w[in_index + i];
+    T min_val = simd_min(val);
+    T max_val = simd_max(val);
+    w_min = metal::min(w_min, min_val);
+    w_max = metal::max(w_max, max_val);
+  }
+
+  T scale = metal::max((w_max - w_min) / n_bins, eps);
+  bool side = metal::abs(w_min) > metal::abs(w_max);
+  scale = side ? scale : -scale;
+  T edge = side ? w_min : w_max;
+  T q0 = metal::round(edge / scale);
+  bool at_zero = q0 == 0.0f;
+  scale = at_zero ? scale : edge / q0;
+  T bias = at_zero ? 0 : edge;
+
+  int gindex = in_index / group_size;
+
+  uint8_t output = 0;
+#pragma clang loop unroll(full)
+  for (int i = 0; i < packs_per_int; i++) {
+    uint8_t val =
+        metal::min(metal::round((w[in_index + i] - bias) / scale), n_bins);
+    if (bits == 8) {
+      output = val;
+    } else {
+      output += val << (bits * i);
+    }
+  }
+  out[index] = output;
+  if (in_index % group_size == 0) {
+    scales[gindex] = scale;
+    biases[gindex] = bias;
+  }
+}
+
+template <typename T, const int group_size, const int bits>
+[[kernel]] void affine_quantize_with_params(
+    const device T* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
     device uint8_t* out [[buffer(3)]],
     uint index [[thread_position_in_grid]]) {
   constexpr int uint8_bits = 8;
   constexpr int packs_per_int = uint8_bits / bits;
+  constexpr T n_bins = (1 << bits) - 1;
 
   int in_index = index * packs_per_int;
   int gindex = in_index / group_size;
   T scale = scales[gindex];
   T bias = biases[gindex];
 
-  int output = 0;
+  uint8_t output = 0;
 #pragma clang loop unroll(full)
   for (int i = 0; i < packs_per_int; i++) {
-    int val = metal::round((w[in_index + i] - bias) / scale);
+    uint8_t val =
+        metal::min(metal::round((w[in_index + i] - bias) / scale), n_bins);
     if (bits == 8) {
       output = val;
     } else {

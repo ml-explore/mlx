@@ -2,6 +2,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
 
 #include "mlx/fast.h"
@@ -143,6 +144,41 @@ void init_fast(nb::module_& parent_module) {
       "affine_quantize",
       &fast::affine_quantize,
       "w"_a,
+      "group_size"_a = 64,
+      "bits"_a = 4,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def affine_quantize(w: array, /, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
+      R"pbdoc(
+        Quantize the matrix ``w`` using the provided ``scales`` and
+        ``biases`` and the ``group_size`` and ``bits`` configuration.
+
+        Formally, given the notation in :func:`quantize`, we compute
+        :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s` and
+        :math:`\beta` as follows
+
+        .. math::
+
+          w_i = s (\hat{w_i} + \beta)
+
+        Args:
+          w (array): Matrix to be quantize
+          scales (array): The scales to use per ``group_size`` elements of ``w``
+          biases (array): The biases to use per ``group_size`` elements of ``w``
+          group_size (int, optional): The size of the group in ``w`` that shares a
+            scale and bias. (default: ``64``)
+          bits (int, optional): The number of bits occupied by each element in
+            ``w``. (default: ``4``)
+
+        Returns:
+          array: The quantized version of ``w``
+      )pbdoc");
+
+  m.def(
+      "affine_quantize_with_params",
+      &fast::affine_quantize_with_params,
+      "w"_a,
       "scales"_a,
       "biases"_a,
       "group_size"_a = 64,
@@ -150,7 +186,7 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def affine_quantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def affine_quantize_with_params(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Quantize the matrix ``w`` using the provided ``scales`` and
         ``biases`` and the ``group_size`` and ``bits`` configuration.

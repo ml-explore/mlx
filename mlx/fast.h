@@ -39,7 +39,13 @@ array scaled_dot_product_attention(
     const std::optional<array>& mask = std::nullopt,
     StreamOrDevice s = {});
 
-array affine_quantize(
+std::tuple<array, array, array> affine_quantize(
+    const array& w,
+    int group_size = 64,
+    int bits = 4,
+    StreamOrDevice s = {});
+
+array affine_quantize_with_params(
     const array& w,
     const array& scales,
     const array& biases,

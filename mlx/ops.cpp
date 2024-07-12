@@ -3337,26 +3337,6 @@ array quantized_matmul(
        astype(biases, dtype, s)});
 }
 
-array affine_quantize(
-    const array& w,
-    const array& scales,
-    const array& biases,
-    int bits,
-    StreamOrDevice s) {
-  // Quantize and pack w
-  array zero(0, w.dtype());
-  array n_bins((1 << bits) - 1, w.dtype()); // 2**bits - 1
-  int el_per_int = 32 / bits;
-  array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
-  array packed_w = astype(
-      clip(round(divide(subtract(w, biases, s), scales, s), s), zero, n_bins),
-      uint32);
-  packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
-  packed_w = sum(
-      multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
-  return packed_w;
-}
-
 std::tuple<array, array, array> quantize(
     const array& w,
     int group_size /* = 64 */,
@@ -3396,8 +3376,6 @@ std::tuple<array, array, array> quantize(
   array eps(1e-7, w.dtype());
   array zero(0, w.dtype());
   int el_per_int = 32 / bits;
-  array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
-  shifts = reshape(shifts, {1, 1, -1}, s);
 
   // Check that the w matrix will fill up a whole SIMD.
   // This is an implementation detail which should be removed in the future but
@@ -3431,7 +3409,7 @@ std::tuple<array, array, array> quantize(
   array biases = where(equal(q0, zero, s), zero, edge);
 
   packed_w =
-      fast::affine_quantize(packed_w, scales, biases, group_size, bits, s);
+      fast::affine_quantize_with_params(w, scales, biases, group_size, bits, s);
 
   return std::make_tuple(
       reshape(packed_w, wshape, s),

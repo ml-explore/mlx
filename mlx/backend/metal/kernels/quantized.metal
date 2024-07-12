@@ -37,6 +37,7 @@ instantiate_quantized_all(bs_qmv)
 instantiate_quantized_all(bs_qvm)
 instantiate_quantized_all(bs_qmm_n)
 instantiate_quantized_all(affine_quantize)
+instantiate_quantized_all(affine_quantize_with_params)
 instantiate_quantized_all(affine_dequantize)
 
 #define instantiate_quantized_aligned(name, type, group_size, bits, aligned) \

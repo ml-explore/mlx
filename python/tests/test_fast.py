@@ -443,16 +443,35 @@ class TestFast(mlx_tests.MLXTestCase):
         mx.random.seed(7)
         x = mx.random.uniform(shape=(1, 512))
         for bits in (8,):
-            with self.subTest(bits=bits):
-                with mx.stream(mx.cpu):
-                    w, scales, biases = mx.quantize(x, bits=bits)
-                    print("w", w, scales)
-                w, scales, biases = mx.quantize(x, bits=bits)
-                print("w", w, scales)
-                # out_f = mx.dequantize(w, scales, biases, bits=bits)
-                # with mx.stream(mx.cpu):
-                #     out = mx.dequantize(w, scales, biases, bits=bits)
-                # self.assertTrue(mx.allclose(out_f, out, atol=1e-4))
+            for group_size in (32,):
+                with self.subTest(bits=bits):
+                    w, scales, biases = mx.fast.affine_quantize(
+                        x, bits=bits, group_size=group_size
+                    )
+                    print(scales)
+                    print(w)
+
+                    with mx.stream(mx.cpu):
+                        w_c, scales_c, biases_c = mx.quantize(
+                            x, bits=bits, group_size=group_size
+                        )
+                    print(scales_c)
+                    print(w_c)
+
+                    import numpy as np
+
+                    np.testing.assert_allclose(w, w_c, atol=1e-4)
+                    np.testing.assert_allclose(scales, scales_c, atol=1e-4)
+                    np.testing.assert_allclose(biases, biases_c, atol=1e-4)
+
+                    # packed_w = w.reshape((-1, w.shape[-1] // group_size, group_size))
+                    # # print(packed_w.max(axis=-1))
+                    # print(packed_w.min(axis=-1))
+                    # print(w)
+                    # out_f = mx.dequantize(w, scales, biases, bits=bits)
+                    # with mx.stream(mx.cpu):
+                    #     out = mx.dequantize(w, scales, biases, bits=bits)
+                    # self.assertTrue(mx.allclose(out_f, out, atol=1e-4))
 
 
 if __name__ == "__main__":
