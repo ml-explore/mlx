@@ -41,7 +41,7 @@ struct Contraction {
   Contraction(size_t size, size_t cost, CharSet output, int x, int y)
       : size(size), cost(cost), output(std::move(output)), x(x), y(y) {};
 
-  size_t size;
+  int64_t size; // Can be negative
   size_t cost;
   CharSet output;
   int x;
@@ -69,26 +69,28 @@ std::pair<std::vector<std::string>, std::string> parse(std::string subscripts) {
       std::remove(subscripts.begin(), subscripts.end(), ' '), subscripts.end());
 
   if (auto pos = subscripts.find("->"); pos != std::string::npos) {
+    // Explicit mode
     lhs = subscripts.substr(0, pos);
     rhs = subscripts.substr(pos + 2);
   } else {
+    // Implicit mode:
+    // - repeats are summed
+    // - remaining output axes are ordered alphabetically
     lhs = subscripts;
     std::unordered_map<char, int> temp;
     for (auto& c : subscripts) {
       if (c == ',') {
         continue;
       }
-      if (auto it = temp.find(c); it != temp.end()) {
-        it->second += 1;
-      } else {
-        temp.insert({c, 1});
-      }
+      auto inserted = temp.insert({c, 0});
+      inserted.first->second++;
     }
     for (auto& k : temp) {
       if (k.second == 1) {
         rhs += k.first;
       }
     }
+    std::sort(rhs.begin(), rhs.end());
   }
   std::vector<std::string> input_list;
   std::stringstream ss(lhs);
@@ -213,14 +215,9 @@ std::vector<PathNode> greedy_path(
   std::vector<PathNode> path;
   std::vector<Contraction> possible_contractions;
   size_t path_cost = 0;
-  for (int i = 0; i < inputs.size(); ++i) {
-    for (auto& [p1, p2] : pos_pairs) {
-      // Ignore outer products
-      if (disjoint(inputs[p1].set, inputs[p2].set)) {
-        continue;
-      }
-
-      // Find possible contraction
+  auto num_in = inputs.size();
+  for (int i = 0; i < num_in; ++i) {
+    auto add_contraction = [&](int p1, int p2) {
       auto [new_term, contractions] = contract_two(p1, p2, inputs, output);
 
       // Ignore if:
@@ -228,23 +225,33 @@ std::vector<PathNode> greedy_path(
       // - The cost is larger than the naive cost
       auto new_size = term_size(new_term, dim_dict);
       if (new_size > memory_limit) {
-        continue;
+        return;
       }
-      auto removed_size = term_size(inputs[p1].set, dim_dict) +
+      int64_t removed_size = term_size(inputs[p1].set, dim_dict) +
           term_size(inputs[p2].set, dim_dict) - new_size;
 
       bool inner = contractions.size() > new_term.size();
       auto cost = flop_count(contractions, inner, 2, dim_dict);
       if (path_cost + cost > naive_cost) {
-        continue;
+        return;
       }
       possible_contractions.emplace_back(
           removed_size, cost, std::move(new_term), p1, p2);
+    };
+
+    for (auto& [p1, p2] : pos_pairs) {
+      // Ignore outer products
+      if (!disjoint(inputs[p1].set, inputs[p2].set)) {
+        add_contraction(p1, p2);
+      }
     }
 
     // If there's nothing in the contraction list,
     // go over the pairs again without ignoring outer products
     if (possible_contractions.empty()) {
+      for (auto& [p1, p2] : pos_pairs) {
+        add_contraction(p1, p2);
+      }
     }
 
     if (possible_contractions.empty()) {
@@ -453,7 +460,6 @@ array einsum_naive(
     auto& op = operands[i];
 
     // Add missing dimensions at the end
-    std::cout << op.ndim() << " " << char_to_ax.size() << std::endl;
     if (op.ndim() != char_to_ax.size()) {
       auto shape = operands[i].shape();
       shape.insert(shape.end(), char_to_ax.size() - shape.size(), 1);
@@ -485,7 +491,6 @@ array einsum_naive(
             str_ax.begin(), str_ax.end(), [](const auto& x, const auto& y) {
               return x.second < y.second;
             })) {
-      std::cout << "SKIP? " << std::endl;
       break;
     }
 
@@ -507,9 +512,8 @@ array einsum_naive(
       sum_axes.push_back(ax);
     }
   }
-  std::cout << "SUM AXES " << sum_axes << std::endl;
   if (!sum_axes.empty()) {
-    out = sum(out, sum_axes, true, s);
+    out = sum(out, sum_axes, false, s);
   }
 
   // Transpose output if needed
@@ -517,15 +521,16 @@ array einsum_naive(
   for (auto c : output.str) {
     reorder.push_back(char_to_ax[c]);
   }
-  reorder.insert(reorder.end(), sum_axes.begin(), sum_axes.end());
-  out = transpose(out, reorder, s);
-
-  // Remove reduced axes
-  if (!sum_axes.empty()) {
-    out = squeeze(out, sum_axes, s);
+  for (auto& r : reorder) {
+    int offset = 0;
+    for (auto s : sum_axes) {
+      if (r > s) {
+        offset++;
+      }
+    }
+    r -= offset;
   }
-
-  return out;
+  return transpose(out, reorder, s);
 }
 
 std::pair<std::vector<PathNode>, std::unordered_map<char, int>>
