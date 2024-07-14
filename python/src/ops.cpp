@@ -4410,12 +4410,13 @@ void init_ops(nb::module_& m) {
       "einsum_path",
       [](const std::string& equation, const nb::args& operands) {
         auto arrays_list = nb::cast<std::vector<array>>(operands);
-        return einsum_path(equation, arrays_list);
-        /*std::vector<nb::tuple> tuple_path;
+        auto [path, str] = einsum_path(equation, arrays_list);
+        // Convert to list of tuples
+        std::vector<nb::tuple> tuple_path;
         for (auto& p : path) {
-          tuple_path.push_back(nb::cast<nb::tuple>(p));
+          tuple_path.push_back(nb::tuple(nb::cast(p)));
         }
-        return */
+        return std::make_pair(tuple_path, str);
       },
       "subscripts"_a,
       "operands"_a,
