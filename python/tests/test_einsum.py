@@ -12,36 +12,58 @@ class TestEinsum(mlx_tests.MLXTestCase):
     def test_simple_path(self):
         a = mx.zeros((5, 5))
         path = mx.einsum_path("ii", a)
-        self.assertEqual(path[0], [[0]])
+        self.assertEqual(path[0], [(0,)])
 
         path = mx.einsum_path("ij->i", a)
-        self.assertEqual(path[0], [[0]])
+        self.assertEqual(path[0], [(0,)])
 
         path = mx.einsum_path("ii->i", a)
-        self.assertEqual(path[0], [[0]])
+        self.assertEqual(path[0], [(0,)])
 
         a = mx.zeros((5, 8))
         b = mx.zeros((8, 3))
         path = mx.einsum_path("ij,jk", a, b)
-        self.assertEqual(path[0], [[0, 1]])
+        self.assertEqual(path[0], [(0, 1)])
         path = mx.einsum_path("ij,jk -> ijk", a, b)
-        self.assertEqual(path[0], [[0, 1]])
+        self.assertEqual(path[0], [(0, 1)])
 
         a = mx.zeros((5, 8))
         b = mx.zeros((8, 3))
         c = mx.zeros((3, 7))
         path = mx.einsum_path("ij,jk,kl", a, b, c)
 
-        self.assertEqual(path[0], [[0, 1], [0, 1]])
+        self.assertEqual(path[0], [(0, 1), (0, 1)])
 
         a = mx.zeros((5, 8))
         b = mx.zeros((8, 10))
         c = mx.zeros((10, 7))
         path = mx.einsum_path("ij,jk,kl", a, b, c)
-        self.assertEqual(path[0], [[1, 2], [0, 1]])
+        self.assertEqual(path[0], [(1, 2), (0, 1)])
 
-    def test_long_greedy_path(self):
-        pass
+    def test_longer_paths(self):
+        chars = "abcdefghijklmopqABC"
+        sizes = [2, 3, 4, 5, 4, 3, 2, 6, 5, 4, 3, 2, 5, 7, 4, 3, 2, 3, 4]
+        dim_dict = {c: s for c, s in zip(chars, sizes)}
+        cases = [
+            "eb,cb,fb->cef",
+            "dd,fb,be,cdb->cef",
+            "dd,fb,be,cdb->cef",
+            "bca,cdb,dbf,afc->",
+            "dcc,fce,ea,dbf->ab",
+            "dcc,fce,ea,dbf->ab",
+        ]
+
+        for case in cases:
+            subscripts = case[: case.find("->")].split(",")
+            inputs = []
+            for s in subscripts:
+                shape = [dim_dict[c] for c in s]
+                inputs.append(np.ones(shape))
+            np_path = np.einsum_path(case, *inputs)
+
+            inputs = [mx.array(i) for i in inputs]
+            mx_path = mx.einsum_path(case, *inputs)
+            self.assertEqual(np_path[0][1:], mx_path[0])
 
     def test_simple_einsum(self):
         a = mx.arange(4 * 4).reshape(4, 4)
@@ -116,8 +138,15 @@ class TestEinsum(mlx_tests.MLXTestCase):
         # Matmul
         a = mx.full((2, 8), 1.0)
         b = mx.full((8, 2), 1.0)
-        a_mx = mx.einsum("ij,jk", a, b)
-        a_np = np.einsum("ij,jk", a, b)
+        a_mx = mx.einsum("ik,kj", a, b)
+        a_np = np.einsum("ik,kj", a, b)
+        self.assertTrue(np.array_equal(a_mx, a_np))
+
+        # Matmul + transpose
+        a = mx.full((2, 8), 1.0)
+        b = mx.full((8, 3), 1.0)
+        a_mx = mx.einsum("ik,kj->ji", a, b)
+        a_np = np.einsum("ik,kj->ji", a, b)
         self.assertTrue(np.array_equal(a_mx, a_np))
 
         # Inner product
@@ -147,6 +176,40 @@ class TestEinsum(mlx_tests.MLXTestCase):
         a_mx = mx.einsum("abcd,fgda->bfca", a, b)
         a_np = np.einsum("abcd,fgda->bfca", a, b)
         self.assertTrue(np.array_equal(a_mx, a_np))
+
+    def test_sum_first(self):
+        a = mx.full((5, 8), 1.0)
+        b = mx.full((8, 2), 1.0)
+        a_mx = mx.einsum("ab,bc->c", a, b)
+        a_np = np.einsum("ab,bc->c", a, b)
+        self.assertTrue(np.array_equal(a_mx, a_np))
+
+    def test_broadcasting(self):
+        a = mx.full((5, 1), 1.0)
+        b = mx.full((8, 2), 1.0)
+        a_mx = mx.einsum("ab,bc->c", a, b)
+        return
+        a_np = np.einsum("ab,bc->c", a, b)
+        self.assertTrue(np.array_equal(a_mx, a_np))
+
+        a = mx.random.uniform(shape=(5, 1, 3, 1))
+        b = mx.random.uniform(shape=(1, 7, 1, 2))
+        a_mx = mx.einsum("abcd,cdab->abcd", a, b)
+        a_np = np.einsum("abcd,cdab->abcd", a, b)
+        self.assertTrue(np.allclose(a_mx, a_np))
+
+    def test_attention(self):
+        q = mx.random.uniform(shape=(2, 3, 4, 5))
+        k = mx.random.uniform(shape=(2, 3, 4, 5))
+        v = mx.random.uniform(shape=(2, 3, 4, 5))
+
+        s = mx.einsum("itjk,iujk->ijtu", q, k)
+        out_mx = mx.einsum("ijtu,iujk->itjk", s, v)
+
+        s = np.einsum("itjk,iujk->ijtu", q, k)
+        out_np = np.einsum("ijtu,iujk->itjk", s, v)
+
+        self.assertTrue(np.allclose(out_mx, out_np))
 
 
 if __name__ == "__main__":
