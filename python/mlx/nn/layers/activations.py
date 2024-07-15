@@ -532,7 +532,7 @@ class GELU(Module):
 
     where :math:`\Phi(x)` is the Gaussian CDF.
 
-    However, if ``approx`` is set to 'precise' or 'fast' it applies
+    However, if ``approx`` is set to 'precise'/'tanh' or 'fast' it applies
 
     .. math::
         \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
@@ -544,7 +544,7 @@ class GELU(Module):
     functional equivalents and information regarding error bounds.
 
     Args:
-        approx ('none' | 'precise' | 'fast'): Which approximation to gelu to use if any.
+        approx ('none' | 'precise'/'tanh' | 'fast'): Which approximation to gelu to use if any.
     """
 
     def __init__(self, approx="none"):
@@ -552,13 +552,13 @@ class GELU(Module):
 
         if approx == "none":
             self._act = gelu
-        elif approx == "precise":
+        elif approx == "precise" or approx == "tanh":
             self._act = gelu_approx
         elif approx == "fast":
             self._act = gelu_fast_approx
         else:
             raise ValueError(
-                f"The approximation should be in ['none', 'precise', 'fast'] but '{approx}' was given"
+                f"The approximation should be in ['none', 'precise'/'tanh', 'fast'] but '{approx}' was given"
             )
 
     def __call__(self, x):
