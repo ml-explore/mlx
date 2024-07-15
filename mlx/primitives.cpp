@@ -124,7 +124,7 @@ std::vector<array> Primitive::vjp(
     const std::vector<int>&,
     const std::vector<array>&) {
   std::ostringstream msg;
-  msg << "[Primitive::vip] Not implemented for ";
+  msg << "[Primitive::vjp] Not implemented for ";
   print(msg);
   msg << ".";
   throw std::invalid_argument(msg.str());
