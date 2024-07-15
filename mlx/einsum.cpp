@@ -51,23 +51,6 @@ struct PathNode {
   std::vector<int> positions;
 };
 
-struct Contraction {
-  Contraction(size_t size, size_t cost, CharSet output, int dims, int x, int y)
-      : size(size),
-        cost(cost),
-        output(std::move(output)),
-        dims(dims),
-        x(x),
-        y(y) {};
-
-  int64_t size; // Size difference, can be negative
-  size_t cost;
-  CharSet output;
-  int dims; // Number of dimensions in the contraction
-  int x;
-  int y;
-};
-
 // Parse the comma separated subscripts into a vector of strings. If the
 // output subscripts are missing they are inferred.
 //
@@ -124,17 +107,6 @@ bool disjoint(const CharSet& x, const CharSet& y) {
   return true;
 }
 
-// Intersect two sets
-CharSet intersect(const CharSet& x, const CharSet& y) {
-  CharSet intersection;
-  for (auto& a : x) {
-    if (y.find(a) != y.end()) {
-      intersection.insert(a);
-    }
-  }
-  return intersection;
-}
-
 template <typename T>
 size_t term_size(const T& term, std::unordered_map<char, int> dict) {
   size_t size = 1;
@@ -160,53 +132,36 @@ size_t flop_count(
   return size * op_factor;
 }
 
-// Look for a contraction using the given positions.
-//
-// Returns:
-// - The subscripts of the contracted result
-// - The subscripts participating in the contraction
-std::pair<CharSet, CharSet> contract_two(
-    int p1,
-    int p2,
-    const std::vector<Subscript>& inputs,
-    const Subscript& out) {
-  CharSet idx_contracted;
-  CharSet idx_remaining(out.set);
-  for (int i = 0; i < inputs.size(); i++) {
-    auto& in = inputs[i].set;
-    if (i == p1 || i == p2) {
-      idx_contracted.insert(in.begin(), in.end());
-    } else {
-      idx_remaining.insert(in.begin(), in.end());
-    }
-  }
-
-  // The subscripts of the contracted result
-  auto new_result = intersect(idx_remaining, idx_contracted);
-  return {new_result, idx_contracted};
-}
-
-// Contract all the inputs (e.g. naive einsum)
-std::pair<CharSet, CharSet> contract_all(
-    const std::vector<Subscript>& inputs,
-    const Subscript& out) {
-  CharSet idx_contracted;
-  for (auto& in : inputs) {
-    idx_contracted.insert(in.set.begin(), in.set.end());
-  }
-
-  // The subscripts of the contracted result
-  auto new_result = intersect(out.set, idx_contracted);
-
-  return {new_result, idx_contracted};
-}
-
 std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
     std::vector<Subscript> inputs,
     const Subscript& output,
     std::unordered_map<char, int> dim_dict,
     size_t cost_limit,
     size_t memory_limit) {
+  // Helper struct for building the greedy path
+  struct Contraction {
+    Contraction(
+        size_t size,
+        size_t cost,
+        CharSet output,
+        int dims,
+        int x,
+        int y)
+        : size(size),
+          cost(cost),
+          output(std::move(output)),
+          dims(dims),
+          x(x),
+          y(y) {};
+
+    int64_t size; // Size difference, can be negative
+    size_t cost;
+    CharSet output;
+    int dims; // Number of dimensions in the contraction
+    int x;
+    int y;
+  };
+
   // Start by iterating over all possible combinations
   std::vector<std::pair<int, int>> pos_pairs;
   for (int i = 0; i < inputs.size(); ++i) {
@@ -222,7 +177,25 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
   auto num_in = inputs.size();
   for (int i = 0; i < num_in; ++i) {
     auto add_contraction = [&](int p1, int p2) {
-      auto [new_term, contractions] = contract_two(p1, p2, inputs, output);
+      CharSet new_term;
+      CharSet contractions(inputs[p1].set.begin(), inputs[p1].set.end());
+      contractions.insert(inputs[p2].set.begin(), inputs[p2].set.end());
+      for (int i = 0; i < inputs.size(); i++) {
+        if (i == p1 || i == p2) {
+          continue;
+        }
+        auto& in = inputs[i].set;
+        for (auto c : in) {
+          if (contractions.find(c) != contractions.end()) {
+            new_term.insert(c);
+          }
+        }
+      }
+      for (auto c : output.set) {
+        if (contractions.find(c) != contractions.end()) {
+          new_term.insert(c);
+        }
+      }
 
       // Ignore if:
       // - The size of the new result is greater than the memory limit
@@ -658,7 +631,6 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
   Subscript output(out_subscript, std::move(out_set));
 
   std::unordered_map<char, int> dim_map;
-  //  std::vector<CharSet> broadcast_indicies;
   std::vector<Subscript> inputs;
   for (int i = 0; i < in_subscripts.size(); ++i) {
     auto& in = in_subscripts[i];
@@ -694,19 +666,17 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
     for (int j = 0; j < in.size(); j++) {
       auto c = in[j];
       auto dim = operands[i].shape(j);
-      if (auto it = dim_map.find(c); it != dim_map.end()) {
-        if (dim != 1 && it->second != 1 && it->second != dim) {
-          std::ostringstream msg;
-          msg << "[" << fn_name << "] Cannot broadcast dimension " << j
-              << " of input " << i << " with shape " << operands[i].shape()
-              << " to size " << it->second << ".";
-          throw std::invalid_argument(msg.str());
-        }
-        // Ensure the broadcasted size is used
-        it->second = std::max(it->second, dim);
-      } else {
-        dim_map[c] = dim;
+      auto inserted = dim_map.insert({c, dim});
+      auto& in_dim = inserted.first->second;
+      if (dim != 1 && in_dim != 1 && in_dim != dim) {
+        std::ostringstream msg;
+        msg << "[" << fn_name << "] Cannot broadcast dimension " << j
+            << " of input " << i << " with shape " << operands[i].shape()
+            << " to size " << in_dim << ".";
+        throw std::invalid_argument(msg.str());
       }
+      // Ensure the broadcasted size is used
+      in_dim = std::max(in_dim, dim);
     }
   }
 
@@ -720,12 +690,19 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
   // Get the full naive cost
   size_t naive_cost;
   {
-    auto [new_term, contractions] = contract_all(inputs, output);
-    naive_cost = flop_count(
-        contractions,
-        contractions.size() > new_term.size(),
-        inputs.size(),
-        dim_map);
+    CharSet contractions;
+    for (auto& in : inputs) {
+      contractions.insert(in.set.begin(), in.set.end());
+    }
+
+    bool inner = false;
+    for (auto c : contractions) {
+      if (output.set.find(c) == output.set.end()) {
+        inner = true;
+        break;
+      }
+    }
+    naive_cost = flop_count(contractions, inner, inputs.size(), dim_map);
     path_info.naive_cost = naive_cost;
   }
   path_info.naive_scaling = dim_map.size();
@@ -735,7 +712,8 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
   if (inputs.size() <= 2) {
     std::vector<int> positions(in_subscripts.size());
     std::iota(positions.begin(), positions.end(), 0);
-    path.emplace_back(inputs, output, std::move(positions));
+    path.emplace_back(
+        std::move(inputs), std::move(output), std::move(positions));
   } else {
     std::tie(path, path_info.optimized_cost, path_info.optimized_scaling) =
         greedy_path(inputs, output, dim_map, naive_cost, max_size);
@@ -774,7 +752,6 @@ array einsum(
   auto [path, path_info] = einsum_path_helper(subscripts, operands, "einsum");
   auto inputs = operands;
   for (auto node : path) {
-    // TODO, maybe this should run before optimizing the path
     preprocess_einsum_inputs(node.inputs, node.output, inputs, s);
 
     if (can_dot(node.inputs, node.output)) {
