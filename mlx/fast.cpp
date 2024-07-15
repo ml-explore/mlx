@@ -8,8 +8,6 @@
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
 
-#include <iostream>
-
 namespace mlx::core::fast {
 
 std::vector<array> Custom::vjp(
@@ -612,14 +610,78 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_;
 }
 
+array pack_and_quantize(
+    array& packed_w,
+    const array& scales,
+    const array& biases,
+    int group_size,
+    int bits,
+    const Stream& s) {
+  int el_per_int = 32 / bits;
+  array zero(0, packed_w.dtype());
+  array n_bins((1 << bits) - 1, packed_w.dtype()); // 2**bits - 1
+  array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
+  packed_w = astype(
+      clip(
+          round(divide(subtract(packed_w, biases, s), scales, s), s),
+          zero,
+          n_bins),
+      uint32);
+  packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
+  packed_w = sum(
+      multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+  return packed_w;
+}
+
 std::tuple<array, array, array>
 affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
   auto s = to_stream(s_);
 
+  if (group_size != 32 && group_size != 64 && group_size != 128) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested group size " << group_size
+        << " is not supported. The supported group sizes are 64 and 128.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (bits != 2 && bits != 4 && bits != 8) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested number of bits " << bits
+        << " is not supported. The supported bits are 2, 4 and 8.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (w.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+        << "but it has only " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if ((w.shape(-1) % group_size) != 0) {
+    std::ostringstream msg;
+    msg << "[quantize] The last dimension of the matrix needs to be divisible by "
+        << "the quantization group size " << group_size
+        << ". However the provided " << " matrix has shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
   int el_per_int = 32 / bits;
+
+  if (w.shape(-1) < 32 * el_per_int) {
+    std::ostringstream msg;
+    msg << "[quantize] The feature dimension (2nd dimension of the matrix) is "
+        << "too small for quantization. We support >=512 for 2 bits, "
+        << ">= 256 for 4 bits and >= 128 for 8 bits. The provided matrix has "
+        << "shape " << w.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
   auto fallback = [group_size, bits, el_per_int, s](
                       const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
+    auto wshape = w.shape();
+    wshape.back() = -1;
 
     array zero(0, w.dtype());
     array n_bins((1 << bits) - 1, w.dtype()); // 2**bits - 1
@@ -638,17 +700,12 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
     array biases = where(equal(q0, zero, s), zero, edge);
 
-    array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
-    packed_w = astype(
-        clip(
-            round(divide(subtract(packed_w, biases, s), scales, s), s),
-            zero,
-            n_bins),
-        uint32);
-    packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
-    packed_w = sum(
-        multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
-    return {packed_w, scales, biases};
+    packed_w = pack_and_quantize(packed_w, scales, biases, group_size, bits, s);
+    return {
+        reshape(packed_w, wshape, s),
+        reshape(scales, wshape, s),
+        reshape(biases, wshape, s),
+    };
   };
 
   std::vector<array> outputs;
@@ -684,18 +741,7 @@ array affine_quantize_with_params(
     auto& scales = inputs[1];
     auto& biases = inputs[2];
     array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
-    array zero(0, w.dtype());
-    array n_bins((1 << bits) - 1, w.dtype()); // 2**bits - 1
-    array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
-    packed_w = astype(
-        clip(
-            round(divide(subtract(packed_w, biases, s), scales, s), s),
-            zero,
-            n_bins),
-        uint32);
-    packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
-    packed_w = sum(
-        multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+    packed_w = pack_and_quantize(packed_w, scales, biases, group_size, bits, s);
     return {packed_w};
   };
 

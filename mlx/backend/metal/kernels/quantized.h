@@ -1461,55 +1461,77 @@ template <typename T, const int group_size, const int bits>
     device T* scales [[buffer(2)]],
     device T* biases [[buffer(3)]],
     uint index [[thread_position_in_grid]]) {
-  constexpr T eps = (T)1e-7;
+  constexpr T eps = T(1e-7);
   constexpr int simd_size = 32;
   constexpr int uint8_bits = 8;
-  constexpr int packs_per_int = uint8_bits / bits;
   constexpr T n_bins = (1 << bits) - 1;
+  constexpr int packs_per_int = uint8_bits / bits;
   constexpr int values_per_reduce = group_size / simd_size;
-  constexpr int values_per_thread =
-      values_per_reduce > packs_per_int ? values_per_reduce : packs_per_int;
+  constexpr int writes_per_reduce = packs_per_int / values_per_reduce;
+  constexpr int writes_per_pack =
+      writes_per_reduce > 1 ? 1 : values_per_reduce / packs_per_int;
 
-  int in_index = index * values_per_thread;
+  static_assert(
+      group_size % simd_size == 0,
+      "Group size must be divisible by simd size.");
 
-  T w_thread[values_per_thread];
+  int in_index = index * values_per_reduce;
+  int out_index = index * writes_per_pack;
+
+  T w_thread[values_per_reduce];
   T w_min = Limits<T>::max;
   T w_max = 0;
-#pragma clang loop unroll(full)
-  for (int i = 0; i < values_per_thread; i++) {
+
+  for (int i = 0; i < values_per_reduce; i++) {
     T val = w[in_index + i];
-    T min_val = simd_min(val);
-    T max_val = simd_max(val);
-    w_min = metal::min(w_min, min_val);
-    w_max = metal::max(w_max, max_val);
+    w_thread[i] = val;
+    w_min = min(w_min, val);
+    w_max = max(w_max, val);
   }
 
-  T scale = metal::max((w_max - w_min) / n_bins, eps);
-  bool side = metal::abs(w_min) > metal::abs(w_max);
+  w_min = simd_min(w_min);
+  w_max = simd_max(w_max);
+
+  T scale = max((w_max - w_min) / n_bins, eps);
+  bool side = abs(w_min) > abs(w_max);
   scale = side ? scale : -scale;
   T edge = side ? w_min : w_max;
-  T q0 = metal::round(edge / scale);
+  T q0 = round(edge / scale);
   bool at_zero = q0 == 0.0f;
   scale = at_zero ? scale : edge / q0;
   T bias = at_zero ? 0 : edge;
 
+  // Write out the scales and biases
   int gindex = in_index / group_size;
-
-  uint8_t output = 0;
-#pragma clang loop unroll(full)
-  for (int i = 0; i < packs_per_int; i++) {
-    uint8_t val =
-        metal::min(metal::round((w[in_index + i] - bias) / scale), n_bins);
-    if (bits == 8) {
-      output = val;
-    } else {
-      output += val << (bits * i);
-    }
-  }
-  out[index] = output;
   if (in_index % group_size == 0) {
     scales[gindex] = scale;
     biases[gindex] = bias;
+  }
+
+  uint8_t output = 0;
+  for (int i = 0; i < values_per_reduce; i++) {
+    uint8_t val = min(round((w_thread[i] - bias) / scale), n_bins);
+    // need to pack the adjacent val
+    if (bits == 8) {
+      output = val;
+    } else {
+      output += val << (bits * (i % packs_per_int));
+    }
+
+    // More threads than values to write
+    if (packs_per_int < values_per_reduce &&
+        i % packs_per_int == packs_per_int - 1) {
+      out[out_index + i / packs_per_int] = output;
+      output = 0;
+    } else {
+      for (int j = 0; j < writes_per_reduce - 1; j++) {
+        uint8_t sval = simd_shuffle_down(val, j + 1);
+        output += sval << (bits * (values_per_reduce + j + i));
+      }
+    }
+  }
+  if (out_index % writes_per_reduce == 0) {
+    out[out_index / writes_per_reduce] = output;
   }
 }
 
@@ -1532,8 +1554,7 @@ template <typename T, const int group_size, const int bits>
   uint8_t output = 0;
 #pragma clang loop unroll(full)
   for (int i = 0; i < packs_per_int; i++) {
-    uint8_t val =
-        metal::min(metal::round((w[in_index + i] - bias) / scale), n_bins);
+    uint8_t val = min(round((w[in_index + i] - bias) / scale), n_bins);
     if (bits == 8) {
       output = val;
     } else {

@@ -13,12 +13,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
         for gs in [32, 64, 128]:
             for b in [2, 4, 8]:
                 with self.subTest(gs=gs, b=b):
-                    # with mx.stream(mx.cpu):
-                    #     w_q_c, scales, biases = mx.quantize(w, group_size=gs, bits=b)
-                    #     print("w", w_q_c, scales)
                     w_q, scales, biases = mx.quantize(w, group_size=gs, bits=b)
-                    # print("w", w_q, scales)
-                    # self.assertTrue(mx.allclose(w_q_c, w_q, atol=1e-4))
                     w_hat = mx.dequantize(w_q, scales, biases, gs, b)
                     errors = (w - w_hat).abs().reshape(*scales.shape, -1)
                     eps = 1e-6
