@@ -175,7 +175,7 @@ array::~array() {
     return;
   }
 
-  // Ignore arrays that will be detached during async eval
+  // Ignore arrays that might be detached during eval
   if (status() == array::Status::scheduled) {
     return;
   }
