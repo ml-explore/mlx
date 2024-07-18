@@ -9,9 +9,7 @@
 namespace mlx::core {
 
 void unpack_32_4(uint8_t* data, int8_t* dst) {
-  for (int j = 0; j < 16; ++j) {
-    dst[j] = 0;
-  }
+  std::fill_n(dst, 16, 0);
   for (int j = 0; j < 16; ++j) {
     uint8_t x = (data[j + 2] & 0x0F); // j+2 to skip scale bytes.
     if (j % 2 != 0) {
