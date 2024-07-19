@@ -2697,9 +2697,8 @@ array scatter(
   if (updates.ndim() != (a.ndim() + idx_shape.size())) {
     std::ostringstream msg;
     msg << "[scatter] Updates with " << updates.ndim()
-        << " dimensions does not match the sum of the array and indices "
-           "dimensions "
-        << a.ndim() + idx_shape.size() << ".";
+        << " dimensions does not match the sum of the array (" << a.ndim()
+        << ") and indices (" << idx_shape.size() << ") dimensions.";
     throw std::invalid_argument(msg.str());
   }
   for (int i = 0; i < idx_shape.size(); ++i) {
@@ -2741,6 +2740,7 @@ array scatter(
   inputs.insert(inputs.begin(), a);
   // TODO promote or cast?
   inputs.push_back(astype(updates, a.dtype(), s));
+
   return array(
       a.shape(),
       a.dtype(),

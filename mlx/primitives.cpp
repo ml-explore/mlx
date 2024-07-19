@@ -1,4 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -2974,6 +2975,71 @@ std::vector<array> Scatter::jvp(
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
   throw std::runtime_error("[scatter] JVP not yet implemented");
+}
+
+std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& vmap_axes) {
+  assert(inputs.size() >= 2);
+  assert(inputs.size() == vmap_axes.size());
+
+  for (size_t i = 1; i < vmap_axes.size(); i++) {
+    if (vmap_axes[i] != -1) {
+      throw std::runtime_error(
+          "[scatter]: vmap is only supported on the src input.");
+    }
+  }
+
+  const auto& src = inputs.front();
+  std::vector<array> indices(inputs.begin() + 1, inputs.end() - 1);
+  const auto& updates = inputs.back();
+
+  auto src_ax = vmap_axes.front();
+  auto upd_ax = vmap_axes.back();
+  auto scatter_axes = axes_;
+
+  auto out_ax_it = std::find_if(
+      vmap_axes.begin(), vmap_axes.end(), [](int a) { return a >= 0; });
+  assert(out_ax_it != vmap_axes.end());
+
+  auto out_ax = *out_ax_it;
+
+  // Reorder all the index arrays so the vmap axis is in the same spot.
+  for (int i = 1; i < vmap_axes.size(); ++i) {
+    if (out_ax != vmap_axes[i] && vmap_axes[i] >= 0) {
+      indices[i - 1] = moveaxis(indices[i - 1], vmap_axes[i], out_ax, stream());
+    }
+  }
+
+  if (src_ax != -1) {
+    // Adjust the scatter axis to account for the extra vmap dimension.
+    auto new_ax_loc = std::find_if(
+        scatter_axes.begin(), scatter_axes.end(), [&src_ax](int a) {
+          return a >= src_ax;
+        });
+    for (; new_ax_loc < scatter_axes.end(); new_ax_loc++) {
+      (*new_ax_loc)++;
+    }
+
+    // Clone updates along the vmap dimension so they can be applied to each
+    // source tensor in the vmap.
+    const int num_vmap_items = src.shape().at(src_ax);
+    auto stacked_updates = repeat(updates, num_vmap_items, src_ax, stream());
+    auto stacked_updates_shape = updates.shape();
+    stacked_updates_shape.insert(
+        stacked_updates_shape.end() - src.ndim() + src_ax + 1, num_vmap_items);
+    stacked_updates = reshape(stacked_updates, stacked_updates_shape);
+
+    return {
+        {scatter(src, indices, stacked_updates, scatter_axes, stream())},
+        // The updated scatter leaves the vmapped axis in the same place, so we
+        // can use src_ax here.
+        {src_ax},
+    };
+  }
+
+  // No vmapping needed.
+  return {{scatter(src, indices, updates, axes_, stream())}, {-1}};
 }
 
 std::vector<array> Sigmoid::vjp(
