@@ -845,7 +845,7 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(result, expected))
 
     def test_expm1(self):
-        a = mx.array([0, 0.5, -0.5, 5])
+        a = mx.array([-88, -87, 0, 0.5, -0.5, 5, 87, 88, 89, 90])
         result = mx.expm1(a)
         expected = np.expm1(a, dtype=np.float32)
 
