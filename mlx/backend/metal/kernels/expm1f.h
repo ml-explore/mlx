@@ -83,6 +83,7 @@ float expm1f(float a) {
   r = expm1f_scaled_unchecked(a, 1.0f);
   /* handle severe overflow and underflow */
   if (abs(a - 1.0f) > 88.0f) {
+    r = pow(2, a);
     r = fma(r, r, -1.0f);
   }
   return r;
