@@ -242,8 +242,17 @@ void MetalAllocator::free(Buffer buffer) {
 }
 
 MetalAllocator& allocator() {
-  static MetalAllocator allocator_;
-  return allocator_;
+  // By creating the |allocator_| on heap, the destructor of MetalAllocator will
+  // not be called on exit and all the buffers will be leaked. This is necessary
+  // because releasing buffers can take more than 30sec when the program holds a
+  // lot of RAM (for example inferencing a LLM), and it would feel frozen to
+  // users when exiting.
+  // TODO(zcbenz): Consider using the `base::NoDestructor` class from Chromium
+  // when applying this pattern to more places, or when introducing sanitizers
+  // to MLX.
+  // https://source.chromium.org/chromium/chromium/src/+/main:base/no_destructor.h
+  static MetalAllocator* allocator_ = new MetalAllocator;
+  return *allocator_;
 }
 
 size_t set_cache_limit(size_t limit) {

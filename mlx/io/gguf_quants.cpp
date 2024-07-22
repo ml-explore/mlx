@@ -9,7 +9,8 @@
 namespace mlx::core {
 
 void unpack_32_4(uint8_t* data, int8_t* dst) {
-  for (int64_t j = 0; j < 16; ++j) {
+  std::fill_n(dst, 16, 0);
+  for (int j = 0; j < 16; ++j) {
     uint8_t x = (data[j + 2] & 0x0F); // j+2 to skip scale bytes.
     if (j % 2 != 0) {
       x <<= 4;
@@ -17,7 +18,7 @@ void unpack_32_4(uint8_t* data, int8_t* dst) {
     dst[j / 2] += x;
   }
   // Last 16 weights are in the higher bits
-  for (int64_t j = 0; j < 16; ++j) {
+  for (int j = 0; j < 16; ++j) {
     uint8_t x = (data[j + 2] >> 4);
     if (j % 2 != 0) {
       x <<= 4;
@@ -134,7 +135,6 @@ void gguf_load_quantized(
 
   array scales(allocator::malloc(sb_nbytes), shape, float16);
   array biases(allocator::malloc(sb_nbytes), std::move(shape), float16);
-
   if (tensor.type == GGUF_TYPE_Q4_0) {
     extract_q4_0_data(tensor, weights, scales, biases);
   } else if (tensor.type == GGUF_TYPE_Q4_1) {

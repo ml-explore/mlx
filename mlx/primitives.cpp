@@ -124,7 +124,7 @@ std::vector<array> Primitive::vjp(
     const std::vector<int>&,
     const std::vector<array>&) {
   std::ostringstream msg;
-  msg << "[Primitive::vip] Not implemented for ";
+  msg << "[Primitive::vjp] Not implemented for ";
   print(msg);
   msg << ".";
   throw std::invalid_argument(msg.str());
@@ -523,7 +523,7 @@ std::vector<array> AsType::vjp(
     const std::vector<array>&) {
   if (cotangents[0].dtype() != dtype_) {
     throw std::invalid_argument(
-        "[astype] Type of cotangentsgent does not much primal output type.");
+        "[astype] Type of cotangents does not match primal output type.");
   }
   return {astype(cotangents[0], primals[0].dtype(), stream())};
 }
@@ -627,6 +627,26 @@ std::pair<std::vector<array>, std::vector<int>> BitwiseBinary::vmap(
           std::make_shared<BitwiseBinary>(stream(), op_),
           {a, b})},
       {to_ax}};
+}
+
+std::vector<array> BitwiseBinary::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 2);
+  std::vector<array> vjps = {zeros_like(tangents[0], stream())};
+  if (argnums.size() > 1) {
+    vjps.push_back(vjps.back());
+  }
+  return vjps;
+}
+
+std::vector<array> BitwiseBinary::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  return jvp(primals, cotangents, argnums);
 }
 
 std::vector<array> Broadcast::vjp(
@@ -1093,17 +1113,21 @@ std::pair<std::vector<array>, std::vector<int>> Cosh::vmap(
   return {{cosh(inputs[0], stream())}, axes};
 }
 
-std::vector<array> CustomVJP::vjp(
+std::vector<array> CustomTransforms::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>& outputs) {
-  std::vector<array> inputs(primals.begin(), primals.end() - outputs.size());
+  // Extract the inputs to the VJP function
+  std::vector<array> inputs(primals.begin(), primals.end() - num_outputs_);
+
+  // Compute all the vjps
   auto all_vjps = vjp_fun_(inputs, cotangents, outputs);
   for (const auto& cot : cotangents) {
     all_vjps.emplace_back(cot);
   }
 
+  // Select the vjps requested
   std::vector<array> vjps;
   vjps.reserve(argnums.size());
   for (auto arg : argnums) {
@@ -1111,6 +1135,26 @@ std::vector<array> CustomVJP::vjp(
   }
 
   return vjps;
+}
+
+std::vector<array> CustomTransforms::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  // Extract the inputs to the JVP function
+  std::vector<array> inputs(primals.begin(), primals.end() - num_outputs_);
+
+  // Compute the jvps
+  return jvp_fun_(inputs, tangents, argnums);
+}
+
+std::pair<std::vector<array>, std::vector<int>> CustomTransforms::vmap(
+    const std::vector<array>& inputs_,
+    const std::vector<int>& axes_) {
+  // Extract the inputs to the vmap function
+  std::vector<array> inputs(inputs_.begin(), inputs_.end() - num_outputs_);
+  std::vector<int> axes(axes_.begin(), axes_.end() - num_outputs_);
+  return vmap_fun_(inputs, axes);
 }
 
 std::vector<array> Depends::vjp(
@@ -1598,13 +1642,19 @@ std::vector<array> Gather::vjp(
     const std::vector<array>& cotangents,
     const std::vector<int>& argnums,
     const std::vector<array>&) {
-  if (argnums.size() > 1 || argnums[0] != 0) {
-    throw std::invalid_argument(
-        "[gather] Cannot calculate VJP with respect to indices.");
+  std::vector<array> vjps;
+  for (int argnum : argnums) {
+    if (argnum > 0) {
+      // Grads w.r.t. indices are zero
+      vjps.push_back(
+          zeros(primals[argnum].shape(), primals[argnum].dtype(), stream()));
+    } else {
+      auto src = zeros_like(primals[0], stream());
+      std::vector<array> inds(primals.begin() + 1, primals.end());
+      vjps.push_back(scatter_add(src, inds, cotangents[0], axes_, stream()));
+    }
   }
-  auto src = zeros_like(primals[0], stream());
-  std::vector<array> inds(primals.begin() + 1, primals.end());
-  return {scatter_add(src, inds, cotangents[0], axes_, stream())};
+  return vjps;
 }
 
 std::vector<array> Gather::jvp(
@@ -3948,6 +3998,44 @@ void View::print(std::ostream& os) {
 bool View::is_equivalent(const Primitive& other) const {
   const View& a_other = static_cast<const View&>(other);
   return (dtype_ == a_other.dtype_);
+}
+
+std::pair<std::vector<array>, std::vector<int>> Hadamard::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  auto& s = stream();
+  if (axes[0] == inputs[0].ndim() - 1) {
+    auto a = moveaxis(inputs[0], axes[0], 0, s);
+    auto b = hadamard_transform(a, scale_, s);
+    return {{b}, {0}};
+  }
+  return {{hadamard_transform(inputs[0], scale_, s)}, axes};
+}
+
+std::vector<array> Hadamard::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>& cotangents,
+    const std::vector<int>& argnums,
+    const std::vector<array>&) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return jvp(primals, cotangents, argnums);
+}
+
+std::vector<array> Hadamard::jvp(
+    const std::vector<array>& primals,
+    const std::vector<array>& tangents,
+    const std::vector<int>& argnums) {
+  assert(primals.size() == 1);
+  assert(argnums.size() == 1);
+  return {hadamard_transform(tangents[0], scale_, stream())};
+}
+
+bool Hadamard::is_equivalent(const Primitive& other) const {
+  const Hadamard& h_other = static_cast<const Hadamard&>(other);
+  return scale_ == h_other.scale_;
 }
 
 } // namespace mlx::core

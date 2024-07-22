@@ -217,13 +217,11 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
   };
 
   while (gguf_get_tensor(ctx, &tensor)) {
-    std::string name(tensor.name, tensor.namelen);
     if (tensor.type == GGUF_TYPE_Q4_0 || tensor.type == GGUF_TYPE_Q4_1 ||
         tensor.type == GGUF_TYPE_Q8_0) {
       gguf_load_quantized(array_map, tensor);
     } else {
-      std::string name = std::string(tensor.name, tensor.namelen);
-
+      std::string name(tensor.name, tensor.namelen);
       const auto& [data, dtype] = extract_tensor_data(&tensor);
       array loaded_array = array(data, get_shape(tensor), dtype);
       check_insert(array_map.insert({name, loaded_array}));
@@ -233,6 +231,15 @@ std::unordered_map<std::string, array> load_arrays(gguf_ctx* ctx) {
 }
 
 GGUFLoad load_gguf(const std::string& file, StreamOrDevice s) {
+  bool exists;
+  {
+    std::ifstream f(file.c_str());
+    exists = f.good();
+  }
+  if (!exists) {
+    throw std::invalid_argument("[load_gguf] Failed to open " + file);
+  }
+
   gguf_ctx* ctx = gguf_open(file.data());
   if (!ctx) {
     throw std::runtime_error("[load_gguf] gguf_init failed");

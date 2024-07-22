@@ -104,6 +104,7 @@ class Optimizer:
 
     @state.setter
     def state(self, state: dict):
+        self._initialized = True
         self._state = state
 
     @property

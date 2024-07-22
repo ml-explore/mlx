@@ -52,6 +52,7 @@ make_jit_source(
 )
 make_jit_source(scatter)
 make_jit_source(gather)
+make_jit_source(hadamard)
 
 if (MLX_METAL_JIT) 
   target_sources(
@@ -132,6 +133,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/indexing.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/matmul.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/scaled_dot_product_attention.cpp

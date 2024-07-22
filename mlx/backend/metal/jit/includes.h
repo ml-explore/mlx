@@ -18,6 +18,7 @@ const char* binary();
 const char* binary_two();
 const char* copy();
 const char* fft();
+const char* hadamard();
 const char* quantized();
 const char* ternary();
 const char* scan();

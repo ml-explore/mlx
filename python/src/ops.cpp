@@ -2559,7 +2559,7 @@ void init_ops(nb::module_& m) {
               If unspecified, it defaults to ``-1``.
 
         Returns:
-            array: The `uint32`` array containing indices that partition the input.
+            array: The ``uint32`` array containing indices that partition the input.
       )pbdoc");
   m.def(
       "topk",
@@ -4374,5 +4374,35 @@ void init_ops(nb::module_& m) {
 
         Returns:
             array: The array with the new type.
+      )pbdoc");
+  m.def(
+      "hadamard_transform",
+      &hadamard_transform,
+      nb::arg(),
+      "scale"_a = 1.0,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def hadamard_transform(a: array, float scale = 1.0, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Perform the Walsh-Hadamard transform along the final axis.
+
+        Equivalent to:
+
+        .. code-block:: python
+
+           from scipy.linalg import hadamard
+
+           y = hadamard(len(x)) @ x
+
+        Supports sizes ``n = m*2^k`` for ``m`` in ``(1, 12, 20, 28)`` and ``2^k
+        <= 8192`` for float32 and ``2^k <= 16384`` for float16/bfloat16.
+
+        Args:
+            a (array): Input array or scalar.
+            scale (float): Scale the output by this factor.
+
+        Returns:
+            array: The transformed array.
       )pbdoc");
 }

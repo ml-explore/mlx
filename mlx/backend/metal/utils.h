@@ -130,17 +130,6 @@ inline void debug_set_primitive_buffer_label(
 #endif
 }
 
-bool is_power_of_2(int n) {
-  return ((n & (n - 1)) == 0) && n != 0;
-}
-
-int next_power_of_2(int n) {
-  if (is_power_of_2(n)) {
-    return n;
-  }
-  return pow(2, std::ceil(std::log2(n)));
-}
-
 std::string get_primitive_string(Primitive* primitive) {
   std::ostringstream op_t;
   primitive->print(op_t);
