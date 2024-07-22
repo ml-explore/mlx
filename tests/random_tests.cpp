@@ -674,9 +674,11 @@ TEST_CASE("test laplace") {
 
     // Chebyshev's inequality.
     for (int k = 1; k <= 5; ++k) {
-        float prob_above = mean(greater_equal(out,  array(k*std::sqrt(sample_variance)))).item<float>();
-        float bound = 1 / std::pow(k,2);
-        CHECK(prob_above<bound);
+      float prob_above =
+          mean(greater_equal(out, array(k * std::sqrt(sample_variance))))
+              .item<float>();
+      float bound = 1 / std::pow(k, 2);
+      CHECK(prob_above < bound);
     }
 
     // Expected variance for Laplace distribution is 2*scale^2.
@@ -685,7 +687,8 @@ TEST_CASE("test laplace") {
 
     // Expected kurtosis of Laplace distribution is 3.
     array fourth_pows = power(out - sample_mean, {4});
-    float sample_kurtosis = mean(fourth_pows).item<float>() / std::pow(sample_variance, 2) - 3;
+    float sample_kurtosis =
+        mean(fourth_pows).item<float>() / std::pow(sample_variance, 2) - 3;
     float expected_kurtosis = 3.0;
     CHECK(std::abs(sample_kurtosis - expected_kurtosis) < 0.1);
   }
@@ -708,4 +711,3 @@ TEST_CASE("test laplace") {
     CHECK(abs(float(mean(out).item<bfloat16_t>())) < 0.1);
   }
 }
-

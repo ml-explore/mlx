@@ -254,6 +254,4 @@ inline array laplace(
   return laplace(shape, float32, 0.0, 1.0, key, s);
 }
 
-
-
 } // namespace mlx::core::random

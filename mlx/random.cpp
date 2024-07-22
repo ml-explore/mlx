@@ -105,14 +105,14 @@ T above_minus_one() {
 // Get the next representable value above -1.0 for half precision
 // use std::nextafter as default case.
 array above_minus_one_with_default(Dtype dtype) {
-    switch (dtype) {
-      case float16:
-        return array(above_minus_one<float16_t>(), dtype);
-      case bfloat16:
-        return array(above_minus_one<bfloat16_t>(), dtype);
-      default:
-        return array(std::nextafter(-1.0f, 0.0f), dtype);
-    }
+  switch (dtype) {
+    case float16:
+      return array(above_minus_one<float16_t>(), dtype);
+    case bfloat16:
+      return array(above_minus_one<bfloat16_t>(), dtype);
+    default:
+      return array(std::nextafter(-1.0f, 0.0f), dtype);
+  }
 }
 
 array uniform(
@@ -453,7 +453,10 @@ array laplace(
   auto high = array(1.0f, dtype);
   auto samples = uniform(low, high, shape, dtype, key, stream);
   // Use inverse CDF to generate Laplacian noise
-  samples = multiply(sign(samples), log1p(multiply(array(-1.0f, dtype), abs(samples))), stream);
+  samples = multiply(
+      sign(samples),
+      log1p(multiply(array(-1.0f, dtype), abs(samples))),
+      stream);
 
   if (scale != 1.0) {
     samples = multiply(array(scale, dtype), samples, stream);
