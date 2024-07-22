@@ -223,4 +223,36 @@ array categorical(
     const std::optional<array>& key = std::nullopt,
     StreamOrDevice s = {});
 
+/** Generate samples from the laplace distribution. */
+array laplace(
+    const std::vector<int>& shape,
+    Dtype dtype,
+    const float loc,
+    const float scale,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {});
+inline array laplace(
+    const std::vector<int>& shape,
+    const float loc,
+    const float scale,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {}) {
+  return laplace(shape, float32, loc, scale, key, s);
+}
+inline array laplace(
+    const std::vector<int>& shape,
+    const Dtype dtype,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {}) {
+  return laplace(shape, dtype, 0.0, 1.0, key, s);
+}
+inline array laplace(
+    const std::vector<int>& shape,
+    const std::optional<array>& key = std::nullopt,
+    StreamOrDevice s = {}) {
+  return laplace(shape, float32, 0.0, 1.0, key, s);
+}
+
+
+
 } // namespace mlx::core::random

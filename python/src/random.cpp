@@ -419,6 +419,38 @@ void init_random(nb::module_& parent_module) {
         Returns:
             array: The ``shape``-sized output array with type ``uint32``.
       )pbdoc");
+  m.def(
+      "laplace",
+      [](const std::vector<int>& shape,
+         std::optional<Dtype> type,
+         float loc,
+         float scale,
+         const std::optional<array>& key_,
+         StreamOrDevice s) {
+        auto key = key_ ? key_.value() : default_key().next();
+        return laplace(shape, type.value_or(float32), loc, scale, key, s);
+      },
+      "shape"_a = std::vector<int>{},
+      "dtype"_a.none() = float32,
+      "loc"_a = 0.0,
+      "scale"_a = 1.0,
+      "key"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def laplace(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, loc: float = 0.0, scale: float = 1.0, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Sample numbers from a Laplace distribution.
+
+        Args:
+            shape (list(int), optional): Shape of the output. Default is ``()``.
+            dtype (Dtype, optional): Type of the output. Default is ``float32``.
+            loc (float, optional): Mean of the distribution. Default is ``0.0``.
+            scale (float, optional): The scale "b" of the Laplace distribution. Default is ``1.0``.
+            key (array, optional): A PRNG key. Default: None.
+
+        Returns:
+            array: The output array of random values.
+      )pbdoc");
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");
   atexit.attr("register")(nb::cpp_function([]() { default_key().release(); }));
