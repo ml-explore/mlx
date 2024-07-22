@@ -184,17 +184,7 @@ array normal(
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
-  auto get_low = [&dtype]() {
-    switch (dtype) {
-      case float16:
-        return array(above_minus_one<float16_t>(), dtype);
-      case bfloat16:
-        return array(above_minus_one<bfloat16_t>(), dtype);
-      default:
-        return array(std::nextafter(-1.0f, 0.0f), dtype);
-    }
-  };
-  auto low = get_low();
+  auto low = above_minus_one_with_default(dtype);
   auto high = array(1.0f, dtype);
   auto samples = uniform(low, high, shape, dtype, key, stream);
   samples =
