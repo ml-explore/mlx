@@ -127,7 +127,7 @@ class TestLosses(mlx_tests.MLXTestCase):
 
         def _test_tiny_probs_as_inputs():
             TINY_PROB = 1e-59
-            probs = mx.array([0, TINY_PROB, 1-TINY_PROB, 1])
+            probs = mx.array([0, TINY_PROB, 1 - TINY_PROB, 1])
             targets = mx.array([0, 0, 1, 1])
 
             losses_none = nn.losses.binary_cross_entropy(
