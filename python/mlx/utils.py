@@ -1,6 +1,6 @@
 # Copyright © 2023 Apple Inc.
 from collections import defaultdict
-from typing import Callable, Any, Tuple
+from typing import Any, Callable, Tuple
 
 
 def tree_map(
