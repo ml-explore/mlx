@@ -126,7 +126,9 @@ def binary_cross_entropy(
 
     In order to always return a finite loss for input probabilities close to or
     exactly 0 or 1, this loss calculation clips log function outputs to be
-    greater than or equal to -100.
+    greater than or equal to -100. However, in this case, consider passing the
+    logits as inputs and `with_logits=True` for a more direct and precise loss
+    calculation.
 
     Args:
         inputs (array): The predicted values. If ``with_logits`` is ``True``, then
