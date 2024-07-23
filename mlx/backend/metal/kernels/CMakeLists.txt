@@ -4,6 +4,7 @@ set(
   bf16_math.h
   complex.h
   defines.h
+  expm1f.h
   utils.h
 )
 

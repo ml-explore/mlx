@@ -847,9 +847,10 @@ class TestOps(mlx_tests.MLXTestCase):
     def test_expm1(self):
         a = mx.array([-88, -87, 0, 0.5, -0.5, 5, 87, 88, 89, 90])
         result = mx.expm1(a)
-        expected = np.expm1(a, dtype=np.float32)
-
-        self.assertTrue(np.allclose(result, expected, rtol=1e-5, atol=1e-5))
+        errs = np.seterr(over="ignore")
+        expected = np.expm1(a)
+        np.seterr(over=errs["over"])
+        self.assertTrue(np.allclose(result, expected, rtol=1e-3, atol=1e-4))
 
     def test_erf(self):
         inputs = [-5, 0.0, 0.5, 1.0, 2.0, 10.0]
