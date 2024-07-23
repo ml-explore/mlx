@@ -4393,7 +4393,7 @@ void init_ops(nb::module_& m) {
 
            from scipy.linalg import hadamard
 
-           y = hadamard(len(x)) @ x
+           y = (hadamard(len(x)) @ x) * scale
 
         Supports sizes ``n = m*2^k`` for ``m`` in ``(1, 12, 20, 28)`` and ``2^k
         <= 8192`` for float32 and ``2^k <= 16384`` for float16/bfloat16.
@@ -4401,7 +4401,7 @@ void init_ops(nb::module_& m) {
         Args:
             a (array): Input array or scalar.
             scale (float): Scale the output by this factor.
-              Defaults to `1/sqrt(a.shape[-1])` so that H is orthonormal.
+              Defaults to ``1/sqrt(a.shape[-1])`` so that the Hadamard matrix is orthonormal.
 
         Returns:
             array: The transformed array.
