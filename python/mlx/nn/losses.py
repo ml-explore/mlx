@@ -124,11 +124,10 @@ def binary_cross_entropy(
     """
     Computes the binary cross entropy loss.
 
-    In order to always return a finite loss for input probabilities close to or
-    exactly 0 or 1, this loss calculation clips log function outputs to be
-    greater than or equal to -100. However, in this case, consider passing the
-    logits as inputs and `with_logits=True` for a more direct and precise loss
-    calculation.
+    By default, this function takes the pre-sigmoid logits, which results in a faster
+    and more precise loss. For improved numerical stability when ``with_logits=False``,
+    the loss calculation clips the input probabilities (in log-space) to a minimum value
+    of ``-100``.
 
     Args:
         inputs (array): The predicted values. If ``with_logits`` is ``True``, then
