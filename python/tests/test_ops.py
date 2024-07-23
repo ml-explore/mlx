@@ -2516,7 +2516,7 @@ class TestOps(mlx_tests.MLXTestCase):
             c = mx.array(c).astype(mx.float32)
 
             def hadamard_transform(x):
-                return h @ x
+                return h @ x / mx.sqrt(x.shape[-1])
 
             out = mx.vjp(hadamard_transform, [x], [c])
             out_t = mx.vjp(mx.hadamard_transform, [x], [c])
