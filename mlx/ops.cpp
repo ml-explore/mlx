@@ -453,8 +453,10 @@ array flatten(const array& a, StreamOrDevice s /* = {} */) {
 
 array hadamard_transform(
     const array& a,
-    float scale /* = 1.0 */,
+    std::optional<float> scale_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
+  // Default to an orthonormal Hadamard matrix scaled by 1/sqrt(N)
+  float scale = scale_.has_value() ? *scale_ : 1.0f / std::sqrt(a.shape(-1));
   auto dtype = issubdtype(a.dtype(), floating) ? a.dtype() : float32;
   return array(
       a.shape(),
