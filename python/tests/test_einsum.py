@@ -211,6 +211,12 @@ class TestEinsum(mlx_tests.MLXTestCase):
 
         self.assertTrue(np.allclose(out_mx, out_np))
 
+    def test_multi_input_einsum(self):
+        a = mx.ones((3, 4, 5))
+        out_mx = mx.einsum("ijk,lmk,ijf->lf", a, a, a)
+        out_np = np.einsum("ijk,lmk,ijf->lf", a, a, a)
+        self.assertTrue(np.allclose(out_mx, out_np))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -255,8 +255,8 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
     // Add the chosen contraction to the path
     {
       std::vector<Subscript> in_terms;
-      in_terms.push_back(std::move(inputs[best.y]));
       in_terms.push_back(std::move(inputs[best.x]));
+      in_terms.push_back(std::move(inputs[best.y]));
       path.emplace_back(
           std::move(in_terms), new_output, std::vector<int>{best.x, best.y});
     }
