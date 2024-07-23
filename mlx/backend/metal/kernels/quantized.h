@@ -1467,8 +1467,7 @@ template <typename T, const int group_size, const int bits>
   constexpr T n_bins = (1 << bits) - 1;
   constexpr int packs_per_int = uint8_bits / bits;
   constexpr int values_per_reduce = group_size / simd_size;
-  constexpr int writes_per_reduce =
-      packs_per_int > values_per_reduce ? packs_per_int / values_per_reduce : 1;
+  constexpr int writes_per_reduce = packs_per_int / values_per_reduce;
   constexpr int writes_per_pack =
       writes_per_reduce > 1 ? 1 : values_per_reduce / packs_per_int;
 
@@ -1532,7 +1531,7 @@ template <typename T, const int group_size, const int bits>
       }
     }
   }
-  if (out_index % writes_per_reduce == 0) {
+  if (writes_per_reduce > 0 && out_index % writes_per_reduce == 0) {
     out[out_index / writes_per_reduce] = output;
   }
 }
