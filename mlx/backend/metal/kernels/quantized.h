@@ -1482,6 +1482,7 @@ template <typename T, const int group_size, const int bits>
   T w_min = Limits<T>::max;
   T w_max = 0;
 
+#pragma clang loop unroll(full)
   for (int i = 0; i < values_per_reduce; i++) {
     T val = w[in_index + i];
     w_thread[i] = val;
@@ -1509,21 +1510,21 @@ template <typename T, const int group_size, const int bits>
   }
 
   uint8_t output = 0;
+#pragma clang loop unroll(full)
   for (int i = 0; i < values_per_reduce; i++) {
     uint8_t val = min(round((w_thread[i] - bias) / scale), n_bins);
-    // need to pack the adjacent val
     if (bits == 8) {
       output = val;
     } else {
       output += val << (bits * (i % packs_per_int));
     }
 
-    // More threads than values to write
     if (packs_per_int < values_per_reduce &&
         i % packs_per_int == packs_per_int - 1) {
       out[out_index + i / packs_per_int] = output;
       output = 0;
     } else {
+#pragma clang loop unroll(full)
       for (int j = 0; j < writes_per_reduce - 1; j++) {
         uint8_t sval = simd_shuffle_down(val, j + 1);
         output += sval << (bits * (values_per_reduce + j + i));
