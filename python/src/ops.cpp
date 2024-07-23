@@ -2833,7 +2833,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def pad(a: array, pad_with: Union[int, Tuple[int], Tuple[int, int], List[Tuple[int, int]]], constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def pad(a: array, pad_width: Union[int, Tuple[int], Tuple[int, int], List[Tuple[int, int]]], constant_values: Union[scalar, array] = 0, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Pad an array with a constant value
 
