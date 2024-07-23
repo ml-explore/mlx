@@ -1501,7 +1501,7 @@ template <typename T, const int group_size, const int bits>
   T q0 = round(edge / scale);
   bool at_zero = q0 == 0.0f;
   scale = at_zero ? scale : edge / q0;
-  T bias = at_zero ? 0 : edge;
+  T bias = at_zero ? T(0) : edge;
 
   // Write out the scales and biases
   int gindex = in_index / group_size;

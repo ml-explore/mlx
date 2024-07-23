@@ -738,11 +738,15 @@ array affine_quantize_with_params(
   auto fallback = [group_size, bits, el_per_int, s](
                       const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
-    auto& scales = inputs[1];
-    auto& biases = inputs[2];
+    auto scales = expand_dims(inputs[1], -1, s);
+    auto biases = expand_dims(inputs[2], -1, s);
+
+    auto wshape = w.shape();
+    wshape.back() = -1;
+
     array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
     packed_w = pack_and_quantize(packed_w, scales, biases, group_size, bits, s);
-    return {packed_w};
+    return {reshape(packed_w, wshape, s)};
   };
 
   if (s.device == Device::gpu) {
