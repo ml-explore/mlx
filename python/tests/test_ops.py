@@ -2496,6 +2496,13 @@ class TestOps(mlx_tests.MLXTestCase):
                 atol = 2e-4 if dtype == np.float32 else 5e-2 * k
                 np.testing.assert_allclose(y, y_np, atol=atol)
 
+                # bfloat16 emulation on M1 means 2**14 doesn't fit in threadgroup memory
+                if dtype == np.float16 and k < 14:
+                    y_bf16 = mx.hadamard_transform(x.astype(mx.bfloat16), scale=scale)
+                    np.testing.assert_allclose(
+                        y_bf16.astype(mx.float16), y, atol=atol * 2
+                    )
+
     def test_hadamard_grad_vmap(self):
         np.random.seed(4)
 
