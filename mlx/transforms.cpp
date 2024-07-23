@@ -141,10 +141,9 @@ array eval_impl(std::vector<array> outputs, bool async) {
     tape.pop();
 
     // Set the status of the array and siblings.
-    auto status = async ? array::Status::scheduled : array::Status::available;
-    arr.set_status(status);
+    arr.set_status(array::Status::scheduled);
     for (auto& s : arr.siblings()) {
-      s.set_status(status);
+      s.set_status(array::Status::scheduled);
     }
 
     auto stream = arr.primitive().stream();
@@ -170,6 +169,10 @@ array eval_impl(std::vector<array> outputs, bool async) {
         if (!arr.is_tracer()) {
           arr.detach();
         }
+        for (auto& out : outputs) {
+          out.set_status(array::Status::available);
+        }
+
         if (signal) {
           arr.event().signal();
         }
