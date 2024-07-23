@@ -1,8 +1,11 @@
 # Copyright © 2023 Apple Inc.
 from collections import defaultdict
+from typing import Any, Callable, Tuple
 
 
-def tree_map(fn, tree, *rest, is_leaf=None):
+def tree_map(
+    fn: Callable, tree: Any, *rest: Tuple[Any], is_leaf: Callable = None
+) -> Any:
     """Applies ``fn`` to the leaves of the Python tree ``tree`` and
     returns a new collection with the results.
 
@@ -53,7 +56,13 @@ def tree_map(fn, tree, *rest, is_leaf=None):
         return fn(tree, *rest)
 
 
-def tree_map_with_path(fn, tree, *rest, is_leaf=None, path=None):
+def tree_map_with_path(
+    fn: Callable,
+    tree: Any,
+    *rest: Tuple[Any],
+    is_leaf: Callable = None,
+    path: Any = None,
+) -> Any:
     """Applies ``fn`` to the path and leaves of the Python tree ``tree`` and
     returns a new collection with the results.
 
