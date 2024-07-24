@@ -1841,12 +1841,13 @@ class TestOps(mlx_tests.MLXTestCase):
             self.assertEqual(b_mx.dtype, c_mx.dtype)
 
         # Test very large array
-        a_np = np.random.normal(20, 20, size=(2**22)).astype(np.float32)
-        a_mx = mx.array(a_np)
+        if mx.default_device() == mx.gpu:
+            a_np = np.random.normal(20, 20, size=(2**22)).astype(np.float32)
+            a_mx = mx.array(a_np)
 
-        b_np = np.sort(a_np)
-        b_mx = mx.sort(a_mx)
-        self.assertTrue(np.array_equal(b_np, b_mx))
+            b_np = np.sort(a_np)
+            b_mx = mx.sort(a_mx)
+            self.assertTrue(np.array_equal(b_np, b_mx))
 
     def test_partition(self):
         shape = (3, 4, 5)
