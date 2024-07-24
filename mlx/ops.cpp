@@ -1785,15 +1785,6 @@ array sort(const array& a, int axis, StreamOrDevice s /* = {} */) {
     throw std::invalid_argument(msg.str());
   }
 
-  // TODO: Fix GPU kernel
-  if (a.shape(axis) >= (1u << 21) && to_stream(s).device.type == Device::gpu) {
-    std::ostringstream msg;
-    msg << "[sort] GPU sort cannot handle sort axis of >= 2M elements,"
-        << " got array with sort axis size " << a.shape(axis) << "."
-        << " Please place this operation on the CPU instead.";
-    throw std::runtime_error(msg.str());
-  }
-
   return array(
       a.shape(), a.dtype(), std::make_shared<Sort>(to_stream(s), axis), {a});
 }
