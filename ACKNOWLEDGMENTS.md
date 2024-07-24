@@ -17,6 +17,7 @@ MLX was developed with contributions from the following individuals:
 - Brian Keene & Atila Orhon, with Argmax Inc.: Added `fast.scaled_dot_product_attention`
 - AmirHossein Razlighi: Added chaining support for some of the ops in `nn.Module`. Comparison works for non array objects in `mlx.core.array`. Exception handling for invalid operations in `mlx.core.array`.
 - Gleb Pobudzey: Added the `where` primitive, and groups in 1D and 2D convolutions.
+- Paul Paczuski: Improved stability of BCE loss calculation
 
 <a href="https://github.com/ml-explore/mlx/graphs/contributors">
   <img class="dark-light" src="https://contrib.rocks/image?repo=ml-explore/mlx&anon=0&columns=20&max=100&r=true" />
