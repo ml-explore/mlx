@@ -102,6 +102,19 @@ T above_minus_one() {
   return f;
 }
 
+// Get the next representable value above -1.0 for half precision
+// use std::nextafter as default case.
+array above_minus_one_with_default(Dtype dtype) {
+  switch (dtype) {
+    case float16:
+      return array(above_minus_one<float16_t>(), dtype);
+    case bfloat16:
+      return array(above_minus_one<bfloat16_t>(), dtype);
+    default:
+      return array(std::nextafter(-1.0f, 0.0f), dtype);
+  }
+}
+
 array uniform(
     const array& low,
     const array& high,
@@ -171,17 +184,7 @@ array normal(
     const std::optional<array>& key /*= nullopt */,
     StreamOrDevice s /* = {} */) {
   auto stream = to_stream(s);
-  auto get_low = [&dtype]() {
-    switch (dtype) {
-      case float16:
-        return array(above_minus_one<float16_t>(), dtype);
-      case bfloat16:
-        return array(above_minus_one<bfloat16_t>(), dtype);
-      default:
-        return array(std::nextafter(-1.0f, 0.0f), dtype);
-    }
-  };
-  auto low = get_low();
+  auto low = above_minus_one_with_default(dtype);
   auto high = array(1.0f, dtype);
   auto samples = uniform(low, high, shape, dtype, key, stream);
   samples =
@@ -426,6 +429,32 @@ array categorical(
   auto shape = logits.shape();
   shape.erase(shape.begin() + axis);
   return categorical_impl(logits, axis, shape, key, s);
+}
+
+array laplace(
+    const std::vector<int>& shape,
+    Dtype dtype,
+    const float loc /* = 0.0 */,
+    const float scale /* = 1.0 */,
+    const std::optional<array>& key /*= nullopt */,
+    StreamOrDevice s /* = {} */) {
+  auto stream = to_stream(s);
+  auto low = above_minus_one_with_default(dtype);
+  auto high = array(1.0f, dtype);
+  auto samples = uniform(low, high, shape, dtype, key, stream);
+  // Use inverse CDF to generate Laplacian noise
+  samples = multiply(
+      sign(samples),
+      log1p(multiply(array(-1.0f, dtype), abs(samples))),
+      stream);
+
+  if (scale != 1.0) {
+    samples = multiply(array(scale, dtype), samples, stream);
+  }
+  if (loc != 0.0) {
+    samples = add(array(loc, dtype), samples, stream);
+  }
+  return samples;
 }
 
 } // namespace mlx::core::random
