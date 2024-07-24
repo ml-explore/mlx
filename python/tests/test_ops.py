@@ -1845,7 +1845,7 @@ class TestOps(mlx_tests.MLXTestCase):
         a_mx = mx.array(a_np)
 
         b_np = np.sort(a_np)
-        b_mx = np.sort(a_mx)
+        b_mx = mx.sort(a_mx)
         self.assertTrue(np.array_equal(b_np, b_mx))
 
     def test_partition(self):
