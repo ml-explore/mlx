@@ -444,8 +444,9 @@ array laplace(
   auto samples = uniform(low, high, shape, dtype, key, stream);
   // Use inverse CDF to generate Laplacian noise
   samples = multiply(
-      sign(samples),
-      log1p(multiply(array(-1.0f, dtype), abs(samples))),
+      sign(samples, stream),
+      log1p(
+          multiply(array(-1.0f, dtype), abs(samples, stream), stream), stream),
       stream);
 
   if (scale != 1.0) {

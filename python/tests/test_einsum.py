@@ -217,6 +217,102 @@ class TestEinsum(mlx_tests.MLXTestCase):
         out_np = np.einsum("ijk,lmk,ijf->lf", a, a, a)
         self.assertTrue(np.allclose(out_mx, out_np))
 
+    def test_opt_einsum_test_cases(self):
+        # Test cases from
+        # https://github.com/dgasmith/opt_einsum/blob/c826bb7df16f470a69f7bf90598fc27586209d11/opt_einsum/tests/test_contract.py#L11
+        tests = [
+            # Test hadamard-like products
+            "a,ab,abc->abc",
+            "a,b,ab->ab",
+            # Test index-transformations
+            "ea,fb,gc,hd,abcd->efgh",
+            "ea,fb,abcd,gc,hd->efgh",
+            "abcd,ea,fb,gc,hd->efgh",
+            # Test complex contractions
+            "acdf,jbje,gihb,hfac,gfac,gifabc,hfac",
+            "cd,bdhe,aidb,hgca,gc,hgibcd,hgac",
+            "abhe,hidj,jgba,hiab,gab",
+            "bde,cdh,agdb,hica,ibd,hgicd,hiac",
+            "chd,bde,agbc,hiad,hgc,hgi,hiad",
+            "chd,bde,agbc,hiad,bdi,cgh,agdb",
+            "bdhe,acad,hiab,agac,hibd",
+            # Test collapse
+            "ab,ab,c->",
+            "ab,ab,c->c",
+            "ab,ab,cd,cd->",
+            "ab,ab,cd,cd->ac",
+            "ab,ab,cd,cd->cd",
+            "ab,ab,cd,cd,ef,ef->",
+            # Test outer prodcuts
+            "ab,cd,ef->abcdef",
+            "ab,cd,ef->acdf",
+            "ab,cd,de->abcde",
+            "ab,cd,de->be",
+            "ab,bcd,cd->abcd",
+            "ab,bcd,cd->abd",
+            # Random test cases that have previously failed
+            "eb,cb,fb->cef",
+            "dd,fb,be,cdb->cef",
+            "bca,cdb,dbf,afc->",
+            "dcc,fce,ea,dbf->ab",
+            "fdf,cdd,ccd,afe->ae",
+            "abcd,ad",
+            "ed,fcd,ff,bcf->be",
+            "baa,dcf,af,cde->be",
+            "bd,db,eac->ace",
+            "fff,fae,bef,def->abd",
+            "efc,dbc,acf,fd->abe",
+            # Inner products
+            "ab,ab",
+            "ab,ba",
+            "abc,abc",
+            "abc,bac",
+            "abc,cba",
+            # GEMM test cases
+            "ab,bc",
+            "ab,cb",
+            "ba,bc",
+            "ba,cb",
+            "abcd,cd",
+            "abcd,ab",
+            "abcd,cdef",
+            "abcd,cdef->feba",
+            "abcd,efdc",
+            # Inner then dot
+            "aab,bc->ac",
+            "ab,bcc->ac",
+            "aab,bcc->ac",
+            "baa,bcc->ac",
+            "aab,ccb->ac",
+            # Randomly build test caes
+            "aab,fa,df,ecc->bde",
+            "ecb,fef,bad,ed->ac",
+            "bcf,bbb,fbf,fc->",
+            "bb,ff,be->e",
+            "bcb,bb,fc,fff->",
+            "fbb,dfd,fc,fc->",
+            "afd,ba,cc,dc->bf",
+            "adb,bc,fa,cfc->d",
+            "bbd,bda,fc,db->acf",
+            "dba,ead,cad->bce",
+            "aef,fbc,dca->bde",
+        ]
+
+        size_dict = dict(zip("abcdefghij", [2, 3, 4, 5, 2, 3, 4, 5, 2, 3]))
+
+        def inputs_for_case(test_case):
+            inputs = test_case.split("->")[0].split(",")
+            return [
+                mx.random.uniform(shape=tuple(size_dict[c] for c in inp))
+                for inp in inputs
+            ]
+
+        for test_case in tests:
+            inputs = inputs_for_case(test_case)
+            np_out = np.einsum(test_case, *inputs)
+            mx_out = mx.einsum(test_case, *inputs)
+            self.assertTrue(np.allclose(mx_out, np_out, rtol=1e-4, atol=1e-4))
+
 
 if __name__ == "__main__":
     unittest.main()

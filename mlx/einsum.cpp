@@ -132,10 +132,30 @@ size_t flop_count(
   return size * op_factor;
 }
 
+std::pair<size_t, int> compute_cost_and_scaling(
+    const std::vector<Subscript>& inputs,
+    const Subscript& output,
+    std::unordered_map<char, int> dim_map) {
+  CharSet contractions;
+  for (auto& in : inputs) {
+    contractions.insert(in.set.begin(), in.set.end());
+  }
+
+  bool inner = false;
+  for (auto c : contractions) {
+    if (output.set.find(c) == output.set.end()) {
+      inner = true;
+      break;
+    }
+  }
+  auto cost = flop_count(contractions, inner, inputs.size(), dim_map);
+  return {cost, contractions.size()};
+}
+
 std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
     std::vector<Subscript> inputs,
     const Subscript& output,
-    std::unordered_map<char, int> dim_dict,
+    std::unordered_map<char, int> dim_map,
     size_t cost_limit,
     size_t memory_limit) {
   // Helper struct for building the greedy path
@@ -175,7 +195,7 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
   size_t path_cost = 0;
   int path_scaling = 0;
   auto num_in = inputs.size();
-  for (int i = 0; i < num_in; ++i) {
+  for (int i = 0; i < num_in - 1; ++i) {
     auto add_contraction = [&](int p1, int p2) {
       CharSet new_term;
       CharSet contractions(inputs[p1].set.begin(), inputs[p1].set.end());
@@ -200,15 +220,15 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
       // Ignore if:
       // - The size of the new result is greater than the memory limit
       // - The cost is larger than the naive cost
-      auto new_size = term_size(new_term, dim_dict);
+      auto new_size = term_size(new_term, dim_map);
       if (new_size > memory_limit) {
         return;
       }
-      int64_t removed_size = term_size(inputs[p1].set, dim_dict) +
-          term_size(inputs[p2].set, dim_dict) - new_size;
+      int64_t removed_size = term_size(inputs[p1].set, dim_map) +
+          term_size(inputs[p2].set, dim_map) - new_size;
 
       bool inner = contractions.size() > new_term.size();
-      auto cost = flop_count(contractions, inner, 2, dim_dict);
+      auto cost = flop_count(contractions, inner, 2, dim_map);
       if (path_cost + cost > cost_limit) {
         return;
       }
@@ -232,6 +252,14 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
     }
 
     if (possible_contractions.empty()) {
+      // Default to naive einsum for the remaining inputs
+      std::vector<int> positions(inputs.size());
+      std::iota(positions.begin(), positions.end(), 0);
+      auto [cost, scale] = compute_cost_and_scaling(inputs, output, dim_map);
+      path.emplace_back(std::move(inputs), output, std::move(positions));
+
+      path_cost += cost;
+      path_scaling = std::max(scale, path_scaling);
       break;
     }
 
@@ -247,8 +275,8 @@ std::tuple<std::vector<PathNode>, size_t, int> greedy_path(
     // Construct the output subscripts
     std::string out_str(best.output.begin(), best.output.end());
     // TODO, sorting by dimension size seems suboptimal?
-    std::sort(out_str.begin(), out_str.end(), [&dim_dict](auto x, auto y) {
-      return dim_dict[x] < dim_dict[y];
+    std::sort(out_str.begin(), out_str.end(), [&dim_map](auto x, auto y) {
+      return dim_map[x] < dim_map[y];
     });
     Subscript new_output(std::move(out_str), std::move(best.output));
 
@@ -334,7 +362,6 @@ array batch_tensordot(
     a = broadcast_to(a, a_shape, s);
     b = broadcast_to(b, b_shape, s);
   }
-
   auto transpose_reshape = [&s](
                                const array& x,
                                const std::vector<int>& i,
@@ -389,38 +416,39 @@ array batch_tensordot(
 //   returns an output with shape (4, 2) and updates the subscript
 //   to "ij".
 array collapse_repeats(array in, Subscript& subscript, StreamOrDevice s) {
-  // Build a list of (repeat chars, num repeats, first axis the char appears in)
+  // Build a list of (repeat chars, num repeats)
   auto& str = subscript.str;
+  std::vector<std::pair<char, int>> repeats;
   std::string new_str;
-  std::vector<std::tuple<char, int, int>> repeats;
   {
-    std::unordered_map<char, std::pair<int, int>> counts;
+    std::string repeat_str;
+    std::string no_repeat_str;
+    std::unordered_map<char, int> counts;
     for (int i = 0; i < str.size(); ++i) {
-      auto [it, _] = counts.insert({str[i], {0, i}});
-      if (it->second.first == 0) {
-        new_str.push_back(str[i]);
-      }
-      it->second.first++;
+      auto [it, _] = counts.insert({str[i], 0});
+      it->second++;
     }
 
     for (auto& v : counts) {
-      if (v.second.first >= 2) {
-        repeats.emplace_back(v.first, v.second.first, v.second.second);
+      if (v.second > 1) {
+        repeats.emplace_back(v.first, v.second);
+        repeat_str += v.first;
       }
     }
+    for (auto& c : str) {
+      if (counts[c] == 1) {
+        no_repeat_str += c;
+      }
+    }
+    new_str = repeat_str + no_repeat_str;
   }
-
-  // Sort by the first axis of each repeat
-  std::sort(repeats.begin(), repeats.end(), [](const auto& x, const auto& y) {
-    return std::get<2>(x) < std::get<2>(y);
-  });
 
   // Build the inputs for gather
   auto slice_sizes = in.shape();
   std::vector<int> axes;
   std::vector<array> indices;
   int n_expand = repeats.size();
-  for (auto [c, v, _] : repeats) {
+  for (auto [c, v] : repeats) {
     for (int i = 0; i < str.size(); ++i) {
       if (str[i] == c) {
         slice_sizes[i] = 1;
@@ -444,6 +472,7 @@ array collapse_repeats(array in, Subscript& subscript, StreamOrDevice s) {
   for (auto& ax : axes) {
     ax += indices[0].ndim();
   }
+
   return squeeze(in, axes, s);
 }
 
@@ -454,13 +483,14 @@ array collapse_repeats(array in, Subscript& subscript, StreamOrDevice s) {
 void preprocess_einsum_inputs(
     std::vector<Subscript>& inputs,
     const Subscript& output,
+    const std::vector<int>& positions,
     std::vector<array>& operands,
     StreamOrDevice s) {
   // Collapse repeat indices
   for (int i = 0; i < inputs.size(); ++i) {
     auto& in = inputs[i];
     if (in.set.size() < in.str.size()) {
-      operands[i] = collapse_repeats(operands[i], in, s);
+      operands[positions[i]] = collapse_repeats(operands[positions[i]], in, s);
     }
   }
 
@@ -486,7 +516,8 @@ void preprocess_einsum_inputs(
         }
       }
       if (!sum_axes.empty()) {
-        operands[i] = sum(operands[i], sum_axes, false, s);
+        operands[positions[i]] =
+            sum(operands[positions[i]], sum_axes, false, s);
       }
       for (auto it = sum_axes.rbegin(); it != sum_axes.rend(); ++it) {
         in.set.erase(in.str[*it]);
@@ -499,6 +530,7 @@ void preprocess_einsum_inputs(
 array einsum_naive(
     std::vector<Subscript> inputs,
     const Subscript& output,
+    const std::vector<int>& positions,
     std::vector<array> operands,
     StreamOrDevice s) {
   // Map each character to an axis
@@ -511,11 +543,12 @@ array einsum_naive(
 
   // Expand and transpose inputs as needed
   for (int i = 0; i < inputs.size(); ++i) {
-    auto& op = operands[i];
+    int pos = positions[i];
+    auto& op = operands[pos];
 
     // Add missing dimensions at the end
     if (op.ndim() != char_to_ax.size()) {
-      auto shape = operands[i].shape();
+      auto shape = op.shape();
       shape.insert(shape.end(), char_to_ax.size() - shape.size(), 1);
       op = reshape(op, std::move(shape), s);
     }
@@ -556,9 +589,9 @@ array einsum_naive(
   }
 
   // Multiply and sum
-  auto out = operands[0];
-  for (int i = 1; i < operands.size(); ++i) {
-    out = multiply(out, operands[i], s);
+  auto out = operands[positions[0]];
+  for (int i = 1; i < positions.size(); ++i) {
+    out = multiply(out, operands[positions[i]], s);
   }
   std::vector<int> sum_axes;
   for (auto [c, ax] : char_to_ax) {
@@ -688,24 +721,8 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
   PathInfo path_info;
 
   // Get the full naive cost
-  size_t naive_cost;
-  {
-    CharSet contractions;
-    for (auto& in : inputs) {
-      contractions.insert(in.set.begin(), in.set.end());
-    }
-
-    bool inner = false;
-    for (auto c : contractions) {
-      if (output.set.find(c) == output.set.end()) {
-        inner = true;
-        break;
-      }
-    }
-    naive_cost = flop_count(contractions, inner, inputs.size(), dim_map);
-    path_info.naive_cost = naive_cost;
-  }
-  path_info.naive_scaling = dim_map.size();
+  std::tie(path_info.naive_cost, path_info.naive_scaling) =
+      compute_cost_and_scaling(inputs, output, dim_map);
 
   // Calculate the path
   std::vector<PathNode> path;
@@ -716,7 +733,9 @@ std::pair<std::vector<PathNode>, PathInfo> einsum_path_helper(
         std::move(inputs), std::move(output), std::move(positions));
   } else {
     std::tie(path, path_info.optimized_cost, path_info.optimized_scaling) =
-        greedy_path(inputs, output, dim_map, naive_cost, max_size);
+        greedy_path(inputs, output, dim_map, path_info.naive_cost, max_size);
+    // Set the final output subscript to the actual output
+    path.back().output = std::move(output);
   }
   return {path, path_info};
 }
@@ -751,48 +770,62 @@ array einsum(
     StreamOrDevice s /* = {} */) {
   auto [path, path_info] = einsum_path_helper(subscripts, operands, "einsum");
   auto inputs = operands;
-  for (auto node : path) {
-    preprocess_einsum_inputs(node.inputs, node.output, inputs, s);
+  for (auto& node : path) {
+    preprocess_einsum_inputs(
+        node.inputs, node.output, node.positions, inputs, s);
 
     if (can_dot(node.inputs, node.output)) {
-      auto extract_axes =
-          [](const auto& input, const auto& other, const auto& output) {
-            std::vector<int> contract;
-            std::vector<int> batch;
-            std::vector<int> concat;
-            for (int i = 0; i < input.str.size(); ++i) {
-              auto c = input.str[i];
-              if (output.set.find(c) == output.set.end()) {
-                // Not in the output, contraction
-                contract.push_back(i);
-              } else if (other.set.find(c) != other.set.end()) {
-                // Not a contraction but in both inputs, batch dim
-                batch.push_back(i);
-              } else {
-                // Not a batch dim or contract dim, so concat dim
-                concat.push_back(i);
-              }
-            }
-            return std::make_tuple(contract, batch, concat);
-          };
-      auto [a_contract, a_batch, a_concat] =
-          extract_axes(node.inputs[0], node.inputs[1], node.output);
-      auto [b_contract, b_batch, b_concat] =
-          extract_axes(node.inputs[1], node.inputs[0], node.output);
+      auto& in_a = node.inputs[0];
+      auto& in_b = node.inputs[1];
+      auto& out = node.output;
+
+      std::vector<int> a_contract;
+      std::vector<int> a_batch;
+      std::vector<int> a_concat;
+      for (int i = 0; i < in_a.str.size(); ++i) {
+        auto c = in_a.str[i];
+        if (out.set.find(c) == out.set.end()) {
+          // Not in the output, contraction
+          a_contract.push_back(i);
+        } else if (in_b.set.find(c) != in_b.set.end()) {
+          // Not a contraction but in both inputs, batch dim
+          a_batch.push_back(i);
+        } else {
+          // Not a batch dim or contract dim, so concat dim
+          a_concat.push_back(i);
+        }
+      }
+
+      std::vector<int> b_contract;
+      std::vector<int> b_batch;
+      std::vector<int> b_concat;
+      for (auto a_i : a_contract) {
+        b_contract.push_back(in_b.str.find(in_a.str[a_i]));
+      }
+      for (auto a_i : a_batch) {
+        b_batch.push_back(in_b.str.find(in_a.str[a_i]));
+      }
+      for (int i = 0; i < in_b.str.size(); ++i) {
+        auto c = in_b.str[i];
+        if (out.set.find(c) != out.set.end() &&
+            in_a.set.find(c) == in_a.set.end()) {
+          b_concat.push_back(i);
+        }
+      }
+
       auto& a = inputs[node.positions[0]];
       auto& b = inputs[node.positions[1]];
 
       std::unordered_map<char, int> char_map;
       for (auto i : a_batch) {
-        char_map.insert({node.inputs[0].str[i], char_map.size()});
+        char_map.insert({in_a.str[i], char_map.size()});
       }
       for (auto i : a_concat) {
-        char_map.insert({node.inputs[0].str[i], char_map.size()});
+        char_map.insert({in_a.str[i], char_map.size()});
       }
       for (auto i : b_concat) {
-        char_map.insert({node.inputs[1].str[i], char_map.size()});
+        char_map.insert({in_b.str[i], char_map.size()});
       }
-
       inputs.emplace_back(batch_tensordot(
           a,
           b,
@@ -811,7 +844,8 @@ array einsum(
       inputs.back() = transpose(inputs.back(), reorder, s);
 
     } else {
-      inputs.emplace_back(einsum_naive(node.inputs, node.output, inputs, s));
+      inputs.emplace_back(
+          einsum_naive(node.inputs, node.output, node.positions, inputs, s));
     }
 
     // Positions are always sorted increasing, so start from the back
