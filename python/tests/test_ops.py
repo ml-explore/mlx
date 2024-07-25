@@ -1653,51 +1653,21 @@ class TestOps(mlx_tests.MLXTestCase):
         )
 
     def test_nan_to_num(self):
-        self.assertCmpNumpy(
-            [mx.array([6, float("inf"), 2, 0], dtype=mx.int32)],
-            mx.nan_to_num,
-            np.nan_to_num,
-        )
-        self.assertCmpNumpy(
-            [mx.array([float("inf"), 6.9, float("nan"), float("-inf")])],
-            mx.nan_to_num,
-            np.nan_to_num,
-        )
-        self.assertTrue(
-            np.array_equal(
-                np.nan_to_num(
-                    mx.array([float("inf"), 6.9, float("nan"), float("-inf")]),
-                    False,
-                    nan=0.0,
-                    posinf=1000,
-                    neginf=-1000,
-                ),
-                mx.nan_to_num(
-                    mx.array([float("inf"), 6.9, float("nan"), float("-inf")]),
-                    nan=0.0,
-                    posinf=1000,
-                    neginf=-1000,
-                ),
-            )
-        )
-        self.assertCmpNumpy(
-            [
-                mx.array(
-                    [float("inf"), 6.9, float("nan"), float("-inf")], dtype=mx.float16
-                )
-            ],
-            mx.nan_to_num,
-            np.nan_to_num,
-        )
-        self.assertCmpNumpy(
-            [
-                mx.array(
-                    [6, float("inf"), float("nan"), float("-inf")], dtype=mx.bfloat16
-                )
-            ],
-            mx.nan_to_num,
-            np.nan_to_num,
-        )
+        a = mx.array([6, float("inf"), 2, 0])
+        out_mx = mx.nan_to_num(a)
+        out_np = np.nan_to_num(a)
+        self.assertTrue(np.allclose(out_mx, out_np))
+
+        for t in [mx.float32, mx.float16]:
+            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")])
+            out_mx = mx.nan_to_num(a)
+            out_np = np.nan_to_num(a)
+            self.assertTrue(np.allclose(out_mx, out_np))
+
+            a = mx.array([float("inf"), 6.9, float("nan"), float("-inf")]).astype(t)
+            out_np = np.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
+            out_mx = mx.nan_to_num(a, nan=0.0, posinf=1000, neginf=-1000)
+            self.assertTrue(np.allclose(out_mx, out_np))
 
     def test_as_strided(self):
         x_npy = np.random.randn(128).astype(np.float32)

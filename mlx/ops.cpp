@@ -1,8 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <iostream> // TODO
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -1344,40 +1344,35 @@ array where(
 
 array nan_to_num(
     const array& a,
-    const float& nan,
-    const float& posinf,
-    const float& neginf,
+    float nan /* = 0.0f */,
+    const std::optional<float>& posinf_ /* = std::nullopt */,
+    const std::optional<float>& neginf_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   Dtype dtype = a.dtype();
-
   if (!issubdtype(dtype, inexact)) {
     return a;
   }
 
-  nan_ = array(nan, dtype);
-  posinf_ = array(posinf, dtype);
-  neginf_ = array(neginf, dtype);
+  auto type_to_max = [](const auto& dtype) -> float {
+    if (dtype == float32) {
+      return std::numeric_limits<float>::max();
+    } else if (dtype == bfloat16) {
+      return std::numeric_limits<bfloat16_t>::max();
+    } else if (dtype == float16) {
+      return std::numeric_limits<float16_t>::max();
+    } else {
+      std::ostringstream msg;
+      msg << "[nan_to_num] Does not yet support given type: " << dtype << ".";
+      throw std::invalid_argument(msg.str());
+    }
+  };
 
-  // How to find the max value of a the same dtype as a?
+  float posinf = posinf_ ? *posinf_ : type_to_max(dtype);
+  float neginf = neginf_ ? *neginf_ : -type_to_max(dtype);
 
-  // Checking if input values are too large for float16 and bfloat16
-  if (nan_ == std::numeric_limits<dtype>::infinity() ||
-      nan_ == -std::numeric_limits<dtype>::infinity()) {
-    nan_ = array(0.0, dtype);
-  }
-  if (posinf_ == std::numeric_limits<dtype>::infinity() ||
-      posinf_ == -std::numeric_limits<dtype>::infinity()) {
-    posinf_ = array(std::numeric_limits<dtype>::max());
-  }
-  if (neginf_ == std::numeric_limits<dtype>::infinity() ||
-      neginf_ == -std::numeric_limits<dtype>::infinity()) {
-    neginf_ = array(-std::numeric_limits<dtype>::max());
-  }
-
-  auto out = where(isnan(a, s), nan_, a, s);
-  out = where(isposinf(a, s), posinf_, out, s);
-  out = where(isneginf(a, s), neginf_, out, s);
-
+  auto out = where(isnan(a, s), array(nan, dtype), a, s);
+  out = where(isposinf(a, s), array(posinf, dtype), out, s);
+  out = where(isneginf(a, s), array(neginf, dtype), out, s);
   return out;
 }
 

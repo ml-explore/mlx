@@ -3590,27 +3590,10 @@ void init_ops(nb::module_& m) {
   m.def(
       "nan_to_num",
       [](const ScalarOrArray& a,
-         std::variant<std::monostate, int, float>& nan_,
-         std::variant<std::monostate, int, float>& posinf_,
-         std::variant<std::monostate, int, float>& neginf_,
+         float nan,
+         std::optional<float>& posinf,
+         std::optional<float>& neginf,
          StreamOrDevice s) {
-        // It seems very hard to figure out the dtype of a here, so I moved it
-        // to mlx/ops.cpp
-        if (std::holds_alternative<std::monostate>(posinf_)) {
-          posinf_ = std::numeric_limits<float>::max();
-        } else if (std::holds_alternative<int>(posinf_)) {
-          posinf_ = static_cast<float>(std::get<int>(posinf_));
-        }
-        if (std::holds_alternative<std::monostate>(neginf_)) {
-          neginf_ = -std::numeric_limits<float>::max();
-        } else if (std::holds_alternative<int>(neginf_)) {
-          neginf_ = static_cast<float>(std::get<int>(neginf_));
-        }
-
-        const float nan = std::get<float>(nan_);
-        const float posinf = std::get<float>(posinf_);
-        const float neginf = std::get<float>(neginf_);
-
         return nan_to_num(to_array(a), nan, posinf, neginf, s);
       },
       nb::arg(),
@@ -3620,18 +3603,22 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def nan_to_num(a: Union[scalar, array], nan: Optional[Union[int, float]] = 0, posinf: Optional[Union[int, float]] = float('inf'), neginf: Optional[Union[int, float]] = float('-inf'), /, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def nan_to_num(a: Union[scalar, array], nan: float = 0, posinf: Optional[float] = None, neginf: Optional[float] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Replace NaN with zero and infinities with large finite values or with numbers passed in by the user.
+        Replace NaN and Inf values with finite numbers.
 
         Args:
             a (array): Input array
-            nan (float, optional): Value to replace NaN values with. (default: 0)
-            posinf (float, optional): Value to replace positive infinities with. (default: largest finite float value)
-            neginf (float, optional): Value to replace negative infinities with. (default: smallest (most negative) finite float value)
+            nan (float, optional): Value to replace NaN with. Default: ``0``.
+            posinf (float, optional): Value to replace positive infinities
+              with. If ``None``, defaults to largest finite value for the
+              given data type. Default: ``None``.
+            neginf (float, optional): Value to replace negative infinities
+              with. If ``None``, defaults to the negative of the largest
+              finite value for the given data type. Default: ``None``.
 
         Returns:
-            array: An array of the same type as ``a`` with NaNs and infinities replaced.
+            array: Output array with NaN and Inf replaced.
     )pbdoc");
   m.def(
       "round",
