@@ -41,15 +41,6 @@ double scalar_to_double(Scalar s) {
 }
 
 void init_ops(nb::module_& m) {
-  // TODO, remove deprecation errors in a future release
-  m.def("block_sparse_mm", [](nb::args, nb::kwargs) {
-    throw std::invalid_argument(
-        "block_sparse_mm is deprecated. Please use gather_mm which has the same signature");
-  });
-  m.def("block_sparse_qmm", [](nb::args, nb::kwargs) {
-    throw std::invalid_argument(
-        "block_sparse_qmm is deprecated. Please use gather_qmm which has the same signature");
-  });
   m.def(
       "reshape",
       &reshape,
@@ -1239,7 +1230,8 @@ void init_ops(nb::module_& m) {
             a (array): Input array.
 
         Returns:
-            array: The unchanged input ``a`` but without gradient flowing
+            array:
+              The unchanged input ``a`` but without gradient flowing
               through it.
       )pbdoc");
   m.def(
@@ -2937,6 +2929,9 @@ void init_ops(nb::module_& m) {
           reverse (bool): Perform the cumulative sum in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+
+        Returns:
+          array: The output array.
       )pbdoc");
   m.def(
       "cumprod",
@@ -2970,6 +2965,9 @@ void init_ops(nb::module_& m) {
           reverse (bool): Perform the cumulative product in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+
+        Returns:
+          array: The output array.
       )pbdoc");
   m.def(
       "cummax",
@@ -3003,6 +3001,9 @@ void init_ops(nb::module_& m) {
           reverse (bool): Perform the cumulative maximum in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+
+        Returns:
+          array: The output array.
       )pbdoc");
   m.def(
       "cummin",
@@ -3036,6 +3037,9 @@ void init_ops(nb::module_& m) {
           reverse (bool): Perform the cumulative minimum in reverse.
           inclusive (bool): The i-th element of the output includes the i-th
             element of the input.
+
+        Returns:
+          array: The output array.
       )pbdoc");
   m.def(
       "conj",
@@ -3053,6 +3057,9 @@ void init_ops(nb::module_& m) {
 
         Args:
           a (array): Input array
+
+        Returns:
+          array: The output array.
       )pbdoc");
   m.def(
       "conjugate",
@@ -3070,6 +3077,9 @@ void init_ops(nb::module_& m) {
 
         Args:
           a (array): Input array
+
+        Returns:
+          array: The output array.
       )pbdoc");
   m.def(
       "convolve",
@@ -3493,14 +3503,11 @@ void init_ops(nb::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             format (str, optional): Format of the file. If ``None``, the
-            format
-              is inferred from the file extension. Supported formats:
-              ``npy``,
-              ``npz``, and ``safetensors``. Default: ``None``.
+              format is inferred from the file extension. Supported formats:
+              ``npy``, ``npz``, and ``safetensors``. Default: ``None``.
             return_metadata (bool, optional): Load the metadata for formats
-            which
-              support matadata. The metadata will be returned as an
-              additional dictionary.
+              which support matadata. The metadata will be returned as an
+              additional dictionary. Default: ``False``.
         Returns:
             array or dict:
                 A single array if loading from a ``.npy`` file or a dict
@@ -3552,9 +3559,9 @@ void init_ops(nb::module_& m) {
         Args:
             file (file, str): File in which the array is saved.
             arrays (dict(str, array)): The dictionary of names to arrays to
-            be saved. metadata (dict(str, Union[array, str, list(str)])):
-            The dictionary of
-               metadata to be saved. The values can be a scalar or 1D
+              be saved.
+            metadata (dict(str, Union[array, str, list(str)])): The dictionary
+               of metadata to be saved. The values can be a scalar or 1D
                obj:`array`, a :obj:`str`, or a :obj:`list` of :obj:`str`.
       )pbdoc");
   m.def(
@@ -3644,11 +3651,11 @@ void init_ops(nb::module_& m) {
           biases (array): The biases to use per ``group_size`` elements of ``w``
           transpose (bool, optional): Defines whether to multiply with the
             transposed ``w`` or not, namely whether we are performing
-            ``x @ w.T`` or ``x @ w``. (default: ``True``)
+            ``x @ w.T`` or ``x @ w``. Default: ``True``.
           group_size (int, optional): The size of the group in ``w`` that
-            shares a scale and bias. (default: ``64``)
+            shares a scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: ``4``)
+            ``w``. Default: ``4``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``.
@@ -3701,9 +3708,9 @@ void init_ops(nb::module_& m) {
         Args:
           w (array): Matrix to be quantized
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: ``64``)
+            scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element of
-            ``w`` in the returned quantized matrix. (default: ``4``)
+            ``w`` in the returned quantized matrix. Default: ``4``.
 
         Returns:
           tuple: A tuple containing
@@ -3741,9 +3748,9 @@ void init_ops(nb::module_& m) {
           scales (array): The scales to use per ``group_size`` elements of ``w``
           biases (array): The biases to use per ``group_size`` elements of ``w``
           group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: ``64``)
+            scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: ``4``)
+            ``w``. Default: ``4``.
 
         Returns:
           array: The dequantized version of ``w``
@@ -3780,15 +3787,15 @@ void init_ops(nb::module_& m) {
           w (array): Quantized matrix packed in unsigned integers
           scales (array): The scales to use per ``group_size`` elements of ``w``
           biases (array): The biases to use per ``group_size`` elements of ``w``
-          lhs_indices (array, optional): Integer indices for ``x`` (default: ``None``)
-          rhs_indices (array, optional): Integer indices for ``w`` (default: ``None``)
+          lhs_indices (array, optional): Integer indices for ``x``. Default: ``None``.
+          rhs_indices (array, optional): Integer indices for ``w``. Default: ``None``.
           transpose (bool, optional): Defines whether to multiply with the
             transposed ``w`` or not, namely whether we are performing
-            ``x @ w.T`` or ``x @ w``. (default: ``True``)
+            ``x @ w.T`` or ``x @ w``. Default: ``True``.
           group_size (int, optional): The size of the group in ``w`` that
-            shares a scale and bias. (default: ``64``)
+            shares a scale and bias. Default: ``64``.
           bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: ``4``)
+            ``w``. Default: ``4``.
 
         Returns:
           array: The result of the multiplication of ``x`` with ``w``
@@ -3828,7 +3835,7 @@ void init_ops(nb::module_& m) {
             sum over. If an integer is provided, then sum over the last
             ``axes`` dimensions of ``a`` and the first ``axes`` dimensions of
             ``b``. If a list of lists is provided, then sum over the
-            corresponding dimensions of ``a`` and ``b``. (default: 2)
+            corresponding dimensions of ``a`` and ``b``. Default: 2.
 
         Returns:
           array: The tensor dot product.
@@ -3959,11 +3966,13 @@ void init_ops(nb::module_& m) {
         Args:
             a (array): Input array or scalar.
             b (array): Input array or scalar.
-            block_size (int): Size of blocks to be masked. Must be ``32`` or ``64`` (default: ``64``)
-            mask_out (array, optional): Mask for output (default: ``None``)
-            mask_lhs (array, optional): Mask for a (default: ``None``)
-            mask_rhs (array, optional): Mask for b (default: ``None``)
+            block_size (int): Size of blocks to be masked. Must be ``32`` or ``64``. Default: ``64``.
+            mask_out (array, optional): Mask for output. Default: ``None``.
+            mask_lhs (array, optional): Mask for ``a``. Default: ``None``.
+            mask_rhs (array, optional): Mask for ``b``. Default: ``None``.
 
+        Returns:
+            array: The output array.
       )pbdoc");
   m.def(
       "gather_mm",
@@ -3997,9 +4006,11 @@ void init_ops(nb::module_& m) {
         Args:
             a (array): Input array.
             b (array): Input array.
-            lhs_indices (array, optional): Integer indices for ``a`` (default: ``None``)
-            rhs_indices (array, optional): Integer indices for ``b`` (default: ``None``)
+            lhs_indices (array, optional): Integer indices for ``a``. Default: ``None``
+            rhs_indices (array, optional): Integer indices for ``b``. Default: ``None``
 
+        Returns:
+            array: The output array.
       )pbdoc");
   m.def(
       "diagonal",
@@ -4431,7 +4442,9 @@ void init_ops(nb::module_& m) {
         *operands (array): The input arrays.
 
       Returns:
-        list(tuple(int, int)): The einsum path.
+        tuple(list(tuple(int, int)), str):
+          The einsum path and a string containing information about the
+          chosen path.
     )pbdoc");
   m.def(
       "einsum",
