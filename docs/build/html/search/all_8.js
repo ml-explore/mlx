@@ -9,7 +9,7 @@ var searchData=
   ['hadamard_5fm_6',['hadamard_m',['../metal_2kernels_2hadamard_8h.html#ab0bd478f2051af35aed1869005e3370a',1,'hadamard.h']]],
   ['hadamard_5fmatrices_7',['hadamard_matrices',['../namespacemlx_1_1core.html#a50214cf406957fab27c8bef32046f030',1,'mlx::core']]],
   ['hadamard_5fn_8',['hadamard_n',['../metal_2kernels_2hadamard_8h.html#a63c0e8510e555cd065e1f0ddfb33ce18',1,'hadamard.h']]],
-  ['hadamard_5ftransform_9',['hadamard_transform',['../group__ops.html#ga001919c0ee4a9c3d7948ed32cb4c58d6',1,'mlx::core']]],
+  ['hadamard_5ftransform_9',['hadamard_transform',['../group__ops.html#ga872d2c1806e67ce2596b24d056681074',1,'mlx::core']]],
   ['half_5fbinop_10',['half_binop',['../fp16_8h.html#af58966694c5d80f9a0241670f3128199',1,'fp16.h']]],
   ['half_5fbinop_5fbase_11',['half_binop_base',['../fp16_8h.html#a8420acf5d2687fbdafcc9052c949f323',1,'fp16.h']]],
   ['half_5fbinop_5fhelper_12',['half_binop_helper',['../fp16_8h.html#aa300338c53d5a9f52fbbde8fd777f13d',1,'fp16.h']]],
