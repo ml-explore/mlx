@@ -106,6 +106,7 @@ Operations
    minimum
    moveaxis
    multiply
+   nan_to_num
    negative
    not_equal
    ones

@@ -3596,6 +3596,39 @@ void init_ops(nb::module_& m) {
             ``x`` and ``y``.
       )pbdoc");
   m.def(
+      "nan_to_num",
+      [](const ScalarOrArray& a,
+         float nan,
+         std::optional<float>& posinf,
+         std::optional<float>& neginf,
+         StreamOrDevice s) {
+        return nan_to_num(to_array(a), nan, posinf, neginf, s);
+      },
+      nb::arg(),
+      "nan"_a = 0.0f,
+      "posinf"_a = nb::none(),
+      "neginf"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def nan_to_num(a: Union[scalar, array], nan: float = 0, posinf: Optional[float] = None, neginf: Optional[float] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Replace NaN and Inf values with finite numbers.
+
+        Args:
+            a (array): Input array
+            nan (float, optional): Value to replace NaN with. Default: ``0``.
+            posinf (float, optional): Value to replace positive infinities
+              with. If ``None``, defaults to largest finite value for the
+              given data type. Default: ``None``.
+            neginf (float, optional): Value to replace negative infinities
+              with. If ``None``, defaults to the negative of the largest
+              finite value for the given data type. Default: ``None``.
+
+        Returns:
+            array: Output array with NaN and Inf replaced.
+    )pbdoc");
+  m.def(
       "round",
       [](const ScalarOrArray& a, int decimals, StreamOrDevice s) {
         return round(to_array(a), decimals, s);
