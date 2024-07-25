@@ -57,6 +57,8 @@ Operations
    diagonal
    divide
    divmod
+   einsum
+   einsum_path
    equal
    erf
    erfinv

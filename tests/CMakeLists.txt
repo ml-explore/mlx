@@ -26,6 +26,7 @@ target_sources(tests PRIVATE
   custom_vjp_tests.cpp
   creations_tests.cpp
   device_tests.cpp
+  einsum_tests.cpp
   eval_tests.cpp
   fft_tests.cpp
   load_tests.cpp
