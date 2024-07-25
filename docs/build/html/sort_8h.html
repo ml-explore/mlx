@@ -120,9 +120,9 @@ Functions</h2></td></tr>
 <tr class="memitem:a2a0533103661dd378d6bfe949930650a" id="r_a2a0533103661dd378d6bfe949930650a"><td class="memTemplParams" colspan="2">template&lt;typename val_t , typename idx_t , bool ARG_SORT, short BLOCK_THREADS, short N_PER_THREAD&gt; </td></tr>
 <tr class="memitem:a2a0533103661dd378d6bfe949930650a"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a2a0533103661dd378d6bfe949930650a">mb_block_sort</a> (const device val_t *inp, device val_t *out_vals, device idx_t *out_idxs, const constant int &amp;size_sorted_axis, const constant int &amp;stride_sorted_axis, const constant int &amp;nc_dim, const device int *nc_shape, const device size_t *nc_strides, uint3 tid, uint3 lid)</td></tr>
 <tr class="separator:a2a0533103661dd378d6bfe949930650a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a50ae11454e4dfa374a9bd256cdbbf605" id="r_a50ae11454e4dfa374a9bd256cdbbf605"><td class="memTemplParams" colspan="2">template&lt;typename val_t , typename idx_t , bool ARG_SORT, short BLOCK_THREADS, short N_PER_THREAD&gt; </td></tr>
-<tr class="memitem:a50ae11454e4dfa374a9bd256cdbbf605"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a50ae11454e4dfa374a9bd256cdbbf605">mb_block_partition</a> (device idx_t *block_partitions, const device val_t *dev_vals, const device idx_t *dev_idxs, const constant int &amp;size_sorted_axis, const constant int &amp;merge_tiles, uint3 tid, uint3 lid, uint3 tgp_dims)</td></tr>
-<tr class="separator:a50ae11454e4dfa374a9bd256cdbbf605"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a32cbe4163b8b0f5cb2c97b256119a4b2" id="r_a32cbe4163b8b0f5cb2c97b256119a4b2"><td class="memTemplParams" colspan="2">template&lt;typename val_t , typename idx_t , bool ARG_SORT, short BLOCK_THREADS, short N_PER_THREAD&gt; </td></tr>
+<tr class="memitem:a32cbe4163b8b0f5cb2c97b256119a4b2"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a32cbe4163b8b0f5cb2c97b256119a4b2">mb_block_partition</a> (device idx_t *block_partitions, const device val_t *dev_vals, const device idx_t *dev_idxs, const constant int &amp;size_sorted_axis, const constant int &amp;merge_tiles, const constant int &amp;n_blocks, uint3 tid, uint3 lid, uint3 tgp_dims)</td></tr>
+<tr class="separator:a32cbe4163b8b0f5cb2c97b256119a4b2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab381cd57f344bc7304ab580bfdc78807" id="r_ab381cd57f344bc7304ab580bfdc78807"><td class="memTemplParams" colspan="2">template&lt;typename val_t , typename idx_t , bool ARG_SORT, short BLOCK_THREADS, short N_PER_THREAD, typename CompareOp  = LessThan&lt;val_t&gt;&gt; </td></tr>
 <tr class="memitem:ab381cd57f344bc7304ab580bfdc78807"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ab381cd57f344bc7304ab580bfdc78807">mb_block_merge</a> (const device idx_t *block_partitions, const device val_t *dev_vals_in, const device idx_t *dev_idxs_in, device val_t *dev_vals_out, device idx_t *dev_idxs_out, const constant int &amp;size_sorted_axis, const constant int &amp;merge_tiles, const constant int &amp;num_tiles, uint3 tid, uint3 lid)</td></tr>
 <tr class="separator:ab381cd57f344bc7304ab580bfdc78807"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -351,8 +351,8 @@ template&lt;typename val_t , typename idx_t , bool ARG_SORT, short BLOCK_THREADS
 
 </div>
 </div>
-<a id="a50ae11454e4dfa374a9bd256cdbbf605" name="a50ae11454e4dfa374a9bd256cdbbf605"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a50ae11454e4dfa374a9bd256cdbbf605">&#9670;&#160;</a></span>mb_block_partition()</h2>
+<a id="a32cbe4163b8b0f5cb2c97b256119a4b2" name="a32cbe4163b8b0f5cb2c97b256119a4b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a32cbe4163b8b0f5cb2c97b256119a4b2">&#9670;&#160;</a></span>mb_block_partition()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -383,6 +383,11 @@ template&lt;typename val_t , typename idx_t , bool ARG_SORT, short BLOCK_THREADS
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>merge_tiles</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>n_blocks</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
