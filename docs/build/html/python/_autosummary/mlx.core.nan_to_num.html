@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.core.custom_function.jvp &#8212; MLX 0.16.0 documentation</title>
+    <title>mlx.core.nan_to_num &#8212; MLX 0.16.1 documentation</title>
   
   
   
@@ -36,13 +36,15 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../_static/documentation_options.js?v=ac69e7c2"></script>
+    <script src="../../_static/documentation_options.js?v=179565df"></script>
     <script src="../../_static/doctools.js?v=888ff710"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
-    <script>DOCUMENTATION_OPTIONS.pagename = 'python/_autosummary/mlx.core.custom_function.jvp';</script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'python/_autosummary/mlx.core.nan_to_num';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="mlx.core.negative" href="mlx.core.negative.html" />
+    <link rel="prev" title="mlx.core.multiply" href="mlx.core.multiply.html" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <meta name="docsearch:language" content="en"/>
   </head>
@@ -129,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.0 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.0 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.1 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.1 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -171,7 +173,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../../examples/llama-inference.html">LLM inference</a></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
-<ul class="nav bd-sidenav">
+<ul class="current nav bd-sidenav">
 <li class="toctree-l1 has-children"><a class="reference internal" href="../array.html">Array</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-1"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.html">mlx.core.array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.astype.html">mlx.core.array.astype</a></li>
@@ -244,7 +246,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.synchronize.html">mlx.core.synchronize</a></li>
 </ul>
 </li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../ops.html">Operations</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../ops.html">Operations</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.abs.html">mlx.core.abs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.add.html">mlx.core.add</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.addmm.html">mlx.core.addmm</a></li>
@@ -294,6 +296,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.diagonal.html">mlx.core.diagonal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.divide.html">mlx.core.divide</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.divmod.html">mlx.core.divmod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.einsum.html">mlx.core.einsum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.einsum_path.html">mlx.core.einsum_path</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.equal.html">mlx.core.equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.erf.html">mlx.core.erf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.erfinv.html">mlx.core.erfinv</a></li>
@@ -341,6 +345,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.minimum.html">mlx.core.minimum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.moveaxis.html">mlx.core.moveaxis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.multiply.html">mlx.core.multiply</a></li>
+<li class="toctree-l2 current active"><a class="current reference internal" href="#">mlx.core.nan_to_num</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.negative.html">mlx.core.negative</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.not_equal.html">mlx.core.not_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.ones.html">mlx.core.ones</a></li>
@@ -412,6 +417,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.split.html">mlx.core.random.split</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.truncated_normal.html">mlx.core.random.truncated_normal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.random.laplace.html">mlx.core.random.laplace</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -730,7 +736,7 @@
       
       
       
-      <li><a href="../../_sources/python/_autosummary/mlx.core.custom_function.jvp.rst" target="_blank"
+      <li><a href="../../_sources/python/_autosummary/mlx.core.nan_to_num.rst" target="_blank"
    class="btn btn-sm btn-download-source-button dropdown-item"
    title="Download source file"
    data-bs-placement="left" data-bs-toggle="tooltip"
@@ -814,7 +820,7 @@ document.write(`
               
 
 <div id="jb-print-docs-body" class="onlyprint">
-    <h1>mlx.core.custom_function.jvp</h1>
+    <h1>mlx.core.nan_to_num</h1>
     <!-- Table of contents -->
     <div id="print-main-content">
         <div id="jb-print-toc">
@@ -824,7 +830,7 @@ document.write(`
             </div>
             <nav aria-label="Page">
                 <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mlx.core.custom_function.jvp"><code class="docutils literal notranslate"><span class="pre">custom_function.jvp()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mlx.core.nan_to_num"><code class="docutils literal notranslate"><span class="pre">nan_to_num()</span></code></a></li>
 </ul>
             </nav>
         </div>
@@ -836,23 +842,32 @@ document.write(`
 <div id="searchbox"></div>
                 <article class="bd-article" role="main">
                   
-  <section id="mlx-core-custom-function-jvp">
-<h1>mlx.core.custom_function.jvp<a class="headerlink" href="#mlx-core-custom-function-jvp" title="Link to this heading">#</a></h1>
-<dl class="py method">
-<dt class="sig sig-object py" id="mlx.core.custom_function.jvp">
-<span class="sig-prename descclassname"><span class="pre">custom_function.</span></span><span class="sig-name descname"><span class="pre">jvp</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">self</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">f_jvp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">callable</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.custom_function.jvp" title="Link to this definition">#</a></dt>
-<dd><p>Define a custom jvp for the wrapped function.</p>
-<p>The jvp function takes two arguments:</p>
-<ul class="simple">
-<li><p><em>primals</em>: A pytree that contains all the positional arguments to
-the function. It could be a single array, a tuple of arrays or a
-full blown tuple of dicts of arrays etc.</p></li>
-<li><p><em>tangents</em>: A pytree that matches the structure of the inputs but
-instead contains the gradients wrt to each input. Tangents could
-be <code class="docutils literal notranslate"><span class="pre">None</span></code> if some inputs don’t have an associated gradient.</p></li>
+  <section id="mlx-core-nan-to-num">
+<h1>mlx.core.nan_to_num<a class="headerlink" href="#mlx-core-nan-to-num" title="Link to this heading">#</a></h1>
+<dl class="py function">
+<dt class="sig sig-object py" id="mlx.core.nan_to_num">
+<span class="sig-name descname"><span class="pre">nan_to_num</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">scalar</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">nan</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">posinf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">neginf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></span><a class="headerlink" href="#mlx.core.nan_to_num" title="Link to this definition">#</a></dt>
+<dd><p>Replace NaN and Inf values with finite numbers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>a</strong> (<a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a>) – Input array</p></li>
+<li><p><strong>nan</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – Value to replace NaN with. Default: <code class="docutils literal notranslate"><span class="pre">0</span></code>.</p></li>
+<li><p><strong>posinf</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – Value to replace positive infinities
+with. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, defaults to largest finite value for the
+given data type. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
+<li><p><strong>neginf</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – Value to replace negative infinities
+with. If <code class="docutils literal notranslate"><span class="pre">None</span></code>, defaults to the negative of the largest
+finite value for the given data type. Default: <code class="docutils literal notranslate"><span class="pre">None</span></code>.</p></li>
 </ul>
-<p>The jvp function should return the same pytree structure as the
-outputs of the function but containing the tangents.</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Output array with NaN and Inf replaced.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><em>array</em></a></p>
+</dd>
+</dl>
 </dd></dl>
 
 </section>
@@ -868,6 +883,24 @@ outputs of the function but containing the tangents.</p>
                 <footer class="prev-next-footer">
                   
 <div class="prev-next-area">
+    <a class="left-prev"
+       href="mlx.core.multiply.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">mlx.core.multiply</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="mlx.core.negative.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">mlx.core.negative</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
 </div>
                 </footer>
               
@@ -883,7 +916,7 @@ outputs of the function but containing the tangents.</p>
   </div>
   <nav class="bd-toc-nav page-toc">
     <ul class="visible nav section-nav flex-column">
-<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mlx.core.custom_function.jvp"><code class="docutils literal notranslate"><span class="pre">custom_function.jvp()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#mlx.core.nan_to_num"><code class="docutils literal notranslate"><span class="pre">nan_to_num()</span></code></a></li>
 </ul>
   </nav></div>
 

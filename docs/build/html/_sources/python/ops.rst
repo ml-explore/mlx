@@ -57,6 +57,8 @@ Operations
    diagonal
    divide
    divmod
+   einsum
+   einsum_path
    equal
    erf
    erfinv
@@ -104,6 +106,7 @@ Operations
    minimum
    moveaxis
    multiply
+   nan_to_num
    negative
    not_equal
    ones
