@@ -168,7 +168,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00080" name="l00080"></a><span class="lineno">   80</span> </div>
 <div class="line"><a id="l00081" name="l00081"></a><span class="lineno">   81</span>    <a class="code hl_define" href="steel_2defines_8h.html#a5a5c3095b132a7589bc19cd5cb80e2c6">STEEL_PRAGMA_UNROLL</a></div>
 <div class="line"><a id="l00082" name="l00082"></a><span class="lineno">   82</span>    <span class="keywordflow">for</span> (<span class="keywordtype">short</span> r = 0; r &lt; max_radix; r++) {</div>
-<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>      <a class="code hl_variable" href="backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697">buf</a>[j + h * r] = x[r];</div>
+<div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>      <a class="code hl_variable" href="backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697">buf</a>[j + h * r] = T(x[r]);</div>
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>    }</div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span> </div>
 <div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    h &lt;&lt;= logR;</div>
@@ -194,7 +194,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00106" name="l00106"></a><span class="lineno">  106</span> </div>
 <div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>      <a class="code hl_define" href="steel_2defines_8h.html#a5a5c3095b132a7589bc19cd5cb80e2c6">STEEL_PRAGMA_UNROLL</a></div>
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>      <span class="keywordflow">for</span> (<span class="keywordtype">short</span> r = 0; r &lt; final_radix; r++) {</div>
-<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>        <a class="code hl_variable" href="backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697">buf</a>[j + h * r] = x[r];</div>
+<div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>        <a class="code hl_variable" href="backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697">buf</a>[j + h * r] = T(x[r]);</div>
 <div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>      }</div>
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span>    }</div>
 <div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>    threadgroup_barrier(mem_flags::mem_threadgroup);</div>
@@ -206,7 +206,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00118" name="l00118"></a><span class="lineno">  118</span>    <span class="keywordtype">short</span> index = j * read_width * num_threads + i * read_width;</div>
 <div class="line"><a id="l00119" name="l00119"></a><span class="lineno">  119</span>    <a class="code hl_define" href="steel_2defines_8h.html#a5a5c3095b132a7589bc19cd5cb80e2c6">STEEL_PRAGMA_UNROLL</a></div>
 <div class="line"><a id="l00120" name="l00120"></a><span class="lineno">  120</span>    <span class="keywordflow">for</span> (<span class="keywordtype">short</span> r = 0; r &lt; read_width; r++) {</div>
-<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>      out[batch_idx + index + r] = <a class="code hl_variable" href="backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697">buf</a>[index + r] * scale;</div>
+<div class="line"><a id="l00121" name="l00121"></a><span class="lineno">  121</span>      out[batch_idx + index + r] = T(<a class="code hl_variable" href="backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697">buf</a>[index + r] * scale);</div>
 <div class="line"><a id="l00122" name="l00122"></a><span class="lineno">  122</span>    }</div>
 <div class="line"><a id="l00123" name="l00123"></a><span class="lineno">  123</span>  }</div>
 <div class="line"><a id="l00124" name="l00124"></a><span class="lineno">  124</span>}</div>
@@ -251,7 +251,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00161" name="l00161"></a><span class="lineno">  161</span>  <span class="keywordflow">for</span> (<span class="keywordtype">short</span> c = 0; c &lt; M; c++) {</div>
 <div class="line"><a id="l00162" name="l00162"></a><span class="lineno">  162</span>    <a class="code hl_define" href="steel_2defines_8h.html#a5a5c3095b132a7589bc19cd5cb80e2c6">STEEL_PRAGMA_UNROLL</a></div>
 <div class="line"><a id="l00163" name="l00163"></a><span class="lineno">  163</span>    <span class="keywordflow">for</span> (<span class="keywordtype">short</span> r = 0; r &lt; read_width; r++) {</div>
-<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>      out[batch_idx + c * N + i * read_width + r] = x[r][c] * scale;</div>
+<div class="line"><a id="l00164" name="l00164"></a><span class="lineno">  164</span>      out[batch_idx + c * N + i * read_width + r] = T(x[r][c] * scale);</div>
 <div class="line"><a id="l00165" name="l00165"></a><span class="lineno">  165</span>    }</div>
 <div class="line"><a id="l00166" name="l00166"></a><span class="lineno">  166</span>  }</div>
 <div class="line"><a id="l00167" name="l00167"></a><span class="lineno">  167</span>}</div>
