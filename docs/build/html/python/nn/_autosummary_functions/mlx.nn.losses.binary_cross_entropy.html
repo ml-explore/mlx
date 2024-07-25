@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.nn.losses.binary_cross_entropy &#8212; MLX 0.16.0 documentation</title>
+    <title>mlx.nn.losses.binary_cross_entropy &#8212; MLX 0.16.1 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../../_static/documentation_options.js?v=ac69e7c2"></script>
+    <script src="../../../_static/documentation_options.js?v=179565df"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.0 documentation - Home"/>
-    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.0 documentation - Home"/>`);</script>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.1 documentation - Home"/>
+    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.1 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -296,6 +296,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.diagonal.html">mlx.core.diagonal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.divide.html">mlx.core.divide</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.divmod.html">mlx.core.divmod</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.einsum.html">mlx.core.einsum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.einsum_path.html">mlx.core.einsum_path</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.equal.html">mlx.core.equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.erf.html">mlx.core.erf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.erfinv.html">mlx.core.erfinv</a></li>
@@ -343,6 +345,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.minimum.html">mlx.core.minimum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.moveaxis.html">mlx.core.moveaxis</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.multiply.html">mlx.core.multiply</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.nan_to_num.html">mlx.core.nan_to_num</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.negative.html">mlx.core.negative</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.not_equal.html">mlx.core.not_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.ones.html">mlx.core.ones</a></li>
@@ -414,6 +417,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.split.html">mlx.core.random.split</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.truncated_normal.html">mlx.core.random.truncated_normal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.laplace.html">mlx.core.random.laplace</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -844,6 +848,10 @@ document.write(`
 <dt class="sig sig-object py" id="mlx.nn.losses.binary_cross_entropy">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">binary_cross_entropy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">inputs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">weights</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../../_autosummary/mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">with_logits</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reduction</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Literal" title="(in Python v3.12)"><span class="pre">Literal</span></a><span class="p"><span class="pre">[</span></span><span class="s"><span class="pre">'none'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'mean'</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="s"><span class="pre">'sum'</span></span><span class="p"><span class="pre">]</span></span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'mean'</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.losses.binary_cross_entropy" title="Link to this definition">#</a></dt>
 <dd><p>Computes the binary cross entropy loss.</p>
+<p>By default, this function takes the pre-sigmoid logits, which results in a faster
+and more precise loss. For improved numerical stability when <code class="docutils literal notranslate"><span class="pre">with_logits=False</span></code>,
+the loss calculation clips the input probabilities (in log-space) to a minimum value
+of <code class="docutils literal notranslate"><span class="pre">-100</span></code>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
