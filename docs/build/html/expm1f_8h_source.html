@@ -171,10 +171,11 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>  r = <a class="code hl_function" href="expm1f_8h.html#adf20e03405fba634ca8d01acac24592e">expm1f_scaled_unchecked</a>(a, 1.0f);</div>
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span>  <span class="comment">/* handle severe overflow and underflow */</span></div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>  <span class="keywordflow">if</span> (abs(a - 1.0f) &gt; 88.0f) {</div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    r = fma(r, r, -1.0f);</div>
-<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>  }</div>
-<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>  <span class="keywordflow">return</span> r;</div>
-<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>}</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>    r = pow(2, a);</div>
+<div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>    r = fma(r, r, -1.0f);</div>
+<div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>  }</div>
+<div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>  <span class="keywordflow">return</span> r;</div>
+<div class="line"><a id="l00090" name="l00090"></a><span class="lineno">   90</span>}</div>
 </div>
 <div class="ttc" id="aexpm1f_8h_html_a87f66d30e185950f42ce3641783cdc40"><div class="ttname"><a href="expm1f_8h.html#a87f66d30e185950f42ce3641783cdc40">expm1f</a></div><div class="ttdeci">float expm1f(float a)</div><div class="ttdef"><b>Definition</b> expm1f.h:80</div></div>
 <div class="ttc" id="aexpm1f_8h_html_adf20e03405fba634ca8d01acac24592e"><div class="ttname"><a href="expm1f_8h.html#adf20e03405fba634ca8d01acac24592e">expm1f_scaled_unchecked</a></div><div class="ttdeci">float expm1f_scaled_unchecked(float a, float b)</div><div class="ttdef"><b>Definition</b> expm1f.h:43</div></div>
