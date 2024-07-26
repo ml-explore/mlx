@@ -305,9 +305,12 @@ void init_array(nb::module_& m) {
           },
           "api_version"_a = nb::none(),
           R"pbdoc(
-            Used to apply updates at the given indices.
+            Returns an object that has all the array API functions on it.
 
-             Args:
+            See the `Python array API <https://data-apis.org/array-api/latest/index.html>`_
+            for more information.
+
+            Args:
                 api_version (str, optional): String representing the version
                   of the array API spec to return. Default: ``None``.
 
