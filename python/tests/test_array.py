@@ -1828,6 +1828,12 @@ class TestArray(mlx_tests.MLXTestCase):
         anp[:, idx] = 4
         self.assertTrue(np.array_equal(a, anp))
 
+    def test_array_namespace(self):
+        a = mx.array(1.0)
+        api = a.__array_namespace__()
+        self.assertTrue(hasattr(api, "array"))
+        self.assertTrue(hasattr(api, "add"))
+
 
 if __name__ == "__main__":
     unittest.main()
