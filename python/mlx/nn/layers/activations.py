@@ -532,19 +532,21 @@ class GELU(Module):
 
     where :math:`\Phi(x)` is the Gaussian CDF.
 
-    However, if ``approx`` is set to 'precise'/'tanh' or 'fast' it applies
+    However, if ``approx`` is set to 'precise' or 'fast' it applies
 
     .. math::
         \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
         \textrm{GELUFast}(x) &= x * \sigma\left(1.773 * x\right)
 
-    respectively.
+    respectively. Note, that 'tanh' is an alias for 'precise' to follow the 
+    Pytorch API.
 
     See :func:`gelu`, :func:`gelu_approx` and :func:`gelu_fast_approx` for the
     functional equivalents and information regarding error bounds.
+    
 
     Args:
-        approx ('none' | 'precise'/'tanh' | 'fast'): Which approximation to gelu to use if any.
+        approx ('none' | 'precise' | 'fast'): Which approximation to gelu to use if any.
     """
 
     def __init__(self, approx="none"):
