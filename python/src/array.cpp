@@ -294,6 +294,26 @@ void init_array(nb::module_& m) {
             Returns:
                 array: The array with type ``dtype``.
           )pbdoc")
+      .def(
+          "__array_namespace__",
+          [](const array& a, const std::optional<std::string>& api_version) {
+            if (api_version) {
+              throw std::invalid_argument(
+                  "Explicitly specifying api_version is not yet implemented.");
+            }
+            return nb::module_::import_("mlx.core");
+          },
+          "api_version"_a = nb::none(),
+          R"pbdoc(
+            Used to apply updates at the given indices.
+
+             Args:
+                api_version (str, optional): String representing the version
+                  of the array API spec to return. Default: ``None``.
+
+            Returns:
+                out (Any): An object representing the array API namespace.
+          )pbdoc")
       .def("__getitem__", mlx_get_item, nb::arg().none())
       .def("__setitem__", mlx_set_item, nb::arg().none(), nb::arg())
       .def_prop_ro(
