@@ -536,10 +536,13 @@ class GELU(Module):
 
     .. math::
         \textrm{GELUApprox}(x) &= 0.5 * x * \left(1 + \text{Tanh}\left((\sqrt{2 / \pi} * \left(x + 0.044715 * x^3\right)\right)\right) \\
-        \textrm{GELUFast}(x) &= x * \sigma\left(1.773 * x\right)
+        \textrm{GELUFast}(x) &= x * \sigma\left(1.702 * x\right)
 
-    respectively. Note, that 'tanh' is an alias for 'precise' to follow the 
-    Pytorch API.
+    respectively.
+
+    .. note::
+       For compatibility with the PyTorch API, 'tanh' can be used as an alias
+       for 'precise'.
 
     See :func:`gelu`, :func:`gelu_approx` and :func:`gelu_fast_approx` for the
     functional equivalents and information regarding error bounds.
@@ -560,7 +563,7 @@ class GELU(Module):
             self._act = gelu_fast_approx
         else:
             raise ValueError(
-                f"The approximation should be in ['none', 'precise'/'tanh', 'fast'] but '{approx}' was given"
+                f"The approximation should be in ['none', 'precise', 'tanh', 'fast'] but '{approx}' was given"
             )
 
     def __call__(self, x):
