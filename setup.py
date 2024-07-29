@@ -175,8 +175,14 @@ if __name__ == "__main__":
         package_data=package_data,
         include_package_data=True,
         extras_require={
-            "testing": ["numpy", "torch"],
-            "dev": ["pre-commit"],
+            "dev": [
+                "nanobind@git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4",
+                "numpy",
+                "pre-commit",
+                "setuptools>=42",
+                "torch",
+                "typing_extensions",
+            ],
         },
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
