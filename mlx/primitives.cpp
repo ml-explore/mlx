@@ -855,7 +855,13 @@ array conv_weight_backward_patches(
   std::vector<int> padded_axes(in.ndim() - 2, 0);
   std::iota(padded_axes.begin(), padded_axes.end(), 1);
   auto in_padded =
-      pad(in, padded_axes, padding, padding, array(0, in.dtype()), s);
+      pad(in,
+          padded_axes,
+          padding,
+          padding,
+          array(0, in.dtype()),
+          PaddingMode::Constant,
+          s);
 
   // Resolve strided patches
 
@@ -2288,6 +2294,7 @@ std::vector<array> Pad::jvp(
           low_pad_size_,
           high_pad_size_,
           array(0, tangents[0].dtype()),
+          PaddingMode::Constant,
           stream())};
 }
 
@@ -3668,7 +3675,14 @@ std::vector<array> BlockMaskedMM::vjp(
 
     // Pad if needed
     if ((align_Y != 0) || (align_X != 0)) {
-      r = pad(r, {-2, -1}, {0, 0}, {align_Y, align_X}, zero, stream());
+      r =
+          pad(r,
+              {-2, -1},
+              {0, 0},
+              {align_Y, align_X},
+              zero,
+              PaddingMode::Constant,
+              stream());
     }
 
     // Reshape

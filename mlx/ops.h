@@ -256,6 +256,8 @@ array moveaxis(
     int destination,
     StreamOrDevice s = {});
 
+enum PaddingMode { Constant, Edge };
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,
@@ -263,6 +265,7 @@ array pad(
     const std::vector<int>& low_pad_size,
     const std::vector<int>& high_pad_size,
     const array& pad_value = array(0),
+    const PaddingMode mode = PaddingMode::Constant,
     StreamOrDevice s = {});
 
 /** Pad an array with a constant value along all axes */
@@ -270,16 +273,19 @@ array pad(
     const array& a,
     const std::vector<std::pair<int, int>>& pad_width,
     const array& pad_value = array(0),
+    const PaddingMode mode = PaddingMode::Constant,
     StreamOrDevice s = {});
 array pad(
     const array& a,
     const std::pair<int, int>& pad_width,
     const array& pad_value = array(0),
+    const PaddingMode mode = PaddingMode::Constant,
     StreamOrDevice s = {});
 array pad(
     const array& a,
     int pad_width,
     const array& pad_value = array(0),
+    const PaddingMode mode = PaddingMode::Constant,
     StreamOrDevice s = {});
 
 /** Permutes the dimensions in reverse order. */

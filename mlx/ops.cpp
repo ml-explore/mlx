@@ -1000,6 +1000,51 @@ array tile(
   return reshape(x, final_shape, s);
 }
 
+array edge_pad(
+    const array& a,
+    const std::vector<int>& axes,
+    const std::vector<int>& low_pad_size,
+    const std::vector<int>& high_pad_size,
+    const std::vector<int>& out_shape,
+    StreamOrDevice s /* = {}*/) {
+  array out = zeros(out_shape, a.dtype(), s);
+  auto stops = a.shape();
+  for (int i = 0; i < stops.size(); i++) {
+    stops[i] += low_pad_size[i];
+  }
+  // Copy over values from the unpadded array
+  array padded = slice_update(out, a, low_pad_size, stops, s);
+
+  for (int axis = 0; axis < a.ndim(); axis++) {
+    if (low_pad_size[axis] > 0) {
+      std::vector<int> starts(a.ndim(), 0);
+      starts[axis] = low_pad_size[axis];
+      auto stops = out.shape();
+      stops[axis] = low_pad_size[axis] + 1;
+      // Fetch edge values
+      array edge_value = slice(padded, starts, stops, s);
+
+      starts[axis] = 0;
+      stops[axis] = low_pad_size[axis];
+      // Update edge values in the padded array
+      padded = slice_update(padded, edge_value, starts, stops, s);
+    }
+
+    if (high_pad_size[axis] > 0) {
+      std::vector<int> starts(a.ndim(), 0);
+      starts[axis] = -high_pad_size[axis] - 1;
+      auto stops = out.shape();
+      stops[axis] = -high_pad_size[axis];
+      array edge_value = slice(padded, starts, stops, s);
+
+      starts[axis] = -high_pad_size[axis];
+      stops[axis] = out.shape(axis);
+      padded = slice_update(padded, edge_value, starts, stops, s);
+    }
+  }
+  return padded;
+}
+
 /** Pad an array with a constant value */
 array pad(
     const array& a,
@@ -1007,6 +1052,7 @@ array pad(
     const std::vector<int>& low_pad_size,
     const std::vector<int>& high_pad_size,
     const array& pad_value /*= array(0)*/,
+    const PaddingMode mode /*= PaddingMode::Constant*/,
     StreamOrDevice s /* = {}*/) {
   if (axes.size() != low_pad_size.size() ||
       axes.size() != high_pad_size.size()) {
@@ -1038,6 +1084,10 @@ array pad(
     out_shape[ax] += low_pad_size[i] + high_pad_size[i];
   }
 
+  if (mode == PaddingMode::Edge) {
+    return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  }
+
   return array(
       out_shape,
       a.dtype(),
@@ -1050,6 +1100,7 @@ array pad(
     const array& a,
     const std::vector<std::pair<int, int>>& pad_width,
     const array& pad_value /*= array(0)*/,
+    const PaddingMode mode /*= PaddingMode::Constant*/,
     StreamOrDevice s /*= {}*/) {
   std::vector<int> axes(a.ndim(), 0);
   std::iota(axes.begin(), axes.end(), 0);
@@ -1062,27 +1113,34 @@ array pad(
     highs.push_back(pads.second);
   }
 
-  return pad(a, axes, lows, highs, pad_value, s);
+  return pad(a, axes, lows, highs, pad_value, mode, s);
 }
 
 array pad(
     const array& a,
     const std::pair<int, int>& pad_width,
     const array& pad_value /*= array(0)*/,
+    const PaddingMode mode /*= PaddingMode::Constant*/,
     StreamOrDevice s /*= {}*/) {
   return pad(
-      a, std::vector<std::pair<int, int>>(a.ndim(), pad_width), pad_value, s);
+      a,
+      std::vector<std::pair<int, int>>(a.ndim(), pad_width),
+      pad_value,
+      mode,
+      s);
 }
 
 array pad(
     const array& a,
     int pad_width,
     const array& pad_value /*= array(0)*/,
+    const PaddingMode mode /*= PaddingMode::Constant*/,
     StreamOrDevice s /*= {}*/) {
   return pad(
       a,
       std::vector<std::pair<int, int>>(a.ndim(), {pad_width, pad_width}),
       pad_value,
+      mode,
       s);
 }
 
