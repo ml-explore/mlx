@@ -610,4 +610,253 @@ bool ScaledDotProductAttention::is_equivalent(const Primitive& other) const {
   return needs_mask_ == a_other.needs_mask_ && scale_ == a_other.scale_;
 }
 
+array pack_and_quantize(
+    array& packed_w,
+    const array& scales,
+    const array& biases,
+    int group_size,
+    int bits,
+    const Stream& s) {
+  int el_per_int = 32 / bits;
+  array zero(0, packed_w.dtype());
+  array n_bins((1 << bits) - 1, packed_w.dtype()); // 2**bits - 1
+  array shifts = power(array(2, uint32), arange(0, 32, bits, uint32, s), s);
+  packed_w = astype(
+      clip(
+          round(divide(subtract(packed_w, biases, s), scales, s), s),
+          zero,
+          n_bins),
+      uint32);
+  packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
+  packed_w = sum(
+      multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
+  return packed_w;
+}
+
+std::tuple<array, array, array>
+affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
+  auto s = to_stream(s_);
+
+  if (group_size != 32 && group_size != 64 && group_size != 128) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested group size " << group_size
+        << " is not supported. The supported group sizes are 64 and 128.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (bits != 2 && bits != 4 && bits != 8) {
+    std::ostringstream msg;
+    msg << "[quantize] The requested number of bits " << bits
+        << " is not supported. The supported bits are 2, 4 and 8.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (w.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+        << "but it has only " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if ((w.shape(-1) % group_size) != 0) {
+    std::ostringstream msg;
+    msg << "[quantize] The last dimension of the matrix needs to be divisible by "
+        << "the quantization group size " << group_size
+        << ". However the provided " << " matrix has shape " << w.shape();
+    throw std::invalid_argument(msg.str());
+  }
+
+  int el_per_int = 32 / bits;
+
+  if (w.shape(-1) < 32 * el_per_int) {
+    std::ostringstream msg;
+    msg << "[quantize] The feature dimension (2nd dimension of the matrix) is "
+        << "too small for quantization. We support >=512 for 2 bits, "
+        << ">= 256 for 4 bits and >= 128 for 8 bits. The provided matrix has "
+        << "shape " << w.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto fallback = [group_size, bits, el_per_int, s](
+                      const std::vector<array>& inputs) -> std::vector<array> {
+    auto& w = inputs[0];
+    auto wshape = w.shape();
+    wshape.back() = -1;
+
+    array zero(0, w.dtype());
+    array n_bins((1 << bits) - 1, w.dtype()); // 2**bits - 1
+    array eps(1e-7, w.dtype());
+
+    array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
+
+    array w_max = max(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+    array w_min = min(packed_w, /* axis= */ -1, /* keepdims= */ true, s);
+    array mask = greater(abs(w_min, s), abs(w_max, s), s);
+    array scales =
+        maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
+    scales = where(mask, scales, negative(scales), s);
+    array edge = where(mask, w_min, w_max, s);
+    array q0 = round(divide(edge, scales, s), s);
+    scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
+    array biases = where(equal(q0, zero, s), zero, edge);
+
+    packed_w = pack_and_quantize(packed_w, scales, biases, group_size, bits, s);
+    return {
+        reshape(packed_w, wshape, s),
+        reshape(scales, wshape, s),
+        reshape(biases, wshape, s),
+    };
+  };
+
+  std::vector<array> outputs;
+  if (s.device == Device::gpu) {
+    auto wq_shape = w.shape();
+    wq_shape.back() = w.shape(-1) / el_per_int;
+    auto sshape = w.shape();
+    sshape.back() = w.shape(-1) / group_size;
+    outputs = array::make_arrays(
+        {wq_shape, sshape, sshape},
+        {uint32, w.dtype(), w.dtype()},
+        std::make_shared<AffineQuantize>(s, fallback, group_size, bits, false),
+        {w});
+  } else {
+    outputs = fallback({w});
+  }
+  return {outputs[0], outputs[1], outputs[2]};
+}
+
+array affine_quantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size,
+    int bits,
+    StreamOrDevice s_) {
+  auto s = to_stream(s_);
+
+  int el_per_int = 32 / bits;
+  auto fallback = [group_size, bits, el_per_int, s](
+                      const std::vector<array>& inputs) -> std::vector<array> {
+    auto& w = inputs[0];
+    auto scales = expand_dims(inputs[1], -1, s);
+    auto biases = expand_dims(inputs[2], -1, s);
+
+    auto wshape = w.shape();
+    wshape.back() = -1;
+
+    array packed_w = reshape(w, {-1, w.shape(-1) / group_size, group_size}, s);
+    packed_w = pack_and_quantize(packed_w, scales, biases, group_size, bits, s);
+    return {reshape(packed_w, wshape, s)};
+  };
+
+  if (s.device == Device::gpu) {
+    auto out_shape = w.shape();
+    out_shape.back() = w.shape(-1) / el_per_int;
+    return array(
+        out_shape,
+        uint32,
+        std::make_shared<AffineQuantize>(s, fallback, group_size, bits, false),
+        {w, scales, biases});
+  }
+  return fallback({w, scales, biases})[0];
+}
+
+array affine_dequantize(
+    const array& w,
+    const array& scales,
+    const array& biases,
+    int group_size,
+    int bits,
+    StreamOrDevice s_) {
+  if (bits <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for bits: " << bits;
+    throw std::invalid_argument(msg.str());
+  }
+  if (group_size <= 0) {
+    std::ostringstream msg;
+    msg << "[dequantize] Invalid value for group_size: " << group_size;
+    throw std::invalid_argument(msg.str());
+  }
+  if (w.ndim() < 2 || scales.ndim() < 2 || biases.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[quantize] The matrix to be quantized must have at least 2 dimension "
+        << "but it has only " << w.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto wshape = w.shape();
+  auto sshape = scales.shape();
+  auto bshape = biases.shape();
+  wshape.back() = -1;
+  sshape.back() = -1;
+  bshape.back() = -1;
+
+  if (wshape != sshape || wshape != bshape) {
+    throw std::invalid_argument(
+        "[dequantize] Shape of scales and biases does not match the matrix");
+  }
+
+  if (w.dtype() != uint32) {
+    throw std::invalid_argument(
+        "[dequantize] The matrix should be given as a uint32");
+  }
+
+  // Packing into uint32
+  int el_per_int = 32 / bits;
+
+  if (w.shape(-1) * el_per_int != scales.shape(-1) * group_size) {
+    std::ostringstream msg;
+    msg << "[dequantize] Shape of scales and biases does not match the matrix "
+        << "given the quantization parameters. Provided matrix of shape "
+        << w.shape() << " and scales/biases of shape " << scales.shape()
+        << " with group_size=" << group_size << " and bits=" << bits << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto s = to_stream(s_);
+
+  auto fallback =
+      [&wshape, &sshape, &scales, &biases, group_size, bits, el_per_int, s](
+          const std::vector<array>& inputs) -> std::vector<array> {
+    auto& w = inputs[0];
+    auto& scales = inputs[1];
+    auto& biases = inputs[2];
+    std::vector<array> parts;
+    for (int start = 0; start < 32; start += bits) {
+      int shift_left = 32 - (start + bits);
+      int shift_right = shift_left + start;
+
+      parts.push_back(expand_dims(
+          right_shift(
+              left_shift(w, array(32 - (start + bits), uint32), s),
+              array(32 - bits, uint32),
+              s),
+          -1,
+          s));
+    }
+    array w_full = concatenate(parts, -1, s);
+
+    // Dequantize
+    wshape.push_back(group_size);
+    w_full = reshape(w_full, wshape, s);
+    w_full = multiply(w_full, expand_dims(scales, -1, s), s);
+    w_full = add(w_full, expand_dims(biases, -1, s), s);
+    w_full = reshape(w_full, sshape, s);
+
+    return {w_full};
+  };
+
+  if (s.device == Device::gpu) {
+    auto out_shape = w.shape();
+    out_shape.back() = w.shape(-1) * el_per_int;
+    return array(
+        out_shape,
+        scales.dtype(),
+        std::make_shared<AffineQuantize>(s, fallback, group_size, bits, true),
+        {w, scales, biases});
+  }
+  return fallback({w, scales, biases})[0];
+}
+
 } // namespace mlx::core::fast
