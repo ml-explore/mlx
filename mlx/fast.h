@@ -45,7 +45,7 @@ std::tuple<array, array, array> affine_quantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-array affine_quantize_with_params(
+array affine_quantize(
     const array& w,
     const array& scales,
     const array& biases,

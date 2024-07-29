@@ -562,7 +562,7 @@ void fast::AffineQuantize::eval_gpu(
   std::ostringstream kname;
   auto type_string = dequantize_ ? get_type_string(out.dtype())
                                  : get_type_string(w_pre.dtype());
-  std::string kernel_func = "affine_quantize_with_params";
+  auto kernel_func = "affine_quantize_scales_biases";
   if (dequantize_) {
     kernel_func = "affine_dequantize";
   } else if (compute_scale_bias) {

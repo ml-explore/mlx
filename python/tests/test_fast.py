@@ -445,10 +445,8 @@ class TestFast(mlx_tests.MLXTestCase):
         for bits in (2, 4, 8):
             for group_size in (32, 64, 128):
                 with self.subTest(bits=bits, group_size=group_size):
-                    w, scales, biases = mx.fast.affine_quantize(
-                        x, bits=bits, group_size=group_size
-                    )
-                    w_p = mx.fast.affine_quantize_with_params(
+                    w, scales, biases = mx.quantize(x, bits=bits, group_size=group_size)
+                    w_p = mx.fast.affine_quantize(
                         x, scales, biases, bits=bits, group_size=group_size
                     )
                     self.assertTrue(mx.allclose(w, w_p))

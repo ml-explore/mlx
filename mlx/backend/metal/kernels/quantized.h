@@ -1537,7 +1537,7 @@ template <typename T, const int group_size, const int bits>
 }
 
 template <typename T, const int group_size, const int bits>
-[[kernel]] void affine_quantize_with_params(
+[[kernel]] void affine_quantize_scales_biases(
     const device T* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],

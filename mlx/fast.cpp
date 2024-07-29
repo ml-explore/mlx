@@ -725,7 +725,7 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
   return {outputs[0], outputs[1], outputs[2]};
 }
 
-array affine_quantize_with_params(
+array affine_quantize(
     const array& w,
     const array& scales,
     const array& biases,
