@@ -1,9 +1,9 @@
 # Copyright © 2023 Apple Inc.
 
 import time
-
 import mlx.core as mx
 
+# Base parameters
 num_features = 100
 num_examples = 1_000
 num_iters = 10_000
