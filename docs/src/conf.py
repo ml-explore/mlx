@@ -83,3 +83,15 @@ def setup(app):
 # -- Options for LaTeX output ------------------------------------------------
 
 latex_documents = [(main_doc, "MLX.tex", "MLX Documentation", author, "manual")]
+latex_elements = {
+    "preamble": r"""
+    \usepackage{enumitem}
+    \setlistdepth{5}
+    \setlist[itemize,1]{label=$\bullet$}
+    \setlist[itemize,2]{label=$\bullet$}
+    \setlist[itemize,3]{label=$\bullet$}
+    \setlist[itemize,4]{label=$\bullet$}
+    \setlist[itemize,5]{label=$\bullet$}
+    \renewlist{itemize}{itemize}{5}
+""",
+}

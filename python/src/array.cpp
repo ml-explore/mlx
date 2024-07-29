@@ -162,7 +162,7 @@ void init_array(nb::module_& m) {
 
             * :attr:`~mlx.core.complexfloating`
 
-              * :ref:`complex128 <data_types>`
+              * :ref:`complex64 <data_types>`
 
       See also :func:`~mlx.core.issubdtype`.
       )pbdoc");
