@@ -15,7 +15,7 @@ module to concisely define the model architecture.
 Attention layer
 ^^^^^^^^^^^^^^^^
 
-We will start with the llama attention layer which notably uses the RoPE
+We will start with the Llama attention layer which notably uses the RoPE
 positional encoding. [1]_ In addition, our attention layer will optionally use a
 key/value cache that will be concatenated with the provided keys and values to
 support efficient inference.
