@@ -49,6 +49,48 @@ template <typename T, typename U, typename Op>
 }
 
 template <typename T, typename U, typename Op>
+[[kernel]] void binary_sv2(
+    device const T* a,
+    device const T* b,
+    device U* c,
+    device U* d,
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  auto out = Op()(a[0], b[offset]);
+  c[offset] = out[0];
+  d[offset] = out[1];
+}
+
+template <typename T, typename U, typename Op>
+[[kernel]] void binary_vs2(
+    device const T* a,
+    device const T* b,
+    device U* c,
+    device U* d,
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  auto out = Op()(a[offset], b[0]);
+  c[offset] = out[0];
+  d[offset] = out[1];
+}
+
+template <typename T, typename U, typename Op>
+[[kernel]] void binary_vv2(
+    device const T* a,
+    device const T* b,
+    device U* c,
+    device U* d,
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  auto out = Op()(a[offset], b[offset]);
+  c[offset] = out[0];
+  d[offset] = out[1];
+}
+
+template <typename T, typename U, typename Op>
 [[kernel]] void binary_g_nd1(
     device const T* a,
     device const T* b,

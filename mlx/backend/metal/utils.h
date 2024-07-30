@@ -104,6 +104,35 @@ MTL::Size get_block_dims(int dim0, int dim1, int dim2) {
   return MTL::Size{1ul << pows[0], 1ul << pows[1], 1ul << pows[2]};
 }
 
+// Computes a 2D grid where each element is < UINT_MAX
+// Assumes:
+// - overall size (product of non-broadcasted dimensions) is < UINT_MAX^2
+// - shape and strides correspond to a contiguous (no holes) but
+//   possibly broadcasted array
+MTL::Size get_2d_grid_dims(
+    const std::vector<int>& shape,
+    const std::vector<size_t>& strides) {
+  // Dims with strides of 0 are ignored as they
+  // correspond to broadcasted dimensions
+  size_t grid_x = 1;
+  size_t grid_y = 1;
+  for (int i = 0; i < shape.size(); ++i) {
+    if (strides[i] == 0) {
+      continue;
+    }
+    if (grid_x * shape[i] < UINT32_MAX) {
+      grid_x *= shape[i];
+    } else {
+      grid_y *= shape[i];
+    }
+  }
+  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX) {
+    throw std::runtime_error("Unable to safely factor shape.");
+  }
+  return MTL::Size(
+      static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
+}
+
 inline NS::String* make_string(std::ostringstream& os) {
   std::string string = os.str();
   return NS::String::string(string.c_str(), NS::UTF8StringEncoding);

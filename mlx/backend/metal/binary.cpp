@@ -21,10 +21,43 @@ namespace mlx::core {
 
 constexpr int MAX_BINARY_SPECIALIZED_DIMS = 5;
 
+std::string get_kernel_name(
+    BinaryOpType bopt,
+    const std::string& op,
+    const array& a,
+    bool use_2d,
+    int ndim) {
+  std::ostringstream kname;
+  switch (bopt) {
+    case BinaryOpType::ScalarScalar:
+      kname << "ss";
+      break;
+    case BinaryOpType::ScalarVector:
+      kname << (use_2d ? "sv2" : "sv");
+      break;
+    case BinaryOpType::VectorScalar:
+      kname << (use_2d ? "vs2" : "vs");
+      break;
+    case BinaryOpType::VectorVector:
+      kname << (use_2d ? "vv2" : "vv");
+      break;
+    case BinaryOpType::General:
+      kname << "g";
+      if (ndim <= MAX_BINARY_SPECIALIZED_DIMS) {
+        kname << ndim;
+      } else {
+        kname << "n";
+      }
+      break;
+  }
+  kname << op << type_to_name(a);
+  return kname.str();
+}
+
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string op,
+    const std::string& op,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -41,35 +74,8 @@ void binary_op_gpu_inplace(
   auto& strides_b = strides[1];
   auto& strides_out = strides[2];
 
-  std::string kernel_name;
-  {
-    std::ostringstream kname;
-    switch (bopt) {
-      case BinaryOpType::ScalarScalar:
-        kname << "ss";
-        break;
-      case BinaryOpType::ScalarVector:
-        kname << "sv";
-        break;
-      case BinaryOpType::VectorScalar:
-        kname << "vs";
-        break;
-      case BinaryOpType::VectorVector:
-        kname << "vv";
-        break;
-      case BinaryOpType::General:
-        kname << "g";
-        if (shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
-          kname << shape.size();
-        } else {
-          kname << "n";
-        }
-        break;
-    }
-    kname << op << type_to_name(a);
-    kernel_name = kname.str();
-  }
-
+  bool use_2d = out.data_size() > UINT32_MAX;
+  std::string kernel_name = get_kernel_name(bopt, op, a, use_2d, shape.size());
   auto& d = metal::device(s.device);
 
   auto kernel =
@@ -117,9 +123,11 @@ void binary_op_gpu_inplace(
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
-    // Launch a 1D grid of threads
+    // Launch a 1D or 2D grid of threads
     size_t nthreads = out.data_size();
-    MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims = use_2d
+        ? get_2d_grid_dims(outputs[0].shape(), outputs[0].strides())
+        : MTL::Size(nthreads, 1, 1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
@@ -132,7 +140,7 @@ void binary_op_gpu_inplace(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string op,
+    const std::string& op,
     const Stream& s) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
@@ -146,7 +154,7 @@ void binary_op_gpu(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string op) {
+    const std::string& op) {
   auto& s = outputs[0].primitive().stream();
   binary_op_gpu(inputs, outputs, op, s);
 }
@@ -154,7 +162,7 @@ void binary_op_gpu(
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const std::string& op,
     const Stream& s) {
   auto& a = inputs[0];
   auto& b = inputs[1];
@@ -169,35 +177,9 @@ void binary_op_gpu_inplace(
   auto& strides_b = strides[1];
   auto& strides_out = strides[2];
 
-  std::string kernel_name;
-  {
-    std::ostringstream kname;
-    switch (bopt) {
-      case BinaryOpType::ScalarScalar:
-        kname << "ss";
-        break;
-      case BinaryOpType::ScalarVector:
-        kname << "sv";
-        break;
-      case BinaryOpType::VectorScalar:
-        kname << "vs";
-        break;
-      case BinaryOpType::VectorVector:
-        kname << "vv";
-        break;
-      case BinaryOpType::General:
-        kname << "g";
-        if (shape.size() <= MAX_BINARY_SPECIALIZED_DIMS) {
-          kname << shape.size();
-        } else {
-          kname << "n";
-        }
-        break;
-    }
-    kname << op << type_to_name(a);
-    kernel_name = kname.str();
-  }
-
+  bool use_2d = out.data_size() > UINT32_MAX;
+  std::string kernel_name =
+      get_kernel_name(bopt, op, a, shape.size(), out.data_size());
   auto& d = metal::device(s.device);
 
   auto kernel = get_binary_kernel(d, kernel_name, a.dtype(), out.dtype(), op);
@@ -237,10 +219,11 @@ void binary_op_gpu_inplace(
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
-    // Launch a 1D grid of threads
-    size_t nthreads =
-        bopt == BinaryOpType::General ? out.size() : out.data_size();
-    MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+    // Launch a 1D or 2D grid of threads
+
+    size_t nthreads = out.data_size();
+    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                                 : MTL::Size(nthreads, 1, 1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
@@ -253,7 +236,7 @@ void binary_op_gpu_inplace(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const std::string& op,
     const Stream& s) {
   assert(inputs.size() == 2);
   auto& a = inputs[0];
@@ -266,7 +249,7 @@ void binary_op_gpu(
 void binary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op) {
+    const std::string& op) {
   auto& s = out.primitive().stream();
   binary_op_gpu(inputs, out, op, s);
 }

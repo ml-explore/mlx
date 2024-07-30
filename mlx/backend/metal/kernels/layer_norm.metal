@@ -34,7 +34,7 @@ template <typename T, int N_READS = RMS_N_READS>
   threadgroup float local_mean[1];
   threadgroup float local_normalizer[1];
 
-  x += gid * axis_size + lid * N_READS;
+  x += gid * size_t(axis_size) + lid * N_READS;
   w += w_stride * lid * N_READS;
   b += b_stride * lid * N_READS;
 
@@ -89,7 +89,7 @@ template <typename T, int N_READS = RMS_N_READS>
   float normalizer = local_normalizer[0];
 
   // Write the outputs
-  out += gid * axis_size + lid * N_READS;
+  out += gid * size_t(axis_size) + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
       thread_x[i] = (thread_x[i] - mean) * normalizer;
@@ -131,7 +131,7 @@ template <typename T, int N_READS = RMS_N_READS>
   threadgroup float local_mean[1];
   threadgroup float local_normalizer[1];
 
-  x += gid * axis_size + lid * N_READS;
+  x += gid * size_t(axis_size) + lid * N_READS;
   w += w_stride * lid * N_READS;
   b += b_stride * lid * N_READS;
 
@@ -188,7 +188,7 @@ template <typename T, int N_READS = RMS_N_READS>
   float normalizer = local_normalizer[0];
 
   // Write the outputs
-  out += gid * axis_size + lid * N_READS;
+  out += gid * size_t(axis_size) + lid * N_READS;
   for (uint r = 0; r < axis_size; r += lsize * N_READS) {
     if (r + lid * N_READS + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {
@@ -223,8 +223,8 @@ template <typename T, int N_READS = RMS_N_READS>
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   // Advance the input pointers
-  x += gid * axis_size + lid * N_READS;
-  g += gid * axis_size + lid * N_READS;
+  x += gid * size_t(axis_size) + lid * N_READS;
+  g += gid * size_t(axis_size) + lid * N_READS;
   w += w_stride * lid * N_READS;
 
   // Allocate registers for the computation and accumulators
@@ -321,8 +321,8 @@ template <typename T, int N_READS = RMS_N_READS>
   float normalizer2 = normalizer * normalizer;
 
   // Write the outputs
-  gx += gid * axis_size + lid * N_READS;
-  gw += gid * axis_size + lid * N_READS;
+  gx += gid * size_t(axis_size) + lid * N_READS;
+  gw += gid * size_t(axis_size) + lid * N_READS;
   if (lid * N_READS + N_READS <= axis_size) {
     for (int i = 0; i < N_READS; i++) {
       thread_x[i] = (thread_x[i] - mean) * normalizer;
@@ -360,8 +360,8 @@ template <typename T, int N_READS = RMS_N_READS>
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   // Advance the input pointers
-  x += gid * axis_size + lid * N_READS;
-  g += gid * axis_size + lid * N_READS;
+  x += gid * size_t(axis_size) + lid * N_READS;
+  g += gid * size_t(axis_size) + lid * N_READS;
   w += w_stride * lid * N_READS;
 
   // Allocate registers for the accumulators
@@ -457,8 +457,8 @@ template <typename T, int N_READS = RMS_N_READS>
   float normalizer2 = normalizer * normalizer;
 
   // Write the outputs
-  gx += gid * axis_size + lid * N_READS;
-  gw += gid * axis_size + lid * N_READS;
+  gx += gid * size_t(axis_size) + lid * N_READS;
+  gw += gid * size_t(axis_size) + lid * N_READS;
   for (uint r = 0; r < axis_size; r += lsize * N_READS) {
     if (r + lid * N_READS + N_READS <= axis_size) {
       for (int i = 0; i < N_READS; i++) {

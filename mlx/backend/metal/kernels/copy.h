@@ -17,6 +17,26 @@ template <typename T, typename U>
 }
 
 template <typename T, typename U>
+[[kernel]] void copy_s2(
+    device const T* src [[buffer(0)]],
+    device U* dst [[buffer(1)]],
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  dst[offset] = static_cast<U>(src[0]);
+}
+
+template <typename T, typename U>
+[[kernel]] void copy_v2(
+    device const T* src [[buffer(0)]],
+    device U* dst [[buffer(1)]],
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  dst[offset] = static_cast<U>(src[offset]);
+}
+
+template <typename T, typename U>
 [[kernel]] void copy_g_nd1(
     device const T* src [[buffer(0)]],
     device U* dst [[buffer(1)]],

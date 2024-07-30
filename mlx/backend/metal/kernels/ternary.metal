@@ -11,6 +11,7 @@
 
 #define instantiate_ternary_all(op, tname, type)                  \
   instantiate_kernel("v_" #op #tname, ternary_v, type, op)        \
+  instantiate_kernel("v2_" #op #tname, ternary_v2, type, op)      \
   instantiate_kernel("g_" #op #tname, ternary_g, type, op)        \
   instantiate_kernel("g1_" #op #tname, ternary_g_nd1, type, op)   \
   instantiate_kernel("g2_" #op #tname, ternary_g_nd2, type, op)   \

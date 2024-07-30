@@ -64,6 +64,7 @@ void copy_gpu_inplace(
   auto& strides_in_ = strides[0];
   auto& strides_out_ = strides[1];
 
+  bool use_2d = out.data_size() > UINT32_MAX;
   auto& d = metal::device(s.device);
   std::string kernel_name;
   {
@@ -73,7 +74,7 @@ void copy_gpu_inplace(
         kname << "s";
         break;
       case CopyType::Vector:
-        kname << "v";
+        kname << (use_2d ? "v2" : "v");
         break;
       case CopyType::General:
         kname << "g";
@@ -139,7 +140,8 @@ void copy_gpu_inplace(
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     size_t nthreads = out.data_size();
-    MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                                 : MTL::Size(nthreads, 1, 1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
