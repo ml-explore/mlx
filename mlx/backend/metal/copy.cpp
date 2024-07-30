@@ -71,7 +71,7 @@ void copy_gpu_inplace(
     std::ostringstream kname;
     switch (ctype) {
       case CopyType::Scalar:
-        kname << "s";
+        kname << (use_2d ? "s2" : "s");
         break;
       case CopyType::Vector:
         kname << (use_2d ? "v2" : "v");
