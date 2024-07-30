@@ -178,8 +178,7 @@ void binary_op_gpu_inplace(
   auto& strides_out = strides[2];
 
   bool use_2d = out.data_size() > UINT32_MAX;
-  std::string kernel_name =
-      get_kernel_name(bopt, op, a, shape.size(), out.data_size());
+  std::string kernel_name = get_kernel_name(bopt, op, a, use_2d, shape.size());
   auto& d = metal::device(s.device);
 
   auto kernel = get_binary_kernel(d, kernel_name, a.dtype(), out.dtype(), op);
