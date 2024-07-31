@@ -32,6 +32,7 @@ void ternary_op_gpu_inplace(
   auto& strides_c = strides[2];
   auto& strides_out = strides[3];
 
+  bool use_2d = out.data_size();
   std::string kernel_name;
   {
     std::ostringstream kname;
@@ -40,6 +41,8 @@ void ternary_op_gpu_inplace(
       if (shape.size() <= MAX_TERNARY_SPECIALIZED_DIMS) {
         kname << shape.size();
       }
+    } else if (use_2d) {
+      kname << "v2";
     } else {
       kname << "v";
     }

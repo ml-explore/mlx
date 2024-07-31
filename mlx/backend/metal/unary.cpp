@@ -25,11 +25,14 @@ void unary_op_gpu_inplace(
 
   auto& d = metal::device(s.device);
 
-  std::string kernel_name = (contig ? "v" : "g") + op + type_to_name(out);
+  size_t nthreads = contig ? in.data_size() : in.size();
+  bool use_2d = nthreads > UINT32_MAX;
+  std::string kernel_name =
+      (contig ? (use_2d ? "v2" : "v") : "g") + op + type_to_name(out);
   auto kernel = get_unary_kernel(d, kernel_name, out.dtype(), op);
 
-  size_t nthreads = contig ? in.data_size() : in.size();
-  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(in.shape(), in.strides())
+                               : MTL::Size(nthreads, 1, 1);
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   if (thread_group_size > nthreads) {
     thread_group_size = nthreads;

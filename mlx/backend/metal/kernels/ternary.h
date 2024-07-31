@@ -11,6 +11,18 @@ template <typename T, typename Op>
 }
 
 template <typename T, typename Op>
+[[kernel]] void ternary_v2(
+    device const bool* a,
+    device const T* b,
+    device const T* c,
+    device T* d,
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  d[offset] = Op()(a[offset], b[offset], c[offset]);
+}
+
+template <typename T, typename Op>
 [[kernel]] void ternary_g_nd1(
     device const bool* a,
     device const T* b,

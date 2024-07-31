@@ -9,25 +9,25 @@ namespace mlx::core {
 void binary_op_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string op,
+    const std::string& op,
     const Stream& s);
 
 void binary_op_gpu(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const std::string& op,
     const Stream& s);
 
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     std::vector<array>& outputs,
-    const std::string op,
+    const std::string& op,
     const Stream& s);
 
 void binary_op_gpu_inplace(
     const std::vector<array>& inputs,
     array& out,
-    const std::string op,
+    const std::string& op,
     const Stream& s);
 
 } // namespace mlx::core

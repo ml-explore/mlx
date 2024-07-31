@@ -12,6 +12,9 @@
   instantiate_kernel("sv" #op #tname, binary_sv, itype, otype, op)      \
   instantiate_kernel("vs" #op #tname, binary_vs, itype, otype, op)      \
   instantiate_kernel("vv" #op #tname, binary_vv, itype, otype, op)      \
+  instantiate_kernel("sv2" #op #tname, binary_sv2, itype, otype, op)    \
+  instantiate_kernel("vs2" #op #tname, binary_vs2, itype, otype, op)    \
+  instantiate_kernel("vv2" #op #tname, binary_vv2, itype, otype, op)    \
   instantiate_kernel("gn" #op #tname, binary_g, itype, otype, op)       \
   instantiate_kernel("g1" #op #tname, binary_g_nd1, itype, otype, op)   \
   instantiate_kernel("g2" #op #tname, binary_g_nd2, itype, otype, op)   \

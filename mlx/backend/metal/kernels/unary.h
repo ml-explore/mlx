@@ -9,6 +9,16 @@ template <typename T, typename Op>
 }
 
 template <typename T, typename Op>
+[[kernel]] void unary_v2(
+    device const T* in,
+    device T* out,
+    uint2 index [[thread_position_in_grid]],
+    uint2 grid_dim [[threads_per_grid]]) {
+  size_t offset = index.x + grid_dim.x * size_t(index.y);
+  out[offset] = Op()(in[offset]);
+}
+
+template <typename T, typename Op>
 [[kernel]] void unary_g(
     device const T* in,
     device T* out,
