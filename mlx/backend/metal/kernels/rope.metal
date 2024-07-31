@@ -25,8 +25,8 @@ template <typename T, bool traditional, bool forward>
   float sintheta = metal::fast::sin(theta);
 
   // Compute the input and output indices
-  size_t in_index_1, in_index_2;
-  size_t out_index_1, out_index_2;
+  uint in_index_1, in_index_2;
+  uint out_index_1, out_index_2;
   if (traditional) {
     out_index_1 = 2 * pos.x + pos.y * stride;
     out_index_2 = out_index_1 + 1;
