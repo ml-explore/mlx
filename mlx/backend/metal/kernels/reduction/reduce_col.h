@@ -64,14 +64,23 @@ METAL_FUNC U _contiguous_strided_reduce(
   U total_val = Op::init;
 
   size_t base_offset = (size_t(tid.y) * lsize.y + lid.y) * N_READS;
-  uint remaining = uint(reduction_size - base_offset);
+
   in += in_idx;
   in += base_offset * reduction_stride;
 
-  for (uint r = 0; r < N_READS && r < remaining; r++) {
-    total_val = op(static_cast<U>(total_val), *in);
-    in += reduction_stride;
+  if (base_offset + N_READS <= reduction_size) {
+    for (int r = 0; r < N_READS; r++) {
+      total_val = op(static_cast<U>(total_val), *in);
+      in += reduction_stride;
+    }
+  } else {
+    int remaining = reduction_size - base_offset;
+    for (int r = 0; r < remaining; r++) {
+      total_val = op(static_cast<U>(total_val), *in);
+      in += reduction_stride;
+    }
   }
+
   local_data[lsize.y * lid.x + lid.y] = total_val;
   threadgroup_barrier(mem_flags::mem_threadgroup);
 
