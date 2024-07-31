@@ -18,7 +18,7 @@ METAL_FUNC void scatter_1d_index_impl(
     uint2 gid [[thread_position_in_grid]]) {
   Op op;
 
-  uint out_idx = 0;
+  size_t out_idx = 0;
   for (int i = 0; i < NIDX; i++) {
     auto idx_val = offset_neg_idx(idx_buffers[i][gid.y], out_shape[i]);
     out_idx += idx_val * out_strides[i];
