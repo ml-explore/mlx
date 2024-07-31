@@ -136,8 +136,8 @@ METAL_FUNC U per_thread_row_reduce(
 
   // Each threadgroup handles 1 reduction
   // TODO: Specializing elem_to_loc would be slightly faster
-  int idx = tid.y * out_size + tid.x;
-  int extra_offset = elem_to_loc(idx, shape, strides, ndim);
+  size_t idx = size_t(tid.y) * out_size + tid.x;
+  size_t extra_offset = elem_to_loc(idx, shape, strides, ndim);
   in += extra_offset + lid_x * N_READS;
 
   // The reduction is accumulated here

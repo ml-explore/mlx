@@ -54,20 +54,23 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
 METAL_FUNC U _contiguous_strided_reduce(
     const device T* in,
     threadgroup U* local_data,
-    uint in_idx,
-    uint reduction_size,
-    uint reduction_stride,
+    size_t in_idx,
+    size_t reduction_size,
+    size_t reduction_stride,
     uint2 tid,
     uint2 lid,
     uint2 lsize) {
   Op op;
   U total_val = Op::init;
 
-  uint base_offset = (tid.y * lsize.y + lid.y) * N_READS;
-  for (uint r = 0; r < N_READS && (base_offset + r) < reduction_size; r++) {
-    uint offset = base_offset + r;
-    total_val =
-        op(static_cast<U>(total_val), in[in_idx + offset * reduction_stride]);
+  size_t base_offset = (size_t(tid.y) * lsize.y + lid.y) * N_READS;
+  uint remaining = uint(reduction_size - base_offset);
+  in += in_idx;
+  in += base_offset * reduction_stride;
+
+  for (uint r = 0; r < N_READS && r < remaining; r++) {
+    total_val = op(static_cast<U>(total_val), *in);
+    in += reduction_stride;
   }
   local_data[lsize.y * lid.x + lid.y] = total_val;
   threadgroup_barrier(mem_flags::mem_threadgroup);
@@ -101,7 +104,7 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
     uint3 tid [[threadgroup_position_in_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
     uint3 lsize [[threads_per_threadgroup]]) {
-  auto out_idx = tid.x * lsize.x + lid.x;
+  auto out_idx = size_t(tid.x) * lsize.x + lid.x;
   auto in_idx = elem_to_loc(out_idx + tid.z * out_size, shape, strides, ndim);
 
   Op op;
@@ -140,7 +143,7 @@ template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
     uint3 gid [[thread_position_in_grid]],
     uint3 lsize [[threads_per_threadgroup]],
     uint3 gsize [[threads_per_grid]]) {
-  auto out_idx = tid.x * lsize.x + lid.x;
+  auto out_idx = size_t(tid.x) * lsize.x + lid.x;
   auto in_idx = elem_to_loc(out_idx + tid.z * out_size, shape, strides, ndim);
 
   if (out_idx < out_size) {
