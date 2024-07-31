@@ -5,6 +5,8 @@
 
 namespace mlx::core::fast {
 
+constexpr int n_per_thread = 4;
+
 void RoPE::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -62,8 +64,11 @@ void RoPE::eval_gpu(
   out_strides[1] = out.strides()[ndim - 2];
   out_strides[2] = out.strides()[ndim - 1];
 
+  // Special case for inference (single time step and contiguous)
+  bool single = in.flags().row_contiguous && (mat_size == in.shape(-1));
+
   std::ostringstream kname;
-  kname << "rope_" << (forward_ ? "" : "vjp_")
+  kname << "rope_" << (single ? "single_" : "") << (forward_ ? "" : "vjp_")
         << (traditional_ ? "traditional_" : "") << type_to_name(in);
   auto kernel = d.get_kernel(kname.str());
   auto& compute_encoder = d.get_command_encoder(s.index);
@@ -72,18 +77,28 @@ void RoPE::eval_gpu(
   compute_encoder->setComputePipelineState(kernel);
   compute_encoder.set_input_array(donated ? out : in, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&strides, 3 * sizeof(size_t), 2);
-  compute_encoder->setBytes(&out_strides, 3 * sizeof(size_t), 3);
-  compute_encoder->setBytes(&offset_, sizeof(int), 4);
-  compute_encoder->setBytes(&base, sizeof(float), 5);
-  compute_encoder->setBytes(&scale_, sizeof(float), 6);
+  compute_encoder->setBytes(&offset_, sizeof(int), 2);
+  compute_encoder->setBytes(&base, sizeof(float), 3);
+  compute_encoder->setBytes(&scale_, sizeof(float), 4);
 
-  int dim0 = dims_ / 2;
-  int dim1 = in.shape(-2);
-  int dim2 = in.size() / mat_size;
-  auto group_dims = get_block_dims(dim0, dim1, dim2);
-  auto grid_dims = MTL::Size(dim0, dim1, dim2);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
+  size_t n_batch = in.size() / mat_size;
+  if (single) {
+    compute_encoder->setBytes(&out_strides[1], sizeof(size_t), 5);
+    uint32_t dim0 = dims_ / 2;
+    auto group_dims = get_block_dims(dim0, n_batch, 1);
+    auto grid_dims = MTL::Size(dim0, n_batch, 1);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
+  } else {
+    compute_encoder->setBytes(&strides, 3 * sizeof(size_t), 5);
+    compute_encoder->setBytes(&out_strides, 3 * sizeof(size_t), 6);
+    compute_encoder->setBytes(&n_batch, sizeof(size_t), 7);
+    uint32_t dim0 = dims_ / 2;
+    uint32_t dim1 = in.shape(-2);
+    uint32_t dim2 = (n_batch + n_per_thread - 1) / n_per_thread;
+    auto group_dims = get_block_dims(dim0, dim1, dim2);
+    auto grid_dims = MTL::Size(dim0, dim1, dim2);
+    compute_encoder.dispatchThreads(grid_dims, group_dims);
+  }
 }
 
 } // namespace mlx::core::fast
