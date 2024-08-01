@@ -321,7 +321,8 @@ METAL_FUNC uint3 elem_to_loc_3_nd(
 ///////////////////////////////////////////////////////////////////////////////
 
 /** Compute ceil((float)N/(float)M) */
-inline size_t ceildiv(size_t N, size_t M) {
+template <typename T, typename U>
+inline T ceildiv(T N, U M) {
   return (N + M - 1) / M;
 }
 
