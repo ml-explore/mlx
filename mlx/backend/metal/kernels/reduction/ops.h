@@ -5,6 +5,20 @@
 #include <metal_atomic>
 #include <metal_simdgroup>
 
+#define DEFINE_SIMD_REDUCE()                                             \
+  template <typename T, metal::enable_if_t<sizeof(T) < 8, bool> = true>  \
+  T simd_reduce(T val) {                                                 \
+    return simd_reduce_impl(val);                                        \
+  }                                                                      \
+                                                                         \
+  template <typename T, metal::enable_if_t<sizeof(T) == 8, bool> = true> \
+  T simd_reduce(T val) {                                                 \
+    for (short i = simd_size / 2; i > 0; i /= 2) {                       \
+      val = operator()(val, simd_shuffle_down(val, i));                  \
+    }                                                                    \
+    return val;                                                          \
+  }
+
 static constant constexpr const uint8_t simd_size = 32;
 
 union bool4_or_uint {
@@ -21,7 +35,9 @@ struct None {
 
 template <typename U = bool>
 struct And {
-  bool simd_reduce(bool val) {
+  DEFINE_SIMD_REDUCE()
+
+  bool simd_reduce_impl(bool val) {
     return simd_all(val);
   }
 
@@ -60,7 +76,9 @@ struct And {
 
 template <typename U = bool>
 struct Or {
-  bool simd_reduce(bool val) {
+  DEFINE_SIMD_REDUCE()
+
+  bool simd_reduce_impl(bool val) {
     return simd_any(val);
   }
 
@@ -99,8 +117,10 @@ struct Or {
 
 template <typename U>
 struct Sum {
+  DEFINE_SIMD_REDUCE()
+
   template <typename T>
-  T simd_reduce(T val) {
+  T simd_reduce_impl(T val) {
     return simd_sum(val);
   }
 
@@ -119,8 +139,10 @@ struct Sum {
 
 template <typename U>
 struct Prod {
+  DEFINE_SIMD_REDUCE()
+
   template <typename T>
-  T simd_reduce(T val) {
+  T simd_reduce_impl(T val) {
     return simd_product(val);
   }
 
@@ -139,8 +161,10 @@ struct Prod {
 
 template <typename U>
 struct Min {
+  DEFINE_SIMD_REDUCE()
+
   template <typename T>
-  T simd_reduce(T val) {
+  T simd_reduce_impl(T val) {
     return simd_min(val);
   }
 
@@ -159,8 +183,10 @@ struct Min {
 
 template <typename U>
 struct Max {
+  DEFINE_SIMD_REDUCE()
+
   template <typename T>
-  T simd_reduce(T val) {
+  T simd_reduce_impl(T val) {
     return simd_max(val);
   }
 
