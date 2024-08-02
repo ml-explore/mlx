@@ -10,6 +10,34 @@
 #include <lapack.h>
 #endif
 
+// Wrapper to account for differences in
+// LAPACK implementations (basically how to pass the 'uplo' string to fortran).
+int strtri_wrapper(char uplo, char diag, float* matrix, int N) {
+  int info;
+
+#ifdef LAPACK_FORTRAN_STRLEN_END
+  strtri_(
+      /* uplo = */ &uplo,
+      /* diag = */ &diag,
+      /* N = */ &N,
+      /* a = */ matrix,
+      /* lda = */ &N,
+      /* info = */ &info,
+      /* uplo_len = */ static_cast<size_t>(1),
+      /* diag_len = */ static_cast<size_t>(1));
+#else
+  strtri_(
+      /* uplo = */ &uplo,
+      /* diag = */ &diag,
+      /* N = */ &N,
+      /* a = */ matrix,
+      /* lda = */ &N,
+      /* info = */ &info);
+#endif
+
+  return info;
+}
+
 namespace mlx::core {
 
 void general_inv(array& inv, int N, int i) {
@@ -71,17 +99,9 @@ void general_inv(array& inv, int N, int i) {
 }
 
 void tri_inv(array& inv, int N, int i, bool upper) {
-  int info;
   const char uplo = upper ? 'L' : 'U';
   const char diag = 'N';
-  strtri_(
-      /* uplo = */ &uplo,
-      /* diag = */ &diag,
-      /* N = */ &N,
-      /* a = */ inv.data<float>() + N * N * i,
-      /* lda = */ &N,
-      /* info = */ &info);
-
+  int info = strtri_wrapper(uplo, diag, inv.data<float>() + N * N * i, N);
   if (info != 0) {
     std::stringstream ss;
     ss << "inverse_impl: triangular inversion failed with error code " << info;
