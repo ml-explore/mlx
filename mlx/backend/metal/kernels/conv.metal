@@ -344,14 +344,14 @@ winograd_conv_2d_weight_transform(
   const short sn = (qid & 2) * 2 + (simd_lane_id % 2) * 2;
 
   // Initialize G matrix
-  simdgroup_matrix<T, 8, 8> G;
-  G.thread_elements()[0] = static_cast<T>(WGT::wt_transform[sm][sn]);
-  G.thread_elements()[1] = static_cast<T>(WGT::wt_transform[sm][sn + 1]);
+  simdgroup_matrix<float, 8, 8> G;
+  G.thread_elements()[0] = WGT::wt_transform[sm][sn];
+  G.thread_elements()[1] = WGT::wt_transform[sm][sn + 1];
 
   // Initialize Gt matrix
-  simdgroup_matrix<T, 8, 8> Gt;
-  Gt.thread_elements()[0] = static_cast<T>(WGT::wt_transform[sn][sm]);
-  Gt.thread_elements()[1] = static_cast<T>(WGT::wt_transform[sn + 1][sm]);
+  simdgroup_matrix<float, 8, 8> Gt;
+  Gt.thread_elements()[0] = WGT::wt_transform[sn][sm];
+  Gt.thread_elements()[1] = WGT::wt_transform[sn + 1][sm];
 
   // Move to the correct output filter
   size_t ko = BO * tid + simd_group_id;
@@ -381,15 +381,15 @@ winograd_conv_2d_weight_transform(
     threadgroup_barrier(mem_flags::mem_threadgroup);
     // Do transform and store the result
     for (int c = 0; c < BC; ++c) {
-      simdgroup_matrix<T, 8, 8> g;
+      simdgroup_matrix<float, 8, 8> g;
       g.thread_elements()[0] =
           sm < R && sn < R ? Ws[simd_group_id][sm][sn][c] : T(0);
       g.thread_elements()[1] =
           sm < R && sn + 1 < R ? Ws[simd_group_id][sm][sn + 1][c] : T(0);
 
-      simdgroup_matrix<T, 8, 8> g_out = (G * g) * Gt;
-      wt_out_0[c * O] = g_out.thread_elements()[0];
-      wt_out_1[c * O] = g_out.thread_elements()[1];
+      simdgroup_matrix<float, 8, 8> g_out = (G * g) * Gt;
+      wt_out_0[c * O] = static_cast<T>(g_out.thread_elements()[0]);
+      wt_out_1[c * O] = static_cast<T>(g_out.thread_elements()[1]);
     }
 
     wt_in += BC;
