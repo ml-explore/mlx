@@ -150,6 +150,20 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 mx.allclose(M @ M_inv, mx.eye(M.shape[0]), rtol=0, atol=1e-5)
             )
 
+    def test_tri_inverse(self):
+        for upper in (False, True):
+            A = mx.array([[1, 0, 0], [6, -5, 0], [-9, 8, 7]], dtype=mx.float32)
+            B = mx.array([[7, 0, 0], [3, -2, 0], [1, 8, 3]], dtype=mx.float32)
+            if upper:
+                A = A.T
+                B = B.T
+            AB = mx.stack([A, B])
+            invs = mx.linalg.tri_inv(AB, upper=upper, stream=mx.cpu)
+            for M, M_inv in zip(AB, invs):
+                self.assertTrue(
+                    mx.allclose(M @ M_inv, mx.eye(M.shape[0]), rtol=0, atol=1e-5)
+                )
+
     def test_cholesky(self):
         sqrtA = mx.array(
             [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=mx.float32
@@ -166,6 +180,33 @@ class TestLinalg(mlx_tests.MLXTestCase):
         Ls = mx.linalg.cholesky(AB, stream=mx.cpu)
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
+
+    def test_cholesky_inverse(self):
+        mx.random.seed(7)
+
+        sqrtA = mx.array(
+            [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], dtype=mx.float32
+        )
+        A = sqrtA.T @ sqrtA / 81
+
+        N = 3
+        A = mx.random.uniform(shape=(N, N))
+        A = A @ A.T
+
+        for upper in (False, True):
+            L = mx.linalg.cholesky(A, upper=upper, stream=mx.cpu)
+            A_inv = mx.linalg.cholesky_inverse(L, upper=upper, stream=mx.cpu)
+            self.assertTrue(mx.allclose(A @ A_inv, mx.eye(N), atol=1e-4))
+
+        # Multiple matrices
+        B = A + 1 / 9
+        AB = mx.stack([A, B])
+        Ls = mx.linalg.cholesky(AB, stream=mx.cpu)
+        for upper in (False, True):
+            Ls = mx.linalg.cholesky(AB, upper=upper, stream=mx.cpu)
+            AB_inv = mx.linalg.cholesky_inverse(Ls, upper=upper, stream=mx.cpu)
+            for M, M_inv in zip(AB, AB_inv):
+                self.assertTrue(mx.allclose(M @ M_inv, mx.eye(N), atol=1e-4))
 
 
 if __name__ == "__main__":

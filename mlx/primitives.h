@@ -2125,7 +2125,8 @@ class SVD : public Primitive {
 /* Matrix inversion primitive. */
 class Inverse : public UnaryPrimitive {
  public:
-  explicit Inverse(Stream stream) : UnaryPrimitive(stream) {}
+  explicit Inverse(Stream stream, bool tri, bool upper)
+      : UnaryPrimitive(stream), tri_(tri), upper_(upper) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& output) override;
   void eval_gpu(const std::vector<array>& inputs, array& output) override;
@@ -2135,6 +2136,8 @@ class Inverse : public UnaryPrimitive {
 
  private:
   void eval(const std::vector<array>& inputs, array& output);
+  bool tri_;
+  bool upper_;
 };
 
 class Cholesky : public UnaryPrimitive {

@@ -261,6 +261,31 @@ void init_linalg(nb::module_& parent_module) {
             array: ``ainv`` such that ``dot(a, ainv) = dot(ainv, a) = eye(a.shape[0])``
       )pbdoc");
   m.def(
+      "tri_inv",
+      &tri_inv,
+      "a"_a,
+      "upper"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def tri_inv(a: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the inverse of a triangular square matrix.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the inverse is computed for each matrix
+        in the last two dimensions of ``a``.
+
+        Args:
+            a (array): Input array.
+            upper (array): Whether the array is upper or lower triangular. Defaults to ``False``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: ``ainv`` such that ``dot(a, ainv) = dot(ainv, a) = eye(a.shape[0])``
+      )pbdoc");
+  m.def(
       "cholesky",
       &cholesky,
       "a"_a,
@@ -286,8 +311,46 @@ void init_linalg(nb::module_& parent_module) {
               in which case the default stream of the default device is used.
 
         Returns:
-          array: If ``upper = False``, it returns a lower trinagular ``L`` matrix such
+          array: If ``upper = False``, it returns a lower triangular ``L`` matrix such
           that ``dot(L, L.T) = a``.  If ``upper = True``, it returns an upper triangular
           ``U`` matrix such that ``dot(U.T, U) = a``.
+      )pbdoc");
+  m.def(
+      "cholesky_inverse",
+      &cholesky_inverse,
+      "a"_a,
+      "upper"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cholesky_inverse(L: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the inverse of a real symmetric positive semi-definite matrix using it's Cholesky decomposition L.
+
+        Let A be a real symmetric positive semi-definite matrix and L its Cholesky definition such that:
+
+        .. math::
+
+          \begin{aligned}
+            \mathbf{A} = \mathbf{L}\mathbf{L}^T
+          \end{aligned}
+
+        This function computes :math:`\mathbf{A}^{-1}`.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the Cholesky inverse is computed for each matrix
+        in the last two dimensions of ``L``.
+
+        If the input matrix is not a triangular matrix behaviour is undefined.
+
+        Args:
+            L (array): Input array.
+            upper (bool, optional): If ``True``, return the upper triangular Cholesky factor.
+              If ``False``, return the lower triangular Cholesky factor. Default: ``False``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+          array: :math:`A^{-1}` where :math:`\mathbf{A} = \mathbf{L}\mathbf{L}^T`.
       )pbdoc");
 }

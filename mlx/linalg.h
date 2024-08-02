@@ -66,6 +66,13 @@ std::vector<array> svd(const array& a, StreamOrDevice s = {});
 
 array inv(const array& a, StreamOrDevice s = {});
 
+array tri_inv(const array& a, bool upper = false, StreamOrDevice s = {});
+
 array cholesky(const array& a, bool upper = false, StreamOrDevice s = {});
+
+array cholesky_inverse(
+    const array& a,
+    bool upper = false,
+    StreamOrDevice s = {});
 
 } // namespace mlx::core::linalg
