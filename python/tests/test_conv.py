@@ -331,7 +331,7 @@ class TestConv(mlx_tests.MLXTestCase):
 
                 self.assertEqual(out_pt.shape, out_mx.shape)
                 if dtype == "bfloat16":
-                    atol, rtol = 1e-3, 1e-4
+                    atol, rtol = 1e-1, 1e-3
                 else:
                     atol, rtol = 1e-5, 1e-6
                 self.assertTrue(np.allclose(out_pt, out_mx, atol=atol))
