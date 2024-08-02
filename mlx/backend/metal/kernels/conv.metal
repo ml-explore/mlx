@@ -345,13 +345,13 @@ winograd_conv_2d_weight_transform(
 
   // Initialize G matrix
   simdgroup_matrix<T, 8, 8> G;
-  G.thread_elements()[0] = WGT::wt_transform[sm][sn];
-  G.thread_elements()[1] = WGT::wt_transform[sm][sn + 1];
+  G.thread_elements()[0] = static_cast<T>(WGT::wt_transform[sm][sn]);
+  G.thread_elements()[1] = static_cast<T>(WGT::wt_transform[sm][sn + 1]);
 
   // Initialize Gt matrix
   simdgroup_matrix<T, 8, 8> Gt;
-  Gt.thread_elements()[0] = WGT::wt_transform[sn][sm];
-  Gt.thread_elements()[1] = WGT::wt_transform[sn + 1][sm];
+  Gt.thread_elements()[0] = static_cast<T>(WGT::wt_transform[sn][sm]);
+  Gt.thread_elements()[1] = static_cast<T>(WGT::wt_transform[sn + 1][sm]);
 
   // Move to the correct output filter
   size_t ko = BO * tid + simd_group_id;
@@ -434,13 +434,13 @@ winograd_conv_2d_input_transform(
 
   // Initialize B matrix
   simdgroup_matrix<T, 8, 8> B;
-  B.thread_elements()[0] = WGT::in_transform[sm][sn];
-  B.thread_elements()[1] = WGT::in_transform[sm][sn + 1];
+  B.thread_elements()[0] = static_cast<T>(WGT::in_transform[sm][sn]);
+  B.thread_elements()[1] = static_cast<T>(WGT::in_transform[sm][sn + 1]);
 
   // Initialize Bt matrix
   simdgroup_matrix<T, 8, 8> Bt;
-  Bt.thread_elements()[0] = WGT::in_transform[sn][sm];
-  Bt.thread_elements()[1] = WGT::in_transform[sn + 1][sm];
+  Bt.thread_elements()[0] = static_cast<T>(WGT::in_transform[sn][sm]);
+  Bt.thread_elements()[1] = static_cast<T>(WGT::in_transform[sn + 1][sm]);
 
   // Resolve input tile
   constexpr int TH = (A / WM);
@@ -544,13 +544,13 @@ winograd_conv_2d_output_transform(
 
   // Initialize A matrix
   simdgroup_matrix<T, 8, 8> B;
-  B.thread_elements()[0] = WGT::out_transform[sm][sn];
-  B.thread_elements()[1] = WGT::out_transform[sm][sn + 1];
+  B.thread_elements()[0] = static_cast<T>(WGT::out_transform[sm][sn]);
+  B.thread_elements()[1] = static_cast<T>(WGT::out_transform[sm][sn + 1]);
 
   // Initialize At matrix
   simdgroup_matrix<T, 8, 8> Bt;
-  Bt.thread_elements()[0] = WGT::out_transform[sn][sm];
-  Bt.thread_elements()[1] = WGT::out_transform[sn + 1][sm];
+  Bt.thread_elements()[0] = static_cast<T>(WGT::out_transform[sn][sm]);
+  Bt.thread_elements()[1] = static_cast<T>(WGT::out_transform[sn + 1][sm]);
 
   // Out_in comes in shape (A x A x tiles x O)
   // We do transform and then write out to out_out in shape (N, H, W, O)
@@ -650,4 +650,5 @@ winograd_conv_2d_output_transform(
 
 // clang-format off
 instantiate_winograd_conv_2d(float32, float);
+instantiate_winograd_conv_2d(bfloat16, bfloat16_t);
 instantiate_winograd_conv_2d(float16, half); // clang-format on
