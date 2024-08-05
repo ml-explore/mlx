@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <algorithm>
 #include <climits>
 #include <cmath>
@@ -1101,6 +1100,9 @@ array moveaxis(
   };
   source = check_ax(source);
   destination = check_ax(destination);
+  if (source == destination) {
+    return a;
+  }
   std::vector<int> reorder(a.ndim());
   std::iota(reorder.begin(), reorder.end(), 0);
   reorder.erase(reorder.begin() + source);
@@ -2745,7 +2747,7 @@ array scatter(
       a.shape(),
       a.dtype(),
       std::make_shared<Scatter>(to_stream(s), mode, axes),
-      inputs);
+      std::move(inputs));
 }
 
 array scatter(

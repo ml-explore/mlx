@@ -419,7 +419,6 @@ TEST_CASE("test vmap scatter") {
                             const array& updates,
                             const std::vector<int>& axes) {
     return [=](const std::vector<array>& inputs) {
-      REQUIRE_EQ(inputs.size(), 1);
       auto a = inputs.at(0);
       return std::vector<array>{scatter(a, indices, updates, axes)};
     };
@@ -490,19 +489,15 @@ TEST_CASE("test vmap scatter") {
 
   {
     // vmap src on axis 2, scatter on axes (0, 1).
-    auto a = zeros({3, 4, 5});
+    auto a = zeros({2, 3, 2});
     auto indices = {array({1}), array({2})};
     auto axes = {0, 1};
-    auto updates = reshape(array({1, 2}, float32), {1, 1, 2});
+    auto updates = reshape(array({1}, float32), {1, 1, 1});
 
     auto func = make_scatter_fn(indices, updates, axes);
     auto out = vmap(func, /* in_axes = */ {2}, /* out_axes = */ {2})({a})[0];
-    auto expected = array(
-        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2,
-         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
-        {3, 4, 5},
-        float32);
+    auto expected =
+        array({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1}, {2, 3, 2}, float32);
     CHECK(array_equal(out, expected).item<bool>());
   }
 }

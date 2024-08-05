@@ -2978,68 +2978,66 @@ std::vector<array> Scatter::jvp(
 }
 
 std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
-    const std::vector<array>& inputs,
+    const std::vector<array>& inputs_,
     const std::vector<int>& vmap_axes) {
-  assert(inputs.size() >= 2);
-  assert(inputs.size() == vmap_axes.size());
+  assert(inputs_.size() >= 2);
+  assert(inputs_.size() == vmap_axes.size());
 
-  for (size_t i = 1; i < vmap_axes.size(); i++) {
-    if (vmap_axes[i] != -1) {
-      throw std::runtime_error(
-          "[scatter]: vmap is only supported on the src input.");
-    }
-  }
+  auto inputs = inputs_;
 
-  const auto& src = inputs.front();
-  std::vector<array> indices(inputs.begin() + 1, inputs.end() - 1);
-  const auto& updates = inputs.back();
-
-  auto src_ax = vmap_axes.front();
-  auto upd_ax = vmap_axes.back();
   auto scatter_axes = axes_;
+  int src_ax = vmap_axes[0];
 
-  auto out_ax_it = std::find_if(
+  auto vmap_ax_it = std::find_if(
       vmap_axes.begin(), vmap_axes.end(), [](int a) { return a >= 0; });
-  assert(out_ax_it != vmap_axes.end());
-
-  auto out_ax = *out_ax_it;
-
-  // Reorder all the index arrays so the vmap axis is in the same spot.
-  for (int i = 1; i < vmap_axes.size(); ++i) {
-    if (out_ax != vmap_axes[i] && vmap_axes[i] >= 0) {
-      indices[i - 1] = moveaxis(indices[i - 1], vmap_axes[i], out_ax, stream());
+  auto vmap_ax = *vmap_ax_it;
+  if (vmap_ax >= 0) {
+    auto vmap_size = inputs[vmap_ax_it - vmap_axes.begin()].shape(vmap_ax);
+    if (src_ax < 0) {
+      src_ax = 0;
+      inputs[0] =
+          repeat(expand_dims(inputs[0], 0, stream()), vmap_size, 0, stream());
     }
-  }
-
-  if (src_ax != -1) {
-    // Adjust the scatter axis to account for the extra vmap dimension.
-    auto new_ax_loc = std::find_if(
-        scatter_axes.begin(), scatter_axes.end(), [&src_ax](int a) {
-          return a >= src_ax;
-        });
-    for (; new_ax_loc < scatter_axes.end(); new_ax_loc++) {
-      (*new_ax_loc)++;
+    for (int i = 1; i < vmap_axes.size() - 1; ++i) {
+      // vmap axis for indices goes to 0
+      if (vmap_axes[i] >= 0) {
+        inputs[i] = moveaxis(inputs[i], vmap_axes[i], 0, stream());
+      }
+      // insert a vmap axis and repeat
+      if (vmap_axes[i] < 0) {
+        auto idx_shape = inputs[i].shape();
+        inputs[i] =
+            repeat(expand_dims(inputs[i], 0, stream()), vmap_size, 0, stream());
+      }
+      // Adjust non-vmapped index axes to account for the extra vmap dimension.
+      if (scatter_axes[i - 1] >= src_ax) {
+        scatter_axes[i - 1]++;
+      }
     }
+
+    auto vmap_inds = arange(vmap_size, inputs[1].dtype(), stream());
+    auto vmap_inds_shape = std::vector<int>(inputs[1].ndim(), 1);
+    vmap_inds_shape[0] = vmap_inds.size();
+    vmap_inds = reshape(vmap_inds, std::move(vmap_inds_shape), stream());
+    inputs.insert(
+        inputs.end() - 1, broadcast_to(vmap_inds, inputs[1].shape(), stream()));
+    scatter_axes.push_back(src_ax);
 
     // Clone updates along the vmap dimension so they can be applied to each
     // source tensor in the vmap.
-    const int num_vmap_items = src.shape().at(src_ax);
-    auto stacked_updates = repeat(updates, num_vmap_items, src_ax, stream());
-    auto stacked_updates_shape = updates.shape();
-    stacked_updates_shape.insert(
-        stacked_updates_shape.end() - src.ndim() + src_ax + 1, num_vmap_items);
-    stacked_updates = reshape(stacked_updates, stacked_updates_shape);
-
-    return {
-        {scatter(src, indices, stacked_updates, scatter_axes, stream())},
-        // The updated scatter leaves the vmapped axis in the same place, so we
-        // can use src_ax here.
-        {src_ax},
-    };
+    auto& updates = inputs.back();
+    updates =
+        expand_dims(updates, {0, static_cast<int>(inputs[1].ndim())}, stream());
+    updates = repeat(updates, vmap_size, 0, stream());
   }
 
-  // No vmapping needed.
-  return {{scatter(src, indices, updates, axes_, stream())}, {-1}};
+  auto out = array(
+      inputs[0].shape(),
+      inputs[0].dtype(),
+      std::make_shared<Scatter>(stream(), reduce_type_, scatter_axes),
+      std::move(inputs));
+
+  return {{out}, {src_ax}};
 }
 
 std::vector<array> Sigmoid::vjp(
