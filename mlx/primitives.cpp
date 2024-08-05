@@ -3026,9 +3026,15 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
     // Clone updates along the vmap dimension so they can be applied to each
     // source tensor in the vmap.
     auto& updates = inputs.back();
-    updates =
-        expand_dims(updates, {0, static_cast<int>(inputs[1].ndim())}, stream());
-    updates = repeat(updates, vmap_size, 0, stream());
+    if (vmap_axes.back() < 0) {
+      updates = expand_dims(
+          updates, {0, static_cast<int>(inputs[1].ndim())}, stream());
+      updates = repeat(updates, vmap_size, 0, stream());
+    } else {
+      updates =
+          expand_dims(updates, static_cast<int>(inputs[1].ndim()), stream());
+      updates = moveaxis(updates, vmap_axes.back(), 0, stream());
+    }
   }
 
   auto out = array(

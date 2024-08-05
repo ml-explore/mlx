@@ -437,6 +437,31 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected[2, 2] = 1
         self.assertTrue(mx.allclose(out, expected))
 
+        # vmap over src, indices, updates
+        def scatter(a, idx, updates):
+            a[idx] = updates
+            return a
+
+        a = mx.zeros((3, 4))
+        idx = mx.array([0, 1, 2])
+        updates = mx.array([1, 2, 3])
+        out = mx.vmap(scatter, in_axes=(0, 0, 0), out_axes=0)(a, idx, updates)
+        expected = mx.diag(mx.array([1, 2, 3]), k=-1)[1:]
+        self.assertTrue(mx.allclose(out, expected))
+
+        # vmap over only updates
+        def scatter(a, idx, updates):
+            a[idx] = updates
+            return a
+
+        a = mx.zeros((3, 4))
+        idx = mx.array([0])
+        updates = mx.array([1, 2, 3])
+        out = mx.vmap(scatter, in_axes=(None, None, 0), out_axes=0)(a, idx, updates)
+        expected = mx.zeros((3, 3, 4))
+        expected[:, 0] = mx.array([1, 2, 3])[:, None]
+        self.assertTrue(mx.allclose(out, expected))
+
 
 if __name__ == "__main__":
     unittest.main()
