@@ -3037,9 +3037,11 @@ std::pair<std::vector<array>, std::vector<int>> Scatter::vmap(
     }
   }
 
+  auto& shape = inputs[0].shape();
+  auto dtype = inputs[0].dtype();
   auto out = array(
-      inputs[0].shape(),
-      inputs[0].dtype(),
+      shape,
+      dtype,
       std::make_shared<Scatter>(stream(), reduce_type_, scatter_axes),
       std::move(inputs));
 
