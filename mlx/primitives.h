@@ -1713,7 +1713,9 @@ class Scatter : public UnaryPrimitive {
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
+  DEFINE_VMAP();
   DEFINE_GRADS();
+
   void print(std::ostream& os) override {
     os << "Scatter";
     switch (reduce_type_) {
