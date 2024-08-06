@@ -101,7 +101,11 @@ class _Pool(Module):
 
     def __call__(self, x):
         if any(p[0] > 0 for p in self._padding):
-            x = mx.pad(x, [(0, 0)] + self._padding + [(0, 0)], self._padding_value)
+            x = mx.pad(
+                x,
+                [(0, 0)] + self._padding + [(0, 0)],
+                constant_values=self._padding_value,
+            )
         x = _sliding_windows(x, self._kernel_size, self._stride)
         return self._pooling_function(x, self._axes)
 
