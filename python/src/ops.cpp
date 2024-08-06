@@ -2843,18 +2843,9 @@ void init_ops(nb::module_& m) {
              std::tuple<int>,
              std::pair<int, int>,
              std::vector<std::pair<int, int>>>& pad_width,
-         const std::string padding_mode,
+         const std::string mode,
          const ScalarOrArray& constant_value,
          StreamOrDevice s) {
-        PaddingMode mode;
-        if (padding_mode == "constant") {
-          mode = PaddingMode::Constant;
-        } else if (padding_mode == "edge") {
-          mode = PaddingMode::Edge;
-        } else {
-          throw std::invalid_argument(
-              "Padding mode '" + padding_mode + "' not supported");
-        }
         if (auto pv = std::get_if<int>(&pad_width); pv) {
           return pad(a, *pv, to_array(constant_value), mode, s);
         } else if (auto pv = std::get_if<std::tuple<int>>(&pad_width); pv) {
@@ -3169,12 +3160,8 @@ void init_ops(nb::module_& m) {
           } else { // Even sizes use asymmetric padding
             int pad_l = wt.size() / 2;
             int pad_r = std::max(0, pad_l - 1);
-            in =
-                pad(in,
-                    {{0, 0}, {pad_l, pad_r}, {0, 0}},
-                    array(0),
-                    PaddingMode::Constant,
-                    s);
+            in = pad(
+                in, {{0, 0}, {pad_l, pad_r}, {0, 0}}, array(0), "constant", s);
           }
 
         } else {

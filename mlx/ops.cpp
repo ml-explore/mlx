@@ -1052,7 +1052,7 @@ array pad(
     const std::vector<int>& low_pad_size,
     const std::vector<int>& high_pad_size,
     const array& pad_value /*= array(0)*/,
-    const PaddingMode mode /*= PaddingMode::Constant*/,
+    const std::string mode /*= "constant"*/,
     StreamOrDevice s /* = {}*/) {
   if (axes.size() != low_pad_size.size() ||
       axes.size() != high_pad_size.size()) {
@@ -1084,15 +1084,19 @@ array pad(
     out_shape[ax] += low_pad_size[i] + high_pad_size[i];
   }
 
-  if (mode == PaddingMode::Edge) {
+  if (mode == "constant") {
+    return array(
+        out_shape,
+        a.dtype(),
+        std::make_shared<Pad>(to_stream(s), axes, low_pad_size, high_pad_size),
+        {a, astype(pad_value, a.dtype(), s)});
+  } else if (mode == "edge") {
     return edge_pad(a, axes, low_pad_size, high_pad_size, out_shape, s);
+  } else {
+    std::ostringstream msg;
+    msg << "Invalid padding mode (" << mode << ") passed to pad";
+    throw std::invalid_argument(msg.str());
   }
-
-  return array(
-      out_shape,
-      a.dtype(),
-      std::make_shared<Pad>(to_stream(s), axes, low_pad_size, high_pad_size),
-      {a, astype(pad_value, a.dtype(), s)});
 }
 
 /** Pad an array with a constant value along all axes */
@@ -1100,7 +1104,7 @@ array pad(
     const array& a,
     const std::vector<std::pair<int, int>>& pad_width,
     const array& pad_value /*= array(0)*/,
-    const PaddingMode mode /*= PaddingMode::Constant*/,
+    const std::string mode /*= "constant"*/,
     StreamOrDevice s /*= {}*/) {
   std::vector<int> axes(a.ndim(), 0);
   std::iota(axes.begin(), axes.end(), 0);
@@ -1120,7 +1124,7 @@ array pad(
     const array& a,
     const std::pair<int, int>& pad_width,
     const array& pad_value /*= array(0)*/,
-    const PaddingMode mode /*= PaddingMode::Constant*/,
+    const std::string mode /*= "constant"*/,
     StreamOrDevice s /*= {}*/) {
   return pad(
       a,
@@ -1134,7 +1138,7 @@ array pad(
     const array& a,
     int pad_width,
     const array& pad_value /*= array(0)*/,
-    const PaddingMode mode /*= PaddingMode::Constant*/,
+    const std::string mode /*= "constant"*/,
     StreamOrDevice s /*= {}*/) {
   return pad(
       a,
