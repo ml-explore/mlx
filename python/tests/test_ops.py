@@ -1623,6 +1623,12 @@ class TestOps(mlx_tests.MLXTestCase):
                 self.assertEqual(list(b_npy.shape), list(b_mlx.shape))
                 self.assertTrue(np.allclose(b_npy, b_mlx, atol=1e-6))
 
+                b_npy = np.pad(a_npy, pw, mode="edge")
+                b_mlx = mx.pad(a_mlx, pw, mode="edge")
+
+                self.assertEqual(list(b_npy.shape), list(b_mlx.shape))
+                self.assertTrue(np.allclose(b_npy, b_mlx, atol=1e-6))
+
         a = mx.zeros((1, 1, 1))
         self.assertEqual(mx.pad(a, 1).shape, (3, 3, 3))
         self.assertEqual(mx.pad(a, (1,)).shape, (3, 3, 3))
