@@ -290,4 +290,37 @@ void init_linalg(nb::module_& parent_module) {
           that ``dot(L, L.T) = a``.  If ``upper = True``, it returns an upper triangular
           ``U`` matrix such that ``dot(U.T, U) = a``.
       )pbdoc");
+  m.def(
+      "cross_product",
+      &cross_product,
+      "a"_a,
+      "b"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cross_product(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+      Compute the cross product of two vectors.
+
+      The cross product is defined only for 3-dimensional vectors. The function
+      takes two input arrays and returns the cross product. The function requires
+      both input arrays to be of the same shape.
+
+      Args:
+          a (array): Input array.
+          b (array): Input array.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
+
+      Returns:
+          array: The cross product of ``a`` and ``b``.
+
+      Example:
+          >>> import mlx.core as mx
+          >>> from mlx.core import linalg as la
+          >>> a = mx.array([1.0, 2.0, 3.0])
+          >>> b = mx.array([4.0, 5.0, 6.0])
+          >>> la.cross_product(a, b)
+          array([-3., 6., -3.], dtype=float32)
+    )pbdoc");
 }
