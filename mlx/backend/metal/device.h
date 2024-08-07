@@ -86,6 +86,8 @@ class Device {
       const std::string& lib_name,
       const std::string& lib_path);
 
+  void register_library(const std::string& lib_name);
+
   MTL::Library* get_library(const std::string& name);
 
   MTL::Library* get_library(

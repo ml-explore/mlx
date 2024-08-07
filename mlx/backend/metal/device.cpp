@@ -312,6 +312,12 @@ void Device::register_library(
   }
 }
 
+void Device::register_library(const std::string& lib_name) {
+  if (auto it = library_map_.find(lib_name); it == library_map_.end()) {
+    register_library(lib_name, get_colocated_mtllib_path(lib_name));
+  }
+}
+
 MTL::Library* Device::get_library_cache_(const std::string& lib_name) {
   // Search for cached metal lib
   MTL::Library* mtl_lib;
