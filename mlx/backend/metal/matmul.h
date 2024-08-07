@@ -1,14 +1,6 @@
 // Copyright © 2023 Apple Inc.
 
-#include <algorithm>
-#include <cassert>
-#include <sstream>
-
-#include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
-#include "mlx/backend/metal/mps/gemm.h"
-#include "mlx/backend/metal/utils.h"
-#include "mlx/utils.h"
 
 namespace mlx::core {
 
