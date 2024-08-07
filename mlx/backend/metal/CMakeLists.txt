@@ -114,6 +114,7 @@ if (MLX_METAL_JIT)
     kernels/steel/conv/loaders/loader_general.h
   )
   make_jit_source(quantized)
+  make_jit_source(gemv_masked)
 else()
   target_sources(
     mlx
@@ -149,6 +150,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/reduce.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/ternary.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/unary.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
 )
 
 if (NOT MLX_METAL_PATH)

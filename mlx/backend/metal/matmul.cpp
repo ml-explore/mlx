@@ -11,186 +11,13 @@
 #include "mlx/backend/metal/kernels/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/params.h"
 #include "mlx/backend/metal/matmul.h"
-#include "mlx/backend/metal/mps/gemm.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
 
-///////////////////////////////////////////////////////////////////////////////
-// MPS Matmul fallback
-///////////////////////////////////////////////////////////////////////////////
-
 namespace {
-
-bool use_mps() {
-  auto get_val = []() {
-    if (const char* buff_str = std::getenv("MLX_USE_MPS")) {
-      return std::string(buff_str) != "OFF";
-    } else {
-      return false;
-    }
-  };
-  static bool use_mps_ = get_val();
-  return use_mps_;
-}
-
-#define MAX_OPS_PER_BUFFER max_ops_per_buffer()
-
-inline void mps_matmul(
-    const Stream& s,
-    metal::Device& d,
-    const array& a,
-    const array& b,
-    array& out,
-    int M,
-    int N,
-    int K,
-    int batch_size_out,
-    int lda,
-    int ldb,
-    bool transpose_a,
-    bool transpose_b,
-    std::vector<array>& copies,
-    float alpha = 1.0f,
-    float beta = 0.0f) {
-  MPS::DataType mps_dtype = MPS::DataTypeFloat32;
-
-  if (out.dtype() == float16) {
-    mps_dtype = MPS::DataTypeFloat16;
-  } else if (out.dtype() == bfloat16) {
-    mps_dtype = MPS::DataTypeBFloat16;
-  }
-
-  // Used batched MPSMatrixMultiplication if batch_size_out > 1
-  // We only accept the following cases:
-  //  1. Both a, b have batch_size_out matrices worth of data
-  //  2. Only one of a or b has batch_size_out matrices worth of data and
-  //     the other has matrix worth of data
-
-  // The matrix dimensions of a and b are sure to be regularly strided
-  if (batch_size_out > 1) {
-    // No broadcasting defaults
-    auto batch_size_a = a.data_size() / (M * K);
-    auto batch_size_b = b.data_size() / (K * N);
-
-    auto matrix_stride_a = M * K;
-    auto matrix_stride_b = K * N;
-    auto matrix_stride_out = M * N;
-
-    // At this point, batch_size_a, batch_size_b show the number of matrices
-    //    in data, no broadcasted strides considered
-    if (batch_size_out == std::max(batch_size_a, batch_size_b)) {
-      // Handle simple broadcasting
-      if (std::min(batch_size_a, batch_size_b) == 1) {
-        matrix_stride_a = (batch_size_a == 1) ? 0 : matrix_stride_a;
-        matrix_stride_b = (batch_size_b == 1) ? 0 : matrix_stride_b;
-
-        batch_size_a = batch_size_out;
-        batch_size_b = batch_size_out;
-      }
-
-      // Only proceed if broadcasting between a and b is simple
-      // At this point, batch_size_a, batch_size_b show the number of matrices
-      //    after broadcasting
-      if (batch_size_a == batch_size_b) {
-        auto a_desc = MPS::MatrixDescriptor::matrixDescriptor(
-            (M * K) / lda,
-            lda,
-            batch_size_a,
-            lda * a.itemsize(),
-            (matrix_stride_a * a.itemsize()),
-            mps_dtype);
-
-        auto b_desc = MPS::MatrixDescriptor::matrixDescriptor(
-            (K * N) / ldb,
-            ldb,
-            batch_size_b,
-            ldb * b.itemsize(),
-            (matrix_stride_b * b.itemsize()),
-            mps_dtype);
-
-        auto out_desc = MPS::MatrixDescriptor::matrixDescriptor(
-            M,
-            N,
-            batch_size_out,
-            N * out.itemsize(),
-            matrix_stride_out * out.itemsize(),
-            mps_dtype);
-
-        auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-        auto a_mat = MPS::Matrix::alloc()->init(a_buf, a_desc);
-
-        auto b_buf = static_cast<const MTL::Buffer*>(b.buffer().ptr());
-        auto b_mat = MPS::Matrix::alloc()->init(b_buf, b_desc);
-
-        auto out_buf = static_cast<MTL::Buffer*>(out.buffer().ptr());
-        auto out_mat = MPS::Matrix::alloc()->init(out_buf, out_desc);
-
-        auto kernel = MPS::MatrixMultiplication::alloc()->init(
-            d.mtl_device(), transpose_a, transpose_b, M, N, K, alpha, beta);
-
-        auto command_buffer = d.get_command_buffer(s.index);
-        kernel->setBatchSize(batch_size_out);
-        kernel->setBatchStart(0);
-        kernel->encodeToCommandBuffer(command_buffer, a_mat, b_mat, out_mat);
-        command_buffer->addCompletedHandler(
-            [a_mat, b_mat, out_mat, kernel, copies](
-                MTL::CommandBuffer*) mutable {
-              a_mat->release();
-              b_mat->release();
-              out_mat->release();
-              kernel->release();
-              copies.clear();
-            });
-
-        return;
-      }
-    }
-  }
-
-  // Schedule as many calls to MPSMatrixMultiplication as needed otherwise
-  auto a_desc = MPS::MatrixDescriptor::matrixDescriptor(
-      a.data_size() / lda, lda, lda * a.itemsize(), mps_dtype);
-
-  auto b_desc = MPS::MatrixDescriptor::matrixDescriptor(
-      b.data_size() / ldb, ldb, ldb * b.itemsize(), mps_dtype);
-
-  auto out_desc = MPS::MatrixDescriptor::matrixDescriptor(
-      batch_size_out * M, N, N * out.itemsize(), mps_dtype);
-
-  auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-  auto a_mat = MPS::Matrix::alloc()->init(a_buf, a_desc);
-
-  auto b_buf = static_cast<const MTL::Buffer*>(b.buffer().ptr());
-  auto b_mat = MPS::Matrix::alloc()->init(b_buf, b_desc);
-
-  auto out_buf = static_cast<MTL::Buffer*>(out.buffer().ptr());
-  auto out_mat = MPS::Matrix::alloc()->init(out_buf, out_desc);
-
-  auto kernel = MPS::MatrixMultiplication::alloc()->init(
-      d.mtl_device(), transpose_a, transpose_b, M, N, K, alpha, beta);
-
-  auto command_buffer = d.get_command_buffer(s.index);
-  for (int i = 0; i < batch_size_out; ++i) {
-    auto a_row = elem_to_loc(M * K * i, a.shape(), a.strides()) / lda;
-    auto b_row = elem_to_loc(K * N * i, b.shape(), b.strides()) / ldb;
-    kernel->setLeftMatrixOrigin({a_row, 0, 0});
-    kernel->setRightMatrixOrigin({b_row, 0, 0});
-    kernel->setResultMatrixOrigin({i * static_cast<size_t>(M), 0, 0});
-    kernel->encodeToCommandBuffer(command_buffer, a_mat, b_mat, out_mat);
-  }
-
-  command_buffer->addCompletedHandler(
-      [a_mat, b_mat, out_mat, kernel, copies](MTL::CommandBuffer*) mutable {
-        a_mat->release();
-        b_mat->release();
-        out_mat->release();
-        kernel->release();
-        copies.clear();
-      });
-}
 
 inline auto collapse_batches(const array& a, const array& b) {
   // Get and check the shape for the batched dims
@@ -860,26 +687,6 @@ void Matmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   /////////////////////////////////////////////////////////////////////////////
   // Gemm specialization
 
-  if (use_mps()) {
-    d.end_encoding(s.index);
-
-    return mps_matmul(
-        s,
-        d,
-        a,
-        b,
-        out,
-        M,
-        N,
-        K,
-        batch_size_out,
-        a_cols,
-        b_cols,
-        a_transposed,
-        b_transposed,
-        copies);
-  }
-
   return steel_matmul(
       /* const Stream& s = */ s,
       /* metal::Device& d = */ d,
@@ -1529,8 +1336,22 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_nc" << !contiguous_kernel;
 
     // Encode and dispatch kernel
+    auto kernel = get_gemv_masked_kernel(
+        d,
+        kname.str(),
+        out,
+        has_out_mask ? std::optional<array>{inputs[2]} : std::nullopt,
+        has_op_mask ? std::optional<array>{inputs.back()} : std::nullopt,
+        transpose_mat,
+        bm,
+        bn,
+        sm,
+        sn,
+        tm,
+        tn,
+        contiguous_kernel);
+
     auto& compute_encoder = d.get_command_encoder(s.index);
-    auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
     int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;

@@ -4,8 +4,6 @@
 
 #include <complex>
 #include <cstdint>
-#include <ostream>
-#include <string>
 
 #include "mlx/types/complex.h"
 #include "mlx/types/half_types.h"
@@ -102,10 +100,5 @@ template <typename T>
 struct TypeToDtype {
   operator Dtype();
 };
-
-// Array protocol typestring for Dtype
-std::string dtype_to_array_protocol(const Dtype& t);
-// Dtype from array protocol type string
-Dtype dtype_from_array_protocol(std::string_view t);
 
 } // namespace mlx::core
