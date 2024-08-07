@@ -12,8 +12,6 @@
 #include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/unary.h"
 #include "mlx/backend/metal/utils.h"
-#include "mlx/mlx.h"
-#include "mlx/primitives.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
