@@ -1,4 +1,4 @@
-// Copyright © 2023 Apple Inc.
+// Copyright © 2024 Apple Inc.
 #include <cassert>
 #include <complex>
 #include <map>
@@ -786,10 +786,9 @@ void nd_fft_op(
     fft_op(in_arr, out_arr, axis, inverse, step_real, inplace, s);
   }
 
-  std::vector<array> copies = {temp1, temp2};
   auto& d = metal::device(s.device);
   d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+      [temp_arrs](MTL::CommandBuffer*) mutable { temp_arrs.clear(); });
 }
 
 void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {

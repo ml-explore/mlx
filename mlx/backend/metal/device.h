@@ -9,38 +9,16 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <dlfcn.h>
-#include <filesystem>
-
 #include "mlx/array.h"
 #include "mlx/device.h"
 
-namespace fs = std::filesystem;
-
 namespace mlx::core::metal {
-
-inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
-  Dl_info info;
-  std::string mtllib_path;
-  std::string lib_ext = lib_name + ".metallib";
-
-  int success = dladdr((void*)get_colocated_mtllib_path, &info);
-  if (success) {
-    auto mtllib = fs::path(info.dli_fname).remove_filename() / lib_ext;
-    mtllib_path = mtllib.c_str();
-  }
-
-  return mtllib_path;
-}
 
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
 
 struct CommandEncoder {
-  CommandEncoder(MTL::CommandBuffer* cbuf) : cbuf(cbuf) {
-    enc = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
-    enc->retain();
-  };
+  CommandEncoder(MTL::CommandBuffer* cbuf);
   CommandEncoder(const CommandEncoder&) = delete;
   CommandEncoder& operator=(const CommandEncoder&) = delete;
 
@@ -63,34 +41,8 @@ struct CommandEncoder {
     return enc;
   }
 
-  void set_input_array(const array& a, int idx, int64_t offset = 0) {
-    auto r_buf =
-        static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
-    if (auto it = outputs.find(r_buf); it != outputs.end()) {
-      // Insert a barrier
-      enc->memoryBarrier(&r_buf, 1);
-
-      // Remove the output
-      outputs.erase(it);
-    }
-    auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
-    auto base_offset = a.data<char>() -
-        static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
-    base_offset += offset;
-    enc->setBuffer(a_buf, base_offset, idx);
-  }
-
-  void set_output_array(array& a, int idx, int64_t offset = 0) {
-    // Add barriers before adding the output to the output set
-    set_input_array(a, idx, offset);
-    auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
-    if (concurrent) {
-      concurrent_outputs.insert(buf);
-    } else {
-      outputs.insert(buf);
-    }
-  }
-
+  void set_input_array(const array& a, int idx, int64_t offset = 0);
+  void set_output_array(array& a, int idx, int64_t offset = 0);
   void dispatchThreadgroups(MTL::Size grid_dims, MTL::Size group_dims);
   void dispatchThreads(MTL::Size grid_dims, MTL::Size group_dims);
 
@@ -98,10 +50,7 @@ struct CommandEncoder {
     return ConcurrentContext(*this);
   }
 
-  ~CommandEncoder() {
-    enc->endEncoding();
-    enc->release();
-  }
+  ~CommandEncoder();
 
  private:
   void maybe_split();
@@ -136,10 +85,6 @@ class Device {
   void register_library(
       const std::string& lib_name,
       const std::string& lib_path);
-  void register_library(
-      const std::string& lib_name,
-      const std::function<std::string(const std::string&)>& lib_path_func =
-          get_colocated_mtllib_path);
 
   MTL::Library* get_library(const std::string& name);
 
