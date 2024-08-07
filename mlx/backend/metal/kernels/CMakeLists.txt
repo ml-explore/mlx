@@ -38,7 +38,6 @@ endfunction(build_kernel)
 build_kernel(arg_reduce)
 build_kernel(conv steel/conv/params.h)
 build_kernel(gemv steel/utils.h)
-build_kernel(gemv_masked steel/utils.h)
 build_kernel(layer_norm)
 build_kernel(random)
 build_kernel(rms_norm)
@@ -121,6 +120,7 @@ build_kernel(
   steel/gemm/kernels/steel_gemm_splitk
   ${STEEL_HEADERS}
 )
+build_kernel(gemv_masked steel/utils.h)
 endif()
 
 

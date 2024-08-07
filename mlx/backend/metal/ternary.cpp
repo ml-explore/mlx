@@ -32,7 +32,7 @@ void ternary_op_gpu_inplace(
   auto& strides_c = strides[2];
   auto& strides_out = strides[3];
 
-  bool use_2d = out.data_size();
+  bool use_2d = out.data_size() > UINT_MAX;
   std::string kernel_name;
   {
     std::ostringstream kname;

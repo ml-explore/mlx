@@ -169,6 +169,23 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
   return d.get_kernel(kernel_name);
 }
 
+MTL::ComputePipelineState* get_gemv_masked_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array&,
+    const std::optional<array>&,
+    const std::optional<array>&,
+    bool,
+    int,
+    int,
+    int,
+    int,
+    int,
+    int,
+    bool) {
+  return d.get_kernel(kernel_name);
+}
+
 MTL::ComputePipelineState* get_steel_conv_kernel(
     metal::Device& d,
     const std::string& kernel_name,

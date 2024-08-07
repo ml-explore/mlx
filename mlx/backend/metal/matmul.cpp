@@ -1529,8 +1529,22 @@ void BlockMaskedMM::eval_gpu(const std::vector<array>& inputs, array& out) {
     kname << "_nc" << !contiguous_kernel;
 
     // Encode and dispatch kernel
+    auto kernel = get_gemv_masked_kernel(
+        d,
+        kname.str(),
+        out,
+        has_out_mask ? std::optional<array>{inputs[2]} : std::nullopt,
+        has_op_mask ? std::optional<array>{inputs.back()} : std::nullopt,
+        transpose_mat,
+        bm,
+        bn,
+        sm,
+        sn,
+        tm,
+        tn,
+        contiguous_kernel);
+
     auto& compute_encoder = d.get_command_encoder(s.index);
-    auto kernel = d.get_kernel(kname.str());
     compute_encoder->setComputePipelineState(kernel);
 
     int n_tgp = (out_vector_len + n_out_per_tgp - 1) / n_out_per_tgp;

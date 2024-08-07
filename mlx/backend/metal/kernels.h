@@ -151,6 +151,21 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
     int n_channel_specialization,
     bool small_filter);
 
+MTL::ComputePipelineState* get_gemv_masked_kernel(
+    metal::Device& d,
+    const std::string& kernel_name,
+    const array& out,
+    const std::optional<array>& mask_out,
+    const std::optional<array>& mask_op,
+    bool transpose_mat,
+    int bm,
+    int bn,
+    int sm,
+    int sn,
+    int tm,
+    int tn,
+    bool contiguous);
+
 MTL::ComputePipelineState* get_steel_conv_general_kernel(
     metal::Device& d,
     const std::string& kernel_name,

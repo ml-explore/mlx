@@ -33,5 +33,6 @@ const char* steel_gemm_splitk();
 const char* conv();
 const char* steel_conv();
 const char* steel_conv_general();
+const char* gemv_masked();
 
 } // namespace mlx::core::metal
