@@ -486,9 +486,8 @@ below.
         std::ostringstream kname;
         kname << "axpby_" << "general_" << type_to_name(out);
 
-        // Make sure the metal library is available and look for it
-        // in the same folder as this executable if needed
-        d.register_library("mlx_ext", metal::get_colocated_mtllib_path);
+        // Make sure the metal library is available
+        d.register_library("mlx_ext");
 
         // Make a kernel from this metal library
         auto kernel = d.get_kernel(kname.str(), "mlx_ext");
