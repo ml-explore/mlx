@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <any>
 #include <map>
 #include <optional>
 
@@ -64,7 +65,8 @@ array affine_dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-std::map<std::string, array> custom_kernel(
+std::vector<array> custom_kernel(
+    std::string name,
     std::map<std::string, std::any>& inputs,
     const std::string& source,
     std::map<std::string, std::vector<int>> output_shapes,

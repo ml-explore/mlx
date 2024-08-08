@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <any>
+#include <map>
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {
@@ -246,15 +248,19 @@ class CustomKernel : public Primitive {
  public:
   CustomKernel(
       Stream stream,
+      std::string name,
       std::string source,
-      std::map<std::string, std::vector<int>> output_shapes,
-      std::optional<std::tuple<int, int, int>> grid,
-      std::optional<std::tuple<int, int, int>> threadgroup)
+      std::vector<std::any> in_args,
+      std::tuple<int, int, int> grid,
+      std::tuple<int, int, int> threadgroup,
+      bool ensure_row_contiguous)
       : Primitive(stream),
         source_(source),
-        output_shapes_(output_shapes),
+        name_(name),
+        in_args_(in_args),
         grid_(grid),
-        threadgroup_(threadgroup) {}
+        threadgroup_(threadgroup),
+        ensure_row_contiguous_(ensure_row_contiguous) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -264,11 +270,15 @@ class CustomKernel : public Primitive {
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
+  DEFINE_PRINT(CustomKernel);
+
  private:
   std::string source_;
-  std::map<std::string, std::vector<int>> output_shapes_;
-  std::optional<std::tuple<int, int, int>> grid_;
-  std::optional<std::tuple<int, int, int>> threadgroup_;
+  std::string name_;
+  std::vector<std::any> in_args_;
+  std::tuple<int, int, int> grid_;
+  std::tuple<int, int, int> threadgroup_;
+  bool ensure_row_contiguous_;
 };
 
 } // namespace mlx::core::fast

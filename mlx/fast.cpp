@@ -2,10 +2,14 @@
 #include <cassert>
 #include <numeric>
 
+#include "mlx/backend/common/compiled.h"
+#include "mlx/backend/metal/kernels.h"
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
+
+#include <iostream>
 
 namespace mlx::core::fast {
 
@@ -913,8 +917,10 @@ array affine_dequantize(
   return fallback({w, scales, biases})[0];
 }
 
-std::map<std::string, array> custom_kernel(
-    std::map<std::string, array>& inputs,
+// std::map<std::string, array> custom_kernel(
+std::vector<array> custom_kernel(
+    std::string name,
+    std::map<std::string, std::any>& inputs,
     const std::string& source,
     std::map<std::string, std::vector<int>> output_shapes,
     std::map<std::string, Dtype> output_dtypes,
@@ -924,22 +930,136 @@ std::map<std::string, array> custom_kernel(
     StreamOrDevice s_ /* = {} */
 ) {
   auto s = to_stream(s_);
-  if (s.device == Device::gpu) {
-    std::vector<array> in_arrs;
-    std::vector<std::vector<int>> out_shapes;
-    std::vector<Dtype> out_dtypes;
-    for (auto [name, arr] : inputs) {
-      in_arrs.push_back(arr);
-    }
-    for (auto [name, shape] : output_shapes) {
-      out_shapes.push_back(shape);
-      out_dtypes.push_back(output_dtypes[name]);
-    }
-    return array::make_arrays(
-        out_shapes,
-        out_dtypes,
-        std::make_shared<CustomKernel>(s, source),
-        in_arrs);
+  if (s.device != Device::gpu) {
+    throw std::invalid_argument("Only works on GPU");
   }
+  // Split up the inputs into arrays and non-arrays
+  std::map<std::string, array> in_arrs;
+  std::map<std::string, std::any> in_args;
+  for (auto& [name, value] : inputs) {
+    if (value.type() == typeid(array)) {
+      in_arrs.insert({name, std::any_cast<array>(value)});
+    } else {
+      in_args.insert({name, value});
+    }
+  }
+  // Check if there are any metal keywords e.g. "thread_position_in_grid"
+  std::vector<std::pair<std::string, std::string>> metal_attributes = {
+      {"dispatch_quadgroups_per_threadgroup", "uint"},
+      {"dispatch_simdgroups_per_threadgroup", "uint"},
+      {"dispatch_threads_per_threadgroup", "uint3"},
+      {"grid_origin", "uint3"},
+      {"grid_size", "uint3"},
+      {"quadgroup_index_in_threadgroup", "uint"},
+      {"quadgroups_per_threadgroup", "uint"},
+      {"simdgroup_index_in_threadgroup", "uint"},
+      {"simdgroups_per_threadgroup", "uint"},
+      {"thread_execution_width", "uint"},
+      {"thread_index_in_quadgroup", "uint"},
+      {"thread_index_in_simdgroup", "uint"},
+      {"thread_index_in_threadgroup", "uint"},
+      {"thread_position_in_grid", "uint3"},
+      {"thread_position_in_threadgroup", "uint3"},
+      {"threadgroup_position_in_grid", "uint3"},
+      {"threadgroups_per_grid", "uint3"},
+      {"threads_per_grid", "uint3"},
+      {"threads_per_simdgroup", "uint"},
+      {"thread_per_threadgroup", "uint3"},
+  };
+
+  std::vector<std::pair<std::string, std::string>> attrs;
+  for (auto [attr, dtype] : metal_attributes) {
+    if (source.find(attr) != std::string::npos) {
+      attrs.push_back({attr, dtype});
+    }
+  }
+
+  // We're JIT compiling this each time so we want ints/floats/bools to be
+  // template arguments for the kernel Tuples/lists (e.g. shapes/strides) get
+  // passed as vector args Sometimes you might want some args to be template
+  // args and some to not require recompilation?
+
+  auto func_name = "custom_kernel_" + name;
+  std::ostringstream kernel_source;
+  kernel_source << "template <int N>" << std::endl;
+  kernel_source << "[[kernel]] void " << func_name << " (" << std::endl;
+  int index = 0;
+  for (auto [name, arr] : in_arrs) {
+    kernel_source << "  const device " << get_type_string(arr.dtype()) << "* "
+                  << name << " [[buffer(" << index << ")]]," << std::endl;
+    index++;
+  }
+  for (auto [name, dtype] : output_dtypes) {
+    kernel_source << "  device " << get_type_string(dtype) << "* " << name
+                  << " [[buffer(" << index << ")]]," << std::endl;
+    index++;
+  }
+  index = 0;
+  for (auto [name, arg] : in_args) {
+    std::string arg_type;
+    if (arg.type() == typeid(float)) {
+      arg_type = "float";
+    } else if (arg.type() == typeid(int)) {
+      arg_type = "int";
+    }
+    kernel_source << "  constant const " << arg_type << "& " << name;
+    if (index < in_args.size() - 1 || attrs.size() > 0) {
+      kernel_source << "," << std::endl;
+    } else {
+      kernel_source << ") {" << std::endl;
+    }
+    index++;
+  }
+  index = 0;
+  for (auto [attr, dtype] : attrs) {
+    kernel_source << "  " << dtype << " " << attr << " [[" << attr << "]]";
+    if (index < attrs.size() - 1) {
+      kernel_source << "," << std::endl;
+    } else {
+      kernel_source << ") {" << std::endl;
+    }
+  }
+  kernel_source << source << std::endl;
+  kernel_source << "}" << std::endl;
+
+  // Add the template
+  kernel_source << get_template_definition(func_name, func_name, 7)
+                << std::endl;
+
+  std::cout << kernel_source.str() << std::endl;
+
+  std::vector<array> in_arrs_vec;
+  for (auto [name, arr] : in_arrs) {
+    in_arrs_vec.push_back(arr);
+  }
+
+  std::vector<std::any> in_args_vec;
+  for (auto [name, arg] : in_args) {
+    in_args_vec.push_back(arg);
+  }
+
+  std::vector<std::vector<int>> out_shapes;
+  for (auto [name, shape] : output_shapes) {
+    out_shapes.push_back(shape);
+  }
+
+  std::vector<Dtype> out_dtypes;
+  for (auto [name, dtype] : output_dtypes) {
+    out_dtypes.push_back(dtype);
+  }
+
+  return array::make_arrays(
+      out_shapes,
+      out_dtypes,
+      std::make_shared<CustomKernel>(
+          s,
+          func_name,
+          kernel_source.str(),
+          in_args_vec,
+          grid,
+          threadgroup,
+          ensure_row_contiguous),
+      in_arrs_vec);
+}
 
 } // namespace mlx::core::fast

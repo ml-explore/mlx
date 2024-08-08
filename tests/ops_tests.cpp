@@ -4,7 +4,10 @@
 
 #include "doctest/doctest.h"
 
+#include "mlx/fast.h"
 #include "mlx/mlx.h"
+
+#include <iostream>
 
 using namespace mlx::core;
 
@@ -3552,4 +3555,24 @@ TEST_CASE("test view") {
   in = array({1, 2, 3, 4}, int64);
   auto out = view(in, int32);
   CHECK(array_equal(out, array({1, 0, 2, 0, 3, 0, 4, 0})).item<bool>());
+}
+
+TEST_CASE("test custom kernel") {
+  auto a = array(3);
+  int b = 13;
+  float c = 4.0;
+
+  std::map<std::string, std::any> inputs = {{"a", a}, {"b", b}, {"c", c}};
+  auto source =
+      "out[thread_position_in_grid.x] = thread_position_in_grid.x + a[0] + c;";
+
+  auto outputs = fast::custom_kernel(
+      "myfunc",
+      inputs,
+      source,
+      {{"out", {4, 8}}},
+      {{"out", float32}},
+      {2, 1, 1},
+      {1, 1, 1});
+  std::cout << outputs[0] << std::endl;
 }

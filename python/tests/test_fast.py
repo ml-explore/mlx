@@ -586,13 +586,13 @@ ParamShapes = dict[str, Sequence[int]]
 #     """,
 #     grid=(1, 1, 16),
 #     threadgroup=(1, 1, 4),
-#     ensure_row_contiguous=True
-#     output_shapes={"x": (34, 72), "y": (34, 72)},
 # )
-# def custom_kernel(a: array, b: array):
-#     # will be used as CPU/transform fallback and for vjp/jvp
-#     return a + b
+# def custom_kernel(a: mx.array, b: mx.array, c: int):
+#     return a + b + c
 
+# # Recompilation will be based on the template params -- if they don't match then we'll rebuild the library for you
+# # Question: should ints/floats be template params by default or variable params?
+# #
 # metal_kernel(
 #     source="""
 #     int index = thread_position_in_grid.x;
@@ -602,6 +602,7 @@ ParamShapes = dict[str, Sequence[int]]
 #     grid=(1, 1, 16),
 #     group=(1, 1, 4),
 #     output_shapes={"x": (34, 72), "y": (34, 72)},
+#     output_dtypes={"x": mx.float32, "y": mx.float32},
 #     fallback=(),
 #     ensure_row_contiguous=True,
-# )(a=a, b=b, a_strides=a.strides())
+# )(a=a, b=b, c=TemplateParam(7))
