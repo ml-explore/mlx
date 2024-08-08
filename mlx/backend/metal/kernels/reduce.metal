@@ -28,7 +28,8 @@
 
 #define instantiate_reduce_helper_64b(inst_f, name, op) \
   inst_f(name, int64, int64_t, op)                      \
-  inst_f(name, uint64, uint64_t, op)
+  inst_f(name, uint64, uint64_t, op)                    \
+  inst_f(name, complex64, complex64_t, op)
 
 #define instantiate_reduce_helper_types(inst_f, name, op) \
   instantiate_reduce_helper_floats(inst_f, name, op)      \
@@ -273,32 +274,8 @@ instantiate_reduce_from_types(instantiate_col_reduce_small, or, bool, Or<bool>)
           uint simd_per_group [[simdgroups_per_threadgroup]],      \
           uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
-#define instantiate_row_reduce_general_no_atomics(name, itype, otype, op)   \
-  instantiate_row_reduce_small(name, itype, otype, op)                      \
-  template                                                                  \
-      [[host_name("rowGeneralNoAtomics_reduce_" #name)]] [[kernel]] void    \
-      row_reduce_general_no_atomics<itype, otype, op>(                      \
-          const device itype* in [[buffer(0)]],                             \
-          device otype* out [[buffer(1)]],                                  \
-          const constant int& reduction_size [[buffer(2)]],              \
-          const constant size_t& out_size [[buffer(3)]],                    \
-          const constant size_t& non_row_reductions [[buffer(4)]],          \
-          const constant int* shape [[buffer(5)]],                          \
-          const constant size_t* strides [[buffer(6)]],                     \
-          const constant int& ndim [[buffer(7)]],                           \
-          uint3 lid [[thread_position_in_threadgroup]],                     \
-          uint3 lsize [[threads_per_threadgroup]],                          \
-          uint3 gsize [[threads_per_grid]],                                 \
-          uint3 tid [[threadgroup_position_in_grid]],                       \
-          uint simd_lane_id [[thread_index_in_simdgroup]],                  \
-          uint simd_per_group [[simdgroups_per_threadgroup]],               \
-          uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
 #define instantiate_same_row_reduce_helper(name, tname, type, op) \
   instantiate_row_reduce_general(name##tname, type, type, op<type>)
-
-#define instantiate_same_row_reduce_na_helper(name, tname, type, op) \
-  instantiate_row_reduce_general_no_atomics(name##tname, type, type, op<type>)
 
 instantiate_reduce_ops(instantiate_same_row_reduce_helper, instantiate_reduce_helper_types)
 instantiate_reduce_ops(instantiate_same_row_reduce_helper, instantiate_reduce_helper_64b)

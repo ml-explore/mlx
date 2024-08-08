@@ -64,6 +64,14 @@ struct Limits<bool> {
   static constexpr constant bool min = false;
 };
 
+template <>
+struct Limits<complex64_t> {
+  static constexpr constant complex64_t max =
+      complex64_t(metal::numeric_limits<float>::infinity(), 0);
+  static constexpr constant complex64_t min =
+      complex64_t(-metal::numeric_limits<float>::infinity(), 0);
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 // Indexing utils
 ///////////////////////////////////////////////////////////////////////////////
@@ -367,4 +375,9 @@ inline int64_t simd_shuffle_down(int64_t data, uint16_t delta) {
 
 inline bool simd_shuffle_down(bool data, uint16_t delta) {
   return simd_shuffle_down(static_cast<uint32_t>(data), delta);
+}
+
+inline complex64_t simd_shuffle_down(complex64_t data, uint16_t delta) {
+  return complex64_t(
+      simd_shuffle_down(data.real, delta), simd_shuffle_down(data.imag, delta));
 }
