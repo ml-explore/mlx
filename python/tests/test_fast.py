@@ -569,8 +569,8 @@ ParamShapes = dict[str, Sequence[int]]
 
 # def metal_kernel(
 #     source: str,
-#     grid=tuple[int, int, int],
-#     threadgroup=tuple[int, int, int],
+#     grid: tuple[int, int, int],
+#     threadgroup: tuple[int, int, int],
 #     output_shapes: ParamShapes | Callable[[ParamShapes], ParamShapes] | None = None,
 #     fallback: Callable[..., Any] | None = None,
 #     ensure_row_contiguous: bool = True,
@@ -586,14 +586,17 @@ ParamShapes = dict[str, Sequence[int]]
 #     """,
 #     grid=(1, 1, 16),
 #     threadgroup=(1, 1, 4),
+#     template_args={"d": 9},
 # )
 # def custom_kernel(a: mx.array, b: mx.array, c: int):
 #     return a + b + c
 
-# # Recompilation will be based on the template params -- if they don't match then we'll rebuild the library for you
-# # Question: should ints/floats be template params by default or variable params?
-# #
+
+# metal_kernel(fallback=custom_kernel, source=source, grid=grid, threadgroup=threadgroup)(a=a, b=b, c=TemplateParam(7))
+
+# # Everything gets converted into an mx.array() and that what the c++ API deals with
 # metal_kernel(
+#     name="mykernel",
 #     source="""
 #     int index = thread_position_in_grid.x;
 #     x[index] = a[index];
@@ -603,6 +606,4 @@ ParamShapes = dict[str, Sequence[int]]
 #     group=(1, 1, 4),
 #     output_shapes={"x": (34, 72), "y": (34, 72)},
 #     output_dtypes={"x": mx.float32, "y": mx.float32},
-#     fallback=(),
-#     ensure_row_contiguous=True,
-# )(a=a, b=b, c=TemplateParam(7))
+# )(a=a, b=b, c=7)

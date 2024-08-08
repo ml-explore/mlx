@@ -920,7 +920,8 @@ array affine_dequantize(
 // std::map<std::string, array> custom_kernel(
 std::vector<array> custom_kernel(
     std::string name,
-    std::map<std::string, std::any>& inputs,
+    std::map<std::string, array>& inputs,
+    std::vector<std::string>& template_args,
     const std::string& source,
     std::map<std::string, std::vector<int>> output_shapes,
     std::map<std::string, Dtype> output_dtypes,
@@ -929,21 +930,7 @@ std::vector<array> custom_kernel(
     bool ensure_row_contiguous /* = true */,
     StreamOrDevice s_ /* = {} */
 ) {
-  auto s = to_stream(s_);
-  if (s.device != Device::gpu) {
-    throw std::invalid_argument("Only works on GPU");
-  }
-  // Split up the inputs into arrays and non-arrays
-  std::map<std::string, array> in_arrs;
-  std::map<std::string, std::any> in_args;
-  for (auto& [name, value] : inputs) {
-    if (value.type() == typeid(array)) {
-      in_arrs.insert({name, std::any_cast<array>(value)});
-    } else {
-      in_args.insert({name, value});
-    }
-  }
-  // Check if there are any metal keywords e.g. "thread_position_in_grid"
+  // Metal attributes are automatically added to the arguments if present
   std::vector<std::pair<std::string, std::string>> metal_attributes = {
       {"dispatch_quadgroups_per_threadgroup", "uint"},
       {"dispatch_simdgroups_per_threadgroup", "uint"},
@@ -966,7 +953,6 @@ std::vector<array> custom_kernel(
       {"threads_per_simdgroup", "uint"},
       {"thread_per_threadgroup", "uint3"},
   };
-
   std::vector<std::pair<std::string, std::string>> attrs;
   for (auto [attr, dtype] : metal_attributes) {
     if (source.find(attr) != std::string::npos) {
@@ -974,16 +960,42 @@ std::vector<array> custom_kernel(
     }
   }
 
-  // We're JIT compiling this each time so we want ints/floats/bools to be
-  // template arguments for the kernel Tuples/lists (e.g. shapes/strides) get
-  // passed as vector args Sometimes you might want some args to be template
-  // args and some to not require recompilation?
+  auto s = to_stream(s_);
+  if (s.device != Device::gpu) {
+    throw std::invalid_argument("Only works on GPU");
+  }
 
   auto func_name = "custom_kernel_" + name;
   std::ostringstream kernel_source;
   kernel_source << "template <int N>" << std::endl;
   kernel_source << "[[kernel]] void " << func_name << " (" << std::endl;
   int index = 0;
+
+  std::vector<array> in_arrs;
+  for (auto& [name, arr] : inputs) {
+    auto dtype = get_type_string(arr.dtype());
+    std::string location = "constant";
+    std::string ref = "*";
+    if (arr.ndim() == 0) {
+      // Single ints/float/bools are passed by ref
+      ref = "&";
+      // Small 1D arrays are passed as constants.
+      // Often these will be shapes/strides.
+      // We use device memory for larger arrays
+    } else if (arr.ndim() > 1 || arr.shape(0) > 8) {
+      location = "device";
+      in_arrs.push_back(arr);
+    }
+    kernel_source << "  const " << location << " " << dtype << ref << " "
+                  << name << "[[buffer(" << index << ")]]";
+    index++;
+  }
+
+  // We're JIT compiling this each time so we want ints/floats/bools to be
+  // template arguments for the kernel Tuples/lists (e.g. shapes/strides) get
+  // passed as vector args Sometimes you might want some args to be template
+  // args and some to not require recompilation?
+
   for (auto [name, arr] : in_arrs) {
     kernel_source << "  const device " << get_type_string(arr.dtype()) << "* "
                   << name << " [[buffer(" << index << ")]]," << std::endl;
@@ -1055,7 +1067,6 @@ std::vector<array> custom_kernel(
           s,
           func_name,
           kernel_source.str(),
-          in_args_vec,
           grid,
           threadgroup,
           ensure_row_contiguous),

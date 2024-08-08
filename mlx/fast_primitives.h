@@ -250,14 +250,12 @@ class CustomKernel : public Primitive {
       Stream stream,
       std::string name,
       std::string source,
-      std::vector<std::any> in_args,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
       bool ensure_row_contiguous)
       : Primitive(stream),
         source_(source),
         name_(name),
-        in_args_(in_args),
         grid_(grid),
         threadgroup_(threadgroup),
         ensure_row_contiguous_(ensure_row_contiguous) {}
@@ -275,7 +273,6 @@ class CustomKernel : public Primitive {
  private:
   std::string source_;
   std::string name_;
-  std::vector<std::any> in_args_;
   std::tuple<int, int, int> grid_;
   std::tuple<int, int, int> threadgroup_;
   bool ensure_row_contiguous_;

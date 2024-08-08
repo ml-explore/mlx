@@ -68,6 +68,7 @@ array affine_dequantize(
 std::vector<array> custom_kernel(
     std::string name,
     std::map<std::string, std::any>& inputs,
+    std::vector<std::string>& template_args,
     const std::string& source,
     std::map<std::string, std::vector<int>> output_shapes,
     std::map<std::string, Dtype> output_dtypes,
