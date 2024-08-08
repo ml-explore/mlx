@@ -126,7 +126,7 @@ void init_array(nb::module_& m) {
   m.attr("float32") = nb::cast(float32);
   m.attr("bfloat16") = nb::cast(bfloat16);
   m.attr("complex64") = nb::cast(complex64);
-  nb::class_<Dtype::Category>(
+  nb::enum_<Dtype::Category>(
       m,
       "DtypeCategory",
       R"pbdoc(
@@ -165,16 +165,16 @@ void init_array(nb::module_& m) {
               * :ref:`complex64 <data_types>`
 
       See also :func:`~mlx.core.issubdtype`.
-      )pbdoc");
-  m.attr("complexfloating") = nb::cast(complexfloating);
-  m.attr("floating") = nb::cast(floating);
-  m.attr("inexact") = nb::cast(inexact);
-  m.attr("signedinteger") = nb::cast(signedinteger);
-  m.attr("unsignedinteger") = nb::cast(unsignedinteger);
-  m.attr("integer") = nb::cast(integer);
-  m.attr("number") = nb::cast(number);
-  m.attr("generic") = nb::cast(generic);
-
+      )pbdoc")
+      .value("complexfloating", complexfloating)
+      .value("floating", floating)
+      .value("inexact", inexact)
+      .value("signedinteger", signedinteger)
+      .value("unsignedinteger", unsignedinteger)
+      .value("integer", integer)
+      .value("number", number)
+      .value("generic", generic)
+      .export_values();
   nb::class_<ArrayAt>(
       m,
       "_ArrayAt",
