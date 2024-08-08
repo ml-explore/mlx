@@ -16,7 +16,25 @@ std::pair<std::vector<int>, std::vector<size_t>> shapes_without_reduction_axes(
     strides.erase(strides.begin() + a);
   }
 
-  return std::make_pair(shape, strides);
+  std::vector<int> collapsed_shape;
+  std::vector<size_t> collapsed_strides;
+  if (shape.size() > 0) {
+    collapsed_shape.push_back(shape[0]);
+    collapsed_strides.push_back(strides[0]);
+    for (int i = 1; i < shape.size(); i++) {
+      if (strides[i] * shape[i] != collapsed_strides.back() ||
+          collapsed_shape.back() * static_cast<size_t>(shape[i]) >
+              std::numeric_limits<int>::max()) {
+        collapsed_shape.push_back(shape[i]);
+        collapsed_strides.push_back(strides[i]);
+      } else {
+        collapsed_shape.back() *= shape[i];
+        collapsed_strides.back() = strides[i];
+      }
+    }
+  }
+
+  return std::make_pair(collapsed_shape, collapsed_strides);
 }
 
 ReductionPlan get_reduction_plan(const array& x, const std::vector<int> axes) {

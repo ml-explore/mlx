@@ -32,6 +32,30 @@ inline bool is_64b_int(Dtype dtype) {
   return dtype == int64 || dtype == uint64;
 }
 
+inline bool is_64b_dtype(Dtype dtype) {
+  return dtype == int64 || dtype == uint64 || dtype == complex64;
+}
+
+void init_reduce(
+    array& out,
+    const std::string& op_name,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  auto kernel =
+      get_reduce_init_kernel(d, "i_reduce_" + op_name + type_to_name(out), out);
+  size_t nthreads = out.size();
+  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
+  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  if (thread_group_size > nthreads) {
+    thread_group_size = nthreads;
+  }
+  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+  compute_encoder->setComputePipelineState(kernel);
+  compute_encoder.set_output_array(out, 0);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
+}
+
 // All Reduce
 void all_reduce_dispatch(
     const array& in,
@@ -143,7 +167,9 @@ void row_reduce_simple(
   out_grid_size.width =
       (out_grid_size.width + REDUCE_N_WRITES - 1) / REDUCE_N_WRITES;
   int thread_group_size =
-      std::min((plan.shape.back() + REDUCE_N_READS - 1) / REDUCE_N_READS, 1024);
+      (plan.shape.back() + REDUCE_N_READS - 1) / REDUCE_N_READS;
+  thread_group_size = std::min(thread_group_size, 1024);
+  thread_group_size = ((thread_group_size + 31) / 32) * 32;
   MTL::Size grid_dims(
       thread_group_size, out_grid_size.width, out_grid_size.height);
   MTL::Size group_dims(thread_group_size, 1, 1);
@@ -153,6 +179,60 @@ void row_reduce_simple(
   compute_encoder.set_output_array(out, 1);
   compute_encoder->setBytes(plan.shape.data(), sizeof(int), 2);
   compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
+}
+
+void row_reduce_looped(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    const ReductionPlan& plan,
+    const std::vector<int>& axes,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  // Set the kernel
+  std::ostringstream kname;
+  kname << "rowLooped_reduce_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Prepare the arguments for the kernel
+  int row_size = plan.shape.back();
+  auto reduce_shape = plan.shape;
+  auto reduce_strides = plan.strides;
+  reduce_shape.pop_back();
+  reduce_strides.pop_back();
+  int reduce_ndim = reduce_shape.size();
+  auto [shape, strides] = shapes_without_reduction_axes(in, axes);
+  int ndim = shape.size();
+  size_t non_row_reductions = 1;
+  for (auto s : reduce_shape) {
+    non_row_reductions *= s;
+  }
+
+  // Figure out the grid
+  auto out_grid_size = get_2d_grid_dims(out.shape(), out.strides());
+  int thread_group_size = (row_size + REDUCE_N_READS - 1) / REDUCE_N_READS;
+  thread_group_size = std::min(thread_group_size, 1024);
+  thread_group_size = ((thread_group_size + 31) / 32) * 32;
+  MTL::Size grid_dims(
+      thread_group_size, out_grid_size.width, out_grid_size.height);
+  MTL::Size group_dims(thread_group_size, 1, 1);
+
+  // Launch
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder->setBytes(&row_size, sizeof(int), 2);
+  compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 3);
+  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
+  compute_encoder->setBytes(&ndim, sizeof(int), 6);
+  compute_encoder->setBytes(
+      reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
+  compute_encoder->setBytes(
+      reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
+  compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
@@ -171,9 +251,8 @@ void row_reduce_general_dispatch(
         in, out, op_name, plan, axes, compute_encoder, d, s);
   }
 
-  // Case 2: Overlap row reductions with atomics
-
-  // Case 3: Overlap row reductions no atomics
+  // Case 2: General row reduce including non-row reductions
+  return row_reduce_looped(in, out, op_name, plan, axes, compute_encoder, d, s);
 }
 
 // void row_reduce_general_dispatch(
@@ -603,26 +682,6 @@ void strided_reduce_general_dispatch(
 //////////////////////////////////////////////////////////////////////
 // Main reduce dispatch
 //////////////////////////////////////////////////////////////////////
-
-void init_reduce(
-    array& out,
-    const std::string& op_name,
-    CommandEncoder& compute_encoder,
-    metal::Device& d,
-    const Stream& s) {
-  auto kernel =
-      get_reduce_init_kernel(d, "i_reduce_" + op_name + type_to_name(out), out);
-  size_t nthreads = out.size();
-  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  if (thread_group_size > nthreads) {
-    thread_group_size = nthreads;
-  }
-  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  compute_encoder->setComputePipelineState(kernel);
-  compute_encoder.set_output_array(out, 0);
-  compute_encoder.dispatchThreads(grid_dims, group_dims);
-}
 
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);

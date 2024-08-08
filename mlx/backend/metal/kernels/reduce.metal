@@ -253,19 +253,22 @@ instantiate_reduce_from_types(instantiate_col_reduce_small, or, bool, Or<bool>)
           uint simd_per_group [[simdgroups_per_threadgroup]],      \
           uint simd_group_id [[simdgroup_index_in_threadgroup]]);  \
   template                                                         \
-      [[host_name("rowGeneral_reduce_" #name)]] [[kernel]] void    \
-      row_reduce_general<itype, otype, op>(                        \
+      [[host_name("rowLooped_reduce_" #name)]] [[kernel]] void     \
+      row_reduce_looped<itype, otype, op>(                         \
           const device itype* in [[buffer(0)]],                    \
-          device mlx_atomic<otype>* out [[buffer(1)]],             \
-          const constant int& reduction_size [[buffer(2)]],        \
-          const constant size_t& out_size [[buffer(3)]],           \
-          const constant size_t& non_row_reductions [[buffer(4)]], \
-          const constant int* shape [[buffer(5)]],                 \
-          const constant size_t* strides [[buffer(6)]],            \
-          const constant int& ndim [[buffer(7)]],                  \
+          device otype* out [[buffer(1)]],                         \
+          const constant int& row_size [[buffer(2)]],              \
+          const constant size_t& non_row_reductions [[buffer(3)]], \
+          const constant int* shape [[buffer(4)]],                 \
+          const constant size_t* strides [[buffer(5)]],            \
+          const constant int& ndim [[buffer(6)]],                  \
+          const constant int* reduce_shape [[buffer(7)]],          \
+          const constant size_t* reduce_strides [[buffer(8)]],     \
+          const constant int& reduce_ndim [[buffer(9)]],           \
+          uint3 gid [[threadgroup_position_in_grid]],              \
+          uint3 gsize [[threadgroups_per_grid]],                   \
           uint3 lid [[thread_position_in_threadgroup]],            \
           uint3 lsize [[threads_per_threadgroup]],                 \
-          uint3 tid [[threadgroup_position_in_grid]],              \
           uint simd_lane_id [[thread_index_in_simdgroup]],         \
           uint simd_per_group [[simdgroups_per_threadgroup]],      \
           uint simd_group_id [[simdgroup_index_in_threadgroup]]);
@@ -298,7 +301,7 @@ instantiate_reduce_from_types(instantiate_col_reduce_small, or, bool, Or<bool>)
   instantiate_row_reduce_general_no_atomics(name##tname, type, type, op<type>)
 
 instantiate_reduce_ops(instantiate_same_row_reduce_helper, instantiate_reduce_helper_types)
-instantiate_reduce_ops(instantiate_same_row_reduce_na_helper, instantiate_reduce_helper_64b)
+instantiate_reduce_ops(instantiate_same_row_reduce_helper, instantiate_reduce_helper_64b)
 
 instantiate_reduce_from_types(instantiate_row_reduce_general, and, bool, And<bool>)
 instantiate_reduce_from_types(instantiate_row_reduce_general, or, bool, Or<bool>)
