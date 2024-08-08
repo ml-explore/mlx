@@ -181,7 +181,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
         for M, L in zip(AB, Ls):
             self.assertTrue(mx.allclose(L @ L.T, M, rtol=1e-5, atol=1e-7))
 
-    def test_cholesky_inverse(self):
+    def test_cholesky_inv(self):
         mx.random.seed(7)
 
         sqrtA = mx.array(
@@ -195,7 +195,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
         for upper in (False, True):
             L = mx.linalg.cholesky(A, upper=upper, stream=mx.cpu)
-            A_inv = mx.linalg.cholesky_inverse(L, upper=upper, stream=mx.cpu)
+            A_inv = mx.linalg.cholesky_inv(L, upper=upper, stream=mx.cpu)
             self.assertTrue(mx.allclose(A @ A_inv, mx.eye(N), atol=1e-4))
 
         # Multiple matrices
@@ -204,7 +204,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
         Ls = mx.linalg.cholesky(AB, stream=mx.cpu)
         for upper in (False, True):
             Ls = mx.linalg.cholesky(AB, upper=upper, stream=mx.cpu)
-            AB_inv = mx.linalg.cholesky_inverse(Ls, upper=upper, stream=mx.cpu)
+            AB_inv = mx.linalg.cholesky_inv(Ls, upper=upper, stream=mx.cpu)
             for M, M_inv in zip(AB, AB_inv):
                 self.assertTrue(mx.allclose(M @ M_inv, mx.eye(N), atol=1e-4))
 

@@ -12,6 +12,6 @@ Linear Algebra
     tri_inv
     norm
     cholesky
-    cholesky_inverse
+    cholesky_inv
     qr
     svd

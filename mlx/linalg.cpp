@@ -306,7 +306,7 @@ array cholesky(
       {a});
 }
 
-array cholesky_inverse(
+array cholesky_inv(
     const array& L,
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
@@ -331,7 +331,7 @@ array cholesky_inverse(
         "matrices.");
   }
 
-  array L_inv = tri_inv(L, upper, Device::cpu);
+  array L_inv = tri_inv(L, upper, s);
   if (upper) {
     return matmul(L_inv, swapaxes(L_inv, -1, -2, s), s);
   } else {

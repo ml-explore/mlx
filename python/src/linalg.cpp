@@ -316,14 +316,14 @@ void init_linalg(nb::module_& parent_module) {
           ``U`` matrix such that ``dot(U.T, U) = a``.
       )pbdoc");
   m.def(
-      "cholesky_inverse",
-      &cholesky_inverse,
+      "cholesky_inv",
+      &cholesky_inv,
       "a"_a,
       "upper"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cholesky_inverse(L: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cholesky_inv(L: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Compute the inverse of a real symmetric positive semi-definite matrix using it's Cholesky decomposition L.
 
