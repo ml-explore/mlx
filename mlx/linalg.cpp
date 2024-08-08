@@ -238,7 +238,7 @@ std::vector<array> svd(const array& a, StreamOrDevice s /* = {} */) {
       {a});
 }
 
-array inv(const array& a, StreamOrDevice s /* = {} */) {
+array inv_impl(const array& a, bool tri, bool upper, StreamOrDevice s) {
   if (a.dtype() != float32) {
     std::ostringstream msg;
     msg << "[linalg::inv] Arrays must type float32. Received array "
@@ -258,7 +258,21 @@ array inv(const array& a, StreamOrDevice s /* = {} */) {
   }
 
   return array(
-      a.shape(), a.dtype(), std::make_shared<Inverse>(to_stream(s)), {a});
+      a.shape(),
+      a.dtype(),
+      std::make_shared<Inverse>(to_stream(s), tri, upper),
+      {a});
+}
+
+array inv(const array& a, StreamOrDevice s /* = {} */) {
+  return inv_impl(a, /*tri=*/false, /*upper=*/true, s);
+}
+
+array tri_inv(
+    const array& a,
+    bool upper /* = true */,
+    StreamOrDevice s /* = {} */) {
+  return inv_impl(a, /*tri=*/true, upper, s);
 }
 
 array cholesky(
@@ -290,6 +304,39 @@ array cholesky(
       a.dtype(),
       std::make_shared<Cholesky>(to_stream(s), upper),
       {a});
+}
+
+array cholesky_inv(
+    const array& L,
+    bool upper /* = false */,
+    StreamOrDevice s /* = {} */) {
+  if (L.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::cholesky] Arrays must type float32. Received array "
+        << "with type " << L.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (L.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::cholesky] Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << L.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (L.shape(-1) != L.shape(-2)) {
+    throw std::invalid_argument(
+        "[linalg::cholesky] Cholesky inverse is only defined for square "
+        "matrices.");
+  }
+
+  array L_inv = tri_inv(L, upper, s);
+  if (upper) {
+    return matmul(L_inv, swapaxes(L_inv, -1, -2, s), s);
+  } else {
+    return matmul(swapaxes(L_inv, -1, -2, s), L_inv, s);
+  }
 }
 
 } // namespace mlx::core::linalg
