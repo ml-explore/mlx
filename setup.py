@@ -176,7 +176,7 @@ if __name__ == "__main__":
         include_package_data=True,
         extras_require={
             "dev": [
-                "nanobind@git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4",
+                "nanobind==2.0",
                 "numpy",
                 "pre-commit",
                 "setuptools>=42",
