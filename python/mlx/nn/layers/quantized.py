@@ -197,7 +197,7 @@ class QuantizedLinear(Module):
         out_dims, in_dims = self.weight.shape
         in_dims *= 32 // self.bits
         return (
-            f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self},"
+            f"input_dims={in_dims}, output_dims={out_dims}, bias={'bias' in self}, "
             f"group_size={self.group_size}, bits={self.bits}"
         )
 
