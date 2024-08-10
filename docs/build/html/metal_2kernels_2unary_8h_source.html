@@ -97,19 +97,32 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span> </div>
 <div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> Op&gt;</div>
 <div class="foldopen" id="foldopen00012" data-start="{" data-end="}">
-<div class="line"><a id="l00012" name="l00012"></a><span class="lineno"><a class="line" href="metal_2kernels_2unary_8h.html#a0d73f9febd23148b2f9787dcaac12049">   12</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2unary_8h.html#a0d73f9febd23148b2f9787dcaac12049">unary_g</a>(</div>
+<div class="line"><a id="l00012" name="l00012"></a><span class="lineno"><a class="line" href="metal_2kernels_2unary_8h.html#a95f7b9c0112cdc84ae10465fb74d29dd">   12</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2unary_8h.html#a95f7b9c0112cdc84ae10465fb74d29dd">unary_v2</a>(</div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span>    device <span class="keyword">const</span> T* in,</div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span>    device T* out,</div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    device <span class="keyword">const</span> <span class="keywordtype">int</span>* in_shape,</div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    device <span class="keyword">const</span> <span class="keywordtype">size_t</span>* in_strides,</div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>    device <span class="keyword">const</span> <span class="keywordtype">int</span>&amp; ndim,</div>
-<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    uint index [[thread_position_in_grid]]) {</div>
-<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>  <span class="keyword">auto</span> idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a2e49fa7ab8f6348543455c6c45d7e2a9">elem_to_loc</a>(index, in_shape, in_strides, ndim);</div>
-<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span>  out[index] = Op()(in[idx]);</div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>}</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>    uint2 index [[thread_position_in_grid]],</div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    uint2 grid_dim [[threads_per_grid]]) {</div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>  <span class="keywordtype">size_t</span> offset = index.x + grid_dim.x * size_t(index.y);</div>
+<div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>  out[offset] = Op()(in[offset]);</div>
+<div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>}</div>
+</div>
+<div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span> </div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> Op&gt;</div>
+<div class="foldopen" id="foldopen00022" data-start="{" data-end="}">
+<div class="line"><a id="l00022" name="l00022"></a><span class="lineno"><a class="line" href="metal_2kernels_2unary_8h.html#a0d73f9febd23148b2f9787dcaac12049">   22</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="metal_2kernels_2unary_8h.html#a0d73f9febd23148b2f9787dcaac12049">unary_g</a>(</div>
+<div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    device <span class="keyword">const</span> T* in,</div>
+<div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    device T* out,</div>
+<div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>    device <span class="keyword">const</span> <span class="keywordtype">int</span>* in_shape,</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    device <span class="keyword">const</span> <span class="keywordtype">size_t</span>* in_strides,</div>
+<div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>    device <span class="keyword">const</span> <span class="keywordtype">int</span>&amp; ndim,</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>    uint index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>  <span class="keyword">auto</span> idx = <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a2e49fa7ab8f6348543455c6c45d7e2a9">elem_to_loc</a>(index, in_shape, in_strides, ndim);</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>  out[index] = Op()(in[idx]);</div>
+<div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>}</div>
 </div>
 <div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a2e49fa7ab8f6348543455c6c45d7e2a9"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a2e49fa7ab8f6348543455c6c45d7e2a9">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc(uint elem, device const int *shape, device const stride_t *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:77</div></div>
-<div class="ttc" id="ametal_2kernels_2unary_8h_html_a0d73f9febd23148b2f9787dcaac12049"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#a0d73f9febd23148b2f9787dcaac12049">unary_g</a></div><div class="ttdeci">void unary_g(device const T *in, device T *out, device const int *in_shape, device const size_t *in_strides, device const int &amp;ndim, uint index)</div><div class="ttdef"><b>Definition</b> unary.h:12</div></div>
+<div class="ttc" id="ametal_2kernels_2unary_8h_html_a0d73f9febd23148b2f9787dcaac12049"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#a0d73f9febd23148b2f9787dcaac12049">unary_g</a></div><div class="ttdeci">void unary_g(device const T *in, device T *out, device const int *in_shape, device const size_t *in_strides, device const int &amp;ndim, uint index)</div><div class="ttdef"><b>Definition</b> unary.h:22</div></div>
+<div class="ttc" id="ametal_2kernels_2unary_8h_html_a95f7b9c0112cdc84ae10465fb74d29dd"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#a95f7b9c0112cdc84ae10465fb74d29dd">unary_v2</a></div><div class="ttdeci">void unary_v2(device const T *in, device T *out, uint2 index, uint2 grid_dim)</div><div class="ttdef"><b>Definition</b> unary.h:12</div></div>
 <div class="ttc" id="ametal_2kernels_2unary_8h_html_ada52df4976078091cd7b47c152f326fb"><div class="ttname"><a href="metal_2kernels_2unary_8h.html#ada52df4976078091cd7b47c152f326fb">unary_v</a></div><div class="ttdeci">void unary_v(device const T *in, device T *out, uint index)</div><div class="ttdef"><b>Definition</b> unary.h:4</div></div>
 </div><!-- fragment --></div><!-- contents -->
 <!-- start footer part -->

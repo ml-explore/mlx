@@ -70,36 +70,36 @@ To build and install the MLX python library from source, first, clone MLX from
 
    git clone git@github.com:ml-explore/mlx.git mlx && cd mlx
 
-Install `nanobind <https://nanobind.readthedocs.io/en/latest/>`_ with:
-
-.. code-block:: shell
-
-    pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
-
 Then simply build and install MLX using pip:
 
 .. code-block:: shell
 
-   env CMAKE_BUILD_PARALLEL_LEVEL="" pip install .
+  CMAKE_BUILD_PARALLEL_LEVEL="" pip install .
 
-For developing use an editable install:
-
-.. code-block:: shell
-
-  env CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e .
-
-To make sure the install is working run the tests with:
+For developing, install the package with development dependencies, and use an
+editable install:
 
 .. code-block:: shell
 
-  pip install ".[testing]"
+  CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e ".[dev]"
+
+Once the development dependencies are installed, you can build faster with:
+
+.. code-block:: shell
+
+ CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py build_ext -j --inplace
+
+Run the tests with:
+
+.. code-block:: shell
+
   python -m unittest discover python/tests
 
-Optional: Install stubs to enable auto completions and type checking from your IDE:
+Optional: Install stubs to enable auto completions and type checking from your
+IDE:
 
 .. code-block:: shell
 
-  pip install ".[dev]"
   python setup.py generate_stubs
 
 C++ API

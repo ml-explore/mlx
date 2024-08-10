@@ -7,13 +7,14 @@ var searchData=
   ['gemm_5fn_5fiterations_5faligned_4',['gemm_n_iterations_aligned',['../struct_m_l_x_fast_attention_params.html#ab56b3db8fc6a938ce9c739ee78a7b803',1,'MLXFastAttentionParams']]],
   ['gemm_5fparams_5',['gemm_params',['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_large_filter.html#ab0724eb3ef52ee773b6607f6433b9f2c',1,'mlx::steel::Conv2DInputBlockLoaderLargeFilter::gemm_params'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_small_filter.html#acc778b3c0b7ec38a43e8ea943df8704c',1,'mlx::steel::Conv2DInputBlockLoaderSmallFilter::gemm_params'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_small_channels.html#af59f9d356c4c3ec5627dc5a263d239d4',1,'mlx::steel::Conv2DInputBlockLoaderSmallChannels::gemm_params']]],
   ['gemm_5fsv_5fm_5fblock_5fiterations_6',['gemm_sv_m_block_iterations',['../struct_m_l_x_fast_attention_params.html#a2799a2f219441fef7f351374f4cbc67c',1,'MLXFastAttentionParams']]],
-  ['generic_7',['generic',['../namespacemlx_1_1core.html#a34d69c4d46aa9b2a4a79dba7aba093d2',1,'mlx::core']]],
-  ['global_5fformatter_8',['global_formatter',['../namespacemlx_1_1core.html#af5a408a78cc934717dd711ddfda58ea6',1,'mlx::core']]],
-  ['gpu_9',['gpu',['../structmlx_1_1core_1_1_device.html#a45ed081b56ae5d4ddd39c83a5d8a1616',1,'mlx::core::Device']]],
-  ['grad_10',['grad',['../namespacemlx_1_1core.html#a99994806f81e83f98746c9e5ba4c3673',1,'mlx::core']]],
-  ['grid_11',['grid',['../struct_read_writer.html#ac7a957f99873d3797081f5d620f3b2c8',1,'ReadWriter']]],
-  ['group_5fstep_5fcnt_12',['group_step_cnt',['../struct_quantized_block_loader.html#a234feacde36a4afc0d740332a3769fb6',1,'QuantizedBlockLoader']]],
-  ['group_5fsteps_13',['group_steps',['../struct_quantized_block_loader.html#a31e14175f3d4902d9fe5ab5a219f61ba',1,'QuantizedBlockLoader']]],
-  ['group_5fstride_14',['group_stride',['../struct_quantized_block_loader.html#a0ace7e3762ecfa5a4106e7dee7e1b6ab',1,'QuantizedBlockLoader']]],
-  ['groups_15',['groups',['../struct_m_l_x_conv_params.html#af7a5590ac0974c7841c7f8b9fda0cbed',1,'MLXConvParams']]]
+  ['gemv_5fmasked_5fkernel_7',['gemv_masked_kernel',['../jit_2gemv__masked_8h.html#a933f06c211f86c37673dee329ed6901f',1,'gemv_masked.h']]],
+  ['generic_8',['generic',['../namespacemlx_1_1core.html#a34d69c4d46aa9b2a4a79dba7aba093d2',1,'mlx::core']]],
+  ['global_5fformatter_9',['global_formatter',['../namespacemlx_1_1core.html#af5a408a78cc934717dd711ddfda58ea6',1,'mlx::core']]],
+  ['gpu_10',['gpu',['../structmlx_1_1core_1_1_device.html#a45ed081b56ae5d4ddd39c83a5d8a1616',1,'mlx::core::Device']]],
+  ['grad_11',['grad',['../namespacemlx_1_1core.html#a99994806f81e83f98746c9e5ba4c3673',1,'mlx::core']]],
+  ['grid_12',['grid',['../struct_read_writer.html#ac7a957f99873d3797081f5d620f3b2c8',1,'ReadWriter']]],
+  ['group_5fstep_5fcnt_13',['group_step_cnt',['../struct_quantized_block_loader.html#a234feacde36a4afc0d740332a3769fb6',1,'QuantizedBlockLoader']]],
+  ['group_5fsteps_14',['group_steps',['../struct_quantized_block_loader.html#a31e14175f3d4902d9fe5ab5a219f61ba',1,'QuantizedBlockLoader']]],
+  ['group_5fstride_15',['group_stride',['../struct_quantized_block_loader.html#a0ace7e3762ecfa5a4106e7dee7e1b6ab',1,'QuantizedBlockLoader']]],
+  ['groups_16',['groups',['../struct_m_l_x_conv_params.html#af7a5590ac0974c7841c7f8b9fda0cbed',1,'MLXConvParams']]]
 ];

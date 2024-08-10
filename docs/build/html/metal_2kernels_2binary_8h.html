@@ -97,6 +97,15 @@ Functions</h2></td></tr>
 <tr class="memitem:add6a9aeee3cb0ba909574f27fa9ecd5b" id="r_add6a9aeee3cb0ba909574f27fa9ecd5b"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
 <tr class="memitem:add6a9aeee3cb0ba909574f27fa9ecd5b"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#add6a9aeee3cb0ba909574f27fa9ecd5b">binary_vv</a> (device const T *a, device const T *b, device U *c, uint index)</td></tr>
 <tr class="separator:add6a9aeee3cb0ba909574f27fa9ecd5b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa8c48b1b21d8f5a181f5443de2346589" id="r_aa8c48b1b21d8f5a181f5443de2346589"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
+<tr class="memitem:aa8c48b1b21d8f5a181f5443de2346589"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa8c48b1b21d8f5a181f5443de2346589">binary_sv2</a> (device const T *a, device const T *b, device U *c, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:aa8c48b1b21d8f5a181f5443de2346589"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a48bd82eb10f9c623ce7d28daec4fa512" id="r_a48bd82eb10f9c623ce7d28daec4fa512"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
+<tr class="memitem:a48bd82eb10f9c623ce7d28daec4fa512"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a48bd82eb10f9c623ce7d28daec4fa512">binary_vs2</a> (device const T *a, device const T *b, device U *c, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a48bd82eb10f9c623ce7d28daec4fa512"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a19dbbf8fea68b64bdd25dc8d36865171" id="r_a19dbbf8fea68b64bdd25dc8d36865171"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
+<tr class="memitem:a19dbbf8fea68b64bdd25dc8d36865171"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a19dbbf8fea68b64bdd25dc8d36865171">binary_vv2</a> (device const T *a, device const T *b, device U *c, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a19dbbf8fea68b64bdd25dc8d36865171"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6808bfb006cb5473da087a2758d0d867" id="r_a6808bfb006cb5473da087a2758d0d867"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
 <tr class="memitem:a6808bfb006cb5473da087a2758d0d867"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6808bfb006cb5473da087a2758d0d867">binary_g_nd1</a> (device const T *a, device const T *b, device U *c, constant const size_t &amp;a_stride, constant const size_t &amp;b_stride, uint index)</td></tr>
 <tr class="separator:a6808bfb006cb5473da087a2758d0d867"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -430,6 +439,44 @@ template&lt;typename T , typename U , typename Op &gt; </div>
 
 </div>
 </div>
+<a id="aa8c48b1b21d8f5a181f5443de2346589" name="aa8c48b1b21d8f5a181f5443de2346589"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8c48b1b21d8f5a181f5443de2346589">&#9670;&#160;</a></span>binary_sv2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , typename Op &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void binary_sv2 </td>
+          <td>(</td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>a</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>b</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>c</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a649851d133358dd5832a73b1061b3313" name="a649851d133358dd5832a73b1061b3313"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a649851d133358dd5832a73b1061b3313">&#9670;&#160;</a></span>binary_vs()</h2>
 
@@ -463,6 +510,44 @@ template&lt;typename T , typename U , typename Op &gt; </div>
 
 </div>
 </div>
+<a id="a48bd82eb10f9c623ce7d28daec4fa512" name="a48bd82eb10f9c623ce7d28daec4fa512"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a48bd82eb10f9c623ce7d28daec4fa512">&#9670;&#160;</a></span>binary_vs2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , typename Op &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void binary_vs2 </td>
+          <td>(</td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>a</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>b</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>c</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="add6a9aeee3cb0ba909574f27fa9ecd5b" name="add6a9aeee3cb0ba909574f27fa9ecd5b"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#add6a9aeee3cb0ba909574f27fa9ecd5b">&#9670;&#160;</a></span>binary_vv()</h2>
 
@@ -490,6 +575,44 @@ template&lt;typename T , typename U , typename Op &gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a19dbbf8fea68b64bdd25dc8d36865171" name="a19dbbf8fea68b64bdd25dc8d36865171"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19dbbf8fea68b64bdd25dc8d36865171">&#9670;&#160;</a></span>binary_vv2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , typename Op &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void binary_vv2 </td>
+          <td>(</td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>a</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>b</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>c</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

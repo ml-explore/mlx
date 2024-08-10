@@ -9,14 +9,21 @@
    .. automethod:: __init__
 
    
-   .. rubric:: Methods
+   
+
+   
+   
+   .. rubric:: Attributes
 
    .. autosummary::
    
-      ~DtypeCategory.__init__
-   
-   
-
-   
+      ~DtypeCategory.complexfloating
+      ~DtypeCategory.floating
+      ~DtypeCategory.inexact
+      ~DtypeCategory.signedinteger
+      ~DtypeCategory.unsignedinteger
+      ~DtypeCategory.integer
+      ~DtypeCategory.number
+      ~DtypeCategory.generic
    
    

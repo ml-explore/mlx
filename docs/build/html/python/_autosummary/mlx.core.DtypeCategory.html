@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.core.DtypeCategory &#8212; MLX 0.16.1 documentation</title>
+    <title>mlx.core.DtypeCategory &#8212; MLX 0.16.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../_static/documentation_options.js?v=179565df"></script>
+    <script src="../../_static/documentation_options.js?v=00e1e5b9"></script>
     <script src="../../_static/doctools.js?v=888ff710"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.1 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.1 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -457,8 +457,10 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../linalg.html">Linear Algebra</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.inv.html">mlx.core.linalg.inv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.tri_inv.html">mlx.core.linalg.tri_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.norm.html">mlx.core.linalg.norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.cholesky.html">mlx.core.linalg.cholesky</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.cholesky_inv.html">mlx.core.linalg.cholesky_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.qr.html">mlx.core.linalg.qr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 </ul>
@@ -849,7 +851,7 @@ document.write(`
 <h1>mlx.core.DtypeCategory<a class="headerlink" href="#mlx-core-dtypecategory" title="Link to this heading">#</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mlx.core.DtypeCategory">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">DtypeCategory</span></span><a class="headerlink" href="#mlx.core.DtypeCategory" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">DtypeCategory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.DtypeCategory" title="Link to this definition">#</a></dt>
 <dd><p>Type to hold categories of <a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><code class="xref py py-class docutils literal notranslate"><span class="pre">dtypes</span></code></a>.</p>
 <ul class="simple">
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">generic</span></code></p>
@@ -887,7 +889,7 @@ document.write(`
 </li>
 <li><p><code class="xref py py-attr docutils literal notranslate"><span class="pre">complexfloating</span></code></p>
 <ul>
-<li><p><a class="reference internal" href="../data_types.html#data-types"><span class="std std-ref">complex128</span></a></p></li>
+<li><p><a class="reference internal" href="../data_types.html#data-types"><span class="std std-ref">complex64</span></a></p></li>
 </ul>
 </li>
 </ul>
@@ -900,13 +902,34 @@ document.write(`
 <p>See also <a class="reference internal" href="mlx.core.issubdtype.html#mlx.core.issubdtype" title="mlx.core.issubdtype"><code class="xref py py-func docutils literal notranslate"><span class="pre">issubdtype()</span></code></a>.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="mlx.core.DtypeCategory.__init__">
-<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.DtypeCategory.__init__" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">__init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.DtypeCategory.__init__" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
-<p class="rubric">Methods</p>
+<p class="rubric">Attributes</p>
 <table class="autosummary longtable table autosummary">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#mlx.core.DtypeCategory.__init__" title="mlx.core.DtypeCategory.__init__"><code class="xref py py-obj docutils literal notranslate"><span class="pre">__init__</span></code></a>(*args, **kwargs)</p></td>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">complexfloating</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">floating</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">inexact</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">signedinteger</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">unsignedinteger</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">integer</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">number</span></code></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="xref py py-obj docutils literal notranslate"><span class="pre">generic</span></code></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
