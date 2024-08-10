@@ -113,7 +113,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span> </div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>  AccT ld[N_READS];</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
-<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>  in += gid * axis_size + lid * N_READS;</div>
+<div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>  in += gid * size_t(axis_size) + lid * N_READS;</div>
 <div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span>  <span class="keywordflow">if</span> (lid * N_READS + N_READS &lt;= axis_size) {</div>
 <div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N_READS; i++) {</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span>      ld[i] = AccT(in[i]);</div>
@@ -171,7 +171,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00083" name="l00083"></a><span class="lineno">   83</span>  normalizer = 1 / local_normalizer[0];</div>
 <div class="line"><a id="l00084" name="l00084"></a><span class="lineno">   84</span> </div>
 <div class="line"><a id="l00085" name="l00085"></a><span class="lineno">   85</span>  <span class="comment">// Normalize and write to the output</span></div>
-<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>  out += gid * axis_size + lid * N_READS;</div>
+<div class="line"><a id="l00086" name="l00086"></a><span class="lineno">   86</span>  out += gid * size_t(axis_size) + lid * N_READS;</div>
 <div class="line"><a id="l00087" name="l00087"></a><span class="lineno">   87</span>  <span class="keywordflow">if</span> (lid * N_READS + N_READS &lt;= axis_size) {</div>
 <div class="line"><a id="l00088" name="l00088"></a><span class="lineno">   88</span>    <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; N_READS; i++) {</div>
 <div class="line"><a id="l00089" name="l00089"></a><span class="lineno">   89</span>      out[i] = T(ld[i] * normalizer);</div>
@@ -197,7 +197,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00107" name="l00107"></a><span class="lineno">  107</span>    uint lsize [[threads_per_threadgroup]],</div>
 <div class="line"><a id="l00108" name="l00108"></a><span class="lineno">  108</span>    uint simd_lane_id [[thread_index_in_simdgroup]],</div>
 <div class="line"><a id="l00109" name="l00109"></a><span class="lineno">  109</span>    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {</div>
-<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>  in += gid * axis_size;</div>
+<div class="line"><a id="l00110" name="l00110"></a><span class="lineno">  110</span>  in += gid * size_t(axis_size);</div>
 <div class="line"><a id="l00111" name="l00111"></a><span class="lineno">  111</span> </div>
 <div class="line"><a id="l00112" name="l00112"></a><span class="lineno">  112</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> <a class="code hl_variable" href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a> = 32;</div>
 <div class="line"><a id="l00113" name="l00113"></a><span class="lineno">  113</span> </div>
@@ -260,7 +260,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00170" name="l00170"></a><span class="lineno">  170</span> </div>
 <div class="line"><a id="l00171" name="l00171"></a><span class="lineno">  171</span>  <span class="comment">// Finally given the normalizer and max value we can directly write the</span></div>
 <div class="line"><a id="l00172" name="l00172"></a><span class="lineno">  172</span>  <span class="comment">// softmax output</span></div>
-<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>  out += gid * axis_size;</div>
+<div class="line"><a id="l00173" name="l00173"></a><span class="lineno">  173</span>  out += gid * size_t(axis_size);</div>
 <div class="line"><a id="l00174" name="l00174"></a><span class="lineno">  174</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> r = 0; r &lt; static_cast&lt;int&gt;(<a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#a51c19db777f43943e4b35f25dd88d49d">ceildiv</a>(axis_size, N_READS * lsize));</div>
 <div class="line"><a id="l00175" name="l00175"></a><span class="lineno">  175</span>       r++) {</div>
 <div class="line"><a id="l00176" name="l00176"></a><span class="lineno">  176</span>    <span class="keywordtype">int</span> offset = r * lsize * N_READS + lid * N_READS;</div>
