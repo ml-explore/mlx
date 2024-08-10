@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Multi-Layer Perceptron &#8212; MLX 0.16.1 documentation</title>
+    <title>Multi-Layer Perceptron &#8212; MLX 0.16.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../_static/documentation_options.js?v=179565df"></script>
+    <script src="../_static/documentation_options.js?v=00e1e5b9"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.1 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.1 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -457,8 +457,10 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/linalg.html">Linear Algebra</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.inv.html">mlx.core.linalg.inv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.tri_inv.html">mlx.core.linalg.tri_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.norm.html">mlx.core.linalg.norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.cholesky.html">mlx.core.linalg.cholesky</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.cholesky_inv.html">mlx.core.linalg.cholesky_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.qr.html">mlx.core.linalg.qr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 </ul>
@@ -884,7 +886,7 @@ set:</p>
 </div>
 <p>Next, setup the problem parameters and load the data. To load the data, you need our
 <a class="reference external" href="https://github.com/ml-explore/mlx-examples/blob/main/mnist/mnist.py">mnist data loader</a>, which
-we will import as <cite>mnist</cite>.</p>
+we will import as <code class="docutils literal notranslate"><span class="pre">mnist</span></code>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">num_layers</span> <span class="o">=</span> <span class="mi">2</span>
 <span class="n">hidden_dim</span> <span class="o">=</span> <span class="mi">32</span>
 <span class="n">num_classes</span> <span class="o">=</span> <span class="mi">10</span>
