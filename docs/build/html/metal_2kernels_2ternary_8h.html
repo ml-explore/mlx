@@ -88,6 +88,9 @@ Functions</h2></td></tr>
 <tr class="memitem:a83f93644d21ee774e06e8190d0725ccb" id="r_a83f93644d21ee774e06e8190d0725ccb"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
 <tr class="memitem:a83f93644d21ee774e06e8190d0725ccb"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a83f93644d21ee774e06e8190d0725ccb">ternary_v</a> (device const bool *a, device const T *b, device const T *c, device T *d, uint index)</td></tr>
 <tr class="separator:a83f93644d21ee774e06e8190d0725ccb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3e610f3b01966bdbf23fdfebe5d2c508" id="r_a3e610f3b01966bdbf23fdfebe5d2c508"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
+<tr class="memitem:a3e610f3b01966bdbf23fdfebe5d2c508"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a3e610f3b01966bdbf23fdfebe5d2c508">ternary_v2</a> (device const bool *a, device const T *b, device const T *c, device T *d, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a3e610f3b01966bdbf23fdfebe5d2c508"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1bd5918559850f3f80e3adee2391fe6a" id="r_a1bd5918559850f3f80e3adee2391fe6a"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
 <tr class="memitem:a1bd5918559850f3f80e3adee2391fe6a"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1bd5918559850f3f80e3adee2391fe6a">ternary_g_nd1</a> (device const bool *a, device const T *b, device const T *c, device T *d, constant const size_t &amp;a_strides, constant const size_t &amp;b_strides, constant const size_t &amp;c_strides, uint index)</td></tr>
 <tr class="separator:a1bd5918559850f3f80e3adee2391fe6a"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -437,6 +440,49 @@ template&lt;typename T , typename Op &gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3e610f3b01966bdbf23fdfebe5d2c508" name="a3e610f3b01966bdbf23fdfebe5d2c508"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e610f3b01966bdbf23fdfebe5d2c508">&#9670;&#160;</a></span>ternary_v2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename Op &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void ternary_v2 </td>
+          <td>(</td>
+          <td class="paramtype">device const bool *</td>          <td class="paramname"><span class="paramname"><em>a</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>b</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>c</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>d</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

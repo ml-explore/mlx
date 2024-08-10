@@ -88,6 +88,9 @@ Functions</h2></td></tr>
 <tr class="memitem:ada52df4976078091cd7b47c152f326fb" id="r_ada52df4976078091cd7b47c152f326fb"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
 <tr class="memitem:ada52df4976078091cd7b47c152f326fb"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ada52df4976078091cd7b47c152f326fb">unary_v</a> (device const T *in, device T *out, uint index)</td></tr>
 <tr class="separator:ada52df4976078091cd7b47c152f326fb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a95f7b9c0112cdc84ae10465fb74d29dd" id="r_a95f7b9c0112cdc84ae10465fb74d29dd"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
+<tr class="memitem:a95f7b9c0112cdc84ae10465fb74d29dd"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a95f7b9c0112cdc84ae10465fb74d29dd">unary_v2</a> (device const T *in, device T *out, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a95f7b9c0112cdc84ae10465fb74d29dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a0d73f9febd23148b2f9787dcaac12049" id="r_a0d73f9febd23148b2f9787dcaac12049"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
 <tr class="memitem:a0d73f9febd23148b2f9787dcaac12049"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a0d73f9febd23148b2f9787dcaac12049">unary_g</a> (device const T *in, device T *out, device const int *in_shape, device const size_t *in_strides, device const int &amp;ndim, uint index)</td></tr>
 <tr class="separator:a0d73f9febd23148b2f9787dcaac12049"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -158,6 +161,39 @@ template&lt;typename T , typename Op &gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a95f7b9c0112cdc84ae10465fb74d29dd" name="a95f7b9c0112cdc84ae10465fb74d29dd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a95f7b9c0112cdc84ae10465fb74d29dd">&#9670;&#160;</a></span>unary_v2()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename Op &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void unary_v2 </td>
+          <td>(</td>
+          <td class="paramtype">device const T *</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

@@ -9,7 +9,9 @@ Linear Algebra
    :toctree: _autosummary 
 
     inv
+    tri_inv
     norm
     cholesky
+    cholesky_inv
     qr
     svd

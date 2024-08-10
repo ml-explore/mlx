@@ -64,7 +64,7 @@ set:
 Next, setup the problem parameters and load the data. To load the data, you need our
 `mnist data loader
 <https://github.com/ml-explore/mlx-examples/blob/main/mnist/mnist.py>`_, which
-we will import as `mnist`.
+we will import as ``mnist``.
 
 .. code-block:: python
 

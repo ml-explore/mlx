@@ -16,10 +16,5 @@ var searchData=
   ['mlx_3a_3acore_3a_3ametal_13',['metal',['../namespacemlx_1_1core_1_1metal.html',1,'mlx::core']]],
   ['mlx_3a_3acore_3a_3arandom_14',['random',['../namespacemlx_1_1core_1_1random.html',1,'mlx::core']]],
   ['mlx_3a_3acore_3a_3ascheduler_15',['scheduler',['../namespacemlx_1_1core_1_1scheduler.html',1,'mlx::core']]],
-  ['mlx_3a_3asteel_16',['steel',['../namespacemlx_1_1steel.html',1,'mlx']]],
-  ['mps_17',['MPS',['../namespace_m_p_s.html',1,'']]],
-  ['mtl_18',['MTL',['../namespace_m_t_l.html',1,'']]],
-  ['mtl_3a_3aprivate_19',['Private',['../namespace_m_t_l_1_1_private.html',1,'MTL']]],
-  ['mtl_3a_3aprivate_3a_3aclass_20',['Class',['../namespace_m_t_l_1_1_private_1_1_class.html',1,'MTL::Private']]],
-  ['mtl_3a_3aprivate_3a_3aselector_21',['Selector',['../namespace_m_t_l_1_1_private_1_1_selector.html',1,'MTL::Private']]]
+  ['mlx_3a_3asteel_16',['steel',['../namespacemlx_1_1steel.html',1,'mlx']]]
 ];
