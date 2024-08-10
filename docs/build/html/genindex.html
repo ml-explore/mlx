@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; MLX 0.16.1 documentation</title>
+    <title>Index &#8212; MLX 0.16.2 documentation</title>
   
   
   
@@ -35,7 +35,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="_static/documentation_options.js?v=179565df"></script>
+    <script src="_static/documentation_options.js?v=00e1e5b9"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -128,8 +128,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.1 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.1 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -454,8 +454,10 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="python/linalg.html">Linear Algebra</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.inv.html">mlx.core.linalg.inv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.tri_inv.html">mlx.core.linalg.tri_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.norm.html">mlx.core.linalg.norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.cholesky.html">mlx.core.linalg.cholesky</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.cholesky_inv.html">mlx.core.linalg.cholesky_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.qr.html">mlx.core.linalg.qr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 </ul>
@@ -1039,6 +1041,8 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.linalg.cholesky.html#mlx.core.linalg.cholesky">cholesky() (in module mlx.core.linalg)</a>
 </li>
+      <li><a href="python/_autosummary/mlx.core.linalg.cholesky_inv.html#mlx.core.linalg.cholesky_inv">cholesky_inv() (in module mlx.core.linalg)</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.metal.clear_cache.html#mlx.core.metal.clear_cache">clear_cache() (in module mlx.core.metal)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv44clipRK5arrayRKNSt8optionalI5arrayEERKNSt8optionalI5arrayEE14StreamOrDevice">clip (C++ function)</a>
@@ -1079,10 +1083,10 @@ document.write(`
 </li>
       <li><a href="cpp/ops.html#_CPPv46conv3dRK5arrayRK5arrayRKNSt5tupleIiiiEERKNSt5tupleIiiiEERKNSt5tupleIiiiEEi14StreamOrDevice">conv3d (C++ function)</a>
 </li>
-      <li><a href="python/nn/_autosummary/mlx.nn.Conv3d.html#mlx.nn.Conv3d">Conv3d (class in mlx.nn)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="python/nn/_autosummary/mlx.nn.Conv3d.html#mlx.nn.Conv3d">Conv3d (class in mlx.nn)</a>
+</li>
       <li><a href="cpp/ops.html#_CPPv412conv_general5array5arrayNSt6vectorIiEENSt6vectorIiEENSt6vectorIiEENSt6vectorIiEENSt6vectorIiEEib14StreamOrDevice">conv_general (C++ function)</a>, <a href="cpp/ops.html#_CPPv412conv_generalRK5arrayRK5arrayNSt6vectorIiEENSt6vectorIiEENSt6vectorIiEENSt6vectorIiEEib14StreamOrDevice">[1]</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.conv_general.html#mlx.core.conv_general">conv_general() (in module mlx.core)</a>
@@ -1789,7 +1793,7 @@ document.write(`
 <h2 id="P">P</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="cpp/ops.html#_CPPv43padRK5arrayRKNSt4pairIiiEERK5array14StreamOrDevice">pad (C++ function)</a>, <a href="cpp/ops.html#_CPPv43padRK5arrayRKNSt6vectorINSt4pairIiiEEEERK5array14StreamOrDevice">[1]</a>, <a href="cpp/ops.html#_CPPv43padRK5arrayRKNSt6vectorIiEERKNSt6vectorIiEERKNSt6vectorIiEERK5array14StreamOrDevice">[2]</a>, <a href="cpp/ops.html#_CPPv43padRK5arrayiRK5array14StreamOrDevice">[3]</a>
+      <li><a href="cpp/ops.html#_CPPv43padRK5arrayRKNSt4pairIiiEERK5arrayKNSt6stringE14StreamOrDevice">pad (C++ function)</a>, <a href="cpp/ops.html#_CPPv43padRK5arrayRKNSt6vectorINSt4pairIiiEEEERK5arrayKNSt6stringE14StreamOrDevice">[1]</a>, <a href="cpp/ops.html#_CPPv43padRK5arrayRKNSt6vectorIiEERKNSt6vectorIiEERKNSt6vectorIiEERK5arrayKNSt6stringE14StreamOrDevice">[2]</a>, <a href="cpp/ops.html#_CPPv43padRK5arrayiRK5arrayKNSt6stringE14StreamOrDevice">[3]</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.pad.html#mlx.core.pad">pad() (in module mlx.core)</a>
 </li>
@@ -2214,6 +2218,8 @@ document.write(`
       <li><a href="cpp/ops.html#_CPPv43trii5Dtype14StreamOrDevice">tri (C++ function)</a>, <a href="cpp/ops.html#_CPPv43triiii5Dtype14StreamOrDevice">[1]</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.tri.html#mlx.core.tri">tri() (in module mlx.core)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.linalg.tri_inv.html#mlx.core.linalg.tri_inv">tri_inv() (in module mlx.core.linalg)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv44tril5arrayi14StreamOrDevice">tril (C++ function)</a>
 </li>

@@ -91,9 +91,8 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00006" name="l00006"></a><span class="lineno">    6</span> </div>
 <div class="line"><a id="l00008" name="l00008"></a><span class="lineno">    8</span><span class="comment">// GEMM kernels</span></div>
 <div class="line"><a id="l00010" name="l00010"></a><span class="lineno">   10</span> </div>
-<div class="foldopen" id="foldopen00011" data-start="{" data-end="};">
-<div class="line"><a id="l00011" name="l00011"></a><span class="lineno"><a class="line" href="struct___no_mask.html">   11</a></span><span class="keyword">struct </span><a class="code hl_struct" href="struct___no_mask.html">_NoMask</a> {</div>
-<div class="line"><a id="l00012" name="l00012"></a><span class="lineno"><a class="line" href="struct___no_mask.html#a0c4a4557d5c97ceafe3a2c4e521cdf7e">   12</a></span>  <span class="keywordtype">char</span> <a class="code hl_variable" href="struct___no_mask.html#a0c4a4557d5c97ceafe3a2c4e521cdf7e">x</a>;</div>
+<div class="line"><a id="l00011" name="l00011"></a><span class="lineno">   11</span><span class="keyword">struct </span><a class="code hl_struct" href="struct___no_mask.html">_NoMask</a> {</div>
+<div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span>  <span class="keywordtype">char</span> <a class="code hl_variable" href="struct___no_mask.html#a0c4a4557d5c97ceafe3a2c4e521cdf7e">x</a>;</div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span> </div>
 <div class="foldopen" id="foldopen00014" data-start="{" data-end="}">
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno"><a class="line" href="struct___no_mask.html#ad3723c1e70e46beefd283ce6317416cb">   14</a></span>  <span class="keyword">constexpr</span> METAL_FUNC <span class="keyword">operator</span> bool() {</div>
@@ -116,12 +115,10 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno">   25</span>  }</div>
 </div>
 <div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>};</div>
-</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span> </div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> OutT, <span class="keyword">typename</span> InT = OutT&gt;</div>
-<div class="foldopen" id="foldopen00029" data-start="{" data-end="};">
-<div class="line"><a id="l00029" name="l00029"></a><span class="lineno"><a class="line" href="struct_scale_op.html">   29</a></span><span class="keyword">struct </span><a class="code hl_struct" href="struct_scale_op.html">ScaleOp</a> {</div>
-<div class="line"><a id="l00030" name="l00030"></a><span class="lineno"><a class="line" href="struct_scale_op.html#a02043fac21c68fb8d6863a01f45ede4b">   30</a></span>  OutT <a class="code hl_variable" href="struct_scale_op.html#a02043fac21c68fb8d6863a01f45ede4b">scale</a>;</div>
+<div class="line"><a id="l00029" name="l00029"></a><span class="lineno">   29</span><span class="keyword">struct </span><a class="code hl_struct" href="struct_scale_op.html">ScaleOp</a> {</div>
+<div class="line"><a id="l00030" name="l00030"></a><span class="lineno">   30</span>  OutT <a class="code hl_variable" href="struct_scale_op.html#a02043fac21c68fb8d6863a01f45ede4b">scale</a>;</div>
 <div class="line"><a id="l00031" name="l00031"></a><span class="lineno">   31</span> </div>
 <div class="foldopen" id="foldopen00032" data-start="{" data-end="}">
 <div class="line"><a id="l00032" name="l00032"></a><span class="lineno"><a class="line" href="struct_scale_op.html#a69f82bc925843a4e1c14dfe8ad2f3218">   32</a></span>  METAL_FUNC OutT <a class="code hl_function" href="struct_scale_op.html#a69f82bc925843a4e1c14dfe8ad2f3218">apply</a>(InT x)<span class="keyword"> const </span>{</div>
@@ -129,7 +126,6 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00034" name="l00034"></a><span class="lineno">   34</span>  }</div>
 </div>
 <div class="line"><a id="l00035" name="l00035"></a><span class="lineno">   35</span>};</div>
-</div>
 <div class="line"><a id="l00036" name="l00036"></a><span class="lineno">   36</span> </div>
 <div class="line"><a id="l00037" name="l00037"></a><span class="lineno"><a class="line" href="steel__gemm__masked_8h.html#a1480c8cdff1cae1462a5a71632969bca">   37</a></span><span class="keyword">typedef</span> <span class="keyword">struct </span><a class="code hl_struct" href="struct___no_mask.html">_NoMask</a> <a class="code hl_struct" href="struct___no_mask.html">nomask_t</a>;</div>
 <div class="line"><a id="l00038" name="l00038"></a><span class="lineno">   38</span> </div>
@@ -821,10 +817,10 @@ $(function() { codefold.init(0); });
 <div class="ttc" id="asteel_2defines_8h_html"><div class="ttname"><a href="steel_2defines_8h.html">defines.h</a></div></div>
 <div class="ttc" id="asteel_2defines_8h_html_a5a5c3095b132a7589bc19cd5cb80e2c6"><div class="ttname"><a href="steel_2defines_8h.html#a5a5c3095b132a7589bc19cd5cb80e2c6">STEEL_PRAGMA_UNROLL</a></div><div class="ttdeci">#define STEEL_PRAGMA_UNROLL</div><div class="ttdef"><b>Definition</b> defines.h:4</div></div>
 <div class="ttc" id="asteel__gemm__masked_8h_html_af805e998b2046ee30c2b4be813e3af97"><div class="ttname"><a href="steel__gemm__masked_8h.html#af805e998b2046ee30c2b4be813e3af97">block_masked_gemm</a></div><div class="ttdeci">void block_masked_gemm(const device T *A, const device T *B, device T *D, const constant GEMMParams *params, const constant int *batch_shape, const constant size_t *batch_strides, const device out_mask_t *out_mask, const device op_mask_t *lhs_mask, const device op_mask_t *rhs_mask, const constant int *mask_strides, uint simd_lane_id, uint simd_group_id, uint3 tid, uint3 lid)</div><div class="ttdef"><b>Definition</b> steel_gemm_masked.h:53</div></div>
-<div class="ttc" id="astruct___no_mask_html"><div class="ttname"><a href="struct___no_mask.html">_NoMask</a></div><div class="ttdef"><b>Definition</b> steel_gemm_masked.h:11</div></div>
-<div class="ttc" id="astruct___no_mask_html_a0c4a4557d5c97ceafe3a2c4e521cdf7e"><div class="ttname"><a href="struct___no_mask.html#a0c4a4557d5c97ceafe3a2c4e521cdf7e">_NoMask::x</a></div><div class="ttdeci">char x</div><div class="ttdef"><b>Definition</b> steel_gemm_masked.h:12</div></div>
-<div class="ttc" id="astruct_scale_op_html"><div class="ttname"><a href="struct_scale_op.html">ScaleOp</a></div><div class="ttdef"><b>Definition</b> steel_gemm_masked.h:29</div></div>
-<div class="ttc" id="astruct_scale_op_html_a02043fac21c68fb8d6863a01f45ede4b"><div class="ttname"><a href="struct_scale_op.html#a02043fac21c68fb8d6863a01f45ede4b">ScaleOp::scale</a></div><div class="ttdeci">OutT scale</div><div class="ttdef"><b>Definition</b> steel_gemm_masked.h:30</div></div>
+<div class="ttc" id="astruct___no_mask_html"><div class="ttname"><a href="struct___no_mask.html">_NoMask</a></div><div class="ttdef"><b>Definition</b> gemv_masked.h:10</div></div>
+<div class="ttc" id="astruct___no_mask_html_a0c4a4557d5c97ceafe3a2c4e521cdf7e"><div class="ttname"><a href="struct___no_mask.html#a0c4a4557d5c97ceafe3a2c4e521cdf7e">_NoMask::x</a></div><div class="ttdeci">char x</div><div class="ttdef"><b>Definition</b> gemv_masked.h:11</div></div>
+<div class="ttc" id="astruct_scale_op_html"><div class="ttname"><a href="struct_scale_op.html">ScaleOp</a></div><div class="ttdef"><b>Definition</b> gemv_masked.h:30</div></div>
+<div class="ttc" id="astruct_scale_op_html_a02043fac21c68fb8d6863a01f45ede4b"><div class="ttname"><a href="struct_scale_op.html#a02043fac21c68fb8d6863a01f45ede4b">ScaleOp::scale</a></div><div class="ttdeci">OutT scale</div><div class="ttdef"><b>Definition</b> gemv_masked.h:31</div></div>
 <div class="ttc" id="astruct_scale_op_html_a69f82bc925843a4e1c14dfe8ad2f3218"><div class="ttname"><a href="struct_scale_op.html#a69f82bc925843a4e1c14dfe8ad2f3218">ScaleOp::apply</a></div><div class="ttdeci">METAL_FUNC OutT apply(InT x) const</div><div class="ttdef"><b>Definition</b> steel_gemm_masked.h:32</div></div>
 <div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_kernel_html"><div class="ttname"><a href="structmlx_1_1steel_1_1_g_e_m_m_kernel.html">mlx::steel::GEMMKernel</a></div><div class="ttdef"><b>Definition</b> gemm.h:37</div></div>
 <div class="ttc" id="astructmlx_1_1steel_1_1_g_e_m_m_params_html"><div class="ttname"><a href="structmlx_1_1steel_1_1_g_e_m_m_params.html">mlx::steel::GEMMParams</a></div><div class="ttdef"><b>Definition</b> params.h:12</div></div>
