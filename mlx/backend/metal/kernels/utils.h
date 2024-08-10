@@ -325,6 +325,41 @@ METAL_FUNC uint3 elem_to_loc_3_nd(
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+// Elem to loc in a loop utils
+///////////////////////////////////////////////////////////////////////////////
+
+template <int dim, typename offset_t = size_t>
+struct looped_elem_to_loc {
+  looped_elem_to_loc<dim - 1, offset_t> inner_looper;
+  offset_t offset{0};
+  int index{0};
+
+  void next(const constant int* shape, const constant size_t* strides) {
+    index++;
+    offset += strides[dim - 1];
+
+    if (index >= shape[dim - 1]) {
+      index = 0;
+      inner_looper.next(shape, strides);
+      offset = inner_looper.offset;
+    }
+  }
+};
+
+template <typename offset_t>
+struct looped_elem_to_loc<1, offset_t> {
+  offset_t offset{0};
+
+  void next(const constant int* shape, const constant size_t* strides) {
+    (void)shape; // appease the compiler
+    offset += strides[0];
+  }
+};
+
+template <typename offset_t>
+struct looped_elem_to_loc<0, offset_t> {};
+
+///////////////////////////////////////////////////////////////////////////////
 // Calculation utils
 ///////////////////////////////////////////////////////////////////////////////
 
