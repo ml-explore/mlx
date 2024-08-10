@@ -803,12 +803,12 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00690" name="l00690"></a><span class="lineno">  690</span> </div>
 <div class="line"><a id="l00691" name="l00691"></a><span class="lineno">  691</span><span class="keyword">template</span> &lt;</div>
 <div class="line"><a id="l00692" name="l00692"></a><span class="lineno">  692</span>    <span class="keyword">typename</span> T,</div>
-<div class="line"><a id="l00693" name="l00693"></a><span class="lineno">  693</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BM,</div>
-<div class="line"><a id="l00694" name="l00694"></a><span class="lineno">  694</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BK,</div>
-<div class="line"><a id="l00695" name="l00695"></a><span class="lineno">  695</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BN,</div>
-<div class="line"><a id="l00696" name="l00696"></a><span class="lineno">  696</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> group_size,</div>
-<div class="line"><a id="l00697" name="l00697"></a><span class="lineno">  697</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1random.html#abb895baa477f5a06b5f88e69245f1825">bits</a>,</div>
-<div class="line"><a id="l00698" name="l00698"></a><span class="lineno">  698</span>    <span class="keyword">const</span> <span class="keywordtype">bool</span> aligned_N&gt;</div>
+<div class="line"><a id="l00693" name="l00693"></a><span class="lineno">  693</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> group_size,</div>
+<div class="line"><a id="l00694" name="l00694"></a><span class="lineno">  694</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1random.html#abb895baa477f5a06b5f88e69245f1825">bits</a>,</div>
+<div class="line"><a id="l00695" name="l00695"></a><span class="lineno">  695</span>    <span class="keyword">const</span> <span class="keywordtype">bool</span> aligned_N,</div>
+<div class="line"><a id="l00696" name="l00696"></a><span class="lineno">  696</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BM = 32,</div>
+<div class="line"><a id="l00697" name="l00697"></a><span class="lineno">  697</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BK = 32,</div>
+<div class="line"><a id="l00698" name="l00698"></a><span class="lineno">  698</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BN = 32&gt;</div>
 <div class="foldopen" id="foldopen00699" data-start="{" data-end="}">
 <div class="line"><a id="l00699" name="l00699"></a><span class="lineno"><a class="line" href="quantized_8h.html#ac7b6accc41b026ef8efc312987aa9efe">  699</a></span>METAL_FUNC <span class="keywordtype">void</span> <a class="code hl_function" href="quantized_8h.html#ac7b6accc41b026ef8efc312987aa9efe">qmm_t_impl</a>(</div>
 <div class="line"><a id="l00700" name="l00700"></a><span class="lineno">  700</span>    <span class="keyword">const</span> device T* x,</div>
@@ -927,11 +927,11 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00812" name="l00812"></a><span class="lineno">  812</span> </div>
 <div class="line"><a id="l00813" name="l00813"></a><span class="lineno">  813</span><span class="keyword">template</span> &lt;</div>
 <div class="line"><a id="l00814" name="l00814"></a><span class="lineno">  814</span>    <span class="keyword">typename</span> T,</div>
-<div class="line"><a id="l00815" name="l00815"></a><span class="lineno">  815</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BM,</div>
-<div class="line"><a id="l00816" name="l00816"></a><span class="lineno">  816</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BK,</div>
-<div class="line"><a id="l00817" name="l00817"></a><span class="lineno">  817</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BN,</div>
-<div class="line"><a id="l00818" name="l00818"></a><span class="lineno">  818</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> group_size,</div>
-<div class="line"><a id="l00819" name="l00819"></a><span class="lineno">  819</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1random.html#abb895baa477f5a06b5f88e69245f1825">bits</a>&gt;</div>
+<div class="line"><a id="l00815" name="l00815"></a><span class="lineno">  815</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> group_size,</div>
+<div class="line"><a id="l00816" name="l00816"></a><span class="lineno">  816</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> <a class="code hl_function" href="namespacemlx_1_1core_1_1random.html#abb895baa477f5a06b5f88e69245f1825">bits</a>,</div>
+<div class="line"><a id="l00817" name="l00817"></a><span class="lineno">  817</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BM = 32,</div>
+<div class="line"><a id="l00818" name="l00818"></a><span class="lineno">  818</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BK = 32,</div>
+<div class="line"><a id="l00819" name="l00819"></a><span class="lineno">  819</span>    <span class="keyword">const</span> <span class="keywordtype">int</span> BN = 32&gt;</div>
 <div class="foldopen" id="foldopen00820" data-start="{" data-end="}">
 <div class="line"><a id="l00820" name="l00820"></a><span class="lineno"><a class="line" href="quantized_8h.html#a5f7b71eef2e328af3225d7c777ffb339">  820</a></span>METAL_FUNC <span class="keywordtype">void</span> <a class="code hl_function" href="quantized_8h.html#a5f7b71eef2e328af3225d7c777ffb339">qmm_n_impl</a>(</div>
 <div class="line"><a id="l00821" name="l00821"></a><span class="lineno">  821</span>    <span class="keyword">const</span> device T* x,</div>
@@ -1225,7 +1225,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l01099" name="l01099"></a><span class="lineno"> 1099</span>  threadgroup T Xs[BM * BK_padded];</div>
 <div class="line"><a id="l01100" name="l01100"></a><span class="lineno"> 1100</span>  threadgroup T Ws[BN * BK_padded];</div>
 <div class="line"><a id="l01101" name="l01101"></a><span class="lineno"> 1101</span> </div>
-<div class="line"><a id="l01102" name="l01102"></a><span class="lineno"> 1102</span>  qmm_t_impl&lt;T, BM, BK, BN, group_size, bits, aligned_N&gt;(</div>
+<div class="line"><a id="l01102" name="l01102"></a><span class="lineno"> 1102</span>  qmm_t_impl&lt;T, group_size, bits, aligned_N, BM, BK, BN&gt;(</div>
 <div class="line"><a id="l01103" name="l01103"></a><span class="lineno"> 1103</span>      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);</div>
 <div class="line"><a id="l01104" name="l01104"></a><span class="lineno"> 1104</span>}</div>
 </div>
@@ -1259,7 +1259,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l01131" name="l01131"></a><span class="lineno"> 1131</span>  threadgroup T Xs[BM * BK_padded];</div>
 <div class="line"><a id="l01132" name="l01132"></a><span class="lineno"> 1132</span>  threadgroup T Ws[BK * BN_padded];</div>
 <div class="line"><a id="l01133" name="l01133"></a><span class="lineno"> 1133</span> </div>
-<div class="line"><a id="l01134" name="l01134"></a><span class="lineno"> 1134</span>  qmm_n_impl&lt;T, BM, BK, BN, group_size, bits&gt;(</div>
+<div class="line"><a id="l01134" name="l01134"></a><span class="lineno"> 1134</span>  qmm_n_impl&lt;T, group_size, bits, BM, BK, BN&gt;(</div>
 <div class="line"><a id="l01135" name="l01135"></a><span class="lineno"> 1135</span>      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);</div>
 <div class="line"><a id="l01136" name="l01136"></a><span class="lineno"> 1136</span>}</div>
 </div>
@@ -1518,7 +1518,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l01382" name="l01382"></a><span class="lineno"> 1382</span>      s_strides,</div>
 <div class="line"><a id="l01383" name="l01383"></a><span class="lineno"> 1383</span>      b_strides,</div>
 <div class="line"><a id="l01384" name="l01384"></a><span class="lineno"> 1384</span>      tid);</div>
-<div class="line"><a id="l01385" name="l01385"></a><span class="lineno"> 1385</span>  qmm_t_impl&lt;T, BM, BK, BN, group_size, bits, aligned_N&gt;(</div>
+<div class="line"><a id="l01385" name="l01385"></a><span class="lineno"> 1385</span>  qmm_t_impl&lt;T, group_size, bits, aligned_N, BM, BK, BN&gt;(</div>
 <div class="line"><a id="l01386" name="l01386"></a><span class="lineno"> 1386</span>      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);</div>
 <div class="line"><a id="l01387" name="l01387"></a><span class="lineno"> 1387</span>}</div>
 </div>
@@ -1588,15 +1588,169 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l01450" name="l01450"></a><span class="lineno"> 1450</span>      s_strides,</div>
 <div class="line"><a id="l01451" name="l01451"></a><span class="lineno"> 1451</span>      b_strides,</div>
 <div class="line"><a id="l01452" name="l01452"></a><span class="lineno"> 1452</span>      tid);</div>
-<div class="line"><a id="l01453" name="l01453"></a><span class="lineno"> 1453</span>  qmm_n_impl&lt;T, BM, BK, BN, group_size, bits&gt;(</div>
+<div class="line"><a id="l01453" name="l01453"></a><span class="lineno"> 1453</span>  qmm_n_impl&lt;T, group_size, bits, BM, BK, BN&gt;(</div>
 <div class="line"><a id="l01454" name="l01454"></a><span class="lineno"> 1454</span>      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);</div>
 <div class="line"><a id="l01455" name="l01455"></a><span class="lineno"> 1455</span>}</div>
 </div>
+<div class="line"><a id="l01456" name="l01456"></a><span class="lineno"> 1456</span> </div>
+<div class="line"><a id="l01457" name="l01457"></a><span class="lineno"> 1457</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, const <span class="keywordtype">int</span> group_size, const <span class="keywordtype">int</span> bits&gt;</div>
+<div class="foldopen" id="foldopen01458" data-start="{" data-end="}">
+<div class="line"><a id="l01458" name="l01458"></a><span class="lineno"><a class="line" href="quantized_8h.html#a47610f886f988d84c3e789eb564a6c44"> 1458</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="quantized_8h.html#a47610f886f988d84c3e789eb564a6c44">affine_quantize</a>(</div>
+<div class="line"><a id="l01459" name="l01459"></a><span class="lineno"> 1459</span>    <span class="keyword">const</span> device T* w [[buffer(0)]],</div>
+<div class="line"><a id="l01460" name="l01460"></a><span class="lineno"> 1460</span>    device uint8_t* out [[buffer(1)]],</div>
+<div class="line"><a id="l01461" name="l01461"></a><span class="lineno"> 1461</span>    device T* scales [[buffer(2)]],</div>
+<div class="line"><a id="l01462" name="l01462"></a><span class="lineno"> 1462</span>    device T* biases [[buffer(3)]],</div>
+<div class="line"><a id="l01463" name="l01463"></a><span class="lineno"> 1463</span>    uint index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l01464" name="l01464"></a><span class="lineno"> 1464</span>  <span class="keyword">constexpr</span> T eps = T(1e-7);</div>
+<div class="line"><a id="l01465" name="l01465"></a><span class="lineno"> 1465</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> <a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a> = 32;</div>
+<div class="line"><a id="l01466" name="l01466"></a><span class="lineno"> 1466</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> uint8_bits = 8;</div>
+<div class="line"><a id="l01467" name="l01467"></a><span class="lineno"> 1467</span>  <span class="keyword">constexpr</span> T n_bins = (1 &lt;&lt; bits) - 1;</div>
+<div class="line"><a id="l01468" name="l01468"></a><span class="lineno"> 1468</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> packs_per_int = uint8_bits / bits;</div>
+<div class="line"><a id="l01469" name="l01469"></a><span class="lineno"> 1469</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> values_per_reduce = group_size / <a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a>;</div>
+<div class="line"><a id="l01470" name="l01470"></a><span class="lineno"> 1470</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> writes_per_reduce = packs_per_int / values_per_reduce;</div>
+<div class="line"><a id="l01471" name="l01471"></a><span class="lineno"> 1471</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> writes_per_pack =</div>
+<div class="line"><a id="l01472" name="l01472"></a><span class="lineno"> 1472</span>      writes_per_reduce &gt; 1 ? 1 : values_per_reduce / packs_per_int;</div>
+<div class="line"><a id="l01473" name="l01473"></a><span class="lineno"> 1473</span> </div>
+<div class="line"><a id="l01474" name="l01474"></a><span class="lineno"> 1474</span>  <span class="keyword">static_assert</span>(</div>
+<div class="line"><a id="l01475" name="l01475"></a><span class="lineno"> 1475</span>      group_size % <a class="code hl_variable" href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a> == 0,</div>
+<div class="line"><a id="l01476" name="l01476"></a><span class="lineno"> 1476</span>      <span class="stringliteral">&quot;Group size must be divisible by simd size.&quot;</span>);</div>
+<div class="line"><a id="l01477" name="l01477"></a><span class="lineno"> 1477</span> </div>
+<div class="line"><a id="l01478" name="l01478"></a><span class="lineno"> 1478</span>  <span class="keywordtype">int</span> in_index = index * values_per_reduce;</div>
+<div class="line"><a id="l01479" name="l01479"></a><span class="lineno"> 1479</span>  <span class="keywordtype">int</span> out_index = index * writes_per_pack;</div>
+<div class="line"><a id="l01480" name="l01480"></a><span class="lineno"> 1480</span> </div>
+<div class="line"><a id="l01481" name="l01481"></a><span class="lineno"> 1481</span>  T w_thread[values_per_reduce];</div>
+<div class="line"><a id="l01482" name="l01482"></a><span class="lineno"> 1482</span>  T w_min = <a class="code hl_struct" href="struct_limits.html">Limits&lt;T&gt;::max</a>;</div>
+<div class="line"><a id="l01483" name="l01483"></a><span class="lineno"> 1483</span>  T w_max = 0;</div>
+<div class="line"><a id="l01484" name="l01484"></a><span class="lineno"> 1484</span> </div>
+<div class="line"><a id="l01485" name="l01485"></a><span class="lineno"> 1485</span><span class="preprocessor">#pragma clang loop unroll(full)</span></div>
+<div class="line"><a id="l01486" name="l01486"></a><span class="lineno"> 1486</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; values_per_reduce; i++) {</div>
+<div class="line"><a id="l01487" name="l01487"></a><span class="lineno"> 1487</span>    T val = w[in_index + i];</div>
+<div class="line"><a id="l01488" name="l01488"></a><span class="lineno"> 1488</span>    w_thread[i] = val;</div>
+<div class="line"><a id="l01489" name="l01489"></a><span class="lineno"> 1489</span>    w_min = <a class="code hl_function" href="namespacemetal.html#a6653b28c9473087141eddce39878d4d3">min</a>(w_min, val);</div>
+<div class="line"><a id="l01490" name="l01490"></a><span class="lineno"> 1490</span>    w_max = <a class="code hl_function" href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">max</a>(w_max, val);</div>
+<div class="line"><a id="l01491" name="l01491"></a><span class="lineno"> 1491</span>  }</div>
+<div class="line"><a id="l01492" name="l01492"></a><span class="lineno"> 1492</span> </div>
+<div class="line"><a id="l01493" name="l01493"></a><span class="lineno"> 1493</span>  w_min = <a class="code hl_function" href="namespacemetal.html#ae9e2a23e00724ba2d7868bc4112b386b">simd_min</a>(w_min);</div>
+<div class="line"><a id="l01494" name="l01494"></a><span class="lineno"> 1494</span>  w_max = <a class="code hl_function" href="namespacemetal.html#a048cad0aca52cb737ebf103e76bd1c49">simd_max</a>(w_max);</div>
+<div class="line"><a id="l01495" name="l01495"></a><span class="lineno"> 1495</span> </div>
+<div class="line"><a id="l01496" name="l01496"></a><span class="lineno"> 1496</span>  T scale = <a class="code hl_function" href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">max</a>((w_max - w_min) / n_bins, eps);</div>
+<div class="line"><a id="l01497" name="l01497"></a><span class="lineno"> 1497</span>  <span class="keywordtype">bool</span> side = <a class="code hl_function" href="namespacemetal.html#a87c5122c60f9a12afceb9925a5b78ffb">abs</a>(w_min) &gt; <a class="code hl_function" href="namespacemetal.html#a87c5122c60f9a12afceb9925a5b78ffb">abs</a>(w_max);</div>
+<div class="line"><a id="l01498" name="l01498"></a><span class="lineno"> 1498</span>  scale = side ? scale : -scale;</div>
+<div class="line"><a id="l01499" name="l01499"></a><span class="lineno"> 1499</span>  T edge = side ? w_min : w_max;</div>
+<div class="line"><a id="l01500" name="l01500"></a><span class="lineno"> 1500</span>  T q0 = <a class="code hl_function" href="namespacemetal.html#a46c667e169ff9d51a9204a045305442f">round</a>(edge / scale);</div>
+<div class="line"><a id="l01501" name="l01501"></a><span class="lineno"> 1501</span>  <span class="keywordtype">bool</span> at_zero = q0 == 0.0f;</div>
+<div class="line"><a id="l01502" name="l01502"></a><span class="lineno"> 1502</span>  scale = at_zero ? scale : edge / q0;</div>
+<div class="line"><a id="l01503" name="l01503"></a><span class="lineno"> 1503</span>  T bias = at_zero ? T(0) : edge;</div>
+<div class="line"><a id="l01504" name="l01504"></a><span class="lineno"> 1504</span> </div>
+<div class="line"><a id="l01505" name="l01505"></a><span class="lineno"> 1505</span>  <span class="comment">// Write out the scales and biases</span></div>
+<div class="line"><a id="l01506" name="l01506"></a><span class="lineno"> 1506</span>  <span class="keywordtype">int</span> gindex = in_index / group_size;</div>
+<div class="line"><a id="l01507" name="l01507"></a><span class="lineno"> 1507</span>  <span class="keywordflow">if</span> (in_index % group_size == 0) {</div>
+<div class="line"><a id="l01508" name="l01508"></a><span class="lineno"> 1508</span>    scales[gindex] = scale;</div>
+<div class="line"><a id="l01509" name="l01509"></a><span class="lineno"> 1509</span>    biases[gindex] = bias;</div>
+<div class="line"><a id="l01510" name="l01510"></a><span class="lineno"> 1510</span>  }</div>
+<div class="line"><a id="l01511" name="l01511"></a><span class="lineno"> 1511</span> </div>
+<div class="line"><a id="l01512" name="l01512"></a><span class="lineno"> 1512</span>  uint8_t output = 0;</div>
+<div class="line"><a id="l01513" name="l01513"></a><span class="lineno"> 1513</span><span class="preprocessor">#pragma clang loop unroll(full)</span></div>
+<div class="line"><a id="l01514" name="l01514"></a><span class="lineno"> 1514</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; values_per_reduce; i++) {</div>
+<div class="line"><a id="l01515" name="l01515"></a><span class="lineno"> 1515</span>    uint8_t val = <a class="code hl_function" href="namespacemetal.html#a6653b28c9473087141eddce39878d4d3">min</a>(<a class="code hl_function" href="namespacemetal.html#a46c667e169ff9d51a9204a045305442f">round</a>((w_thread[i] - bias) / scale), n_bins);</div>
+<div class="line"><a id="l01516" name="l01516"></a><span class="lineno"> 1516</span>    <span class="keywordflow">if</span> (bits == 8) {</div>
+<div class="line"><a id="l01517" name="l01517"></a><span class="lineno"> 1517</span>      output = val;</div>
+<div class="line"><a id="l01518" name="l01518"></a><span class="lineno"> 1518</span>    } <span class="keywordflow">else</span> {</div>
+<div class="line"><a id="l01519" name="l01519"></a><span class="lineno"> 1519</span>      output += val &lt;&lt; (bits * (i % packs_per_int));</div>
+<div class="line"><a id="l01520" name="l01520"></a><span class="lineno"> 1520</span>    }</div>
+<div class="line"><a id="l01521" name="l01521"></a><span class="lineno"> 1521</span> </div>
+<div class="line"><a id="l01522" name="l01522"></a><span class="lineno"> 1522</span>    <span class="keywordflow">if</span> (packs_per_int &lt; values_per_reduce &amp;&amp;</div>
+<div class="line"><a id="l01523" name="l01523"></a><span class="lineno"> 1523</span>        i % packs_per_int == packs_per_int - 1) {</div>
+<div class="line"><a id="l01524" name="l01524"></a><span class="lineno"> 1524</span>      out[out_index + i / packs_per_int] = output;</div>
+<div class="line"><a id="l01525" name="l01525"></a><span class="lineno"> 1525</span>      output = 0;</div>
+<div class="line"><a id="l01526" name="l01526"></a><span class="lineno"> 1526</span>    } <span class="keywordflow">else</span> {</div>
+<div class="line"><a id="l01527" name="l01527"></a><span class="lineno"> 1527</span><span class="preprocessor">#pragma clang loop unroll(full)</span></div>
+<div class="line"><a id="l01528" name="l01528"></a><span class="lineno"> 1528</span>      <span class="keywordflow">for</span> (<span class="keywordtype">int</span> j = 0; j &lt; writes_per_reduce - 1; j++) {</div>
+<div class="line"><a id="l01529" name="l01529"></a><span class="lineno"> 1529</span>        uint8_t sval = <a class="code hl_function" href="namespacemetal.html#af6e2dd7ae087aba6abac4f0350b7611c">simd_shuffle_down</a>(val, j + 1);</div>
+<div class="line"><a id="l01530" name="l01530"></a><span class="lineno"> 1530</span>        output += sval &lt;&lt; (bits * (values_per_reduce + j + i));</div>
+<div class="line"><a id="l01531" name="l01531"></a><span class="lineno"> 1531</span>      }</div>
+<div class="line"><a id="l01532" name="l01532"></a><span class="lineno"> 1532</span>    }</div>
+<div class="line"><a id="l01533" name="l01533"></a><span class="lineno"> 1533</span>  }</div>
+<div class="line"><a id="l01534" name="l01534"></a><span class="lineno"> 1534</span>  <span class="keywordflow">if</span> (writes_per_reduce &gt; 0 &amp;&amp; out_index % writes_per_reduce == 0) {</div>
+<div class="line"><a id="l01535" name="l01535"></a><span class="lineno"> 1535</span>    out[out_index / writes_per_reduce] = output;</div>
+<div class="line"><a id="l01536" name="l01536"></a><span class="lineno"> 1536</span>  }</div>
+<div class="line"><a id="l01537" name="l01537"></a><span class="lineno"> 1537</span>}</div>
+</div>
+<div class="line"><a id="l01538" name="l01538"></a><span class="lineno"> 1538</span> </div>
+<div class="line"><a id="l01539" name="l01539"></a><span class="lineno"> 1539</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, const <span class="keywordtype">int</span> group_size, const <span class="keywordtype">int</span> bits&gt;</div>
+<div class="foldopen" id="foldopen01540" data-start="{" data-end="}">
+<div class="line"><a id="l01540" name="l01540"></a><span class="lineno"><a class="line" href="quantized_8h.html#a57cd320aab5fa1abb65f79b0b781f575"> 1540</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="quantized_8h.html#a57cd320aab5fa1abb65f79b0b781f575">affine_quantize_scales_biases</a>(</div>
+<div class="line"><a id="l01541" name="l01541"></a><span class="lineno"> 1541</span>    <span class="keyword">const</span> device T* w [[buffer(0)]],</div>
+<div class="line"><a id="l01542" name="l01542"></a><span class="lineno"> 1542</span>    <span class="keyword">const</span> device T* scales [[buffer(1)]],</div>
+<div class="line"><a id="l01543" name="l01543"></a><span class="lineno"> 1543</span>    <span class="keyword">const</span> device T* biases [[buffer(2)]],</div>
+<div class="line"><a id="l01544" name="l01544"></a><span class="lineno"> 1544</span>    device uint8_t* out [[buffer(3)]],</div>
+<div class="line"><a id="l01545" name="l01545"></a><span class="lineno"> 1545</span>    uint index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l01546" name="l01546"></a><span class="lineno"> 1546</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> uint8_bits = 8;</div>
+<div class="line"><a id="l01547" name="l01547"></a><span class="lineno"> 1547</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> packs_per_int = uint8_bits / bits;</div>
+<div class="line"><a id="l01548" name="l01548"></a><span class="lineno"> 1548</span>  <span class="keyword">constexpr</span> T n_bins = (1 &lt;&lt; bits) - 1;</div>
+<div class="line"><a id="l01549" name="l01549"></a><span class="lineno"> 1549</span> </div>
+<div class="line"><a id="l01550" name="l01550"></a><span class="lineno"> 1550</span>  <span class="keywordtype">int</span> in_index = index * packs_per_int;</div>
+<div class="line"><a id="l01551" name="l01551"></a><span class="lineno"> 1551</span>  <span class="keywordtype">int</span> gindex = in_index / group_size;</div>
+<div class="line"><a id="l01552" name="l01552"></a><span class="lineno"> 1552</span>  T scale = scales[gindex];</div>
+<div class="line"><a id="l01553" name="l01553"></a><span class="lineno"> 1553</span>  T bias = biases[gindex];</div>
+<div class="line"><a id="l01554" name="l01554"></a><span class="lineno"> 1554</span> </div>
+<div class="line"><a id="l01555" name="l01555"></a><span class="lineno"> 1555</span>  uint8_t output = 0;</div>
+<div class="line"><a id="l01556" name="l01556"></a><span class="lineno"> 1556</span><span class="preprocessor">#pragma clang loop unroll(full)</span></div>
+<div class="line"><a id="l01557" name="l01557"></a><span class="lineno"> 1557</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; packs_per_int; i++) {</div>
+<div class="line"><a id="l01558" name="l01558"></a><span class="lineno"> 1558</span>    uint8_t val = <a class="code hl_function" href="namespacemetal.html#a6653b28c9473087141eddce39878d4d3">min</a>(<a class="code hl_function" href="namespacemetal.html#a46c667e169ff9d51a9204a045305442f">round</a>((w[in_index + i] - bias) / scale), n_bins);</div>
+<div class="line"><a id="l01559" name="l01559"></a><span class="lineno"> 1559</span>    <span class="keywordflow">if</span> (bits == 8) {</div>
+<div class="line"><a id="l01560" name="l01560"></a><span class="lineno"> 1560</span>      output = val;</div>
+<div class="line"><a id="l01561" name="l01561"></a><span class="lineno"> 1561</span>    } <span class="keywordflow">else</span> {</div>
+<div class="line"><a id="l01562" name="l01562"></a><span class="lineno"> 1562</span>      output += val &lt;&lt; (bits * i);</div>
+<div class="line"><a id="l01563" name="l01563"></a><span class="lineno"> 1563</span>    }</div>
+<div class="line"><a id="l01564" name="l01564"></a><span class="lineno"> 1564</span>  }</div>
+<div class="line"><a id="l01565" name="l01565"></a><span class="lineno"> 1565</span>  out[index] = output;</div>
+<div class="line"><a id="l01566" name="l01566"></a><span class="lineno"> 1566</span>}</div>
+</div>
+<div class="line"><a id="l01567" name="l01567"></a><span class="lineno"> 1567</span> </div>
+<div class="line"><a id="l01568" name="l01568"></a><span class="lineno"> 1568</span><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, const <span class="keywordtype">int</span> group_size, const <span class="keywordtype">int</span> bits&gt;</div>
+<div class="foldopen" id="foldopen01569" data-start="{" data-end="}">
+<div class="line"><a id="l01569" name="l01569"></a><span class="lineno"><a class="line" href="quantized_8h.html#aecc3db76dcae742776e71ec8fca470c5"> 1569</a></span>[[kernel]] <span class="keywordtype">void</span> <a class="code hl_function" href="quantized_8h.html#aecc3db76dcae742776e71ec8fca470c5">affine_dequantize</a>(</div>
+<div class="line"><a id="l01570" name="l01570"></a><span class="lineno"> 1570</span>    <span class="keyword">const</span> device uint8_t* w [[buffer(0)]],</div>
+<div class="line"><a id="l01571" name="l01571"></a><span class="lineno"> 1571</span>    <span class="keyword">const</span> device T* scales [[buffer(1)]],</div>
+<div class="line"><a id="l01572" name="l01572"></a><span class="lineno"> 1572</span>    <span class="keyword">const</span> device T* biases [[buffer(2)]],</div>
+<div class="line"><a id="l01573" name="l01573"></a><span class="lineno"> 1573</span>    device T* out [[buffer(3)]],</div>
+<div class="line"><a id="l01574" name="l01574"></a><span class="lineno"> 1574</span>    uint index [[thread_position_in_grid]]) {</div>
+<div class="line"><a id="l01575" name="l01575"></a><span class="lineno"> 1575</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> uint8_bits = 8;</div>
+<div class="line"><a id="l01576" name="l01576"></a><span class="lineno"> 1576</span>  <span class="keyword">constexpr</span> <span class="keywordtype">int</span> packs_per_int = uint8_bits / bits;</div>
+<div class="line"><a id="l01577" name="l01577"></a><span class="lineno"> 1577</span> </div>
+<div class="line"><a id="l01578" name="l01578"></a><span class="lineno"> 1578</span>  <span class="keywordtype">int</span> oindex = index * packs_per_int;</div>
+<div class="line"><a id="l01579" name="l01579"></a><span class="lineno"> 1579</span>  <span class="keywordtype">int</span> gindex = oindex / group_size;</div>
+<div class="line"><a id="l01580" name="l01580"></a><span class="lineno"> 1580</span>  T scale = scales[gindex];</div>
+<div class="line"><a id="l01581" name="l01581"></a><span class="lineno"> 1581</span>  T bias = biases[gindex];</div>
+<div class="line"><a id="l01582" name="l01582"></a><span class="lineno"> 1582</span>  uint val = w[index];</div>
+<div class="line"><a id="l01583" name="l01583"></a><span class="lineno"> 1583</span> </div>
+<div class="line"><a id="l01584" name="l01584"></a><span class="lineno"> 1584</span><span class="preprocessor">#pragma clang loop unroll(full)</span></div>
+<div class="line"><a id="l01585" name="l01585"></a><span class="lineno"> 1585</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; packs_per_int; i++) {</div>
+<div class="line"><a id="l01586" name="l01586"></a><span class="lineno"> 1586</span>    uint8_t d;</div>
+<div class="line"><a id="l01587" name="l01587"></a><span class="lineno"> 1587</span>    <span class="keywordflow">if</span> (bits == 2) {</div>
+<div class="line"><a id="l01588" name="l01588"></a><span class="lineno"> 1588</span>      d = (val &gt;&gt; (bits * i)) &amp; 0x03;</div>
+<div class="line"><a id="l01589" name="l01589"></a><span class="lineno"> 1589</span>    } <span class="keywordflow">else</span> <span class="keywordflow">if</span> (bits == 4) {</div>
+<div class="line"><a id="l01590" name="l01590"></a><span class="lineno"> 1590</span>      d = (val &gt;&gt; (bits * i)) &amp; 0x0f;</div>
+<div class="line"><a id="l01591" name="l01591"></a><span class="lineno"> 1591</span>    } <span class="keywordflow">else</span> <span class="keywordflow">if</span> (bits == 8) {</div>
+<div class="line"><a id="l01592" name="l01592"></a><span class="lineno"> 1592</span>      d = val;</div>
+<div class="line"><a id="l01593" name="l01593"></a><span class="lineno"> 1593</span>    }</div>
+<div class="line"><a id="l01594" name="l01594"></a><span class="lineno"> 1594</span>    out[oindex + i] = scale * d + bias;</div>
+<div class="line"><a id="l01595" name="l01595"></a><span class="lineno"> 1595</span>  }</div>
+<div class="line"><a id="l01596" name="l01596"></a><span class="lineno"> 1596</span>}</div>
+</div>
+<div class="ttc" id="abackend_2metal_2kernels_2reduction_2ops_8h_html_a515b75d563a93d3c09ee677948dc83e3"><div class="ttname"><a href="backend_2metal_2kernels_2reduction_2ops_8h.html#a515b75d563a93d3c09ee677948dc83e3">simd_size</a></div><div class="ttdeci">static constant constexpr const uint8_t simd_size</div><div class="ttdef"><b>Definition</b> ops.h:8</div></div>
 <div class="ttc" id="abackend_2metal_2kernels_2steel_2utils_8h_html_aaf4974425147d6f26d031691e321637f"><div class="ttname"><a href="backend_2metal_2kernels_2steel_2utils_8h.html#aaf4974425147d6f26d031691e321637f">elem_to_loc_broadcast</a></div><div class="ttdeci">METAL_FUNC ulong2 elem_to_loc_broadcast(uint elem, constant const int *shape, constant const size_t *a_strides, constant const size_t *b_strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:7</div></div>
 <div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a2e49fa7ab8f6348543455c6c45d7e2a9"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a2e49fa7ab8f6348543455c6c45d7e2a9">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc(uint elem, device const int *shape, device const stride_t *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:77</div></div>
 <div class="ttc" id="anamespacemetal_html"><div class="ttname"><a href="namespacemetal.html">metal</a></div><div class="ttdef"><b>Definition</b> bf16.h:265</div></div>
+<div class="ttc" id="anamespacemetal_html_a048cad0aca52cb737ebf103e76bd1c49"><div class="ttname"><a href="namespacemetal.html#a048cad0aca52cb737ebf103e76bd1c49">metal::simd_max</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_max(bfloat16_t data)</div><div class="ttdef"><b>Definition</b> bf16_math.h:392</div></div>
+<div class="ttc" id="anamespacemetal_html_a46c667e169ff9d51a9204a045305442f"><div class="ttname"><a href="namespacemetal.html#a46c667e169ff9d51a9204a045305442f">metal::round</a></div><div class="ttdeci">METAL_FUNC bfloat16_t round(bfloat16_t x)</div><div class="ttdef"><b>Definition</b> bf16_math.h:234</div></div>
 <div class="ttc" id="anamespacemetal_html_a6653b28c9473087141eddce39878d4d3"><div class="ttname"><a href="namespacemetal.html#a6653b28c9473087141eddce39878d4d3">metal::min</a></div><div class="ttdeci">METAL_FUNC bfloat16_t min(bfloat16_t x, bfloat16_t y)</div><div class="ttdef"><b>Definition</b> bf16_math.h:234</div></div>
 <div class="ttc" id="anamespacemetal_html_a85181e37a00cb4a4217f1bb25389bce5"><div class="ttname"><a href="namespacemetal.html#a85181e37a00cb4a4217f1bb25389bce5">metal::simd_sum</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_sum(bfloat16_t data)</div><div class="ttdef"><b>Definition</b> bf16_math.h:392</div></div>
+<div class="ttc" id="anamespacemetal_html_a853c80479ab2264d9c4587c7bcac767b"><div class="ttname"><a href="namespacemetal.html#a853c80479ab2264d9c4587c7bcac767b">metal::max</a></div><div class="ttdeci">METAL_FUNC bfloat16_t max(bfloat16_t x, bfloat16_t y)</div><div class="ttdef"><b>Definition</b> bf16_math.h:234</div></div>
+<div class="ttc" id="anamespacemetal_html_a87c5122c60f9a12afceb9925a5b78ffb"><div class="ttname"><a href="namespacemetal.html#a87c5122c60f9a12afceb9925a5b78ffb">metal::abs</a></div><div class="ttdeci">METAL_FUNC bfloat16_t abs(bfloat16_t x)</div><div class="ttdef"><b>Definition</b> bf16_math.h:234</div></div>
+<div class="ttc" id="anamespacemetal_html_ae9e2a23e00724ba2d7868bc4112b386b"><div class="ttname"><a href="namespacemetal.html#ae9e2a23e00724ba2d7868bc4112b386b">metal::simd_min</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_min(bfloat16_t data)</div><div class="ttdef"><b>Definition</b> bf16_math.h:392</div></div>
+<div class="ttc" id="anamespacemetal_html_af6e2dd7ae087aba6abac4f0350b7611c"><div class="ttname"><a href="namespacemetal.html#af6e2dd7ae087aba6abac4f0350b7611c">metal::simd_shuffle_down</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_shuffle_down(bfloat16_t data, ushort delta)</div><div class="ttdef"><b>Definition</b> bf16_math.h:391</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_1_1random_html_abb895baa477f5a06b5f88e69245f1825"><div class="ttname"><a href="namespacemlx_1_1core_1_1random.html#abb895baa477f5a06b5f88e69245f1825">mlx::core::random::bits</a></div><div class="ttdeci">array bits(const std::vector&lt; int &gt; &amp;shape, int width, const std::optional&lt; array &gt; &amp;key=std::nullopt, StreamOrDevice s={})</div><div class="ttdoc">Generate an array with type uint32 filled with random bits.</div></div>
 <div class="ttc" id="aquantized_8h_html_a0386011c52d03e60885a31e6fbd903dd"><div class="ttname"><a href="quantized_8h.html#a0386011c52d03e60885a31e6fbd903dd">MLX_MTL_CONST</a></div><div class="ttdeci">#define MLX_MTL_CONST</div><div class="ttdef"><b>Definition</b> quantized.h:8</div></div>
 <div class="ttc" id="aquantized_8h_html_a03ba4a4a5fe9955319b0aa477d2d7d98"><div class="ttname"><a href="quantized_8h.html#a03ba4a4a5fe9955319b0aa477d2d7d98">bs_qmv</a></div><div class="ttdeci">void bs_qmv(const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:1200</div></div>
@@ -1605,6 +1759,8 @@ $(function() { codefold.init(0); });
 <div class="ttc" id="aquantized_8h_html_a3ab400746ad77be89c30d25638e01698"><div class="ttname"><a href="quantized_8h.html#a3ab400746ad77be89c30d25638e01698">adjust_matrix_offsets</a></div><div class="ttdeci">METAL_FUNC void adjust_matrix_offsets(const device T *&amp;x, const device uint32_t *&amp;w, const device T *&amp;scales, const device T *&amp;biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *&amp;y, int output_stride, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid)</div><div class="ttdef"><b>Definition</b> quantized.h:946</div></div>
 <div class="ttc" id="aquantized_8h_html_a3acc2ace766cb855f13da2d1834e7dc7"><div class="ttname"><a href="quantized_8h.html#a3acc2ace766cb855f13da2d1834e7dc7">bs_qmm_t</a></div><div class="ttdeci">void bs_qmm_t(const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:1329</div></div>
 <div class="ttc" id="aquantized_8h_html_a3af1c89416632c9275b8218a33cb8a04"><div class="ttname"><a href="quantized_8h.html#a3af1c89416632c9275b8218a33cb8a04">bs_qvm</a></div><div class="ttdeci">void bs_qvm(const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:1261</div></div>
+<div class="ttc" id="aquantized_8h_html_a47610f886f988d84c3e789eb564a6c44"><div class="ttname"><a href="quantized_8h.html#a47610f886f988d84c3e789eb564a6c44">affine_quantize</a></div><div class="ttdeci">void affine_quantize(const device T *w, device uint8_t *out, device T *scales, device T *biases, uint index)</div><div class="ttdef"><b>Definition</b> quantized.h:1458</div></div>
+<div class="ttc" id="aquantized_8h_html_a57cd320aab5fa1abb65f79b0b781f575"><div class="ttname"><a href="quantized_8h.html#a57cd320aab5fa1abb65f79b0b781f575">affine_quantize_scales_biases</a></div><div class="ttdeci">void affine_quantize_scales_biases(const device T *w, const device T *scales, const device T *biases, device uint8_t *out, uint index)</div><div class="ttdef"><b>Definition</b> quantized.h:1540</div></div>
 <div class="ttc" id="aquantized_8h_html_a5f7b71eef2e328af3225d7c777ffb339"><div class="ttname"><a href="quantized_8h.html#a5f7b71eef2e328af3225d7c777ffb339">qmm_n_impl</a></div><div class="ttdeci">METAL_FUNC void qmm_n_impl(const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, threadgroup T *Xs, threadgroup T *Ws, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:820</div></div>
 <div class="ttc" id="aquantized_8h_html_a62969a218d93680f5e35d0c61b160b99"><div class="ttname"><a href="quantized_8h.html#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a></div><div class="ttdeci">static constant constexpr const int SIMD_SIZE</div><div class="ttdef"><b>Definition</b> quantized.h:10</div></div>
 <div class="ttc" id="aquantized_8h_html_a6f92bb9f3d29d707bfc680bebe1c80f7"><div class="ttname"><a href="quantized_8h.html#a6f92bb9f3d29d707bfc680bebe1c80f7">bs_qmv_fast</a></div><div class="ttdeci">void bs_qmv_fast(const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:1139</div></div>
@@ -1620,8 +1776,10 @@ $(function() { codefold.init(0); });
 <div class="ttc" id="aquantized_8h_html_ad6d0aa9b080358581844d6583aa2f4ea"><div class="ttname"><a href="quantized_8h.html#ad6d0aa9b080358581844d6583aa2f4ea">qmv_fast</a></div><div class="ttdeci">void qmv_fast(const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:1000</div></div>
 <div class="ttc" id="aquantized_8h_html_ae024e11c3e38dda71fef772ff0a82fe2"><div class="ttname"><a href="quantized_8h.html#ae024e11c3e38dda71fef772ff0a82fe2">qmv</a></div><div class="ttdeci">void qmv(const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:1025</div></div>
 <div class="ttc" id="aquantized_8h_html_ae756f6817b584c60f5dcdd1d9c6b4f58"><div class="ttname"><a href="quantized_8h.html#ae756f6817b584c60f5dcdd1d9c6b4f58">qouter</a></div><div class="ttdeci">void qouter(const thread uint8_t *w, U x, U scale, U bias, thread U *result)</div><div class="ttdef"><b>Definition</b> quantized.h:186</div></div>
+<div class="ttc" id="aquantized_8h_html_aecc3db76dcae742776e71ec8fca470c5"><div class="ttname"><a href="quantized_8h.html#aecc3db76dcae742776e71ec8fca470c5">affine_dequantize</a></div><div class="ttdeci">void affine_dequantize(const device uint8_t *w, const device T *scales, const device T *biases, device T *out, uint index)</div><div class="ttdef"><b>Definition</b> quantized.h:1569</div></div>
 <div class="ttc" id="aquantized_8h_html_aecff265b63566d0d5689cfc4e5b037d2"><div class="ttname"><a href="quantized_8h.html#aecff265b63566d0d5689cfc4e5b037d2">dequantize</a></div><div class="ttdeci">void dequantize(const device uint8_t *w, U scale, U bias, threadgroup U *w_local)</div><div class="ttdef"><b>Definition</b> quantized.h:218</div></div>
 <div class="ttc" id="aquantized_8h_html_af9b25269ab95632e343631eeef79dc8d"><div class="ttname"><a href="quantized_8h.html#af9b25269ab95632e343631eeef79dc8d">qmm_t</a></div><div class="ttdeci">void qmm_t(const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</div><div class="ttdef"><b>Definition</b> quantized.h:1082</div></div>
+<div class="ttc" id="astruct_limits_html"><div class="ttname"><a href="struct_limits.html">Limits</a></div><div class="ttdef"><b>Definition</b> utils.h:17</div></div>
 <div class="ttc" id="astruct_quantized_block_loader_html"><div class="ttname"><a href="struct_quantized_block_loader.html">QuantizedBlockLoader</a></div><div class="ttdef"><b>Definition</b> quantized.h:261</div></div>
 <div class="ttc" id="astruct_quantized_block_loader_html_a0ace7e3762ecfa5a4106e7dee7e1b6ab"><div class="ttname"><a href="struct_quantized_block_loader.html#a0ace7e3762ecfa5a4106e7dee7e1b6ab">QuantizedBlockLoader::group_stride</a></div><div class="ttdeci">const int group_stride</div><div class="ttdef"><b>Definition</b> quantized.h:281</div></div>
 <div class="ttc" id="astruct_quantized_block_loader_html_a1392a5278cf6e090ea80ebe7c4ac5fbb"><div class="ttname"><a href="struct_quantized_block_loader.html#a1392a5278cf6e090ea80ebe7c4ac5fbb">QuantizedBlockLoader::BCOLS_PACKED</a></div><div class="ttdeci">static constant constexpr const short BCOLS_PACKED</div><div class="ttdef"><b>Definition</b> quantized.h:273</div></div>

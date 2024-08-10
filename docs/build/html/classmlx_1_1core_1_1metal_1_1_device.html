@@ -112,8 +112,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a60689f97347811b27e8c5ca23e0372bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a45945f2efcd242d915ffa2171e92bf9d" id="r_a45945f2efcd242d915ffa2171e92bf9d"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a45945f2efcd242d915ffa2171e92bf9d">register_library</a> (const std::string &amp;lib_name, const std::string &amp;lib_path)</td></tr>
 <tr class="separator:a45945f2efcd242d915ffa2171e92bf9d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6993ce23a485b725b687628b77751ad2" id="r_a6993ce23a485b725b687628b77751ad2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6993ce23a485b725b687628b77751ad2">register_library</a> (const std::string &amp;lib_name, const std::function&lt; std::string(const std::string &amp;)&gt; &amp;lib_path_func=<a class="el" href="namespacemlx_1_1core_1_1metal.html#a5fd6ba2040e53a254b9d71ae7ebd315f">get_colocated_mtllib_path</a>)</td></tr>
-<tr class="separator:a6993ce23a485b725b687628b77751ad2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a99ff72689b7beb65ad4541391b0eeabf" id="r_a99ff72689b7beb65ad4541391b0eeabf"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a99ff72689b7beb65ad4541391b0eeabf">register_library</a> (const std::string &amp;lib_name)</td></tr>
+<tr class="separator:a99ff72689b7beb65ad4541391b0eeabf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a86297d66de43ee77d0697f69c6bd0b87" id="r_a86297d66de43ee77d0697f69c6bd0b87"><td class="memItemLeft" align="right" valign="top">MTL::Library *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a86297d66de43ee77d0697f69c6bd0b87">get_library</a> (const std::string &amp;name)</td></tr>
 <tr class="separator:a86297d66de43ee77d0697f69c6bd0b87"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a961d3cdb4bfb14c1a0b0aeb05609f56e" id="r_a961d3cdb4bfb14c1a0b0aeb05609f56e"><td class="memItemLeft" align="right" valign="top">MTL::Library *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a961d3cdb4bfb14c1a0b0aeb05609f56e">get_library</a> (const std::string &amp;name, const std::string &amp;source_string, bool cache=true)</td></tr>
@@ -581,8 +581,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a6993ce23a485b725b687628b77751ad2" name="a6993ce23a485b725b687628b77751ad2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6993ce23a485b725b687628b77751ad2">&#9670;&#160;</a></span>register_library() <span class="overload">[1/2]</span></h2>
+<a id="a99ff72689b7beb65ad4541391b0eeabf" name="a99ff72689b7beb65ad4541391b0eeabf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a99ff72689b7beb65ad4541391b0eeabf">&#9670;&#160;</a></span>register_library() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -590,12 +590,8 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">void mlx::core::metal::Device::register_library </td>
           <td>(</td>
-          <td class="paramtype">const std::string &amp;</td>          <td class="paramname"><span class="paramname"><em>lib_name</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
+          <td class="paramtype">const std::string &amp;</td>          <td class="paramname"><span class="paramname"><em>lib_name</em></span></td><td>)</td>
           <td></td>
-          <td class="paramtype">const std::function&lt; std::string(const std::string &amp;)&gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>lib_path_func</em><span class="paramdefsep"> = </span><span class="paramdefval"><a class="el" href="namespacemlx_1_1core_1_1metal.html#a5fd6ba2040e53a254b9d71ae7ebd315f">get_colocated_mtllib_path</a></span></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
