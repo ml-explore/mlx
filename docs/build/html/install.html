@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Build and Install &#8212; MLX 0.16.1 documentation</title>
+    <title>Build and Install &#8212; MLX 0.16.2 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="_static/documentation_options.js?v=179565df"></script>
+    <script src="_static/documentation_options.js?v=00e1e5b9"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.1 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.1 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -457,8 +457,10 @@
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="python/linalg.html">Linear Algebra</a><input class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.inv.html">mlx.core.linalg.inv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.tri_inv.html">mlx.core.linalg.tri_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.norm.html">mlx.core.linalg.norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.cholesky.html">mlx.core.linalg.cholesky</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.cholesky_inv.html">mlx.core.linalg.cholesky_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.qr.html">mlx.core.linalg.qr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 </ul>
@@ -918,26 +920,26 @@ the output of <code class="docutils literal notranslate"><span class="pre">uname
 <div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>git@github.com:ml-explore/mlx.git<span class="w"> </span>mlx<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>mlx
 </pre></div>
 </div>
-<p>Install <a class="reference external" href="https://nanobind.readthedocs.io/en/latest/">nanobind</a> with:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span>git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
-</pre></div>
-</div>
 <p>Then simply build and install MLX using pip:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>.
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>.
 </pre></div>
 </div>
-<p>For developing use an editable install:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>env<span class="w"> </span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.
+<p>For developing, install the package with development dependencies, and use an
+editable install:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span><span class="s2">&quot;.[dev]&quot;</span>
 </pre></div>
 </div>
-<p>To make sure the install is working run the tests with:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[testing]&quot;</span>
-python<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>discover<span class="w"> </span>python/tests
+<p>Once the development dependencies are installed, you can build faster with:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nv">CMAKE_BUILD_PARALLEL_LEVEL</span><span class="o">=</span><span class="s2">&quot;&quot;</span><span class="w"> </span>python<span class="w"> </span>setup.py<span class="w"> </span>build_ext<span class="w"> </span>-j<span class="w"> </span>--inplace
 </pre></div>
 </div>
-<p>Optional: Install stubs to enable auto completions and type checking from your IDE:</p>
-<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[dev]&quot;</span>
-python<span class="w"> </span>setup.py<span class="w"> </span>generate_stubs
+<p>Run the tests with:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>unittest<span class="w"> </span>discover<span class="w"> </span>python/tests
+</pre></div>
+</div>
+<p>Optional: Install stubs to enable auto completions and type checking from your
+IDE:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>setup.py<span class="w"> </span>generate_stubs
 </pre></div>
 </div>
 </section>
