@@ -4,6 +4,7 @@
 // - `per_thread_row_reduce` collaborative partial reduction in the threadgroup
 // - `threadgroup_reduce` collaborative reduction in the threadgroup such that
 //   lid.x == 0 holds the reduced value
+// - `thread_reduce` simple loop and reduce the row
 
 /**
  * The thread group collaboratively reduces across the rows with bounds
@@ -163,11 +164,34 @@ METAL_FUNC void threadgroup_reduce(
   }
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// Small row reductions
-///////////////////////////////////////////////////////////////////////////////
+template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
+METAL_FUNC void
+thread_reduce(thread U& total, const device T* row, int blocks, int extra) {
+  Op op;
+  for (int i = 0; i < blocks; i++) {
+    U vals[N_READS];
+    for (int j = 0; j < N_READS; j++) {
+      vals[j] = row[j];
+    }
+    for (int j = 0; j < N_READS; j++) {
+      total = op(vals[j], total);
+    }
+    row += N_READS;
+  }
+  for (int i = 0; i < extra; i++) {
+    total = op(*row++, total);
+  }
+}
 
-// Each thread reduces for one output
+// Reduction kernels
+// - `row_reduce_small` depending on the non-row reductions and row size it
+//   either just loops over everything or a simd collaboratively reduces the
+//   non_row reductions. In the first case one thread is responsible for one
+//   output on the 2nd one simd is responsible for one output.
+// - `row_reduce_simple` simple contiguous row reduction
+// - `row_reduce_looped` simply loop and reduce each row for each non-row
+//   reduction. One threadgroup is responsible for one output.
+
 template <
     typename T,
     typename U,
@@ -177,139 +201,71 @@ template <
 [[kernel]] void row_reduce_small(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
-    const constant short& row_size [[buffer(2)]],
-    const constant short& non_row_reductions [[buffer(3)]],
+    const constant int& row_size [[buffer(2)]],
+    const constant int& non_row_reductions [[buffer(3)]],
     const constant int* shape [[buffer(4)]],
     const constant size_t* strides [[buffer(5)]],
     const constant int& ndim [[buffer(6)]],
     const constant int* reduce_shape [[buffer(7)]],
     const constant size_t* reduce_strides [[buffer(8)]],
     const constant int& reduce_ndim [[buffer(9)]],
-    uint2 gid [[thread_position_in_grid]],
-    uint2 gsize [[threads_per_grid]]) {
+    uint simd_lane_id [[thread_index_in_simdgroup]],
+    uint3 gid [[threadgroup_position_in_grid]],
+    uint3 gsize [[threadgroups_per_grid]],
+    uint3 tid [[thread_position_in_grid]],
+    uint3 tsize [[threads_per_grid]]) {
   Op op;
 
-  size_t out_idx = gid.x + gsize.x * size_t(gid.y);
-  in += elem_to_loc(out_idx, shape, strides, ndim);
-
   U total_val = Op::init;
-
-  short blocks = row_size / N_READS;
   looped_elem_to_loc<NDIMS> loop;
 
-  for (short r = 0; r < non_row_reductions; r++) {
-    const device T* in_row;
-    if constexpr (NDIMS > 0) {
-      in_row = in + loop.offset;
-    } else {
-      in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
-    }
+  // Precompute some row reduction numbers
+  int blocks = row_size / N_READS;
+  int extra = row_size % N_READS;
 
-    for (short i = 0; i < blocks; i++) {
-      U vals[N_READS];
-      for (int j = 0; j < N_READS; j++) {
-        vals[j] = in_row[j];
-      }
-      for (int j = 0; j < N_READS; j++) {
-        total_val = op(vals[j], total_val);
-      }
-      in_row += N_READS;
-    }
-    for (short i = blocks * N_READS; i < row_size; i++) {
-      total_val = op(static_cast<U>(*in_row), total_val);
-      in_row++;
-    }
+  if ((non_row_reductions < 32 && row_size <= 8) || non_row_reductions <= 8) {
+    // Simple loop over non_row_reductions and reduce the row in the thread.
+    size_t out_idx = tid.x + tsize.y * size_t(tid.y);
+    in += elem_to_loc(out_idx, shape, strides, ndim);
 
-    if constexpr (NDIMS > 0) {
+    for (int r = 0; r < non_row_reductions; r++) {
+      const device T* in_row;
+      if constexpr (loop.dynamic_ndim) {
+        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
+      } else {
+        in_row = in + loop.offset;
+      }
+      thread_reduce<T, U, Op, N_READS>(total_val, in_row, blocks, extra);
       loop.next(reduce_shape, reduce_strides);
     }
-  }
 
-  out[out_idx] = total_val;
-}
-
-// Each simdgroup reduces for one output
-template <typename T, typename U, typename Op>
-[[kernel]] void row_reduce_general_med(
-    const device T* in [[buffer(0)]],
-    device U* out [[buffer(1)]],
-    const constant size_t& reduction_size [[buffer(2)]],
-    const constant size_t& out_size [[buffer(3)]],
-    const constant size_t& non_row_reductions [[buffer(4)]],
-    const constant int* shape [[buffer(5)]],
-    const constant size_t* strides [[buffer(6)]],
-    const constant int& ndim [[buffer(7)]],
-    uint tid [[threadgroup_position_in_grid]],
-    uint simd_lane_id [[thread_index_in_simdgroup]],
-    uint simd_per_group [[dispatch_simdgroups_per_threadgroup]],
-    uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
-  Op op;
-
-  uint out_idx = simd_per_group * tid + simd_group_id;
-
-  if (out_idx >= out_size) {
-    return;
-  }
-
-  U total_val = Op::init;
-
-  if (short(non_row_reductions) == 1) {
-    uint in_idx = elem_to_loc(out_idx, shape, strides, ndim);
-    const device T* in_row = in + in_idx;
-
-    for (short i = simd_lane_id; i < short(reduction_size); i += 32) {
-      total_val = op(static_cast<U>(in_row[i]), total_val);
-    }
-  }
-
-  else if (short(non_row_reductions) >= 32) {
-    for (short r = simd_lane_id; r < short(non_row_reductions); r += 32) {
-      uint in_idx = elem_to_loc(out_idx + r * out_size, shape, strides, ndim);
-      const device T* in_row = in + in_idx;
-
-      for (short i = 0; i < short(reduction_size); i++) {
-        total_val = op(static_cast<U>(in_row[i]), total_val);
-      }
-    }
-
-  }
-
-  else {
-    const short n_reductions =
-        short(reduction_size) * short(non_row_reductions);
-    const short reductions_per_thread =
-        (n_reductions + simd_size - 1) / simd_size;
-
-    const short r_st = simd_lane_id / reductions_per_thread;
-    const short r_ed = short(non_row_reductions);
-    const short r_jump = simd_size / reductions_per_thread;
-
-    const short i_st = simd_lane_id % reductions_per_thread;
-    const short i_ed = short(reduction_size);
-    const short i_jump = reductions_per_thread;
-
-    if (r_st < r_jump) {
-      for (short r = r_st; r < r_ed; r += r_jump) {
-        uint in_idx = elem_to_loc(out_idx + r * out_size, shape, strides, ndim);
-        const device T* in_row = in + in_idx;
-
-        for (short i = i_st; i < i_ed; i += i_jump) {
-          total_val = op(static_cast<U>(in_row[i]), total_val);
-        }
-      }
-    }
-  }
-
-  total_val = op.simd_reduce(total_val);
-
-  if (simd_lane_id == 0) {
     out[out_idx] = total_val;
+  } else {
+    // Collaboratively reduce over non_row_reductions in the simdgroup. Each
+    // thread reduces every 32nd row and then a simple simd reduce.
+    size_t out_idx = gid.y + gsize.y * size_t(gid.z);
+    in += elem_to_loc(out_idx, shape, strides, ndim);
+
+    loop.next(simd_lane_id, reduce_shape, reduce_strides);
+
+    for (int r = simd_lane_id; r < non_row_reductions; r += simd_size) {
+      const device T* in_row;
+      if constexpr (loop.dynamic_ndim) {
+        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
+      } else {
+        in_row = in + loop.offset;
+      }
+      thread_reduce<T, U, Op, N_READS>(total_val, in_row, blocks, extra);
+      loop.next(simd_size, reduce_shape, reduce_strides);
+    }
+
+    total_val = op.simd_reduce(total_val);
+
+    if (simd_lane_id == 0) {
+      out[out_idx] = total_val;
+    }
   }
 }
-
-///////////////////////////////////////////////////////////////////////////////
-// Large row reductions
-///////////////////////////////////////////////////////////////////////////////
 
 template <
     typename T,
@@ -395,10 +351,10 @@ template <
 
   for (size_t i = 0; i < non_row_reductions; i++) {
     U row_total;
-    if constexpr (NDIMS > 0) {
-      row = in + loop.offset;
-    } else {
+    if constexpr (loop.dynamic_ndim) {
       row = in + elem_to_loc(i, reduce_shape, reduce_strides, reduce_ndim);
+    } else {
+      row = in + loop.offset;
     }
 
     // Each thread reduces across the row
@@ -408,9 +364,7 @@ template <
     // Aggregate across rows
     total = op(total, row_total);
 
-    if constexpr (NDIMS > 0) {
-      loop.next(reduce_shape, reduce_strides);
-    }
+    loop.next(reduce_shape, reduce_strides);
   }
 
   // Reduce across the threadgroup

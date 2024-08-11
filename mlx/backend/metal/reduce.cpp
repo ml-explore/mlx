@@ -33,16 +33,17 @@ inline bool is_64b_dtype(Dtype dtype) {
 }
 
 inline int threadgroup_size_from_row_size(int row_size) {
-  // 1 simdgroup per row small rows
+  // 1 simdgroup per row smallish rows
   if (row_size <= 512) {
     return 32;
   }
-  // 4 simdgroups per row for medium rows
-  else if (row_size <= 1024) {
-    return 128;
+
+  // 2 simdgroups per row for medium rows
+  if (row_size <= 1024) {
+    return 64;
   }
 
-  // as needed after that
+  // up to 32 simdgroups after that
   int thread_group_size;
   thread_group_size = (row_size + REDUCE_N_READS - 1) / REDUCE_N_READS;
   thread_group_size = ((thread_group_size + 31) / 32) * 32;
@@ -177,7 +178,7 @@ void row_reduce_small(
   compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
-  short row_size = plan.shape.back();
+  int row_size = plan.shape.back();
   auto reduce_shape = plan.shape;
   auto reduce_strides = plan.strides;
   reduce_shape.pop_back();
@@ -185,21 +186,29 @@ void row_reduce_small(
   int reduce_ndim = reduce_shape.size();
   auto [shape, strides] = shapes_without_reduction_axes(in, axes);
   int ndim = shape.size();
-  short non_row_reductions = 1;
+  int non_row_reductions = 1;
   for (auto s : reduce_shape) {
     non_row_reductions *= s;
   }
 
   // Figure out the grid dims
-  auto grid_dims = get_2d_grid_dims(out.shape(), out.strides());
-  int threadgroup_size = (grid_dims.width < 1024) ? grid_dims.width : 1024;
-  MTL::Size group_dims(threadgroup_size, 1, 1);
+  MTL::Size grid_dims;
+  MTL::Size group_dims;
+  if ((non_row_reductions < 32 && row_size <= 8) || non_row_reductions <= 8) {
+    grid_dims = get_2d_grid_dims(out.shape(), out.strides());
+    group_dims =
+        MTL::Size((grid_dims.width < 1024) ? grid_dims.width : 1024, 1, 1);
+  } else {
+    auto out_grid_size = get_2d_grid_dims(out.shape(), out.strides());
+    grid_dims = MTL::Size(32, out_grid_size.width, out_grid_size.height);
+    group_dims = MTL::Size(32, 1, 1);
+  }
 
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&row_size, sizeof(short), 2);
-  compute_encoder->setBytes(&non_row_reductions, sizeof(short), 3);
+  compute_encoder->setBytes(&row_size, sizeof(int), 2);
+  compute_encoder->setBytes(&non_row_reductions, sizeof(int), 3);
   compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
   compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
   compute_encoder->setBytes(&ndim, sizeof(int), 6);
@@ -307,27 +316,19 @@ void row_reduce_general_dispatch(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  // Compute the number of elements we are adding per output element. It will
-  // be used later to route to the fastest kernel.
-  size_t total_reductions = 1;
-  for (auto& s : plan.shape) {
-    total_reductions *= s;
+  // Case 1: The row is small
+  if (plan.shape.back() <= 64) {
+    return row_reduce_small(
+        in, out, op_name, plan, axes, compute_encoder, d, s);
   }
-  size_t non_row_reductions = total_reductions / plan.shape.back();
 
-  // Case 1: The row is very small and the non_row reductions are also small.
-  // if (plan.shape.back() <= 16 && non_row_reductions <= 32) {
-  //  return row_reduce_small(in, out, op_name, plan, axes, compute_encoder, d,
-  //  s);
-  //}
-
-  // Case 1: Contiguous reduce without non-row reductions
+  // Case 2: Contiguous reduce without non-row reductions
   if (plan.type == ContiguousReduce && plan.shape.size() == 1) {
     return row_reduce_simple(
         in, out, op_name, plan, axes, compute_encoder, d, s);
   }
 
-  // Case 2: General row reduce including non-row reductions
+  // Case 3: General row reduce including non-row reductions
   return row_reduce_looped(in, out, op_name, plan, axes, compute_encoder, d, s);
 }
 

@@ -215,16 +215,19 @@ instantiate_reduce_from_types(instantiate_col_reduce_small, or, bool, Or<bool>)
   row_reduce_small<itype, otype, op, dim>(                                 \
       const device itype* in [[buffer(0)]],                                \
       device otype* out [[buffer(1)]],                                     \
-      const constant short& row_size [[buffer(2)]],                        \
-      const constant short& non_row_reductions [[buffer(3)]],              \
+      const constant int& row_size [[buffer(2)]],                          \
+      const constant int& non_row_reductions [[buffer(3)]],                \
       const constant int* shape [[buffer(4)]],                             \
       const constant size_t* strides [[buffer(5)]],                        \
       const constant int& ndim [[buffer(6)]],                              \
       const constant int* reduce_shape [[buffer(7)]],                      \
       const constant size_t* reduce_strides [[buffer(8)]],                 \
       const constant int& reduce_ndim [[buffer(9)]],                       \
-      uint2 gid [[thread_position_in_grid]],                               \
-      uint2 gsize [[threads_per_grid]]);
+      uint simd_lane_id [[thread_index_in_simdgroup]],                     \
+      uint3 gid [[threadgroup_position_in_grid]],                          \
+      uint3 gsize [[threadgroups_per_grid]],                               \
+      uint3 tid [[thread_position_in_grid]],                               \
+      uint3 tsize [[threads_per_grid]]);
 #define instantiate_row_reduce_looped(name, itype, otype, op, dim)      \
   template                                                              \
       [[host_name("rowLooped" #dim "_reduce_" #name)]] [[kernel]] void  \
