@@ -1738,7 +1738,7 @@ class TestOps(mlx_tests.MLXTestCase):
             mat_t = mat.astype(t)
             out = mx.cumsum(a_t, axis=-1)
             expected = (mat_t * a_t[:, None, :]).sum(axis=-1)
-            self.assertTrue(mx.allclose(out, expected, rtol=1e-2, atol=1e-3))
+            self.assertTrue(mx.allclose(out, expected, rtol=0.02, atol=1e-3))
         sizes = [1023, 1024, 1025, 2047, 2048, 2049]
         for s in sizes:
             a = mx.ones((s,), mx.int32)

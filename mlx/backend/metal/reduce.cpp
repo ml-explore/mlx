@@ -661,6 +661,11 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
     }
   }
+
+  // Nothing to reduce just set initialize the output
+  else {
+    init_reduce(out, op_name, compute_encoder, d, s);
+  }
 }
 
 } // namespace mlx::core
