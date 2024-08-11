@@ -399,6 +399,8 @@ array isnan(const array& a, StreamOrDevice s = {});
 
 array isinf(const array& a, StreamOrDevice s = {});
 
+array isfinite(const array& a, StreamOrDevice s = {});
+
 array isposinf(const array& a, StreamOrDevice s = {});
 
 array isneginf(const array& a, StreamOrDevice s = {});

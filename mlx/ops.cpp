@@ -1378,6 +1378,10 @@ array isinf(const array& a, StreamOrDevice s /* = {} */) {
   return logical_or(isposinf(a, s), isneginf(a, s), s);
 }
 
+array isfinite(const array& a, StreamOrDevice s /* = {} */) {
+  return logical_not(logical_or(isinf(a, s), isnan(a, s), s), s);
+}
+
 array isposinf(const array& a, StreamOrDevice s /* = {} */) {
   if (issubdtype(a.dtype(), integer) || a.dtype() == bool_) {
     return full(a.shape(), false, bool_, s);
