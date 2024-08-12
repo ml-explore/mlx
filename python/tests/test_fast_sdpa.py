@@ -86,7 +86,7 @@ class TestFastSelfAttentionSDPA(mlx_tests.MLXTestCase):
 
                 reference = mlx_primitives_sdpa_with_gqa(q_mlx, k_mlx, v_mlx, scale)
                 o_mlx = mx.fast.scaled_dot_product_attention(
-                    q_mlx, k_mlx, v_mlx, scale=scale
+                    q_mlx, k_mlx, v_mlx, scale=scale, memory_efficient_threshold=2
                 )
 
                 self.assertListEqual(list(reference.shape), list(o_mlx.shape))

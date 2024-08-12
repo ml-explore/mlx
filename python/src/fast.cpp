@@ -112,6 +112,7 @@ void init_fast(nb::module_& parent_module) {
       nb::kw_only(),
       "scale"_a,
       "mask"_a = nb::none(),
+      "memory_efficient_threshold"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
           "def scaled_dot_product_attention(q: array, k: array, v: array, *, scale: float,  mask: Union[None, array] = None, stream: Union[None, Stream, Device] = None) -> array"),
