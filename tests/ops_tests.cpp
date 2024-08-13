@@ -3558,21 +3558,19 @@ TEST_CASE("test view") {
 }
 
 TEST_CASE("test custom kernel") {
-  auto a = array(3);
-  int b = 13;
-  float c = 4.0;
+  auto a = zeros({4, 8});
+  auto b = array(13);
+  auto c = array(4.0);
 
-  std::map<std::string, std::any> inputs = {{"a", a}, {"b", b}, {"c", c}};
+  std::map<std::string, array> inputs = {{"a", a}, {"b", b}, {"c", c}};
   auto source =
-      "out[thread_position_in_grid.x] = thread_position_in_grid.x + a[0] + c;";
+      "out[thread_position_in_grid.x] = thread_position_in_grid.x + a[0] + c + d;";
 
-  auto outputs = fast::custom_kernel(
-      "myfunc",
-      inputs,
-      source,
-      {{"out", {4, 8}}},
-      {{"out", float32}},
-      {2, 1, 1},
-      {1, 1, 1});
+  auto kernel = fast::MetalKernel("myfunc", source);
+  fast::TemplateArg arg = float32;
+  kernel.template_args.insert({"d", 7});
+  kernel.template_args.insert({"e", float32});
+  auto outputs = kernel.run(
+      inputs, {{"out", {4, 8}}}, {{"out", float32}}, {2, 1, 1}, {1, 1, 1});
   std::cout << outputs[0] << std::endl;
 }

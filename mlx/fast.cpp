@@ -1,6 +1,8 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cassert>
 #include <numeric>
+#include <regex>
+#include <string>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/kernels.h"
@@ -917,21 +919,57 @@ array affine_dequantize(
   return fallback({w, scales, biases})[0];
 }
 
-// std::map<std::string, array> custom_kernel(
-std::vector<array> custom_kernel(
-    std::string name,
+void MetalKernel::validate_output_shapes() {
+  // Make sure output shapes and dtypes have the same keys
+  bool validated = true;
+  if (output_shapes_.size() == 0) {
+    throw std::invalid_argument("Must specify at least one output.");
+  }
+  if (output_shapes_.size() != output_dtypes_.size()) {
+    validated = false;
+  } else {
+    for (auto kv : output_shapes_) {
+      if (output_dtypes_.find(kv.first) == output_dtypes_.end()) {
+        validated = false;
+      }
+    }
+  }
+  if (!validated) {
+    throw std::invalid_argument(
+        "`output_shapes` and `output_dtypes` must have the same keys.");
+  }
+}
+
+void MetalKernel::write_signature(
+    std::string& func_name,
     std::map<std::string, array>& inputs,
-    std::vector<std::string>& template_args,
-    const std::string& source,
-    std::map<std::string, std::vector<int>> output_shapes,
-    std::map<std::string, Dtype> output_dtypes,
-    std::tuple<int, int, int> grid,
-    std::tuple<int, int, int> threadgroup,
-    bool ensure_row_contiguous /* = true */,
-    StreamOrDevice s_ /* = {} */
-) {
+    std::ostringstream& kernel_source) {
+  // Auto-generate a function signature based on `template_args`
+  // and the dtype/shape of the arrays passed as `inputs`.
+  if (template_args.size() > 0) {
+    kernel_source << "template <";
+    int i = 0;
+    for (auto [name, arg] : template_args) {
+      std::string param_type;
+      if (std::holds_alternative<int>(arg)) {
+        param_type = "int";
+      } else if (std::holds_alternative<bool>(arg)) {
+        param_type = "bool";
+      } else if (std::holds_alternative<Dtype>(arg)) {
+        param_type = "typename";
+      }
+      if (i > 0) {
+        kernel_source << ", ";
+      }
+      kernel_source << param_type << " " << name;
+      i++;
+    }
+    kernel_source << ">" << std::endl;
+  }
+  kernel_source << "[[kernel]] void " << func_name << "(" << std::endl;
+
   // Metal attributes are automatically added to the arguments if present
-  std::vector<std::pair<std::string, std::string>> metal_attributes = {
+  const std::vector<std::pair<std::string, std::string>> metal_attributes = {
       {"dispatch_quadgroups_per_threadgroup", "uint"},
       {"dispatch_simdgroups_per_threadgroup", "uint"},
       {"dispatch_threads_per_threadgroup", "uint3"},
@@ -955,74 +993,41 @@ std::vector<array> custom_kernel(
   };
   std::vector<std::pair<std::string, std::string>> attrs;
   for (auto [attr, dtype] : metal_attributes) {
-    if (source.find(attr) != std::string::npos) {
+    if (source_.find(attr) != std::string::npos) {
       attrs.push_back({attr, dtype});
     }
   }
 
-  auto s = to_stream(s_);
-  if (s.device != Device::gpu) {
-    throw std::invalid_argument("Only works on GPU");
-  }
-
-  auto func_name = "custom_kernel_" + name;
-  std::ostringstream kernel_source;
-  kernel_source << "template <int N>" << std::endl;
-  kernel_source << "[[kernel]] void " << func_name << " (" << std::endl;
   int index = 0;
-
-  std::vector<array> in_arrs;
+  constexpr int max_constant_array_size = 8;
+  // Add inputs
   for (auto& [name, arr] : inputs) {
     auto dtype = get_type_string(arr.dtype());
     std::string location = "constant";
     std::string ref = "*";
+    // Single ints/float/bools are passed by ref
     if (arr.ndim() == 0) {
-      // Single ints/float/bools are passed by ref
       ref = "&";
-      // Small 1D arrays are passed as constants.
-      // Often these will be shapes/strides.
-      // We use device memory for larger arrays
-    } else if (arr.ndim() > 1 || arr.shape(0) > 8) {
+      // Use device memory for larger arrays
+    } else if (arr.size() > max_constant_array_size) {
       location = "device";
-      in_arrs.push_back(arr);
     }
     kernel_source << "  const " << location << " " << dtype << ref << " "
-                  << name << "[[buffer(" << index << ")]]";
+                  << name << " [[buffer(" << index << ")]]" << "," << std::endl;
     index++;
   }
-
-  // We're JIT compiling this each time so we want ints/floats/bools to be
-  // template arguments for the kernel Tuples/lists (e.g. shapes/strides) get
-  // passed as vector args Sometimes you might want some args to be template
-  // args and some to not require recompilation?
-
-  for (auto [name, arr] : in_arrs) {
-    kernel_source << "  const device " << get_type_string(arr.dtype()) << "* "
-                  << name << " [[buffer(" << index << ")]]," << std::endl;
-    index++;
-  }
-  for (auto [name, dtype] : output_dtypes) {
+  // Add outputs
+  for (auto [name, dtype] : output_dtypes_) {
     kernel_source << "  device " << get_type_string(dtype) << "* " << name
-                  << " [[buffer(" << index << ")]]," << std::endl;
-    index++;
-  }
-  index = 0;
-  for (auto [name, arg] : in_args) {
-    std::string arg_type;
-    if (arg.type() == typeid(float)) {
-      arg_type = "float";
-    } else if (arg.type() == typeid(int)) {
-      arg_type = "int";
-    }
-    kernel_source << "  constant const " << arg_type << "& " << name;
-    if (index < in_args.size() - 1 || attrs.size() > 0) {
+                  << " [[buffer(" << index << ")]]";
+    if (index < inputs.size() + output_shapes_.size() - 1 || attrs.size() > 0) {
       kernel_source << "," << std::endl;
     } else {
       kernel_source << ") {" << std::endl;
     }
     index++;
   }
-  index = 0;
+  // Add metal attributes e.g. `threadgroup_index_in_grid`
   for (auto [attr, dtype] : attrs) {
     kernel_source << "  " << dtype << " " << attr << " [[" << attr << "]]";
     if (index < attrs.size() - 1) {
@@ -1031,46 +1036,93 @@ std::vector<array> custom_kernel(
       kernel_source << ") {" << std::endl;
     }
   }
-  kernel_source << source << std::endl;
+  kernel_source << source_ << std::endl;
   kernel_source << "}" << std::endl;
+}
 
-  // Add the template
-  kernel_source << get_template_definition(func_name, func_name, 7)
-                << std::endl;
+std::string MetalKernel::write_template(
+    std::string& func_name,
+    std::ostringstream& kernel_source) {
+  std::ostringstream template_def;
+  template_def << func_name << "<";
+  int i = 0;
+  for (auto [name, arg] : template_args) {
+    if (i > 0) {
+      template_def << ", ";
+    }
+    if (std::holds_alternative<int>(arg)) {
+      template_def << std::get<int>(arg);
+    } else if (std::holds_alternative<bool>(arg)) {
+      template_def << std::get<bool>(arg);
+    } else if (std::holds_alternative<Dtype>(arg)) {
+      template_def << get_type_string(std::get<Dtype>(arg));
+    }
+    i++;
+  }
+  template_def << ">";
+  std::string kernel_name = template_def.str();
+  std::replace(kernel_name.begin(), kernel_name.end(), '<', '_');
+  std::replace(kernel_name.begin(), kernel_name.end(), '>', '_');
+  std::replace(kernel_name.begin(), kernel_name.end(), ',', '_');
+  std::replace(kernel_name.begin(), kernel_name.end(), ' ', '_');
+  kernel_source << "template [[host_name(\"" << kernel_name
+                << "\")]] [[kernel]] decltype(" << template_def.str() << ") "
+                << template_def.str() << ";" << std::endl;
+  return kernel_name;
+}
+
+std::map<std::string, array> MetalKernel::run(
+    std::map<std::string, array>& inputs,
+    StreamOrDevice s_) {
+  auto s = to_stream(s_);
+  if (s.device != Device::gpu) {
+    throw std::invalid_argument("MetalKernel only works on GPU.");
+  }
+
+  std::ostringstream kernel_source;
+  auto func_name = "custom_kernel_" + name_;
+  write_signature(func_name, inputs, kernel_source);
+
+  std::string kernel_name = func_name;
+  if (template_args.size() > 0) {
+    kernel_name = write_template(func_name, kernel_source);
+  }
 
   std::cout << kernel_source.str() << std::endl;
 
-  std::vector<array> in_arrs_vec;
-  for (auto [name, arr] : in_arrs) {
-    in_arrs_vec.push_back(arr);
-  }
-
-  std::vector<std::any> in_args_vec;
-  for (auto [name, arg] : in_args) {
-    in_args_vec.push_back(arg);
+  std::vector<array> in_arrs;
+  for (auto& kv : inputs) {
+    in_arrs.push_back(kv.second);
   }
 
   std::vector<std::vector<int>> out_shapes;
-  for (auto [name, shape] : output_shapes) {
+  for (auto [name, shape] : output_shapes_) {
     out_shapes.push_back(shape);
   }
 
   std::vector<Dtype> out_dtypes;
-  for (auto [name, dtype] : output_dtypes) {
+  for (auto [name, dtype] : output_dtypes_) {
     out_dtypes.push_back(dtype);
   }
 
-  return array::make_arrays(
+  std::map<std::string, array> outputs;
+  auto outputs_vec = array::make_arrays(
       out_shapes,
       out_dtypes,
       std::make_shared<CustomKernel>(
           s,
-          func_name,
+          kernel_name,
           kernel_source.str(),
-          grid,
-          threadgroup,
-          ensure_row_contiguous),
-      in_arrs_vec);
+          grid_,
+          threadgroup_,
+          ensure_row_contiguous_),
+      in_arrs);
+  int i = 0;
+  for (auto kv : output_shapes_) {
+    outputs.insert({kv.first, outputs_vec[i]});
+    i++;
+  }
+  return outputs;
 }
 
 } // namespace mlx::core::fast

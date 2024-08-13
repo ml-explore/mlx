@@ -65,16 +65,51 @@ array affine_dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
-std::vector<array> custom_kernel(
-    std::string name,
-    std::map<std::string, std::any>& inputs,
-    std::vector<std::string>& template_args,
-    const std::string& source,
-    std::map<std::string, std::vector<int>> output_shapes,
-    std::map<std::string, Dtype> output_dtypes,
-    std::tuple<int, int, int> grid,
-    std::tuple<int, int, int> threadgroup,
-    bool ensure_row_contiguous = true,
-    StreamOrDevice s = {});
+typedef std::variant<int, bool, Dtype> TemplateArg;
+
+class MetalKernel {
+ public:
+  MetalKernel(
+      const std::string& name,
+      const std::string& source,
+      std::map<std::string, std::vector<int>> output_shapes,
+      std::map<std::string, Dtype> output_dtypes,
+      std::tuple<int, int, int> grid,
+      std::tuple<int, int, int> threadgroup,
+      bool ensure_row_contiguous)
+      : name_(name),
+        source_(source),
+        output_shapes_(output_shapes),
+        output_dtypes_(output_dtypes),
+        grid_(grid),
+        threadgroup_(threadgroup),
+        ensure_row_contiguous_(ensure_row_contiguous) {
+    validate_output_shapes();
+  }
+
+  std::map<std::string, array> run(
+      std::map<std::string, array>& inputs,
+      StreamOrDevice s = {});
+
+  std::map<std::string, TemplateArg> template_args;
+
+ private:
+  void validate_output_shapes();
+  void write_signature(
+      std::string& func_name,
+      std::map<std::string, array>& inputs,
+      std::ostringstream& kernel_source);
+  std::string write_template(
+      std::string& func_name,
+      std::ostringstream& kernel_source);
+
+  std::string name_;
+  std::string source_;
+  std::map<std::string, std::vector<int>> output_shapes_;
+  std::map<std::string, Dtype> output_dtypes_;
+  std::tuple<int, int, int> grid_;
+  std::tuple<int, int, int> threadgroup_;
+  bool ensure_row_contiguous_ = true;
+};
 
 } // namespace mlx::core::fast

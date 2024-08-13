@@ -1,12 +1,20 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <nanobind/nanobind.h>
+#include <nanobind/stl/map.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/variant.h>
+#include <nanobind/stl/vector.h>
+
+#include "python/src/convert.h"
 
 #include "mlx/fast.h"
 #include "mlx/ops.h"
+
+#include <iostream>
+#include <set>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -144,46 +152,71 @@ void init_fast(nb::module_& parent_module) {
             array: The output array.
       )pbdoc");
 
-  m.def(
-      "affine_quantize",
-      nb::overload_cast<
-          const array&,
-          const array&,
-          const array&,
-          int,
-          int,
-          StreamOrDevice>(&fast::affine_quantize),
-      "w"_a,
-      "scales"_a,
-      "biases"_a,
-      "group_size"_a = 64,
-      "bits"_a = 4,
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def affine_quantize(w: array, /, scales: array, biases: array, group_size: int = 64, bits: int = 4, *, stream: Union[None, Stream, Device] = None) -> array"),
+  nb::class_<fast::MetalKernel>(
+      m,
+      "MetalKernel",
       R"pbdoc(
-        Quantize the matrix ``w`` using the provided ``scales`` and
-        ``biases`` and the ``group_size`` and ``bits`` configuration.
-
-        Formally, given the notation in :func:`quantize`, we compute
-        :math:`w_i` from :math:`\hat{w_i}` and corresponding :math:`s` and
-        :math:`\beta` as follows
-
-        .. math::
-
-          w_i = s (\hat{w_i} + \beta)
-
-        Args:
-          w (array): Matrix to be quantize
-          scales (array): The scales to use per ``group_size`` elements of ``w``
-          biases (array): The biases to use per ``group_size`` elements of ``w``
-          group_size (int, optional): The size of the group in ``w`` that shares a
-            scale and bias. (default: ``64``)
-          bits (int, optional): The number of bits occupied by each element in
-            ``w``. (default: ``4``)
-
-        Returns:
-          array: The quantized version of ``w``
-      )pbdoc");
+      A custom Metal kernel defined from a source string.
+      )pbdoc")
+      .def(
+          nb::init<
+              const std::string&,
+              const std::string&,
+              std::map<std::string, std::vector<int>>,
+              std::map<std::string, Dtype>,
+              std::tuple<int, int, int>,
+              std::tuple<int, int, int>,
+              bool>(),
+          "name"_a,
+          "source"_a,
+          "output_shapes"_a,
+          "output_dtypes"_a,
+          "grid"_a,
+          "threadgroup"_a,
+          "ensure_row_contiguous"_a = true)
+      .def(
+          "template",
+          [](fast::MetalKernel& kernel, nb::kwargs kwargs) {
+            kernel.template_args.clear();
+            for (auto kv : kwargs) {
+              auto name = nb::cast<std::string>(kv.first);
+              auto value = kv.second;
+              // Handle bool, int and dtype template args
+              if (PyBool_Check(value.ptr())) {
+                bool bool_val = nb::cast<bool>(value);
+                kernel.template_args.insert({name, bool_val});
+              } else if (PyLong_Check(value.ptr())) {
+                int int_val = nb::cast<int>(value);
+                kernel.template_args.insert({name, int_val});
+              } else if (
+                  nb::type_check(value.type()) &&
+                  nb::type_info(value.type()) == typeid(Dtype)) {
+                Dtype dtype = nb::cast<Dtype>(value);
+                kernel.template_args.insert({name, dtype});
+              } else {
+                throw std::invalid_argument(
+                    "Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
+              }
+            }
+          })
+      .def(
+          "__call__",
+          [](fast::MetalKernel& kernel, nb::kwargs& kwargs) {
+            StreamOrDevice stream = {};
+            if (kwargs.contains("stream")) {
+              stream = nb::cast<StreamOrDevice>(kwargs["stream"]);
+            }
+            std::map<std::string, array> inputs;
+            for (auto kv : kwargs) {
+              auto name = nb::cast<std::string>(kv.first);
+              if (name != "stream") {
+                auto value = nb::cast<ArrayInitType>(kv.second);
+                auto arr = create_array(value, std::nullopt);
+                inputs.insert({name, arr});
+              }
+            }
+            return kernel.run(inputs, stream);
+          },
+          nb::sig(
+              "def __call__(self, **kwargs: array, stream: Union[None, Stream, Device] = None)"));
 }
