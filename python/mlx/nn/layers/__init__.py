@@ -72,6 +72,8 @@ from mlx.nn.layers.recurrent import GRU, LSTM, RNN
 from mlx.nn.layers.transformer import (
     MultiHeadAttention,
     Transformer,
+    TransformerDecoder,
+    TransformerDecoderLayer,
     TransformerEncoder,
     TransformerEncoderLayer,
 )

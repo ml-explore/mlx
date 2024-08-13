@@ -147,9 +147,9 @@ class TransformerEncoderLayer(Module):
         else:
             y = self.attention(x, x, x, mask)
             y = self.dropout1(y)
-            y = self.ln1(x + y)
+            x = self.ln1(x + y)
 
-            y = self.linear1(y)
+            y = self.linear1(x)
             y = self.activation(y)
             y = self.dropout2(y)
             y = self.linear2(y)
