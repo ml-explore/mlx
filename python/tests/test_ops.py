@@ -750,6 +750,13 @@ class TestOps(mlx_tests.MLXTestCase):
         expected = np.sign(a, dtype=np.float32)
         self.assertTrue(np.allclose(result, expected))
 
+        a = mx.array([-1.0, 1.0, 0.0, -2.0, 3.0])
+        b = mx.array([-4.0, -3.0, 1.0, 0.0, 3.0])
+        c = a + b * 1j
+        result = mx.sign(c)
+        expected = np.sign(c, dtype=np.complex64)
+        self.assertTrue(np.allclose(result, expected))
+
     def test_logical_not(self):
         a = mx.array([-1.0, 1.0, 0.0, 1.0, -2.0, 3.0])
         result = mx.logical_not(a)
