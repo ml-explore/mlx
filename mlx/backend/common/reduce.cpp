@@ -87,6 +87,38 @@ struct OrReduce {
   }
 };
 
+struct MaxReduce {
+  template <typename T>
+  std::enable_if_t<std::is_integral_v<T>> operator()(T* y, T x) {
+    (*y) = (*y > x) ? *y : x;
+  };
+
+  template <typename T>
+  std::enable_if_t<!std::is_integral_v<T>> operator()(T* y, T x) {
+    if (std::isnan(x)) {
+      *y = x;
+    } else {
+      (*y) = (*y > x) ? *y : x;
+    }
+  };
+};
+
+struct MinReduce {
+  template <typename T>
+  std::enable_if_t<std::is_integral_v<T>> operator()(T* y, T x) {
+    (*y) = (*y < x) ? *y : x;
+  };
+
+  template <typename T>
+  std::enable_if_t<!std::is_integral_v<T>> operator()(T* y, T x) {
+    if (std::isnan(x)) {
+      *y = x;
+    } else {
+      (*y) = (*y < x) ? *y : x;
+    }
+  };
+};
+
 template <typename InT>
 void reduce_dispatch_out(
     const array& in,
@@ -118,15 +150,13 @@ void reduce_dispatch_out(
       break;
     }
     case Reduce::Max: {
-      auto op = [](auto y, auto x) { (*y) = (*y > x) ? *y : x; };
       auto init = Limits<InT>::min;
-      reduction_op<InT, InT>(in, out, axes, init, op);
+      reduction_op<InT, InT>(in, out, axes, init, MaxReduce());
       break;
     }
     case Reduce::Min: {
-      auto op = [](auto y, auto x) { (*y) = (*y < x) ? *y : x; };
       auto init = Limits<InT>::max;
-      reduction_op<InT, InT>(in, out, axes, init, op);
+      reduction_op<InT, InT>(in, out, axes, init, MinReduce());
       break;
     }
   }

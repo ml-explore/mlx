@@ -374,6 +374,16 @@ class TestOps(mlx_tests.MLXTestCase):
         result = mx.isinf(x)
         self.assertEqual(result.tolist(), [False, False, False])
 
+    def test_isfinite(self):
+        x = mx.array([0.0, float("inf"), float("nan")])
+        self.assertEqual(mx.isfinite(x).tolist(), [True, False, False])
+
+        x = x.astype(mx.float16)
+        self.assertEqual(mx.isfinite(x).tolist(), [True, False, False])
+
+        x = x.astype(mx.bfloat16)
+        self.assertEqual(mx.isfinite(x).tolist(), [True, False, False])
+
     def test_tri(self):
         for shape in [[4], [4, 4], [2, 10]]:
             for diag in [-1, 0, 1, -2]:
