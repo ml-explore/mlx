@@ -262,7 +262,7 @@ class CustomKernel : public Primitive {
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
-    throw std::runtime_error("NYI");
+    throw std::runtime_error("Custom Metal kernels only run on GPU.");
   }
 
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)

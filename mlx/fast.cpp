@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 #include <cassert>
+#include <iostream>
 #include <numeric>
 #include <regex>
 #include <string>
@@ -10,8 +11,6 @@
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"
 #include "mlx/transforms.h"
-
-#include <iostream>
 
 namespace mlx::core::fast {
 
@@ -1060,12 +1059,11 @@ std::string MetalKernel::write_template(
     i++;
   }
   template_def << ">";
-  std::string kernel_name = template_def.str();
-  std::replace(kernel_name.begin(), kernel_name.end(), '<', '_');
-  std::replace(kernel_name.begin(), kernel_name.end(), '>', '_');
-  std::replace(kernel_name.begin(), kernel_name.end(), ',', '_');
-  std::replace(kernel_name.begin(), kernel_name.end(), ' ', '_');
-  kernel_source << "template [[host_name(\"" << kernel_name
+  std::regex disallowed_chars("\\<|\\>|(, )");
+  std::string kernel_name =
+      std::regex_replace(template_def.str(), disallowed_chars, "_");
+  kernel_source << std::endl
+                << "template [[host_name(\"" << kernel_name
                 << "\")]] [[kernel]] decltype(" << template_def.str() << ") "
                 << template_def.str() << ";" << std::endl;
   return kernel_name;
@@ -1088,7 +1086,12 @@ std::map<std::string, array> MetalKernel::run(
     kernel_name = write_template(func_name, kernel_source);
   }
 
-  std::cout << kernel_source.str() << std::endl;
+  if (verbose_) {
+    std::cout << "Generated source code for `" << name_ << "`:" << std::endl
+              << "```" << std::endl
+              << kernel_source.str() << std::endl
+              << "```" << std::endl;
+  }
 
   std::vector<array> in_arrs;
   for (auto& kv : inputs) {

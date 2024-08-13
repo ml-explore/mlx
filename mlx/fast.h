@@ -76,14 +76,16 @@ class MetalKernel {
       std::map<std::string, Dtype> output_dtypes,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
-      bool ensure_row_contiguous)
+      bool ensure_row_contiguous,
+      bool verbose)
       : name_(name),
         source_(source),
         output_shapes_(output_shapes),
         output_dtypes_(output_dtypes),
         grid_(grid),
         threadgroup_(threadgroup),
-        ensure_row_contiguous_(ensure_row_contiguous) {
+        ensure_row_contiguous_(ensure_row_contiguous),
+        verbose_(verbose) {
     validate_output_shapes();
   }
 
@@ -110,6 +112,7 @@ class MetalKernel {
   std::tuple<int, int, int> grid_;
   std::tuple<int, int, int> threadgroup_;
   bool ensure_row_contiguous_ = true;
+  bool verbose_ = false;
 };
 
 } // namespace mlx::core::fast

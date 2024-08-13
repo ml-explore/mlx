@@ -549,117 +549,53 @@ class TestFast(mlx_tests.MLXTestCase):
                     self.assertTrue(mx.allclose(w, w_p))
 
     def test_custom_kernel(self):
-        A = mx.random.normal(shape=(2**16, 3, 3))
-        A = mx.matmul(A, mx.swapaxes(A, -1, -2))
+        mx.random.seed(7)
 
-        def invert_3x3(A):
-            kernel = mx.fast.MetalKernel(
-                name="invert3x3",
-                source="""
-                int elem = thread_position_in_grid.x;
-                int index = elem * 9;
-                T a11 = a[index];
-                T a12 = a[index + 1];
-                T a13 = a[index + 2];
-                T a21 = a[index + 3];
-                T a22 = a[index + 4];
-                T a23 = a[index + 5];
-                T a31 = a[index + 6];
-                T a32 = a[index + 7];
-                T a33 = a[index + 8];
-                T det = (
-                    a11 * a22 * a33
-                    + a12 * a23 * a31
-                    + a13 * a21 * a32
-                    - a11 * a23 * a32
-                    - a12 * a21 * a33
-                    - a13 * a22 * a31
-                );
-                out[index] = (a22 * a33 - a23 * a32) / det;
-                out[index + 1] = (a13 * a32 - a12 * a33) / det;
-                out[index + 2] = (a12 * a23 - a13 * a22) / det;
-                out[index + 3] = (a23 * a31 - a21 * a33) / det;
-                out[index + 4] = (a11 * a33 - a13 * a31) / det;
-                out[index + 5] = (a13 * a21 - a11 * a23) / det;
-                out[index + 6] = (a21 * a32 - a22 * a31) / det;
-                out[index + 7] = (a12 * a31 - a11 * a32) / det;
-                out[index + 8] = (a11 * a22 - a12 * a21) / det;
-                """,
-                output_shapes={"out": A.shape},
-                output_dtypes={"out": A.dtype},
-                grid=(A.size // 9, 1, 1),
-                threadgroup=(256, 1, 1),
-            )
-            kernel.template(T=A.dtype, e=True, f=7)
-            return kernel(a=A)["out"]
+        # No template
+        a = mx.random.normal(shape=(3, 6))
+        kernel = mx.fast.MetalKernel(
+            name="arg_test",
+            source="""
+            uint elem = thread_position_in_grid.x;
+            out1[elem] = a[elem];
+            """,
+            grid=(4, 1, 1),
+            threadgroup=(2, 1, 1),
+            output_shapes={"out1": (2, 2)},
+            output_dtypes={"out1": mx.float32},
+        )
+        out = kernel(a=a)
+        mx.allclose(out["out1"], a[:2, :2])
 
-        from functools import partial
+        # Template with varied args
+        kernel = mx.fast.MetalKernel(
+            name="arg_test",
+            source="""
+    uint elem = thread_position_in_grid.x;
+    T tmp = a[0];
+    if (e) {
+        out1[elem] = a[1] + b[2] + c[3] + d + f;
+    } else {
+        out1[elem] = 1;
+    }
+    out2[elem] = a[1] + b[2] + c[1] - d;
+            """,
+            grid=(4, 1, 1),
+            threadgroup=(2, 1, 1),
+            output_shapes={"out1": (2, 2), "out2": (3, 2)},
+            output_dtypes={"out1": mx.float32, "out2": mx.int32},
+        )
+        c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
 
-        @partial(mx.compile, shapeless=True)
-        def _inverse_3x3(a11, a12, a13, a21, a22, a23, a31, a32, a33):
-            det = (
-                a11 * a22 * a33
-                + a12 * a23 * a31
-                + a13 * a21 * a32
-                - a11 * a23 * a32
-                - a12 * a21 * a33
-                - a13 * a22 * a31
-            )
-            c11 = (a22 * a33 - a23 * a32) / det
-            c12 = (a13 * a32 - a12 * a33) / det
-            c13 = (a12 * a23 - a13 * a22) / det
-            c21 = (a23 * a31 - a21 * a33) / det
-            c22 = (a11 * a33 - a13 * a31) / det
-            c23 = (a13 * a21 - a11 * a23) / det
-            c31 = (a21 * a32 - a22 * a31) / det
-            c32 = (a12 * a31 - a11 * a32) / det
-            c33 = (a11 * a22 - a12 * a21) / det
-            return c11, c12, c13, c21, c22, c23, c31, c32, c33
-
-        def inverse_3x3(A):
-            shape = A.shape
-            return mx.concatenate(
-                _inverse_3x3(*mx.split(A.reshape(*shape[:-2], -1), 9, -1)), -1
-            ).reshape(shape)
-
-        def time_fn(fn, *args, **kwargs):
-            import time
-
-            msg = kwargs.pop("msg", None)
-            if msg:
-                print(f"Timing {msg} ...", end=" ")
-            else:
-                print(f"Timing {fn.__name__} ...", end=" ")
-
-            # warmup
-            for _ in range(5):
-                mx.eval(fn(*args, **kwargs))
-
-            num_iters = 100
-            tic = time.perf_counter()
-            for _ in range(num_iters):
-                x = mx.eval(fn(*args, **kwargs))
-            toc = time.perf_counter()
-
-            msec = 1e3 * (toc - tic) / num_iters
-            print(f"{msec:.5f} msec")
-
-        print(invert_3x3(A))
-        print(inverse_3x3(A))
-
-        # time_fn(mx.linalg.inv, A, stream=mx.cpu)
-        # time_fn(invert_3x3, A)
-        # time_fn(inverse_3x3, A)
+        kernel.template(e=True, f=3, T=mx.float16)
+        out = kernel(a=a, b=[3, 4, 5], c=c, d=7.3)
+        self.assertTrue(
+            mx.allclose(out["out1"], mx.array([[14.0484, 14.0484], [14.0484, 14.0484]]))
+        )
+        self.assertTrue(
+            mx.allclose(out["out2"], mx.array([[-2, -2], [-2, -2], [0, 0]]))
+        )
 
 
 if __name__ == "__main__":
     unittest.main()
-
-
-# Nice things we should have:
-# - A helper method to test equivalence between the fallback and metal kernel
-# - Automatic addition of `thread_position_in_grid` etc
-# - Optional row contiguity guarrantee
-# - Debug mode that prints full generated kernel
-# - If no output shapes are passed then trace the fallback kernel and use that output shape
-# - Allow specifying the max threadgroup size rather than a number?

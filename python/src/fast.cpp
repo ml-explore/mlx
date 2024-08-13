@@ -13,9 +13,6 @@
 #include "mlx/fast.h"
 #include "mlx/ops.h"
 
-#include <iostream>
-#include <set>
-
 namespace nb = nanobind;
 using namespace nb::literals;
 using namespace mlx::core;
@@ -156,7 +153,7 @@ void init_fast(nb::module_& parent_module) {
       m,
       "MetalKernel",
       R"pbdoc(
-      A custom Metal kernel defined from a source string.
+      A jit-compiled custom Metal kernel defined from a source string.
       )pbdoc")
       .def(
           nb::init<
@@ -166,6 +163,7 @@ void init_fast(nb::module_& parent_module) {
               std::map<std::string, Dtype>,
               std::tuple<int, int, int>,
               std::tuple<int, int, int>,
+              bool,
               bool>(),
           "name"_a,
           "source"_a,
@@ -173,7 +171,29 @@ void init_fast(nb::module_& parent_module) {
           "output_dtypes"_a,
           "grid"_a,
           "threadgroup"_a,
-          "ensure_row_contiguous"_a = true)
+          "ensure_row_contiguous"_a = true,
+          "verbose"_a = false,
+          R"pbdoc(
+      Initialize the MetalKernel.
+
+      Args:
+        name (str): Name for the kernel.
+        source (str): Source code. This is the body of a function in Metal,
+            the function signature will be generated for you. The names of the inputs/outputs
+            are determined by the `mx.array` kwargs used when the kernel is invoked and the keys
+            in `output_shapes`/`output_dtypes`.
+        output_shapes (dict[str, Sequence[int]]): Output shapes. A dict mapping
+            output variable names to shapes. These will be added to the function signature.
+        output_dtypes (dict[str, Dtype]): Output dtypes. A dict mapping output variable
+            names to dtypes. Must have the same keys as `output_shapes`.
+        grid (tuple[int, int, int]): 3-tuple specifying the grid to launch the kernel with.
+        threadgroup (tuple[int, int, int]): 3-tuple specifying the threadgroup size to use.
+        ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
+            before the kernel runs. Default: ``True``.
+        verbose (bool): Whether to print the full generated source code of the kernel
+            when it is run.
+
+      )pbdoc")
       .def(
           "template",
           [](fast::MetalKernel& kernel, nb::kwargs kwargs) {
@@ -198,7 +218,13 @@ void init_fast(nb::module_& parent_module) {
                     "Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
               }
             }
-          })
+          },
+          R"pbdoc(
+            Define template paramters for the kernel.
+
+            Args:
+                **kwargs (Union[int, bool, Dtype]): template parameters
+            )pbdoc")
       .def(
           "__call__",
           [](fast::MetalKernel& kernel, nb::kwargs& kwargs) {
@@ -218,5 +244,12 @@ void init_fast(nb::module_& parent_module) {
             return kernel.run(inputs, stream);
           },
           nb::sig(
-              "def __call__(self, **kwargs: array, stream: Union[None, Stream, Device] = None)"));
+              "def __call__(self, **kwargs: array, stream: Union[None, Stream, Device] = None)"),
+          R"pbdoc(
+            Call the kernel. All inputs must be convertible to `mx.array`.
+
+            Args:
+                **kwargs (array): Input `mx.array`s.
+                stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+            )pbdoc");
 }
