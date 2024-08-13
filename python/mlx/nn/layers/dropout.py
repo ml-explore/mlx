@@ -32,7 +32,7 @@ class Dropout(Module):
 
         mask = mx.random.bernoulli(self._p_1, x.shape)
 
-        return (1 / self._p_1) * mask * x
+        return mask * x / self._p_1
 
 
 class Dropout2d(Module):
@@ -85,7 +85,7 @@ class Dropout2d(Module):
         mask_shape[-2] = mask_shape[-3] = 1
 
         mask = mx.random.bernoulli(p=self._p_1, shape=mask_shape)
-        return (1 / self._p_1) * mask * x
+        return mask * x / self._p_1
 
 
 class Dropout3d(Module):
@@ -134,4 +134,4 @@ class Dropout3d(Module):
         mask_shape[-2] = mask_shape[-3] = mask_shape[-4] = 1
 
         mask = mx.random.bernoulli(p=self._p_1, shape=mask_shape)
-        return (1 / self._p_1) * mask * x
+        return mask * x / self._p_1
