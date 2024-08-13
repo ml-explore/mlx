@@ -939,73 +939,73 @@ class TestLayers(mlx_tests.MLXTestCase):
             shape = (1, 3, 4)
             x = mx.random.uniform(shape=shape)
             y = rope(x)
-            self.assertTrue(y.shape, shape)
-            self.assertTrue(y.dtype, mx.float32)
+            self.assertEqual(y.shape, shape)
+            self.assertEqual(y.dtype, mx.float32)
 
             y = rope(x, offset=3)
-            self.assertTrue(y.shape, shape)
+            self.assertEqual(y.shape, shape)
 
             y = rope(x.astype(mx.float16))
-            self.assertTrue(y.dtype, mx.float16)
+            self.assertEqual(y.dtype, mx.float16)
 
     def test_alibi(self):
         alibi = nn.ALiBi()
-        shape = [1, 8, 20, 20]
+        shape = (1, 8, 20, 20)
         x = mx.random.uniform(shape=shape)
         y = alibi(x)
-        self.assertTrue(y.shape, shape)
-        self.assertTrue(y.dtype, mx.float32)
+        self.assertEqual(y.shape, shape)
+        self.assertEqual(y.dtype, mx.float32)
 
         y = alibi(x.astype(mx.float16))
-        self.assertTrue(y.dtype, mx.float16)
+        self.assertEqual(y.dtype, mx.float16)
 
     def test_dropout(self):
         x = mx.ones((2, 4))
         y = nn.Dropout(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.float32)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.float32)
 
         x = mx.ones((2, 4), dtype=mx.bfloat16)
         y = nn.Dropout(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.bfloat16)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.bfloat16)
 
         x = mx.ones((2, 4), dtype=mx.float16)
         y = nn.Dropout(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.float16)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.float16)
 
     def test_dropout2d(self):
         x = mx.ones((2, 4, 4, 4))
         y = nn.Dropout2d(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.float32)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.float32)
 
         x = mx.ones((2, 4, 4, 4), dtype=mx.bfloat16)
         y = nn.Dropout2d(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.bfloat16)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.bfloat16)
 
         x = mx.ones((2, 4, 4, 4), dtype=mx.float16)
         y = nn.Dropout2d(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.float16)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.float16)
 
     def test_dropout3d(self):
         x = mx.ones((2, 4, 4, 4, 4))
         y = nn.Dropout3d(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.float32)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.float32)
 
         x = mx.ones((2, 4, 4, 4, 4), dtype=mx.bfloat16)
         y = nn.Dropout3d(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.bfloat16)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.bfloat16)
 
         x = mx.ones((2, 4, 4, 4, 4), dtype=mx.float16)
         y = nn.Dropout3d(0.5)(x)
-        self.assertTrue(y.shape, x.shape)
-        self.assertTrue(y.dtype, mx.float16)
+        self.assertEqual(y.shape, x.shape)
+        self.assertEqual(y.dtype, mx.float16)
 
     def test_upsample(self):
         b, h, w, c = 1, 2, 2, 1
