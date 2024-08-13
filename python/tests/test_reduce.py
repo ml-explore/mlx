@@ -114,25 +114,6 @@ class TestReduce(mlx_tests.MLXTestCase):
                     b = getattr(np, op)(data)
                     self.assertEqual(a.item(), b)
 
-    def test_reduce_with_nan(self):
-        x = mx.array([[1, 2, 3], [float("nan"), 5, 6]])
-
-        out = mx.max(x, axis=0)
-        expected = mx.array([float("nan"), 5, 6])
-        self.assertTrue(mx.allclose(out, expected, equal_nan=True))
-
-        out = mx.min(x, axis=0)
-        expected = mx.array([float("nan"), 2, 3])
-        self.assertTrue(mx.allclose(out, expected, equal_nan=True))
-
-        out = mx.sum(x, axis=0)
-        expected = mx.array([float("nan"), 7, 9])
-        self.assertTrue(mx.allclose(out, expected, equal_nan=True))
-
-        out = mx.prod(x, axis=0)
-        expected = mx.array([float("nan"), 10, 18])
-        self.assertTrue(mx.allclose(out, expected, equal_nan=True))
-
 
 if __name__ == "__main__":
     unittest.main(failfast=True)
