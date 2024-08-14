@@ -6,7 +6,6 @@
 #include <string>
 
 #include "mlx/backend/common/compiled.h"
-#include "mlx/backend/metal/kernels.h"
 #include "mlx/fast.h"
 #include "mlx/fast_primitives.h"
 #include "mlx/ops.h"

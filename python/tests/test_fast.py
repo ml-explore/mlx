@@ -548,6 +548,7 @@ class TestFast(mlx_tests.MLXTestCase):
                     )
                     self.assertTrue(mx.allclose(w, w_p))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel(self):
         mx.random.seed(7)
 

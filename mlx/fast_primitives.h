@@ -1,6 +1,5 @@
 // Copyright © 2024 Apple Inc.
 
-#include <any>
 #include <map>
 #include "mlx/primitives.h"
 

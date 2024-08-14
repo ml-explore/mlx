@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <any>
 #include <map>
 #include <optional>
 

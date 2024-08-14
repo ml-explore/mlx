@@ -1,5 +1,3 @@
-#include <cassert>
-
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/jit/includes.h"
 #include "mlx/backend/metal/utils.h"
