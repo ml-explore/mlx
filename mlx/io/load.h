@@ -91,7 +91,7 @@ class FileReader : public Reader {
 class FileWriter : public Writer {
  public:
   explicit FileWriter(std::string file_path)
-      : fd_(open(file_path.c_str(), O_CREAT | O_WRONLY)),
+      : fd_(open(file_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644)),
         label_(std::move(file_path)) {}
 
   bool is_open() const override {
