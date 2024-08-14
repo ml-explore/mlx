@@ -2,6 +2,9 @@
 
 #pragma once
 
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <fstream>
 #include <istream>
 #include <memory>
@@ -36,31 +39,36 @@ class Writer {
 
 class FileReader : public Reader {
  public:
-  explicit FileReader(std::ifstream is)
-      : is_(std::move(is)), label_("stream") {}
   explicit FileReader(std::string file_path)
-      : is_(std::ifstream(file_path, std::ios::binary)),
-        label_(std::move(file_path)) {}
+      : fd_(open(file_path.c_str(), O_RDONLY)), label_(std::move(file_path)) {}
+
+  ~FileReader() {
+    close(fd_);
+  }
 
   bool is_open() const override {
-    return is_.is_open();
+    return fd_ > 0;
   }
 
   bool good() const override {
-    return is_.good();
+    return is_open();
   }
 
   size_t tell() override {
-    return is_.tellg();
+    return lseek(fd_, 0, SEEK_CUR);
   }
 
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
-    is_.seekg(off, way);
+    if (way == std::ios_base::beg) {
+      lseek(fd_, off, 0);
+    } else {
+      lseek(fd_, off, SEEK_CUR);
+    }
   }
 
   void read(char* data, size_t n) override {
-    is_.read(data, n);
+    ::read(fd_, data, n);
   }
 
   std::string label() const override {
@@ -68,7 +76,7 @@ class FileReader : public Reader {
   }
 
  private:
-  std::ifstream is_;
+  int fd_;
   std::string label_;
 };
 
