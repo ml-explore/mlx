@@ -1,10 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include <nanobind/nanobind.h>
-#include <nanobind/stl/map.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
+#include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
@@ -202,8 +202,8 @@ void init_fast(nb::module_& parent_module) {
           nb::init<
               const std::string&,
               const std::string&,
-              std::map<std::string, std::vector<int>>,
-              std::map<std::string, Dtype>,
+              std::unordered_map<std::string, std::vector<int>>,
+              std::unordered_map<std::string, Dtype>,
               std::tuple<int, int, int>,
               std::tuple<int, int, int>,
               bool,
@@ -262,6 +262,7 @@ void init_fast(nb::module_& parent_module) {
               }
             }
           },
+          nb::sig("def template(self, **kwargs: Union[int, bool, Dtype])"),
           R"pbdoc(
             Define template paramters for the kernel.
 
@@ -275,7 +276,7 @@ void init_fast(nb::module_& parent_module) {
             if (kwargs.contains("stream")) {
               stream = nb::cast<StreamOrDevice>(kwargs["stream"]);
             }
-            std::map<std::string, array> inputs;
+            std::unordered_map<std::string, array> inputs;
             for (auto kv : kwargs) {
               auto name = nb::cast<std::string>(kv.first);
               if (name != "stream") {

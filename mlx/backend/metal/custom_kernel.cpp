@@ -16,9 +16,9 @@ void CustomKernel::eval_gpu(
 
   std::vector<array> copies;
 
-  auto check_input = [&copies, &s](const array& x) {
+  auto check_input = [&copies, &s, this](const array& x) -> const array {
     bool no_copy = x.flags().row_contiguous;
-    if (no_copy) {
+    if (!ensure_row_contiguous_ || no_copy) {
       return x;
     } else {
       copies.push_back(array(x.shape(), x.dtype(), nullptr, {}));
@@ -26,6 +26,10 @@ void CustomKernel::eval_gpu(
       return copies.back();
     }
   };
+  std::vector<const array> checked_inputs;
+  for (const array& in : inputs) {
+    checked_inputs.push_back(check_input(in));
+  }
 
   auto& d = metal::device(s.device);
   const auto& lib_name = name_;
@@ -37,13 +41,18 @@ void CustomKernel::eval_gpu(
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   int index = 0;
-  for (int i = 0; i < inputs.size(); i++) {
-    array in = inputs[i];
-    if (ensure_row_contiguous_) {
-      in = check_input(in);
-    }
+  for (const array& in : checked_inputs) {
     compute_encoder.set_input_array(in, index);
     index++;
+    if (in.ndim() > 0) {
+      int ndim = in.ndim();
+      set_vector_bytes(compute_encoder, in.shape(), ndim, index);
+      index++;
+      set_vector_bytes(compute_encoder, in.strides(), ndim, index);
+      index++;
+      compute_encoder->setBytes(&ndim, sizeof(int), index);
+      index++;
+    }
   }
   for (array out : outputs) {
     compute_encoder.set_output_array(out, index);
@@ -56,8 +65,10 @@ void CustomKernel::eval_gpu(
   MTL::Size grid_dims = MTL::Size(gx, gy, gz);
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  if (!copies.empty()) {
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  }
 }
 
 } // namespace mlx::core::fast

@@ -71,8 +71,8 @@ class MetalKernel {
   MetalKernel(
       const std::string& name,
       const std::string& source,
-      std::map<std::string, std::vector<int>> output_shapes,
-      std::map<std::string, Dtype> output_dtypes,
+      std::unordered_map<std::string, std::vector<int>> output_shapes,
+      std::unordered_map<std::string, Dtype> output_dtypes,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
       bool ensure_row_contiguous,
@@ -88,26 +88,24 @@ class MetalKernel {
     validate_output_shapes();
   }
 
-  std::map<std::string, array> run(
-      std::map<std::string, array>& inputs,
+  std::unordered_map<std::string, array> run(
+      std::unordered_map<std::string, array>& inputs,
       StreamOrDevice s = {});
 
-  std::map<std::string, TemplateArg> template_args;
+  std::unordered_map<std::string, TemplateArg> template_args;
 
  private:
   void validate_output_shapes();
   void write_signature(
-      std::string& func_name,
-      std::map<std::string, array>& inputs,
+      std::string func_name,
+      std::unordered_map<std::string, array>& inputs,
       std::ostringstream& kernel_source);
-  std::string write_template(
-      std::string& func_name,
-      std::ostringstream& kernel_source);
+  std::string write_template();
 
   std::string name_;
   std::string source_;
-  std::map<std::string, std::vector<int>> output_shapes_;
-  std::map<std::string, Dtype> output_dtypes_;
+  std::unordered_map<std::string, std::vector<int>> output_shapes_;
+  std::unordered_map<std::string, Dtype> output_dtypes_;
   std::tuple<int, int, int> grid_;
   std::tuple<int, int, int> threadgroup_;
   bool ensure_row_contiguous_ = true;
