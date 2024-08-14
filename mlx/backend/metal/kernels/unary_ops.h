@@ -308,6 +308,14 @@ struct Sign {
   uint32_t operator()(uint32_t x) {
     return x != 0;
   };
+  template <>
+  complex64_t operator()(complex64_t x) {
+    if (x == complex64_t(0)) {
+      return x;
+    }
+    return x /
+        (complex64_t)metal::precise::sqrt(x.real * x.real + x.imag * x.imag);
+  };
 };
 
 struct Sin {

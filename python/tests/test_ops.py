@@ -754,7 +754,9 @@ class TestOps(mlx_tests.MLXTestCase):
         b = mx.array([-4.0, -3.0, 1.0, 0.0, 3.0])
         c = a + b * 1j
         result = mx.sign(c)
-        expected = np.sign(c, dtype=np.complex64)
+        # np.sign differs in NumPy 1 and 2 so
+        # we manually implement the NumPy 2 version here.
+        expected = c / np.abs(c)
         self.assertTrue(np.allclose(result, expected))
 
     def test_logical_not(self):

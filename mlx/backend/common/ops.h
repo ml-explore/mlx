@@ -373,6 +373,10 @@ struct Sign {
   uint64_t operator()(uint64_t x) {
     return x != 0;
   }
+
+  complex64_t operator()(complex64_t x) {
+    return x == complex64_t(0) ? x : x / std::abs(x);
+  }
 };
 
 struct Sin {
