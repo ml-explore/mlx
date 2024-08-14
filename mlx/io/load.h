@@ -5,9 +5,8 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <fstream>
-#include <istream>
 #include <memory>
+#include <sstream>
 
 namespace mlx::core {
 
@@ -68,7 +67,16 @@ class FileReader : public Reader {
   }
 
   void read(char* data, size_t n) override {
-    ::read(fd_, data, n);
+    while (n != 0) {
+      auto m = ::read(fd_, data, n);
+      if (m <= 0) {
+        std::ostringstream msg;
+        msg << "[read] Unable to read " << n << " bytes from file.";
+        throw std::runtime_error(msg.str());
+      }
+      data += m;
+      n -= m;
+    }
   }
 
   std::string label() const override {
@@ -82,31 +90,42 @@ class FileReader : public Reader {
 
 class FileWriter : public Writer {
  public:
-  explicit FileWriter(std::ofstream os)
-      : os_(std::move(os)), label_("stream") {}
   explicit FileWriter(std::string file_path)
-      : os_(std::ofstream(file_path, std::ios::binary)),
+      : fd_(open(file_path.c_str(), O_CREAT | O_WRONLY)),
         label_(std::move(file_path)) {}
 
   bool is_open() const override {
-    return os_.is_open();
+    return fd_ >= 0;
   }
 
   bool good() const override {
-    return os_.good();
+    return is_open();
   }
 
   size_t tell() override {
-    return os_.tellp();
+    return lseek(fd_, 0, SEEK_CUR);
   }
 
   void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
       override {
-    os_.seekp(off, way);
+    if (way == std::ios_base::beg) {
+      lseek(fd_, off, 0);
+    } else {
+      lseek(fd_, off, SEEK_CUR);
+    }
   }
 
   void write(const char* data, size_t n) override {
-    os_.write(data, n);
+    while (n != 0) {
+      auto m = ::write(fd_, data, n);
+      if (m <= 0) {
+        std::ostringstream msg;
+        msg << "[write] Unable to write " << n << " bytes to file.";
+        throw std::runtime_error(msg.str());
+      }
+      data += m;
+      n -= m;
+    }
   }
 
   std::string label() const override {
@@ -114,7 +133,7 @@ class FileWriter : public Writer {
   }
 
  private:
-  std::ofstream os_;
+  int fd_;
   std::string label_;
 };
 
