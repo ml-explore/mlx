@@ -184,7 +184,10 @@ void row_reduce_small(
   reduce_shape.pop_back();
   reduce_strides.pop_back();
   int reduce_ndim = reduce_shape.size();
-  auto [shape, strides] = shapes_without_reduction_axes(in, axes);
+  std::vector<int> shape;
+  std::vector<size_t> strides;
+  std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
+  std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
   int ndim = shape.size();
   int non_row_reductions = 1;
   for (auto s : reduce_shape) {
@@ -265,8 +268,8 @@ void row_reduce_looped(
     const Stream& s) {
   // Set the kernel
   std::ostringstream kname;
-  kname << "rowLooped" << (plan.shape.size() - 1) << "_reduce_" << op_name
-        << type_to_name(in);
+  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
+  kname << "rowLooped" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
 
@@ -277,7 +280,10 @@ void row_reduce_looped(
   reduce_shape.pop_back();
   reduce_strides.pop_back();
   int reduce_ndim = reduce_shape.size();
-  auto [shape, strides] = shapes_without_reduction_axes(in, axes);
+  std::vector<int> shape;
+  std::vector<size_t> strides;
+  std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
+  std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
   int ndim = shape.size();
   size_t non_row_reductions = 1;
   for (auto s : reduce_shape) {
@@ -332,7 +338,92 @@ void row_reduce_general_dispatch(
   return row_reduce_looped(in, out, op_name, plan, axes, compute_encoder, d, s);
 }
 
+void strided_reduce_looped(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    const ReductionPlan& plan,
+    const std::vector<int>& axes,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  // Set the kernel
+  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
+  std::ostringstream kname;
+  kname << "colLooped" << n << "_reduce_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Prepare the arguments for the kernel
+  size_t reduction_size = plan.shape.back();
+  size_t reduction_stride = plan.strides.back();
+  auto reduce_shape = plan.shape;
+  auto reduce_strides = plan.strides;
+  reduce_shape.pop_back();
+  reduce_strides.pop_back();
+  int reduce_ndim = reduce_shape.size();
+  std::vector<int> shape;
+  std::vector<size_t> strides;
+  std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
+  while (!shape.empty() && strides.back() < reduction_stride &&
+         strides.back() > 0) {
+    shape.pop_back();
+    strides.pop_back();
+  }
+  std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
+  int ndim = shape.size();
+  size_t non_col_reductions = 1;
+  for (auto s : reduce_shape) {
+    non_col_reductions *= s;
+  }
+
+  // Figure out the grid dims
+  auto out_shape = out.shape();
+  auto out_strides = out.strides();
+  while (!out_shape.empty() && out_strides.back() < reduction_stride) {
+    out_shape.pop_back();
+    out_strides.pop_back();
+  }
+  auto out_grid_size = get_2d_grid_dims(out_shape, out_strides);
+  const int BN = 64;
+  int threadgroup_size = 4 * 32;
+  MTL::Size grid_dims(
+      threadgroup_size * ((reduction_stride + BN - 1) / BN),
+      out_grid_size.width,
+      out_grid_size.height);
+  MTL::Size group_dims(threadgroup_size, 1, 1);
+
+  // Launch
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(out, 1);
+  compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+  compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
+  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
+  compute_encoder->setBytes(&ndim, sizeof(int), 6);
+  compute_encoder->setBytes(
+      reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
+  compute_encoder->setBytes(
+      reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
+  compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
+  compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 10);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
+}
+
 void strided_reduce_general_dispatch(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    const ReductionPlan& plan,
+    const std::vector<int>& axes,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  return strided_reduce_looped(
+      in, out, op_name, plan, axes, compute_encoder, d, s);
+}
+
+void strided_reduce_general_dispatch_old(
     const array& in,
     array& out,
     const std::string& op_name,
@@ -583,6 +674,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   // Make sure no identity reductions trickle down here
   assert(!axes_.empty());
+  assert(out.size() != in.size());
 
   // Continue with reduction operation
   // Minimum of 4 bytes since we use size 4 structs for all reduce
@@ -623,6 +715,10 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     // If it is a general reduce then copy the input to a contiguous array and
     // recompute the plan.
+    //
+    // TODO: This can be avoided by making the output have the same strides as
+    //       input for the axes with stride smaller than the minimum reduction
+    //       stride.
     if (plan.type == GeneralReduce) {
       array in_copy(in.shape(), in.dtype(), nullptr, {});
       copy_gpu(in, in_copy, CopyType::General, s);
@@ -651,7 +747,6 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     else if (
         plan.type == ContiguousStridedReduce ||
         plan.type == GeneralStridedReduce) {
-      init_reduce(out, op_name, compute_encoder, d, s);
       strided_reduce_general_dispatch(
           in, out, op_name, plan, axes_, compute_encoder, d, s);
     }

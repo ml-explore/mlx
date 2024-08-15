@@ -11,6 +11,11 @@
 namespace mlx {
 namespace steel {
 
+template <typename T>
+struct Initializer {
+  static constexpr constant T init = T(0);
+};
+
 template <
     typename T,
     short BROWS,
@@ -21,7 +26,8 @@ template <
     short alignment = 1,
     short n_reads = (BCOLS * BROWS) / (tgp_size),
     short TCOLS = BCOLS / n_reads,
-    short TROWS = tgp_size / TCOLS>
+    short TROWS = tgp_size / TCOLS,
+    typename initializer = Initializer<T>>
 struct BlockLoader {
   STEEL_CONST short n_rows = (BROWS + TROWS - 1) / TROWS;
   STEEL_CONST short vec_size = n_reads;
@@ -89,7 +95,7 @@ struct BlockLoader {
       for (short i = 0; i < BROWS; i += TROWS) {
         STEEL_PRAGMA_UNROLL
         for (short j = 0; j < vec_size; j++) {
-          dst[i * dst_ld + j] = T(0);
+          dst[i * dst_ld + j] = T(initializer::init);
         }
       }
       return;
@@ -116,7 +122,7 @@ struct BlockLoader {
       // Zero out uneeded values
       STEEL_PRAGMA_UNROLL
       for (short j = 0; j < vec_size; j++) {
-        tmp_val[j] = tmp_idx[j] ? tmp_val[j] : T(0);
+        tmp_val[j] = tmp_idx[j] ? tmp_val[j] : T(initializer::init);
       }
 
       // Copy values to threadgroup memory
@@ -130,6 +136,10 @@ struct BlockLoader {
   /* Iteration helper */
   METAL_FUNC void next() {
     src += tile_stride;
+  }
+
+  METAL_FUNC void reset(const device T* src_) {
+    src = src_ + bi * src_ld + bj;
   }
 };
 
