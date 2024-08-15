@@ -33,7 +33,7 @@ void Load::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 0);
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
-  reader_->seek(offset_, std::ios_base::beg);
+  reader_->seek(offset_);
   reader_->read(out.data<char>(), out.nbytes());
 
   if (swap_endianness_) {

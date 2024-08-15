@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <numeric>
 
 #include "mlx/io/gguf.h"

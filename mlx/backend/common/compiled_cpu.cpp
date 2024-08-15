@@ -2,6 +2,7 @@
 
 #include <dlfcn.h>
 #include <filesystem>
+#include <fstream>
 #include <list>
 
 #include "mlx/backend/common/compiled.h"
