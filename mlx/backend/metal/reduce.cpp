@@ -16,6 +16,142 @@
 
 namespace mlx::core {
 
+namespace {
+
+struct RowReduceArgs {
+  // Input shape and strides not including the reduction axes
+  std::vector<int> shape;
+  std::vector<size_t> strides;
+  int ndim;
+
+  // Input shape and strides for the reduction axes
+  std::vector<int> reduce_shape;
+  std::vector<size_t> reduce_strides;
+  int reduce_ndim;
+
+  // The number of rows we are reducing. Namely prod(reduce_shape).
+  size_t non_row_reductions;
+
+  // The size of the row.
+  int row_size;
+
+  RowReduceArgs(
+      const array& in,
+      const ReductionPlan& plan,
+      const std::vector<int>& axes) {
+    row_size = plan.shape.back();
+
+    reduce_shape = plan.shape;
+    reduce_strides = plan.strides;
+    reduce_shape.pop_back();
+    reduce_strides.pop_back();
+    reduce_ndim = reduce_shape.size();
+
+    non_row_reductions = 1;
+    for (auto s : reduce_shape) {
+      non_row_reductions *= s;
+    }
+
+    std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
+    std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
+    ndim = shape.size();
+
+    if (reduce_ndim == 0) {
+      // Push 0s to avoid accessing empty strides. This is an optimization to
+      // avoid calling elem_to_loc unless we really have a large large number of
+      // unfusable reduction dims.
+      reduce_shape.push_back(0);
+      reduce_strides.push_back(0);
+    }
+  }
+
+  void encode(CommandEncoder& compute_encoder) {
+    compute_encoder->setBytes(&row_size, sizeof(int), 2);
+    compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 3);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+    compute_encoder->setBytes(
+        strides.data(), strides.size() * sizeof(size_t), 5);
+    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+    compute_encoder->setBytes(
+        reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
+    compute_encoder->setBytes(
+        reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
+    compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
+  }
+};
+
+struct ColReduceArgs {
+  // Input shape and strides not including the reduction axes
+  std::vector<int> shape;
+  std::vector<size_t> strides;
+  int ndim;
+
+  // Input shape and strides for the reduction axes
+  std::vector<int> reduce_shape;
+  std::vector<size_t> reduce_strides;
+  int reduce_ndim;
+
+  // The number of column reductions we are doing. Namely prod(reduce_shape).
+  size_t non_col_reductions;
+
+  // The size of the contiguous column reduction.
+  size_t reduction_size;
+  size_t reduction_stride;
+
+  ColReduceArgs(
+      const array& in,
+      const ReductionPlan& plan,
+      const std::vector<int>& axes) {
+    reduction_size = plan.shape.back();
+    reduction_stride = plan.strides.back();
+
+    reduce_shape = plan.shape;
+    reduce_strides = plan.strides;
+    reduce_shape.pop_back();
+    reduce_strides.pop_back();
+    reduce_ndim = reduce_shape.size();
+
+    non_col_reductions = 1;
+    for (auto s : reduce_shape) {
+      non_col_reductions *= s;
+    }
+
+    std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
+    while (!shape.empty() && strides.back() < reduction_stride &&
+           strides.back() > 0) {
+      shape.pop_back();
+      strides.pop_back();
+    }
+    std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
+    ndim = shape.size();
+
+    if (reduce_ndim == 0) {
+      // Push 0s to avoid accessing empty strides. This is an optimization to
+      // avoid calling elem_to_loc unless we really have a large large number of
+      // unfusable reduction dims.
+      reduce_shape.push_back(0);
+      reduce_strides.push_back(0);
+    }
+  }
+
+  void encode(CommandEncoder& compute_encoder) {
+    compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
+    compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
+    compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
+    compute_encoder->setBytes(
+        strides.data(), strides.size() * sizeof(size_t), 5);
+    compute_encoder->setBytes(&ndim, sizeof(int), 6);
+    compute_encoder->setBytes(
+        reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
+    compute_encoder->setBytes(
+        reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
+    compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
+    compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 10);
+  }
+};
+
+} // namespace
+
 inline auto safe_div(size_t n, size_t m) {
   return m == 0 ? 0 : (n + m - 1) / m;
 }
@@ -49,6 +185,18 @@ inline int threadgroup_size_from_row_size(int row_size) {
   thread_group_size = ((thread_group_size + 31) / 32) * 32;
   thread_group_size = std::min(1024, thread_group_size);
   return thread_group_size;
+}
+
+inline auto output_grid_for_col_reduce(
+    const array& out,
+    const ColReduceArgs& args) {
+  auto out_shape = out.shape();
+  auto out_strides = out.strides();
+  while (!out_shape.empty() && out_strides.back() < args.reduction_stride) {
+    out_shape.pop_back();
+    out_strides.pop_back();
+  }
+  return get_2d_grid_dims(out_shape, out_strides);
 }
 
 void init_reduce(
@@ -172,32 +320,19 @@ void row_reduce_small(
     const Stream& s) {
   // Set the kernel
   std::ostringstream kname;
-  kname << "rowSmall" << (plan.shape.size() - 1) << "_reduce_" << op_name
-        << type_to_name(in);
+  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
+  kname << "rowSmall" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
-  int row_size = plan.shape.back();
-  auto reduce_shape = plan.shape;
-  auto reduce_strides = plan.strides;
-  reduce_shape.pop_back();
-  reduce_strides.pop_back();
-  int reduce_ndim = reduce_shape.size();
-  std::vector<int> shape;
-  std::vector<size_t> strides;
-  std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
-  std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
-  int ndim = shape.size();
-  int non_row_reductions = 1;
-  for (auto s : reduce_shape) {
-    non_row_reductions *= s;
-  }
+  RowReduceArgs args(in, plan, axes);
 
   // Figure out the grid dims
   MTL::Size grid_dims;
   MTL::Size group_dims;
-  if ((non_row_reductions < 32 && row_size <= 8) || non_row_reductions <= 8) {
+  if ((args.non_row_reductions < 32 && args.row_size <= 8) ||
+      args.non_row_reductions <= 8) {
     grid_dims = get_2d_grid_dims(out.shape(), out.strides());
     group_dims =
         MTL::Size((grid_dims.width < 1024) ? grid_dims.width : 1024, 1, 1);
@@ -210,16 +345,7 @@ void row_reduce_small(
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&row_size, sizeof(int), 2);
-  compute_encoder->setBytes(&non_row_reductions, sizeof(int), 3);
-  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
-  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
-  compute_encoder->setBytes(&ndim, sizeof(int), 6);
-  compute_encoder->setBytes(
-      reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
-  compute_encoder->setBytes(
-      reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
-  compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
+  args.encode(compute_encoder);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
@@ -274,25 +400,11 @@ void row_reduce_looped(
   compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
-  int row_size = plan.shape.back();
-  auto reduce_shape = plan.shape;
-  auto reduce_strides = plan.strides;
-  reduce_shape.pop_back();
-  reduce_strides.pop_back();
-  int reduce_ndim = reduce_shape.size();
-  std::vector<int> shape;
-  std::vector<size_t> strides;
-  std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
-  std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
-  int ndim = shape.size();
-  size_t non_row_reductions = 1;
-  for (auto s : reduce_shape) {
-    non_row_reductions *= s;
-  }
+  RowReduceArgs args(in, plan, axes);
 
   // Figure out the grid
   auto out_grid_size = get_2d_grid_dims(out.shape(), out.strides());
-  int threadgroup_size = threadgroup_size_from_row_size(row_size);
+  int threadgroup_size = threadgroup_size_from_row_size(args.row_size);
   MTL::Size grid_dims(
       threadgroup_size, out_grid_size.width, out_grid_size.height);
   MTL::Size group_dims(threadgroup_size, 1, 1);
@@ -300,16 +412,7 @@ void row_reduce_looped(
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&row_size, sizeof(int), 2);
-  compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 3);
-  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
-  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
-  compute_encoder->setBytes(&ndim, sizeof(int), 6);
-  compute_encoder->setBytes(
-      reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
-  compute_encoder->setBytes(
-      reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
-  compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
+  args.encode(compute_encoder);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
@@ -338,6 +441,46 @@ void row_reduce_general_dispatch(
   return row_reduce_looped(in, out, op_name, plan, axes, compute_encoder, d, s);
 }
 
+void strided_reduce_small(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    const ReductionPlan& plan,
+    const std::vector<int>& axes,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  // Set the kernel
+  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
+  std::ostringstream kname;
+  kname << "colSmall" << n << "_reduce_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Prepare the arguments for the kernel
+  ColReduceArgs args(in, plan, axes);
+
+  // Figure out the grid dims
+  MTL::Size grid_dims, group_dims;
+
+  // Case 1: everything is small so launch one thread per col reduce
+  if (args.reduction_size * args.non_col_reductions < 64) {
+    grid_dims = output_grid_for_col_reduce(out, args);
+    int threadgroup_size = (grid_dims.width > 128) ? 128 : grid_dims.width;
+    group_dims = MTL::Size(threadgroup_size, 1, 1);
+  }
+
+  // Case 2: Reduction in the simdgroup
+  // else if () {
+  //}
+
+  // Launch
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(out, 1);
+  args.encode(compute_encoder);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
+}
+
 void strided_reduce_looped(
     const array& in,
     array& out,
@@ -355,40 +498,14 @@ void strided_reduce_looped(
   compute_encoder->setComputePipelineState(kernel);
 
   // Prepare the arguments for the kernel
-  size_t reduction_size = plan.shape.back();
-  size_t reduction_stride = plan.strides.back();
-  auto reduce_shape = plan.shape;
-  auto reduce_strides = plan.strides;
-  reduce_shape.pop_back();
-  reduce_strides.pop_back();
-  int reduce_ndim = reduce_shape.size();
-  std::vector<int> shape;
-  std::vector<size_t> strides;
-  std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
-  while (!shape.empty() && strides.back() < reduction_stride &&
-         strides.back() > 0) {
-    shape.pop_back();
-    strides.pop_back();
-  }
-  std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
-  int ndim = shape.size();
-  size_t non_col_reductions = 1;
-  for (auto s : reduce_shape) {
-    non_col_reductions *= s;
-  }
+  ColReduceArgs args(in, plan, axes);
 
   // Figure out the grid dims
-  auto out_shape = out.shape();
-  auto out_strides = out.strides();
-  while (!out_shape.empty() && out_strides.back() < reduction_stride) {
-    out_shape.pop_back();
-    out_strides.pop_back();
-  }
-  auto out_grid_size = get_2d_grid_dims(out_shape, out_strides);
-  const int BN = 64;
+  auto out_grid_size = output_grid_for_col_reduce(out, args);
+  const int BN = (in.itemsize() < 8) ? 32 : 16;
   int threadgroup_size = 4 * 32;
   MTL::Size grid_dims(
-      threadgroup_size * ((reduction_stride + BN - 1) / BN),
+      threadgroup_size * ((args.reduction_stride + BN - 1) / BN),
       out_grid_size.width,
       out_grid_size.height);
   MTL::Size group_dims(threadgroup_size, 1, 1);
@@ -396,17 +513,7 @@ void strided_reduce_looped(
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
-  compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
-  compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
-  compute_encoder->setBytes(strides.data(), strides.size() * sizeof(size_t), 5);
-  compute_encoder->setBytes(&ndim, sizeof(int), 6);
-  compute_encoder->setBytes(
-      reduce_shape.data(), reduce_shape.size() * sizeof(int), 7);
-  compute_encoder->setBytes(
-      reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
-  compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
-  compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 10);
+  args.encode(compute_encoder);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
@@ -419,6 +526,11 @@ void strided_reduce_general_dispatch(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  // if (plan.shape.back() < 32 || plan.strides.back() < 32) {
+  //   return strided_reduce_small(
+  //       in, out, op_name, plan, axes, compute_encoder, d, s);
+  // }
+
   return strided_reduce_looped(
       in, out, op_name, plan, axes, compute_encoder, d, s);
 }

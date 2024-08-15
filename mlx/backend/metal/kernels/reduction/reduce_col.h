@@ -1,111 +1,126 @@
 // Copyright © 2023-2024 Apple Inc.
 
-///////////////////////////////////////////////////////////////////////////////
-// Small column reduce kernel
-///////////////////////////////////////////////////////////////////////////////
-
-template <typename T, typename U, typename Op>
+template <
+    typename T,
+    typename U,
+    typename Op,
+    int NDIMS = 0,
+    int N_READS = REDUCE_N_READS>
 [[kernel]] void col_reduce_small(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
     const constant size_t& reduction_size [[buffer(2)]],
     const constant size_t& reduction_stride [[buffer(3)]],
-    const constant size_t& out_size [[buffer(4)]],
-    const constant int* shape [[buffer(5)]],
-    const constant size_t* strides [[buffer(6)]],
-    const constant int& ndim [[buffer(7)]],
-    const constant size_t& non_col_reductions [[buffer(8)]],
-    const constant int* non_col_shapes [[buffer(9)]],
-    const constant size_t* non_col_strides [[buffer(10)]],
-    const constant int& non_col_ndim [[buffer(11)]],
-    uint tid [[thread_position_in_grid]]) {
-  // Appease the compiler
-  (void)out_size;
-
+    const constant int* shape [[buffer(4)]],
+    const constant size_t* strides [[buffer(5)]],
+    const constant int& ndim [[buffer(6)]],
+    const constant int* reduce_shape [[buffer(7)]],
+    const constant size_t* reduce_strides [[buffer(8)]],
+    const constant int& reduce_ndim [[buffer(9)]],
+    const constant size_t& non_col_reductions [[buffer(10)]],
+    uint3 gid [[threadgroup_position_in_grid]],
+    uint3 gsize [[threadgroups_per_grid]],
+    // uint simd_lane_id [[thread_index_in_simdgroup]],
+    // uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint3 tid [[thread_position_in_grid]],
+    uint3 tsize [[threads_per_grid]]) {
   Op op;
-  U total_val = Op::init;
+  looped_elem_to_loc<NDIMS> loop;
 
-  auto out_idx = tid;
+  // Case 1:
+  // reduction_stride is small, reduction_size is small and non_col_reductions
+  // is small. Each thread computes reduction_stride outputs.
+  if (reduction_size * non_col_reductions < 64) {
+    U totals[31];
+    for (int i = 0; i < 31; i++) {
+      totals[i] = Op::init;
+    }
 
-  in += elem_to_loc(
-      out_idx,
-      shape + non_col_ndim,
-      strides + non_col_ndim,
-      ndim - non_col_ndim);
+    short stride = reduction_stride;
+    short size = reduction_size;
+    short blocks = stride / N_READS;
+    short extra = stride % N_READS;
 
-  for (uint i = 0; i < non_col_reductions; i++) {
-    size_t in_idx =
-        elem_to_loc(i, non_col_shapes, non_col_strides, non_col_ndim);
+    size_t out_idx = tid.x + tsize.y * size_t(tid.y);
+    in += elem_to_loc(out_idx, shape, strides, ndim);
 
-    for (uint j = 0; j < reduction_size; j++, in_idx += reduction_stride) {
-      U val = static_cast<U>(in[in_idx]);
-      total_val = op(total_val, val);
+    for (uint r = 0; r < non_col_reductions; r++) {
+      const device T* in_row;
+      if constexpr (loop.dynamic_ndim) {
+        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
+      } else {
+        in_row = in + loop.offset;
+      }
+
+      for (short i = 0; i < size; i++) {
+        thread U* local_totals = totals;
+        for (short j = 0; j < blocks; j++) {
+          for (short k = 0; k < N_READS; k++) {
+            local_totals[k] = op(local_totals[k], in_row[k]);
+          }
+          local_totals += N_READS;
+          in_row += N_READS;
+        }
+        for (short k = 0; k < extra; k++) {
+          local_totals[k] = op(local_totals[k], in_row[k]);
+        }
+      }
+
+      loop.next(reduce_shape, reduce_strides);
+      threadgroup_barrier(mem_flags::mem_none);
+    }
+    out += out_idx * reduction_stride;
+    for (short j = 0; j < stride; j++) {
+      out[j] = totals[j];
     }
   }
 
-  out[out_idx] = total_val;
+  //// Case 2:
+  //// Each threadgroup reads
+  // else {
+  //   U total = Op::init;
+
+  //  size_t out_idx = gid.y + gsize.y * size_t(gid.z);
+  //  size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+
+  //  in += in_idx + simd_lane_id;
+
+  //  for (uint r = 0; r < non_col_reductions; r++) {
+  //    const device T* in_row;
+  //    if constexpr (loop.dynamic_ndim) {
+  //      in_row = in + elem_to_loc(r, reduce_shape, reduce_strides,
+  //      reduce_ndim);
+  //    } else {
+  //      in_row = in + loop.offset;
+  //    }
+
+  //    for (
+  //  }
+  //}
 }
 
-///////////////////////////////////////////////////////////////////////////////
-// Column reduce helper
-///////////////////////////////////////////////////////////////////////////////
-
-template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
-METAL_FUNC U _contiguous_strided_reduce(
-    const device T* in,
-    threadgroup U* local_data,
-    size_t in_idx,
-    size_t reduction_size,
-    size_t reduction_stride,
-    uint2 tid,
-    uint2 lid,
-    uint2 lsize) {
-  Op op;
-  U total_val = Op::init;
-
-  size_t base_offset = (size_t(tid.y) * lsize.y + lid.y) * N_READS;
-
-  in += in_idx;
-  in += base_offset * reduction_stride;
-
-  if (base_offset + N_READS <= reduction_size) {
-    for (int r = 0; r < N_READS; r++) {
-      total_val = op(static_cast<U>(total_val), *in);
-      in += reduction_stride;
-    }
-  } else {
-    int remaining = reduction_size - base_offset;
-    for (int r = 0; r < remaining; r++) {
-      total_val = op(static_cast<U>(total_val), *in);
-      in += reduction_stride;
-    }
-  }
-
-  local_data[lsize.y * lid.x + lid.y] = total_val;
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-
-  U val = Op::init;
-  if (lid.y == 0) {
-    // Perform reduction across columns in thread group
-    for (uint i = 0; i < lsize.y; i++) {
-      val = op(val, local_data[lsize.y * lid.x + i]);
-    }
-  }
-
-  return val;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// Column reduce kernel
-///////////////////////////////////////////////////////////////////////////////
-
+/**
+ * Our approach is the following simple looped approach:
+ *  1. Each thread keeps running totals for BN / n_simdgroups outputs.
+ *  2. Load a tile BM, BN in shared memory.
+ *  3. Add the values from shared memory to the current running totals.
+ *     Neighboring threads access different rows (transposed acces).
+ *  4. Move ahead to the next tile until the M axis is exhausted.
+ *  5. Move ahead to the next non column reduction
+ *  6. Simd reduce the running totals
+ *  7. Write them to the output
+ *
+ * The kernel becomes verbose because we support all kinds of OOB checks. For
+ * instance if we choose that reduction_stride must be larger than BN then we
+ * can get rid of half the kernel.
+ */
 template <
     typename T,
     typename U,
     typename Op,
     int NDIMS = 0,
     int BM = 32,
-    int BN = 64>
+    int BN_32bit = 32>
 [[kernel]] void col_reduce_looped(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
@@ -124,6 +139,7 @@ template <
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   Op op;
   constexpr int n_simdgroups = 4;
+  constexpr int BN = (BN_32bit * sizeof(T) <= 128) ? BN_32bit : BN_32bit / 2;
   constexpr int BN_padded = (BN + 16 / sizeof(T));
   constexpr int n_outputs = BN / n_simdgroups;
   threadgroup T shared_vals[BM * BN_padded];
@@ -263,46 +279,6 @@ template <
            i++, j++) {
         out[i] = totals[i];
       }
-    }
-  }
-}
-
-template <typename T, typename U, typename Op, int N_READS = REDUCE_N_READS>
-[[kernel]] void col_reduce_general_no_atomics(
-    const device T* in [[buffer(0)]],
-    device U* out [[buffer(1)]],
-    const constant size_t& reduction_size [[buffer(2)]],
-    const constant size_t& reduction_stride [[buffer(3)]],
-    const constant size_t& out_size [[buffer(4)]],
-    const constant int* shape [[buffer(5)]],
-    const constant size_t* strides [[buffer(6)]],
-    const constant int& ndim [[buffer(7)]],
-    threadgroup U* local_data [[threadgroup(0)]],
-    uint3 tid [[threadgroup_position_in_grid]],
-    uint3 lid [[thread_position_in_threadgroup]],
-    uint3 gid [[thread_position_in_grid]],
-    uint3 lsize [[threads_per_threadgroup]],
-    uint3 gsize [[threads_per_grid]]) {
-  auto out_idx = size_t(tid.x) * lsize.x + lid.x;
-  auto in_idx = elem_to_loc(out_idx + tid.z * out_size, shape, strides, ndim);
-
-  if (out_idx < out_size) {
-    U val = _contiguous_strided_reduce<T, U, Op, N_READS>(
-        in,
-        local_data,
-        in_idx,
-        reduction_size,
-        reduction_stride,
-        tid.xy,
-        lid.xy,
-        lsize.xy);
-
-    // Write out reduction results generated by threadgroups working on specific
-    // output element, contiguously.
-    if (lid.y == 0) {
-      uint tgsize_y = ceildiv(gsize.y, lsize.y);
-      uint tgsize_z = ceildiv(gsize.z, lsize.z);
-      out[tgsize_y * tgsize_z * gid.x + tgsize_y * tid.z + tid.y] = val;
     }
   }
 }

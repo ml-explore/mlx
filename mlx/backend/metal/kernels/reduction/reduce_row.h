@@ -202,7 +202,7 @@ template <
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
     const constant int& row_size [[buffer(2)]],
-    const constant int& non_row_reductions [[buffer(3)]],
+    const constant size_t& non_row_reductions [[buffer(3)]],
     const constant int* shape [[buffer(4)]],
     const constant size_t* strides [[buffer(5)]],
     const constant int& ndim [[buffer(6)]],
@@ -228,7 +228,7 @@ template <
     size_t out_idx = tid.x + tsize.y * size_t(tid.y);
     in += elem_to_loc(out_idx, shape, strides, ndim);
 
-    for (int r = 0; r < non_row_reductions; r++) {
+    for (uint r = 0; r < non_row_reductions; r++) {
       const device T* in_row;
       if constexpr (loop.dynamic_ndim) {
         in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
@@ -248,7 +248,7 @@ template <
 
     loop.next(simd_lane_id, reduce_shape, reduce_strides);
 
-    for (int r = simd_lane_id; r < non_row_reductions; r += simd_size) {
+    for (uint r = simd_lane_id; r < non_row_reductions; r += simd_size) {
       const device T* in_row;
       if constexpr (loop.dynamic_ndim) {
         in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
