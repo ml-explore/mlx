@@ -22,6 +22,7 @@ class Reader {
       std::ios_base::seekdir way = std::ios_base::beg) = 0;
   virtual void read(char* data, size_t n) = 0;
   virtual std::string label() const = 0;
+  virtual ~Reader() = default;
 };
 
 class Writer {
@@ -34,6 +35,7 @@ class Writer {
       std::ios_base::seekdir way = std::ios_base::beg) = 0;
   virtual void write(const char* data, size_t n) = 0;
   virtual std::string label() const = 0;
+  virtual ~Writer() = default;
 };
 
 class FileReader : public Reader {
@@ -41,7 +43,7 @@ class FileReader : public Reader {
   explicit FileReader(std::string file_path)
       : fd_(open(file_path.c_str(), O_RDONLY)), label_(std::move(file_path)) {}
 
-  ~FileReader() {
+  ~FileReader() override {
     close(fd_);
   }
 
@@ -93,6 +95,10 @@ class FileWriter : public Writer {
   explicit FileWriter(std::string file_path)
       : fd_(open(file_path.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0644)),
         label_(std::move(file_path)) {}
+
+  ~FileWriter() override {
+    close(fd_);
+  }
 
   bool is_open() const override {
     return fd_ >= 0;
