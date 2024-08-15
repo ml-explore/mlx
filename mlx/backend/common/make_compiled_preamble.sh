@@ -21,7 +21,7 @@ EOM
 
 fi
 
-CONTENT=$($GCC -I $SRCDIR -E $SRCDIR/mlx/backend/common/compiled_preamble.h 2>/dev/null)
+CONTENT=$($GCC -I "$SRCDIR" -E "$SRCDIR/mlx/backend/common/compiled_preamble.h" 2>/dev/null)
 
 cat << EOF > "$OUTPUT_FILE"
 const char* get_kernel_preamble() {
