@@ -582,21 +582,18 @@ class TestFast(mlx_tests.MLXTestCase):
                 }
                 out2[elem] = a[1] + b[2] + c[1] - d;
             """,
-            grid=(4, 1, 1),
+            grid=(6, 1, 1),
             threadgroup=(2, 1, 1),
             output_shapes={"out1": (2, 2), "out2": (3, 2)},
             output_dtypes={"out1": mx.float32, "out2": mx.int32},
+            verbose=True,
         )
         c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
 
         kernel.template(e=True, f=3, T=mx.float16)
         out = kernel(a=a, b=[3, 4, 5], c=c, d=7.3, stream=mx.gpu)
-        self.assertTrue(
-            mx.allclose(out["out1"], mx.array([[14.0484, 14.0484], [14.0484, 14.0484]]))
-        )
-        self.assertTrue(
-            mx.allclose(out["out2"], mx.array([[-2, -2], [-2, -2], [0, 0]]))
-        )
+        self.assertTrue(mx.allclose(out["out1"], mx.full((2, 2), 14.0484)))
+        self.assertTrue(mx.allclose(out["out2"], mx.full((3, 2), -2, dtype=mx.int32)))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_strides(self):

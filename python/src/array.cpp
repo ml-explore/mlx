@@ -248,15 +248,6 @@ void init_array(nb::module_& m) {
             tuple(int): A tuple containing the sizes of each dimension.
         )pbdoc")
       .def_prop_ro(
-          "strides",
-          [](const array& a) { return nb::tuple(nb::cast(a.strides())); },
-          R"pbdoc(
-          The strides of the array as a Python tuple.
-
-          Returns:
-            tuple(int): A tuple containing the strides of each dimension.
-        )pbdoc")
-      .def_prop_ro(
           "dtype",
           &array::dtype,
           R"pbdoc(
