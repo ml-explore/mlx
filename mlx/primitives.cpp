@@ -977,7 +977,7 @@ std::vector<array> Convolution::vjp(
           }
         }
 
-        grad = slice(grad, std::move(starts), std::move(stops), stream());
+        grad = slice(grad, starts, stops, stream());
       }
 
       grads.push_back(grad);

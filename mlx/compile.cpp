@@ -824,7 +824,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       // Mark the entry as not empty since we are about to fill it
       entry.empty = false;
       // Set the constants
-      entry.constants = std::move(constants);
+      entry.constants = constants;
       // Trace to build the graph
       std::tie(entry.inputs, entry.outputs) = compile_trace(fun, inputs);
 

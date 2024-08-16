@@ -76,7 +76,7 @@ void Softmax::eval(const std::vector<array>& inputs, array& out) {
       return x_copy;
     }
   };
-  array in = check_input(std::move(inputs[0]));
+  array in = check_input(inputs[0]);
   if (in.is_donatable()) {
     out.copy_shared_buffer(in);
   } else {

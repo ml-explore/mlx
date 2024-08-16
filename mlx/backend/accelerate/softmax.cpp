@@ -331,7 +331,7 @@ void Softmax::eval_cpu(const std::vector<array>& inputs, array& out) {
       return x_copy;
     }
   };
-  array in = check_input(std::move(inputs[0]));
+  array in = check_input(inputs[0]);
   out.set_data(
       allocator::malloc_or_wait(in.data_size() * in.itemsize()),
       in.data_size(),
