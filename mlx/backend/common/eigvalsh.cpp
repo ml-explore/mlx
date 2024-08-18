@@ -98,28 +98,25 @@ int ssyevd_wrapper(char jobz, char uplo, float* matrix, float* w, int N) {
 
 } // namespace
 
-void eigenvalues_impl(
+void eigvalsh_impl(
     const array& a,
     array& values,
     array& vectors,
+    bool upper,
     bool compute_vectors) {
   char jobz = compute_vectors ? 'V' : 'N';
-  char uplo = 'U'; // Use upper triangle of the matrix
+  char uplo = (upper) ? 'L' : 'U'; // Use upper triangle of the matrix
 
-  // Copy input to a buffer for in-place computation
-  array buffer;
-  copy(
-      a,
-      buffer,
-      a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  // Create a copy of the input array for in-place computation
+  array buffer = copy(a);
 
-  const int N = a.shape(-1);
-  const size_t num_matrices = a.size() / (N * N);
+  const int N = static_cast<int>(a.shape(-1));
+  const int num_matrices = static_cast<int>(a.size() / (N * N));
 
   // Allocate output arrays
-  values = array::empty({num_matrices, N}, float32);
+  values = zeros({num_matrices, N}, float32);
   if (compute_vectors) {
-    vectors = array::empty(a.shape(), float32);
+    vectors = zeros(a.shape(), float32);
   }
 
   float* matrix = buffer.data<float>();
@@ -132,7 +129,7 @@ void eigenvalues_impl(
 
     if (info != 0) {
       std::stringstream msg;
-      msg << "[eigenvalues] Eigenvalue decomposition failed with error code "
+      msg << "[eigvalsh] Eigenvalue decomposition failed with error code "
           << info;
       throw std::runtime_error(msg.str());
     }
@@ -149,14 +146,14 @@ void eigenvalues_impl(
   }
 }
 
-void Eigenvalues::eval(
+void Eigvalsh::eval(
     const std::vector<array>& inputs,
     array& values,
     array& vectors) {
   if (inputs[0].dtype() != float32) {
-    throw std::runtime_error("[Eigenvalues::eval] only supports float32.");
+    throw std::runtime_error("[Eigvalsh::eval] only supports float32.");
   }
-  eigenvalues_impl(inputs[0], values, vectors, compute_vectors_);
+  eigvalsh_impl(inputs[0], values, vectors, upper_, compute_vectors_);
 }
 
 } // namespace mlx::core
