@@ -41,6 +41,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/erf.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/eigvalsh.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/hadamard.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/masked_mm.cpp

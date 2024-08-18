@@ -15,3 +15,4 @@ Linear Algebra
     cholesky_inv
     qr
     svd
+    eigvalsh
