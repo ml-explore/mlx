@@ -2196,4 +2196,20 @@ class Cholesky : public UnaryPrimitive {
   bool upper_;
 };
 
+class Eigvalsh : public UnaryPrimitive {
+ public:
+  explicit Eigvalsh(Stream stream, bool upper)
+      : UnaryPrimitive(stream), upper_(upper) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Eigvalsh)
+
+ private:
+  void eval(const std::vector<array>& inputs, array& output);
+  bool upper_;
+};
+
 } // namespace mlx::core

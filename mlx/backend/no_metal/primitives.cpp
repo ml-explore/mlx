@@ -112,6 +112,7 @@ NO_GPU(Tanh)
 NO_GPU(Transpose)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
+NO_GPU(Eigvalsh)
 NO_GPU(View)
 
 namespace fast {

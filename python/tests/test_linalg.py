@@ -268,6 +268,54 @@ class TestLinalg(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.linalg.cross(a, b)
 
+    def test_eigvalsh(self):
+        # Test a simple 2x2 symmetric matrix
+        A_mx = mx.array([[1.0, 2.0], [2.0, 4.0]], dtype=mx.float32)
+        A_np = np.array([[1.0, 2.0], [2.0, 4.0]], dtype=np.float32)
+
+        eigenvalues_mx = mx.linalg.eigvalsh(A_mx)
+        eigenvalues_np = np.linalg.eigvalsh(A_np)
+
+        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
+
+        # Test a larger random symmetric matrix
+        n = 5
+        rng = np.random.default_rng(42)
+        B_np = rng.random((n, n)).astype(np.float32)
+        B_np = (B_np + B_np.T) / 2  # Make sure B is symmetric
+        B_mx = mx.array(B_np)
+
+        eigenvalues_mx = mx.linalg.eigvalsh(B_mx)
+        eigenvalues_np = np.linalg.eigvalsh(B_np)
+
+        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
+
+        # Test that eigenvalues are in ascending order
+        self.assertTrue(mx.all(eigenvalues_mx[1:] >= eigenvalues_mx[:-1]))
+
+        # Test with upper=False
+        eigenvalues_mx_lower = mx.linalg.eigvalsh(B_mx, upper=False)
+        eigenvalues_np_lower = np.linalg.eigvalsh(B_np, UPLO='L')
+
+        self.assertTrue(mx.allclose(eigenvalues_mx_lower, mx.array(eigenvalues_np_lower), atol=1e-5))
+
+        # Test with batched input
+        C_np = rng.random((3, n, n)).astype(np.float32)
+        C_np = (C_np + np.transpose(C_np, (0, 2, 1))) / 2  # Make sure C is symmetric for each batch
+        C_mx = mx.array(C_np)
+
+        eigenvalues_mx = mx.linalg.eigvalsh(C_mx)
+        eigenvalues_np = np.linalg.eigvalsh(C_np)
+
+        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
+
+        # Test error cases
+        with self.assertRaises(ValueError):
+            mx.linalg.eigvalsh(mx.array([1.0, 2.0]))  # 1D array
+
+        with self.assertRaises(ValueError):
+            mx.linalg.eigvalsh(mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))  # Non-square matrix
+
 
 if __name__ == "__main__":
     unittest.main()

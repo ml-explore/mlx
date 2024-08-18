@@ -454,4 +454,38 @@ array cross(
   return concatenate(outputs, axis, s);
 }
 
+array eigvalsh(
+    const array& a,
+    bool upper /* = true */,
+    StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::eigvalsh] Arrays must be type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::eigvalsh] Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    throw std::invalid_argument(
+        "[linalg::eigvalsh] Eigenvalues are only defined for square matrices.");
+  }
+
+  std::vector<int> out_shape(a.shape().begin(), a.shape().end() - 1);
+  out_shape.back() = a.shape(-1);
+
+  return array(
+      out_shape,
+      a.dtype(),
+      std::make_shared<Eigvalsh>(to_stream(s), upper),
+      {a});
+}
+
 } // namespace mlx::core::linalg

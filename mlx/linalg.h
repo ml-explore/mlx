@@ -83,4 +83,6 @@ array cross(
     int axis = -1,
     StreamOrDevice s = {});
 
+array eigvalsh(const array& a, bool upper = true, StreamOrDevice s = {});
+
 } // namespace mlx::core::linalg

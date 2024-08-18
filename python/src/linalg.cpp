@@ -405,4 +405,41 @@ void init_linalg(nb::module_& parent_module) {
         Returns:
             array: The cross product of ``a`` and ``b`` along the specified axis.
       )pbdoc");
+  m.def(
+      "eigvalsh",
+      &eigvalsh,
+      "a"_a,
+      "upper"_a = true,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def eigvalsh(a: array, upper: bool = True, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the eigenvalues of a complex Hermitian or real symmetric matrix.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the eigenvalues are computed for each matrix
+        in the last two dimensions of ``a``.
+
+        Args:
+            a (array): Input array. Must be a real symmetric or complex Hermitian matrix.
+            upper (bool, optional): Whether to use the upper or lower triangle of the matrix.
+                                    Default is True (upper triangle).
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The eigenvalues in ascending order.
+
+        Note:
+            The input matrix is assumed to be symmetric (or Hermitian). Only the
+            upper triangle (if upper=True) or lower triangle (if upper=False) is used.
+            No checks for symmetry are performed.
+
+        Example:
+            >>> A = mx.array([[1., -2.], [-2., 1.]])
+            >>> eigenvalues = mx.linalg.eigvalsh(A)
+            >>> eigenvalues
+            array([-1., 3.], dtype=float32)
+      )pbdoc");
 }
