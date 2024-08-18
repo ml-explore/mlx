@@ -2203,14 +2203,14 @@ class Eigvalsh : public UnaryPrimitive {
         upper_(upper),
         compute_vectors_(compute_vectors) {}
 
-  void eval_cpu(const std::vector<array>& inputs, array& values) override;
-  void eval_gpu(const std::vector<array>& inputs, array& values) override;
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
   DEFINE_PRINT(Eigvalsh)
 
  private:
-  void eval(const std::vector<array>& inputs, array& values);
+  void eval(const std::vector<array>& inputs, array& output);
   bool upper_;
   bool compute_vectors_;
 };

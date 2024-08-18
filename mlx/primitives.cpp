@@ -772,7 +772,7 @@ std::pair<std::vector<array>, std::vector<int>> Eigvalsh::vmap(
     const std::vector<int>& axes) {
   auto ax = axes[0] >= 0 ? 0 : -1;
   auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
-  return {{linalg::eigvalsh(a, upper_, stream())}, {ax}};
+  return {{linalg::eigvalsh(a, upper_, compute_vectors_, stream())}, {ax}};
 }
 
 std::vector<array> Concatenate::vjp(

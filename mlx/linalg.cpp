@@ -457,6 +457,7 @@ array cross(
 array eigvalsh(
     const array& a,
     bool upper /* = true */,
+    bool compute_vectors /* = false */,
     StreamOrDevice s /* = {} */) {
   if (a.dtype() != float32) {
     std::ostringstream msg;
@@ -484,7 +485,7 @@ array eigvalsh(
   return array(
       out_shape,
       a.dtype(),
-      std::make_shared<Eigvalsh>(to_stream(s), upper),
+      std::make_shared<Eigvalsh>(to_stream(s), upper, compute_vectors),
       {a});
 }
 

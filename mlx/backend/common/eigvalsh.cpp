@@ -114,9 +114,11 @@ void eigvalsh_impl(
   const int num_matrices = static_cast<int>(a.size() / (N * N));
 
   // Allocate output arrays
-  values = zeros({num_matrices, N}, float32);
+  std::vector<int> values_shape = {num_matrices, N};
+  values = array(values_shape, a.dtype());
+
   if (compute_vectors) {
-    vectors = zeros(a.shape(), float32);
+    vectors = array(a.shape(), a.dtype());
   }
 
   float* matrix = buffer.data<float>();
