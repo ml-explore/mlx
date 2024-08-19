@@ -454,7 +454,7 @@ array cross(
   return concatenate(outputs, axis, s);
 }
 
-array eigvalsh(
+std::pair<array, array> eigvalsh(
     const array& a,
     bool upper /* = true */,
     bool compute_vectors /* = false */,
@@ -482,11 +482,12 @@ array eigvalsh(
   std::vector<int> out_shape(a.shape().begin(), a.shape().end() - 1);
   out_shape.back() = a.shape(-1);
 
-  return array(
-      out_shape,
-      a.dtype(),
+  auto out = array::make_arrays(
+      {out_shape, compute_vectors ? a.shape() : std::vector<int>()},
+      {a.dtype(), a.dtype()},
       std::make_shared<Eigvalsh>(to_stream(s), upper, compute_vectors),
-      {a});
+      {astype(a, a.dtype(), s)});
+  return std::make_pair(out[0], out[1]);
 }
 
 } // namespace mlx::core::linalg
