@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-#include <iostream> // TODO
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/fast_primitives.h"
