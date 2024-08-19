@@ -105,7 +105,7 @@ void eigvalsh_impl(
     bool upper,
     bool compute_vectors) {
   char jobz = compute_vectors ? 'V' : 'N';
-  char uplo = (upper) ? 'L' : 'U'; // Use upper triangle of the matrix
+  char uplo = (upper) ? 'U' : 'L'; // Use upper triangle of the matrix
 
   // Create a copy of the input array for in-place computation
   array buffer = copy(a);
@@ -115,10 +115,10 @@ void eigvalsh_impl(
 
   // Allocate output arrays
   std::vector<int> values_shape = {num_matrices, N};
-  values = array(values_shape, a.dtype());
+  values = array({}, values_shape, a.dtype());
 
   if (compute_vectors) {
-    vectors = array(a.shape(), a.dtype());
+    vectors = array({}, a.shape(), a.dtype());
   }
 
   float* matrix = buffer.data<float>();
@@ -150,12 +150,11 @@ void eigvalsh_impl(
 
 void Eigvalsh::eval(
     const std::vector<array>& inputs,
-    array& values,
-    array& vectors) {
+    std::vector<array>& outputs) {
   if (inputs[0].dtype() != float32) {
     throw std::runtime_error("[Eigvalsh::eval] only supports float32.");
   }
-  eigvalsh_impl(inputs[0], values, vectors, upper_, compute_vectors_);
+  eigvalsh_impl(inputs[0], output[0], output[1], upper_, compute_vectors_);
 }
 
 } // namespace mlx::core
