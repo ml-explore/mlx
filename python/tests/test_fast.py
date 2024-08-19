@@ -7,13 +7,18 @@ import mlx.core as mx
 import mlx_tests
 
 
-def rope_orig(x, dims, traditional, base, scale, offset):
+def rope_orig(x, dims, traditional, base, scale, offset, freqs=None):
     N = x.shape[1] + offset
     dtype = x.dtype
     half_D = dims // 2
     positions = mx.arange(offset, N, dtype=dtype) * scale
-    freqs = mx.exp(-mx.arange(0.0, half_D, dtype=dtype) * (math.log(base) / half_D))
-    theta = mx.reshape(positions, (-1, 1)) * mx.reshape(freqs, (1, -1))
+    if freqs is None:
+        inv_freqs = mx.exp(
+            -mx.arange(0.0, half_D, dtype=dtype) * (math.log(base) / half_D)
+        )
+    else:
+        inv_freqs = 1 / freqs
+    theta = mx.reshape(positions, (-1, 1)) * mx.reshape(inv_freqs, (1, -1))
     costheta, sintheta = mx.cos(theta), mx.sin(theta)
     if traditional:
         x1 = x[..., :dims:2]
@@ -137,6 +142,48 @@ class TestFast(mlx_tests.MLXTestCase):
                     offset=offset,
                 )
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+    def test_rope_with_freqs(self):
+        # Check throws
+        T = 4
+        dims = 8
+        x = mx.random.uniform(shape=(2, T, dims))
+
+        with self.assertRaises(ValueError):
+            freqs = mx.random.uniform(shape=(dims - 1,))
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=False,
+                base=1.0,
+                scale=1.0,
+                offset=0,
+                freqs=freqs,
+            )
+        with self.assertRaises(ValueError):
+            freqs = mx.random.uniform(shape=(1, dims))
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=False,
+                base=1.0,
+                scale=1.0,
+                offset=0,
+                freqs=freqs,
+            )
+
+        freqs = mx.random.uniform(shape=(dims // 2,))
+        rx = rope_orig(x, dims, False, None, 1.0, 0, freqs)
+        rx_fast = mx.fast.rope(
+            x,
+            dims,
+            traditional=False,
+            base=1.0,
+            scale=1.0,
+            offset=0,
+            freqs=freqs,
+        )
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-6)
 
     def test_rope_grad(self):
         D = 32
