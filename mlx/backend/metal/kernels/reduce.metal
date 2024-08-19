@@ -156,6 +156,8 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
       const constant size_t& non_col_reductions [[buffer(10)]],   \
       uint3 gid [[threadgroup_position_in_grid]],                 \
       uint3 gsize [[threadgroups_per_grid]],                      \
+      uint simd_lane_id [[thread_index_in_simdgroup]],            \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]],      \
       uint3 tid [[thread_position_in_grid]],                      \
       uint3 tsize [[threads_per_grid]]);
 

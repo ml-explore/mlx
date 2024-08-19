@@ -55,17 +55,19 @@ struct RowReduceArgs {
     std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
     std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
     ndim = shape.size();
-
-    if (reduce_ndim == 0) {
-      // Push 0s to avoid accessing empty strides. This is an optimization to
-      // avoid calling elem_to_loc unless we really have a large large number of
-      // unfusable reduction dims.
-      reduce_shape.push_back(0);
-      reduce_strides.push_back(0);
-    }
   }
 
   void encode(CommandEncoder& compute_encoder) {
+    // Push 0s to avoid encoding empty vectors.
+    if (reduce_ndim == 0) {
+      reduce_shape.push_back(0);
+      reduce_strides.push_back(0);
+    }
+    if (ndim == 0) {
+      shape.push_back(0);
+      strides.push_back(0);
+    }
+
     compute_encoder->setBytes(&row_size, sizeof(int), 2);
     compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 3);
     compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
@@ -77,6 +79,15 @@ struct RowReduceArgs {
     compute_encoder->setBytes(
         reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
     compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
+
+    if (reduce_ndim == 0) {
+      reduce_shape.pop_back();
+      reduce_strides.pop_back();
+    }
+    if (ndim == 0) {
+      shape.pop_back();
+      strides.pop_back();
+    }
   }
 };
 
@@ -124,17 +135,19 @@ struct ColReduceArgs {
     }
     std::tie(shape, strides) = collapse_contiguous_dims(shape, strides);
     ndim = shape.size();
-
-    if (reduce_ndim == 0) {
-      // Push 0s to avoid accessing empty strides. This is an optimization to
-      // avoid calling elem_to_loc unless we really have a large large number of
-      // unfusable reduction dims.
-      reduce_shape.push_back(0);
-      reduce_strides.push_back(0);
-    }
   }
 
   void encode(CommandEncoder& compute_encoder) {
+    // Push 0s to avoid encoding empty vectors.
+    if (reduce_ndim == 0) {
+      reduce_shape.push_back(0);
+      reduce_strides.push_back(0);
+    }
+    if (ndim == 0) {
+      shape.push_back(0);
+      strides.push_back(0);
+    }
+
     compute_encoder->setBytes(&reduction_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&reduction_stride, sizeof(size_t), 3);
     compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
@@ -147,6 +160,15 @@ struct ColReduceArgs {
         reduce_strides.data(), reduce_strides.size() * sizeof(size_t), 8);
     compute_encoder->setBytes(&reduce_ndim, sizeof(int), 9);
     compute_encoder->setBytes(&non_col_reductions, sizeof(size_t), 10);
+
+    if (reduce_ndim == 0) {
+      reduce_shape.pop_back();
+      reduce_strides.pop_back();
+    }
+    if (ndim == 0) {
+      shape.pop_back();
+      strides.pop_back();
+    }
   }
 };
 
@@ -450,13 +472,6 @@ void strided_reduce_small(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  // Set the kernel
-  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
-  std::ostringstream kname;
-  kname << "colSmall" << n << "_reduce_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
-  compute_encoder->setComputePipelineState(kernel);
-
   // Prepare the arguments for the kernel
   ColReduceArgs args(in, plan, axes);
 
@@ -471,8 +486,25 @@ void strided_reduce_small(
   }
 
   // Case 2: Reduction in the simdgroup
-  // else if () {
-  //}
+  else {
+    args.reduce_shape.push_back(args.reduction_size);
+    args.reduce_strides.push_back(args.reduction_stride);
+    args.reduce_ndim++;
+    int simdgroups =
+        (args.reduction_stride + REDUCE_N_READS - 1) / REDUCE_N_READS;
+    int threadgroup_size = simdgroups * 32;
+    auto out_grid_dims = output_grid_for_col_reduce(out, args);
+    grid_dims =
+        MTL::Size(threadgroup_size, out_grid_dims.width, out_grid_dims.height);
+    group_dims = MTL::Size(threadgroup_size, 1, 1);
+  }
+
+  // Set the kernel
+  int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
+  std::ostringstream kname;
+  kname << "colSmall" << n << "_reduce_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  compute_encoder->setComputePipelineState(kernel);
 
   // Launch
   compute_encoder.set_input_array(in, 0);
@@ -526,10 +558,10 @@ void strided_reduce_general_dispatch(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  // if (plan.shape.back() < 32 || plan.strides.back() < 32) {
-  //   return strided_reduce_small(
-  //       in, out, op_name, plan, axes, compute_encoder, d, s);
-  // }
+  if (plan.strides.back() < 32) {
+    return strided_reduce_small(
+        in, out, op_name, plan, axes, compute_encoder, d, s);
+  }
 
   return strided_reduce_looped(
       in, out, op_name, plan, axes, compute_encoder, d, s);

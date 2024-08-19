@@ -20,8 +20,8 @@ template <
     const constant size_t& non_col_reductions [[buffer(10)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
-    // uint simd_lane_id [[thread_index_in_simdgroup]],
-    // uint simd_group_id [[simdgroup_index_in_threadgroup]],
+    uint simd_lane_id [[thread_index_in_simdgroup]],
+    uint simd_group_id [[simdgroup_index_in_threadgroup]],
     uint3 tid [[thread_position_in_grid]],
     uint3 tsize [[threads_per_grid]]) {
   Op op;
@@ -39,7 +39,7 @@ template <
     short stride = reduction_stride;
     short size = reduction_size;
     short blocks = stride / N_READS;
-    short extra = stride % N_READS;
+    short extra = stride - blocks * N_READS;
 
     size_t out_idx = tid.x + tsize.y * size_t(tid.y);
     in += elem_to_loc(out_idx, shape, strides, ndim);
@@ -53,21 +53,21 @@ template <
       }
 
       for (short i = 0; i < size; i++) {
-        thread U* local_totals = totals;
         for (short j = 0; j < blocks; j++) {
           for (short k = 0; k < N_READS; k++) {
-            local_totals[k] = op(local_totals[k], in_row[k]);
+            totals[j * N_READS + k] =
+                op(totals[j * N_READS + k],
+                   static_cast<U>(in_row[i * stride + j * N_READS + k]));
           }
-          local_totals += N_READS;
-          in_row += N_READS;
         }
         for (short k = 0; k < extra; k++) {
-          local_totals[k] = op(local_totals[k], in_row[k]);
+          totals[blocks * N_READS + k] =
+              op(totals[blocks * N_READS + k],
+                 static_cast<U>(in_row[i * stride + blocks * N_READS + k]));
         }
       }
 
       loop.next(reduce_shape, reduce_strides);
-      threadgroup_barrier(mem_flags::mem_none);
     }
     out += out_idx * reduction_stride;
     for (short j = 0; j < stride; j++) {
@@ -75,28 +75,77 @@ template <
     }
   }
 
-  //// Case 2:
-  //// Each threadgroup reads
-  // else {
-  //   U total = Op::init;
+  // Case 2:
+  // Reduction stride is small but everything else can be big. We loop bot
+  // across reduction size and non_col_reductions.
+  else {
+    threadgroup U shared_vals[1024];
+    U totals[N_READS];
+    for (int i = 0; i < N_READS; i++) {
+      totals[i] = Op::init;
+    }
 
-  //  size_t out_idx = gid.y + gsize.y * size_t(gid.z);
-  //  size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
+    short stride = reduction_stride;
+    short lid = simd_group_id * simd_size + simd_lane_id;
+    short2 tile((stride + N_READS - 1) / N_READS, 32);
+    short2 offset((lid % tile.x) * N_READS, lid / tile.x);
+    short sm_stride = tile.x * N_READS;
+    bool safe = offset.x + N_READS <= stride;
 
-  //  in += in_idx + simd_lane_id;
+    size_t out_idx = gid.y + gsize.y * size_t(gid.z);
+    in += elem_to_loc(out_idx, shape, strides, ndim) + offset.x;
 
-  //  for (uint r = 0; r < non_col_reductions; r++) {
-  //    const device T* in_row;
-  //    if constexpr (loop.dynamic_ndim) {
-  //      in_row = in + elem_to_loc(r, reduce_shape, reduce_strides,
-  //      reduce_ndim);
-  //    } else {
-  //      in_row = in + loop.offset;
-  //    }
+    size_t total = non_col_reductions * reduction_size;
+    loop.next(offset.y, reduce_shape, reduce_strides);
+    for (size_t r = offset.y; r < total; r += simd_size) {
+      const device T* in_row;
+      if constexpr (loop.dynamic_ndim) {
+        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
+      } else {
+        in_row = in + loop.offset;
+      }
 
-  //    for (
-  //  }
-  //}
+      if (safe) {
+        for (int i = 0; i < N_READS; i++) {
+          totals[i] = op(static_cast<U>(in_row[i]), totals[i]);
+        }
+      } else {
+        U vals[N_READS];
+        for (int i = 0; i < N_READS; i++) {
+          vals[i] =
+              (offset.x + i < stride) ? static_cast<U>(in_row[i]) : op.init;
+        }
+        for (int i = 0; i < N_READS; i++) {
+          totals[i] = op(vals[i], totals[i]);
+        }
+      }
+
+      loop.next(simd_size, reduce_shape, reduce_strides);
+    }
+
+    for (int i = 0; i < N_READS; i++) {
+      shared_vals[offset.y * sm_stride + offset.x + i] = totals[i];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    for (int i = 0; i < N_READS; i++) {
+      totals[i] = op.simd_reduce(
+          shared_vals[simd_lane_id * sm_stride + simd_group_id * N_READS + i]);
+    }
+
+    if (simd_lane_id == 0) {
+      short column = simd_group_id * N_READS;
+      out += out_idx * reduction_stride + column;
+      if (column + N_READS <= stride) {
+        for (int i = 0; i < N_READS; i++) {
+          out[i] = totals[i];
+        }
+      } else {
+        for (int i = 0; column + i < stride; i++) {
+          out[i] = totals[i];
+        }
+      }
+    }
+  }
 }
 
 /**
