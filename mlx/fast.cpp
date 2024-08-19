@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <cassert>
 #include <numeric>
 
@@ -360,7 +359,7 @@ array rope(
     auto default_inv_freqs = [&inputs, &s, &t, base, half_dims]() {
       return exp(
           multiply(
-              arange(0, half_dims, -1, t, s),
+              arange(0, -half_dims, -1, t, s),
               array(std::log(base) / half_dims, t),
               s),
           s);
