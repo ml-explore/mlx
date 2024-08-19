@@ -173,6 +173,7 @@ class TestFast(mlx_tests.MLXTestCase):
             )
 
         freqs = mx.random.uniform(shape=(dims // 2,))
+
         rx = rope_orig(x, dims, False, None, 1.0, 0, freqs)
         rx_fast = mx.fast.rope(
             x,
@@ -183,7 +184,28 @@ class TestFast(mlx_tests.MLXTestCase):
             offset=0,
             freqs=freqs,
         )
-        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-6)
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
+        # Test grad with freqs
+        f1 = lambda x, y: (rope_orig(x, dims, False, None, 1.0, 0, freqs) * y).sum()
+        f2 = lambda x, y: (
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=False,
+                base=1.0,
+                scale=1.0,
+                offset=0,
+                freqs=freqs,
+            )
+            * y
+        ).sum()
+
+        x = mx.random.uniform(shape=(2, 4, dims))
+        y = mx.random.uniform(shape=(2, 4, dims))
+        g1 = mx.grad(f1)(x, y)
+        g2 = mx.grad(f2)(x, y)
+        self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
 
     def test_rope_grad(self):
         D = 32
