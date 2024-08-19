@@ -84,7 +84,6 @@ void RoPE::eval_gpu(
   compute_encoder->setBytes(&scale_, sizeof(float), 3);
 
   size_t n_batch = in.size() / mat_size;
-  std::cout << "FREQS? " << kname.str() << std::endl;
   MTL::Size group_dims;
   MTL::Size grid_dims;
   if (single) {
@@ -104,7 +103,6 @@ void RoPE::eval_gpu(
   }
 
   if (with_freqs) {
-    std::cout << "ADDING FREQS " << std::endl;
     auto& freqs = inputs[1];
     compute_encoder.set_input_array(freqs, 10);
     auto freq_stride = freqs.strides()[0];
