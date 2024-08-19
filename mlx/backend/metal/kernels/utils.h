@@ -330,8 +330,6 @@ METAL_FUNC uint3 elem_to_loc_3_nd(
 
 template <int dim, typename offset_t = size_t>
 struct looped_elem_to_loc {
-  static constexpr constant bool dynamic_ndim = false;
-
   looped_elem_to_loc<dim - 1, offset_t> inner_looper;
   offset_t offset{0};
   int index{0};
@@ -361,12 +359,22 @@ struct looped_elem_to_loc {
       }
     }
   }
+
+  offset_t location(
+      offset_t idx,
+      const constant int* shape,
+      const constant size_t* strides,
+      int ndim) {
+    (void)idx; // appease the compiler
+    (void)shape;
+    (void)strides;
+    (void)ndim;
+    return offset;
+  }
 };
 
 template <typename offset_t>
 struct looped_elem_to_loc<1, offset_t> {
-  static constexpr constant bool dynamic_ndim = false;
-
   offset_t offset{0};
 
   void next(const constant int* shape, const constant size_t* strides) {
@@ -378,12 +386,22 @@ struct looped_elem_to_loc<1, offset_t> {
     (void)shape; // appease the compiler
     offset += n * strides[0];
   }
+
+  offset_t location(
+      offset_t idx,
+      const constant int* shape,
+      const constant size_t* strides,
+      int ndim) {
+    (void)idx; // appease the compiler
+    (void)shape;
+    (void)strides;
+    (void)ndim;
+    return offset;
+  }
 };
 
 template <typename offset_t>
 struct looped_elem_to_loc<0, offset_t> {
-  static constexpr constant bool dynamic_ndim = true;
-
   void next(const constant int* shape, const constant size_t* strides) {
     (void)shape; // appease the compiler
     (void)strides;
@@ -392,6 +410,14 @@ struct looped_elem_to_loc<0, offset_t> {
     (void)shape; // appease the compiler
     (void)strides;
     (void)n;
+  }
+
+  offset_t location(
+      offset_t idx,
+      const constant int* shape,
+      const constant size_t* strides,
+      int ndim) {
+    return elem_to_loc(idx, shape, strides, ndim);
   }
 };
 

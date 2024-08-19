@@ -220,6 +220,7 @@ template <
   looped_elem_to_loc<NDIMS> loop;
 
   // Precompute some row reduction numbers
+  const device T* row;
   int blocks = row_size / N_READS;
   int extra = row_size % N_READS;
 
@@ -229,13 +230,8 @@ template <
     in += elem_to_loc(out_idx, shape, strides, ndim);
 
     for (uint r = 0; r < non_row_reductions; r++) {
-      const device T* in_row;
-      if constexpr (loop.dynamic_ndim) {
-        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
-      } else {
-        in_row = in + loop.offset;
-      }
-      thread_reduce<T, U, Op, N_READS>(total_val, in_row, blocks, extra);
+      row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+      thread_reduce<T, U, Op, N_READS>(total_val, row, blocks, extra);
       loop.next(reduce_shape, reduce_strides);
     }
 
@@ -249,13 +245,8 @@ template <
     loop.next(simd_lane_id, reduce_shape, reduce_strides);
 
     for (uint r = simd_lane_id; r < non_row_reductions; r += simd_size) {
-      const device T* in_row;
-      if constexpr (loop.dynamic_ndim) {
-        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
-      } else {
-        in_row = in + loop.offset;
-      }
-      thread_reduce<T, U, Op, N_READS>(total_val, in_row, blocks, extra);
+      row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+      thread_reduce<T, U, Op, N_READS>(total_val, row, blocks, extra);
       loop.next(simd_size, reduce_shape, reduce_strides);
     }
 
@@ -350,14 +341,10 @@ template <
   const device T* row;
 
   for (size_t i = 0; i < non_row_reductions; i++) {
-    U row_total;
-    if constexpr (loop.dynamic_ndim) {
-      row = in + elem_to_loc(i, reduce_shape, reduce_strides, reduce_ndim);
-    } else {
-      row = in + loop.offset;
-    }
+    row = in + loop.location(i, reduce_shape, reduce_strides, reduce_ndim);
 
     // Each thread reduces across the row
+    U row_total;
     per_thread_row_reduce<T, U, Op, N_READS, 1>(
         &row_total, &row, row_size, lsize.x, lid.x);
 

@@ -26,6 +26,7 @@ template <
     uint3 tsize [[threads_per_grid]]) {
   Op op;
   looped_elem_to_loc<NDIMS> loop;
+  const device T* row;
 
   // Case 1:
   // reduction_stride is small, reduction_size is small and non_col_reductions
@@ -45,25 +46,20 @@ template <
     in += elem_to_loc(out_idx, shape, strides, ndim);
 
     for (uint r = 0; r < non_col_reductions; r++) {
-      const device T* in_row;
-      if constexpr (loop.dynamic_ndim) {
-        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
-      } else {
-        in_row = in + loop.offset;
-      }
+      row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
 
       for (short i = 0; i < size; i++) {
         for (short j = 0; j < blocks; j++) {
           for (short k = 0; k < N_READS; k++) {
             totals[j * N_READS + k] =
                 op(totals[j * N_READS + k],
-                   static_cast<U>(in_row[i * stride + j * N_READS + k]));
+                   static_cast<U>(row[i * stride + j * N_READS + k]));
           }
         }
         for (short k = 0; k < extra; k++) {
           totals[blocks * N_READS + k] =
               op(totals[blocks * N_READS + k],
-                 static_cast<U>(in_row[i * stride + blocks * N_READS + k]));
+                 static_cast<U>(row[i * stride + blocks * N_READS + k]));
         }
       }
 
@@ -76,8 +72,9 @@ template <
   }
 
   // Case 2:
-  // Reduction stride is small but everything else can be big. We loop bot
-  // across reduction size and non_col_reductions.
+  // Reduction stride is small but everything else can be big. We loop both
+  // across reduction size and non_col_reductions. Each simdgroup produces
+  // N_READS outputs.
   else {
     threadgroup U shared_vals[1024];
     U totals[N_READS];
@@ -95,25 +92,20 @@ template <
     size_t out_idx = gid.y + gsize.y * size_t(gid.z);
     in += elem_to_loc(out_idx, shape, strides, ndim) + offset.x;
 
+    // Read cooperatively and contiguously and aggregate the partial results.
     size_t total = non_col_reductions * reduction_size;
     loop.next(offset.y, reduce_shape, reduce_strides);
     for (size_t r = offset.y; r < total; r += simd_size) {
-      const device T* in_row;
-      if constexpr (loop.dynamic_ndim) {
-        in_row = in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim);
-      } else {
-        in_row = in + loop.offset;
-      }
+      row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
 
       if (safe) {
         for (int i = 0; i < N_READS; i++) {
-          totals[i] = op(static_cast<U>(in_row[i]), totals[i]);
+          totals[i] = op(static_cast<U>(row[i]), totals[i]);
         }
       } else {
         U vals[N_READS];
         for (int i = 0; i < N_READS; i++) {
-          vals[i] =
-              (offset.x + i < stride) ? static_cast<U>(in_row[i]) : op.init;
+          vals[i] = (offset.x + i < stride) ? static_cast<U>(row[i]) : op.init;
         }
         for (int i = 0; i < N_READS; i++) {
           totals[i] = op(vals[i], totals[i]);
@@ -123,6 +115,9 @@ template <
       loop.next(simd_size, reduce_shape, reduce_strides);
     }
 
+    // Each thread holds N_READS partial results but the simdgroups are not
+    // aligned to do the reduction across the simdgroup so we write our results
+    // in the shared memory and read them back according to the simdgroup.
     for (int i = 0; i < N_READS; i++) {
       shared_vals[offset.y * sm_stride + offset.x + i] = totals[i];
     }
@@ -132,6 +127,7 @@ template <
           shared_vals[simd_lane_id * sm_stride + simd_group_id * N_READS + i]);
     }
 
+    // Write the output.
     if (simd_lane_id == 0) {
       short column = simd_group_id * N_READS;
       out += out_idx * reduction_stride + column;
@@ -238,12 +234,8 @@ template <
   if (reduction_stride < BN) {
     short2 tile(reduction_stride, BM);
     for (size_t r = 0; r < non_col_reductions; r++) {
-      if constexpr (loop.dynamic_ndim) {
-        loader.reset(
-            in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim));
-      } else {
-        loader.reset(in + loop.offset);
-      }
+      loader.reset(
+          in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim));
 
       for (int i = 0; i < n_blocks; i++) {
         loader.load_safe(tile);
@@ -274,12 +266,8 @@ template <
     }
   } else {
     for (size_t r = 0; r < non_col_reductions; r++) {
-      if constexpr (loop.dynamic_ndim) {
-        loader.reset(
-            in + elem_to_loc(r, reduce_shape, reduce_strides, reduce_ndim));
-      } else {
-        loader.reset(in + loop.offset);
-      }
+      loader.reset(
+          in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim));
 
       for (int i = 0; i < n_blocks; i++) {
         loader.load_unsafe();
