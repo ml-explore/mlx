@@ -186,6 +186,20 @@ class TestFast(mlx_tests.MLXTestCase):
         )
         self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
 
+        # Test single vector
+        x = mx.random.uniform(shape=(1, 1, dims))
+        rx = rope_orig(x, dims, False, None, 1.0, 0, freqs)
+        rx_fast = mx.fast.rope(
+            x,
+            dims,
+            traditional=False,
+            base=1.0,
+            scale=1.0,
+            offset=0,
+            freqs=freqs,
+        )
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
         # Test grad with freqs
         f1 = lambda x, y: (rope_orig(x, dims, False, None, 1.0, 0, freqs) * y).sum()
         f2 = lambda x, y: (
