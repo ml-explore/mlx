@@ -115,8 +115,8 @@ inline auto check_contiguity(
   bool is_col_contiguous = true;
 
   for (int i = 0, ri = shape.size() - 1; ri >= 0; i++, ri--) {
-    is_row_contiguous &= strides[i] == f_stride || shape[i] == 1;
-    is_col_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
+    is_col_contiguous &= strides[i] == f_stride || shape[i] == 1;
+    is_row_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
     f_stride *= shape[i];
     b_stride *= shape[ri];
     if (strides[i] > 0) {

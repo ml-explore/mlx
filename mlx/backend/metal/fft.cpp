@@ -546,8 +546,8 @@ void fft_op(
       auto [data_size, is_row_contiguous, is_col_contiguous] =
           check_contiguity(x.shape(), strides);
 
-      flags.col_contiguous = is_row_contiguous;
-      flags.row_contiguous = is_col_contiguous;
+      flags.col_contiguous = is_col_contiguous;
+      flags.row_contiguous = is_row_contiguous;
       flags.contiguous = data_size == x_copy.size();
 
       x_copy.set_data(
