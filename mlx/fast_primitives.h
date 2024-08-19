@@ -1,6 +1,5 @@
 // Copyright © 2024 Apple Inc.
 
-#include <map>
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {

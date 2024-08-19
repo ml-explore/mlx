@@ -1,5 +1,3 @@
-.. _custom_metal_kernels:
-
 Custom Metal Kernels
 ====================
 
@@ -19,16 +17,16 @@ Let's write a custom kernel that computes ``exp`` elementwise:
           out[elem] = metal::exp(tmp);
       """
 
-      kernel = mx.fast.MetalKernel(
+      outputs = mx.fast.metal_kernel(
           name="myexp",
           source=source,
+          inputs={"inp": a},
+          template={"T": mx.float32},
           grid=(a.size, 1, 1),
           threadgroup=(256, 1, 1),
           output_shapes={"out": a.shape},
           output_dtypes={"out": a.dtype},
       )
-      kernel.template(T=mx.float32)
-      outputs = kernel(inp=a)
       return outputs["out"]
 
   a = mx.random.normal(shape=(4, 16)).astype(mx.float16)
@@ -45,8 +43,8 @@ We are only required to pass the body of the Metal kernel in ``source``.
 * The keys and values of ``output_shapes`` and ``output_dtypes``.
     In the above, ``out`` is an ``mx.float16`` ``mx.array``
     so we add ``device float16_t* out [[buffer(3)]]``.
-* Template parameters passed using ``MetalKernel.template()``.
-    In the above, ``kernel.template(T=mx.float32)`` adds a template of ``template <typename T>`` to the function
+* Template parameters passed using ``template``.
+    In the above, ``template={"T": mx.float32}`` adds a template of ``template <typename T>`` to the function
     and instantiates the template with ``custom_kernel_myexp<float>``.
     Template parameters can be ``mx.core.Dtype``, ``int`` or ``bool``.
 * Metal attributes used in ``source`` such as ``[[thread_position_in_grid]]`` or ``[[simdgroup_index_in_threadgroup]]``.
@@ -104,17 +102,17 @@ Let's convert ``myexp`` above to support arbitrarily strided arrays without rely
           out[elem] = metal::exp(tmp);
       """
 
-      kernel = mx.fast.MetalKernel(
+      outputs = mx.fast.metal_kernel(
           name="myexp_strided",
           source=source,
+          inputs={"inp": a},
+          template={"T": mx.float32},
           grid=(a.size, 1, 1),
           threadgroup=(256, 1, 1),
           output_shapes={"out": a.shape},
           output_dtypes={"out": a.dtype},
           ensure_row_contiguous=False,
       )
-      kernel.template(T=mx.float32)
-      outputs = kernel(inp=a)
       return outputs["out"]
 
   a = mx.random.normal(shape=(4, 16)).astype(mx.float16)

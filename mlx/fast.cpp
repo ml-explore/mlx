@@ -917,37 +917,45 @@ array affine_dequantize(
   return fallback({w, scales, biases})[0];
 }
 
-void MetalKernel::validate_output_shapes() {
+void validate_output_shapes(
+    std::map<std::string, std::vector<int>> output_shapes,
+    std::map<std::string, Dtype> output_dtypes) {
   // Make sure output shapes and dtypes have the same keys
   bool validated = true;
-  if (output_shapes_.size() == 0) {
-    throw std::invalid_argument("Must specify at least one output.");
+  if (output_shapes.size() == 0) {
+    throw std::invalid_argument(
+        "[metal_kernel] Must specify at least one output.");
   }
-  if (output_shapes_.size() != output_dtypes_.size()) {
+  if (output_shapes.size() != output_dtypes.size()) {
     validated = false;
   } else {
-    for (auto kv : output_shapes_) {
-      if (output_dtypes_.find(kv.first) == output_dtypes_.end()) {
+    for (const auto& kv : output_shapes) {
+      if (output_dtypes.find(kv.first) == output_dtypes.end()) {
         validated = false;
+        break;
       }
     }
   }
   if (!validated) {
     throw std::invalid_argument(
-        "`output_shapes` and `output_dtypes` must have the same keys.");
+        "[metal_kernel] `output_shapes` and `output_dtypes` must have the same keys.");
   }
 }
 
-void MetalKernel::write_signature(
+void write_signature(
     std::string func_name,
-    std::unordered_map<std::string, array>& inputs,
+    std::string& source,
+    std::map<std::string, array>& inputs,
+    std::map<std::string, std::vector<int>>& output_shapes,
+    std::map<std::string, Dtype>& output_dtypes,
+    std::optional<std::map<std::string, TemplateArg>> template_args,
     std::ostringstream& kernel_source) {
   // Auto-generate a function signature based on `template_args`
   // and the dtype/shape of the arrays passed as `inputs`.
-  if (template_args.size() > 0) {
+  if (template_args && template_args.value().size() > 0) {
     kernel_source << "template <";
     int i = 0;
-    for (auto [name, arg] : template_args) {
+    for (const auto& [name, arg] : template_args.value()) {
       std::string param_type;
       if (std::holds_alternative<int>(arg)) {
         param_type = "int";
@@ -990,8 +998,8 @@ void MetalKernel::write_signature(
       {"thread_per_threadgroup", "uint3"},
   };
   std::vector<std::pair<std::string, std::string>> attrs;
-  for (auto [attr, dtype] : metal_attributes) {
-    if (source_.find(attr) != std::string::npos) {
+  for (const auto& [attr, dtype] : metal_attributes) {
+    if (source.find(attr) != std::string::npos) {
       attrs.push_back({attr, dtype});
     }
   }
@@ -999,7 +1007,7 @@ void MetalKernel::write_signature(
   int index = 0;
   constexpr int max_constant_array_size = 8;
   // Add inputs
-  for (auto& [name, arr] : inputs) {
+  for (const auto& [name, arr] : inputs) {
     auto dtype = get_type_string(arr.dtype());
     bool is_constant =
         arr.is_available() && arr.size() < max_constant_array_size;
@@ -1022,10 +1030,10 @@ void MetalKernel::write_signature(
     }
   }
   // Add outputs
-  for (auto [name, dtype] : output_dtypes_) {
+  for (const auto& [name, dtype] : output_dtypes) {
     kernel_source << "  device " << get_type_string(dtype) << "* " << name
                   << " [[buffer(" << index << ")]]";
-    if (index < inputs.size() + output_shapes_.size() - 1 || attrs.size() > 0) {
+    if (index < inputs.size() + output_shapes.size() - 1 || attrs.size() > 0) {
       kernel_source << "," << std::endl;
     } else {
       kernel_source << ") {" << std::endl;
@@ -1033,7 +1041,7 @@ void MetalKernel::write_signature(
     index++;
   }
   // Add metal attributes e.g. `threadgroup_index_in_grid`
-  for (auto [attr, dtype] : attrs) {
+  for (const auto& [attr, dtype] : attrs) {
     kernel_source << "  " << dtype << " " << attr << " [[" << attr << "]]";
     if (index < attrs.size() - 1) {
       kernel_source << "," << std::endl;
@@ -1041,15 +1049,15 @@ void MetalKernel::write_signature(
       kernel_source << ") {" << std::endl;
     }
   }
-  kernel_source << source_ << std::endl;
+  kernel_source << source << std::endl;
   kernel_source << "}" << std::endl;
 }
 
-std::string MetalKernel::write_template() {
+std::string write_template(std::map<std::string, TemplateArg>& template_args) {
   std::ostringstream template_def;
   template_def << "<";
   int i = 0;
-  for (auto [name, arg] : template_args) {
+  for (const auto& [name, arg] : template_args) {
     if (i > 0) {
       template_def << ", ";
     }
@@ -1066,30 +1074,50 @@ std::string MetalKernel::write_template() {
   return template_def.str();
 }
 
-std::unordered_map<std::string, array> MetalKernel::run(
-    std::unordered_map<std::string, array>& inputs,
+std::map<std::string, array> metal_kernel(
+    std::string name,
+    std::string source,
+    std::map<std::string, array> inputs,
+    std::map<std::string, std::vector<int>> output_shapes,
+    std::map<std::string, Dtype> output_dtypes,
+    std::tuple<int, int, int> grid,
+    std::tuple<int, int, int> threadgroup,
+    std::optional<std::map<std::string, TemplateArg>> template_args,
+    bool ensure_row_contiguous,
+    bool verbose,
     StreamOrDevice s_) {
+  validate_output_shapes(output_shapes, output_dtypes);
+
   auto s = to_stream(s_);
   if (s.device != Device::gpu) {
-    throw std::invalid_argument("MetalKernel only works on GPU.");
+    throw std::invalid_argument(
+        "[metal_kernel] MetalKernel only works on GPU.");
   }
 
   std::ostringstream kernel_source;
   std::ostringstream func_name;
 
   std::string template_def = "";
-  if (template_args.size() > 0) {
-    template_def = write_template();
+  bool needs_template = template_args && template_args.value().size() > 0;
+  if (needs_template) {
+    template_def = write_template(template_args.value());
   }
 
   std::hash<std::string> hasher;
   // Hash the source and template params to avoid cache invalidation
-  func_name << name_ << "_" << hasher(source_ + template_def);
+  func_name << name << "_" << hasher(source + template_def);
   std::string kernel_name = func_name.str();
 
-  write_signature(func_name.str(), inputs, kernel_source);
+  write_signature(
+      func_name.str(),
+      source,
+      inputs,
+      output_shapes,
+      output_dtypes,
+      template_args,
+      kernel_source);
 
-  if (template_args.size() > 0) {
+  if (needs_template) {
     template_def = func_name.str() + template_def;
     kernel_source << std::endl
                   << "template [[host_name(\"" << kernel_name
@@ -1097,8 +1125,8 @@ std::unordered_map<std::string, array> MetalKernel::run(
                   << template_def << ";" << std::endl;
   }
 
-  if (verbose_) {
-    std::cout << "Generated source code for `" << name_ << "`:" << std::endl
+  if (verbose) {
+    std::cout << "Generated source code for `" << name << "`:" << std::endl
               << "```" << std::endl
               << kernel_source.str() << std::endl
               << "```" << std::endl;
@@ -1111,17 +1139,17 @@ std::unordered_map<std::string, array> MetalKernel::run(
 
   std::vector<std::string> out_keys;
   std::vector<std::vector<int>> out_shapes;
-  for (auto [name, shape] : output_shapes_) {
+  for (auto [name, shape] : output_shapes) {
     out_keys.push_back(name);
     out_shapes.push_back(shape);
   }
 
   std::vector<Dtype> out_dtypes;
-  for (auto kv : output_dtypes_) {
+  for (auto kv : output_dtypes) {
     out_dtypes.push_back(kv.second);
   }
 
-  std::unordered_map<std::string, array> outputs;
+  std::map<std::string, array> outputs;
   auto outputs_vec = array::make_arrays(
       out_shapes,
       out_dtypes,
@@ -1129,9 +1157,9 @@ std::unordered_map<std::string, array> MetalKernel::run(
           s,
           kernel_name,
           kernel_source.str(),
-          grid_,
-          threadgroup_,
-          ensure_row_contiguous_),
+          grid,
+          threadgroup,
+          ensure_row_contiguous),
       in_arrs);
 
   int i = 0;

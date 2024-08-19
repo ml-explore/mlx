@@ -45,7 +45,6 @@ are the CPU and GPU.
    usage/numpy
    usage/distributed
    usage/using_streams
-   usage/custom_metal_kernels
 
 .. toctree::
    :caption: Examples
@@ -86,3 +85,4 @@ are the CPU and GPU.
 
    dev/extensions
    dev/metal_debugger
+   dev/custom_metal_kernels

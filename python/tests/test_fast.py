@@ -552,25 +552,28 @@ class TestFast(mlx_tests.MLXTestCase):
     def test_custom_kernel_basic(self):
         mx.random.seed(7)
         a = mx.random.normal(shape=(3, 6))
-        kernel = mx.fast.MetalKernel(
+        out = mx.fast.metal_kernel(
             name="arg_test",
             source="""
                 uint elem = thread_position_in_grid.x;
                 out1[elem] = a[elem];
             """,
+            inputs={"a": a},
             grid=(4, 1, 1),
             threadgroup=(2, 1, 1),
             output_shapes={"out1": (2, 2)},
             output_dtypes={"out1": mx.float32},
+            stream=mx.gpu,
         )
-        out = kernel(a=a, stream=mx.gpu)
         mx.allclose(out["out1"], a[:2, :2])
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_args(self):
         mx.random.seed(7)
         a = mx.random.normal(shape=(3, 6))
-        kernel = mx.fast.MetalKernel(
+        c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
+
+        out = mx.fast.metal_kernel(
             name="arg_test",
             source="""
                 uint elem = thread_position_in_grid.x;
@@ -582,16 +585,24 @@ class TestFast(mlx_tests.MLXTestCase):
                 }
                 out2[elem] = a[1] + b[2] + c[1] - d;
             """,
+            inputs={
+                "a": a,
+                "b": [3, 4, 5],
+                "c": c,
+                "d": 7.3,
+            },
+            template={
+                "e": True,
+                "f": 3,
+                "T": mx.float16,
+            },
             grid=(6, 1, 1),
             threadgroup=(2, 1, 1),
             output_shapes={"out1": (2, 2), "out2": (3, 2)},
             output_dtypes={"out1": mx.float32, "out2": mx.int32},
-            verbose=True,
+            stream=mx.gpu,
         )
-        c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
 
-        kernel.template(e=True, f=3, T=mx.float16)
-        out = kernel(a=a, b=[3, 4, 5], c=c, d=7.3, stream=mx.gpu)
         self.assertTrue(mx.allclose(out["out1"], mx.full((2, 2), 14.0484)))
         self.assertTrue(mx.allclose(out["out2"], mx.full((3, 2), -2, dtype=mx.int32)))
 
@@ -615,17 +626,18 @@ class TestFast(mlx_tests.MLXTestCase):
         a = mx.tile(a[::2], [4, 1])
 
         for contig in [True, False]:
-            kernel = mx.fast.MetalKernel(
+            outputs = mx.fast.metal_kernel(
                 name="myexp",
                 source=source_contig if contig else source,
+                inputs={"inp": a},
+                template={"T": mx.float32},
                 grid=(a.size, 1, 1),
                 threadgroup=(256, 1, 1),
                 output_shapes={"out": a.shape},
                 output_dtypes={"out": a.dtype},
                 ensure_row_contiguous=contig,
+                stream=mx.gpu,
             )
-            kernel.template(T=mx.float32)
-            outputs = kernel(inp=a, stream=mx.gpu)
             self.assertTrue(mx.allclose(mx.exp(a), outputs["out"]))
 
 
