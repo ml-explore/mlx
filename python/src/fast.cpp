@@ -259,6 +259,8 @@ void init_fast(nb::module_& parent_module) {
       "verbose"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
+      nb::sig(
+          "def metal_kernel(name: str, source: str, inputs: Mapping[str, Union[scalar, list, tuple, numpy.ndarray, array]], output_shapes: Mapping[str, Sequence[int]], output_dtypes: Mapping[str, Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Mapping[str, Union[bool, int, Dtype]] | None = None, ensure_row_contiguous: bool = True, verbose: bool = False, *, stream: Stream | Device | None = None) -> dict[str, array]"),
       R"pbdoc(
       Run a custom Metal kernel.
 
@@ -268,9 +270,8 @@ void init_fast(nb::module_& parent_module) {
             the function signature will be generated for you. The function parameters
             are determined by the names and shapes of ``inputs`` and
             ``output_shapes``/``output_dtypes``.
-        inputs (dict[str, array]): Inputs. These will be added to the function signature
-        and passed to the Metal kernel. The keys will the names of the inputs in the function.
-        The values can be anything convertible to an ``mx.array``.
+        inputs (dict[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
+            The keys will the names of the arguments to the kernel.
         output_shapes (dict[str, Sequence[int]]): Output shapes. A dict mapping
             output variable names to shapes. These will be added to the function signature.
         output_dtypes (dict[str, Dtype]): Output dtypes. A dict mapping output variable
@@ -278,11 +279,14 @@ void init_fast(nb::module_& parent_module) {
         grid (tuple[int, int, int]): 3-tuple specifying the grid to launch the kernel with.
         threadgroup (tuple[int, int, int]): 3-tuple specifying the threadgroup size to use.
         template (dict[str, Union[bool, int, Dtype]], optional): Template arguments.
-          These will be added as template arguments to the kernel definition.
+            These will be added as template arguments to the kernel definition.
         ensure_row_contiguous (bool, optional): Whether to ensure the inputs are row contiguous
             before the kernel runs. Default: ``True``.
         verbose (bool, optional): Whether to print the full generated source code of the kernel
             when it is run.
+
+      Returns:
+        dict[str, array]: Dictionary of output arrays based on ``output_shapes``/``output_dtypes``.
 
       )pbdoc");
 }

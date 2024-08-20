@@ -1104,8 +1104,7 @@ std::map<std::string, array> metal_kernel(
   }
 
   std::hash<std::string> hasher;
-  // Hash the source and template params to avoid cache invalidation
-  func_name << name << "_" << hasher(source + template_def);
+  func_name << name;
   std::string kernel_name = func_name.str();
 
   write_signature(
