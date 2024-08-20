@@ -522,15 +522,18 @@ void strided_reduce_looped(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  // Prepare the arguments for the kernel
+  ColReduceArgs args(in, plan, axes);
+  args.reduce_shape.push_back(args.reduction_size);
+  args.reduce_strides.push_back(args.reduction_stride);
+  args.reduce_ndim++;
+
   // Set the kernel
-  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
+  int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
   std::ostringstream kname;
   kname << "colLooped" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
-
-  // Prepare the arguments for the kernel
-  ColReduceArgs args(in, plan, axes);
 
   // Figure out the grid dims
   auto out_grid_size = output_grid_for_col_reduce(out, args);

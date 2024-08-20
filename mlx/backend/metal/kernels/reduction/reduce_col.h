@@ -183,137 +183,78 @@ template <
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   Op op;
+  static_assert(BM == simd_size, "BM should be equal to simd_size");
   constexpr int n_simdgroups = 4;
-  constexpr int BN = (BN_32bit * sizeof(T) <= 128) ? BN_32bit : BN_32bit / 2;
+  constexpr int BN = (sizeof(T) < 8) ? BN_32bit : BN_32bit / 2;
   constexpr int BN_padded = (BN + 16 / sizeof(T));
-  constexpr int n_outputs = BN / n_simdgroups;
-  threadgroup T shared_vals[BM * BN_padded];
-  thread U totals[n_outputs];
-  threadgroup T* shared_vals_local =
-      shared_vals + simd_lane_id * BN_padded + simd_group_id * n_outputs;
+  constexpr short tgp_size = n_simdgroups * simd_size;
+  constexpr short n_reads = (BM * BN) / tgp_size;
+  constexpr short n_read_blocks = BN / n_reads;
 
-  for (int i = 0; i < n_outputs; i++) {
+  threadgroup U shared_vals[BM * BN_padded];
+  U totals[n_reads];
+  looped_elem_to_loc<NDIMS> loop;
+  const device T* row;
+
+  for (int i = 0; i < n_reads; i++) {
     totals[i] = Op::init;
   }
 
-  constexpr short tgp_size = n_simdgroups * simd_size;
-  constexpr short n_reads = (BM * BN) / tgp_size;
-  constexpr short TCOLS = BN / n_reads;
-  using loader_t = mlx::steel::BlockLoader<
-      T,
-      /*         BROWS= */ BM,
-      /*         BCOLS= */ BN,
-      /*        dst_ld= */ BN_padded,
-      /* reduction_dim= */ 0,
-      /*      tgp_size= */ tgp_size,
-      /*     alignment= */ 1,
-      /*       n_reads= */ n_reads,
-      /*         TCOLS= */ TCOLS,
-      /*         TROWS= */ tgp_size / TCOLS,
-      /*   initializer= */ Op>;
-
-  // If the column is OOB then move it back so that we always have BN columns
-  // to read.
   size_t column = BN * gid.x;
-  if (column + BN > reduction_stride && BN < reduction_stride) {
-    column = reduction_stride - BN;
-  }
+  short lid = simd_group_id * simd_size + simd_lane_id;
+  short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
+  bool safe = column + offset.x + n_reads <= reduction_stride;
 
   size_t out_idx = gid.y + gsize.y * size_t(gid.z);
   size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
-  const int n_blocks = reduction_size / BM;
-  bool extra = (reduction_size % BM) != 0;
+  in += in_idx + column + offset.x;
 
-  out += out_idx * reduction_stride + column + simd_group_id * n_outputs;
-  in += in_idx + column;
+  size_t total = non_col_reductions * reduction_size;
+  loop.next(offset.y, reduce_shape, reduce_strides);
+  for (size_t r = offset.y; r < total; r += simd_size) {
+    row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
 
-  loader_t loader(
-      in, reduction_stride, shared_vals, simd_group_id, simd_lane_id);
-  looped_elem_to_loc<NDIMS> loop;
-
-  if (reduction_stride < BN) {
-    short2 tile(reduction_stride, BM);
-    for (size_t r = 0; r < non_col_reductions; r++) {
-      loader.reset(
-          in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim));
-
-      for (int i = 0; i < n_blocks; i++) {
-        loader.load_safe(tile);
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        // Partial reduction of the whole block
-        for (int i = 0; i < n_outputs; i++) {
-          U val = shared_vals_local[i];
-          totals[i] = op(val, totals[i]);
-        }
-
-        // Load the next block
-        loader.next();
+    if (safe) {
+      for (int i = 0; i < n_reads; i++) {
+        totals[i] = op(static_cast<U>(row[i]), totals[i]);
       }
-      if (extra) {
-        // Load the last block with bounds checking
-        loader.load_safe(short2(tile.x, reduction_size - n_blocks * BM));
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        // Partial reduction of the whole block
-        for (int i = 0; i < n_outputs; i++) {
-          U val = shared_vals_local[i];
-          totals[i] = op(val, totals[i]);
-        }
+    } else {
+      U vals[n_reads];
+      for (int i = 0; i < n_reads; i++) {
+        vals[i] = (column + offset.x + i < reduction_stride)
+            ? static_cast<U>(row[i])
+            : op.init;
       }
-
-      loop.next(reduce_shape, reduce_strides);
+      for (int i = 0; i < n_reads; i++) {
+        totals[i] = op(vals[i], totals[i]);
+      }
     }
-  } else {
-    for (size_t r = 0; r < non_col_reductions; r++) {
-      loader.reset(
-          in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim));
 
-      for (int i = 0; i < n_blocks; i++) {
-        loader.load_unsafe();
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        // Partial reduction of the whole block
-        for (int i = 0; i < n_outputs; i++) {
-          U val = shared_vals_local[i];
-          totals[i] = op(val, totals[i]);
-        }
-
-        // Load the next block
-        loader.next();
-      }
-      if (extra) {
-        // Load the last block with bounds checking
-        loader.load_safe(short2(BN, reduction_size - n_blocks * BM));
-        threadgroup_barrier(mem_flags::mem_threadgroup);
-
-        // Partial reduction of the whole block
-        for (int i = 0; i < n_outputs; i++) {
-          U val = shared_vals_local[i];
-          totals[i] = op(val, totals[i]);
-        }
-      }
-
-      loop.next(reduce_shape, reduce_strides);
-    }
+    loop.next(simd_size, reduce_shape, reduce_strides);
   }
 
-  // Reduce across simdgroups
+  // Each thread holds N_READS partial results but the simdgroups are not
+  // aligned to do the reduction across the simdgroup so we write our results
+  // in the shared memory and read them back according to the simdgroup.
+  for (int i = 0; i < n_reads; i++) {
+    shared_vals[offset.y * BN_padded + offset.x + i] = totals[i];
+  }
   threadgroup_barrier(mem_flags::mem_threadgroup);
-  for (int i = 0; i < n_outputs; i++) {
-    totals[i] = op.simd_reduce(totals[i]);
+  for (int i = 0; i < n_reads; i++) {
+    totals[i] = op.simd_reduce(
+        shared_vals[simd_lane_id * BN_padded + simd_group_id * n_reads + i]);
   }
 
-  // Write output
+  // Write the output.
   if (simd_lane_id == 0) {
-    if (column + (simd_group_id + 1) * n_outputs <= reduction_stride) {
-      for (int i = 0; i < n_outputs; i++) {
+    column += simd_group_id * n_reads;
+    out += out_idx * reduction_stride + column;
+    if (column + n_reads <= reduction_stride) {
+      for (int i = 0; i < n_reads; i++) {
         out[i] = totals[i];
       }
     } else {
-      for (uint i = 0, j = column + simd_group_id * n_outputs;
-           j < reduction_stride;
-           i++, j++) {
+      for (int i = 0; column + i < reduction_stride; i++) {
         out[i] = totals[i];
       }
     }
