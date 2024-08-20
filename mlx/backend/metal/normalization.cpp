@@ -135,8 +135,8 @@ void RMSNormVJP::eval_gpu(
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
 
-  // Allocate a temporary to store the gradients for w and initialize the
-  // gradient accumulator to 0.
+  // Allocate the gradient accumulator gw and a temporary to store the
+  // gradients before they are accumulated.
   array gw_temp({n_rows, x.shape().back()}, gw.dtype(), nullptr, {});
   bool g_in_gw = false;
   if (!g_in_gx && g.is_donatable()) {
@@ -146,11 +146,7 @@ void RMSNormVJP::eval_gpu(
     gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
   }
   copies.push_back(gw_temp);
-  {
-    array zero(0, gw.dtype());
-    copy_gpu(zero, gw, CopyType::Scalar, s);
-    copies.push_back(std::move(zero));
-  }
+  gw.set_data(allocator::malloc_or_wait(gw.nbytes()));
 
   const int simd_size = 32;
   const int n_reads = RMS_N_READS;
@@ -330,8 +326,8 @@ void LayerNormVJP::eval_gpu(
   auto axis_size = static_cast<uint32_t>(x.shape().back());
   int n_rows = x.data_size() / axis_size;
 
-  // Allocate a temporary to store the gradients for w and initialize the
-  // gradient accumulator to 0.
+  // Allocate a temporary to store the gradients for w and allocate the output
+  // gradient accumulators.
   array gw_temp({n_rows, x.shape().back()}, gw.dtype(), nullptr, {});
   bool g_in_gw = false;
   if (!g_in_gx && g.is_donatable()) {
@@ -341,12 +337,8 @@ void LayerNormVJP::eval_gpu(
     gw_temp.set_data(allocator::malloc_or_wait(gw_temp.nbytes()));
   }
   copies.push_back(gw_temp);
-  {
-    array zero(0, gw.dtype());
-    copy_gpu(zero, gw, CopyType::Scalar, s);
-    copy_gpu(zero, gb, CopyType::Scalar, s);
-    copies.push_back(std::move(zero));
-  }
+  gw.set_data(allocator::malloc_or_wait(gw.nbytes()));
+  gb.set_data(allocator::malloc_or_wait(gb.nbytes()));
 
   // Finish with the gradient for b in case we had a b
   auto& compute_encoder = d.get_command_encoder(s.index);

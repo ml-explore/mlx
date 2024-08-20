@@ -1,7 +1,5 @@
 // Copyright © 2024 Apple Inc.
 
-#include <iostream>
-
 #include "mlx/backend/common/reduce.h"
 
 namespace mlx::core {
