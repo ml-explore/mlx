@@ -1,5 +1,4 @@
 // Copyright © 2023-2024 Apple Inc.
-
 #include <cassert>
 #include <numeric>
 
@@ -323,7 +322,7 @@ bool LayerNormVJP::is_equivalent(const Primitive& other) const {
 }
 
 array rope(
-    const array& x,
+    std::vector<array> inputs,
     int dims,
     bool traditional,
     float base,
@@ -331,15 +330,23 @@ array rope(
     int offset,
     bool forward,
     StreamOrDevice s) {
+  auto& x = inputs[0];
   if (x.ndim() < 3) {
     std::ostringstream msg;
     msg << "[rope] Input must have at least 3 dimensions but got input with "
         << x.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
+  if (inputs.size() == 2 &&
+      (inputs[1].ndim() != 1 || inputs[1].shape(0) != dims / 2)) {
+    std::ostringstream msg;
+    msg << "[rope] freqs must be one dimensional with size " << dims
+        << " but got shape " << inputs[1].shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
 
   auto fallback = [dims, traditional, base, scale, offset, forward, s](
-                      const std::vector<array>& inputs) {
+                      std::vector<array> inputs) {
     auto& shape = inputs[0].shape();
     int ndim = shape.size();
     auto x = reshape(inputs[0], {-1, shape[ndim - 2], shape[ndim - 1]}, s);
@@ -348,10 +355,20 @@ array rope(
     // Compute sines and cosines
     auto half_dims = dims / 2;
     auto positions = multiply(arange(offset, N, t, s), array(scale, t), s);
-    auto freqs = negative(arange(0, half_dims, t, s), s);
-    freqs = exp(multiply(freqs, array(std::log(base) / half_dims, t), s), s);
+
+    auto default_inv_freqs = [&inputs, &s, &t, base, half_dims]() {
+      return exp(
+          multiply(
+              arange(0, -half_dims, -1, t, s),
+              array(std::log(base) / half_dims, t),
+              s),
+          s);
+    };
+
+    auto inv_freqs =
+        inputs.size() == 2 ? reciprocal(inputs[1], s) : default_inv_freqs();
     auto theta =
-        multiply(expand_dims(positions, 1, s), expand_dims(freqs, 0, s), s);
+        multiply(expand_dims(positions, 1, s), expand_dims(inv_freqs, 0, s), s);
     auto coss = cos(theta, s);
     auto sins = sin(theta, s);
 
@@ -409,20 +426,39 @@ array rope(
         x.dtype(),
         std::make_shared<RoPE>(
             stream, fallback, dims, traditional, base, scale, offset, forward),
-        {x});
+        std::move(inputs));
   }
-  return fallback({x})[0];
+  return fallback(std::move(inputs))[0];
 }
 
 array rope(
     const array& x,
     int dims,
     bool traditional,
-    float base,
+    std::optional<float> base,
     float scale,
     int offset,
+    const std::optional<array>& freqs /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
-  return rope(x, dims, traditional, base, scale, offset, true, s);
+  std::vector<array> inputs = {x};
+  if (freqs) {
+    inputs.push_back(astype(*freqs, float32, s));
+    if (base) {
+      throw std::invalid_argument(
+          "[rope] Only one of base or freqs can have a value.");
+    }
+  } else if (!base) {
+    throw std::invalid_argument("[rope] Neither base nor freqs has a value.");
+  }
+  return rope(
+      std::move(inputs),
+      dims,
+      traditional,
+      base.has_value() ? *base : 1.0,
+      scale,
+      offset,
+      true,
+      s);
 }
 
 std::vector<array> RoPE::vjp(
@@ -438,16 +474,27 @@ std::vector<array> RoPE::vjp(
                    offset = offset_,
                    forward = forward_,
                    s](std::vector<array> inputs) {
-    return std::vector<array>{
-        rope(inputs[0], dims, traditional, base, scale, offset, !forward, s)};
+    return std::vector<array>{rope(
+        std::move(inputs),
+        dims,
+        traditional,
+        base,
+        scale,
+        offset,
+        !forward,
+        s)};
   };
 
+  auto inputs = cotangents;
+  if (primals.size() == 2) {
+    inputs.push_back(primals[1]);
+  }
   return {array(
       cotangents[0].shape(),
       cotangents[0].dtype(),
       std::make_shared<RoPE>(
           s, fallback, dims_, traditional_, base_, scale_, offset_, !forward_),
-      cotangents)};
+      std::move(inputs))};
 }
 
 bool RoPE::is_equivalent(const Primitive& other) const {
