@@ -242,6 +242,12 @@ class AffineQuantize : public Custom {
   bool dequantize_;
 };
 
+struct CustomKernelShapeInfo {
+  bool shape = false;
+  bool strides = false;
+  bool ndim = false;
+};
+
 class CustomKernel : public Primitive {
  public:
   CustomKernel(
@@ -250,12 +256,14 @@ class CustomKernel : public Primitive {
       std::string source,
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
+      std::vector<CustomKernelShapeInfo> shape_infos,
       bool ensure_row_contiguous)
       : Primitive(stream),
         source_(source),
         name_(name),
         grid_(grid),
         threadgroup_(threadgroup),
+        shape_infos_(shape_infos),
         ensure_row_contiguous_(ensure_row_contiguous) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -273,6 +281,7 @@ class CustomKernel : public Primitive {
   std::string name_;
   std::tuple<int, int, int> grid_;
   std::tuple<int, int, int> threadgroup_;
+  std::vector<CustomKernelShapeInfo> shape_infos_;
   bool ensure_row_contiguous_;
 };
 

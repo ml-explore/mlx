@@ -41,17 +41,25 @@ void CustomKernel::eval_gpu(
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   int index = 0;
-  for (const array& in : checked_inputs) {
+  for (int i = 0; i < checked_inputs.size(); i++) {
+    const array& in = checked_inputs[i];
+    auto shape_info = shape_infos_[i];
     compute_encoder.set_input_array(in, index);
     index++;
     if (in.ndim() > 0) {
       int ndim = in.ndim();
-      set_vector_bytes(compute_encoder, in.shape(), ndim, index);
-      index++;
-      set_vector_bytes(compute_encoder, in.strides(), ndim, index);
-      index++;
-      compute_encoder->setBytes(&ndim, sizeof(int), index);
-      index++;
+      if (shape_info.shape) {
+        set_vector_bytes(compute_encoder, in.shape(), ndim, index);
+        index++;
+      }
+      if (shape_info.strides) {
+        set_vector_bytes(compute_encoder, in.strides(), ndim, index);
+        index++;
+      }
+      if (shape_info.ndim) {
+        compute_encoder->setBytes(&ndim, sizeof(int), index);
+        index++;
+      }
     }
   }
   for (array out : outputs) {

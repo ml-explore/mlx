@@ -949,6 +949,7 @@ void write_signature(
     std::map<std::string, std::vector<int>>& output_shapes,
     std::map<std::string, Dtype>& output_dtypes,
     std::optional<std::map<std::string, TemplateArg>> template_args,
+    std::vector<CustomKernelShapeInfo>& shape_infos,
     std::ostringstream& kernel_source) {
   // Auto-generate a function signature based on `template_args`
   // and the dtype/shape of the arrays passed as `inputs`.
@@ -1016,18 +1017,29 @@ void write_signature(
     kernel_source << "  const " << location << " " << dtype << ref << " "
                   << name << " [[buffer(" << index << ")]]," << std::endl;
     index++;
-    // Add input shape, strides and ndim
+    // Add input shape, strides and ndim if present in the source
+    CustomKernelShapeInfo shape_info;
     if (arr.ndim() > 0) {
-      kernel_source << "  const constant int* " << name << "_shape [[buffer("
-                    << index << ")]]," << std::endl;
-      index++;
-      kernel_source << "  const constant size_t* " << name
-                    << "_strides [[buffer(" << index << ")]]," << std::endl;
-      index++;
-      kernel_source << "  const constant int& " << name << "_ndim [[buffer("
-                    << index << ")]]," << std::endl;
-      index++;
+      if (source.find(name + "_shape") != std::string::npos) {
+        kernel_source << "  const constant int* " << name << "_shape [[buffer("
+                      << index << ")]]," << std::endl;
+        shape_info.shape = true;
+        index++;
+      }
+      if (source.find(name + "_strides") != std::string::npos) {
+        kernel_source << "  const constant size_t* " << name
+                      << "_strides [[buffer(" << index << ")]]," << std::endl;
+        shape_info.strides = true;
+        index++;
+      }
+      if (source.find(name + "_ndim") != std::string::npos) {
+        kernel_source << "  const constant int& " << name << "_ndim [[buffer("
+                      << index << ")]]," << std::endl;
+        shape_info.ndim = true;
+        index++;
+      }
     }
+    shape_infos.push_back(shape_info);
   }
   // Add outputs
   for (const auto& [name, dtype] : output_dtypes) {
@@ -1099,14 +1111,18 @@ std::map<std::string, array> metal_kernel(
 
   std::string template_def = "";
   bool needs_template = template_args && template_args.value().size() > 0;
+  std::string hash_key = "";
   if (needs_template) {
+    std::regex disallowed_chars("\\<|\\>|(, )");
     template_def = write_template(template_args.value());
+    hash_key = std::regex_replace(template_def, disallowed_chars, "_");
+    hash_key.pop_back();
   }
 
-  std::hash<std::string> hasher;
-  func_name << name;
+  func_name << name << hash_key;
   std::string kernel_name = func_name.str();
 
+  std::vector<CustomKernelShapeInfo> shape_infos;
   write_signature(
       func_name.str(),
       source,
@@ -1114,6 +1130,7 @@ std::map<std::string, array> metal_kernel(
       output_shapes,
       output_dtypes,
       template_args,
+      shape_infos,
       kernel_source);
 
   if (needs_template) {
@@ -1158,6 +1175,7 @@ std::map<std::string, array> metal_kernel(
           kernel_source.str(),
           grid,
           threadgroup,
+          shape_infos,
           ensure_row_contiguous),
       in_arrs);
 

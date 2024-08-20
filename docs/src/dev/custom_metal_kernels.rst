@@ -47,7 +47,7 @@ The full function signature will be generated using:
     so we add ``device float16_t* out``.
 * Template parameters passed using ``template``
     In the above, ``template={"T": mx.float32}`` adds a template of ``template <typename T>`` to the function
-    and instantiates the template with ``myexp_(hash)<float>``.
+    and instantiates the template with ``myexp_float<float>``.
     Template parameters can be ``mx.core.Dtype``, ``int`` or ``bool``.
 * Metal attributes used in ``source`` such as ``[[thread_position_in_grid]]``
     These will be added as function arguments.
@@ -58,12 +58,9 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 .. code-block:: cpp
 
   template <typename T>
-  [[kernel]] void myexp_7406405795239204910(
+  [[kernel]] void myexp_float(
     const device float16_t* inp [[buffer(0)]],
-    const constant int* inp_shape [[buffer(1)]],
-    const constant size_t* inp_strides [[buffer(2)]],
-    const constant int& inp_ndim [[buffer(3)]],
-    device float16_t* out [[buffer(4)]],
+    device float16_t* out [[buffer(1)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]]) {
 
           uint elem = thread_position_in_grid.x;
@@ -72,7 +69,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 
   }
 
-  template [[host_name("myexp_7406405795239204910")]] [[kernel]] decltype(myexp_7406405795239204910<float>) myexp_7406405795239204910<float>;
+  template [[host_name("myexp_float")]] [[kernel]] decltype(myexp_float<float>) myexp_float<float>;
 
 You can print the generated code for a ``mx.fast.metal_kernel`` by passing ``verbose=True``.
 
@@ -85,7 +82,7 @@ Generally this makes writing the kernel easier, since we don't have to worry abo
 when indexing.
 
 If we want to avoid this copy, ``metal_kernel`` automatically passes ``a_shape``, ``a_strides`` and ``a_ndim`` for each
-input array ``a``.
+input array ``a`` if any are present in ``source``.
 We can then use MLX's built in indexing utils to fetch the right elements for each thread.
 
 Let's convert ``myexp`` above to support arbitrarily strided arrays without relying on a copy from ``ensure_row_contiguous``:

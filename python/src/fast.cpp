@@ -265,7 +265,7 @@ void init_fast(nb::module_& parent_module) {
       Run a custom Metal kernel.
 
       Args:
-        name (str): Name for the kernel.
+        name (str): Name for the kernel. Must be unique in this process.
         source (str): Source code. This is the body of a function in Metal,
             the function signature will be generated for you. The function parameters
             are determined by the names and shapes of ``inputs`` and
