@@ -79,13 +79,13 @@ void init_fast(nb::module_& parent_module) {
       "dims"_a,
       nb::kw_only(),
       "traditional"_a,
-      "base"_a,
+      "base"_a.none(),
       "scale"_a,
       "offset"_a,
       "freqs"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def rope(a: array, dims: int, *, traditional: bool, base: float, scale: float, offset: int, freqs: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def rope(a: array, dims: int, *, traditional: bool, base: Optional[float], scale: float, offset: int, freqs: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Apply rotary positional encoding to the input.
 
@@ -95,12 +95,13 @@ void init_fast(nb::module_& parent_module) {
               is larger than dims then the rest is left unchanged.
             traditional (bool): If set to ``True`` choose the traditional
               implementation which rotates consecutive dimensions.
-            base (float): The base used to compute angular frequency for
-              each dimension in the positional encodings.
+            base (float, optional): The base used to compute angular frequency for
+              each dimension in the positional encodings. Exactly one of ``base`` and
+             ``freqs`` must be ``None``.
             scale (float): The scale used to scale the positions.
             offset (int): The position offset to start at.
             freqs (array, optional): Optional frequencies to use with RoPE.
-              If set, the ``base`` parameter is ignored. ``Default: None``.
+              If set, the ``base`` parameter must be ``None``. ``Default: None``.
         Returns:
             array: The output array.
       )pbdoc");

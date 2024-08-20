@@ -25,7 +25,7 @@ array rope(
     const array& x,
     int dims,
     bool traditional,
-    float base,
+    std::optional<float> base,
     float scale,
     int offset,
     const std::optional<array>& freqs = std::nullopt,

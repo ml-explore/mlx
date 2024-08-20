@@ -435,7 +435,7 @@ array rope(
     const array& x,
     int dims,
     bool traditional,
-    float base,
+    std::optional<float> base,
     float scale,
     int offset,
     const std::optional<array>& freqs /* = std::nullopt */,
@@ -443,9 +443,22 @@ array rope(
   std::vector<array> inputs = {x};
   if (freqs) {
     inputs.push_back(astype(*freqs, float32, s));
+    if (base) {
+      throw std::invalid_argument(
+          "[rope] Only one of base or freqs can have a value.");
+    }
+  } else if (!base) {
+    throw std::invalid_argument("[rope] Neither base nor freqs has a value.");
   }
   return rope(
-      std::move(inputs), dims, traditional, base, scale, offset, true, s);
+      std::move(inputs),
+      dims,
+      traditional,
+      base.has_value() ? *base : 1.0,
+      scale,
+      offset,
+      true,
+      s);
 }
 
 std::vector<array> RoPE::vjp(
