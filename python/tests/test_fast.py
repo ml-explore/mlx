@@ -143,6 +143,20 @@ class TestFast(mlx_tests.MLXTestCase):
                 )
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
 
+            # Test transpose into rope
+            dims, _, base, scale, offset, _ = defaults
+            x = mx.random.uniform(shape=(1, 4, dims)).swapaxes(0, 1)
+            rx = rope_orig(x, dims, traditional, base, scale, offset)
+            rx_fast = mx.fast.rope(
+                1.0 * x,  # multiply here to allow donation
+                dims,
+                traditional=traditional,
+                base=base,
+                scale=scale,
+                offset=offset,
+            )
+            self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[mx.float32])
+
     def test_rope_with_freqs(self):
         # Check throws
         T = 4
