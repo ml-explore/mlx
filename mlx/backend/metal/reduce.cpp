@@ -292,6 +292,7 @@ void all_reduce_dispatch(
     compute_encoder.dispatchThreads(grid_dims, group_dims);
 
     // 2nd pass
+    compute_encoder->setComputePipelineState(kernel);
     size_t intermediate_size = n_rows;
     grid_dims = MTL::Size(32, 1, 1);
     group_dims = MTL::Size(32, 1, 1);
