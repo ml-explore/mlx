@@ -230,7 +230,7 @@ void init_fast(nb::module_& parent_module) {
             kernel = mx.fast.metal_kernel(
                 name="myexp",
                 source=source
-            ) 
+            )
             outputs = kernel(
                 inputs={"inp": a},
                 template={"T": mx.float32},
