@@ -9,6 +9,7 @@
 #include <nanobind/stl/vector.h>
 
 #include "python/src/convert.h"
+#include "python/src/utils.h"
 
 #include "mlx/fast.h"
 #include "mlx/ops.h"
@@ -192,101 +193,135 @@ void init_fast(nb::module_& parent_module) {
           array: The quantized version of ``w``
       )pbdoc");
 
-  m.def(
+  nb::class_<fast::MetalKernel>(
+      m,
       "metal_kernel",
-      [](std::string name,
-         std::string source,
-         std::map<std::string, nb::handle> inputs_,
-         std::map<std::string, std::vector<int>> output_shapes,
-         std::map<std::string, Dtype> output_dtypes,
-         std::tuple<int, int, int> grid,
-         std::tuple<int, int, int> threadgroup,
-         std::optional<std::map<std::string, nb::handle>> template_args_,
-         bool ensure_row_contiguous,
-         bool verbose,
-         StreamOrDevice s) -> std::map<std::string, array> {
-        std::map<std::string, fast::TemplateArg> template_args;
-        if (template_args_) {
-          for (auto [name, value] : template_args_.value()) {
-            // Handle bool, int and dtype template args
-            if (PyBool_Check(value.ptr())) {
-              bool bool_val = nb::cast<bool>(value);
-              template_args.insert({name, bool_val});
-            } else if (PyLong_Check(value.ptr())) {
-              int int_val = nb::cast<int>(value);
-              template_args.insert({name, int_val});
-            } else if (
-                nb::type_check(value.type()) &&
-                nb::type_info(value.type()) == typeid(Dtype)) {
-              Dtype dtype = nb::cast<Dtype>(value);
-              template_args.insert({name, dtype});
-            } else {
-              throw std::invalid_argument(
-                  "Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
-            }
-          }
-        }
-        std::map<std::string, array> inputs;
-        for (auto [name, in] : inputs_) {
-          if (name != "stream") {
-            auto value = nb::cast<ArrayInitType>(in);
-            auto arr = create_array(value, std::nullopt);
-            inputs.insert({name, arr});
-          }
-        }
-        return fast::metal_kernel(
-            name,
-            source,
-            inputs,
-            output_shapes,
-            output_dtypes,
-            grid,
-            threadgroup,
-            template_args,
-            ensure_row_contiguous,
-            verbose,
-            s);
-      },
-      "name"_a,
-      "source"_a,
-      "inputs"_a,
-      "output_shapes"_a,
-      "output_dtypes"_a,
-      "grid"_a,
-      "threadgroup"_a,
-      "template"_a = nb::none(),
-      "ensure_row_contiguous"_a = true,
-      "verbose"_a = false,
-      nb::kw_only(),
-      "stream"_a = nb::none(),
-      nb::sig(
-          "def metal_kernel(name: str, source: str, inputs: Mapping[str, Union[scalar, list, tuple, numpy.ndarray, array]], output_shapes: Mapping[str, Sequence[int]], output_dtypes: Mapping[str, Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Mapping[str, Union[bool, int, Dtype]] | None = None, ensure_row_contiguous: bool = True, verbose: bool = False, *, stream: Stream | Device | None = None) -> dict[str, array]"),
       R"pbdoc(
-      Run a custom Metal kernel.
+      A jit-compiled custom Metal kernel defined from a source string.
+      )pbdoc")
+      .def(
+          nb::init<const std::string&, const std::string&, bool>(),
+          "name"_a,
+          "source"_a,
+          "ensure_row_contiguous"_a = true,
+          R"pbdoc(
+      Initialize a metal_kernel.
 
       Args:
-        name (str): Name for the kernel. Must be unique in this process.
+        name (str): Name for the kernel.
         source (str): Source code. This is the body of a function in Metal,
-            the function signature will be generated for you. The function parameters
-            are determined by the names and shapes of ``inputs`` and
-            ``output_shapes``/``output_dtypes``.
-        inputs (dict[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
-            The keys will the names of the arguments to the kernel.
-        output_shapes (dict[str, Sequence[int]]): Output shapes. A dict mapping
-            output variable names to shapes. These will be added to the function signature.
-        output_dtypes (dict[str, Dtype]): Output dtypes. A dict mapping output variable
-            names to dtypes. Must have the same keys as ``output_shapes``.
-        grid (tuple[int, int, int]): 3-tuple specifying the grid to launch the kernel with.
-        threadgroup (tuple[int, int, int]): 3-tuple specifying the threadgroup size to use.
-        template (dict[str, Union[bool, int, Dtype]], optional): Template arguments.
-            These will be added as template arguments to the kernel definition.
-        ensure_row_contiguous (bool, optional): Whether to ensure the inputs are row contiguous
+            the function signature will be generated for you. The names of the inputs/outputs
+            are determined by the ``inputs`` and ``output_shapes``/``output_dtypes``
+            used when the kernel is called.
+        ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
             before the kernel runs. Default: ``True``.
-        verbose (bool, optional): Whether to print the full generated source code of the kernel
-            when it is run.
-
       Returns:
-        dict[str, array]: Dictionary of output arrays based on ``output_shapes``/``output_dtypes``.
+        Callable ``metal_kernel``.
 
-      )pbdoc");
+      .. code-block:: python
+
+        def exp_elementwise(a: mx.array):
+            source = """
+                uint elem = thread_position_in_grid.x;
+                T tmp = inp[elem];
+                out[elem] = metal::exp(tmp);
+            """
+
+            kernel = mx.fast.metal_kernel(
+                name="myexp",
+                source=source
+            ) 
+            outputs = kernel(
+                inputs={"inp": a},
+                template={"T": mx.float32},
+                grid=(a.size, 1, 1),
+                threadgroup=(256, 1, 1),
+                output_shapes={"out": a.shape},
+                output_dtypes={"out": a.dtype},
+                verbose=True,
+            )
+            return outputs["out"]
+
+        a = mx.random.normal(shape=(4, 16)).astype(mx.float16)
+        b = exp_elementwise(a)
+        assert mx.allclose(b, mx.exp(a))
+
+      )pbdoc")
+      .def(
+          "__call__",
+          [](fast::MetalKernel& kernel,
+             std::map<std::string, ScalarOrArray>& inputs_,
+             std::map<std::string, std::vector<int>>& output_shapes,
+             std::map<std::string, Dtype>& output_dtypes,
+             std::tuple<int, int, int> grid,
+             std::tuple<int, int, int> threadgroup,
+             std::optional<std::map<std::string, nb::handle>> template_args_,
+             bool verbose,
+             StreamOrDevice s) {
+            std::map<std::string, array> inputs;
+            for (const auto& [name, value] : inputs_) {
+              auto arr = to_array(value, std::nullopt);
+              inputs.insert({name, arr});
+            }
+            std::map<std::string, fast::TemplateArg> template_args;
+            if (template_args_) {
+              for (const auto& [name, value] : template_args_.value()) {
+                // Handle bool, int and dtype template args
+                if (nb::isinstance<bool>(value)) {
+                  bool bool_val = nb::cast<bool>(value);
+                  template_args.insert({name, bool_val});
+                } else if (nb::isinstance<int>(value)) {
+                  int int_val = nb::cast<int>(value);
+                  template_args.insert({name, int_val});
+                } else if (nb::isinstance<Dtype>(value)) {
+                  Dtype dtype = nb::cast<Dtype>(value);
+                  template_args.insert({name, dtype});
+                } else {
+                  throw std::invalid_argument(
+                      "Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
+                }
+              }
+            }
+            return kernel.run(
+                inputs,
+                output_shapes,
+                output_dtypes,
+                grid,
+                threadgroup,
+                template_args,
+                verbose,
+                s);
+          },
+          "inputs"_a,
+          "output_shapes"_a,
+          "output_dtypes"_a,
+          "grid"_a,
+          "threadgroup"_a,
+          "template"_a = nb::none(),
+          "verbose"_a = false,
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          nb::sig(
+              "def __call__(self, inputs: Mapping[str, Union[scalar, array]], output_shapes: Mapping[str, Sequence[int]], output_dtypes: Mapping[str, Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[Mapping[str, Union[bool, int, Dtype]]] = None, verbose: bool = false, *, stream: Union[None, Stream, Device] = None)"),
+          R"pbdoc(
+            Run the kernel.
+
+            Args:
+              inputs (dict[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
+                  The keys will the names of the arguments to the kernel.
+              output_shapes (dict[str, Sequence[int]]): Output shapes. A dict mapping
+                  output variable names to shapes. These will be added to the function signature.
+              output_dtypes (dict[str, Dtype]): Output dtypes. A dict mapping output variable
+                  names to dtypes. Must have the same keys as ``output_shapes``.
+              grid (tuple[int, int, int]): 3-tuple specifying the grid to launch the kernel with.
+              threadgroup (tuple[int, int, int]): 3-tuple specifying the threadgroup size to use.
+              template (dict[str, Union[bool, int, Dtype]], optional): Template arguments.
+                  These will be added as template arguments to the kernel definition.
+              verbose (bool, optional): Whether to print the full generated source code of the kernel
+                  when it is run.
+              stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+
+            Returns:
+              dict[str, array]: Dictionary of output arrays based on ``output_shapes``/``output_dtypes``.
+            )pbdoc");
 }

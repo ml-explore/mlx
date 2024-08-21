@@ -66,18 +66,30 @@ array affine_dequantize(
 
 typedef std::variant<int, bool, Dtype> TemplateArg;
 
-std::map<std::string, array> metal_kernel(
-    std::string name,
-    std::string source,
-    std::map<std::string, array> inputs,
-    std::map<std::string, std::vector<int>> output_shapes,
-    std::map<std::string, Dtype> output_dtypes,
-    std::tuple<int, int, int> grid,
-    std::tuple<int, int, int> threadgroup,
-    std::optional<std::map<std::string, TemplateArg>> template_args =
-        std::nullopt,
-    bool ensure_row_contiguous = true,
-    bool verbose = false,
-    StreamOrDevice s = {});
+class MetalKernel {
+ public:
+  MetalKernel(
+      const std::string& name,
+      const std::string& source,
+      bool ensure_row_contiguous)
+      : name_(name),
+        source_(source),
+        ensure_row_contiguous_(ensure_row_contiguous) {}
 
+  std::map<std::string, array> run(
+      std::map<std::string, array>& inputs,
+      std::map<std::string, std::vector<int>> output_shapes,
+      std::map<std::string, Dtype> output_dtypes,
+      std::tuple<int, int, int> grid,
+      std::tuple<int, int, int> threadgroup,
+      std::optional<std::map<std::string, TemplateArg>> template_args =
+          std::nullopt,
+      bool verbose = false,
+      StreamOrDevice s = {});
+
+ private:
+  std::string name_;
+  std::string source_;
+  bool ensure_row_contiguous_ = true;
+};
 } // namespace mlx::core::fast

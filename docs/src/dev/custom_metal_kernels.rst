@@ -17,9 +17,11 @@ Let's write a custom kernel that computes ``exp`` elementwise:
           out[elem] = metal::exp(tmp);
       """
 
-      outputs = mx.fast.metal_kernel(
+      kernel = mx.fast.metal_kernel(
           name="myexp",
           source=source,
+      )
+      outputs = kernel(
           inputs={"inp": a},
           template={"T": mx.float32},
           grid=(a.size, 1, 1),
@@ -71,7 +73,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 
   template [[host_name("custom_kernel_myexp_float")]] [[kernel]] decltype(custom_kernel_myexp_float<float>) custom_kernel_myexp_float<float>;
 
-You can print the generated code for a ``mx.fast.metal_kernel`` by passing ``verbose=True``.
+You can print the generated code for a ``mx.fast.metal_kernel`` by passing ``verbose=True`` when you call it.
 
 Using Shape/Strides
 -------------------
@@ -99,9 +101,11 @@ Let's convert ``myexp`` above to support arbitrarily strided arrays without rely
           out[elem] = metal::exp(tmp);
       """
 
-      outputs = mx.fast.metal_kernel(
+      kernel = mx.fast.metal_kernel(
           name="myexp_strided",
-          source=source,
+          source=source
+      )
+      outputs = kernel(
           inputs={"inp": a},
           template={"T": mx.float32},
           grid=(a.size, 1, 1),

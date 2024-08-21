@@ -1086,16 +1086,13 @@ std::string write_template(std::map<std::string, TemplateArg>& template_args) {
   return template_def.str();
 }
 
-std::map<std::string, array> metal_kernel(
-    std::string name,
-    std::string source,
-    std::map<std::string, array> inputs,
+std::map<std::string, array> MetalKernel::run(
+    std::map<std::string, array>& inputs,
     std::map<std::string, std::vector<int>> output_shapes,
     std::map<std::string, Dtype> output_dtypes,
     std::tuple<int, int, int> grid,
     std::tuple<int, int, int> threadgroup,
     std::optional<std::map<std::string, TemplateArg>> template_args,
-    bool ensure_row_contiguous,
     bool verbose,
     StreamOrDevice s_) {
   validate_output_shapes(output_shapes, output_dtypes);
@@ -1119,13 +1116,13 @@ std::map<std::string, array> metal_kernel(
     hash_key.pop_back();
   }
 
-  func_name << "custom_kernel_" << name << hash_key;
+  func_name << "custom_kernel_" << name_ << hash_key;
   std::string kernel_name = func_name.str();
 
   std::vector<CustomKernelShapeInfo> shape_infos;
   write_signature(
       func_name.str(),
-      source,
+      source_,
       inputs,
       output_shapes,
       output_dtypes,
@@ -1142,26 +1139,26 @@ std::map<std::string, array> metal_kernel(
   }
 
   if (verbose) {
-    std::cout << "Generated source code for `" << name << "`:" << std::endl
+    std::cout << "Generated source code for `" << name_ << "`:" << std::endl
               << "```" << std::endl
               << kernel_source.str() << std::endl
               << "```" << std::endl;
   }
 
   std::vector<array> in_arrs;
-  for (auto& kv : inputs) {
+  for (const auto& kv : inputs) {
     in_arrs.push_back(kv.second);
   }
 
   std::vector<std::string> out_keys;
   std::vector<std::vector<int>> out_shapes;
-  for (auto [name, shape] : output_shapes) {
+  for (const auto& [name, shape] : output_shapes) {
     out_keys.push_back(name);
     out_shapes.push_back(shape);
   }
 
   std::vector<Dtype> out_dtypes;
-  for (auto kv : output_dtypes) {
+  for (const auto& kv : output_dtypes) {
     out_dtypes.push_back(kv.second);
   }
 
@@ -1176,11 +1173,11 @@ std::map<std::string, array> metal_kernel(
           grid,
           threadgroup,
           shape_infos,
-          ensure_row_contiguous),
+          ensure_row_contiguous_),
       in_arrs);
 
   int i = 0;
-  for (auto key : out_keys) {
+  for (const auto& key : out_keys) {
     outputs.insert({key, outputs_vec[i]});
     i++;
   }
