@@ -8,7 +8,7 @@ import mlx_tests
 
 
 def rope_orig(x, dims, traditional, base, scale, offset, freqs=None):
-    N = x.shape[1] + offset
+    N = x.shape[-2] + offset
     dtype = x.dtype
     half_D = dims // 2
     positions = mx.arange(offset, N, dtype=dtype) * scale
