@@ -273,8 +273,8 @@ void all_reduce_dispatch(
   // We need multiple threadgroups so we 'll do it in 2 passes.
   else {
     int n_rows, threadgroup_2nd_pass;
-    // Less than 2**25 elements
-    if (in_size <= 16777216) {
+    // Less than 2**26 bytes
+    if (in.nbytes() <= (1 << 26)) {
       n_rows = 32 * REDUCE_N_READS;
       threadgroup_2nd_pass = 32;
     }
