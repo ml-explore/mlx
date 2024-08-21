@@ -272,8 +272,20 @@ void all_reduce_dispatch(
 
   // We need multiple threadgroups so we 'll do it in 2 passes.
   else {
+    int n_rows, threadgroup_2nd_pass;
+    // Less than 2**25 elements
+    if (in_size <= 16777216) {
+      n_rows = 32 * REDUCE_N_READS;
+      threadgroup_2nd_pass = 32;
+    }
+
+    // Really large matrix so parallelize as much as possible
+    else {
+      n_rows = 1024 * REDUCE_N_READS;
+      threadgroup_2nd_pass = 1024;
+    }
+
     // Allocate an intermediate tensor to hold results if needed
-    int n_rows = 32 * REDUCE_N_READS;
     array intermediate({n_rows}, out.dtype(), nullptr, {});
     intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
     copies.push_back(intermediate);
@@ -294,8 +306,8 @@ void all_reduce_dispatch(
     // 2nd pass
     compute_encoder->setComputePipelineState(kernel);
     size_t intermediate_size = n_rows;
-    grid_dims = MTL::Size(32, 1, 1);
-    group_dims = MTL::Size(32, 1, 1);
+    grid_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
+    group_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
     compute_encoder.set_input_array(intermediate, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 2);
