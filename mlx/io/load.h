@@ -141,7 +141,6 @@ class FileWriter : public Writer {
  private:
   int fd_;
   std::string label_;
-  ;
 };
 
 } // namespace io
