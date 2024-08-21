@@ -176,7 +176,7 @@ if __name__ == "__main__":
         include_package_data=True,
         extras_require={
             "dev": [
-                "nanobind==2.0",
+                "nanobind==2.1.0",
                 "numpy",
                 "pre-commit",
                 "setuptools>=42",

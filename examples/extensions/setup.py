@@ -13,7 +13,6 @@ if __name__ == "__main__":
         cmdclass={"build_ext": extension.CMakeBuild},
         packages=["mlx_sample_extensions"],
         package_data={"mlx_sample_extensions": ["*.so", "*.dylib", "*.metallib"]},
-        extras_require={"dev": []},
         zip_safe=False,
         python_requires=">=3.8",
     )
