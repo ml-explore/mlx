@@ -164,8 +164,8 @@ template <
     typename U,
     typename Op,
     int NDIMS = 0,
-    int BM = 32,
-    int BN_32bit = 32>
+    int BM = 8,
+    int BN = 128>
 [[kernel]] void col_reduce_looped(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
@@ -183,15 +183,12 @@ template <
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   Op op;
-  static_assert(BM == simd_size, "BM should be equal to simd_size");
   constexpr int n_simdgroups = 4;
-  constexpr int BN = (sizeof(T) < 8) ? BN_32bit : BN_32bit / 2;
-  constexpr int BN_padded = (BN + 16 / sizeof(T));
   constexpr short tgp_size = n_simdgroups * simd_size;
   constexpr short n_reads = (BM * BN) / tgp_size;
   constexpr short n_read_blocks = BN / n_reads;
 
-  threadgroup U shared_vals[BM * BN_padded];
+  threadgroup U shared_vals[BN * BM];
   U totals[n_reads];
   looped_elem_to_loc<NDIMS> loop;
   const device T* row;
@@ -200,18 +197,18 @@ template <
     totals[i] = Op::init;
   }
 
-  size_t column = BN * gid.x;
   short lid = simd_group_id * simd_size + simd_lane_id;
   short2 offset((lid % n_read_blocks) * n_reads, lid / n_read_blocks);
-  bool safe = column + offset.x + n_reads <= reduction_stride;
+  size_t column = BN * gid.x + offset.x;
+  bool safe = column + n_reads <= reduction_stride;
 
   size_t out_idx = gid.y + gsize.y * size_t(gid.z);
   size_t in_idx = elem_to_loc(out_idx, shape, strides, ndim);
-  in += in_idx + column + offset.x;
+  in += in_idx + column;
 
   size_t total = non_col_reductions * reduction_size;
   loop.next(offset.y, reduce_shape, reduce_strides);
-  for (size_t r = offset.y; r < total; r += simd_size) {
+  for (size_t r = offset.y; r < total; r += BM) {
     row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
 
     if (safe) {
@@ -221,41 +218,80 @@ template <
     } else {
       U vals[n_reads];
       for (int i = 0; i < n_reads; i++) {
-        vals[i] = (column + offset.x + i < reduction_stride)
-            ? static_cast<U>(row[i])
-            : op.init;
+        vals[i] =
+            (column + i < reduction_stride) ? static_cast<U>(row[i]) : op.init;
       }
       for (int i = 0; i < n_reads; i++) {
         totals[i] = op(vals[i], totals[i]);
       }
     }
 
-    loop.next(simd_size, reduce_shape, reduce_strides);
+    loop.next(BM, reduce_shape, reduce_strides);
   }
 
-  // Each thread holds N_READS partial results but the simdgroups are not
-  // aligned to do the reduction across the simdgroup so we write our results
-  // in the shared memory and read them back according to the simdgroup.
-  for (int i = 0; i < n_reads; i++) {
-    shared_vals[offset.y * BN_padded + offset.x + i] = totals[i];
-  }
-  threadgroup_barrier(mem_flags::mem_threadgroup);
-  for (int i = 0; i < n_reads; i++) {
-    totals[i] = op.simd_reduce(
-        shared_vals[simd_lane_id * BN_padded + simd_group_id * n_reads + i]);
-  }
+  // We can use a simd reduction to accumulate across BM so each thread writes
+  // the partial output to SM and then each simdgroup does BN / n_simdgroups
+  // accumulations.
+  if (BM == 32) {
+    constexpr int n_outputs = BN / n_simdgroups;
+    static_assert(
+        BM != 32 || n_outputs == n_reads,
+        "The tile should be selected such that n_outputs == n_reads");
+    for (int i = 0; i < n_reads; i++) {
+      shared_vals[offset.y * BN + offset.x + i] = totals[i];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    short2 out_offset(simd_group_id * n_outputs, simd_lane_id);
+    for (int i = 0; i < n_outputs; i++) {
+      totals[i] =
+          op.simd_reduce(shared_vals[out_offset.y * BN + out_offset.x + i]);
+    }
 
-  // Write the output.
-  if (simd_lane_id == 0) {
-    column += simd_group_id * n_reads;
-    out += out_idx * reduction_stride + column;
-    if (column + n_reads <= reduction_stride) {
-      for (int i = 0; i < n_reads; i++) {
-        out[i] = totals[i];
+    // Write the output.
+    if (simd_lane_id == 0) {
+      size_t out_column = BN * gid.x + out_offset.x;
+      out += out_idx * reduction_stride + out_column;
+      if (out_column + n_outputs <= reduction_stride) {
+        for (int i = 0; i < n_outputs; i++) {
+          out[i] = totals[i];
+        }
+      } else {
+        for (int i = 0; out_column + i < reduction_stride; i++) {
+          out[i] = totals[i];
+        }
       }
-    } else {
-      for (int i = 0; column + i < reduction_stride; i++) {
-        out[i] = totals[i];
+    }
+  }
+
+  // Each thread holds n_reads partial results. We write them all out to shared
+  // memory and threads with offset.y == 0 aggregate the columns and write the
+  // outputs.
+  else {
+    short x_block = offset.x / n_reads;
+    for (int i = 0; i < n_reads; i++) {
+      shared_vals[x_block * BM * n_reads + i * BM + offset.y] = totals[i];
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+    if (offset.y == 0) {
+      for (int i = 0; i < n_reads; i++) {
+        for (int j = 1; j < BM; j++) {
+          totals[i] =
+              op(shared_vals[x_block * BM * n_reads + i * BM + j], totals[i]);
+        }
+      }
+    }
+
+    // Write the output.
+    if (offset.y == 0) {
+      out += out_idx * reduction_stride + column;
+      if (safe) {
+        for (int i = 0; i < n_reads; i++) {
+          out[i] = totals[i];
+        }
+      } else {
+        for (int i = 0; column + i < reduction_stride; i++) {
+          out[i] = totals[i];
+        }
       }
     }
   }

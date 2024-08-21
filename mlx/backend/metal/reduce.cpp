@@ -527,22 +527,24 @@ void strided_reduce_looped(
   args.reduce_strides.push_back(args.reduction_stride);
   args.reduce_ndim++;
 
-  // Set the kernel
-  int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
-  std::ostringstream kname;
-  kname << "colLooped" << n << "_reduce_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
-  compute_encoder->setComputePipelineState(kernel);
-
   // Figure out the grid dims
   auto out_grid_size = output_grid_for_col_reduce(out, args);
-  const int BN = (in.itemsize() < 8) ? 32 : 16;
+  int BN = (args.reduction_stride <= 256) ? 32 : 128;
+  int BM = 1024 / BN;
   int threadgroup_size = 4 * 32;
   MTL::Size grid_dims(
       threadgroup_size * ((args.reduction_stride + BN - 1) / BN),
       out_grid_size.width,
       out_grid_size.height);
   MTL::Size group_dims(threadgroup_size, 1, 1);
+
+  // Set the kernel
+  int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
+  std::ostringstream kname;
+  kname << "colLooped" << n << "_" << BM << "_" << BN << "_reduce_" << op_name
+        << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  compute_encoder->setComputePipelineState(kernel);
 
   // Launch
   compute_encoder.set_input_array(in, 0);

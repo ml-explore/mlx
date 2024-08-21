@@ -160,24 +160,28 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
       uint3 tid [[thread_position_in_grid]],                      \
       uint3 tsize [[threads_per_grid]]);
 
-#define instantiate_col_reduce_looped(name, itype, otype, op, dim) \
-  template  [[host_name("colLooped" #dim "_reduce_" #name)]]       \
-  [[kernel]] void col_reduce_looped<itype, otype, op, dim>(        \
-      const device itype* in [[buffer(0)]],                        \
-      device otype* out [[buffer(1)]],                             \
-      const constant size_t& reduction_size [[buffer(2)]],         \
-      const constant size_t& reduction_stride [[buffer(3)]],       \
-      const constant int* shape [[buffer(4)]],                     \
-      const constant size_t* strides [[buffer(5)]],                \
-      const constant int& ndim [[buffer(6)]],                      \
-      const constant int* reduce_shape [[buffer(7)]],              \
-      const constant size_t* reduce_strides [[buffer(8)]],         \
-      const constant int& reduce_ndim [[buffer(9)]],               \
-      const constant size_t& non_col_reductions [[buffer(10)]],    \
-      uint3 gid [[threadgroup_position_in_grid]],                  \
-      uint3 gsize [[threadgroups_per_grid]],                       \
-      uint simd_lane_id [[thread_index_in_simdgroup]],             \
+#define instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, bm, bn) \
+  template  [[host_name("colLooped" #dim "_" #bm "_" #bn "_reduce_" #name)]]    \
+  [[kernel]] void col_reduce_looped<itype, otype, op, dim, bm, bn>(             \
+      const device itype* in [[buffer(0)]],                                     \
+      device otype* out [[buffer(1)]],                                          \
+      const constant size_t& reduction_size [[buffer(2)]],                      \
+      const constant size_t& reduction_stride [[buffer(3)]],                    \
+      const constant int* shape [[buffer(4)]],                                  \
+      const constant size_t* strides [[buffer(5)]],                             \
+      const constant int& ndim [[buffer(6)]],                                   \
+      const constant int* reduce_shape [[buffer(7)]],                           \
+      const constant size_t* reduce_strides [[buffer(8)]],                      \
+      const constant int& reduce_ndim [[buffer(9)]],                            \
+      const constant size_t& non_col_reductions [[buffer(10)]],                 \
+      uint3 gid [[threadgroup_position_in_grid]],                               \
+      uint3 gsize [[threadgroups_per_grid]],                                    \
+      uint simd_lane_id [[thread_index_in_simdgroup]],                          \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
+
+#define instantiate_col_reduce_looped(name, itype, otype, op, dim) \
+  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 8, 128) \
+  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32)
 
 #define instantiate_col_reduce_general(name, itype, otype, op) \
   instantiate_col_reduce_small(name, itype, otype, op, 0)      \
