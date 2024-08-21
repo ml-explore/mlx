@@ -19,7 +19,8 @@ template <
 METAL_FUNC void per_thread_row_reduce(
     thread U totals[N_WRITES],
     const device T* inputs[N_WRITES],
-    const constant int& reduction_size,
+    int blocks,
+    int extra,
     uint lsize_x,
     uint lid_x) {
   Op op;
@@ -30,15 +31,10 @@ METAL_FUNC void per_thread_row_reduce(
   }
 
   // Loop over the reduction size within thread group
-  int r = 0;
-  for (; r < ceildiv(reduction_size, N_READS * lsize_x) - 1; r++) {
+  for (int i = 0; i < blocks; i++) {
     for (int j = 0; j < N_WRITES; j++) {
-      T vals[N_READS];
       for (int i = 0; i < N_READS; i++) {
-        vals[i] = inputs[j][i];
-      }
-      for (int i = 0; i < N_READS; i++) {
-        totals[j] = op(static_cast<U>(vals[i]), totals[j]);
+        totals[j] = op(static_cast<U>(inputs[j][i]), totals[j]);
       }
 
       inputs[j] += lsize_x * N_READS;
@@ -46,19 +42,17 @@ METAL_FUNC void per_thread_row_reduce(
   }
 
   // Separate case for the last set as we close the reduction size
-  int reduction_index = (lid_x + lsize_x * r) * N_READS;
-  if (reduction_index < reduction_size) {
-    int max_reads = reduction_size - reduction_index;
-
+  int index = lid_x * N_READS;
+  if (index + N_READS <= extra) {
     for (int j = 0; j < N_WRITES; j++) {
-      T vals[N_READS];
       for (int i = 0; i < N_READS; i++) {
-        int idx = min(i, max_reads - 1);
-        vals[i] = inputs[j][idx];
+        totals[j] = op(static_cast<U>(inputs[j][i]), totals[j]);
       }
-      for (int i = 0; i < N_READS; i++) {
-        T val = i < max_reads ? vals[i] : Op::init;
-        totals[j] = op(static_cast<U>(val), totals[j]);
+    }
+  } else {
+    for (int j = 0; j < N_WRITES; j++) {
+      for (int i = 0; index + i < extra; i++) {
+        totals[j] = op(static_cast<U>(inputs[j][i]), totals[j]);
       }
     }
   }
@@ -76,7 +70,9 @@ template <
 METAL_FUNC void per_thread_row_reduce(
     thread U totals[N_WRITES],
     const device T* in,
-    const constant int& reduction_size,
+    const constant size_t& reduction_size,
+    int blocks,
+    int extra,
     uint lsize_x,
     uint lid_x) {
   // Set up the input pointers
@@ -87,7 +83,7 @@ METAL_FUNC void per_thread_row_reduce(
   }
 
   per_thread_row_reduce<T, U, Op, N_READS, N_WRITES>(
-      totals, inputs, reduction_size, lsize_x, lid_x);
+      totals, inputs, blocks, extra, lsize_x, lid_x);
 }
 
 /**
@@ -103,7 +99,8 @@ METAL_FUNC void per_thread_row_reduce(
     thread U totals[N_WRITES],
     const device T* in,
     const size_t row_idx,
-    const constant int& reduction_size,
+    int blocks,
+    int extra,
     const constant int* shape,
     const constant size_t* strides,
     const constant int& ndim,
@@ -117,7 +114,7 @@ METAL_FUNC void per_thread_row_reduce(
   }
 
   per_thread_row_reduce<T, U, Op, N_READS, N_WRITES>(
-      totals, inputs, reduction_size, lsize_x, lid_x);
+      totals, inputs, blocks, extra, lsize_x, lid_x);
 }
 
 /**
@@ -201,7 +198,7 @@ template <
 [[kernel]] void row_reduce_small(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
-    const constant int& row_size [[buffer(2)]],
+    const constant size_t& row_size [[buffer(2)]],
     const constant size_t& non_row_reductions [[buffer(3)]],
     const constant int* shape [[buffer(4)]],
     const constant size_t* strides [[buffer(5)]],
@@ -267,7 +264,7 @@ template <
 [[kernel]] void row_reduce_simple(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
-    const constant int& reduction_size [[buffer(2)]],
+    const constant size_t& reduction_size [[buffer(2)]],
     const constant size_t& out_size [[buffer(3)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
@@ -288,8 +285,10 @@ template <
   out += out_idx;
 
   // Each thread reduces across the row
+  int blocks = reduction_size / (lsize.x * N_READS);
+  int extra = reduction_size - blocks * (lsize.x * N_READS);
   per_thread_row_reduce<T, U, Op, N_READS, N_WRITES>(
-      totals, in, reduction_size, lsize.x, lid.x);
+      totals, in, reduction_size, blocks, extra, lsize.x, lid.x);
 
   // Reduce across the threadgroup
   threadgroup_reduce<T, U, Op, N_READS, N_WRITES>(
@@ -312,7 +311,7 @@ template <
 [[kernel]] void row_reduce_looped(
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
-    const constant int& row_size [[buffer(2)]],
+    const constant size_t& row_size [[buffer(2)]],
     const constant size_t& non_row_reductions [[buffer(3)]],
     const constant int* shape [[buffer(4)]],
     const constant size_t* strides [[buffer(5)]],
@@ -339,6 +338,8 @@ template <
 
   looped_elem_to_loc<NDIMS> loop;
   const device T* row;
+  int blocks = row_size / (lsize.x * N_READS);
+  int extra = row_size - blocks * (lsize.x * N_READS);
 
   for (size_t i = 0; i < non_row_reductions; i++) {
     row = in + loop.location(i, reduce_shape, reduce_strides, reduce_ndim);
@@ -346,7 +347,7 @@ template <
     // Each thread reduces across the row
     U row_total;
     per_thread_row_reduce<T, U, Op, N_READS, 1>(
-        &row_total, &row, row_size, lsize.x, lid.x);
+        &row_total, &row, blocks, extra, lsize.x, lid.x);
 
     // Aggregate across rows
     total = op(total, row_total);

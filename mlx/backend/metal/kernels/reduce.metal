@@ -98,40 +98,24 @@ instantiate_init_reduce(andbool_, bool, And<bool>)
 instantiate_init_reduce(orbool_, bool, Or<bool>)
 
 #define instantiate_all_reduce(name, itype, otype, op)        \
-  template [[host_name("all_reduce_" #name)]] [[kernel]] void \
-  all_reduce<itype, otype, op>(                               \
+  template [[host_name("all_reduce_" #name)]]                 \
+  [[kernel]] void all_reduce<itype, otype, op>(               \
       const device itype* in [[buffer(0)]],                   \
-      device mlx_atomic<otype>* out [[buffer(1)]],            \
-      const device size_t& in_size [[buffer(2)]],             \
-      uint gid [[thread_position_in_grid]],                   \
-      uint lid [[thread_position_in_threadgroup]],            \
-      uint grid_size [[threads_per_grid]],                    \
+      device otype* out [[buffer(1)]],                        \
+      const constant size_t& in_size [[buffer(2)]],           \
+      const constant size_t& row_size [[buffer(3)]],          \
+      uint3 gid [[threadgroup_position_in_grid]],             \
+      uint3 lid [[thread_position_in_threadgroup]],           \
+      uint3 lsize [[threads_per_threadgroup]],                \
       uint simd_per_group [[simdgroups_per_threadgroup]],     \
       uint simd_lane_id [[thread_index_in_simdgroup]],        \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
-#define instantiate_all_reduce_no_atomics(name, itype, otype, op)        \
-  template [[host_name("allNoAtomics_reduce_" #name)]] [[kernel]] void   \
-  all_reduce_no_atomics<itype, otype, op>(                               \
-      const device itype* in [[buffer(0)]],                              \
-      device otype* out [[buffer(1)]],                                   \
-      const device size_t& in_size [[buffer(2)]],                        \
-      uint gid [[thread_position_in_grid]],                              \
-      uint lid [[thread_position_in_threadgroup]],                       \
-      uint grid_size [[threads_per_grid]],                               \
-      uint simd_per_group [[simdgroups_per_threadgroup]],                \
-      uint simd_lane_id [[thread_index_in_simdgroup]],                   \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]],             \
-      uint thread_group_id [[threadgroup_position_in_grid]]);
-
 #define instantiate_same_all_reduce_helper(name, tname, type, op) \
   instantiate_all_reduce(name##tname, type, type, op<type>)
 
-#define instantiate_same_all_reduce_na_helper(name, tname, type, op) \
-  instantiate_all_reduce_no_atomics(name##tname, type, type, op<type>)
-
 instantiate_reduce_ops(instantiate_same_all_reduce_helper, instantiate_reduce_helper_types)
-instantiate_reduce_ops(instantiate_same_all_reduce_na_helper, instantiate_reduce_helper_64b)
+instantiate_reduce_ops(instantiate_same_all_reduce_helper, instantiate_reduce_helper_64b)
 
 instantiate_reduce_from_types(instantiate_all_reduce, and, bool, And<bool>)
 instantiate_reduce_from_types(instantiate_all_reduce, or, bool, Or<bool>)
@@ -210,7 +194,7 @@ instantiate_reduce_from_types(instantiate_col_reduce_general, or, bool, Or<bool>
   row_reduce_small<itype, otype, op, dim>(                                 \
       const device itype* in [[buffer(0)]],                                \
       device otype* out [[buffer(1)]],                                     \
-      const constant int& row_size [[buffer(2)]],                          \
+      const constant size_t& row_size [[buffer(2)]],                       \
       const constant size_t& non_row_reductions [[buffer(3)]],             \
       const constant int* shape [[buffer(4)]],                             \
       const constant size_t* strides [[buffer(5)]],                        \
@@ -229,7 +213,7 @@ instantiate_reduce_from_types(instantiate_col_reduce_general, or, bool, Or<bool>
       row_reduce_looped<itype, otype, op, dim>(                         \
           const device itype* in [[buffer(0)]],                         \
           device otype* out [[buffer(1)]],                              \
-          const constant int& row_size [[buffer(2)]],                   \
+          const constant size_t& row_size [[buffer(2)]],                \
           const constant size_t& non_row_reductions [[buffer(3)]],      \
           const constant int* shape [[buffer(4)]],                      \
           const constant size_t* strides [[buffer(5)]],                 \
@@ -261,7 +245,7 @@ instantiate_reduce_from_types(instantiate_col_reduce_general, or, bool, Or<bool>
       row_reduce_simple<itype, otype, op>(                         \
           const device itype* in [[buffer(0)]],                    \
           device otype* out [[buffer(1)]],                         \
-          const constant int& reduction_size [[buffer(2)]],        \
+          const constant size_t& reduction_size [[buffer(2)]],     \
           const constant size_t& out_size [[buffer(3)]],           \
           uint3 gid [[threadgroup_position_in_grid]],              \
           uint3 gsize [[threadgroups_per_grid]],                   \

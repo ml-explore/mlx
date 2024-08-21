@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <iostream>
 #include <sstream>
 
 #include "mlx/backend/metal/copy.h"
@@ -32,7 +33,7 @@ struct RowReduceArgs {
   size_t non_row_reductions;
 
   // The size of the row.
-  int row_size;
+  size_t row_size;
 
   RowReduceArgs(
       const array& in,
@@ -67,7 +68,7 @@ struct RowReduceArgs {
       strides.push_back(0);
     }
 
-    compute_encoder->setBytes(&row_size, sizeof(int), 2);
+    compute_encoder->setBytes(&row_size, sizeof(size_t), 2);
     compute_encoder->setBytes(&non_row_reductions, sizeof(size_t), 3);
     compute_encoder->setBytes(shape.data(), shape.size() * sizeof(int), 4);
     compute_encoder->setBytes(
@@ -240,93 +241,65 @@ void init_reduce(
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
-// All Reduce
 void all_reduce_dispatch(
     const array& in,
     array& out,
     const std::string& op_name,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s) {
-  Dtype out_dtype = out.dtype();
-  bool is_out_64b_int = is_64b_int(out_dtype);
-  std::string kernel_name = "all";
-  if (is_out_64b_int) {
-    kernel_name += "NoAtomics";
-  }
-  kernel_name += "_reduce_" + op_name + type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kernel_name, op_name, in, out);
-
+    const Stream& s,
+    std::vector<array>& copies) {
+  // Set the kernel
+  std::ostringstream kname;
+  kname << "all_reduce_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
 
-  // We make sure each thread has enough to do by making it read in
-  // at least n_reads inputs
-  int n_reads = REDUCE_N_READS;
   size_t in_size = in.size();
 
-  // mod_in_size gives us the groups of n_reads needed to go over the entire
-  // input
-  uint mod_in_size = (in_size + n_reads - 1) / n_reads;
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-  thread_group_size =
-      mod_in_size > thread_group_size ? thread_group_size : mod_in_size;
-  uint simd_size = kernel->threadExecutionWidth();
-  thread_group_size =
-      ((thread_group_size + simd_size - 1) / simd_size) * simd_size;
+  // Small array so dispatch a single threadgroup
+  if (in_size <= REDUCE_N_READS * 1024) {
+    int threadgroup_size = (in_size + REDUCE_N_READS - 1) / REDUCE_N_READS;
+    threadgroup_size = ((threadgroup_size + 31) / 32) * 32;
+    MTL::Size grid_dims(threadgroup_size, 1, 1);
 
-  // If the number of thread groups needed exceeds 1024, we reuse threads groups
-  uint n_thread_groups = safe_div(mod_in_size, thread_group_size);
-  n_thread_groups = std::min(n_thread_groups, 1024u);
-  uint nthreads = n_thread_groups * thread_group_size;
-
-  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
-
-  // Encode buffers and dispatch
-  if (is_out_64b_int == false || n_thread_groups == 1) {
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
-    compute_encoder.dispatchThreads(grid_dims, group_dims);
+    compute_encoder->setBytes(&in_size, sizeof(size_t), 3);
+    compute_encoder.dispatchThreads(grid_dims, grid_dims);
+  }
 
-  } else {
-    // Allocate intermediate array to store partial reduction results
-    size_t intermediate_size = n_thread_groups;
-    array intermediate =
-        array({static_cast<int>(intermediate_size)}, out_dtype, nullptr, {});
+  // We need multiple threadgroups so we 'll do it in 2 passes.
+  else {
+    // Allocate an intermediate tensor to hold results if needed
+    int n_rows = 32 * REDUCE_N_READS;
+    array intermediate({n_rows}, out.dtype(), nullptr, {});
     intermediate.set_data(allocator::malloc_or_wait(intermediate.nbytes()));
-    std::vector<array> intermediates = {intermediate};
+    copies.push_back(intermediate);
 
-    // First dispatch
+    // 1st pass
+    size_t row_size = (in_size + n_rows - 1) / n_rows;
+    int threadgroup_size =
+        std::min((row_size + REDUCE_N_READS - 1) / REDUCE_N_READS, 1024ul);
+    threadgroup_size = ((threadgroup_size + 31) / 32) * 32;
+    MTL::Size grid_dims(threadgroup_size, n_rows, 1);
+    MTL::Size group_dims(threadgroup_size, 1, 1);
     compute_encoder.set_input_array(in, 0);
     compute_encoder.set_output_array(intermediate, 1);
     compute_encoder->setBytes(&in_size, sizeof(size_t), 2);
+    compute_encoder->setBytes(&row_size, sizeof(size_t), 3);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
 
-    // Second pass to reduce intermediate reduction results written to DRAM
+    // 2nd pass
+    size_t intermediate_size = n_rows;
+    grid_dims = MTL::Size(32, 1, 1);
+    group_dims = MTL::Size(32, 1, 1);
     compute_encoder.set_input_array(intermediate, 0);
     compute_encoder.set_output_array(out, 1);
     compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 2);
-
-    mod_in_size = (intermediate_size + n_reads - 1) / n_reads;
-
-    thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-    thread_group_size =
-        mod_in_size > thread_group_size ? thread_group_size : mod_in_size;
-    thread_group_size =
-        ((thread_group_size + simd_size - 1) / simd_size) * simd_size;
-
-    // If the number of thread groups needed exceeds 1024, we reuse threads
-    // groups
-    nthreads = thread_group_size;
-    group_dims = MTL::Size(thread_group_size, 1, 1);
-    grid_dims = MTL::Size(nthreads, 1, 1);
+    compute_encoder->setBytes(&intermediate_size, sizeof(size_t), 3);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
-
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [intermediates](MTL::CommandBuffer*) mutable {
-          intermediates.clear();
-        });
   }
 }
 
@@ -334,20 +307,16 @@ void row_reduce_small(
     const array& in,
     array& out,
     const std::string& op_name,
-    const ReductionPlan& plan,
-    const std::vector<int>& axes,
+    RowReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
   // Set the kernel
   std::ostringstream kname;
-  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
+  int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
   kname << "rowSmall" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
-
-  // Prepare the arguments for the kernel
-  RowReduceArgs args(in, plan, axes);
 
   // Figure out the grid dims
   MTL::Size grid_dims;
@@ -374,8 +343,7 @@ void row_reduce_simple(
     const array& in,
     array& out,
     const std::string& op_name,
-    const ReductionPlan& plan,
-    const std::vector<int>& axes,
+    RowReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
@@ -386,12 +354,15 @@ void row_reduce_simple(
   compute_encoder->setComputePipelineState(kernel);
 
   // Figure out the grid dims
-  int row_size = plan.shape.back();
+  size_t row_size = args.row_size;
   size_t out_size = out.size();
   auto out_grid_size = get_2d_grid_dims(out.shape(), out.strides());
   out_grid_size.width =
       (out_grid_size.width + REDUCE_N_WRITES - 1) / REDUCE_N_WRITES;
   int threadgroup_size = threadgroup_size_from_row_size(row_size);
+  if (in.itemsize() == 8) {
+    threadgroup_size = std::min(threadgroup_size, 512);
+  }
   MTL::Size grid_dims(
       threadgroup_size, out_grid_size.width, out_grid_size.height);
   MTL::Size group_dims(threadgroup_size, 1, 1);
@@ -399,7 +370,7 @@ void row_reduce_simple(
   // Launch
   compute_encoder.set_input_array(in, 0);
   compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&row_size, sizeof(int), 2);
+  compute_encoder->setBytes(&row_size, sizeof(size_t), 2);
   compute_encoder->setBytes(&out_size, sizeof(size_t), 3);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
@@ -408,20 +379,16 @@ void row_reduce_looped(
     const array& in,
     array& out,
     const std::string& op_name,
-    const ReductionPlan& plan,
-    const std::vector<int>& axes,
+    RowReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
   // Set the kernel
   std::ostringstream kname;
-  int n = (plan.shape.size() <= 5) ? std::max(1ul, plan.shape.size() - 1) : 0;
+  int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
   kname << "rowLooped" << n << "_reduce_" << op_name << type_to_name(in);
   auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
-
-  // Prepare the arguments for the kernel
-  RowReduceArgs args(in, plan, axes);
 
   // Figure out the grid
   auto out_grid_size = get_2d_grid_dims(out.shape(), out.strides());
@@ -446,34 +413,31 @@ void row_reduce_general_dispatch(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
+  // Prepare the arguments for the kernel
+  RowReduceArgs args(in, plan, axes);
+
   // Case 1: The row is small
-  if (plan.shape.back() <= 64) {
-    return row_reduce_small(
-        in, out, op_name, plan, axes, compute_encoder, d, s);
+  if (args.row_size <= 64) {
+    return row_reduce_small(in, out, op_name, args, compute_encoder, d, s);
   }
 
   // Case 2: Contiguous reduce without non-row reductions
-  if (plan.type == ContiguousReduce && plan.shape.size() == 1) {
-    return row_reduce_simple(
-        in, out, op_name, plan, axes, compute_encoder, d, s);
+  if (plan.type == ContiguousReduce && args.reduce_ndim == 0) {
+    return row_reduce_simple(in, out, op_name, args, compute_encoder, d, s);
   }
 
   // Case 3: General row reduce including non-row reductions
-  return row_reduce_looped(in, out, op_name, plan, axes, compute_encoder, d, s);
+  return row_reduce_looped(in, out, op_name, args, compute_encoder, d, s);
 }
 
 void strided_reduce_small(
     const array& in,
     array& out,
     const std::string& op_name,
-    const ReductionPlan& plan,
-    const std::vector<int>& axes,
+    ColReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  // Prepare the arguments for the kernel
-  ColReduceArgs args(in, plan, axes);
-
   // Figure out the grid dims
   MTL::Size grid_dims, group_dims;
 
@@ -516,13 +480,11 @@ void strided_reduce_looped(
     const array& in,
     array& out,
     const std::string& op_name,
-    const ReductionPlan& plan,
-    const std::vector<int>& axes,
+    ColReduceArgs& args,
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
   // Prepare the arguments for the kernel
-  ColReduceArgs args(in, plan, axes);
   args.reduce_shape.push_back(args.reduction_size);
   args.reduce_strides.push_back(args.reduction_stride);
   args.reduce_ndim++;
@@ -562,13 +524,14 @@ void strided_reduce_general_dispatch(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  if (plan.strides.back() < 32) {
-    return strided_reduce_small(
-        in, out, op_name, plan, axes, compute_encoder, d, s);
+  // Prepare the arguments for the kernel
+  ColReduceArgs args(in, plan, axes);
+
+  if (args.reduction_stride < 32) {
+    return strided_reduce_small(in, out, op_name, args, compute_encoder, d, s);
   }
 
-  return strided_reduce_looped(
-      in, out, op_name, plan, axes, compute_encoder, d, s);
+  return strided_reduce_looped(in, out, op_name, args, compute_encoder, d, s);
 }
 
 void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -633,8 +596,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     // Reducing over everything and the data is all there no broadcasting or
     // slicing etc.
     if (plan.type == ContiguousAllReduce) {
-      init_reduce(out, op_name, compute_encoder, d, s);
-      all_reduce_dispatch(in, out, op_name, compute_encoder, d, s);
+      all_reduce_dispatch(in, out, op_name, compute_encoder, d, s, copies);
     }
 
     // At least the last dimension is row contiguous and we are reducing over
@@ -660,7 +622,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   }
 
-  // Nothing to reduce just set initialize the output
+  // Nothing to reduce just initialize the output
   else {
     init_reduce(out, op_name, compute_encoder, d, s);
   }
