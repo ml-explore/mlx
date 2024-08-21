@@ -3,7 +3,6 @@
 #include <iostream>
 #include <numeric>
 #include <regex>
-#include <string>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/fast.h"

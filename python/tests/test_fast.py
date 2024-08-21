@@ -552,12 +552,14 @@ class TestFast(mlx_tests.MLXTestCase):
     def test_custom_kernel_basic(self):
         mx.random.seed(7)
         a = mx.random.normal(shape=(3, 6))
-        out = mx.fast.metal_kernel(
+        kernel = mx.fast.metal_kernel(
             name="basic",
             source="""
                 uint elem = thread_position_in_grid.x;
                 out1[elem] = a[elem];
             """,
+        )
+        out = kernel(
             inputs={"a": a},
             grid=(4, 1, 1),
             threadgroup=(2, 1, 1),
@@ -573,7 +575,7 @@ class TestFast(mlx_tests.MLXTestCase):
         a = mx.random.normal(shape=(3, 6))
         c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
 
-        out = mx.fast.metal_kernel(
+        kernel = mx.fast.metal_kernel(
             name="arg_test",
             source="""
                 uint elem = thread_position_in_grid.x;
@@ -585,9 +587,11 @@ class TestFast(mlx_tests.MLXTestCase):
                 }
                 out2[elem] = a[1] + b[2] + c[1] - d;
             """,
+        )
+        out = kernel(
             inputs={
                 "a": a,
-                "b": [3, 4, 5],
+                "b": mx.array([3, 4, 5]),
                 "c": c,
                 "d": 7.3,
             },
@@ -626,16 +630,18 @@ class TestFast(mlx_tests.MLXTestCase):
         a = mx.tile(a[::2], [4, 1])
 
         for contig in [True, False]:
-            outputs = mx.fast.metal_kernel(
+            kernel = mx.fast.metal_kernel(
                 name="myexp" + str(contig),
                 source=source_contig if contig else source,
+                ensure_row_contiguous=contig,
+            )
+            outputs = kernel(
                 inputs={"inp": a},
                 template={"T": mx.float32},
                 grid=(a.size, 1, 1),
                 threadgroup=(256, 1, 1),
                 output_shapes={"out": a.shape},
                 output_dtypes={"out": a.dtype},
-                ensure_row_contiguous=contig,
                 stream=mx.gpu,
             )
             self.assertTrue(mx.allclose(mx.exp(a), outputs["out"]))
