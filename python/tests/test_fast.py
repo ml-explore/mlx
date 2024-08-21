@@ -553,7 +553,7 @@ class TestFast(mlx_tests.MLXTestCase):
         mx.random.seed(7)
         a = mx.random.normal(shape=(3, 6))
         out = mx.fast.metal_kernel(
-            name="arg_test",
+            name="basic",
             source="""
                 uint elem = thread_position_in_grid.x;
                 out1[elem] = a[elem];
@@ -627,7 +627,7 @@ class TestFast(mlx_tests.MLXTestCase):
 
         for contig in [True, False]:
             outputs = mx.fast.metal_kernel(
-                name="myexp",
+                name="myexp" + str(contig),
                 source=source_contig if contig else source,
                 inputs={"inp": a},
                 template={"T": mx.float32},

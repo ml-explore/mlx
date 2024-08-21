@@ -47,7 +47,7 @@ The full function signature will be generated using:
     so we add ``device float16_t* out``.
 * Template parameters passed using ``template``
     In the above, ``template={"T": mx.float32}`` adds a template of ``template <typename T>`` to the function
-    and instantiates the template with ``myexp_float<float>``.
+    and instantiates the template with ``custom_kernel_myexp_float<float>``.
     Template parameters can be ``mx.core.Dtype``, ``int`` or ``bool``.
 * Metal attributes used in ``source`` such as ``[[thread_position_in_grid]]``
     These will be added as function arguments.
@@ -58,7 +58,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 .. code-block:: cpp
 
   template <typename T>
-  [[kernel]] void myexp_float(
+  [[kernel]] void custom_kernel_myexp_float(
     const device float16_t* inp [[buffer(0)]],
     device float16_t* out [[buffer(1)]],
     uint3 thread_position_in_grid [[thread_position_in_grid]]) {
@@ -69,7 +69,7 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 
   }
 
-  template [[host_name("myexp_float")]] [[kernel]] decltype(myexp_float<float>) myexp_float<float>;
+  template [[host_name("custom_kernel_myexp_float")]] [[kernel]] decltype(custom_kernel_myexp_float<float>) custom_kernel_myexp_float<float>;
 
 You can print the generated code for a ``mx.fast.metal_kernel`` by passing ``verbose=True``.
 

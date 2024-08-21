@@ -1119,7 +1119,7 @@ std::map<std::string, array> metal_kernel(
     hash_key.pop_back();
   }
 
-  func_name << name << hash_key;
+  func_name << "custom_kernel_" << name << hash_key;
   std::string kernel_name = func_name.str();
 
   std::vector<CustomKernelShapeInfo> shape_infos;
