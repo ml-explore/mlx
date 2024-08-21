@@ -340,7 +340,7 @@ array rope(
   if (inputs.size() == 2 &&
       (inputs[1].ndim() != 1 || inputs[1].shape(0) != dims / 2)) {
     std::ostringstream msg;
-    msg << "[rope] freqs must be one dimensional with size " << dims
+    msg << "[rope] freqs must be one dimensional with size " << dims / 2
         << " but got shape " << inputs[1].shape() << ".";
     throw std::invalid_argument(msg.str());
   }

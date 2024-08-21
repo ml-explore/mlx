@@ -86,7 +86,7 @@ void RoPE::eval_gpu(
   MTL::Size group_dims;
   MTL::Size grid_dims;
   if (single) {
-    compute_encoder->setBytes(&out_strides[1], sizeof(size_t), 4);
+    compute_encoder->setBytes(out_strides, sizeof(size_t), 4);
     uint32_t dim0 = dims_ / 2;
     group_dims = get_block_dims(dim0, n_batch, 1);
     grid_dims = MTL::Size(dim0, n_batch, 1);
