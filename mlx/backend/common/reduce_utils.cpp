@@ -19,7 +19,7 @@ std::pair<std::vector<int>, std::vector<size_t>> shapes_without_reduction_axes(
   return std::make_pair(shape, strides);
 }
 
-ReductionPlan get_reduction_plan(const array& x, const std::vector<int> axes) {
+ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes) {
   // The data is all there and we are reducing over everything
   if (x.size() == x.data_size() && axes.size() == x.ndim() &&
       x.flags().contiguous) {
@@ -35,9 +35,17 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int> axes) {
       if (axes[i] - 1 == axes[i - 1]) {
         shape.back() *= x.shape(axes[i]);
         strides.back() = x.strides()[axes[i]];
-      } else if (x.shape(axes[i]) > 1) {
+      } else {
         shape.push_back(x.shape(axes[i]));
         strides.push_back(x.strides()[axes[i]]);
+      }
+    }
+
+    // Remove singleton axes from the plan
+    for (int i = shape.size() - 1; i >= 0; i--) {
+      if (shape[i] == 1) {
+        shape.erase(shape.begin() + i);
+        strides.erase(strides.begin() + i);
       }
     }
 
@@ -102,16 +110,33 @@ ReductionPlan get_reduction_plan(const array& x, const std::vector<int> axes) {
   // strides.back() are contiguous.
   if (strides.back() > 1) {
     int size = 1;
+    bool have_expand = false;
     for (int i = x.ndim() - 1; i >= 0; i--) {
       if (axes.back() == i) {
         continue;
       }
-      if (x.strides()[i] != size) {
+
+      size_t stride_i = x.strides()[i];
+      int shape_i = x.shape(i);
+      if (stride_i == 0) {
+        if (shape_i == 1) {
+          continue;
+        }
+
+        have_expand = true;
         break;
       }
-      size *= x.shape(i);
+
+      if (stride_i != size && shape_i != 1) {
+        break;
+      }
+      size *= shape_i;
     }
-    if (size >= strides.back()) {
+    // In the case of an expanded dimension we are being conservative and
+    // require the smallest reduction stride to be smaller than the maximum row
+    // contiguous size. The reason is that we can't easily know if the reduced
+    // axis is before or after an expanded dimension.
+    if (size > strides.back() || (size == strides.back() && !have_expand)) {
       return ReductionPlan(GeneralStridedReduce, shape, strides);
     }
   }

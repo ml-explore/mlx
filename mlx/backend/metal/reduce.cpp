@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <iostream>
 #include <sstream>
 
 #include "mlx/backend/metal/copy.h"
@@ -127,9 +126,14 @@ struct ColReduceArgs {
       non_col_reductions *= s;
     }
 
+    // We 'll use a stride_back variable because strides.back() could be 0 but
+    // yet we may have removed the appropriate amount of elements. It is safe
+    // to compute the stride by multiplying shapes (while < reduction_stride)
+    // because it is a contiguous section.
+    size_t stride_back = 1;
     std::tie(shape, strides) = shapes_without_reduction_axes(in, axes);
-    while (!shape.empty() && strides.back() < reduction_stride &&
-           strides.back() > 0) {
+    while (!shape.empty() && stride_back < reduction_stride) {
+      stride_back *= shape.back();
       shape.pop_back();
       strides.pop_back();
     }

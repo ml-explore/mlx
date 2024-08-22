@@ -49,7 +49,7 @@ struct ReductionPlan {
   ReductionPlan(ReductionOpType type_) : type(type_) {}
 };
 
-ReductionPlan get_reduction_plan(const array& x, const std::vector<int> axes);
+ReductionPlan get_reduction_plan(const array& x, const std::vector<int>& axes);
 
 // Helper for the ndimensional strided loop
 // Should this be in utils?
