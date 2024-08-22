@@ -1085,7 +1085,7 @@ std::string write_template(std::map<std::string, TemplateArg>& template_args) {
   return template_def.str();
 }
 
-std::map<std::string, array> MetalKernel::run(
+std::map<std::string, array> MetalKernel::operator()(
     std::map<std::string, array>& inputs,
     std::map<std::string, std::vector<int>> output_shapes,
     std::map<std::string, Dtype> output_dtypes,

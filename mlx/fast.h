@@ -76,7 +76,7 @@ class MetalKernel {
         source_(source),
         ensure_row_contiguous_(ensure_row_contiguous) {}
 
-  std::map<std::string, array> run(
+  std::map<std::string, array> operator()(
       std::map<std::string, array>& inputs,
       std::map<std::string, std::vector<int>> output_shapes,
       std::map<std::string, Dtype> output_dtypes,

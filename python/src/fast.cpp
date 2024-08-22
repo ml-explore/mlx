@@ -8,7 +8,6 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "python/src/convert.h"
 #include "python/src/utils.h"
 
 #include "mlx/fast.h"
@@ -278,11 +277,11 @@ void init_fast(nb::module_& parent_module) {
                   template_args.insert({name, dtype});
                 } else {
                   throw std::invalid_argument(
-                      "Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
+                      "[[metal_kernel]] Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
                 }
               }
             }
-            return kernel.run(
+            return kernel(
                 inputs,
                 output_shapes,
                 output_dtypes,
@@ -308,7 +307,7 @@ void init_fast(nb::module_& parent_module) {
 
             Args:
               inputs (dict[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
-                  The keys will the names of the arguments to the kernel.
+                  The keys will be the names of the arguments to the kernel.
               output_shapes (dict[str, Sequence[int]]): Output shapes. A dict mapping
                   output variable names to shapes. These will be added to the function signature.
               output_dtypes (dict[str, Dtype]): Output dtypes. A dict mapping output variable
