@@ -291,6 +291,7 @@ void init_fast(nb::module_& parent_module) {
                 verbose,
                 s);
           },
+          nb::kw_only(),
           "inputs"_a,
           "output_shapes"_a,
           "output_dtypes"_a,
@@ -298,23 +299,22 @@ void init_fast(nb::module_& parent_module) {
           "threadgroup"_a,
           "template"_a = nb::none(),
           "verbose"_a = false,
-          nb::kw_only(),
           "stream"_a = nb::none(),
           nb::sig(
-              "def __call__(self, inputs: Mapping[str, Union[scalar, array]], output_shapes: Mapping[str, Sequence[int]], output_dtypes: Mapping[str, Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[Mapping[str, Union[bool, int, Dtype]]] = None, verbose: bool = false, *, stream: Union[None, Stream, Device] = None)"),
+              "def __call__(self, *, inputs: Mapping[str, Union[scalar, array]], output_shapes: Mapping[str, Sequence[int]], output_dtypes: Mapping[str, Dtype], grid: tuple[int, int, int], threadgroup: tuple[int, int, int], template: Optional[Mapping[str, Union[bool, int, Dtype]]] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
           R"pbdoc(
             Run the kernel.
 
             Args:
-              inputs (dict[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
+              inputs (Mapping[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
                   The keys will be the names of the arguments to the kernel.
-              output_shapes (dict[str, Sequence[int]]): Output shapes. A dict mapping
+              output_shapes (Mapping[str, Sequence[int]]): Output shapes. A dict mapping
                   output variable names to shapes. These will be added to the function signature.
-              output_dtypes (dict[str, Dtype]): Output dtypes. A dict mapping output variable
+              output_dtypes (Mapping[str, Dtype]): Output dtypes. A dict mapping output variable
                   names to dtypes. Must have the same keys as ``output_shapes``.
               grid (tuple[int, int, int]): 3-tuple specifying the grid to launch the kernel with.
               threadgroup (tuple[int, int, int]): 3-tuple specifying the threadgroup size to use.
-              template (dict[str, Union[bool, int, Dtype]], optional): Template arguments.
+              template (Mapping[str, Union[bool, int, Dtype]], optional): Template arguments.
                   These will be added as template arguments to the kernel definition.
               verbose (bool, optional): Whether to print the full generated source code of the kernel
                   when it is run.

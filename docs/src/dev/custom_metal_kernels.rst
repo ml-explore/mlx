@@ -53,7 +53,7 @@ The full function signature will be generated using:
     Template parameters can be ``mx.core.Dtype``, ``int`` or ``bool``.
 * Metal attributes used in ``source`` such as ``[[thread_position_in_grid]]``
     These will be added as function arguments.
-    All the attributes defined in Table 5.8 of the Metal Shading Language Specification are supported.
+    All the attributes defined in Table 5.8 of the `Metal Shading Language Specification <https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf>`_ are supported.
 
 Putting this all together, the generated function signature for ``myexp`` is as follows:
 
