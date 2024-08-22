@@ -31,7 +31,7 @@ jobs:
           name: Install dependencies
           command: |
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
+            pip install nanobind==2.1.0
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
@@ -44,6 +44,7 @@ jobs:
           name: Generate package stubs
           command: |
             echo "stubs"
+            pip install typing_extensions
             python setup.py generate_stubs 
       - run:
           name: Run Python tests
@@ -76,7 +77,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
+            pip install nanobind==2.1.0
             pip install numpy
             pip install torch
             pip install tensorflow
@@ -90,6 +91,7 @@ jobs:
           name: Generate package stubs
           command: |
             source env/bin/activate
+            pip install typing_extensions
             python setup.py generate_stubs 
       - run:
           name: Run Python tests
@@ -149,7 +151,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
+            pip install nanobind==2.1.0
             pip install --upgrade setuptools
             pip install numpy
             pip install twine
@@ -165,6 +167,7 @@ jobs:
           name: Generate package stubs
           command: |
             source env/bin/activate
+            pip install typing_extensions
             python setup.py generate_stubs 
       - run:
           name: Build Python package
@@ -213,7 +216,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install git+https://github.com/wjakob/nanobind.git@2f04eac452a6d9142dedb957701bdb20125561e4
+            pip install nanobind==2.1.0
             pip install --upgrade setuptools
             pip install numpy
             pip install auditwheel
@@ -222,6 +225,7 @@ jobs:
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
               pip install . -v
+            pip install typing_extensions
             python setup.py generate_stubs 
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL="" \
