@@ -66,10 +66,12 @@ struct Limits<bool> {
 
 template <>
 struct Limits<complex64_t> {
-  static constexpr constant complex64_t max =
-      complex64_t(metal::numeric_limits<float>::infinity(), 0);
-  static constexpr constant complex64_t min =
-      complex64_t(-metal::numeric_limits<float>::infinity(), 0);
+  static constexpr constant complex64_t max = complex64_t(
+      metal::numeric_limits<float>::infinity(),
+      metal::numeric_limits<float>::infinity());
+  static constexpr constant complex64_t min = complex64_t(
+      -metal::numeric_limits<float>::infinity(),
+      -metal::numeric_limits<float>::infinity());
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -360,15 +362,8 @@ struct looped_elem_to_loc {
     }
   }
 
-  offset_t location(
-      offset_t idx,
-      const constant int* shape,
-      const constant size_t* strides,
-      int ndim) {
-    (void)idx; // appease the compiler
-    (void)shape;
-    (void)strides;
-    (void)ndim;
+  offset_t
+  location(offset_t, const constant int*, const constant size_t*, int) {
     return offset;
   }
 };
@@ -377,40 +372,24 @@ template <typename offset_t>
 struct looped_elem_to_loc<1, offset_t> {
   offset_t offset{0};
 
-  void next(const constant int* shape, const constant size_t* strides) {
-    (void)shape; // appease the compiler
+  void next(const constant int*, const constant size_t* strides) {
     offset += strides[0];
   }
 
-  void next(int n, const constant int* shape, const constant size_t* strides) {
-    (void)shape; // appease the compiler
+  void next(int n, const constant int*, const constant size_t* strides) {
     offset += n * strides[0];
   }
 
-  offset_t location(
-      offset_t idx,
-      const constant int* shape,
-      const constant size_t* strides,
-      int ndim) {
-    (void)idx; // appease the compiler
-    (void)shape;
-    (void)strides;
-    (void)ndim;
+  offset_t
+  location(offset_t, const constant int*, const constant size_t*, int) {
     return offset;
   }
 };
 
 template <typename offset_t>
 struct looped_elem_to_loc<0, offset_t> {
-  void next(const constant int* shape, const constant size_t* strides) {
-    (void)shape; // appease the compiler
-    (void)strides;
-  }
-  void next(int n, const constant int* shape, const constant size_t* strides) {
-    (void)shape; // appease the compiler
-    (void)strides;
-    (void)n;
-  }
+  void next(const constant int*, const constant size_t*) {}
+  void next(int, const constant int*, const constant size_t*) {}
 
   offset_t location(
       offset_t idx,

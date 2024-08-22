@@ -1443,12 +1443,12 @@ array all(
   auto out = (is_noop)
       ? astype(a, bool_, s)
       : array(
-            out_shape,
+            std::move(out_shape),
             bool_,
             std::make_shared<Reduce>(to_stream(s), Reduce::And, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
@@ -1477,12 +1477,12 @@ array any(
   auto out = (is_noop)
       ? astype(a, bool_, s)
       : array(
-            out_shape,
+            std::move(out_shape),
             bool_,
             std::make_shared<Reduce>(to_stream(s), Reduce::Or, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
@@ -1515,12 +1515,12 @@ array sum(
   auto out = (is_noop)
       ? astype(a, out_type, s)
       : array(
-            out_shape,
+            std::move(out_shape),
             out_type,
             std::make_shared<Reduce>(to_stream(s), Reduce::Sum, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
@@ -1655,12 +1655,12 @@ array prod(
   auto out = (is_noop)
       ? a
       : array(
-            out_shape,
+            std::move(out_shape),
             a.dtype(),
             std::make_shared<Reduce>(to_stream(s), Reduce::Prod, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
@@ -1692,12 +1692,12 @@ array max(
   auto out = (is_noop)
       ? a
       : array(
-            out_shape,
+            std::move(out_shape),
             a.dtype(),
             std::make_shared<Reduce>(to_stream(s), Reduce::Max, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
@@ -1732,12 +1732,12 @@ array min(
   auto out = (is_noop)
       ? a
       : array(
-            out_shape,
+            std::move(out_shape),
             a.dtype(),
             std::make_shared<Reduce>(to_stream(s), Reduce::Min, sorted_axes),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
@@ -1775,13 +1775,13 @@ array argmin(
   auto out = (is_noop)
       ? zeros(out_shape, uint32, s)
       : array(
-            out_shape,
+            std::move(out_shape),
             uint32,
             std::make_shared<ArgReduce>(
                 to_stream(s), ArgReduce::ArgMin, sorted_axes[0]),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
@@ -1811,13 +1811,13 @@ array argmax(
   auto out = (is_noop)
       ? zeros(out_shape, uint32, s)
       : array(
-            out_shape,
+            std::move(out_shape),
             uint32,
             std::make_shared<ArgReduce>(
                 to_stream(s), ArgReduce::ArgMax, sorted_axes[0]),
             {a});
   if (!keepdims) {
-    out = reshape(out, squeezed_shape, s);
+    out = reshape(out, std::move(squeezed_shape), s);
   }
   return out;
 }
