@@ -325,9 +325,9 @@ void init_linalg(nb::module_& parent_module) {
       nb::sig(
           "def cholesky_inv(L: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Compute the inverse of a real symmetric positive semi-definite matrix using it's Cholesky decomposition L.
+        Compute the inverse of a real symmetric positive semi-definite matrix using it's Cholesky decomposition.
 
-        Let A be a real symmetric positive semi-definite matrix and L its Cholesky definition such that:
+        Let :math:`\mathbf{A}` be a real symmetric positive semi-definite matrix and :math:`\mathbf{L}` its Cholesky decomposition such that:
 
         .. math::
 
@@ -339,7 +339,7 @@ void init_linalg(nb::module_& parent_module) {
 
         This function supports arrays with at least 2 dimensions. When the input
         has more than two dimensions, the Cholesky inverse is computed for each matrix
-        in the last two dimensions of ``L``.
+        in the last two dimensions of :math:`\mathbf{L}`.
 
         If the input matrix is not a triangular matrix behaviour is undefined.
 
@@ -351,6 +351,6 @@ void init_linalg(nb::module_& parent_module) {
               in which case the default stream of the default device is used.
 
         Returns:
-          array: :math:`A^{-1}` where :math:`\mathbf{A} = \mathbf{L}\mathbf{L}^T`.
+          array: :math:`\mathbf{A^{-1}}` where :math:`\mathbf{A} = \mathbf{L}\mathbf{L}^T`.
       )pbdoc");
 }

@@ -131,6 +131,7 @@ target_sources(
   ${CMAKE_CURRENT_SOURCE_DIR}/compiled.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/conv.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/copy.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/custom_kernel.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/event.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/fft.cpp

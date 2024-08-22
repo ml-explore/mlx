@@ -242,4 +242,47 @@ class AffineQuantize : public Custom {
   bool dequantize_;
 };
 
+struct CustomKernelShapeInfo {
+  bool shape = false;
+  bool strides = false;
+  bool ndim = false;
+};
+
+class CustomKernel : public Primitive {
+ public:
+  CustomKernel(
+      Stream stream,
+      std::string name,
+      std::string source,
+      std::tuple<int, int, int> grid,
+      std::tuple<int, int, int> threadgroup,
+      std::vector<CustomKernelShapeInfo> shape_infos,
+      bool ensure_row_contiguous)
+      : Primitive(stream),
+        source_(source),
+        name_(name),
+        grid_(grid),
+        threadgroup_(threadgroup),
+        shape_infos_(shape_infos),
+        ensure_row_contiguous_(ensure_row_contiguous) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("Custom Metal kernels only run on GPU.");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(CustomKernel);
+
+ private:
+  std::string source_;
+  std::string name_;
+  std::tuple<int, int, int> grid_;
+  std::tuple<int, int, int> threadgroup_;
+  std::vector<CustomKernelShapeInfo> shape_infos_;
+  bool ensure_row_contiguous_;
+};
+
 } // namespace mlx::core::fast
