@@ -77,6 +77,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
+<a href="#define-members">Macros</a> &#124;
 <a href="#var-members">Variables</a>  </div>
   <div class="headertitle"><div class="title">ops.h File Reference</div></div>
 </div><!--header-->
@@ -105,11 +106,48 @@ Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="struct_max.html">Max&lt; U &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:acacf99e0ba629ed062ccc3c2eba89b05" id="r_acacf99e0ba629ed062ccc3c2eba89b05"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acacf99e0ba629ed062ccc3c2eba89b05">DEFINE_SIMD_REDUCE</a>()</td></tr>
+<tr class="separator:acacf99e0ba629ed062ccc3c2eba89b05"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
 <tr class="memitem:a515b75d563a93d3c09ee677948dc83e3" id="r_a515b75d563a93d3c09ee677948dc83e3"><td class="memItemLeft" align="right" valign="top">static constant constexpr const uint8_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a515b75d563a93d3c09ee677948dc83e3">simd_size</a> = 32</td></tr>
 <tr class="separator:a515b75d563a93d3c09ee677948dc83e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="acacf99e0ba629ed062ccc3c2eba89b05" name="acacf99e0ba629ed062ccc3c2eba89b05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acacf99e0ba629ed062ccc3c2eba89b05">&#9670;&#160;</a></span>DEFINE_SIMD_REDUCE</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define DEFINE_SIMD_REDUCE</td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"></span></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, metal::enable_if_t&lt;sizeof(T) &lt; 8, <span class="keywordtype">bool</span>&gt; = true&gt;  \</div>
+<div class="line">  T simd_reduce(T val) {                                                 \</div>
+<div class="line">    return simd_reduce_impl(val);                                        \</div>
+<div class="line">  }                                                                      \</div>
+<div class="line">                                                                         \</div>
+<div class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, metal::enable_if_t&lt;sizeof(T) == 8, <span class="keywordtype">bool</span>&gt; = true&gt; \</div>
+<div class="line">  T simd_reduce(T val) {                                                 \</div>
+<div class="line">    for (<span class="keywordtype">short</span> i = <a class="code hl_variable" href="#a515b75d563a93d3c09ee677948dc83e3">simd_size</a> / 2; i &gt; 0; i /= 2) {                       \</div>
+<div class="line">      val = operator()(val, <a class="code hl_function" href="backend_2metal_2kernels_2utils_8h.html#aba6279624b1d30c525efee856a222b5c">simd_shuffle_down</a>(val, i));                  \</div>
+<div class="line">    }                                                                    \</div>
+<div class="line">    <span class="keywordflow">return</span> val;                                                          \</div>
+<div class="line">  }</div>
+<div class="ttc" id="abackend_2metal_2kernels_2reduction_2ops_8h_html_a515b75d563a93d3c09ee677948dc83e3"><div class="ttname"><a href="#a515b75d563a93d3c09ee677948dc83e3">simd_size</a></div><div class="ttdeci">static constant constexpr const uint8_t simd_size</div><div class="ttdef"><b>Definition</b> ops.h:22</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_aba6279624b1d30c525efee856a222b5c"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#aba6279624b1d30c525efee856a222b5c">simd_shuffle_down</a></div><div class="ttdeci">uint64_t simd_shuffle_down(uint64_t data, uint16_t delta)</div><div class="ttdef"><b>Definition</b> utils.h:442</div></div>
+</div><!-- fragment -->
+</div>
+</div>
 <h2 class="groupheader">Variable Documentation</h2>
 <a id="a515b75d563a93d3c09ee677948dc83e3" name="a515b75d563a93d3c09ee677948dc83e3"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a515b75d563a93d3c09ee677948dc83e3">&#9670;&#160;</a></span>simd_size</h2>
