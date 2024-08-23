@@ -392,7 +392,7 @@ array cross_product(
   }
   if (a.size() != 3 || b.size() != 3) {
     throw std::invalid_argument(
-        "[linalg::cross_product] Cross product is defined for 3-dimensional vectors only.");
+        "[linalg::cross_product] Each input must be a triplet of 1D vectors.");
   }
   if (a.dtype() != b.dtype()) {
     throw std::invalid_argument(
