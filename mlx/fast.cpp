@@ -1052,6 +1052,7 @@ void write_signature(
     index++;
   }
   // Add metal attributes e.g. `threadgroup_index_in_grid`
+  index = 0;
   for (const auto& [attr, dtype] : attrs) {
     kernel_source << "  " << dtype << " " << attr << " [[" << attr << "]]";
     if (index < attrs.size() - 1) {
@@ -1059,6 +1060,7 @@ void write_signature(
     } else {
       kernel_source << ") {" << std::endl;
     }
+    index++;
   }
   kernel_source << source << std::endl;
   kernel_source << "}" << std::endl;
