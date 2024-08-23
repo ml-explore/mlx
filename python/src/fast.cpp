@@ -199,10 +199,12 @@ void init_fast(nb::module_& parent_module) {
       A jit-compiled custom Metal kernel defined from a source string.
       )pbdoc")
       .def(
-          nb::init<const std::string&, const std::string&, bool>(),
+          nb::init<const std::string&, const std::string&, bool, bool, bool>(),
           "name"_a,
           "source"_a,
           "ensure_row_contiguous"_a = true,
+          "zero_outputs"_a = false,
+          "atomic_outputs"_a = false,
           R"pbdoc(
       Initialize a metal_kernel.
 
@@ -214,6 +216,10 @@ void init_fast(nb::module_& parent_module) {
             used when the kernel is called.
         ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
             before the kernel runs. Default: ``True``.
+        zero_outputs (bool): Whether to initialize the outputs to all zeros before
+            the kernel runs. Default: ``False``.
+        atomic_outputs (bool): Whether to use atomic outputs in the function signature
+            e.g. ``device atomic<float>``. Default: ``False``.
       Returns:
         Callable ``metal_kernel``.
 

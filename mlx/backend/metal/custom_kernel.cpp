@@ -12,11 +12,16 @@ void CustomKernel::eval_gpu(
     std::vector<array>& outputs) {
   auto& s = stream();
 
+  std::vector<array> copies;
+
   for (auto& out : outputs) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
+    if (zero_outputs_) {
+      array zero = array(0, out.dtype());
+      copy_gpu(zero, out, CopyType::Scalar, s);
+      copies.push_back(zero);
+    }
   }
-
-  std::vector<array> copies;
 
   auto check_input = [&copies, &s, this](const array& x) -> const array {
     bool no_copy = x.flags().row_contiguous;
