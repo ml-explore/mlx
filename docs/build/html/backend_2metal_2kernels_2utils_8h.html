@@ -118,6 +118,14 @@ Classes</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="struct_limits_3_01bool_01_4.html">Limits&lt; bool &gt;</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="struct_limits_3_01complex64__t_01_4.html">Limits&lt; complex64_t &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structlooped__elem__to__loc.html">looped_elem_to_loc&lt; dim, offset_t &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structlooped__elem__to__loc_3_011_00_01offset__t_01_4.html">looped_elem_to_loc&lt; 1, offset_t &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structlooped__elem__to__loc_3_010_00_01offset__t_01_4.html">looped_elem_to_loc&lt; 0, offset_t &gt;</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
@@ -141,6 +149,12 @@ Functions</h2></td></tr>
 <tr class="memitem:a8fd0c8fc6058e650fc99bca8b6acd7d1" id="r_a8fd0c8fc6058e650fc99bca8b6acd7d1"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
 <tr class="memitem:a8fd0c8fc6058e650fc99bca8b6acd7d1"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a8fd0c8fc6058e650fc99bca8b6acd7d1">elem_to_loc</a> (uint elem, constant const int *shape, constant const stride_t *strides, int ndim)</td></tr>
 <tr class="separator:a8fd0c8fc6058e650fc99bca8b6acd7d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a458c064858186818561aaf72a3647c32" id="r_a458c064858186818561aaf72a3647c32"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
+<tr class="memitem:a458c064858186818561aaf72a3647c32"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a458c064858186818561aaf72a3647c32">elem_to_loc</a> (stride_t elem, device const int *shape, device const stride_t *strides, int ndim)</td></tr>
+<tr class="separator:a458c064858186818561aaf72a3647c32"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa6b041005351293e68e19b5abf1286cd" id="r_aa6b041005351293e68e19b5abf1286cd"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
+<tr class="memitem:aa6b041005351293e68e19b5abf1286cd"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa6b041005351293e68e19b5abf1286cd">elem_to_loc</a> (stride_t elem, constant const int *shape, constant const stride_t *strides, int ndim)</td></tr>
+<tr class="separator:aa6b041005351293e68e19b5abf1286cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a37e00d94751710e81c9632bca2f91e51" id="r_a37e00d94751710e81c9632bca2f91e51"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
 <tr class="memitem:a37e00d94751710e81c9632bca2f91e51"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a37e00d94751710e81c9632bca2f91e51">elem_to_loc</a> (uint3 elem, constant const int *shape, constant const stride_t *strides, int ndim)</td></tr>
 <tr class="separator:a37e00d94751710e81c9632bca2f91e51"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -175,9 +189,10 @@ Functions</h2></td></tr>
 <tr class="memitem:a418562e11bdfc92130e445ac01e53924" id="r_a418562e11bdfc92130e445ac01e53924"><td class="memTemplParams" colspan="2">template&lt;int NDIM&gt; </td></tr>
 <tr class="memitem:a418562e11bdfc92130e445ac01e53924"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC uint3&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a418562e11bdfc92130e445ac01e53924">elem_to_loc_3_nd</a> (uint3 elem, constant const int shape[NDIM], constant const size_t a_strides[NDIM], constant const size_t b_strides[NDIM], constant const size_t c_strides[NDIM])</td></tr>
 <tr class="separator:a418562e11bdfc92130e445ac01e53924"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a51c19db777f43943e4b35f25dd88d49d" id="r_a51c19db777f43943e4b35f25dd88d49d"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a51c19db777f43943e4b35f25dd88d49d">ceildiv</a> (size_t N, size_t M)</td></tr>
-<tr class="memdesc:a51c19db777f43943e4b35f25dd88d49d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compute ceil((float)N/(float)M)  <br /></td></tr>
-<tr class="separator:a51c19db777f43943e4b35f25dd88d49d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8e5a4b0fb5d018d7b078d147efe4f1e3" id="r_a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U &gt; </td></tr>
+<tr class="memitem:a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="memTemplItemLeft" align="right" valign="top">T&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a8e5a4b0fb5d018d7b078d147efe4f1e3">ceildiv</a> (T N, U M)</td></tr>
+<tr class="memdesc:a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compute ceil((float)N/(float)M)  <br /></td></tr>
+<tr class="separator:a8e5a4b0fb5d018d7b078d147efe4f1e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a27c03f2f90ab56db2e4d59559a3d2e9a" id="r_a27c03f2f90ab56db2e4d59559a3d2e9a"><td class="memItemLeft" align="right" valign="top">float&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a27c03f2f90ab56db2e4d59559a3d2e9a">log1p</a> (float x)</td></tr>
 <tr class="separator:a27c03f2f90ab56db2e4d59559a3d2e9a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3501b665c8837eabf9789ea27a7d6946" id="r_a3501b665c8837eabf9789ea27a7d6946"><td class="memItemLeft" align="right" valign="top"><a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3501b665c8837eabf9789ea27a7d6946">log1p</a> (<a class="el" href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a> x)</td></tr>
@@ -188,6 +203,8 @@ Functions</h2></td></tr>
 <tr class="separator:a0c1e4d782fcc56e1ab5565cef12430dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a48ae83a8caf5c74810df60b6c6cdb062" id="r_a48ae83a8caf5c74810df60b6c6cdb062"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a48ae83a8caf5c74810df60b6c6cdb062">simd_shuffle_down</a> (bool data, uint16_t delta)</td></tr>
 <tr class="separator:a48ae83a8caf5c74810df60b6c6cdb062"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad9a671a5f9aaa729ae7a77026f16bcb0" id="r_ad9a671a5f9aaa729ae7a77026f16bcb0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structcomplex64__t.html">complex64_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad9a671a5f9aaa729ae7a77026f16bcb0">simd_shuffle_down</a> (<a class="el" href="structcomplex64__t.html">complex64_t</a> data, uint16_t delta)</td></tr>
+<tr class="separator:ad9a671a5f9aaa729ae7a77026f16bcb0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Macro Definition Documentation</h2>
 <a id="abedffa358e7ba7782cc78d6772064c7c" name="abedffa358e7ba7782cc78d6772064c7c"></a>
@@ -279,24 +296,26 @@ Functions</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="a51c19db777f43943e4b35f25dd88d49d" name="a51c19db777f43943e4b35f25dd88d49d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a51c19db777f43943e4b35f25dd88d49d">&#9670;&#160;</a></span>ceildiv()</h2>
+<a id="a8e5a4b0fb5d018d7b078d147efe4f1e3" name="a8e5a4b0fb5d018d7b078d147efe4f1e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8e5a4b0fb5d018d7b078d147efe4f1e3">&#9670;&#160;</a></span>ceildiv()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U &gt; </div>
 <table class="mlabels">
   <tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">size_t ceildiv </td>
+          <td class="memname">T ceildiv </td>
           <td>(</td>
-          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>N</em>, </span></td>
+          <td class="paramtype">T</td>          <td class="paramname"><span class="paramname"><em>N</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>M</em></span>&#160;)</td>
+          <td class="paramtype">U</td>          <td class="paramname"><span class="paramname"><em>M</em></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -310,8 +329,74 @@ Functions</h2></td></tr>
 
 </div>
 </div>
+<a id="aa6b041005351293e68e19b5abf1286cd" name="aa6b041005351293e68e19b5abf1286cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa6b041005351293e68e19b5abf1286cd">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[1/5]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename stride_t &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC stride_t elem_to_loc </td>
+          <td>(</td>
+          <td class="paramtype">stride_t</td>          <td class="paramname"><span class="paramname"><em>elem</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">constant const int *</td>          <td class="paramname"><span class="paramname"><em>shape</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">constant const stride_t *</td>          <td class="paramname"><span class="paramname"><em>strides</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>ndim</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a458c064858186818561aaf72a3647c32" name="a458c064858186818561aaf72a3647c32"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a458c064858186818561aaf72a3647c32">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[2/5]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename stride_t &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC stride_t elem_to_loc </td>
+          <td>(</td>
+          <td class="paramtype">stride_t</td>          <td class="paramname"><span class="paramname"><em>elem</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device const int *</td>          <td class="paramname"><span class="paramname"><em>shape</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device const stride_t *</td>          <td class="paramname"><span class="paramname"><em>strides</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>ndim</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a8fd0c8fc6058e650fc99bca8b6acd7d1" name="a8fd0c8fc6058e650fc99bca8b6acd7d1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8fd0c8fc6058e650fc99bca8b6acd7d1">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[1/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a8fd0c8fc6058e650fc99bca8b6acd7d1">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[3/5]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -344,7 +429,7 @@ template&lt;typename stride_t &gt; </div>
 </div>
 </div>
 <a id="a2e49fa7ab8f6348543455c6c45d7e2a9" name="a2e49fa7ab8f6348543455c6c45d7e2a9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2e49fa7ab8f6348543455c6c45d7e2a9">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[2/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e49fa7ab8f6348543455c6c45d7e2a9">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[4/5]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -377,7 +462,7 @@ template&lt;typename stride_t &gt; </div>
 </div>
 </div>
 <a id="a37e00d94751710e81c9632bca2f91e51" name="a37e00d94751710e81c9632bca2f91e51"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a37e00d94751710e81c9632bca2f91e51">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[3/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a37e00d94751710e81c9632bca2f91e51">&#9670;&#160;</a></span>elem_to_loc() <span class="overload">[5/5]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -789,7 +874,7 @@ template&lt;int NDIM&gt; </div>
 </div>
 </div>
 <a id="a48ae83a8caf5c74810df60b6c6cdb062" name="a48ae83a8caf5c74810df60b6c6cdb062"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a48ae83a8caf5c74810df60b6c6cdb062">&#9670;&#160;</a></span>simd_shuffle_down() <span class="overload">[1/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a48ae83a8caf5c74810df60b6c6cdb062">&#9670;&#160;</a></span>simd_shuffle_down() <span class="overload">[1/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -817,8 +902,37 @@ template&lt;int NDIM&gt; </div>
 
 </div>
 </div>
+<a id="ad9a671a5f9aaa729ae7a77026f16bcb0" name="ad9a671a5f9aaa729ae7a77026f16bcb0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad9a671a5f9aaa729ae7a77026f16bcb0">&#9670;&#160;</a></span>simd_shuffle_down() <span class="overload">[2/4]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="structcomplex64__t.html">complex64_t</a> simd_shuffle_down </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structcomplex64__t.html">complex64_t</a></td>          <td class="paramname"><span class="paramname"><em>data</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint16_t</td>          <td class="paramname"><span class="paramname"><em>delta</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a0c1e4d782fcc56e1ab5565cef12430dd" name="a0c1e4d782fcc56e1ab5565cef12430dd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0c1e4d782fcc56e1ab5565cef12430dd">&#9670;&#160;</a></span>simd_shuffle_down() <span class="overload">[2/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c1e4d782fcc56e1ab5565cef12430dd">&#9670;&#160;</a></span>simd_shuffle_down() <span class="overload">[3/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -847,7 +961,7 @@ template&lt;int NDIM&gt; </div>
 </div>
 </div>
 <a id="aba6279624b1d30c525efee856a222b5c" name="aba6279624b1d30c525efee856a222b5c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aba6279624b1d30c525efee856a222b5c">&#9670;&#160;</a></span>simd_shuffle_down() <span class="overload">[3/3]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#aba6279624b1d30c525efee856a222b5c">&#9670;&#160;</a></span>simd_shuffle_down() <span class="overload">[4/4]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
