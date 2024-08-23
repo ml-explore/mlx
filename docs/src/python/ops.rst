@@ -44,6 +44,7 @@ Operations
    convolve
    conv1d
    conv2d
+   conv3d
    conv_general
    cos
    cosh
