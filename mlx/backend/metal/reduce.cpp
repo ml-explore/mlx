@@ -202,7 +202,7 @@ inline int threadgroup_size_from_row_size(int row_size) {
 
   // 2 simdgroups per row for medium rows
   if (row_size <= 1024) {
-    return 64;
+    return 128;
   }
 
   // up to 32 simdgroups after that
@@ -458,14 +458,25 @@ void strided_reduce_small(
   // Figure out the grid dims
   MTL::Size grid_dims, group_dims;
 
-  // Case 1: everything is small so launch one thread per col reduce
-  if (args.reduction_size * args.non_col_reductions < 64) {
+  // Case 1: Small row small column
+  if (args.reduction_size * args.non_col_reductions < 64 &&
+      args.reduction_stride < 32) {
     grid_dims = output_grid_for_col_reduce(out, args);
     int threadgroup_size = (grid_dims.width > 128) ? 128 : grid_dims.width;
     group_dims = MTL::Size(threadgroup_size, 1, 1);
   }
 
-  // Case 2: Reduction in the simdgroup
+  // Case 2: Long row small column
+  else if (args.reduction_size * args.non_col_reductions < 32) {
+    auto out_grid_dims = output_grid_for_col_reduce(out, args);
+    int threads_x =
+        (args.reduction_stride + REDUCE_N_READS - 1) / REDUCE_N_READS;
+    int threadgroup_x = std::min(threads_x, 128);
+    grid_dims = MTL::Size(threads_x, out_grid_dims.width, out_grid_dims.height);
+    group_dims = MTL::Size(threadgroup_x, 1, 1);
+  }
+
+  // Case 3: Long row medium column
   else {
     args.reduce_shape.push_back(args.reduction_size);
     args.reduce_strides.push_back(args.reduction_stride);
@@ -508,7 +519,7 @@ void strided_reduce_looped(
 
   // Figure out the grid dims
   auto out_grid_size = output_grid_for_col_reduce(out, args);
-  int BN = (args.reduction_stride <= 256) ? 32 : 128;
+  int BN = (args.reduction_stride <= 1024) ? 32 : 128;
   int BM = 1024 / BN;
   int threadgroup_size = 4 * 32;
   MTL::Size grid_dims(
@@ -544,7 +555,8 @@ void strided_reduce_general_dispatch(
   // Prepare the arguments for the kernel
   ColReduceArgs args(in, plan, axes);
 
-  if (args.reduction_stride < 32) {
+  if (args.reduction_stride < 32 ||
+      args.reduction_size * args.non_col_reductions < 32) {
     return strided_reduce_small(in, out, op_name, args, compute_encoder, d, s);
   }
 

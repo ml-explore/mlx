@@ -28,10 +28,8 @@ template <
   looped_elem_to_loc<NDIMS> loop;
   const device T* row;
 
-  // Case 1:
-  // reduction_stride is small, reduction_size is small and non_col_reductions
-  // is small. Each thread computes reduction_stride outputs.
-  if (reduction_size * non_col_reductions < 64) {
+  // Case 1: Small row small column
+  if (reduction_size * non_col_reductions < 64 && reduction_stride < 32) {
     U totals[31];
     for (int i = 0; i < 31; i++) {
       totals[i] = Op::init;
@@ -71,10 +69,55 @@ template <
     }
   }
 
-  // Case 2:
-  // Reduction stride is small but everything else can be big. We loop both
-  // across reduction size and non_col_reductions. Each simdgroup produces
-  // N_READS outputs.
+  // Case 2: Long row small column
+  else if (reduction_size * non_col_reductions < 32) {
+    U totals[N_READS];
+    for (int i = 0; i < N_READS; i++) {
+      totals[i] = Op::init;
+    }
+
+    short size = reduction_size;
+    size_t offset = size_t(tid.x) * N_READS;
+    bool safe = offset + N_READS <= reduction_stride;
+    short extra = reduction_stride - offset;
+
+    size_t out_idx = tid.y + tsize.z * size_t(tid.z);
+    in += elem_to_loc(out_idx, shape, strides, ndim) + offset;
+
+    for (uint r = 0; r < non_col_reductions; r++) {
+      row = in + loop.location(r, reduce_shape, reduce_strides, reduce_ndim);
+
+      if (safe) {
+        for (short i = 0; i < size; i++) {
+          for (short j = 0; j < N_READS; j++) {
+            totals[j] =
+                op(static_cast<U>(row[i * reduction_stride + j]), totals[j]);
+          }
+        }
+      } else {
+        for (short i = 0; i < size; i++) {
+          for (short j = 0; j < extra; j++) {
+            totals[j] =
+                op(static_cast<U>(row[i * reduction_stride + j]), totals[j]);
+          }
+        }
+      }
+
+      loop.next(reduce_shape, reduce_strides);
+    }
+    out += out_idx * reduction_stride + offset;
+    if (safe) {
+      for (short i = 0; i < N_READS; i++) {
+        out[i] = totals[i];
+      }
+    } else {
+      for (short i = 0; i < extra; i++) {
+        out[i] = totals[i];
+      }
+    }
+  }
+
+  // Case 3: Long row medium column
   else {
     threadgroup U shared_vals[1024];
     U totals[N_READS];
@@ -147,17 +190,13 @@ template <
 /**
  * Our approach is the following simple looped approach:
  *  1. Each thread keeps running totals for BN / n_simdgroups outputs.
- *  2. Load a tile BM, BN in shared memory.
- *  3. Add the values from shared memory to the current running totals.
- *     Neighboring threads access different rows (transposed acces).
- *  4. Move ahead to the next tile until the M axis is exhausted.
- *  5. Move ahead to the next non column reduction
- *  6. Simd reduce the running totals
+ *  2. Load a tile BM, BN in registers and accumulate in the running totals
+ *  3. Move ahead by BM steps until the column axis and the non column
+ *     reductions are exhausted.
+ *  6. If BM == 32 then transpose in SM and simd reduce the running totals.
+ *     Otherwise write in shared memory and BN threads accumulate the running
+ *     totals with a loop.
  *  7. Write them to the output
- *
- * The kernel becomes verbose because we support all kinds of OOB checks. For
- * instance if we choose that reduction_stride must be larger than BN then we
- * can get rid of half the kernel.
  */
 template <
     typename T,
