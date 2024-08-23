@@ -43,10 +43,6 @@ class TestReduce(mlx_tests.MLXTestCase):
                                 z_npy = np.sum(y_npy, axis=a) / 1000
                                 z_mlx = mx.sum(y_mlx, axis=a) / 1000
                                 mx.eval(z_mlx)
-                                if not np.allclose(z_npy, np.array(z_mlx), atol=1e-4):
-                                    import pdb
-
-                                    pdb.set_trace()
                                 self.assertTrue(
                                     np.allclose(z_npy, np.array(z_mlx), atol=1e-4)
                                 )
