@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Lazy Evaluation &#8212; MLX 0.16.2 documentation</title>
+    <title>Lazy Evaluation &#8212; MLX 0.17.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../_static/documentation_options.js?v=00e1e5b9"></script>
+    <script src="../_static/documentation_options.js?v=50b3d22e"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.17.0 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.17.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -438,6 +438,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -669,6 +671,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../dev/extensions.html">Custom Extensions in MLX</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../dev/metal_debugger.html">Metal Debugger</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dev/custom_metal_kernels.html">Custom Metal Kernels</a></li>
 </ul>
 
     </div>
@@ -935,7 +938,7 @@ stochastic gradient descent). A natural and usually efficient place to use
 </div>
 <p>An important behavior to be aware of is when the graph will be implicitly
 evaluated. Anytime you <code class="docutils literal notranslate"><span class="pre">print</span></code> an array, convert it to an
-<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.0)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a>, or otherwise access it’s memory via <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#memoryview" title="(in Python v3.12)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memoryview</span></code></a>,
+<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.1)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a>, or otherwise access it’s memory via <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#memoryview" title="(in Python v3.12)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">memoryview</span></code></a>,
 the graph will be evaluated. Saving arrays via <a class="reference internal" href="../python/_autosummary/mlx.core.save.html#mlx.core.save" title="mlx.core.save"><code class="xref py py-func docutils literal notranslate"><span class="pre">save()</span></code></a> (or any other MLX
 saving functions) will also evaluate the array.</p>
 <p>Calling <a class="reference internal" href="../python/_autosummary/mlx.core.array.item.html#mlx.core.array.item" title="mlx.core.array.item"><code class="xref py py-func docutils literal notranslate"><span class="pre">array.item()</span></code></a> on a scalar array will also evaluate it. In the

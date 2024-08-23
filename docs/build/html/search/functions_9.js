@@ -32,11 +32,12 @@ var searchData=
   ['is_5fstatic_5fcast_29',['is_static_cast',['../namespacemlx_1_1core.html#afd9e740e567f9d7c28e00113caf46d5f',1,'mlx::core']]],
   ['is_5ftracer_30',['is_tracer',['../classmlx_1_1core_1_1array.html#af9acb115019b995354d366c4ac6b968c',1,'mlx::core::array']]],
   ['isclose_31',['isclose',['../group__ops.html#ga51eac95c04400921c54716de14b52491',1,'mlx::core']]],
-  ['isinf_32',['isinf',['../group__ops.html#ga8fc238d5e5d1153e69da8b36015d9844',1,'mlx::core']]],
-  ['isnan_33',['isnan',['../namespacemetal.html#a83320ba983d90dd1fa5847b6940dc0bb',1,'metal::isnan()'],['../group__ops.html#ga175592792471b0ffb45196dca4711ba6',1,'mlx::core::isnan(const array &amp;a, StreamOrDevice s={})']]],
-  ['isneginf_34',['isneginf',['../group__ops.html#ga1940523da381ed7be50656a3bc465ff3',1,'mlx::core']]],
-  ['isposinf_35',['isposinf',['../group__ops.html#gad80f7c4a58c12b6cb30a8b9a73008993',1,'mlx::core']]],
-  ['issubdtype_36',['issubdtype',['../namespacemlx_1_1core.html#aca9e69b06f4212eba44bf0ce6711d5f7',1,'mlx::core::issubdtype(const Dtype &amp;a, const Dtype &amp;b)'],['../namespacemlx_1_1core.html#aca39f224c1d17bde35dfcb9088430704',1,'mlx::core::issubdtype(const Dtype::Category &amp;a, const Dtype &amp;b)'],['../namespacemlx_1_1core.html#ae9ee4a7c205df061c1caa7e62b7504e8',1,'mlx::core::issubdtype(const Dtype &amp;a, const Dtype::Category &amp;b)'],['../namespacemlx_1_1core.html#ab5b1a5a3d545a5de00c3117f76d71a1d',1,'mlx::core::issubdtype(const Dtype::Category &amp;a, const Dtype::Category &amp;b)']]],
-  ['item_37',['item',['../classmlx_1_1core_1_1array.html#a90c5afddc2fa3028c0f8099bd64c8a99',1,'mlx::core::array::item()'],['../classmlx_1_1core_1_1array.html#a8650a99a6b7549bc823b03ad92590ff7',1,'mlx::core::array::item() const']]],
-  ['itemsize_38',['itemsize',['../classmlx_1_1core_1_1array.html#af329d9432c92de87cbaa2de8454eefc0',1,'mlx::core::array']]]
+  ['isfinite_32',['isfinite',['../group__ops.html#ga725ff0789f934b1fdd54ee29e47022ff',1,'mlx::core']]],
+  ['isinf_33',['isinf',['../group__ops.html#ga8fc238d5e5d1153e69da8b36015d9844',1,'mlx::core']]],
+  ['isnan_34',['isnan',['../namespacemetal.html#a83320ba983d90dd1fa5847b6940dc0bb',1,'metal::isnan()'],['../group__ops.html#ga175592792471b0ffb45196dca4711ba6',1,'mlx::core::isnan(const array &amp;a, StreamOrDevice s={})']]],
+  ['isneginf_35',['isneginf',['../group__ops.html#ga1940523da381ed7be50656a3bc465ff3',1,'mlx::core']]],
+  ['isposinf_36',['isposinf',['../group__ops.html#gad80f7c4a58c12b6cb30a8b9a73008993',1,'mlx::core']]],
+  ['issubdtype_37',['issubdtype',['../namespacemlx_1_1core.html#aca9e69b06f4212eba44bf0ce6711d5f7',1,'mlx::core::issubdtype(const Dtype &amp;a, const Dtype &amp;b)'],['../namespacemlx_1_1core.html#aca39f224c1d17bde35dfcb9088430704',1,'mlx::core::issubdtype(const Dtype::Category &amp;a, const Dtype &amp;b)'],['../namespacemlx_1_1core.html#ae9ee4a7c205df061c1caa7e62b7504e8',1,'mlx::core::issubdtype(const Dtype &amp;a, const Dtype::Category &amp;b)'],['../namespacemlx_1_1core.html#ab5b1a5a3d545a5de00c3117f76d71a1d',1,'mlx::core::issubdtype(const Dtype::Category &amp;a, const Dtype::Category &amp;b)']]],
+  ['item_38',['item',['../classmlx_1_1core_1_1array.html#a90c5afddc2fa3028c0f8099bd64c8a99',1,'mlx::core::array::item()'],['../classmlx_1_1core_1_1array.html#a8650a99a6b7549bc823b03ad92590ff7',1,'mlx::core::array::item() const']]],
+  ['itemsize_39',['itemsize',['../classmlx_1_1core_1_1array.html#af329d9432c92de87cbaa2de8454eefc0',1,'mlx::core::array']]]
 ];
