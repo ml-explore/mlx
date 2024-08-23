@@ -123,6 +123,11 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
                      col_reduce_looped,                                          \
                      itype, otype, op, dim, bm, bn)
 
+#define instantiate_col_reduce_atomic_tile(name, itype, otype, op, dim, bm, bn)   \
+  instantiate_kernel("col_reduce_atomics_" #dim "_" #bm "_" #bn "_reduce_" #name, \
+                     col_reduce_atomics,                                          \
+                     itype, otype, op, dim, bm, bn)
+
 #define instantiate_col_reduce_looped(name, itype, otype, op, dim)        \
   instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 8, 128) \
   instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32)
@@ -142,7 +147,11 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
 #define instantiate_same_col_reduce_helper(name, tname, type, op)  \
   instantiate_col_reduce_general(name##tname, type, type, op<type>)
 
+#define instantiate_same_col_reduce_atomics_helper(name, tname, type, op) \
+  instantiate_col_reduce_atomic_tile(name##tname, type, type, op<type>, 1, 8, 128)
+
 instantiate_reduce_ops(instantiate_same_col_reduce_helper, instantiate_reduce_helper_types)
+instantiate_reduce_ops(instantiate_same_col_reduce_atomics_helper, instantiate_reduce_helper_types)
 instantiate_reduce_ops(instantiate_same_col_reduce_helper, instantiate_reduce_helper_64b)
 
 instantiate_col_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>)

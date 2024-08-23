@@ -558,6 +558,46 @@ void strided_reduce_looped(
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
+void strided_reduce_atomics(
+    const array& in,
+    array& out,
+    const std::string& op_name,
+    ColReduceArgs& args,
+    CommandEncoder& compute_encoder,
+    metal::Device& d,
+    const Stream& s) {
+  // Prepare the arguments for the kernel
+  args.reduce_shape.push_back(args.reduction_size);
+  args.reduce_strides.push_back(args.reduction_stride);
+  args.reduce_ndim++;
+
+  // Figure out the grid dims
+  int BN = 128;
+  int BM = 8;
+  int blocksize = BM * 4;
+  int threadgroup_size = 4 * 32;
+  int blocks = (args.non_col_reductions * args.reduction_size + blocksize - 1) /
+      blocksize;
+  auto out_grid_size = output_grid_for_col_reduce(out, args);
+  MTL::Size grid_dims(
+      threadgroup_size * ((args.reduction_stride + BN - 1) / BN),
+      out_grid_size.width * blocks,
+      out_grid_size.height);
+  MTL::Size group_dims(threadgroup_size, 1, 1);
+
+  // Set the kernel
+  std::ostringstream kname;
+  kname << "colAtomic1_8_128_reduce_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Launch
+  compute_encoder.set_input_array(in, 0);
+  compute_encoder.set_output_array(out, 1);
+  args.encode(compute_encoder);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
+}
+
 void strided_reduce_general_dispatch(
     const array& in,
     array& out,
@@ -573,6 +613,20 @@ void strided_reduce_general_dispatch(
   if (args.reduction_stride < 32 ||
       args.reduction_size * args.non_col_reductions < 32) {
     return strided_reduce_small(in, out, op_name, args, compute_encoder, d, s);
+  }
+
+  int col_reduce_parallelization = 1;
+  for (int i = 0; i < out.ndim(); i++) {
+    if (out.strides()[i] > args.reduction_stride) {
+      col_reduce_parallelization *= out.shape(i);
+    }
+  }
+  if (in.itemsize() == 4 && col_reduce_parallelization < 8 &&
+      args.reduce_ndim == 0 &&
+      args.reduction_size / args.reduction_stride > 1) {
+    init_reduce(out, op_name, compute_encoder, d, s);
+    return strided_reduce_atomics(
+        in, out, op_name, args, compute_encoder, d, s);
   }
 
   return strided_reduce_looped(in, out, op_name, args, compute_encoder, d, s);
