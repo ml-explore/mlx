@@ -43,7 +43,7 @@ var searchData=
   ['bs_5fqmv_40',['bs_qmv',['../quantized_8h.html#a03ba4a4a5fe9955319b0aa477d2d7d98',1,'quantized.h']]],
   ['bs_5fqmv_5ffast_41',['bs_qmv_fast',['../quantized_8h.html#a6f92bb9f3d29d707bfc680bebe1c80f7',1,'quantized.h']]],
   ['bs_5fqvm_42',['bs_qvm',['../quantized_8h.html#a3af1c89416632c9275b8218a33cb8a04',1,'quantized.h']]],
-  ['buffer_43',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html#ac4fc2cc6aa1368cfb74aff329d9a1300',1,'mlx::core::allocator::Buffer']]],
-  ['buffer_44',['buffer',['../classmlx_1_1core_1_1array.html#ab3daf04c27c4593d9d73c397b8484a08',1,'mlx::core::array::buffer()'],['../classmlx_1_1core_1_1array.html#a634466ce661485394f2fdc3bd6796bcd',1,'mlx::core::array::buffer() const']]],
+  ['buffer_43',['buffer',['../classmlx_1_1core_1_1array.html#ab3daf04c27c4593d9d73c397b8484a08',1,'mlx::core::array::buffer()'],['../classmlx_1_1core_1_1array.html#a634466ce661485394f2fdc3bd6796bcd',1,'mlx::core::array::buffer() const']]],
+  ['buffer_44',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html#ac4fc2cc6aa1368cfb74aff329d9a1300',1,'mlx::core::allocator::Buffer']]],
   ['build_5flib_5fname_45',['build_lib_name',['../namespacemlx_1_1core.html#a3ef23f334cb9f68a2c50524bc67c913b',1,'mlx::core']]]
 ];
