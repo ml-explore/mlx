@@ -76,16 +76,24 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
+<a href="#nested-classes">Classes</a> &#124;
 <a href="#namespaces">Namespaces</a> &#124;
+<a href="#typedef-members">Typedefs</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">fast.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &lt;optional&gt;</code><br />
+<div class="textblock"><code>#include &lt;map&gt;</code><br />
+<code>#include &lt;optional&gt;</code><br />
 <code>#include &quot;<a class="el" href="utils_8h_source.html">mlx/utils.h</a>&quot;</code><br />
 </div>
 <p><a href="fast_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html">mlx::core::fast::MetalKernel</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
 Namespaces</h2></td></tr>
 <tr class="memitem:namespacemlx" id="r_namespacemlx"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx.html">mlx</a></td></tr>
@@ -95,17 +103,22 @@ Namespaces</h2></td></tr>
 <tr class="memitem:namespacemlx_1_1core_1_1fast" id="r_namespacemlx_1_1core_1_1fast"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html">mlx::core::fast</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a9390693ff7be931f3ef3428e2ea4c3f9" id="r_a9390693ff7be931f3ef3428e2ea4c3f9"><td class="memItemLeft" align="right" valign="top">typedef std::variant&lt; int, bool, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#a9390693ff7be931f3ef3428e2ea4c3f9">mlx::core::fast::TemplateArg</a></td></tr>
+<tr class="separator:a9390693ff7be931f3ef3428e2ea4c3f9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:ac7b620275c6386f822b7aacc6b312e62" id="r_ac7b620275c6386f822b7aacc6b312e62"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#ac7b620275c6386f822b7aacc6b312e62">mlx::core::fast::rms_norm</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, float eps, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:ac7b620275c6386f822b7aacc6b312e62"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a01bd533ebd0e2415c4ee30032d51d7bf" id="r_a01bd533ebd0e2415c4ee30032d51d7bf"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#a01bd533ebd0e2415c4ee30032d51d7bf">mlx::core::fast::layer_norm</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;weight, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;bias, float eps, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:a01bd533ebd0e2415c4ee30032d51d7bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a44a77225d1e90fd5bf81caccf8c20061" id="r_a44a77225d1e90fd5bf81caccf8c20061"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#a44a77225d1e90fd5bf81caccf8c20061">mlx::core::fast::rope</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, int dims, bool traditional, float base, float scale, int offset, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="separator:a44a77225d1e90fd5bf81caccf8c20061"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5a48ce1f5ec64ef14fd8a3c42e4fcba9" id="r_a5a48ce1f5ec64ef14fd8a3c42e4fcba9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#a5a48ce1f5ec64ef14fd8a3c42e4fcba9">mlx::core::fast::scaled_dot_product_attention</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;queries, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;keys, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;values, const float scale, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;mask=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="memdesc:a5a48ce1f5ec64ef14fd8a3c42e4fcba9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Computes: O = softmax(Q @ K.T) @ V.  <br /></td></tr>
-<tr class="separator:a5a48ce1f5ec64ef14fd8a3c42e4fcba9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a534ef357eae24892684a6ecd866d3fab" id="r_a534ef357eae24892684a6ecd866d3fab"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#a534ef357eae24892684a6ecd866d3fab">mlx::core::fast::rope</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, int dims, bool traditional, std::optional&lt; float &gt; base, float scale, int offset, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;freqs=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a534ef357eae24892684a6ecd866d3fab"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8ff2129e77419b7cd32d149cab0766b9" id="r_a8ff2129e77419b7cd32d149cab0766b9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#a8ff2129e77419b7cd32d149cab0766b9">mlx::core::fast::scaled_dot_product_attention</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;queries, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;keys, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;values, const float scale, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;mask=std::nullopt, const std::optional&lt; int &gt; &amp;memory_efficient_threshold=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:a8ff2129e77419b7cd32d149cab0766b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Computes: O = softmax(Q @ K.T) @ V.  <br /></td></tr>
+<tr class="separator:a8ff2129e77419b7cd32d149cab0766b9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa4b5f6886b2288cb6dfdd8598579f080" id="r_aa4b5f6886b2288cb6dfdd8598579f080"><td class="memItemLeft" align="right" valign="top">std::tuple&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#aa4b5f6886b2288cb6dfdd8598579f080">mlx::core::fast::affine_quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:aa4b5f6886b2288cb6dfdd8598579f080"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a638c7e9b9ea8677f01786d8f9738baf8" id="r_a638c7e9b9ea8677f01786d8f9738baf8"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1fast.html#a638c7e9b9ea8677f01786d8f9738baf8">mlx::core::fast::affine_quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
