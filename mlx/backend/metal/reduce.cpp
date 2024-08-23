@@ -202,7 +202,7 @@ inline int threadgroup_size_from_row_size(int row_size) {
 
   // 2 simdgroups per row for medium rows
   if (row_size <= 1024) {
-    return 64;
+    return 128;
   }
 
   // up to 32 simdgroups after that
@@ -508,7 +508,7 @@ void strided_reduce_looped(
 
   // Figure out the grid dims
   auto out_grid_size = output_grid_for_col_reduce(out, args);
-  int BN = (args.reduction_stride <= 256) ? 32 : 128;
+  int BN = (args.reduction_stride <= 1024) ? 32 : 128;
   int BM = 1024 / BN;
   int threadgroup_size = 4 * 32;
   MTL::Size grid_dims(
