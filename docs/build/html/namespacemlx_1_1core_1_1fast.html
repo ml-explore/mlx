@@ -77,6 +77,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
+<a href="#typedef-members">Typedefs</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">mlx::core::fast Namespace Reference</div></div>
 </div><!--header-->
@@ -88,9 +89,15 @@ Classes</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_custom.html">Custom</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_custom_kernel.html">CustomKernel</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1fast_1_1_custom_kernel_shape_info.html">CustomKernelShapeInfo</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_layer_norm.html">LayerNorm</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_layer_norm_v_j_p.html">LayerNormVJP</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html">MetalKernel</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html">RMSNorm</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -101,17 +108,22 @@ Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1fast_1_1_scaled_dot_product_attention.html">ScaledDotProductAttention</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
+Typedefs</h2></td></tr>
+<tr class="memitem:a9390693ff7be931f3ef3428e2ea4c3f9" id="r_a9390693ff7be931f3ef3428e2ea4c3f9"><td class="memItemLeft" align="right" valign="top">typedef std::variant&lt; int, bool, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9390693ff7be931f3ef3428e2ea4c3f9">TemplateArg</a></td></tr>
+<tr class="separator:a9390693ff7be931f3ef3428e2ea4c3f9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
 <tr class="memitem:ac7b620275c6386f822b7aacc6b312e62" id="r_ac7b620275c6386f822b7aacc6b312e62"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac7b620275c6386f822b7aacc6b312e62">rms_norm</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, float eps, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:ac7b620275c6386f822b7aacc6b312e62"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a01bd533ebd0e2415c4ee30032d51d7bf" id="r_a01bd533ebd0e2415c4ee30032d51d7bf"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a01bd533ebd0e2415c4ee30032d51d7bf">layer_norm</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;weight, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;bias, float eps, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:a01bd533ebd0e2415c4ee30032d51d7bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a44a77225d1e90fd5bf81caccf8c20061" id="r_a44a77225d1e90fd5bf81caccf8c20061"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a44a77225d1e90fd5bf81caccf8c20061">rope</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, int dims, bool traditional, float base, float scale, int offset, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="separator:a44a77225d1e90fd5bf81caccf8c20061"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5a48ce1f5ec64ef14fd8a3c42e4fcba9" id="r_a5a48ce1f5ec64ef14fd8a3c42e4fcba9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5a48ce1f5ec64ef14fd8a3c42e4fcba9">scaled_dot_product_attention</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;queries, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;keys, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;values, const float scale, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;mask=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="memdesc:a5a48ce1f5ec64ef14fd8a3c42e4fcba9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Computes: O = softmax(Q @ K.T) @ V.  <br /></td></tr>
-<tr class="separator:a5a48ce1f5ec64ef14fd8a3c42e4fcba9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a534ef357eae24892684a6ecd866d3fab" id="r_a534ef357eae24892684a6ecd866d3fab"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a534ef357eae24892684a6ecd866d3fab">rope</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, int dims, bool traditional, std::optional&lt; float &gt; base, float scale, int offset, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;freqs=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a534ef357eae24892684a6ecd866d3fab"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8ff2129e77419b7cd32d149cab0766b9" id="r_a8ff2129e77419b7cd32d149cab0766b9"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8ff2129e77419b7cd32d149cab0766b9">scaled_dot_product_attention</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;queries, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;keys, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;values, const float scale, const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;mask=std::nullopt, const std::optional&lt; int &gt; &amp;memory_efficient_threshold=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:a8ff2129e77419b7cd32d149cab0766b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Computes: O = softmax(Q @ K.T) @ V.  <br /></td></tr>
+<tr class="separator:a8ff2129e77419b7cd32d149cab0766b9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa4b5f6886b2288cb6dfdd8598579f080" id="r_aa4b5f6886b2288cb6dfdd8598579f080"><td class="memItemLeft" align="right" valign="top">std::tuple&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa4b5f6886b2288cb6dfdd8598579f080">affine_quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:aa4b5f6886b2288cb6dfdd8598579f080"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a638c7e9b9ea8677f01786d8f9738baf8" id="r_a638c7e9b9ea8677f01786d8f9738baf8"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a638c7e9b9ea8677f01786d8f9738baf8">affine_quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
@@ -119,6 +131,21 @@ Functions</h2></td></tr>
 <tr class="memitem:a12c7ef41409d6fb378008e67b6fab328" id="r_a12c7ef41409d6fb378008e67b6fab328"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a12c7ef41409d6fb378008e67b6fab328">affine_dequantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="separator:a12c7ef41409d6fb378008e67b6fab328"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
+<h2 class="groupheader">Typedef Documentation</h2>
+<a id="a9390693ff7be931f3ef3428e2ea4c3f9" name="a9390693ff7be931f3ef3428e2ea4c3f9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9390693ff7be931f3ef3428e2ea4c3f9">&#9670;&#160;</a></span>TemplateArg</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef std::variant&lt;int, bool, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a>&gt; <a class="el" href="#a9390693ff7be931f3ef3428e2ea4c3f9">mlx::core::fast::TemplateArg</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <h2 class="groupheader">Function Documentation</h2>
 <a id="a12c7ef41409d6fb378008e67b6fab328" name="a12c7ef41409d6fb378008e67b6fab328"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a12c7ef41409d6fb378008e67b6fab328">&#9670;&#160;</a></span>affine_dequantize()</h2>
@@ -300,8 +327,8 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a44a77225d1e90fd5bf81caccf8c20061" name="a44a77225d1e90fd5bf81caccf8c20061"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a44a77225d1e90fd5bf81caccf8c20061">&#9670;&#160;</a></span>rope()</h2>
+<a id="a534ef357eae24892684a6ecd866d3fab" name="a534ef357eae24892684a6ecd866d3fab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a534ef357eae24892684a6ecd866d3fab">&#9670;&#160;</a></span>rope()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -324,7 +351,7 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">float</td>          <td class="paramname"><span class="paramname"><em>base</em>, </span></td>
+          <td class="paramtype">std::optional&lt; float &gt;</td>          <td class="paramname"><span class="paramname"><em>base</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -339,6 +366,11 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>freqs</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em><span class="paramdefsep"> = </span><span class="paramdefval">{}</span></span>&#160;)</td>
         </tr>
       </table>
@@ -346,8 +378,8 @@ Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a5a48ce1f5ec64ef14fd8a3c42e4fcba9" name="a5a48ce1f5ec64ef14fd8a3c42e4fcba9"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5a48ce1f5ec64ef14fd8a3c42e4fcba9">&#9670;&#160;</a></span>scaled_dot_product_attention()</h2>
+<a id="a8ff2129e77419b7cd32d149cab0766b9" name="a8ff2129e77419b7cd32d149cab0766b9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ff2129e77419b7cd32d149cab0766b9">&#9670;&#160;</a></span>scaled_dot_product_attention()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -376,6 +408,11 @@ Functions</h2></td></tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const std::optional&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>mask</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::optional&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>memory_efficient_threshold</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>

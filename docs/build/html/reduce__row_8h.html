@@ -85,34 +85,52 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:aea2b1ba640fffb71c73550ec747b3148" id="r_aea2b1ba640fffb71c73550ec747b3148"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
-<tr class="memitem:aea2b1ba640fffb71c73550ec747b3148"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aea2b1ba640fffb71c73550ec747b3148">row_reduce_general_small</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, uint lid)</td></tr>
-<tr class="separator:aea2b1ba640fffb71c73550ec747b3148"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad77d444bcfa9e6afcc1ffc1dcb919f1c" id="r_ad77d444bcfa9e6afcc1ffc1dcb919f1c"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
-<tr class="memitem:ad77d444bcfa9e6afcc1ffc1dcb919f1c"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad77d444bcfa9e6afcc1ffc1dcb919f1c">row_reduce_general_med</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, uint tid, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</td></tr>
-<tr class="separator:ad77d444bcfa9e6afcc1ffc1dcb919f1c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5df83c60214206d584be1587c9b723a5" id="r_a5df83c60214206d584be1587c9b723a5"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </td></tr>
-<tr class="memitem:a5df83c60214206d584be1587c9b723a5"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC U&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a5df83c60214206d584be1587c9b723a5">per_thread_row_reduce</a> (const device T *in, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, uint lsize_x, uint lid_x, uint2 tid)</td></tr>
-<tr class="separator:a5df83c60214206d584be1587c9b723a5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a917b01e3de3372d276f8dd28f0e9b8f1" id="r_a917b01e3de3372d276f8dd28f0e9b8f1"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </td></tr>
-<tr class="memitem:a917b01e3de3372d276f8dd28f0e9b8f1"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a917b01e3de3372d276f8dd28f0e9b8f1">row_reduce_general</a> (const device T *in, device <a class="el" href="structmlx__atomic.html">mlx_atomic</a>&lt; U &gt; *out, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, uint3 lid, uint3 lsize, uint3 tid, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</td></tr>
-<tr class="separator:a917b01e3de3372d276f8dd28f0e9b8f1"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a034fdccc83e66871550c2d42399f0ab5" id="r_a034fdccc83e66871550c2d42399f0ab5"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </td></tr>
-<tr class="memitem:a034fdccc83e66871550c2d42399f0ab5"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a034fdccc83e66871550c2d42399f0ab5">row_reduce_general_no_atomics</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, uint3 lid, uint3 lsize, uint3 gsize, uint3 tid, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</td></tr>
-<tr class="separator:a034fdccc83e66871550c2d42399f0ab5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9d5e0049a2276f43702fc6907e74a35f" id="r_a9d5e0049a2276f43702fc6907e74a35f"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </td></tr>
+<tr class="memitem:a9d5e0049a2276f43702fc6907e74a35f"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9d5e0049a2276f43702fc6907e74a35f">per_thread_row_reduce</a> (thread U totals[N_WRITES], const device T *inputs[N_WRITES], int blocks, int extra, uint lsize_x, uint lid_x)</td></tr>
+<tr class="memdesc:a9d5e0049a2276f43702fc6907e74a35f"><td class="mdescLeft">&#160;</td><td class="mdescRight">The thread group collaboratively reduces across the rows with bounds checking.  <br /></td></tr>
+<tr class="separator:a9d5e0049a2276f43702fc6907e74a35f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a045ec34228e77c79ec67d11c39ff097a" id="r_a045ec34228e77c79ec67d11c39ff097a"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </td></tr>
+<tr class="memitem:a045ec34228e77c79ec67d11c39ff097a"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a045ec34228e77c79ec67d11c39ff097a">per_thread_row_reduce</a> (thread U totals[N_WRITES], const device T *in, const constant size_t &amp;reduction_size, int blocks, int extra, uint lsize_x, uint lid_x)</td></tr>
+<tr class="memdesc:a045ec34228e77c79ec67d11c39ff097a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consecutive rows in a contiguous array.  <br /></td></tr>
+<tr class="separator:a045ec34228e77c79ec67d11c39ff097a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4d00c44e5f4a13be529ff8b664a0a342" id="r_a4d00c44e5f4a13be529ff8b664a0a342"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </td></tr>
+<tr class="memitem:a4d00c44e5f4a13be529ff8b664a0a342"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a4d00c44e5f4a13be529ff8b664a0a342">per_thread_row_reduce</a> (thread U totals[N_WRITES], const device T *in, const size_t row_idx, int blocks, int extra, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, uint lsize_x, uint lid_x)</td></tr>
+<tr class="memdesc:a4d00c44e5f4a13be529ff8b664a0a342"><td class="mdescLeft">&#160;</td><td class="mdescRight">Consecutive rows in an arbitrarily ordered array.  <br /></td></tr>
+<tr class="separator:a4d00c44e5f4a13be529ff8b664a0a342"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa146bb611069fd2892f03714fd1cc3cf" id="r_aa146bb611069fd2892f03714fd1cc3cf"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </td></tr>
+<tr class="memitem:aa146bb611069fd2892f03714fd1cc3cf"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aa146bb611069fd2892f03714fd1cc3cf">threadgroup_reduce</a> (thread U totals[N_WRITES], threadgroup U *shared_vals, uint3 lid, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</td></tr>
+<tr class="memdesc:aa146bb611069fd2892f03714fd1cc3cf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Reduce within the threadgroup.  <br /></td></tr>
+<tr class="separator:aa146bb611069fd2892f03714fd1cc3cf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afd80a25fa84e6cc884dcc8698859ade1" id="r_afd80a25fa84e6cc884dcc8698859ade1"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </td></tr>
+<tr class="memitem:afd80a25fa84e6cc884dcc8698859ade1"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#afd80a25fa84e6cc884dcc8698859ade1">thread_reduce</a> (thread U &amp;total, const device T *row, int blocks, int extra)</td></tr>
+<tr class="separator:afd80a25fa84e6cc884dcc8698859ade1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a27e75312086e31f6bd1bbf4b366679da" id="r_a27e75312086e31f6bd1bbf4b366679da"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS = 0, int N_READS = REDUCE_N_READS&gt; </td></tr>
+<tr class="memitem:a27e75312086e31f6bd1bbf4b366679da"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a27e75312086e31f6bd1bbf4b366679da">row_reduce_small</a> (const device T *in, device U *out, const constant size_t &amp;row_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, uint simd_lane_id, uint3 gid, uint3 gsize, uint3 tid, uint3 tsize)</td></tr>
+<tr class="separator:a27e75312086e31f6bd1bbf4b366679da"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac01d30987668930c8b38900e47b8308b" id="r_ac01d30987668930c8b38900e47b8308b"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </td></tr>
+<tr class="memitem:ac01d30987668930c8b38900e47b8308b"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac01d30987668930c8b38900e47b8308b">row_reduce_simple</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;out_size, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</td></tr>
+<tr class="separator:ac01d30987668930c8b38900e47b8308b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad98332d74a6824aa7499df3e2f2246ae" id="r_ad98332d74a6824aa7499df3e2f2246ae"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS = 0, int N_READS = REDUCE_N_READS&gt; </td></tr>
+<tr class="memitem:ad98332d74a6824aa7499df3e2f2246ae"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad98332d74a6824aa7499df3e2f2246ae">row_reduce_looped</a> (const device T *in, device U *out, const constant size_t &amp;row_size, const constant size_t &amp;non_row_reductions, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, uint3 gid, uint3 gsize, uint3 lid, uint3 lsize, uint simd_lane_id, uint simd_per_group, uint simd_group_id)</td></tr>
+<tr class="separator:ad98332d74a6824aa7499df3e2f2246ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="a5df83c60214206d584be1587c9b723a5" name="a5df83c60214206d584be1587c9b723a5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5df83c60214206d584be1587c9b723a5">&#9670;&#160;</a></span>per_thread_row_reduce()</h2>
+<a id="a045ec34228e77c79ec67d11c39ff097a" name="a045ec34228e77c79ec67d11c39ff097a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a045ec34228e77c79ec67d11c39ff097a">&#9670;&#160;</a></span>per_thread_row_reduce() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </div>
+template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">METAL_FUNC U per_thread_row_reduce </td>
+          <td class="memname">METAL_FUNC void per_thread_row_reduce </td>
           <td>(</td>
+          <td class="paramtype">thread U</td>          <td class="paramname"><span class="paramname"><em>totals</em>[N_WRITES], </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
         </tr>
         <tr>
@@ -123,7 +141,62 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_size</em>, </span></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>blocks</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>extra</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>lsize_x</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>lid_x</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Consecutive rows in a contiguous array. </p>
+
+</div>
+</div>
+<a id="a4d00c44e5f4a13be529ff8b664a0a342" name="a4d00c44e5f4a13be529ff8b664a0a342"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d00c44e5f4a13be529ff8b664a0a342">&#9670;&#160;</a></span>per_thread_row_reduce() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void per_thread_row_reduce </td>
+          <td>(</td>
+          <td class="paramtype">thread U</td>          <td class="paramname"><span class="paramname"><em>totals</em>[N_WRITES], </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const size_t</td>          <td class="paramname"><span class="paramname"><em>row_idx</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>blocks</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>extra</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -148,45 +221,83 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>lid_x</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>&#160;)</td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>lid_x</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
+<p>Consecutive rows in an arbitrarily ordered array. </p>
+
 </div>
 </div>
-<a id="a917b01e3de3372d276f8dd28f0e9b8f1" name="a917b01e3de3372d276f8dd28f0e9b8f1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a917b01e3de3372d276f8dd28f0e9b8f1">&#9670;&#160;</a></span>row_reduce_general()</h2>
+<a id="a9d5e0049a2276f43702fc6907e74a35f" name="a9d5e0049a2276f43702fc6907e74a35f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9d5e0049a2276f43702fc6907e74a35f">&#9670;&#160;</a></span>per_thread_row_reduce() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </div>
+template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">void row_reduce_general </td>
+          <td class="memname">METAL_FUNC void per_thread_row_reduce </td>
+          <td>(</td>
+          <td class="paramtype">thread U</td>          <td class="paramname"><span class="paramname"><em>totals</em>[N_WRITES], </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>inputs</em>[N_WRITES], </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>blocks</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>extra</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>lsize_x</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>lid_x</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>The thread group collaboratively reduces across the rows with bounds checking. </p>
+<p>In the end each thread holds a part of the reduction. </p>
+
+</div>
+</div>
+<a id="ad98332d74a6824aa7499df3e2f2246ae" name="ad98332d74a6824aa7499df3e2f2246ae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad98332d74a6824aa7499df3e2f2246ae">&#9670;&#160;</a></span>row_reduce_looped()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , typename Op , int NDIMS = 0, int N_READS = REDUCE_N_READS&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void row_reduce_looped </td>
           <td>(</td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">device <a class="el" href="structmlx__atomic.html">mlx_atomic</a>&lt; U &gt; *</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>reduction_size</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_size</em>, </span></td>
+          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>row_size</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -211,17 +322,37 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>reduce_shape</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>reduce_strides</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>reduce_ndim</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>gid</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>gsize</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lid</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lsize</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -243,16 +374,16 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
 
 </div>
 </div>
-<a id="ad77d444bcfa9e6afcc1ffc1dcb919f1c" name="ad77d444bcfa9e6afcc1ffc1dcb919f1c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad77d444bcfa9e6afcc1ffc1dcb919f1c">&#9670;&#160;</a></span>row_reduce_general_med()</h2>
+<a id="ac01d30987668930c8b38900e47b8308b" name="ac01d30987668930c8b38900e47b8308b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac01d30987668930c8b38900e47b8308b">&#9670;&#160;</a></span>row_reduce_simple()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op &gt; </div>
+template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">void row_reduce_general_med </td>
+          <td class="memname">void row_reduce_simple </td>
           <td>(</td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
         </tr>
@@ -274,27 +405,22 @@ template&lt;typename T , typename U , typename Op &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>non_row_reductions</em>, </span></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>gid</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>shape</em>, </span></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>gsize</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>strides</em>, </span></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lid</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>ndim</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>tid</em>, </span></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lsize</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -316,16 +442,16 @@ template&lt;typename T , typename U , typename Op &gt; </div>
 
 </div>
 </div>
-<a id="a034fdccc83e66871550c2d42399f0ab5" name="a034fdccc83e66871550c2d42399f0ab5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a034fdccc83e66871550c2d42399f0ab5">&#9670;&#160;</a></span>row_reduce_general_no_atomics()</h2>
+<a id="a27e75312086e31f6bd1bbf4b366679da" name="a27e75312086e31f6bd1bbf4b366679da"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a27e75312086e31f6bd1bbf4b366679da">&#9670;&#160;</a></span>row_reduce_small()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </div>
+template&lt;typename T , typename U , typename Op , int NDIMS = 0, int N_READS = REDUCE_N_READS&gt; </div>
       <table class="memname">
         <tr>
-          <td class="memname">void row_reduce_general_no_atomics </td>
+          <td class="memname">void row_reduce_small </td>
           <td>(</td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
         </tr>
@@ -337,12 +463,7 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>reduction_size</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_size</em>, </span></td>
+          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>row_size</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -367,12 +488,27 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lid</em>, </span></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>reduce_shape</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lsize</em>, </span></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>reduce_strides</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>reduce_ndim</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_lane_id</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>gid</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -387,6 +523,72 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tsize</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afd80a25fa84e6cc884dcc8698859ade1" name="afd80a25fa84e6cc884dcc8698859ade1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd80a25fa84e6cc884dcc8698859ade1">&#9670;&#160;</a></span>thread_reduce()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void thread_reduce </td>
+          <td>(</td>
+          <td class="paramtype">thread U &amp;</td>          <td class="paramname"><span class="paramname"><em>total</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>row</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>blocks</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>extra</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa146bb611069fd2892f03714fd1cc3cf" name="aa146bb611069fd2892f03714fd1cc3cf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa146bb611069fd2892f03714fd1cc3cf">&#9670;&#160;</a></span>threadgroup_reduce()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS, int N_WRITES = REDUCE_N_WRITES&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void threadgroup_reduce </td>
+          <td>(</td>
+          <td class="paramtype">thread U</td>          <td class="paramname"><span class="paramname"><em>totals</em>[N_WRITES], </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">threadgroup U *</td>          <td class="paramname"><span class="paramname"><em>shared_vals</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>lid</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>simd_lane_id</em>, </span></td>
         </tr>
         <tr>
@@ -402,63 +604,7 @@ template&lt;typename T , typename U , typename Op , int N_READS = REDUCE_N_READS
       </table>
 </div><div class="memdoc">
 
-</div>
-</div>
-<a id="aea2b1ba640fffb71c73550ec747b3148" name="aea2b1ba640fffb71c73550ec747b3148"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aea2b1ba640fffb71c73550ec747b3148">&#9670;&#160;</a></span>row_reduce_general_small()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<div class="memtemplate">
-template&lt;typename T , typename U , typename Op &gt; </div>
-      <table class="memname">
-        <tr>
-          <td class="memname">void row_reduce_general_small </td>
-          <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>reduction_size</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>out_size</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t &amp;</td>          <td class="paramname"><span class="paramname"><em>non_row_reductions</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>shape</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>strides</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>ndim</em>, </span></td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>lid</em></span>&#160;)</td>
-        </tr>
-      </table>
-</div><div class="memdoc">
+<p>Reduce within the threadgroup. </p>
 
 </div>
 </div>

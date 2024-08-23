@@ -98,8 +98,8 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span><span class="stringliteral">    const constant size_t* idx_strides [[buffer(8)]],</span></div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span><span class="stringliteral">    const constant int&amp; idx_ndim [[buffer(9)]],</span></div>
 <div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span><span class="stringliteral">    {4}</span></div>
-<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="stringliteral">    uint2 index [[thread_position_in_grid]],</span></div>
-<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="stringliteral">    uint2 grid_dim [[threads_per_grid]]) {{</span></div>
+<div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span><span class="stringliteral">    uint3 index [[thread_position_in_grid]],</span></div>
+<div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span><span class="stringliteral">    uint3 grid_dim [[threads_per_grid]]) {{</span></div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span><span class="stringliteral">  Indices&lt;{2}, {3}&gt; idxs{{</span></div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span><span class="stringliteral">    {{ {5} }}, idx_shapes, idx_strides, idx_ndim}};</span></div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span><span class="stringliteral"></span> </div>
