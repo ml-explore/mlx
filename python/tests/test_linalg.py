@@ -241,6 +241,13 @@ class TestLinalg(mlx_tests.MLXTestCase):
         result = mx.linalg.cross_product(a, b)
         self.assertTrue(mx.allclose(result, expected))
 
+        # Test with 2D arrays and axis parameter
+        a = mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        b = mx.array([[4.0, 5.0, 6.0], [1.0, 2.0, 3.0]])
+        expected = mx.array([[-3.0, 6.0, -3.0], [3.0, -6.0, 3.0]])
+        result = mx.linalg.cross_product(a, b, axis=1)
+        self.assertTrue(mx.allclose(result, expected))
+
         # Test with different data types (should raise an exception)
         a = mx.array([1.0, 2.0, 3.0], dtype=mx.float32)
         b = mx.array([4, 5, 6], dtype=mx.int32)

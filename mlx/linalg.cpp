@@ -385,27 +385,38 @@ array cholesky_inv(
 array cross_product(
     const array& a,
     const array& b,
-    StreamOrDevice s /* = {} */) {
-  if (a.shape().size() != 1 || b.shape().size() != 1) {
+    int axis = -1,
+    StreamOrDevice s = {}) {
+  // Validate the input dimensions and axis argument.
+  if (a.ndim() != b.ndim()) {
     throw std::invalid_argument(
-        "[linalg::cross_product] Inputs must be 1D vectors.");
+        "Input arrays must have the same number of dimensions.");
   }
-  if (a.size() != 3 || b.size() != 3) {
-    throw std::invalid_argument(
-        "[linalg::cross_product] Each input must be a triplet of 1D vectors.");
+  if (a.shape() != b.shape()) {
+    throw std::invalid_argument("Input arrays must have the same shape.");
   }
-  if (a.dtype() != b.dtype()) {
+  if (a.shape(axis) != 3) {
     throw std::invalid_argument(
-        "[linalg::cross_product] Input vectors must have the same data type.");
+        "The specified axis must have exactly 3 elements.");
   }
 
-  auto dtype = at_least_float(a.dtype());
+  // Adjusting negative axis if provided.
+  if (axis < 0) {
+    axis += a.ndim();
+  }
 
-  // Cross product formula
-  array c = array::empty({3}, dtype, s);
-  c[0] = a[1] * b[2] - a[2] * b[1];
-  c[1] = a[2] * b[0] - a[0] * b[2];
-  c[2] = a[0] * b[1] - a[1] * b[0];
+  // Cross product calculation along the specified axis.
+  array c = array::empty(a.shape(), at_least_float(a.dtype()), s);
+
+  c.index({Ellipsis(), 0}) =
+      a.index({Ellipsis(), 1}) * b.index({Ellipsis(), 2}) -
+      a.index({Ellipsis(), 2}) * b.index({Ellipsis(), 1});
+  c.index({Ellipsis(), 1}) =
+      a.index({Ellipsis(), 2}) * b.index({Ellipsis(), 0}) -
+      a.index({Ellipsis(), 0}) * b.index({Ellipsis(), 2});
+  c.index({Ellipsis(), 2}) =
+      a.index({Ellipsis(), 0}) * b.index({Ellipsis(), 1}) -
+      a.index({Ellipsis(), 1}) * b.index({Ellipsis(), 0});
 
   return c;
 }
