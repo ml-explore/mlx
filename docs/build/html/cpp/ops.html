@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Operations &#8212; MLX 0.16.2 documentation</title>
+    <title>Operations &#8212; MLX 0.17.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../_static/documentation_options.js?v=00e1e5b9"></script>
+    <script src="../_static/documentation_options.js?v=50b3d22e"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.17.0 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.17.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -438,6 +438,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../python/_autosummary/mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../python/fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -669,6 +671,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../dev/extensions.html">Custom Extensions in MLX</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../dev/metal_debugger.html">Metal Debugger</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../dev/custom_metal_kernels.html">Custom Metal Kernels</a></li>
 </ul>
 
     </div>
@@ -931,6 +934,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv411array_equalRK5arrayRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">array_equal()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45isnanRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isnan()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45isinfRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isinf()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48isfiniteRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isfinite()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48isposinfRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isposinf()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48isneginfRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isneginf()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45whereRK5arrayRK5arrayRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">where()</span></code></a></li>
@@ -1675,6 +1679,11 @@ document.write(`
 <dl class="cpp function">
 <dt class="sig sig-object cpp" id="_CPPv45isinfRK5array14StreamOrDevice">
 <span id="_CPPv35isinfRK5array14StreamOrDevice"></span><span id="_CPPv25isinfRK5array14StreamOrDevice"></span><span id="isinf__arrayCR.StreamOrDevice"></span><span class="target" id="group__ops_1ga8fc238d5e5d1153e69da8b36015d9844"></span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">isinf</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="n"><span class="pre">StreamOrDevice</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv45isinfRK5array14StreamOrDevice" title="Link to this definition">#</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="cpp function">
+<dt class="sig sig-object cpp" id="_CPPv48isfiniteRK5array14StreamOrDevice">
+<span id="_CPPv38isfiniteRK5array14StreamOrDevice"></span><span id="_CPPv28isfiniteRK5array14StreamOrDevice"></span><span id="isfinite__arrayCR.StreamOrDevice"></span><span class="target" id="group__ops_1ga725ff0789f934b1fdd54ee29e47022ff"></span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="sig-name descname"><span class="n"><span class="pre">isfinite</span></span></span><span class="sig-paren">(</span><span class="k"><span class="pre">const</span></span><span class="w"> </span><span class="n"><span class="pre">array</span></span><span class="w"> </span><span class="p"><span class="pre">&amp;</span></span><span class="n sig-param"><span class="pre">a</span></span>, <span class="n"><span class="pre">StreamOrDevice</span></span><span class="w"> </span><span class="n sig-param"><span class="pre">s</span></span><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="p"><span class="pre">{</span></span><span class="p"><span class="pre">}</span></span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv48isfiniteRK5array14StreamOrDevice" title="Link to this definition">#</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="cpp function">
@@ -2999,6 +3008,7 @@ document.write(`
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv411array_equalRK5arrayRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">array_equal()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45isnanRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isnan()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45isinfRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isinf()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48isfiniteRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isfinite()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48isposinfRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isposinf()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv48isneginfRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">isneginf()</span></code></a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#_CPPv45whereRK5arrayRK5arrayRK5array14StreamOrDevice"><code class="docutils literal notranslate"><span class="pre">where()</span></code></a></li>

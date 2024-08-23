@@ -104,7 +104,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    uint2 gid [[thread_position_in_grid]]) {</div>
 <div class="line"><a id="l00019" name="l00019"></a><span class="lineno">   19</span>  Op <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>;</div>
 <div class="line"><a id="l00020" name="l00020"></a><span class="lineno">   20</span> </div>
-<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  uint out_idx = 0;</div>
+<div class="line"><a id="l00021" name="l00021"></a><span class="lineno">   21</span>  <span class="keywordtype">size_t</span> out_idx = 0;</div>
 <div class="line"><a id="l00022" name="l00022"></a><span class="lineno">   22</span>  <span class="keywordflow">for</span> (<span class="keywordtype">int</span> i = 0; i &lt; NIDX; i++) {</div>
 <div class="line"><a id="l00023" name="l00023"></a><span class="lineno">   23</span>    <span class="keyword">auto</span> idx_val = <a class="code hl_function" href="kernels_2indexing_8h.html#ab41167dc537c06fbdb4df100972393df">offset_neg_idx</a>(idx_buffers[i][gid.y], out_shape[i]);</div>
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span>    out_idx += idx_val * out_strides[i];</div>
@@ -163,7 +163,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00075" name="l00075"></a><span class="lineno">   75</span>  <a class="code hl_variable" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>.atomic_update(out, updates[upd_idx], out_idx);</div>
 <div class="line"><a id="l00076" name="l00076"></a><span class="lineno">   76</span>}</div>
 </div>
-<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a2e49fa7ab8f6348543455c6c45d7e2a9"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a2e49fa7ab8f6348543455c6c45d7e2a9">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc(uint elem, device const int *shape, device const stride_t *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:77</div></div>
+<div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_a2e49fa7ab8f6348543455c6c45d7e2a9"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#a2e49fa7ab8f6348543455c6c45d7e2a9">elem_to_loc</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc(uint elem, device const int *shape, device const stride_t *strides, int ndim)</div><div class="ttdef"><b>Definition</b> utils.h:87</div></div>
 <div class="ttc" id="acommon_2binary_8h_html_a70228731d29946574b238d21fb4b360c"><div class="ttname"><a href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a></div><div class="ttdeci">Op op</div><div class="ttdef"><b>Definition</b> binary.h:141</div></div>
 <div class="ttc" id="akernels_2indexing_8h_html"><div class="ttname"><a href="kernels_2indexing_8h.html">indexing.h</a></div></div>
 <div class="ttc" id="akernels_2indexing_8h_html_ab41167dc537c06fbdb4df100972393df"><div class="ttname"><a href="kernels_2indexing_8h.html#ab41167dc537c06fbdb4df100972393df">offset_neg_idx</a></div><div class="ttdeci">METAL_FUNC size_t offset_neg_idx(IdxT idx, size_t size)</div><div class="ttdef"><b>Definition</b> indexing.h:16</div></div>

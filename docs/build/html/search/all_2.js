@@ -97,8 +97,9 @@ var searchData=
   ['bs_5fqvm_94',['bs_qvm',['../quantized_8h.html#a3af1c89416632c9275b8218a33cb8a04',1,'quantized.h']]],
   ['bsimd_95',['Bsimd',['../structmlx_1_1steel_1_1_block_m_m_a.html#a3de506004b428d3487bae05ad9e757e6',1,'mlx::steel::BlockMMA']]],
   ['buf_96',['buf',['../struct_read_writer.html#a23bac3c96dd0265ddbee1f256be45ff5',1,'ReadWriter::buf'],['../backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697',1,'buf:&#160;allocator.h']]],
-  ['buffer_97',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html',1,'mlx::core::allocator::Buffer'],['../classmlx_1_1core_1_1allocator_1_1_buffer.html#ac4fc2cc6aa1368cfb74aff329d9a1300',1,'mlx::core::allocator::Buffer::Buffer()']]],
+  ['buffer_97',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html',1,'mlx::core::allocator']]],
   ['buffer_98',['buffer',['../structmlx_1_1core_1_1array_1_1_data.html#a9a51e2d12ba505027cc0fca86bdd39ad',1,'mlx::core::array::Data::buffer'],['../classmlx_1_1core_1_1array.html#ab3daf04c27c4593d9d73c397b8484a08',1,'mlx::core::array::buffer()'],['../classmlx_1_1core_1_1array.html#a634466ce661485394f2fdc3bd6796bcd',1,'mlx::core::array::buffer() const']]],
-  ['buffers_99',['buffers',['../struct_indices.html#ad705070a740579c07d109ae4f3d86e76',1,'Indices']]],
-  ['build_5flib_5fname_100',['build_lib_name',['../namespacemlx_1_1core.html#a3ef23f334cb9f68a2c50524bc67c913b',1,'mlx::core']]]
+  ['buffer_99',['Buffer',['../classmlx_1_1core_1_1allocator_1_1_buffer.html#ac4fc2cc6aa1368cfb74aff329d9a1300',1,'mlx::core::allocator::Buffer']]],
+  ['buffers_100',['buffers',['../struct_indices.html#ad705070a740579c07d109ae4f3d86e76',1,'Indices']]],
+  ['build_5flib_5fname_101',['build_lib_name',['../namespacemlx_1_1core.html#a3ef23f334cb9f68a2c50524bc67c913b',1,'mlx::core']]]
 ];
