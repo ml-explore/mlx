@@ -4,7 +4,7 @@ var searchData=
   ['scales_1',['scales',['../struct_quantized_block_loader.html#a6123e4a9209d6eacb58b2c2344ed1ecf',1,'QuantizedBlockLoader']]],
   ['scan_5fkernels_2',['scan_kernels',['../jit_2scan_8h.html#a35041ee4a053875a2240bdac5a3b4fae',1,'scan.h']]],
   ['scatter_5fkernels_3',['scatter_kernels',['../jit_2indexing_8h.html#a768c949cd650a44c6b402fc1440c1a56',1,'indexing.h']]],
-  ['shape_4',['shape',['../structmlx_1_1core_1_1_reduction_plan.html#a6cfa8771fa9caf6fdcc3d74c9fca83ae',1,'mlx::core::ReductionPlan']]],
+  ['shape_4',['shape',['../structmlx_1_1core_1_1_reduction_plan.html#a6cfa8771fa9caf6fdcc3d74c9fca83ae',1,'mlx::core::ReductionPlan::shape'],['../structmlx_1_1core_1_1fast_1_1_custom_kernel_shape_info.html#a63db720fe0c2abc4b71e22a58a015f8a',1,'mlx::core::fast::CustomKernelShapeInfo::shape']]],
   ['shapes_5',['shapes',['../struct_indices.html#a5ab170f1a77636180889ddfffd4f7d2f',1,'Indices']]],
   ['shp_6',['shp',['../classpocketfft_1_1detail_1_1arr__info.html#a2467e9e01de1ba4d7cd28c1af783da8d',1,'pocketfft::detail::arr_info']]],
   ['signedinteger_7',['signedinteger',['../namespacemlx_1_1core.html#a24e1618af591d737d73729665e868001',1,'mlx::core']]],
@@ -35,6 +35,6 @@ var searchData=
   ['stream_32',['stream',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a8462e4acffcd385c6248bd7102e6bcb1',1,'mlx::core::scheduler::StreamThread']]],
   ['strided_5fdevice_5fidx_33',['strided_device_idx',['../struct_read_writer.html#a4c0b12484aac4fd6759d67c190391989',1,'ReadWriter']]],
   ['strided_5fshared_5fidx_34',['strided_shared_idx',['../struct_read_writer.html#ace40adb02cfb33d89c98353327c251fc',1,'ReadWriter']]],
-  ['strides_35',['strides',['../structmlx_1_1core_1_1_reduction_plan.html#a9bf7cae845ab633247c1811613ece8bd',1,'mlx::core::ReductionPlan::strides'],['../struct_indices.html#a7f73d7652f0f751e6a06c2663e329a4a',1,'Indices::strides']]],
+  ['strides_35',['strides',['../structmlx_1_1core_1_1_reduction_plan.html#a9bf7cae845ab633247c1811613ece8bd',1,'mlx::core::ReductionPlan::strides'],['../struct_indices.html#a7f73d7652f0f751e6a06c2663e329a4a',1,'Indices::strides'],['../structmlx_1_1core_1_1fast_1_1_custom_kernel_shape_info.html#a63954de7da62942ec69afcaaa19d46f2',1,'mlx::core::fast::CustomKernelShapeInfo::strides']]],
   ['swizzle_5flog_36',['swizzle_log',['../struct_m_l_x_fast_attention_params.html#a68a338d522ffeb6761b7b168869361e2',1,'MLXFastAttentionParams::swizzle_log'],['../structmlx_1_1steel_1_1_implicit_gemm_conv2_d_params.html#ad0713159d4f710cd9a066596593d8840',1,'mlx::steel::ImplicitGemmConv2DParams::swizzle_log'],['../structmlx_1_1steel_1_1_g_e_m_m_params.html#af9ff2c06dd8994126634531440325be7',1,'mlx::steel::GEMMParams::swizzle_log']]]
 ];

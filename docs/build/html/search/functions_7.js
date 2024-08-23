@@ -2,7 +2,7 @@ var searchData=
 [
   ['gather_0',['Gather',['../classmlx_1_1core_1_1_gather.html#a5b5f47ceff1d43477c87be5116f261d0',1,'mlx::core::Gather']]],
   ['gather_1',['gather',['../namespacemlx_1_1core_1_1metal.html#a545de371fefba1feec2e70b7e9f4187c',1,'mlx::core::metal::gather()'],['../group__ops.html#gab6e7f655a9ff15350ca5379692f9d444',1,'mlx::core::gather(const array &amp;a, const std::vector&lt; array &gt; &amp;indices, const std::vector&lt; int &gt; &amp;axes, const std::vector&lt; int &gt; &amp;slice_sizes, StreamOrDevice s={})'],['../group__ops.html#gadb4337ca5d4f88fe9e7c083bc478158b',1,'mlx::core::gather(const array &amp;a, const array &amp;indices, int axis, const std::vector&lt; int &gt; &amp;slice_sizes, StreamOrDevice s={})']]],
-  ['gather_5fimpl_2',['gather_impl',['../gather_8h.html#a1a4a98a3290404e95bd2aeb16d160989',1,'gather.h']]],
+  ['gather_5fimpl_2',['gather_impl',['../gather_8h.html#abdec470e1af0109563ddae3e85e6526c',1,'gather.h']]],
   ['gather_5fmm_3',['gather_mm',['../group__ops.html#ga8d50480266d258cac40ff51bcb0fc6a7',1,'mlx::core']]],
   ['gather_5fqmm_4',['gather_qmm',['../group__ops.html#ga368a0dc0e5dfb76922e7aa55a95f12f0',1,'mlx::core']]],
   ['gathermm_5',['GatherMM',['../classmlx_1_1core_1_1_gather_m_m.html#afd9bbc08138181b80e2fb86536ff3f2a',1,'mlx::core::GatherMM']]],
@@ -44,7 +44,7 @@ var searchData=
   ['get_5fquantized_5fkernel_41',['get_quantized_kernel',['../namespacemlx_1_1core.html#aa3faeae5378bfaafe3ce3432a051e43e',1,'mlx::core']]],
   ['get_5freduce_5finit_5fkernel_42',['get_reduce_init_kernel',['../namespacemlx_1_1core.html#a51c4bb09230348bd0252e22bfdc9bc89',1,'mlx::core']]],
   ['get_5freduce_5fkernel_43',['get_reduce_kernel',['../namespacemlx_1_1core.html#a5d6843dcbdbd4d12851fc2edbafbc9e6',1,'mlx::core']]],
-  ['get_5freduction_5fplan_44',['get_reduction_plan',['../namespacemlx_1_1core.html#a1555dc378c5254e79199421761f26f2b',1,'mlx::core']]],
+  ['get_5freduction_5fplan_44',['get_reduction_plan',['../namespacemlx_1_1core.html#ac97b5a6f009ca3d99854ce9512c20dba',1,'mlx::core']]],
   ['get_5fscan_5fkernel_45',['get_scan_kernel',['../namespacemlx_1_1core.html#aeefaff208444d3fa61ecc0946fe1de5f',1,'mlx::core']]],
   ['get_5fshape_46',['get_shape',['../namespacemlx_1_1core.html#aab0d8a256957984acc1e3615c65c898e',1,'mlx::core']]],
   ['get_5fsoftmax_5fkernel_47',['get_softmax_kernel',['../namespacemlx_1_1core.html#a35a412f688d79eb47e42d20a7c8650ee',1,'mlx::core']]],
@@ -69,7 +69,7 @@ var searchData=
   ['greater_66',['greater',['../group__ops.html#gaf4ec7bfc1ad13b891f1f3ef1772ef04d',1,'mlx::core']]],
   ['greater_5fequal_67',['greater_equal',['../group__ops.html#ga7153071bcfff6faad21332163fb9a430',1,'mlx::core']]],
   ['greaterequal_68',['GreaterEqual',['../classmlx_1_1core_1_1_greater_equal.html#a19a3c49d5a9b40e17da0e56ef6908527',1,'mlx::core::GreaterEqual']]],
-  ['group_69',['Group',['../structmlx_1_1core_1_1distributed_1_1_group.html#a6f84accc8d6734989b2757bf6cdd0152',1,'mlx::core::distributed::Group']]],
-  ['group_70',['group',['../classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8831cb61ac633431b78b5fb99c0ea9ff',1,'mlx::core::distributed::DistPrimitive']]],
+  ['group_69',['group',['../classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8831cb61ac633431b78b5fb99c0ea9ff',1,'mlx::core::distributed::DistPrimitive']]],
+  ['group_70',['Group',['../structmlx_1_1core_1_1distributed_1_1_group.html#a6f84accc8d6734989b2757bf6cdd0152',1,'mlx::core::distributed::Group']]],
   ['gumbel_71',['gumbel',['../namespacemlx_1_1core_1_1random.html#aa849b765cd794306997bcbb9936d3d84',1,'mlx::core::random']]]
 ];

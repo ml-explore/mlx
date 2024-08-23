@@ -7,7 +7,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Index &#8212; MLX 0.16.2 documentation</title>
+    <title>Index &#8212; MLX 0.17.0 documentation</title>
   
   
   
@@ -35,7 +35,7 @@
 <link rel="preload" as="script" href="_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="_static/documentation_options.js?v=00e1e5b9"></script>
+    <script src="_static/documentation_options.js?v=50b3d22e"></script>
     <script src="_static/doctools.js?v=888ff710"></script>
     <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -128,8 +128,8 @@
       
     
     
-    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
-    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
+    <img src="_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.17.0 documentation - Home"/>
+    <script>document.write(`<img src="_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.17.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -280,6 +280,7 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.convolve.html">mlx.core.convolve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv1d.html">mlx.core.conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv2d.html">mlx.core.conv2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv3d.html">mlx.core.conv3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.conv_general.html">mlx.core.conv_general</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.cos.html">mlx.core.cos</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.cosh.html">mlx.core.cosh</a></li>
@@ -435,6 +436,8 @@
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="python/_autosummary/mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="python/fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -666,6 +669,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="dev/extensions.html">Custom Extensions in MLX</a></li>
 <li class="toctree-l1"><a class="reference internal" href="dev/metal_debugger.html">Metal Debugger</a></li>
+<li class="toctree-l1"><a class="reference internal" href="dev/custom_metal_kernels.html">Custom Metal Kernels</a></li>
 </ul>
 
     </div>
@@ -830,6 +834,8 @@ document.write(`
 </li>
         <li><a href="python/_autosummary/mlx.core.distributed.Group.html#mlx.core.distributed.Group.__init__">(Group method)</a>
 </li>
+        <li><a href="python/_autosummary/mlx.core.fast.metal_kernel.html#mlx.core.fast.metal_kernel.__init__">(metal_kernel method)</a>
+</li>
         <li><a href="python/_autosummary/stream_class.html#mlx.core.Stream.__init__">(Stream method)</a>
 </li>
       </ul></li>
@@ -866,6 +872,8 @@ document.write(`
       <li><a href="cpp/ops.html#_CPPv45addmm5array5array5arrayRKfRKf14StreamOrDevice">addmm (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.addmm.html#mlx.core.addmm">addmm() (in module mlx.core)</a>
+</li>
+      <li><a href="python/_autosummary/mlx.core.fast.affine_quantize.html#mlx.core.fast.affine_quantize">affine_quantize() (in module mlx.core.fast)</a>
 </li>
       <li><a href="python/nn/_autosummary/mlx.nn.ALiBi.html#mlx.nn.ALiBi">ALiBi (class in mlx.nn)</a>
 </li>
@@ -1083,9 +1091,11 @@ document.write(`
 </li>
       <li><a href="cpp/ops.html#_CPPv46conv3dRK5arrayRK5arrayRKNSt5tupleIiiiEERKNSt5tupleIiiiEERKNSt5tupleIiiiEEi14StreamOrDevice">conv3d (C++ function)</a>
 </li>
+      <li><a href="python/nn/_autosummary/mlx.nn.Conv3d.html#mlx.nn.Conv3d">Conv3d (class in mlx.nn)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="python/nn/_autosummary/mlx.nn.Conv3d.html#mlx.nn.Conv3d">Conv3d (class in mlx.nn)</a>
+      <li><a href="python/_autosummary/mlx.core.conv3d.html#mlx.core.conv3d">conv3d() (in module mlx.core)</a>
 </li>
       <li><a href="cpp/ops.html#_CPPv412conv_general5array5arrayNSt6vectorIiEENSt6vectorIiEENSt6vectorIiEENSt6vectorIiEENSt6vectorIiEEib14StreamOrDevice">conv_general (C++ function)</a>, <a href="cpp/ops.html#_CPPv412conv_generalRK5arrayRK5arrayNSt6vectorIiEENSt6vectorIiEENSt6vectorIiEENSt6vectorIiEEib14StreamOrDevice">[1]</a>
 </li>
@@ -1451,6 +1461,8 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.isclose.html#mlx.core.isclose">isclose() (in module mlx.core)</a>
 </li>
+      <li><a href="cpp/ops.html#_CPPv48isfiniteRK5array14StreamOrDevice">isfinite (C++ function)</a>
+</li>
       <li><a href="cpp/ops.html#_CPPv45isinfRK5array14StreamOrDevice">isinf (C++ function)</a>
 </li>
       <li><a href="python/_autosummary/mlx.core.isinf.html#mlx.core.isinf">isinf() (in module mlx.core)</a>
@@ -1649,10 +1661,12 @@ document.write(`
 </li>
       <li><a href="python/_autosummary/mlx.core.meshgrid.html#mlx.core.meshgrid">meshgrid() (in module mlx.core)</a>
 </li>
-      <li><a href="cpp/ops.html#_CPPv43minRK5array14StreamOrDevice">min (C++ function)</a>, <a href="cpp/ops.html#_CPPv43minRK5arrayRKNSt6vectorIiEEb14StreamOrDevice">[1]</a>, <a href="cpp/ops.html#_CPPv43minRK5arrayb14StreamOrDevice">[2]</a>, <a href="cpp/ops.html#_CPPv43minRK5arrayib14StreamOrDevice">[3]</a>
+      <li><a href="python/_autosummary/mlx.core.fast.metal_kernel.html#mlx.core.fast.metal_kernel">metal_kernel (class in mlx.core.fast)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="cpp/ops.html#_CPPv43minRK5array14StreamOrDevice">min (C++ function)</a>, <a href="cpp/ops.html#_CPPv43minRK5arrayRKNSt6vectorIiEEb14StreamOrDevice">[1]</a>, <a href="cpp/ops.html#_CPPv43minRK5arrayb14StreamOrDevice">[2]</a>, <a href="cpp/ops.html#_CPPv43minRK5arrayib14StreamOrDevice">[3]</a>
+</li>
       <li><a href="python/_autosummary/mlx.core.array.min.html#mlx.core.array.min">min() (array method)</a>
 
       <ul>

@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.core.issubdtype &#8212; MLX 0.16.2 documentation</title>
+    <title>mlx.core.issubdtype &#8212; MLX 0.17.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../_static/documentation_options.js?v=00e1e5b9"></script>
+    <script src="../../_static/documentation_options.js?v=50b3d22e"></script>
     <script src="../../_static/doctools.js?v=888ff710"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.16.2 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.16.2 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.17.0 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.17.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -438,6 +438,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.scaled_dot_product_attention.html">mlx.core.fast.scaled_dot_product_attention</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -669,6 +671,7 @@
 <ul class="nav bd-sidenav">
 <li class="toctree-l1"><a class="reference internal" href="../../dev/extensions.html">Custom Extensions in MLX</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../../dev/metal_debugger.html">Metal Debugger</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../dev/custom_metal_kernels.html">Custom Metal Kernels</a></li>
 </ul>
 
     </div>
@@ -848,15 +851,27 @@ document.write(`
 <h1>mlx.core.issubdtype<a class="headerlink" href="#mlx-core-issubdtype" title="Link to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.core.issubdtype">
-<span class="sig-name descname"><span class="pre">issubdtype</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.Dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.Dtype</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="headerlink" href="#mlx.core.issubdtype" title="Link to this definition">#</a></dt>
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">issubdtype</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.Dtype</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.DtypeCategory</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span></dt>
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">issubdtype</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.DtypeCategory</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.Dtype</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span></dt>
-<dt class="sig sig-object py">
-<span class="sig-name descname"><span class="pre">issubdtype</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.DtypeCategory</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">:</span> <span class="pre">mlx.core.DtypeCategory</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span></dt>
+<span class="sig-name descname"><span class="pre">issubdtype</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">arg1</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><span class="pre">Dtype</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.DtypeCategory.html#mlx.core.DtypeCategory" title="mlx.core.DtypeCategory"><span class="pre">DtypeCategory</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">arg2</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><span class="pre">Dtype</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.DtypeCategory.html#mlx.core.DtypeCategory" title="mlx.core.DtypeCategory"><span class="pre">DtypeCategory</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span></span><a class="headerlink" href="#mlx.core.issubdtype" title="Link to this definition">#</a></dt>
 <dd><p>Check if a <a class="reference internal" href="mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Dtype</span></code></a> or <a class="reference internal" href="mlx.core.DtypeCategory.html#mlx.core.DtypeCategory" title="mlx.core.DtypeCategory"><code class="xref py py-obj docutils literal notranslate"><span class="pre">DtypeCategory</span></code></a> is a subtype
 of another.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>(</strong><strong>Union</strong><strong>[</strong><strong>Dtype</strong> (<em>arg2</em>) – First dtype or category.</p></li>
+<li><p><strong>DtypeCategory</strong><strong>]</strong> – First dtype or category.</p></li>
+<li><p><strong>(</strong><strong>Union</strong><strong>[</strong><strong>Dtype</strong> – Second dtype or category.</p></li>
+<li><p><strong>DtypeCategory</strong><strong>]</strong> – Second dtype or category.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A boolean indicating if the first input is a subtype of the
+second input.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a></p>
+</dd>
+</dl>
+<p class="rubric">Example</p>
 <div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ints</span> <span class="o">=</span> <span class="n">mx</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">mx</span><span class="o">.</span><span class="n">int32</span><span class="p">)</span>
 <span class="gp">&gt;&gt;&gt; </span><span class="n">mx</span><span class="o">.</span><span class="n">issubdtype</span><span class="p">(</span><span class="n">ints</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span> <span class="n">mx</span><span class="o">.</span><span class="n">integer</span><span class="p">)</span>
 <span class="go">True</span>
