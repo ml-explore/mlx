@@ -1101,6 +1101,7 @@ std::map<std::string, array> MetalKernel::operator()(
     std::tuple<int, int, int> grid,
     std::tuple<int, int, int> threadgroup,
     std::optional<std::map<std::string, TemplateArg>> template_args,
+    std::optional<float> init_value,
     bool verbose,
     StreamOrDevice s_) {
   validate_output_shapes(output_shapes, output_dtypes);
@@ -1183,7 +1184,7 @@ std::map<std::string, array> MetalKernel::operator()(
           threadgroup,
           shape_infos,
           ensure_row_contiguous_,
-          zero_outputs_),
+          init_value),
       in_arrs);
 
   int i = 0;

@@ -258,7 +258,7 @@ class CustomKernel : public Primitive {
       std::tuple<int, int, int> threadgroup,
       std::vector<CustomKernelShapeInfo> shape_infos,
       bool ensure_row_contiguous,
-      bool zero_outputs)
+      std::optional<float> init_value)
       : Primitive(stream),
         source_(source),
         name_(name),
@@ -266,7 +266,7 @@ class CustomKernel : public Primitive {
         threadgroup_(threadgroup),
         shape_infos_(shape_infos),
         ensure_row_contiguous_(ensure_row_contiguous),
-        zero_outputs_(zero_outputs) {}
+        init_value_(init_value) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -285,7 +285,7 @@ class CustomKernel : public Primitive {
   std::tuple<int, int, int> threadgroup_;
   std::vector<CustomKernelShapeInfo> shape_infos_;
   bool ensure_row_contiguous_;
-  bool zero_outputs_;
+  std::optional<float> init_value_;
 };
 
 } // namespace mlx::core::fast

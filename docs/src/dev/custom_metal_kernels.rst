@@ -275,8 +275,8 @@ its custom vjp transform so MLX can differentiate it.
 The backwards pass requires atomically updating ``x_grad``/``grid_grad`` and so
 requires a few extra ``mx.fast.metal_kernel`` features:
 
-* ``zero_outputs=True``
-    Zero out all of the kernel's outputs before it runs. This allows us to update only part of the output arrays with the kernel.
+* ``init_value=0``
+    Initialize all of the kernel's outputs to this value before it runs. This allows us to update only part of the output arrays with the kernel.
 
 * ``atomic_outputs=True``
     Designate all of the kernel outputs as ``atomic`` in the function signature. 
@@ -390,7 +390,6 @@ We can then implement the backwards pass as follows:
         kernel = mx.fast.metal_kernel(
             name="grid_sample_grad",
             source=source,
-            zero_outputs=True,
             atomic_outputs=True,
         )
         # pad the output channels to simd group size
@@ -405,6 +404,7 @@ We can then implement the backwards pass as follows:
             output_dtypes={"x_grad": x.dtype, "grid_grad": x.dtype},
             grid=(grid_size, 1, 1),
             threadgroup=(256, 1, 1),
+            init_value=0,
         )
         return outputs["x_grad"], outputs["grid_grad"]
 
