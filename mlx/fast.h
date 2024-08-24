@@ -71,10 +71,12 @@ class MetalKernel {
   MetalKernel(
       const std::string& name,
       const std::string& source,
-      bool ensure_row_contiguous)
+      bool ensure_row_contiguous,
+      bool atomic_outputs)
       : name_(name),
         source_(source),
-        ensure_row_contiguous_(ensure_row_contiguous) {}
+        ensure_row_contiguous_(ensure_row_contiguous),
+        atomic_outputs_(atomic_outputs) {}
 
   std::map<std::string, array> operator()(
       std::map<std::string, array>& inputs,
@@ -84,6 +86,7 @@ class MetalKernel {
       std::tuple<int, int, int> threadgroup,
       std::optional<std::map<std::string, TemplateArg>> template_args =
           std::nullopt,
+      std::optional<float> init_value = std::nullopt,
       bool verbose = false,
       StreamOrDevice s = {});
 
@@ -91,5 +94,6 @@ class MetalKernel {
   std::string name_;
   std::string source_;
   bool ensure_row_contiguous_ = true;
+  bool atomic_outputs_ = false;
 };
 } // namespace mlx::core::fast

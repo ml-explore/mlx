@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <optional>
+
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {
@@ -257,14 +259,16 @@ class CustomKernel : public Primitive {
       std::tuple<int, int, int> grid,
       std::tuple<int, int, int> threadgroup,
       std::vector<CustomKernelShapeInfo> shape_infos,
-      bool ensure_row_contiguous)
+      bool ensure_row_contiguous,
+      std::optional<float> init_value)
       : Primitive(stream),
         source_(source),
         name_(name),
         grid_(grid),
         threadgroup_(threadgroup),
         shape_infos_(shape_infos),
-        ensure_row_contiguous_(ensure_row_contiguous) {}
+        ensure_row_contiguous_(ensure_row_contiguous),
+        init_value_(init_value) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override {
@@ -283,6 +287,7 @@ class CustomKernel : public Primitive {
   std::tuple<int, int, int> threadgroup_;
   std::vector<CustomKernelShapeInfo> shape_infos_;
   bool ensure_row_contiguous_;
+  std::optional<float> init_value_;
 };
 
 } // namespace mlx::core::fast
