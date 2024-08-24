@@ -3,6 +3,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
 #include <nanobind/stl/shared_ptr.h>
+#include <nanobind/stl/variant.h>
 
 #include "mlx/distributed/distributed.h"
 #include "mlx/distributed/ops.h"
@@ -74,6 +75,7 @@ void init_distributed(nb::module_& parent_module) {
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),
+      "stream"_a = nb::none(),
       nb::sig(
           "def all_sum(x: array, *, group: Optional[Group] = None) -> array"),
       R"pbdoc(
@@ -97,6 +99,7 @@ void init_distributed(nb::module_& parent_module) {
       "x"_a,
       nb::kw_only(),
       "group"_a = nb::none(),
+      "stream"_a = nb::none(),
       nb::sig(
           "def all_gather(x: array, *, group: Optional[Group] = None) -> array"),
       R"pbdoc(

@@ -5,6 +5,7 @@
 
 #include "mlx/backend/common/copy.h"
 #include "mlx/distributed/distributed.h"
+#include "mlx/distributed/distributed_impl.h"
 #include "mlx/scheduler.h"
 
 #define LOAD_SYMBOL(symbol, variable)                              \

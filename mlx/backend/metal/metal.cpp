@@ -44,23 +44,10 @@ std::function<void()> make_task(array arr, bool signal) {
     auto command_buffer = d.get_command_buffer(s.index);
     d.increment_command_buffer_ops(s.index);
 
-    {
-      std::vector<Event> needs_wait;
-      for (auto& input : arr.inputs()) {
-        if (input.event().valid() &&
-            input.event().stream() != arr.primitive().stream()) {
-          needs_wait.push_back(input.event());
-        }
-      }
-      if (!needs_wait.empty()) {
-        d.end_encoding(s.index);
-
-        for (auto& e : needs_wait) {
-          command_buffer->encodeWait(
-              static_cast<MTL::Event*>(e.raw_event().get()), e.value());
-        }
-        command_buffer->addCompletedHandler(
-            [events = std::move(needs_wait)](MTL::CommandBuffer* cbuf) {});
+    for (auto& input : arr.inputs()) {
+      if (input.event().valid() &&
+          input.event().stream() != arr.primitive().stream()) {
+        input.event().wait();
       }
     }
 
