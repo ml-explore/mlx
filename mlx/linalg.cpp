@@ -390,14 +390,14 @@ array cross_product(
   // Validate the input dimensions and axis argument.
   if (a.ndim() != b.ndim()) {
     throw std::invalid_argument(
-        "Input arrays must have the same number of dimensions.");
+        "[linalg:cross_product] Input arrays must have the same number of dimensions.");
   }
   if (a.shape() != b.shape()) {
-    throw std::invalid_argument("Input arrays must have the same shape.");
+    throw std::invalid_argument("[linalg:cross_product] Input arrays must have the same shape.");
   }
   if (a.shape(axis) != 3) {
     throw std::invalid_argument(
-        "The specified axis must have exactly 3 elements.");
+        "[linalg:cross_product] The specified axis must have exactly 3 elements.");
   }
 
   // Adjusting negative axis if provided.
