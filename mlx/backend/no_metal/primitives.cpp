@@ -1,6 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
 #include "mlx/primitives.h"
+#include "mlx/distributed/primitives.h"
 #include "mlx/fast_primitives.h"
 
 #define NO_GPU_MULTI(func)                                             \
@@ -121,5 +122,10 @@ NO_GPU(ScaledDotProductAttention)
 NO_GPU_MULTI(AffineQuantize)
 NO_GPU_MULTI(CustomKernel)
 } // namespace fast
+
+namespace distributed {
+NO_GPU_MULTI(AllReduce)
+NO_GPU_MULTI(AllGather)
+} // namespace distributed
 
 } // namespace mlx::core
