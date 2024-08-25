@@ -646,6 +646,34 @@ class TestFast(mlx_tests.MLXTestCase):
             )
             self.assertTrue(mx.allclose(mx.exp(a) * 32, outputs["out"]))
 
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_helper(self):
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(3, 6))
+        kernel = mx.fast.metal_kernel(
+            name="basic",
+            headers="""
+            template <typename T>
+            T do_exp(T x) {
+                return exp(x);
+            }
+            """,
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out1[elem] = do_exp(a[elem]);
+            """,
+        )
+        out = kernel(
+            inputs={"a": a},
+            grid=(4, 1, 1),
+            threadgroup=(2, 1, 1),
+            output_shapes={"out1": (2, 2)},
+            output_dtypes={"out1": mx.float32},
+            stream=mx.gpu,
+        )
+        print(out["out1"])
+        mx.allclose(out["out1"], mx.exp(a[:2, :2]))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -102,12 +102,11 @@ void init_fast(nb::module_& parent_module) {
               implementation which rotates consecutive dimensions.
             base (float, optional): The base used to compute angular frequency for
               each dimension in the positional encodings. Exactly one of ``base`` and
-              ``freqs`` must be ``None``.
+             ``freqs`` must be ``None``.
             scale (float): The scale used to scale the positions.
             offset (int): The position offset to start at.
             freqs (array, optional): Optional frequencies to use with RoPE.
-              If set, the ``base`` parameter must be ``None``. Default: ``None``.
-
+              If set, the ``base`` parameter must be ``None``. ``Default: None``.
         Returns:
             array: The output array.
       )pbdoc");
@@ -200,9 +199,15 @@ void init_fast(nb::module_& parent_module) {
       A jit-compiled custom Metal kernel defined from a source string.
       )pbdoc")
       .def(
-          nb::init<const std::string&, const std::string&, bool, bool>(),
+          nb::init<
+              const std::string&,
+              const std::string&,
+              const std::string&,
+              bool,
+              bool>(),
           "name"_a,
           "source"_a,
+          "headers"_a = "",
           "ensure_row_contiguous"_a = true,
           "atomic_outputs"_a = false,
           R"pbdoc(
@@ -214,6 +219,8 @@ void init_fast(nb::module_& parent_module) {
             the function signature will be generated for you. The names of the inputs/outputs
             are determined by the ``inputs`` and ``output_shapes``/``output_dtypes``
             used when the kernel is called.
+        headers (str): Header source code. Useful for helper functions or includes
+            that should live outside of the main function body.
         ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
             before the kernel runs. Default: ``True``.
         atomic_outputs (bool): Whether to use atomic outputs in the function signature
