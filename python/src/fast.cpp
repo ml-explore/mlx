@@ -102,11 +102,12 @@ void init_fast(nb::module_& parent_module) {
               implementation which rotates consecutive dimensions.
             base (float, optional): The base used to compute angular frequency for
               each dimension in the positional encodings. Exactly one of ``base`` and
-             ``freqs`` must be ``None``.
+              ``freqs`` must be ``None``.
             scale (float): The scale used to scale the positions.
             offset (int): The position offset to start at.
             freqs (array, optional): Optional frequencies to use with RoPE.
-              If set, the ``base`` parameter must be ``None``. ``Default: None``.
+              If set, the ``base`` parameter must be ``None``. Default: ``None``.
+
         Returns:
             array: The output array.
       )pbdoc");
