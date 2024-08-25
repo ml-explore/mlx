@@ -65,6 +65,7 @@ void set_ternary_op_output_data(
             b.strides(),
             b.flags());
       }
+      break;
     case TernaryOpType::General:
       out.set_data(allocator::malloc_or_wait(out.nbytes()));
       break;
