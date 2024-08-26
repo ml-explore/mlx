@@ -3,7 +3,6 @@
 #include <cassert>
 
 #include "mlx/allocator.h"
-#include "mlx/backend/common/copy.h"
 #include "mlx/distributed/ops.h"
 #include "mlx/distributed/primitives.h"
 #include "mlx/ops.h"
