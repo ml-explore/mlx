@@ -3,6 +3,8 @@
 #pragma once
 
 #include <Metal/Metal.hpp>
+#include <dlfcn.h>
+#include <filesystem>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -12,7 +14,25 @@
 #include "mlx/array.h"
 #include "mlx/device.h"
 
+namespace fs = std::filesystem;
+
 namespace mlx::core::metal {
+
+// Note, this function must be left inline in a header so that it is not
+// dynamically linked.
+inline std::string get_colocated_mtllib_path(const std::string& lib_name) {
+  Dl_info info;
+  std::string mtllib_path;
+  std::string lib_ext = lib_name + ".metallib";
+
+  int success = dladdr((void*)get_colocated_mtllib_path, &info);
+  if (success) {
+    auto mtllib = fs::path(info.dli_fname).remove_filename() / lib_ext;
+    mtllib_path = mtllib.c_str();
+  }
+
+  return mtllib_path;
+}
 
 using MTLFCList =
     std::vector<std::tuple<const void*, MTL::DataType, NS::UInteger>>;
@@ -86,7 +106,13 @@ class Device {
       const std::string& lib_name,
       const std::string& lib_path);
 
-  void register_library(const std::string& lib_name);
+  // Note, this should remain in the header so that it is not dynamically
+  // linked
+  void register_library(const std::string& lib_name) {
+    if (auto it = library_map_.find(lib_name); it == library_map_.end()) {
+      register_library(lib_name, get_colocated_mtllib_path(lib_name));
+    }
+  }
 
   MTL::Library* get_library(const std::string& name);
 
