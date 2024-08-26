@@ -4,12 +4,14 @@
 #include <numeric>
 #include <sstream>
 
+#include "mlx/backend/common/load.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels.h"
 #include "mlx/backend/metal/slicing.h"
 #include "mlx/backend/metal/utils.h"
 #include "mlx/primitives.h"
+#include "mlx/scheduler.h"
 #include "mlx/utils.h"
 
 namespace mlx::core {
@@ -196,8 +198,40 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
   copy_gpu(in, out, ctype);
 }
 
+template <const uint8_t scalar_size>
+void swap_endianness(uint8_t* data_bytes, size_t N) {
+  struct Elem {
+    uint8_t bytes[scalar_size];
+  };
+
+  Elem* data = reinterpret_cast<Elem*>(data_bytes);
+
+  for (size_t i = 0; i < N; i++) {
+    for (size_t j = 0; j < (scalar_size / 2); j++) {
+      std::swap(data[i].bytes[j], data[i].bytes[scalar_size - j - 1]);
+    }
+  }
+}
+
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
-  eval(inputs, out);
+  static Stream io_stream = new_stream(Device::cpu);
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  auto task = [out = out,
+               offset = offset_,
+               reader = reader_,
+               swap_endianness = swap_endianness_]() mutable {
+    load(out, offset, reader, swap_endianness);
+    out.event().signal();
+  };
+
+  scheduler::enqueue(io_stream, std::move(task));
+  auto& d = metal::device(stream().device);
+  d.end_encoding(stream().index);
+  auto command_buffer = d.get_command_buffer(stream().index);
+  command_buffer->encodeWait(
+      static_cast<MTL::Event*>(out.event().raw_event().get()),
+      out.event().value());
 }
 
 void NumberOfElements::eval_gpu(const std::vector<array>& inputs, array& out) {
