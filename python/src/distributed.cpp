@@ -121,4 +121,32 @@ void init_distributed(nb::module_& parent_module) {
         Returns:
           array: The concatenation of all ``x`` arrays.
       )pbdoc");
+
+  m.def(
+      "send",
+      &distributed::send,
+      "x"_a,
+      "dst"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "recv",
+      &distributed::recv,
+      "shape"_a,
+      "dtype"_a,
+      "src"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none());
+
+  m.def(
+      "recv_like",
+      &distributed::recv_like,
+      "x"_a,
+      "src"_a,
+      nb::kw_only(),
+      "group"_a = nb::none(),
+      "stream"_a = nb::none());
 }

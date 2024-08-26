@@ -48,6 +48,8 @@ struct MPIWrapper {
     LOAD_SYMBOL(MPI_Comm_free, comm_free);
     LOAD_SYMBOL(MPI_Allreduce, all_reduce);
     LOAD_SYMBOL(MPI_Allgather, all_gather);
+    LOAD_SYMBOL(MPI_Send, send);
+    LOAD_SYMBOL(MPI_Recv, recv);
 
     // Objects
     LOAD_SYMBOL(ompi_mpi_comm_world, comm_world_);
@@ -142,6 +144,8 @@ struct MPIWrapper {
       MPI_Comm);
   int (*comm_split)(MPI_Comm, int, int, MPI_Comm*);
   int (*comm_free)(MPI_Comm*);
+  int (*send)(const void*, int, MPI_Datatype, int, int, MPI_Comm);
+  int (*recv)(void*, int, MPI_Datatype, int, int, MPI_Comm, MPI_Status*);
 
   // Objects
   MPI_Comm comm_world_;
@@ -283,6 +287,29 @@ void all_gather(Group group, const array& input_, array& output) {
       input.size(),
       mpi().datatype(output),
       to_comm(group));
+}
+
+void send(Group group, const array& input_, int dst) {
+  array input = ensure_row_contiguous(input_);
+  mpi().send(
+      input.data<void>(),
+      input.size(),
+      mpi().datatype(input),
+      dst,
+      0,
+      to_comm(group));
+}
+
+void recv(Group group, array& out, int src) {
+  MPI_Status status;
+  mpi().recv(
+      out.data<void>(),
+      out.size(),
+      mpi().datatype(out),
+      src,
+      MPI_ANY_TAG,
+      to_comm(group),
+      &status);
 }
 
 } // namespace detail
