@@ -840,6 +840,8 @@ void init_array(nb::module_& m) {
           },
           "other"_a,
           nb::rv_policy::none)
+      .def("__int__", [](array& a) { return nb::int_(to_scalar(a)); })
+      .def("__float__", [](array& a) { return nb::float_(to_scalar(a)); })
       .def(
           "flatten",
           [](const array& a,

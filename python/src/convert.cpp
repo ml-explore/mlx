@@ -160,6 +160,10 @@ nb::ndarray<> mlx_to_dlpack(const array& a) {
 }
 
 nb::object to_scalar(array& a) {
+  if (a.size() != 1) {
+    throw std::invalid_argument(
+        "[convert] Only length-1 arrays can be converted to Python scalars.");
+  }
   {
     nb::gil_scoped_release nogil;
     a.eval();
