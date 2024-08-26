@@ -198,21 +198,6 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
   copy_gpu(in, out, ctype);
 }
 
-template <const uint8_t scalar_size>
-void swap_endianness(uint8_t* data_bytes, size_t N) {
-  struct Elem {
-    uint8_t bytes[scalar_size];
-  };
-
-  Elem* data = reinterpret_cast<Elem*>(data_bytes);
-
-  for (size_t i = 0; i < N; i++) {
-    for (size_t j = 0; j < (scalar_size / 2); j++) {
-      std::swap(data[i].bytes[j], data[i].bytes[scalar_size - j - 1]);
-    }
-  }
-}
-
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   static Stream io_stream = new_stream(Device::cpu);
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
