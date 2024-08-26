@@ -70,7 +70,7 @@ class FileReader : public Reader {
 
   void read(char* data, size_t n) override {
     while (n != 0) {
-      auto m = ::read(fd_, data, n);
+      auto m = ::read(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
       if (m <= 0) {
         std::ostringstream msg;
         msg << "[read] Unable to read " << n << " bytes from file.";
@@ -123,7 +123,7 @@ class FileWriter : public Writer {
 
   void write(const char* data, size_t n) override {
     while (n != 0) {
-      auto m = ::write(fd_, data, n);
+      auto m = ::write(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
       if (m <= 0) {
         std::ostringstream msg;
         msg << "[write] Unable to write " << n << " bytes to file.";

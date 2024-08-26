@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <map>
 #include <optional>
 
 #include "mlx/utils.h"
@@ -25,9 +26,10 @@ array rope(
     const array& x,
     int dims,
     bool traditional,
-    float base,
+    std::optional<float> base,
     float scale,
     int offset,
+    const std::optional<array>& freqs = std::nullopt,
     StreamOrDevice s = {});
 
 /** Computes: O = softmax(Q @ K.T) @ V **/
@@ -62,4 +64,36 @@ array affine_dequantize(
     int bits = 4,
     StreamOrDevice s = {});
 
+typedef std::variant<int, bool, Dtype> TemplateArg;
+
+class MetalKernel {
+ public:
+  MetalKernel(
+      const std::string& name,
+      const std::string& source,
+      bool ensure_row_contiguous,
+      bool atomic_outputs)
+      : name_(name),
+        source_(source),
+        ensure_row_contiguous_(ensure_row_contiguous),
+        atomic_outputs_(atomic_outputs) {}
+
+  std::map<std::string, array> operator()(
+      std::map<std::string, array>& inputs,
+      std::map<std::string, std::vector<int>> output_shapes,
+      std::map<std::string, Dtype> output_dtypes,
+      std::tuple<int, int, int> grid,
+      std::tuple<int, int, int> threadgroup,
+      std::optional<std::map<std::string, TemplateArg>> template_args =
+          std::nullopt,
+      std::optional<float> init_value = std::nullopt,
+      bool verbose = false,
+      StreamOrDevice s = {});
+
+ private:
+  std::string name_;
+  std::string source_;
+  bool ensure_row_contiguous_ = true;
+  bool atomic_outputs_ = false;
+};
 } // namespace mlx::core::fast

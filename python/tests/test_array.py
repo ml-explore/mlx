@@ -1834,6 +1834,21 @@ class TestArray(mlx_tests.MLXTestCase):
         self.assertTrue(hasattr(api, "array"))
         self.assertTrue(hasattr(api, "add"))
 
+    def test_to_scalar(self):
+        a = mx.array(1)
+        self.assertEqual(int(a), 1)
+        self.assertEqual(float(a), 1)
+
+        a = mx.array(1.5)
+        self.assertEqual(float(a), 1.5)
+        self.assertEqual(int(a), 1)
+
+        a = mx.zeros((2, 1))
+        with self.assertRaises(ValueError):
+            float(a)
+        with self.assertRaises(ValueError):
+            int(a)
+
 
 if __name__ == "__main__":
     unittest.main()

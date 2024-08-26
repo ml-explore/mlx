@@ -23,6 +23,8 @@ struct complex64_t {
 
   // Constructors
   constexpr complex64_t(float real, float imag) : real(real), imag(imag) {};
+  constexpr complex64_t() : real(0), imag(0) {};
+  constexpr complex64_t() threadgroup : real(0), imag(0) {};
 
   // Conversions to complex64_t
   template <

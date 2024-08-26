@@ -1,11 +1,11 @@
 repos:
 -   repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v18.1.4
+    rev: v18.1.8
     hooks:
     -   id: clang-format
 # Using this mirror lets us use mypyc-compiled black, which is about 2x faster
 -   repo: https://github.com/psf/black-pre-commit-mirror
-    rev: 24.4.2
+    rev: 24.8.0
     hooks:
     -   id: black
 -   repo: https://github.com/pycqa/isort

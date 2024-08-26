@@ -104,6 +104,33 @@ inline auto collapse_contiguous_dims(Arrays&&... xs) {
       std::vector<array>{std::forward<Arrays>(xs)...});
 }
 
+// The single array version of the above.
+inline std::tuple<std::vector<int>, std::vector<size_t>>
+collapse_contiguous_dims(
+    const std::vector<int>& shape,
+    const std::vector<size_t>& strides) {
+  std::vector<int> collapsed_shape;
+  std::vector<size_t> collapsed_strides;
+
+  if (shape.size() > 0) {
+    collapsed_shape.push_back(shape[0]);
+    collapsed_strides.push_back(strides[0]);
+    for (int i = 1; i < shape.size(); i++) {
+      if (strides[i] * shape[i] != collapsed_strides.back() ||
+          collapsed_shape.back() * static_cast<size_t>(shape[i]) >
+              std::numeric_limits<int>::max()) {
+        collapsed_shape.push_back(shape[i]);
+        collapsed_strides.push_back(strides[i]);
+      } else {
+        collapsed_shape.back() *= shape[i];
+        collapsed_strides.back() = strides[i];
+      }
+    }
+  }
+
+  return std::make_tuple(collapsed_shape, collapsed_strides);
+}
+
 template <typename stride_t>
 inline auto check_contiguity(
     const std::vector<int>& shape,
@@ -115,8 +142,8 @@ inline auto check_contiguity(
   bool is_col_contiguous = true;
 
   for (int i = 0, ri = shape.size() - 1; ri >= 0; i++, ri--) {
-    is_row_contiguous &= strides[i] == f_stride || shape[i] == 1;
-    is_col_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
+    is_col_contiguous &= strides[i] == f_stride || shape[i] == 1;
+    is_row_contiguous &= strides[ri] == b_stride || shape[ri] == 1;
     f_stride *= shape[i];
     b_stride *= shape[ri];
     if (strides[i] > 0) {

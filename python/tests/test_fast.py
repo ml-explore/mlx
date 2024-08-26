@@ -7,13 +7,18 @@ import mlx.core as mx
 import mlx_tests
 
 
-def rope_orig(x, dims, traditional, base, scale, offset):
-    N = x.shape[1] + offset
+def rope_orig(x, dims, traditional, base, scale, offset, freqs=None):
+    N = x.shape[-2] + offset
     dtype = x.dtype
     half_D = dims // 2
     positions = mx.arange(offset, N, dtype=dtype) * scale
-    freqs = mx.exp(-mx.arange(0.0, half_D, dtype=dtype) * (math.log(base) / half_D))
-    theta = mx.reshape(positions, (-1, 1)) * mx.reshape(freqs, (1, -1))
+    if freqs is None:
+        inv_freqs = mx.exp(
+            -mx.arange(0.0, half_D, dtype=dtype) * (math.log(base) / half_D)
+        )
+    else:
+        inv_freqs = 1 / freqs
+    theta = mx.reshape(positions, (-1, 1)) * mx.reshape(inv_freqs, (1, -1))
     costheta, sintheta = mx.cos(theta), mx.sin(theta)
     if traditional:
         x1 = x[..., :dims:2]
@@ -137,6 +142,98 @@ class TestFast(mlx_tests.MLXTestCase):
                     offset=offset,
                 )
                 self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[dtype])
+
+        # Test transpose into rope
+        dims, _, base, scale, offset, traditional = defaults
+        x = mx.random.uniform(shape=(1, 1, 4, dims)).swapaxes(1, 2)
+        rx = rope_orig(x, dims, traditional, base, scale, offset)
+        rx_fast = mx.fast.rope(
+            1.0 * x,  # multiply here to allow donation
+            dims,
+            traditional=traditional,
+            base=base,
+            scale=scale,
+            offset=offset,
+        )
+        self.assertLess(mx.abs(rx - rx_fast).max(), tolerances[mx.float32])
+
+    def test_rope_with_freqs(self):
+        # Check throws
+        T = 4
+        dims = 8
+        x = mx.random.uniform(shape=(2, T, dims))
+
+        with self.assertRaises(ValueError):
+            freqs = mx.random.uniform(shape=(dims - 1,))
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=False,
+                base=None,
+                scale=1.0,
+                offset=0,
+                freqs=freqs,
+            )
+        with self.assertRaises(ValueError):
+            freqs = mx.random.uniform(shape=(1, dims))
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=False,
+                base=None,
+                scale=1.0,
+                offset=0,
+                freqs=freqs,
+            )
+
+        freqs = mx.random.uniform(shape=(dims // 2,))
+
+        rx = rope_orig(x, dims, False, None, 1.0, 0, freqs)
+        rx_fast = mx.fast.rope(
+            x,
+            dims,
+            traditional=False,
+            base=None,
+            scale=1.0,
+            offset=0,
+            freqs=freqs,
+        )
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
+        # Test single vector
+        x = mx.random.uniform(shape=(1, 1, dims))
+        rx = rope_orig(x, dims, False, None, 1.0, 0, freqs)
+        rx_fast = mx.fast.rope(
+            x,
+            dims,
+            traditional=False,
+            base=None,
+            scale=1.0,
+            offset=0,
+            freqs=freqs,
+        )
+        self.assertLess(mx.abs(rx - rx_fast).max(), 1e-5)
+
+        # Test grad with freqs
+        f1 = lambda x, y: (rope_orig(x, dims, False, None, 1.0, 0, freqs) * y).sum()
+        f2 = lambda x, y: (
+            mx.fast.rope(
+                x,
+                dims,
+                traditional=False,
+                base=None,
+                scale=1.0,
+                offset=0,
+                freqs=freqs,
+            )
+            * y
+        ).sum()
+
+        x = mx.random.uniform(shape=(2, 4, dims))
+        y = mx.random.uniform(shape=(2, 4, dims))
+        g1 = mx.grad(f1)(x, y)
+        g2 = mx.grad(f2)(x, y)
+        self.assertLess(mx.abs(g1 - g2).max(), 1e-5)
 
     def test_rope_grad(self):
         D = 32
@@ -450,6 +547,104 @@ class TestFast(mlx_tests.MLXTestCase):
                         x, scales, biases, bits=bits, group_size=group_size
                     )
                     self.assertTrue(mx.allclose(w, w_p))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_basic(self):
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(3, 6))
+        kernel = mx.fast.metal_kernel(
+            name="basic",
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out1[elem] = a[elem];
+            """,
+        )
+        out = kernel(
+            inputs={"a": a},
+            grid=(4, 1, 1),
+            threadgroup=(2, 1, 1),
+            output_shapes={"out1": (2, 2)},
+            output_dtypes={"out1": mx.float32},
+            stream=mx.gpu,
+        )
+        mx.allclose(out["out1"], a[:2, :2])
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_args(self):
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(3, 6))
+        c = mx.random.normal(shape=(2, 2)).astype(mx.bfloat16)
+
+        kernel = mx.fast.metal_kernel(
+            name="arg_test",
+            source="""
+                uint elem = thread_position_in_grid.x;
+                T tmp = a[0];
+                if (e) {
+                    out1[elem] = a[1] + b[2] + c[3] + d + f;
+                } else {
+                    out1[elem] = 1;
+                }
+                out2[elem] = a[1] + b[2] + c[1] - d;
+            """,
+        )
+        out = kernel(
+            inputs={
+                "a": a,
+                "b": mx.array([3, 4, 5]),
+                "c": c,
+                "d": 7.3,
+            },
+            template={
+                "e": True,
+                "f": 3,
+                "T": mx.float16,
+            },
+            grid=(6, 1, 1),
+            threadgroup=(2, 1, 1),
+            output_shapes={"out1": (2, 2), "out2": (3, 2)},
+            output_dtypes={"out1": mx.float32, "out2": mx.int32},
+            stream=mx.gpu,
+        )
+
+        self.assertTrue(mx.allclose(out["out1"], mx.full((2, 2), 14.0484)))
+        self.assertTrue(mx.allclose(out["out2"], mx.full((3, 2), -2, dtype=mx.int32)))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_strides(self):
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(3, 6))
+        source = """
+            uint elem = thread_position_in_grid.x;
+            uint loc = elem_to_loc(elem, inp_shape, inp_strides, inp_ndim);
+            T tmp = inp[loc];
+            out[elem] = metal::exp(tmp) * threads_per_simdgroup;
+        """
+        source_contig = """
+            uint elem = thread_position_in_grid.x;
+            T tmp = inp[elem];
+            out[elem] = metal::exp(tmp) * threads_per_simdgroup;
+        """
+
+        # non contiguous
+        a = mx.tile(a[::2], [4, 1])
+
+        for contig in [True, False]:
+            kernel = mx.fast.metal_kernel(
+                name="myexp" + str(contig),
+                source=source_contig if contig else source,
+                ensure_row_contiguous=contig,
+            )
+            outputs = kernel(
+                inputs={"inp": a},
+                template={"T": mx.float32},
+                grid=(a.size, 1, 1),
+                threadgroup=(256, 1, 1),
+                output_shapes={"out": a.shape},
+                output_dtypes={"out": a.dtype},
+                stream=mx.gpu,
+            )
+            self.assertTrue(mx.allclose(mx.exp(a) * 32, outputs["out"]))
 
 
 if __name__ == "__main__":

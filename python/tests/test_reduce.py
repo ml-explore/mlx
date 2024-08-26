@@ -57,6 +57,7 @@ class TestReduce(mlx_tests.MLXTestCase):
             "uint32",
             "int64",
             "uint64",
+            "complex64",
         ]
         float_dtypes = ["float32"]
 
@@ -113,6 +114,22 @@ class TestReduce(mlx_tests.MLXTestCase):
                     a = getattr(mx, op)(x)
                     b = getattr(np, op)(data)
                     self.assertEqual(a.item(), b)
+
+    def test_edge_case(self):
+        x = (mx.random.normal((100, 1, 100, 100)) * 128).astype(mx.int32)
+        x = x.transpose(0, 3, 1, 2)
+
+        y = x.sum((0, 2, 3))
+        mx.eval(y)
+        z = np.array(x).sum((0, 2, 3))
+        self.assertTrue(np.all(z == y))
+
+    def test_sum_bool(self):
+        x = np.random.uniform(0, 1, size=(10, 10, 10)) > 0.5
+        y = mx.array(x)
+        npsum = x.sum().item()
+        mxsum = y.sum().item()
+        self.assertEqual(npsum, mxsum)
 
 
 if __name__ == "__main__":

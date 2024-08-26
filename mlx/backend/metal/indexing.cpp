@@ -95,11 +95,21 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     slice_size *= s;
   }
 
-  // Launch 2D grid of threads: indices x slice
-  size_t dim0 = out.size() / slice_size;
-  size_t dim1 = slice_size;
-  auto group_dims = get_block_dims(dim0, dim1, 1);
-  MTL::Size grid_dims = MTL::Size(dim0, dim1, 1);
+  // Launch 3D grid of threads
+  // First two dimensions for the indices, the last one for the slice
+  size_t dim0 = 1;
+  size_t dim1 = 1;
+  if (nidx) {
+    if (inputs[1].ndim() >= 1) {
+      dim0 = inputs[1].shape(0);
+    }
+    if (inputs[1].ndim() >= 2) {
+      dim1 = inputs[1].size() / dim0;
+    }
+  }
+  size_t dim2 = slice_size;
+  auto group_dims = get_block_dims(dim0, dim1, dim2);
+  MTL::Size grid_dims = MTL::Size(dim0, dim1, dim2);
 
   // Collect all idx shapes and strides into one place
   std::vector<int> idx_shapes;

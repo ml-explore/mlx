@@ -394,7 +394,7 @@ struct Conv2DWeightBlockLoader {
       const constant ImplicitGemmConv2DParams* gemm_params_,
       uint simd_group_id [[simdgroup_index_in_threadgroup]],
       uint simd_lane_id [[thread_index_in_simdgroup]])
-      : src_ld(params_ -> wt_strides[0]),
+      : src_ld(params_->wt_strides[0]),
         thread_idx(simd_group_id * 32 + simd_lane_id),
         bi(thread_idx / TCOLS),
         bj(vec_size * (thread_idx % TCOLS)),

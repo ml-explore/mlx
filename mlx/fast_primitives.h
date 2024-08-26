@@ -1,5 +1,7 @@
 // Copyright © 2024 Apple Inc.
 
+#include <optional>
+
 #include "mlx/primitives.h"
 
 namespace mlx::core::fast {
@@ -240,6 +242,52 @@ class AffineQuantize : public Custom {
   int group_size_;
   int bits_;
   bool dequantize_;
+};
+
+struct CustomKernelShapeInfo {
+  bool shape = false;
+  bool strides = false;
+  bool ndim = false;
+};
+
+class CustomKernel : public Primitive {
+ public:
+  CustomKernel(
+      Stream stream,
+      std::string name,
+      std::string source,
+      std::tuple<int, int, int> grid,
+      std::tuple<int, int, int> threadgroup,
+      std::vector<CustomKernelShapeInfo> shape_infos,
+      bool ensure_row_contiguous,
+      std::optional<float> init_value)
+      : Primitive(stream),
+        source_(source),
+        name_(name),
+        grid_(grid),
+        threadgroup_(threadgroup),
+        shape_infos_(shape_infos),
+        ensure_row_contiguous_(ensure_row_contiguous),
+        init_value_(init_value) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override {
+    throw std::runtime_error("Custom Metal kernels only run on GPU.");
+  }
+
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_PRINT(CustomKernel);
+
+ private:
+  std::string source_;
+  std::string name_;
+  std::tuple<int, int, int> grid_;
+  std::tuple<int, int, int> threadgroup_;
+  std::vector<CustomKernelShapeInfo> shape_infos_;
+  bool ensure_row_contiguous_;
+  std::optional<float> init_value_;
 };
 
 } // namespace mlx::core::fast
