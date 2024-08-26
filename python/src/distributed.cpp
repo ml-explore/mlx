@@ -77,7 +77,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def all_sum(x: array, *, group: Optional[Group] = None) -> array"),
+          "def all_sum(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         All reduce sum.
 
@@ -88,6 +88,8 @@ void init_distributed(nb::module_& parent_module) {
           group (Group): The group of processes that will participate in the
             reduction. If set to ``None`` the global group is used. Default:
             ``None``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
 
         Returns:
           array: The sum of all ``x`` arrays.
@@ -101,7 +103,7 @@ void init_distributed(nb::module_& parent_module) {
       "group"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def all_gather(x: array, *, group: Optional[Group] = None) -> array"),
+          "def all_gather(x: array, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Gather arrays from all processes.
 
@@ -113,6 +115,8 @@ void init_distributed(nb::module_& parent_module) {
           group (Group): The group of processes that will participate in the
             gather. If set to ``None`` the global group is used. Default:
             ``None``.
+          stream (Stream, optional): Stream or device. Defaults to ``None``
+            in which case the default stream of the default device is used.
 
         Returns:
           array: The concatenation of all ``x`` arrays.
