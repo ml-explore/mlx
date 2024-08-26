@@ -71,12 +71,12 @@ class MetalKernel {
   MetalKernel(
       const std::string& name,
       const std::string& source,
-      const std::string& headers = "",
+      const std::string& includes = "",
       bool ensure_row_contiguous = true,
       bool atomic_outputs = false)
       : name_(name),
         source_(source),
-        headers_(headers),
+        includes_(includes),
         ensure_row_contiguous_(ensure_row_contiguous),
         atomic_outputs_(atomic_outputs) {}
 
@@ -95,7 +95,7 @@ class MetalKernel {
  private:
   std::string name_;
   std::string source_;
-  std::string headers_;
+  std::string includes_;
   bool ensure_row_contiguous_;
   bool atomic_outputs_;
 };
