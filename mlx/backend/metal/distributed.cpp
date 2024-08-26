@@ -10,6 +10,20 @@
 
 namespace mlx::core::distributed {
 
+void signal_and_wait(const array& in, const array& out, const Stream s) {
+  auto& d = metal::device(s.device);
+  d.end_encoding(s.index);
+  auto command_buffer = d.get_command_buffer(s.index);
+  if (in.event().valid()) {
+    command_buffer->encodeSignalEvent(
+        static_cast<MTL::Event*>(in.event().raw_event().get()),
+        in.event().value());
+  }
+  command_buffer->encodeWait(
+      static_cast<MTL::Event*>(out.event().raw_event().get()),
+      out.event().value());
+}
+
 void AllReduce::eval_gpu(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
@@ -19,8 +33,7 @@ void AllReduce::eval_gpu(
   auto& in = inputs[0];
   auto& out = outputs[0];
   if (in.is_donatable()) {
-    // TODO should be a move?
-    out.copy_shared_buffer(in);
+    out.move_shared_buffer(in);
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
@@ -34,8 +47,8 @@ void AllReduce::eval_gpu(
     }
     switch (reduce_type) {
       case Sum:
-        // TODO fix if move
-        distributed::detail::all_sum(group, in, out);
+        distributed::detail::all_sum(
+            group, in.data_shared_ptr() == nullptr ? out : in, out);
         break;
       default:
         throw std::runtime_error("Only all reduce sum is supported for now");
@@ -44,19 +57,7 @@ void AllReduce::eval_gpu(
   };
   scheduler::enqueue(detail::communication_stream(), std::move(task));
 
-  // TODO clean this up and maybe make APIs for it
-  auto& d = metal::device(stream().device);
-  d.end_encoding(stream().index);
-  auto command_buffer = d.get_command_buffer(stream().index);
-  if (in.event().valid()) {
-    command_buffer->encodeSignalEvent(
-        static_cast<MTL::Event*>(in.event().raw_event().get()),
-        in.event().value());
-  }
-  command_buffer->encodeWait(
-      static_cast<MTL::Event*>(out.event().raw_event().get()),
-      out.event().value());
-  // TODO Need to hold the event in a completion handler?
+  signal_and_wait(in, out, stream());
 }
 
 void AllGather::eval_gpu(
@@ -77,18 +78,7 @@ void AllGather::eval_gpu(
     out.event().signal();
   };
   scheduler::enqueue(detail::communication_stream(), std::move(task));
-
-  auto& d = metal::device(stream().device);
-  d.end_encoding(stream().index);
-  auto command_buffer = d.get_command_buffer(stream().index);
-  if (in.event().valid()) {
-    command_buffer->encodeSignalEvent(
-        static_cast<MTL::Event*>(in.event().raw_event().get()),
-        in.event().value());
-  }
-  command_buffer->encodeWait(
-      static_cast<MTL::Event*>(out.event().raw_event().get()),
-      out.event().value());
+  signal_and_wait(in, out, stream());
 }
 
 } // namespace mlx::core::distributed
