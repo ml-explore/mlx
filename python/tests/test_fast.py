@@ -551,7 +551,7 @@ class TestFast(mlx_tests.MLXTestCase):
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_basic(self):
         mx.random.seed(7)
-        a = mx.random.normal(shape=(3, 6))
+        a = mx.random.normal(shape=(2, 2))
         kernel = mx.fast.metal_kernel(
             name="basic",
             source="""
@@ -567,7 +567,7 @@ class TestFast(mlx_tests.MLXTestCase):
             output_dtypes={"out1": mx.float32},
             stream=mx.gpu,
         )
-        mx.allclose(out["out1"], a[:2, :2])
+        self.assertTrue(mx.allclose(out["out1"], a))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_args(self):
@@ -649,10 +649,10 @@ class TestFast(mlx_tests.MLXTestCase):
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_helper(self):
         mx.random.seed(7)
-        a = mx.random.normal(shape=(3, 6))
+        a = mx.random.normal(shape=(2, 2))
         kernel = mx.fast.metal_kernel(
             name="basic",
-            includes="""
+            header="""
             template <typename T>
             T do_exp(T x) {
                 return exp(x);
@@ -671,8 +671,7 @@ class TestFast(mlx_tests.MLXTestCase):
             output_dtypes={"out1": mx.float32},
             stream=mx.gpu,
         )
-        print(out["out1"])
-        mx.allclose(out["out1"], mx.exp(a[:2, :2]))
+        self.assertTrue(mx.allclose(out["out1"], mx.exp(a)))
 
 
 if __name__ == "__main__":

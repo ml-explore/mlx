@@ -208,7 +208,7 @@ void init_fast(nb::module_& parent_module) {
               bool>(),
           "name"_a,
           "source"_a,
-          "includes"_a = "",
+          "header"_a = "",
           "ensure_row_contiguous"_a = true,
           "atomic_outputs"_a = false,
           R"pbdoc(
@@ -220,7 +220,7 @@ void init_fast(nb::module_& parent_module) {
             the function signature will be generated for you. The names of the inputs/outputs
             are determined by the ``inputs`` and ``output_shapes``/``output_dtypes``
             used when the kernel is called.
-        includes (str): Source code to include before the main function. 
+        header (str): Header source code to include before the main function.
             Useful for helper functions or includes that should live outside of the main function body.
         ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
             before the kernel runs. Default: ``True``.

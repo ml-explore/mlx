@@ -1128,7 +1128,7 @@ std::map<std::string, array> MetalKernel::operator()(
   std::string kernel_name = func_name.str();
 
   std::ostringstream kernel_source;
-  kernel_source << includes_ << std::endl;
+  kernel_source << header_ << std::endl;
 
   std::vector<CustomKernelShapeInfo> shape_infos;
   write_signature(
