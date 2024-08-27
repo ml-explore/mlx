@@ -80,7 +80,7 @@ class ParallelFileReader : public Reader {
 
  private:
   // About 100 MB
-  static constexpr size_t batch_size_ = (1 << 27);
+  static constexpr size_t batch_size_ = (1 << 22);
   int fd_;
   std::string label_;
   ThreadPool thread_pool_;
