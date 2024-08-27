@@ -135,7 +135,7 @@ void init_distributed(nb::module_& parent_module) {
           "def send(x: array, dst: int, *, group: Optional[Group] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Send an array from the current process to the process that has rank
-        ``dst`` in the group..
+        ``dst`` in the group.
 
         Args:
           x (array): Input array.
@@ -192,6 +192,8 @@ void init_distributed(nb::module_& parent_module) {
       R"pbdoc(
         Recv an array with shape and type like ``x`` from process with rank
         ``src``.
+
+        It is equivalent to calling ``mx.distributed.recv(x.shape, x.dtype, src)``.
 
         Args:
           x (array): An array defining the shape and dtype of the array we are
