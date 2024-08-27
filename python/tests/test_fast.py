@@ -651,7 +651,7 @@ class TestFast(mlx_tests.MLXTestCase):
         mx.random.seed(7)
         a = mx.random.normal(shape=(2, 2))
         kernel = mx.fast.metal_kernel(
-            name="basic",
+            name="helper",
             header="""
             template <typename T>
             T do_exp(T x) {
