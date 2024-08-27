@@ -126,6 +126,8 @@ NO_GPU_MULTI(CustomKernel)
 namespace distributed {
 NO_GPU_MULTI(AllReduce)
 NO_GPU_MULTI(AllGather)
+NO_GPU_MULTI(Send)
+NO_GPU_MULTI(Recv)
 } // namespace distributed
 
 } // namespace mlx::core
