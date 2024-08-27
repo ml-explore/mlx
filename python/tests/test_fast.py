@@ -618,12 +618,12 @@ class TestFast(mlx_tests.MLXTestCase):
             uint elem = thread_position_in_grid.x;
             uint loc = elem_to_loc(elem, inp_shape, inp_strides, inp_ndim);
             T tmp = inp[loc];
-            out[elem] = metal::exp(tmp) * threads_per_simdgroup;
+            out[elem] = metal::precise::exp(tmp) * threads_per_simdgroup;
         """
         source_contig = """
             uint elem = thread_position_in_grid.x;
             T tmp = inp[elem];
-            out[elem] = metal::exp(tmp) * threads_per_simdgroup;
+            out[elem] = metal::precise::exp(tmp) * threads_per_simdgroup;
         """
 
         # non contiguous
@@ -655,7 +655,7 @@ class TestFast(mlx_tests.MLXTestCase):
             header="""
             template <typename T>
             T do_exp(T x) {
-                return exp(x);
+                return metal::precise::exp(x);
             }
             """,
             source="""
