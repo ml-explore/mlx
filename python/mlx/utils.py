@@ -1,6 +1,6 @@
 # Copyright © 2023 Apple Inc.
 from collections import defaultdict
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, List, Tuple
 
 
 def tree_map(
@@ -155,7 +155,7 @@ def tree_flatten(tree: Any, prefix: str = "", is_leaf: Callable = None) -> Any:
     return [(prefix[1:], tree)]
 
 
-def tree_unflatten(tree: Any) -> Any:
+def tree_unflatten(tree: List[Tuple[str, Any]]) -> Any:
     """Recreate a Python tree from its flat representation.
 
     .. code-block:: python
