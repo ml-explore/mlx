@@ -306,6 +306,42 @@ array cholesky(
       {a});
 }
 
+array pinv(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must have >= 2 dimensions. Received array "
+        << "with " << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  const auto m = a.shape(-2);
+  const auto n = a.shape(-1);
+  const auto k = std::min(m, n);
+  const auto outs = linalg::svd(a, s);
+  const auto U = outs[0];
+  const auto S = outs[1];
+  const auto Vt = outs[2];
+
+  std::vector<int> starts(a.ndim(), 0);
+  std::vector<int> ends = a.shape();
+  const int i = a.ndim() - 2;
+  const int j = a.ndim() - 1;
+  ends[i] = m;
+  ends[j] = k;
+  const auto U_slice = slice(U, starts, ends, s);
+  ends[i] = k;
+  ends[j] = n;
+  const auto V_slice = slice(Vt, starts, ends, s);
+  return swapaxes(
+      matmul(divide(U_slice, expand_dims(S, -2, s), s), V_slice, s), -1, -2, s);
+}
+
 array cholesky_inv(
     const array& L,
     bool upper /* = false */,
