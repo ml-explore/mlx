@@ -71,10 +71,12 @@ class MetalKernel {
   MetalKernel(
       const std::string& name,
       const std::string& source,
-      bool ensure_row_contiguous,
-      bool atomic_outputs)
+      const std::string& header = "",
+      bool ensure_row_contiguous = true,
+      bool atomic_outputs = false)
       : name_(name),
         source_(source),
+        header_(header),
         ensure_row_contiguous_(ensure_row_contiguous),
         atomic_outputs_(atomic_outputs) {}
 
@@ -93,7 +95,8 @@ class MetalKernel {
  private:
   std::string name_;
   std::string source_;
-  bool ensure_row_contiguous_ = true;
-  bool atomic_outputs_ = false;
+  std::string header_;
+  bool ensure_row_contiguous_;
+  bool atomic_outputs_;
 };
 } // namespace mlx::core::fast

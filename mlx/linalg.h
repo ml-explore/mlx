@@ -70,6 +70,8 @@ array tri_inv(const array& a, bool upper = false, StreamOrDevice s = {});
 
 array cholesky(const array& a, bool upper = false, StreamOrDevice s = {});
 
+array pinv(const array& a, StreamOrDevice s = {});
+
 array cholesky_inv(const array& a, bool upper = false, StreamOrDevice s = {});
 
 } // namespace mlx::core::linalg

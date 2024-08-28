@@ -35,7 +35,7 @@ std::pair<std::vector<array>, std::vector<int>> AllReduce::vmap(
     const std::vector<int>& axes) {
   switch (reduce_type_) {
     case Sum:
-      return {{all_sum(inputs[0], group())}, axes};
+      return {{all_sum(inputs[0], group(), stream())}, axes};
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
   }
@@ -47,7 +47,7 @@ std::vector<array> AllReduce::jvp(
     const std::vector<int>& argnums) {
   switch (reduce_type_) {
     case Sum:
-      return {all_sum(tangents[0], group())};
+      return {all_sum(tangents[0], group(), stream())};
     default:
       throw std::runtime_error("Only all reduce sum is supported for now");
   }
@@ -75,14 +75,14 @@ void AllGather::eval_cpu(
 std::pair<std::vector<array>, std::vector<int>> AllGather::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
-  return {{all_gather(inputs[0], group())}, axes};
+  return {{all_gather(inputs[0], group(), stream())}, axes};
 }
 
 std::vector<array> AllGather::jvp(
     const std::vector<array>& primals,
     const std::vector<array>& tangents,
     const std::vector<int>& argnums) {
-  return {all_gather(tangents[0], group())};
+  return {all_gather(tangents[0], group(), stream())};
 }
 
 std::vector<array> AllGather::vjp(
@@ -96,6 +96,31 @@ std::vector<array> AllGather::vjp(
   starts[0] = g.rank() * stops[0];
   stops[0] += starts[0];
   return {slice(cotangents[0], starts, stops)};
+}
+
+void Send::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 1);
+  assert(outputs.size() == 1);
+
+  distributed::detail::send(group(), inputs[0], dst_);
+}
+
+std::pair<std::vector<array>, std::vector<int>> Send::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  return {{send(inputs[0], dst_, group(), stream())}, axes};
+}
+
+void Recv::eval_cpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  assert(inputs.size() == 0);
+  assert(outputs.size() == 1);
+
+  outputs[0].set_data(allocator::malloc_or_wait(outputs[0].nbytes()));
+  distributed::detail::recv(group(), outputs[0], src_);
 }
 
 } // namespace mlx::core::distributed

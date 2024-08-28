@@ -34,6 +34,8 @@ Stream communication_stream() {
 
 void all_sum(Group group, const array& input, array& output) {}
 void all_gather(Group group, const array& input, array& output) {}
+void send(Group group, const array& input, int dst) {}
+void recv(Group group, array& out, int src) {}
 
 } // namespace detail
 

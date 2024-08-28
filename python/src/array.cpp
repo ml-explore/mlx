@@ -9,6 +9,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
+#include <nanobind/typing.h>
 
 #include "mlx/backend/metal/metal.h"
 #include "python/src/buffer.h"
@@ -113,6 +114,7 @@ void init_array(nb::module_& m) {
       .def("__hash__", [](const Dtype& t) {
         return static_cast<int64_t>(t.val);
       });
+
   m.attr("bool_") = nb::cast(bool_);
   m.attr("uint8") = nb::cast(uint8);
   m.attr("uint16") = nb::cast(uint16);
@@ -177,7 +179,7 @@ void init_array(nb::module_& m) {
       .export_values();
   nb::class_<ArrayAt>(
       m,
-      "_ArrayAt",
+      "ArrayAt",
       R"pbdoc(
       A helper object to apply updates at specific indices.
       )pbdoc")
@@ -195,7 +197,7 @@ void init_array(nb::module_& m) {
 
   nb::class_<ArrayPythonIterator>(
       m,
-      "_ArrayIterator",
+      "ArrayIterator",
       R"pbdoc(
       A helper object to iterate over the 1st dimension of an array.
       )pbdoc")
