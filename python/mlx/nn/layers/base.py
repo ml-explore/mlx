@@ -117,7 +117,7 @@ class Module(dict):
         self,
         file_or_weights: Union[str, List[Tuple[str, mx.array]]],
         strict: bool = True,
-    ) -> "Module":
+    ) -> Module:
         """
         Update the model's weights from a ``.npz``, a ``.safetensors`` file, or a list.
 
@@ -338,7 +338,7 @@ class Module(dict):
         self,
         map_fn: Callable[[mx.array], mx.array],
         filter_fn: Optional[Callable[[Module, str, Any], bool]] = None,
-    ) -> "Module":
+    ) -> Module:
         """Map all the parameters using the provided ``map_fn`` and immediately
         update the module with the mapped parameters.
 
@@ -357,7 +357,7 @@ class Module(dict):
         self.update(self.filter_and_map(filter_fn, map_fn))
         return self
 
-    def update_modules(self, modules: dict) -> "Module":
+    def update_modules(self, modules: dict) -> Module:
         """Replace the child modules of this :class:`Module` instance with the
         provided ones in the dict of dicts and lists.
 
@@ -398,7 +398,7 @@ class Module(dict):
         apply(self, modules)
         return self
 
-    def apply_to_modules(self, apply_fn: Callable[[str, Module], Any]) -> "Module":
+    def apply_to_modules(self, apply_fn: Callable[[str, Module], Any]) -> Module:
         """Apply a function to all the modules in this instance (including this
         instance).
 
@@ -453,7 +453,7 @@ class Module(dict):
         recurse: bool = True,
         keys: Optional[Union[str, List[str]]] = None,
         strict: bool = False,
-    ) -> "Module":
+    ) -> Module:
         """Freeze the Module's parameters or some of them. Freezing a parameter means not
         computing gradients for it.
 
@@ -508,7 +508,7 @@ class Module(dict):
         recurse: bool = True,
         keys: Optional[Union[str, List[str]]] = None,
         strict: bool = False,
-    ) -> "Module":
+    ) -> Module:
         """Unfreeze the Module's parameters or some of them.
 
         This function is idempotent ie unfreezing a model that is not frozen is
@@ -552,7 +552,7 @@ class Module(dict):
             _unfreeze_impl("", self)
         return self
 
-    def train(self, mode: bool = True) -> "Module":
+    def train(self, mode: bool = True) -> Module:
         """Set the model in or out of training mode.
 
         Training mode only applies to certain layers. For example
@@ -572,7 +572,7 @@ class Module(dict):
         self.apply_to_modules(_set_train)
         return self
 
-    def eval(self) -> "Module":
+    def eval(self) -> Module:
         """Set the model to evaluation mode.
 
         See :func:`train`.
