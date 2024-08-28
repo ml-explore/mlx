@@ -1,46 +1,12 @@
 # Copyright © 2023 Apple Inc.
 
+from __future__ import annotations
+
 import textwrap
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
 from mlx.utils import tree_flatten, tree_unflatten
-
-
-def _unwrap(model, value_key, value, filter_fn, map_fn, is_leaf_fn):
-    if is_leaf_fn(model, value_key, value):
-        return map_fn(value)
-
-    elif isinstance(value, Module):
-        return {
-            k: _unwrap(value, k, v, filter_fn, map_fn, is_leaf_fn)
-            for k, v in value.items()
-            if filter_fn(value, k, v)
-        }
-
-    elif isinstance(value, dict):
-        nd = {}
-        for k, v in value.items():
-            tk = f"{value_key}.{k}"
-            nd[k] = (
-                _unwrap(model, tk, v, filter_fn, map_fn, is_leaf_fn)
-                if filter_fn(model, tk, v)
-                else {}
-            )
-        return nd
-
-    elif isinstance(value, list):
-        nl = []
-        for i, vi in enumerate(value):
-            tk = f"{value_key}.{i}"
-            nl.append(
-                _unwrap(model, tk, vi, filter_fn, map_fn, is_leaf_fn)
-                if filter_fn(model, tk, vi)
-                else {}
-            )
-        return nl
-
-    raise RuntimeError("Unexpected leaf found while traversing the module")
 
 
 class Module(dict):
@@ -635,3 +601,39 @@ class Module(dict):
                 return True
 
         self.apply(lambda x: x.astype(dtype) if predicate(x.dtype) else x)
+
+
+def _unwrap(model, value_key, value, filter_fn, map_fn, is_leaf_fn):
+    if is_leaf_fn(model, value_key, value):
+        return map_fn(value)
+
+    elif isinstance(value, Module):
+        return {
+            k: _unwrap(value, k, v, filter_fn, map_fn, is_leaf_fn)
+            for k, v in value.items()
+            if filter_fn(value, k, v)
+        }
+
+    elif isinstance(value, dict):
+        nd = {}
+        for k, v in value.items():
+            tk = f"{value_key}.{k}"
+            nd[k] = (
+                _unwrap(model, tk, v, filter_fn, map_fn, is_leaf_fn)
+                if filter_fn(model, tk, v)
+                else {}
+            )
+        return nd
+
+    elif isinstance(value, list):
+        nl = []
+        for i, vi in enumerate(value):
+            tk = f"{value_key}.{i}"
+            nl.append(
+                _unwrap(model, tk, vi, filter_fn, map_fn, is_leaf_fn)
+                if filter_fn(model, tk, vi)
+                else {}
+            )
+        return nl
+
+    raise RuntimeError("Unexpected leaf found while traversing the module")
