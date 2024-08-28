@@ -111,7 +111,7 @@ def tree_map_with_path(
         return fn(path, tree, *rest)
 
 
-def tree_flatten(tree: Any, prefix: str = "", is_leaf: Callable = None) -> Any:
+def tree_flatten(tree: Any, prefix: str = "", is_leaf: Optional[Callable] = None) -> Any:
     """Flattens a Python tree to a list of key, value tuples.
 
     The keys are using the dot notation to define trees of arbitrary depth and
