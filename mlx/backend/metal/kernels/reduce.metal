@@ -8,7 +8,6 @@
 #include "mlx/backend/metal/kernels/utils.h"
 #include "mlx/backend/metal/kernels/atomic.h"
 #include "mlx/backend/metal/kernels/reduction/ops.h"
-#include "mlx/backend/metal/kernels/reduction/reduce_init.h"
 #include "mlx/backend/metal/kernels/reduce.h"
 
 #define instantiate_reduce_helper_floats(inst_f, name, op) \
