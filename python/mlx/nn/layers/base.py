@@ -266,9 +266,9 @@ class Module(dict):
 
     def filter_and_map(
         self,
-        filter_fn: Callable[["mlx.nn.Module", str, Any], bool],
+        filter_fn: Callable[[Module, str, Any], bool],
         map_fn: Optional[Callable] = None,
-        is_leaf_fn: Optional[Callable[["mlx.nn.Module", str, Any], bool]] = None,
+        is_leaf_fn: Optional[Callable[[Module, str, Any], bool]] = None,
     ):
         """Recursively filter the contents of the module using ``filter_fn``,
         namely only select keys and values where ``filter_fn`` returns true.
@@ -323,7 +323,7 @@ class Module(dict):
 
         return self.filter_and_map(self.valid_child_filter, is_leaf_fn=_is_leaf_module)
 
-    def update(self, parameters: dict) -> "Module":
+    def update(self, parameters: dict) -> Module:
         """Replace the parameters of this Module with the provided ones in the
         dict of dicts and lists.
 
@@ -371,7 +371,7 @@ class Module(dict):
     def apply(
         self,
         map_fn: Callable[[mx.array], mx.array],
-        filter_fn: Optional[Callable[["mlx.nn.Module", str, Any], bool]] = None,
+        filter_fn: Optional[Callable[[Module, str, Any], bool]] = None,
     ) -> "Module":
         """Map all the parameters using the provided ``map_fn`` and immediately
         update the module with the mapped parameters.
@@ -432,9 +432,7 @@ class Module(dict):
         apply(self, modules)
         return self
 
-    def apply_to_modules(
-        self, apply_fn: Callable[[str, "mlx.nn.Module"], Any]
-    ) -> "Module":
+    def apply_to_modules(self, apply_fn: Callable[[str, Module], Any]) -> "Module":
         """Apply a function to all the modules in this instance (including this
         instance).
 

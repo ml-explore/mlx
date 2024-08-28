@@ -4,6 +4,7 @@
 
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/optional.h>
+#include <nanobind/stl/string.h>
 #include <nanobind/stl/variant.h>
 
 #include "mlx/stream.h"
@@ -56,8 +57,8 @@ void init_stream(nb::module_& m) {
             os << s;
             return os.str();
           })
-      .def("__eq__", [](const Stream& s1, const Stream& s2) {
-        return s1 == s2;
+      .def("__eq__", [](const Stream& s, const nb::object& other) {
+        return nb::isinstance<Stream>(other) && s == nb::cast<Stream>(other);
       });
 
   nb::implicitly_convertible<Device::DeviceType, Device>();
