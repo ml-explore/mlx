@@ -320,26 +320,33 @@ array pinv(const array& a, StreamOrDevice s /* = {} */) {
     throw std::invalid_argument(msg.str());
   }
 
-  const auto m = a.shape(-2);
-  const auto n = a.shape(-1);
-  const auto k = std::min(m, n);
-  const auto outs = linalg::svd(a, s);
-  const auto U = outs[0];
-  const auto S = outs[1];
-  const auto Vt = outs[2];
+  int m = a.shape(-2);
+  int n = a.shape(-1);
+  int k = std::min(m, n);
+  auto outs = linalg::svd(a, s);
+  array U = outs[0];
+  array S = outs[1];
+  array V = outs[2];
 
   std::vector<int> starts(a.ndim(), 0);
   std::vector<int> ends = a.shape();
-  const int i = a.ndim() - 2;
-  const int j = a.ndim() - 1;
+  int i = a.ndim() - 2;
+  int j = a.ndim() - 1;
+
+  // Prepare U
   ends[i] = m;
   ends[j] = k;
-  const auto U_slice = slice(U, starts, ends, s);
+  U = swapaxes(slice(U, starts, ends, s), -1, -2, s);
+
+  // Prepare V
   ends[i] = k;
   ends[j] = n;
-  const auto V_slice = slice(Vt, starts, ends, s);
-  return swapaxes(
-      matmul(divide(U_slice, expand_dims(S, -2, s), s), V_slice, s), -1, -2, s);
+  V = swapaxes(slice(V, starts, ends, s), -1, -2, s);
+
+  // Prepare S
+  S = expand_dims(S, -2, s);
+
+  return matmul(divide(V, S, s), U);
 }
 
 array cholesky_inv(
