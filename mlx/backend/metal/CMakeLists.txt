@@ -79,6 +79,7 @@ if (MLX_METAL_JIT)
     kernels/reduction/reduce_all.h
     kernels/reduction/reduce_col.h
     kernels/reduction/reduce_row.h
+    kernels/reduction/reduce_init.h
   )
   make_jit_source(
     steel/gemm/gemm
