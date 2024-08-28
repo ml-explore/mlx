@@ -317,10 +317,18 @@ void ParallelFileReader::read(char* data, size_t n) {
 }
 
 void ParallelFileReader::read(char* data, size_t n, size_t offset) {
-  auto readfn = [fd = fd_](size_t offset, size_t size, char* buffer) -> size_t {
-    return pread(fd, buffer, size, offset);
+  auto readfn = [fd = fd_](size_t offset, size_t size, char* buffer) -> bool {
+    while (size != 0) {
+      auto m = pread(fd, buffer, size, offset);
+      if (m <= 0) {
+        return false;
+      }
+      buffer += m;
+      size -= m;
+    }
+    return true;
   };
-  std::vector<std::future<size_t>> futs;
+  std::vector<std::future<bool>> futs;
   while (n != 0) {
     size_t m = std::min(batch_size_, n);
     futs.emplace_back(thread_pool_.enqueue(readfn, offset, m, data));
@@ -329,8 +337,7 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
     offset += m;
   }
   for (auto& f : futs) {
-    size_t m = f.get();
-    if (m <= 0) {
+    if (!f.get()) {
       throw std::runtime_error("[read] Unable to read from file.");
     }
   }
