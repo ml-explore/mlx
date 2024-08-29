@@ -17,3 +17,4 @@ Linear Algebra
     qr
     svd
     eigvalsh
+    eigh

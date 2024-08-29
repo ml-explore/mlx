@@ -2198,10 +2198,8 @@ class Cholesky : public UnaryPrimitive {
 
 class Eigvalsh : public UnaryPrimitive {
  public:
-  explicit Eigvalsh(Stream stream, bool upper, bool compute_vectors)
-      : UnaryPrimitive(stream),
-        upper_(upper),
-        compute_vectors_(compute_vectors) {}
+  explicit Eigvalsh(Stream stream, bool upper)
+      : UnaryPrimitive(stream), upper_(upper) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -2212,7 +2210,22 @@ class Eigvalsh : public UnaryPrimitive {
  private:
   void eval(const std::vector<array>& inputs, array& output);
   bool upper_;
-  bool compute_vectors_;
+};
+
+class Eigh : public UnaryPrimitive {
+ public:
+  explicit Eigh(Stream stream, bool upper)
+      : UnaryPrimitive(stream), upper_(upper) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Eigh)
+
+ private:
+  void eval(const std::vector<array>& inputs, array& output);
+  bool upper_;
 };
 
 } // namespace mlx::core

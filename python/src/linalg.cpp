@@ -442,4 +442,43 @@ void init_linalg(nb::module_& parent_module) {
             >>> eigenvalues
             array([-1., 3.], dtype=float32)
       )pbdoc");
+  m.def(
+      "eigh",
+      &eigh,
+      "a"_a,
+      "upper"_a = true,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def eigh(a: array, upper: bool = True, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the eigenvectors of a complex Hermitian or real symmetric matrix.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the eigenvectors are computed for each matrix
+        in the last two dimensions of ``a``.
+
+        Args:
+            a (array): Input array. Must be a real symmetric or complex Hermitian matrix.
+            upper (bool, optional): Whether to use the upper or lower triangle of the matrix.
+                                    Default is True (upper triangle).
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The normalized eigenvectors. The column v[:, i] is the
+                   eigenvector corresponding to the i-th eigenvalue.
+
+        Note:
+            The input matrix is assumed to be symmetric (or Hermitian). Only the
+            upper triangle (if upper=True) or lower triangle (if upper=False) is used.
+            No checks for symmetry are performed.
+
+        Example:
+            >>> A = mx.array([[1., -2.], [-2., 1.]])
+            >>> v = mx.linalg.eigh(A)
+            >>> v
+            array([[ 0.707107, -0.707107],
+                   [ 0.707107,  0.707107]], dtype=float32)
+      )pbdoc");
 }

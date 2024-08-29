@@ -382,6 +382,7 @@ array cholesky_inv(
   }
 }
 
+<<<<<<< HEAD
 array cross(
     const array& a,
     const array& b,
@@ -454,10 +455,9 @@ array cross(
   return concatenate(outputs, axis, s);
 }
 
-std::pair<array, array> eigvalsh(
+array eigvalsh(
     const array& a,
-    bool upper /* = true */,
-    bool compute_vectors /* = false */,
+    bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
   if (a.dtype() != float32) {
     std::ostringstream msg;
@@ -482,12 +482,42 @@ std::pair<array, array> eigvalsh(
   std::vector<int> out_shape(a.shape().begin(), a.shape().end() - 1);
   out_shape.back() = a.shape(-1);
 
-  auto out = array::make_arrays(
-      {out_shape, compute_vectors ? a.shape() : std::vector<int>()},
-      {a.dtype(), a.dtype()},
-      std::make_shared<Eigvalsh>(to_stream(s), upper, compute_vectors),
+  return array(
+      out_shape,
+      a.dtype(),
+      std::make_shared<Eigvalsh>(to_stream(s), upper),
       {astype(a, a.dtype(), s)});
-  return std::make_pair(out[0], out[1]);
+}
+
+array eigh(
+    const array& a,
+    bool upper /* = false */,
+    StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::eigh] Arrays must be type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::eigh] Arrays must have >= 2 dimensions. Received array "
+           "with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    throw std::invalid_argument(
+        "[linalg::eigh] Eigenvectors are only defined for square matrices.");
+  }
+
+  return array(
+      a.shape(),
+      a.dtype(),
+      std::make_shared<Eigh>(to_stream(s), upper),
+      {astype(a, a.dtype(), s)});
 }
 
 } // namespace mlx::core::linalg
