@@ -14,6 +14,8 @@ namespace mlx::core {
 
 namespace io {
 
+ThreadPool& thread_pool();
+
 class Reader {
  public:
   virtual bool is_open() const = 0;
@@ -79,8 +81,7 @@ class ParallelFileReader : public Reader {
   }
 
  private:
-  // 4MB
-  static constexpr size_t batch_size_ = (1 << 22);
+  static constexpr size_t batch_size_ = 1 << 25;
   int fd_;
   std::string label_;
   ThreadPool thread_pool_;

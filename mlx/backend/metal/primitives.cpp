@@ -202,15 +202,18 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   static Stream io_stream = new_stream(Device::cpu);
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
-  auto task = [out = out,
-               offset = offset_,
-               reader = reader_,
-               swap_endianness = swap_endianness_]() mutable {
+  auto read_task = [out = out,
+                    offset = offset_,
+                    reader = reader_,
+                    swap_endianness = swap_endianness_]() mutable {
     load(out, offset, reader, swap_endianness);
+  };
+  auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
+  auto signal_task = [out = out, fut = std::move(fut)]() {
+    fut.wait();
     out.event().signal();
   };
-
-  scheduler::enqueue(io_stream, std::move(task));
+  scheduler::enqueue(io_stream, std::move(signal_task));
   auto& d = metal::device(stream().device);
   d.end_encoding(stream().index);
   auto command_buffer = d.get_command_buffer(stream().index);

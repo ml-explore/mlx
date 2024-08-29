@@ -303,6 +303,11 @@ array load(std::string file, StreamOrDevice s) {
 
 namespace io {
 
+ThreadPool& thread_pool() {
+  static ThreadPool pool_{4};
+  return pool_;
+}
+
 void ParallelFileReader::read(char* data, size_t n) {
   while (n != 0) {
     auto m = ::read(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
