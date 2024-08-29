@@ -405,7 +405,7 @@ void Eigvalsh::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error("[Eigvalsh::eval_gpu] Metal Eigvalsh NYI.");
 }
 
-void Eigvh::eval_gpu(const std::vector<array>& inputs, array& out) {
+void Eigh::eval_gpu(const std::vector<array>& inputs, array& out) {
   throw std::runtime_error("[Eigh::eval_gpu] Metal Eigh NYI.");
 }
 
