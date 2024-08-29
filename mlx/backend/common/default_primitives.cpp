@@ -115,6 +115,7 @@ DEFAULT(Transpose)
 DEFAULT(Inverse)
 DEFAULT(Cholesky)
 DEFAULT(Eigvalsh)
+DEFAULT(Eigh)
 
 namespace {
 

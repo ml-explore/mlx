@@ -82,6 +82,7 @@ DEFAULT(Transpose)
 DEFAULT(Inverse)
 DEFAULT(Cholesky)
 DEFAULT(Eigvalsh)
+DEFAULT(Eigh)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);

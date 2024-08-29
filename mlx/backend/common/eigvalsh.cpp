@@ -101,60 +101,87 @@ int ssyevd_wrapper(char jobz, char uplo, float* matrix, float* w, int N) {
 void eigvalsh_impl(
     const array& a,
     array& values,
-    array& vectors,
-    bool upper,
-    bool compute_vectors) {
-  char jobz = compute_vectors ? 'V' : 'N';
-  char uplo = (upper) ? 'U' : 'L'; // Use upper triangle of the matrix
+    bool upper) {
+  char jobz = 'N'; // Only compute eigenvalues
+  char uplo = (upper) ? 'U' : 'L';
 
-  // Create a copy of the input array for in-place computation
   array buffer = copy(a);
 
   const int N = static_cast<int>(a.shape(-1));
   const int num_matrices = static_cast<int>(a.size() / (N * N));
 
-  // Allocate output arrays
   std::vector<int> values_shape = {num_matrices, N};
-  values = array({}, values_shape, a.dtype());
-
-  if (compute_vectors) {
-    vectors = array({}, a.shape(), a.dtype());
-  }
+  values = array(allocator::malloc(num_matrices * N * size_of(a.dtype())), values_shape, a.dtype());
 
   float* matrix = buffer.data<float>();
   float* w = values.data<float>();
-  float* vecs = compute_vectors ? vectors.data<float>() : nullptr;
 
   for (int i = 0; i < num_matrices; i++) {
-    // Compute eigenvalue decomposition
     int info = ssyevd_wrapper(jobz, uplo, matrix, w, N);
 
     if (info != 0) {
       std::stringstream msg;
-      msg << "[eigvalsh] Eigenvalue decomposition failed with error code "
-          << info;
+      msg << "[eigvalsh] Eigenvalue decomposition failed with error code " << info;
       throw std::runtime_error(msg.str());
     }
 
-    // Copy eigenvectors if computed
-    if (compute_vectors) {
-      std::copy(matrix, matrix + N * N, vecs);
-      vecs += N * N;
-    }
-
-    // Move to next matrix
     matrix += N * N;
     w += N;
   }
 }
 
+void eigh_impl(
+    const array& a,
+    array& vectors,
+    bool upper) {
+  char jobz = 'V'; // Compute both eigenvalues and eigenvectors
+  char uplo = (upper) ? 'U' : 'L';
+
+  array buffer = copy(a);
+
+  const int N = static_cast<int>(a.shape(-1));
+  const int num_matrices = static_cast<int>(a.size() / (N * N));
+
+  std::vector<int> vectors_shape = a.shape();
+  vectors = array(allocator::malloc(a.size() * size_of(a.dtype())), vectors_shape, a.dtype());
+
+  float* matrix = buffer.data<float>();
+  float* vecs = vectors.data<float>();
+
+  // Temporary buffer for eigenvalues (we don't return these)
+  std::vector<float> w(N);
+
+  for (int i = 0; i < num_matrices; i++) {
+    int info = ssyevd_wrapper(jobz, uplo, matrix, w.data(), N);
+
+    if (info != 0) {
+      std::stringstream msg;
+      msg << "[eigh] Eigenvalue decomposition failed with error code " << info;
+      throw std::runtime_error(msg.str());
+    }
+
+    // Copy eigenvectors to the output array
+    std::copy(matrix, matrix + N * N, vecs);
+
+    matrix += N * N;
+    vecs += N * N;
+  }
+}
+
 void Eigvalsh::eval(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+    const std::vector<array>& inputs, array& output) {
   if (inputs[0].dtype() != float32) {
     throw std::runtime_error("[Eigvalsh::eval] only supports float32.");
   }
-  eigvalsh_impl(inputs[0], output[0], output[1], upper_, compute_vectors_);
+  eigvalsh_impl(inputs[0], output, upper_);
+}
+
+void Eigh::eval(
+    const std::vector<array>& inputs, array& output) {
+  if (inputs[0].dtype() != float32) {
+    throw std::runtime_error("[Eigh::eval] only supports float32.");
+  }
+  eigh_impl(inputs[0], output, upper_);
 }
 
 } // namespace mlx::core
