@@ -14,6 +14,8 @@ namespace mlx::core {
 
 namespace io {
 
+ThreadPool& thread_pool();
+
 class Reader {
  public:
   virtual bool is_open() const = 0;
@@ -43,10 +45,8 @@ class Writer {
 
 class ParallelFileReader : public Reader {
  public:
-  explicit ParallelFileReader(std::string file_path, int num_threads)
-      : fd_(open(file_path.c_str(), O_RDONLY)),
-        label_(std::move(file_path)),
-        thread_pool_(ThreadPool(num_threads)) {}
+  explicit ParallelFileReader(std::string file_path)
+      : fd_(open(file_path.c_str(), O_RDONLY)), label_(std::move(file_path)) {}
 
   ~ParallelFileReader() override {
     close(fd_);
@@ -79,11 +79,10 @@ class ParallelFileReader : public Reader {
   }
 
  private:
-  // 4MB
-  static constexpr size_t batch_size_ = (1 << 22);
+  static constexpr size_t batch_size_ = 1 << 25;
+  static ThreadPool thread_pool_;
   int fd_;
   std::string label_;
-  ThreadPool thread_pool_;
 };
 
 class FileWriter : public Writer {
