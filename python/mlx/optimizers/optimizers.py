@@ -4,6 +4,7 @@ import math
 from typing import Callable, List, Optional, Tuple, Union
 
 import mlx.core as mx
+from mlx.nn import Module
 from mlx.utils import tree_map, tree_reduce
 
 
@@ -17,7 +18,7 @@ class Optimizer:
         self._state = {"step": mx.array(0, mx.uint64)}
         self._schedulers = {k: v for k, v in (schedulers or {}).items()}
 
-    def update(self, model: "mlx.nn.Module", gradients: dict):
+    def update(self, model: Module, gradients: dict):
         """Apply the gradients to the parameters of the model and update the
         model with the new parameters.
 

@@ -190,9 +190,9 @@ class MaxPool1d(_Pool1d):
 
     def __init__(
         self,
-        kernel_size: Union[int, Tuple[int, int]],
-        stride: Optional[Union[int, Tuple[int, int]]] = None,
-        padding: Optional[Union[int, Tuple[int, int]]] = 0,
+        kernel_size: Union[int, Tuple[int]],
+        stride: Optional[Union[int, Tuple[int]]] = None,
+        padding: Union[int, Tuple[int]] = 0,
     ):
         super().__init__(mx.max, -float("inf"), kernel_size, stride, padding)
 
@@ -229,9 +229,9 @@ class AvgPool1d(_Pool1d):
 
     def __init__(
         self,
-        kernel_size: Union[int, Tuple[int, int]],
-        stride: Optional[Union[int, Tuple[int, int]]] = None,
-        padding: Optional[Union[int, Tuple[int, int]]] = 0,
+        kernel_size: Union[int, Tuple[int]],
+        stride: Optional[Union[int, Tuple[int]]] = None,
+        padding: Union[int, Tuple[int]] = 0,
     ):
         super().__init__(mx.mean, 0, kernel_size, stride, padding)
 

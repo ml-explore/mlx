@@ -1,7 +1,7 @@
 # Copyright © 2023 Apple Inc.
 
 import math
-from typing import Literal
+from typing import Literal, Optional
 
 import mlx.core as mx
 
@@ -22,7 +22,7 @@ def _reduce(loss: mx.array, reduction: Reduction = "none"):
 def cross_entropy(
     logits: mx.array,
     targets: mx.array,
-    weights: mx.array = None,
+    weights: Optional[mx.array] = None,
     axis: int = -1,
     label_smoothing: float = 0.0,
     reduction: Reduction = "none",
@@ -117,7 +117,7 @@ def cross_entropy(
 def binary_cross_entropy(
     inputs: mx.array,
     targets: mx.array,
-    weights: mx.array = None,
+    weights: Optional[mx.array] = None,
     with_logits: bool = True,
     reduction: Reduction = "mean",
 ) -> mx.array:

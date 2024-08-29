@@ -146,6 +146,11 @@ class PyFileReader : public io::Reader {
     }
   }
 
+  void read(char* data, size_t n, size_t offset) override {
+    seek(offset);
+    read(data, n);
+  }
+
   std::string label() const override {
     return "python file object";
   }

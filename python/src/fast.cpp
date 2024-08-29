@@ -200,9 +200,15 @@ void init_fast(nb::module_& parent_module) {
       A jit-compiled custom Metal kernel defined from a source string.
       )pbdoc")
       .def(
-          nb::init<const std::string&, const std::string&, bool, bool>(),
+          nb::init<
+              const std::string&,
+              const std::string&,
+              const std::string&,
+              bool,
+              bool>(),
           "name"_a,
           "source"_a,
+          "header"_a = "",
           "ensure_row_contiguous"_a = true,
           "atomic_outputs"_a = false,
           R"pbdoc(
@@ -214,6 +220,8 @@ void init_fast(nb::module_& parent_module) {
             the function signature will be generated for you. The names of the inputs/outputs
             are determined by the ``inputs`` and ``output_shapes``/``output_dtypes``
             used when the kernel is called.
+        header (str): Header source code to include before the main function.
+            Useful for helper functions or includes that should live outside of the main function body.
         ensure_row_contiguous (bool): Whether to ensure the inputs are row contiguous
             before the kernel runs. Default: ``True``.
         atomic_outputs (bool): Whether to use atomic outputs in the function signature
@@ -221,34 +229,35 @@ void init_fast(nb::module_& parent_module) {
       Returns:
         Callable ``metal_kernel``.
 
-      .. code-block:: python
+      Example:
 
-        def exp_elementwise(a: mx.array):
-            source = """
-                uint elem = thread_position_in_grid.x;
-                T tmp = inp[elem];
-                out[elem] = metal::exp(tmp);
-            """
+        .. code-block:: python
 
-            kernel = mx.fast.metal_kernel(
-                name="myexp",
-                source=source
-            )
-            outputs = kernel(
-                inputs={"inp": a},
-                template={"T": mx.float32},
-                grid=(a.size, 1, 1),
-                threadgroup=(256, 1, 1),
-                output_shapes={"out": a.shape},
-                output_dtypes={"out": a.dtype},
-                verbose=True,
-            )
-            return outputs["out"]
+          def exp_elementwise(a: mx.array):
+              source = '''
+                  uint elem = thread_position_in_grid.x;
+                  T tmp = inp[elem];
+                  out[elem] = metal::exp(tmp);
+              '''
 
-        a = mx.random.normal(shape=(4, 16)).astype(mx.float16)
-        b = exp_elementwise(a)
-        assert mx.allclose(b, mx.exp(a))
+              kernel = mx.fast.metal_kernel(
+                  name="myexp",
+                  source=source
+              )
+              outputs = kernel(
+                  inputs={"inp": a},
+                  template={"T": mx.float32},
+                  grid=(a.size, 1, 1),
+                  threadgroup=(256, 1, 1),
+                  output_shapes={"out": a.shape},
+                  output_dtypes={"out": a.dtype},
+                  verbose=True,
+              )
+              return outputs["out"]
 
+          a = mx.random.normal(shape=(4, 16)).astype(mx.float16)
+          b = exp_elementwise(a)
+          assert mx.allclose(b, mx.exp(a))
       )pbdoc")
       .def(
           "__call__",

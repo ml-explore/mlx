@@ -47,8 +47,6 @@ std::function<void()> make_task(array arr, bool signal) {
     for (auto& input : arr.inputs()) {
       if (input.event().valid() &&
           input.event().stream() != arr.primitive().stream()) {
-        // TODO, consider committing the buffer and encoding a wait in the new
-        // buffer rather than on the task thread
         input.event().wait();
       }
     }

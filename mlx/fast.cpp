@@ -1112,7 +1112,6 @@ std::map<std::string, array> MetalKernel::operator()(
         "[metal_kernel] MetalKernel only works on GPU.");
   }
 
-  std::ostringstream kernel_source;
   std::ostringstream func_name;
 
   std::string template_def = "";
@@ -1127,6 +1126,9 @@ std::map<std::string, array> MetalKernel::operator()(
 
   func_name << "custom_kernel_" << name_ << hash_key;
   std::string kernel_name = func_name.str();
+
+  std::ostringstream kernel_source;
+  kernel_source << header_ << std::endl;
 
   std::vector<CustomKernelShapeInfo> shape_infos;
   write_signature(

@@ -2927,6 +2927,10 @@ array softmax(
     const std::vector<int>& axes,
     bool precise /* = false */,
     StreamOrDevice s /* = {}*/) {
+  if (a.size() == 0) {
+    return a;
+  }
+
   if (axes.size() == 1 && (a.ndim() == axes[0] + 1 || axes[0] == -1)) {
     auto dtype = at_least_float(a.dtype());
     return array(

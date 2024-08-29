@@ -4,10 +4,10 @@
 
 #include <variant>
 
-#include "array.h"
-#include "device.h"
-#include "dtype.h"
-#include "stream.h"
+#include "mlx/array.h"
+#include "mlx/device.h"
+#include "mlx/dtype.h"
+#include "mlx/stream.h"
 
 namespace mlx::core {
 

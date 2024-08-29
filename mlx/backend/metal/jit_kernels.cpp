@@ -6,7 +6,6 @@
 #include "mlx/backend/metal/jit/copy.h"
 #include "mlx/backend/metal/jit/gemv_masked.h"
 #include "mlx/backend/metal/jit/includes.h"
-#include "mlx/backend/metal/jit/reduce.h"
 #include "mlx/backend/metal/jit/scan.h"
 #include "mlx/backend/metal/jit/softmax.h"
 #include "mlx/backend/metal/jit/steel_conv.h"
@@ -323,12 +322,13 @@ MTL::ComputePipelineState* get_reduce_init_kernel(
   auto lib = d.get_library(kernel_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduce_utils()
-                  << fmt::format(
-                         reduce_init_kernels,
-                         kernel_name,
-                         get_type_string(out.dtype()),
-                         op_name(out));
+    std::string op_type = op_name(out);
+    op_type[0] = std::toupper(op_name(out)[0]);
+    auto out_type = get_type_string(out.dtype());
+    std::string op = op_type + "<" + out_type + ">";
+    kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce();
+    kernel_source << get_template_definition(
+        kernel_name, "init_reduce", out_type, op);
     lib = d.get_library(kernel_name, kernel_source.str());
   }
   return d.get_kernel(kernel_name, lib);
@@ -347,14 +347,22 @@ MTL::ComputePipelineState* get_reduce_kernel(
     op_type[0] = std::toupper(op_name[0]);
     bool non_atomic = out.dtype() == int64 || out.dtype() == uint64;
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce()
-                  << fmt::format(
-                         non_atomic ? reduce_non_atomic_kernels
-                                    : reduce_kernels,
-                         lib_name,
-                         get_type_string(in.dtype()),
-                         get_type_string(out.dtype()),
-                         op_type);
+    auto in_type = get_type_string(in.dtype());
+    auto out_type = get_type_string(out.dtype());
+    std::vector<std::pair<std::string, std::string>> reduce_kernels = {
+        {"all_reduce", "allReduce"},
+        {"col_reduce_small", "colReduceSmall"},
+        {"col_reduce_looped", "colReduceLooped"},
+        {"row_reduce_small", "rowReduceSmall"},
+        {"row_reduce_looped", "rowReduceLooped"},
+        {"row_reduce_simple", "rowReduceSimple"}};
+    std::string op = op_type + "<" + out_type + ">";
+    kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce();
+    for (auto [func, name] : reduce_kernels) {
+      kernel_source << get_template_definition(
+          name + "_" + lib_name, func, in_type, out_type, op);
+    }
+
     lib = d.get_library(lib_name, kernel_source.str());
   }
   return d.get_kernel(kernel_name, lib);

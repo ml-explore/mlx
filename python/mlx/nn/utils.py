@@ -1,7 +1,7 @@
 # Copyright © 2023-2024 Apple Inc.
 
 from functools import wraps
-from typing import Callable
+from typing import Callable, Optional
 
 import mlx.core as mx
 
@@ -37,7 +37,7 @@ def value_and_grad(model: Module, fn: Callable):
     return wrapped_value_grad_fn
 
 
-def checkpoint(module: Module, fn: Callable = None):
+def checkpoint(module: Module, fn: Optional[Callable] = None):
     """Transform the passed callable to one that performs gradient
     checkpointing with respect to the trainable parameters of the module (and
     the callable's inputs).

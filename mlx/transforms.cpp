@@ -186,10 +186,35 @@ array eval_impl(std::vector<array> outputs, bool async) {
 }
 
 void async_eval(std::vector<array> outputs) {
+  if (outputs.empty()) {
+    return;
+  }
+
+  if (std::none_of(outputs.begin(), outputs.end(), [](array& x) {
+        return x.status() == array::Status::unscheduled;
+      })) {
+    return;
+  }
+
   eval_impl(std::move(outputs), true);
 }
 
 void eval(std::vector<array> outputs) {
+  if (outputs.empty()) {
+    return;
+  }
+
+  if (std::none_of(outputs.begin(), outputs.end(), [](array& x) {
+        return x.status() == array::Status::unscheduled;
+      })) {
+    for (auto& x : outputs) {
+      if (!x.is_available()) {
+        x.event().wait();
+      }
+    }
+    return;
+  }
+
   eval_impl(std::move(outputs), false).event().wait();
 }
 
