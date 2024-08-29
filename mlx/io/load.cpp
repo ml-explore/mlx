@@ -298,7 +298,7 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
 
 /** Load array from file in .npy format */
 array load(std::string file, StreamOrDevice s) {
-  return load(std::make_shared<io::ParallelFileReader>(std::move(file), 4), s);
+  return load(std::make_shared<io::ParallelFileReader>(std::move(file)), s);
 }
 
 namespace io {
@@ -307,6 +307,8 @@ ThreadPool& thread_pool() {
   static ThreadPool pool_{4};
   return pool_;
 }
+
+ThreadPool ParallelFileReader::thread_pool_{4};
 
 void ParallelFileReader::read(char* data, size_t n) {
   while (n != 0) {
