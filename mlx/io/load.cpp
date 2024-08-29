@@ -337,11 +337,18 @@ void ParallelFileReader::read(char* data, size_t n, size_t offset) {
   };
   std::vector<std::future<bool>> futs;
   while (n != 0) {
-    size_t m = std::min(batch_size_, n);
-    futs.emplace_back(thread_pool_.enqueue(readfn, offset, m, data));
-    data += m;
-    n -= m;
-    offset += m;
+    if (n < batch_size_) {
+      if (!readfn(offset, n, data)) {
+        throw std::runtime_error("[read] Unable to read from file.");
+      }
+      break;
+    } else {
+      size_t m = batch_size_;
+      futs.emplace_back(thread_pool_.enqueue(readfn, offset, m, data));
+      data += m;
+      n -= m;
+      offset += m;
+    }
   }
   for (auto& f : futs) {
     if (!f.get()) {
