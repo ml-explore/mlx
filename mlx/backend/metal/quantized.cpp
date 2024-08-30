@@ -588,7 +588,7 @@ void fast::AffineQuantize::eval_gpu(
     thread_group_size = nthreads;
   }
   auto group_dims = MTL::Size(thread_group_size, 1, 1);
-  bool use_2d = out.data_size() > UINT_MAX;
+  bool use_2d = nthreads > UINT_MAX;
   auto grid_shape = w.shape();
   if (dequantize_) {
     grid_shape.back() *= uint8_per_uint32;

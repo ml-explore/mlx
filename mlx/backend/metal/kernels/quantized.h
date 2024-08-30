@@ -1505,7 +1505,7 @@ template <typename T, const int group_size, const int bits>
   T bias = at_zero ? T(0) : edge;
 
   // Write out the scales and biases
-  int gindex = in_index / group_size;
+  size_t gindex = in_index / group_size;
   if (in_index % group_size == 0) {
     scales[gindex] = scale;
     biases[gindex] = bias;
