@@ -18,7 +18,8 @@ void print_constant(std::ostream& os, const array& x) {
     case complex64:
       return print_complex_constant<complex64_t>(os, x);
     case int8:
-      return print_int_constant<int8_t>(os, x);
+      os << static_cast<int32_t>(x.item<int8_t>());
+      return;
     case int16:
       return print_int_constant<int16_t>(os, x);
     case int32:
@@ -26,7 +27,8 @@ void print_constant(std::ostream& os, const array& x) {
     case int64:
       return print_int_constant<int64_t>(os, x);
     case uint8:
-      return print_int_constant<uint8_t>(os, x);
+      os << static_cast<uint32_t>(x.item<uint8_t>());
+      return;
     case uint16:
       return print_int_constant<uint16_t>(os, x);
     case uint32:

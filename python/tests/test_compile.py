@@ -719,6 +719,20 @@ class TestCompile(mlx_tests.MLXTestCase):
         expected = fn()
         self.assertTrue(mx.array_equal(expected, out))
 
+    def test_dtypes(self):
+        x = mx.array([0, 1, 2, 3])
+        dtypes = [mx.bool_, mx.int8, mx.uint8, mx.int16, mx.uint16]
+        for dtype in dtypes:
+            x = x.astype(dtype)
+            mx.eval(x)
+
+            def fn(x):
+                return x * 1 + 0
+
+            out = mx.compile(fn)(x)
+            expected = fn(x)
+            self.assertTrue(mx.array_equal(expected, out))
+
 
 if __name__ == "__main__":
     unittest.main()
