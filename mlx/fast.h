@@ -65,6 +65,9 @@ array affine_dequantize(
     StreamOrDevice s = {});
 
 typedef std::variant<int, bool, Dtype> TemplateArg;
+typedef int MetalGrid1D;
+typedef std::tuple<int, int> MetalGrid2D;
+typedef std::tuple<int, int, int> MetalGrid3D;
 
 class MetalKernel {
  public:
@@ -80,12 +83,18 @@ class MetalKernel {
         ensure_row_contiguous_(ensure_row_contiguous),
         atomic_outputs_(atomic_outputs) {}
 
+  template <
+      typename T,
+      std::enable_if_t<
+          std::is_same_v<T, MetalGrid1D> || std::is_same_v<T, MetalGrid2D> ||
+              std::is_same_v<T, MetalGrid3D>,
+          bool> = true>
   std::map<std::string, array> operator()(
       std::map<std::string, array>& inputs,
       std::map<std::string, std::vector<int>> output_shapes,
       std::map<std::string, Dtype> output_dtypes,
-      std::tuple<int, int, int> grid,
-      std::tuple<int, int, int> threadgroup,
+      T grid,
+      T threadgroup,
       std::optional<std::map<std::string, TemplateArg>> template_args =
           std::nullopt,
       std::optional<float> init_value = std::nullopt,

@@ -719,7 +719,8 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     std::ostringstream msg;
     msg << "[quantize] The last dimension of the matrix needs to be divisible by "
         << "the quantization group size " << group_size
-        << ". However the provided " << " matrix has shape " << w.shape();
+        << ". However the provided "
+        << " matrix has shape " << w.shape();
     throw std::invalid_argument(msg.str());
   }
 
@@ -941,6 +942,18 @@ void validate_output_shapes(
   }
 }
 
+template <typename T>
+std::string get_grid_dtype() {
+  if constexpr (std::is_same_v<T, MetalGrid1D>) {
+    return "uint";
+  } else if constexpr (std::is_same_v<T, MetalGrid2D>) {
+    return "uint2";
+  } else {
+    return "uint3";
+  }
+}
+
+template <typename T>
 void write_signature(
     std::string func_name,
     std::string& source,
@@ -975,13 +988,15 @@ void write_signature(
   }
   kernel_source << "[[kernel]] void " << func_name << "(" << std::endl;
 
+  const std::string grid_dtype = get_grid_dtype<T>();
+
   // Metal attributes are automatically added to the arguments if present
   const std::vector<std::pair<std::string, std::string>> metal_attributes = {
       {"dispatch_quadgroups_per_threadgroup", "uint"},
       {"dispatch_simdgroups_per_threadgroup", "uint"},
-      {"dispatch_threads_per_threadgroup", "uint3"},
-      {"grid_origin", "uint3"},
-      {"grid_size", "uint3"},
+      {"dispatch_threads_per_threadgroup", grid_dtype},
+      {"grid_origin", grid_dtype},
+      {"grid_size", grid_dtype},
       {"quadgroup_index_in_threadgroup", "uint"},
       {"quadgroups_per_threadgroup", "uint"},
       {"simdgroup_index_in_threadgroup", "uint"},
@@ -990,13 +1005,13 @@ void write_signature(
       {"thread_index_in_quadgroup", "uint"},
       {"thread_index_in_simdgroup", "uint"},
       {"thread_index_in_threadgroup", "uint"},
-      {"thread_position_in_grid", "uint3"},
-      {"thread_position_in_threadgroup", "uint3"},
-      {"threadgroup_position_in_grid", "uint3"},
-      {"threadgroups_per_grid", "uint3"},
-      {"threads_per_grid", "uint3"},
+      {"thread_position_in_grid", grid_dtype},
+      {"thread_position_in_threadgroup", grid_dtype},
+      {"threadgroup_position_in_grid", grid_dtype},
+      {"threadgroups_per_grid", grid_dtype},
+      {"threads_per_grid", grid_dtype},
       {"threads_per_simdgroup", "uint"},
-      {"thread_per_threadgroup", "uint3"},
+      {"thread_per_threadgroup", grid_dtype},
   };
   std::vector<std::pair<std::string, std::string>> attrs;
   for (const auto& [attr, dtype] : metal_attributes) {
@@ -1094,12 +1109,62 @@ std::string write_template(std::map<std::string, TemplateArg>& template_args) {
   return template_def.str();
 }
 
+template std::map<std::string, array> MetalKernel::operator()<MetalGrid1D>(
+    std::map<std::string, array>&,
+    std::map<std::string, std::vector<int>>,
+    std::map<std::string, Dtype>,
+    MetalGrid1D,
+    MetalGrid1D,
+    std::optional<std::map<std::string, TemplateArg>>,
+    std::optional<float>,
+    bool,
+    StreamOrDevice s_);
+
+template std::map<std::string, array> MetalKernel::operator()<MetalGrid2D>(
+    std::map<std::string, array>&,
+    std::map<std::string, std::vector<int>>,
+    std::map<std::string, Dtype>,
+    MetalGrid2D,
+    MetalGrid2D,
+    std::optional<std::map<std::string, TemplateArg>>,
+    std::optional<float>,
+    bool,
+    StreamOrDevice);
+
+template std::map<std::string, array> MetalKernel::operator()<MetalGrid3D>(
+    std::map<std::string, array>&,
+    std::map<std::string, std::vector<int>>,
+    std::map<std::string, Dtype>,
+    MetalGrid3D,
+    MetalGrid3D,
+    std::optional<std::map<std::string, TemplateArg>>,
+    std::optional<float>,
+    bool,
+    StreamOrDevice);
+
+template <typename T>
+constexpr MetalGrid3D to_triple(T arg) {
+  if constexpr (std::is_same_v<T, MetalGrid1D>) {
+    return MetalGrid3D(arg, 1, 1);
+  } else if constexpr (std::is_same_v<T, MetalGrid2D>) {
+    return MetalGrid3D(std::get<0>(arg), std::get<1>(arg), 1);
+  } else {
+    return arg;
+  }
+}
+
+template <
+    typename T,
+    std::enable_if_t<
+        std::is_same_v<T, MetalGrid1D> || std::is_same_v<T, MetalGrid2D> ||
+            std::is_same_v<T, MetalGrid3D>,
+        bool>>
 std::map<std::string, array> MetalKernel::operator()(
     std::map<std::string, array>& inputs,
     std::map<std::string, std::vector<int>> output_shapes,
     std::map<std::string, Dtype> output_dtypes,
-    std::tuple<int, int, int> grid,
-    std::tuple<int, int, int> threadgroup,
+    T grid,
+    T threadgroup,
     std::optional<std::map<std::string, TemplateArg>> template_args,
     std::optional<float> init_value,
     bool verbose,
@@ -1131,7 +1196,7 @@ std::map<std::string, array> MetalKernel::operator()(
   kernel_source << header_ << std::endl;
 
   std::vector<CustomKernelShapeInfo> shape_infos;
-  write_signature(
+  write_signature<T>(
       func_name.str(),
       source_,
       inputs,
@@ -1182,8 +1247,8 @@ std::map<std::string, array> MetalKernel::operator()(
           s,
           kernel_name,
           kernel_source.str(),
-          grid,
-          threadgroup,
+          to_triple<T>(grid),
+          to_triple<T>(threadgroup),
           shape_infos,
           ensure_row_contiguous_,
           init_value),

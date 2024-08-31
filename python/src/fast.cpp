@@ -17,6 +17,54 @@ namespace nb = nanobind;
 using namespace nb::literals;
 using namespace mlx::core;
 
+template <typename T>
+static auto call_metal_kernel(
+    fast::MetalKernel& kernel,
+    std::map<std::string, ScalarOrArray>& inputs_,
+    std::map<std::string, std::vector<int>>& output_shapes,
+    std::map<std::string, Dtype>& output_dtypes,
+    T grid,
+    T threadgroup,
+    std::optional<std::map<std::string, nb::handle>> template_args_,
+    std::optional<float> init_value,
+    bool verbose,
+    StreamOrDevice s) {
+  std::map<std::string, array> inputs;
+  for (const auto& [name, value] : inputs_) {
+    auto arr = to_array(value, std::nullopt);
+    inputs.insert({name, arr});
+  }
+  std::map<std::string, fast::TemplateArg> template_args;
+  if (template_args_) {
+    for (const auto& [name, value] : template_args_.value()) {
+      // Handle bool, int and dtype template args
+      if (nb::isinstance<bool>(value)) {
+        bool bool_val = nb::cast<bool>(value);
+        template_args.insert({name, bool_val});
+      } else if (nb::isinstance<int>(value)) {
+        int int_val = nb::cast<int>(value);
+        template_args.insert({name, int_val});
+      } else if (nb::isinstance<Dtype>(value)) {
+        Dtype dtype = nb::cast<Dtype>(value);
+        template_args.insert({name, dtype});
+      } else {
+        throw std::invalid_argument(
+            "[[metal_kernel]] Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
+      }
+    }
+  }
+  return kernel.operator()<T>(
+      inputs,
+      output_shapes,
+      output_dtypes,
+      grid,
+      threadgroup,
+      template_args,
+      init_value,
+      verbose,
+      s);
+}
+
 void init_fast(nb::module_& parent_module) {
   auto m =
       parent_module.def_submodule("fast", "mlx.core.fast: fast operations");
@@ -261,51 +309,83 @@ void init_fast(nb::module_& parent_module) {
       )pbdoc")
       .def(
           "__call__",
-          [](fast::MetalKernel& kernel,
-             std::map<std::string, ScalarOrArray>& inputs_,
-             std::map<std::string, std::vector<int>>& output_shapes,
-             std::map<std::string, Dtype>& output_dtypes,
-             std::tuple<int, int, int> grid,
-             std::tuple<int, int, int> threadgroup,
-             std::optional<std::map<std::string, nb::handle>> template_args_,
-             std::optional<float> init_value,
-             bool verbose,
-             StreamOrDevice s) {
-            std::map<std::string, array> inputs;
-            for (const auto& [name, value] : inputs_) {
-              auto arr = to_array(value, std::nullopt);
-              inputs.insert({name, arr});
-            }
-            std::map<std::string, fast::TemplateArg> template_args;
-            if (template_args_) {
-              for (const auto& [name, value] : template_args_.value()) {
-                // Handle bool, int and dtype template args
-                if (nb::isinstance<bool>(value)) {
-                  bool bool_val = nb::cast<bool>(value);
-                  template_args.insert({name, bool_val});
-                } else if (nb::isinstance<int>(value)) {
-                  int int_val = nb::cast<int>(value);
-                  template_args.insert({name, int_val});
-                } else if (nb::isinstance<Dtype>(value)) {
-                  Dtype dtype = nb::cast<Dtype>(value);
-                  template_args.insert({name, dtype});
-                } else {
-                  throw std::invalid_argument(
-                      "[[metal_kernel]] Invalid template argument. Must be `mlx.core.Dtype`, `int` or `bool`.");
-                }
-              }
-            }
-            return kernel(
-                inputs,
-                output_shapes,
-                output_dtypes,
-                grid,
-                threadgroup,
-                template_args,
-                init_value,
-                verbose,
-                s);
-          },
+          call_metal_kernel<fast::MetalGrid1D>,
+          nb::kw_only(),
+          "inputs"_a,
+          "output_shapes"_a,
+          "output_dtypes"_a,
+          "grid"_a,
+          "threadgroup"_a,
+          "template"_a = nb::none(),
+          "init_value"_a = nb::none(),
+          "verbose"_a = false,
+          "stream"_a = nb::none(),
+          nb::sig(
+              "def __call__(self, *, inputs: Mapping[str, Union[scalar, array]], output_shapes: Mapping[str, Sequence[int]], output_dtypes: Mapping[str, Dtype], grid: int, threadgroup: int, template: Optional[Mapping[str, Union[bool, int, Dtype]]] = None, init_value: Optional[float] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
+          R"pbdoc(
+            Run the kernel.
+
+            Args:
+              inputs (Mapping[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
+                  The keys will be the names of the arguments to the kernel.
+              output_shapes (Mapping[str, Sequence[int]]): Output shapes. A dict mapping
+                  output variable names to shapes. These will be added to the function signature.
+              output_dtypes (Mapping[str, Dtype]): Output dtypes. A dict mapping output variable
+                  names to dtypes. Must have the same keys as ``output_shapes``.
+              grid (int): integer specifying the grid to launch the kernel with.
+              threadgroup (int): integer specifying the threadgroup size to use.
+              template (Mapping[str, Union[bool, int, Dtype]], optional): Template arguments.
+                  These will be added as template arguments to the kernel definition. Default: ``None``.
+              init_value (float, optional): Optional value to use to initialize all of the output arrays.
+                  By default, output arrays are uninitialized. Default: ``None``.
+              verbose (bool, optional): Whether to print the full generated source code of the kernel
+                  when it is run. Default: ``False``.
+              stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+
+            Returns:
+              dict[str, array]: Dictionary of output arrays based on ``output_shapes``/``output_dtypes``.
+            )pbdoc")
+      .def(
+          "__call__",
+          call_metal_kernel<fast::MetalGrid2D>,
+          nb::kw_only(),
+          "inputs"_a,
+          "output_shapes"_a,
+          "output_dtypes"_a,
+          "grid"_a,
+          "threadgroup"_a,
+          "template"_a = nb::none(),
+          "init_value"_a = nb::none(),
+          "verbose"_a = false,
+          "stream"_a = nb::none(),
+          nb::sig(
+              "def __call__(self, *, inputs: Mapping[str, Union[scalar, array]], output_shapes: Mapping[str, Sequence[int]], output_dtypes: Mapping[str, Dtype], grid: tuple[int, int], threadgroup: tuple[int, int], template: Optional[Mapping[str, Union[bool, int, Dtype]]] = None, init_value: Optional[float] = None, verbose: bool = false, stream: Union[None, Stream, Device] = None)"),
+          R"pbdoc(
+            Run the kernel.
+
+            Args:
+              inputs (Mapping[str, array]): Inputs. These will be added to the function signature and passed to the Metal kernel.
+                  The keys will be the names of the arguments to the kernel.
+              output_shapes (Mapping[str, Sequence[int]]): Output shapes. A dict mapping
+                  output variable names to shapes. These will be added to the function signature.
+              output_dtypes (Mapping[str, Dtype]): Output dtypes. A dict mapping output variable
+                  names to dtypes. Must have the same keys as ``output_shapes``.
+              grid (tuple[int, int]): 2-tuple specifying the grid to launch the kernel with.
+              threadgroup (tuple[int, int]): 2-tuple specifying the threadgroup size to use.
+              template (Mapping[str, Union[bool, int, Dtype]], optional): Template arguments.
+                  These will be added as template arguments to the kernel definition. Default: ``None``.
+              init_value (float, optional): Optional value to use to initialize all of the output arrays.
+                  By default, output arrays are uninitialized. Default: ``None``.
+              verbose (bool, optional): Whether to print the full generated source code of the kernel
+                  when it is run. Default: ``False``.
+              stream (mx.stream, optional): Stream to run the kernel on. Default: ``None``.
+
+            Returns:
+              dict[str, array]: Dictionary of output arrays based on ``output_shapes``/``output_dtypes``.
+            )pbdoc")
+      .def(
+          "__call__",
+          call_metal_kernel<fast::MetalGrid3D>,
           nb::kw_only(),
           "inputs"_a,
           "output_shapes"_a,

@@ -570,6 +570,48 @@ class TestFast(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(out["out1"], a))
 
     @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_1d_grid(self):
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(2,))
+        kernel = mx.fast.metal_kernel(
+            name="basic_1d",
+            source="""
+                uint elem = thread_position_in_grid;
+                out1[elem] = a[elem];
+            """,
+        )
+        out = kernel(
+            inputs={"a": a},
+            grid=4,
+            threadgroup=2,
+            output_shapes={"out1": (2,)},
+            output_dtypes={"out1": mx.float32},
+            stream=mx.gpu,
+        )
+        self.assertTrue(mx.allclose(out["out1"], a))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
+    def test_custom_kernel_2d_grid(self):
+        mx.random.seed(7)
+        a = mx.random.normal(shape=(2, 2))
+        kernel = mx.fast.metal_kernel(
+            name="basic_2d",
+            source="""
+                uint elem = thread_position_in_grid.x;
+                out1[elem] = a[elem];
+            """,
+        )
+        out = kernel(
+            inputs={"a": a},
+            grid=(4, 1),
+            threadgroup=(2, 1),
+            output_shapes={"out1": (2, 2)},
+            output_dtypes={"out1": mx.float32},
+            stream=mx.gpu,
+        )
+        self.assertTrue(mx.allclose(out["out1"], a))
+
+    @unittest.skipIf(not mx.metal.is_available(), "Metal is not available")
     def test_custom_kernel_args(self):
         mx.random.seed(7)
         a = mx.random.normal(shape=(3, 6))
