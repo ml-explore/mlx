@@ -53,7 +53,7 @@ jobs:
       - run:
           name: Build CPP only
           command: |
-            mkdir -p build && cd build && cmake .. -DMLX_BUILD_METAL=OFF && make -j
+            mkdir -p build && cd build && cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG && make -j
       - run:
           name: Run CPP tests
           command: ./build/tests/tests
@@ -255,7 +255,7 @@ workflows:
       - mac_build_and_test:
           matrix:
             parameters:
-              xcode_version: ["15.0.0", "15.2.0"]
+              xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
       - linux_build_and_test
 
   build_pypi_release:
@@ -290,7 +290,7 @@ workflows:
           requires: [ hold ]
           matrix:
             parameters:
-              xcode_version: ["15.0.0", "15.2.0"]
+              xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
       - linux_build_and_test:
           requires: [ hold ]
   nightly_build:
@@ -314,7 +314,7 @@ workflows:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
-              xcode_version: ["15.0.0", "15.2.0"]
+              xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
     when:
