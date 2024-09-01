@@ -1122,7 +1122,8 @@ void init_array(nb::module_& m) {
              bool keepdims,
              int ddof,
              StreamOrDevice s) {
-            return std(a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+            return mlx::core::std(
+                a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
           },
           "axis"_a = nb::none(),
           "keepdims"_a = false,
