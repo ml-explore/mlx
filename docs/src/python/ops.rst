@@ -78,6 +78,7 @@ Operations
    hadamard_transform
    identity
    inner
+   isfinite
    isclose
    isinf
    isnan
