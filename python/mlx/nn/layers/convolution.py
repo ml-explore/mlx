@@ -200,3 +200,168 @@ class Conv3d(Module):
         if "bias" in self:
             y = y + self.bias
         return y
+
+
+class ConvTranspose1d(Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        dilation: int = 1,
+        bias: bool = True,
+    ):
+        super().__init__()
+        # Add +1 to padding to match the behavior of PyTorch
+        padding += 1
+
+        scale = math.sqrt(1 / (in_channels * kernel_size))
+        self.weight = mx.random.uniform(
+            low=-scale,
+            high=scale,
+            shape=(out_channels, kernel_size, in_channels),
+        )
+        if bias:
+            self.bias = mx.zeros((out_channels,))
+
+        self.padding = padding
+        self.stride = stride
+        self.dilation = dilation
+
+    def _extra_repr(self):
+        return (
+            f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
+            f"kernel_size={self.weight.shape[1:2]}, stride={self.stride}, "
+            f"padding={self.padding}, dilation={self.dilation}, "
+            f"bias={'bias' in self}"
+        )
+
+    def __call__(self, x):
+        y = mx.conv_general(
+            x,
+            self.weight,
+            stride=1,
+            padding=self.padding,
+            kernel_dilation=self.dilation,
+            input_dilation=self.stride,
+            flip=True,
+        )
+        if "bias" in self:
+            y = y + self.bias
+        return y
+
+
+class ConvTranspose2d(Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Union[int, tuple],
+        stride: Union[int, tuple] = 1,
+        padding: Union[int, tuple] = 0,
+        dilation: Union[int, tuple] = 1,
+        bias: bool = True,
+    ):
+        super().__init__()
+
+        kernel_size, stride, padding = map(
+            lambda x: (x, x) if isinstance(x, int) else x,
+            (kernel_size, stride, padding),
+        )
+        # Add +1 to padding to match the behavior of PyTorch
+        padding = (padding[0] + 1, padding[1] + 1)
+
+        scale = math.sqrt(1 / (in_channels * kernel_size[0] * kernel_size[1]))
+        self.weight = mx.random.uniform(
+            low=-scale,
+            high=scale,
+            shape=(out_channels, *kernel_size, in_channels),
+        )
+        if bias:
+            self.bias = mx.zeros((out_channels,))
+
+        self.padding = padding
+        self.stride = stride
+        self.dilation = dilation
+
+    def _extra_repr(self):
+        return (
+            f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
+            f"kernel_size={self.weight.shape[1:2]}, stride={self.stride}, "
+            f"padding={self.padding}, dilation={self.dilation}, "
+            f"bias={'bias' in self}"
+        )
+
+    def __call__(self, x):
+        y = mx.conv_general(
+            x,
+            self.weight,
+            stride=1,
+            padding=self.padding,
+            kernel_dilation=self.dilation,
+            input_dilation=self.stride,
+            flip=True,
+        )
+        if "bias" in self:
+            y = y + self.bias
+        return y
+
+
+class ConvTranspose3d(Module):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: Union[int, tuple],
+        stride: Union[int, tuple] = 1,
+        padding: Union[int, tuple] = 0,
+        dilation: Union[int, tuple] = 1,
+        bias: bool = True,
+    ):
+        super().__init__()
+
+        kernel_size, stride, padding = map(
+            lambda x: (x, x, x) if isinstance(x, int) else x,
+            (kernel_size, stride, padding),
+        )
+        # Add +1 to padding to match the behavior of PyTorch
+        padding = (padding[0] + 1, padding[1] + 1, padding[2] + 1)
+
+        scale = math.sqrt(
+            1 / (in_channels * kernel_size[0] * kernel_size[1] * kernel_size[2])
+        )
+        self.weight = mx.random.uniform(
+            low=-scale,
+            high=scale,
+            shape=(out_channels, *kernel_size, in_channels),
+        )
+        if bias:
+            self.bias = mx.zeros((out_channels,))
+
+        self.padding = padding
+        self.stride = stride
+        self.dilation = dilation
+
+    def _extra_repr(self):
+        return (
+            f"{self.weight.shape[-1]}, {self.weight.shape[0]}, "
+            f"kernel_size={self.weight.shape[1:2]}, stride={self.stride}, "
+            f"padding={self.padding}, dilation={self.dilation}, "
+            f"bias={'bias' in self}"
+        )
+
+    def __call__(self, x):
+        y = mx.conv_general(
+            x,
+            self.weight,
+            stride=1,
+            padding=self.padding,
+            kernel_dilation=self.dilation,
+            input_dilation=self.stride,
+            flip=True,
+        )
+        if "bias" in self:
+            y = y + self.bias
+        return y

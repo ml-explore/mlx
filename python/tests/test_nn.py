@@ -10,6 +10,14 @@ import mlx_tests
 import numpy as np
 from mlx.utils import tree_flatten, tree_map
 
+try:
+    import torch
+    import torch.nn.functional as F
+
+    has_torch = True
+except ImportError as e:
+    has_torch = False
+
 
 class TestBase(mlx_tests.MLXTestCase):
     def test_module_utilities(self):
@@ -1678,6 +1686,189 @@ class TestLayers(mlx_tests.MLXTestCase):
             return ab / aa / bb
 
         self.assertGreater(cosine(y, yq).min(), 0.99)
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_conv_transposed1d(self):
+        def set_same_weights(mlx_layer, pt_layer):
+            weight_shape = mlx_layer.weight.shape
+            np_weight = np.ones(weight_shape).astype(np.float32)
+
+            mlx_layer.weight = mx.array(np_weight)
+            pt_layer.weight = torch.nn.Parameter(
+                torch.from_numpy(np_weight).permute(-1, *range(x.ndim - 1))
+            )
+
+            if mlx_layer.bias is not None:
+                bias_shape = mlx_layer.bias.shape
+                np_bias = np.ones(bias_shape).astype(np.float32)
+
+                mlx_layer.bias = mx.array(np_bias)
+                pt_layer.bias = torch.nn.Parameter(torch.from_numpy(np_bias))
+
+        seq_len = 10
+        in_channels = 6
+        out_channels = 3
+        kernel_size = 2
+        stride = 1
+        padding = 0
+        dilation = 1
+        bias = True
+
+        x = np.random.randn(1, seq_len, in_channels).astype(np.float32)
+        mlx_input = mx.array(x)
+        pt_input = torch.from_numpy(x).permute(0, 2, 1)
+
+        mlx_convt1d = nn.ConvTranspose1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        pt_convt1d = torch.nn.ConvTranspose1d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        set_same_weights(mlx_convt1d, pt_convt1d)
+
+        mlx_output = np.array(mlx_convt1d(mlx_input))
+        with torch.no_grad():
+            pt_output = pt_convt1d(pt_input).permute(0, 2, 1).numpy()
+
+        self.assertEqual(list(mlx_output.shape), list(pt_output.shape))
+        self.assertTrue(np.allclose(mlx_output, pt_output, atol=1e-5))
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_conv_transposed2d(self):
+        def set_same_weights(mlx_layer, pt_layer):
+            weight_shape = mlx_layer.weight.shape
+            np_weight = np.ones(weight_shape).astype(np.float32)
+
+            mlx_layer.weight = mx.array(np_weight)
+            pt_layer.weight = torch.nn.Parameter(
+                torch.from_numpy(np_weight).permute(-1, *range(x.ndim - 1))
+            )
+
+            if mlx_layer.bias is not None:
+                bias_shape = mlx_layer.bias.shape
+                np_bias = np.random.randn(*bias_shape).astype(np.float32)
+
+                mlx_layer.bias = mx.array(np_bias)
+                pt_layer.bias = torch.nn.Parameter(torch.from_numpy(np_bias))
+
+        img_size = 8
+        in_channels = 6
+        out_channels = 3
+        kernel_size = 2
+        stride = 1
+        padding = 0
+        dilation = 1
+        bias = True
+
+        x = np.random.randn(1, img_size, img_size, in_channels).astype(np.float32)
+        mlx_input = mx.array(x)
+        pt_input = torch.from_numpy(x).permute(0, 3, 1, 2)
+
+        mlx_convt2d = nn.ConvTranspose2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        pt_convt2d = torch.nn.ConvTranspose2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        set_same_weights(mlx_convt2d, pt_convt2d)
+
+        mlx_output = np.array(mlx_convt2d(mlx_input))
+        with torch.no_grad():
+            pt_output = pt_convt2d(pt_input).permute(0, 2, 3, 1).numpy()
+
+        self.assertEqual(list(mlx_output.shape), list(pt_output.shape))
+        self.assertTrue(np.allclose(mlx_output, pt_output, atol=1e-5))
+
+    @unittest.skipIf(not has_torch, "requires Torch")
+    def test_conv_transposed3d(self):
+        def set_same_weights(mlx_layer, pt_layer):
+            weight_shape = mlx_layer.weight.shape
+            np_weight = np.ones(weight_shape).astype(np.float32)
+
+            mlx_layer.weight = mx.array(np_weight)
+            pt_layer.weight = torch.nn.Parameter(
+                torch.from_numpy(np_weight).permute(-1, *range(x.ndim - 1))
+            )
+
+            if mlx_layer.bias is not None:
+                bias_shape = mlx_layer.bias.shape
+                np_bias = np.random.randn(*bias_shape).astype(np.float32)
+
+                mlx_layer.bias = mx.array(np_bias)
+                pt_layer.bias = torch.nn.Parameter(torch.from_numpy(np_bias))
+
+        img_size = 8
+        depth = 4
+        in_channels = 6
+        out_channels = 3
+        kernel_size = 2
+        stride = 1
+        padding = 0
+        dilation = 1
+        bias = True
+
+        x = np.random.randn(1, depth, img_size, img_size, in_channels).astype(
+            np.float32
+        )
+        mlx_input = mx.array(x)
+        pt_input = torch.from_numpy(x).permute(0, 4, 1, 2, 3)
+
+        mlx_convt3d = nn.ConvTranspose3d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        pt_convt3d = torch.nn.ConvTranspose3d(
+            in_channels=in_channels,
+            out_channels=out_channels,
+            kernel_size=kernel_size,
+            stride=stride,
+            padding=padding,
+            dilation=dilation,
+            bias=bias,
+        )
+
+        set_same_weights(mlx_convt3d, pt_convt3d)
+
+        mlx_output = np.array(mlx_convt3d(mlx_input))
+        with torch.no_grad():
+            pt_output = pt_convt3d(pt_input).permute(0, 2, 3, 4, 1).numpy()
+
+        self.assertEqual(list(mlx_output.shape), list(pt_output.shape))
+        self.assertTrue(np.allclose(mlx_output, pt_output, atol=1e-5))
 
 
 if __name__ == "__main__":
