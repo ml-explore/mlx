@@ -1011,7 +1011,7 @@ void write_signature(
       {"threadgroups_per_grid", grid_dtype},
       {"threads_per_grid", grid_dtype},
       {"threads_per_simdgroup", "uint"},
-      {"thread_per_threadgroup", grid_dtype},
+      {"threads_per_threadgroup", grid_dtype},
   };
   std::vector<std::pair<std::string, std::string>> attrs;
   for (const auto& [attr, dtype] : metal_attributes) {
