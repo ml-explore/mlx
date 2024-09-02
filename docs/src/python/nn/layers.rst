@@ -16,6 +16,9 @@ Layers
    Conv1d
    Conv2d
    Conv3d
+   ConvTransposed1d
+   ConvTransposed2d
+   ConvTransposed3d
    Dropout
    Dropout2d
    Dropout3d

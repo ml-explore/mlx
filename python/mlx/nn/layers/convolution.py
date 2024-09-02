@@ -203,6 +203,25 @@ class Conv3d(Module):
 
 
 class ConvTranspose1d(Module):
+    """
+    Applies 1-dimensional transposed convolution to the multi-channel input sequence.
+
+    The channels are expected to be last i.e. the input shape should be ``NLC`` where:
+
+    * ``N`` is the batch dimension
+    * ``L`` is the sequence length
+    * ``C`` is the number of input channels
+
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        kernel_size (int): Size of the convolution kernel.
+        stride (int, optional): Stride of the convolution. Defaults to 1.
+        padding (int, optional): Padding added to the input. Defaults to 0.
+        dilation (int, optional): Spacing between kernel elements. Defaults to 1.
+        bias (bool, optional): Whether to include a bias term. Defaults to True.
+    """
+
     def __init__(
         self,
         in_channels: int,
@@ -254,6 +273,26 @@ class ConvTranspose1d(Module):
 
 
 class ConvTranspose2d(Module):
+    """
+    Applies 2-dimensional transposed convolution to the multi-channel input image.
+
+    The channels are expected to be last i.e. the input shape should be ``NHWC`` where:
+
+    * ``N`` is the batch dimension
+    * ``H`` is the input image height
+    * ``W`` is the input image width
+    * ``C`` is the number of input channels
+
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        kernel_size (int or tuple): Size of the convolution kernel.
+        stride (int or tuple, optional): Stride of the convolution. Defaults to 1.
+        padding (int or tuple, optional): Padding added to the input. Defaults to 0.
+        dilation (int or tuple, optional): Spacing between kernel elements. Defaults to 1.
+        bias (bool, optional): Whether to include a bias term. Defaults to True.
+    """
+
     def __init__(
         self,
         in_channels: int,
@@ -310,6 +349,26 @@ class ConvTranspose2d(Module):
 
 
 class ConvTranspose3d(Module):
+    """
+    Applies 3-dimensional transposed convolution to the multi-channel input image.
+
+    The channels are expected to be last i.e. the input shape should be ``NDHWC`` where:
+
+    * ``N`` is the batch dimension
+    * ``D`` is the input image depth
+    * ``H`` is the input image height
+    * ``W`` is the input image width
+    * ``C`` is the number of input channels
+
+    Args:
+        in_channels (int): Number of input channels.
+        out_channels (int): Number of output channels.
+        kernel_size (int or tuple): Size of the convolution kernel.
+        stride (int or tuple, optional): Stride of the convolution. Defaults to 1.
+        padding (int or tuple, optional): Padding added to the input. Defaults to 0.
+        bias (bool, optional): Whether to include a bias term. Defaults to True.
+    """
+
     def __init__(
         self,
         in_channels: int,
