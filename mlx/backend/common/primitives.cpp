@@ -508,7 +508,8 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
     size_t data_end = 1;
     for (int i = 0; i < end_indices_.size(); ++i) {
       if (in.shape()[i] > 1) {
-        data_end += (end_indices_[i] - 1) * in.strides()[i];
+        auto end_idx = start_indices_[i] + out.shape()[i] * strides_[i] - 1;
+        data_end += end_idx * in.strides()[i];
       }
     }
     size_t data_size = data_end - data_offset;
