@@ -6,18 +6,16 @@ namespace mlx::core {
 
 std::tuple<bool, int64_t, std::vector<int64_t>> prepare_slice(
     const array& in,
-    std::vector<int>& start_indices,
-    std::vector<int>& strides) {
+    const std::vector<int>& start_indices,
+    const std::vector<int>& strides) {
   int64_t data_offset = 0;
   bool copy_needed = false;
   std::vector<int64_t> inp_strides(in.ndim(), 0);
   for (int i = 0; i < in.ndim(); ++i) {
     data_offset += start_indices[i] * in.strides()[i];
     inp_strides[i] = in.strides()[i] * strides[i];
-
     copy_needed |= strides[i] < 0;
   }
-
   return std::make_tuple(copy_needed, data_offset, inp_strides);
 }
 
@@ -25,9 +23,10 @@ void shared_buffer_slice(
     const array& in,
     const std::vector<size_t>& out_strides,
     size_t data_offset,
+    size_t data_size,
     array& out) {
   // Compute row/col contiguity
-  auto [data_size, is_row_contiguous, is_col_contiguous] =
+  auto [_, is_row_contiguous, is_col_contiguous] =
       check_contiguity(out.shape(), out_strides);
 
   auto flags = in.flags();
