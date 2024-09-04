@@ -83,9 +83,13 @@ MTL::ComputePipelineState* get_reduce_init_kernel(
 MTL::ComputePipelineState* get_reduce_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& func_name,
     const std::string& op_name,
     const array& in,
-    const array& out);
+    const array& out,
+    int ndim = -1,
+    int bm = -1,
+    int bn = -1);
 
 MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
     metal::Device& d,

@@ -337,35 +337,36 @@ MTL::ComputePipelineState* get_reduce_init_kernel(
 MTL::ComputePipelineState* get_reduce_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& func_name,
     const std::string& op_name,
     const array& in,
-    const array& out) {
-  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
+    const array& out,
+    int ndim /* = -1 */,
+    int bm /* = -1 */,
+    int bn /* = -1 */) {
+  auto lib = d.get_library(kernel_name);
   if (lib == nullptr) {
     std::string op_type = op_name;
     op_type[0] = std::toupper(op_name[0]);
-    bool non_atomic = out.dtype() == int64 || out.dtype() == uint64;
     std::ostringstream kernel_source;
     auto in_type = get_type_string(in.dtype());
     auto out_type = get_type_string(out.dtype());
-    std::vector<std::pair<std::string, std::string>> reduce_kernels = {
-        {"all_reduce", "allReduce"},
-        {"col_reduce_small", "colReduceSmall"},
-        {"col_reduce_looped", "colReduceLooped"},
-        {"row_reduce_small", "rowReduceSmall"},
-        {"row_reduce_looped", "rowReduceLooped"},
-        {"row_reduce_simple", "rowReduceSimple"}};
     std::string op = op_type + "<" + out_type + ">";
     kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce();
-    for (auto [func, name] : reduce_kernels) {
+    if (bm >= 0) {
       kernel_source << get_template_definition(
-          name + "_" + lib_name, func, in_type, out_type, op);
+          kernel_name, func_name, in_type, out_type, op, ndim, bm, bn);
+    } else if (ndim >= 0) {
+      kernel_source << get_template_definition(
+          kernel_name, func_name, in_type, out_type, op, ndim);
+    } else {
+      kernel_source << get_template_definition(
+          kernel_name, func_name, in_type, out_type, op);
     }
-
-    lib = d.get_library(lib_name, kernel_source.str());
+    lib = d.get_library(kernel_name, kernel_source.str());
   }
-  return d.get_kernel(kernel_name, lib);
+  auto st = d.get_kernel(kernel_name, lib);
+  return st;
 }
 
 MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
