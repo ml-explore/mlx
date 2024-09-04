@@ -228,7 +228,7 @@ TEST_CASE("test slice") {
   CHECK(array_equal(out, array({0, 2, 4, 6}, {2, 2})).item<bool>());
 
   // Check contiguity preservation
-  x = ones({10, 10}) * 2;
+  x = ones({10, 10});
   eval(x);
   CHECK(x.flags().row_contiguous);
   CHECK(!x.flags().col_contiguous);
@@ -250,6 +250,13 @@ TEST_CASE("test slice") {
   CHECK(out.flags().col_contiguous);
   out = slice(x, {0, 0}, {5, 10});
   eval(out);
+  CHECK(!out.flags().row_contiguous);
+  CHECK(!out.flags().col_contiguous);
+
+  x = ones({6, 4, 10});
+  out = slice(x, {0, 0, 0}, {6, 4, 10}, {2, 1, 2});
+  eval(out);
+  CHECK(!out.flags().contiguous);
   CHECK(!out.flags().row_contiguous);
   CHECK(!out.flags().col_contiguous);
 

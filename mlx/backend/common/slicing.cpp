@@ -26,24 +26,13 @@ void shared_buffer_slice(
     size_t data_size,
     array& out) {
   // Compute row/col contiguity
-  auto [_, is_row_contiguous, is_col_contiguous] =
+  auto [no_bsx_size, is_row_contiguous, is_col_contiguous] =
       check_contiguity(out.shape(), out_strides);
 
   auto flags = in.flags();
   flags.row_contiguous = is_row_contiguous;
   flags.col_contiguous = is_col_contiguous;
-
-  if (data_size == 1) {
-    // Broadcasted scalar array is contiguous.
-    flags.contiguous = true;
-  } else if (data_size == in.data_size()) {
-    // Means we sliced a broadcasted dimension so leave the "no holes" flag
-    // alone.
-  } else {
-    // We sliced something. So either we are row or col contiguous or we
-    // punched a hole.
-    flags.contiguous &= flags.row_contiguous || flags.col_contiguous;
-  }
+  flags.contiguous = (no_bsx_size == data_size);
 
   out.copy_shared_buffer(in, out_strides, flags, data_size, data_offset);
 }
