@@ -82,9 +82,9 @@
     otype,                                                      \
     op)
 
-#define instantiate_init_reduce(name, otype, op)             \
-  instantiate_kernel("init_reduce_" #name, \
-                     init_reduce, \
+#define instantiate_init_reduce(name, otype, op) \
+  instantiate_kernel("init_reduce_" #name,       \
+                     init_reduce,                \
                      otype, op)
 
 #define instantiate_init_reduce_helper(name, tname, type, op) \
@@ -96,9 +96,9 @@ instantiate_reduce_ops(instantiate_init_reduce_helper, instantiate_reduce_helper
 instantiate_init_reduce(andbool_, bool, And<bool>)
 instantiate_init_reduce(orbool_, bool, Or<bool>)
 
-#define instantiate_all_reduce(name, itype, otype, op)        \
-  instantiate_kernel("allReduce_" #name, \
-                     all_reduce, \
+#define instantiate_all_reduce(name, itype, otype, op) \
+  instantiate_kernel("all_reduce_" #name,              \
+                     all_reduce,                       \
                      itype, otype, op)
 
 #define instantiate_same_all_reduce_helper(name, tname, type, op) \
@@ -114,16 +114,16 @@ instantiate_reduce_from_types(instantiate_all_reduce, or, bool, Or<bool>)
 instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
 
 #define instantiate_col_reduce_small(name, itype, otype, op, dim) \
-  instantiate_kernel("colReduceSmall_" #dim "_reduce_" #name, \
-                     col_reduce_small, \
+  instantiate_kernel("col_reduce_small_" #dim "_reduce_" #name,   \
+                     col_reduce_small,                            \
                      itype, otype, op, dim)
 
-#define instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, bm, bn) \
-  instantiate_kernel("colReduceLooped_" #dim "_" #bm "_" #bn "_reduce_" #name, \
-                     col_reduce_looped, \
+#define instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, bm, bn)  \
+  instantiate_kernel("col_reduce_looped_" #dim "_" #bm "_" #bn "_reduce_" #name, \
+                     col_reduce_looped,                                          \
                      itype, otype, op, dim, bm, bn)
 
-#define instantiate_col_reduce_looped(name, itype, otype, op, dim) \
+#define instantiate_col_reduce_looped(name, itype, otype, op, dim)        \
   instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 8, 128) \
   instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32)
 
@@ -139,7 +139,7 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
   instantiate_col_reduce_looped(name, itype, otype, op, 3)     \
   instantiate_col_reduce_looped(name, itype, otype, op, 4)
 
-#define instantiate_same_col_reduce_helper(name, tname, type, op) \
+#define instantiate_same_col_reduce_helper(name, tname, type, op)  \
   instantiate_col_reduce_general(name##tname, type, type, op<type>)
 
 instantiate_reduce_ops(instantiate_same_col_reduce_helper, instantiate_reduce_helper_types)
@@ -149,32 +149,32 @@ instantiate_col_reduce_general(sumbool_, bool, uint32_t, Sum<uint32_t>)
 instantiate_reduce_from_types(instantiate_col_reduce_general, and, bool, And<bool>)
 instantiate_reduce_from_types(instantiate_col_reduce_general, or, bool, Or<bool>)
 
-#define instantiate_row_reduce_small(name, itype, otype, op, dim)          \
-  instantiate_kernel("rowReduceSmall_" #dim "_reduce_" #name, \
-                     row_reduce_small, \
+#define instantiate_row_reduce_small(name, itype, otype, op, dim) \
+  instantiate_kernel("row_reduce_small_" #dim "_reduce_" #name,   \
+                     row_reduce_small,                            \
                      itype, otype, op, dim)
 
-#define instantiate_row_reduce_looped(name, itype, otype, op, dim)      \
-  instantiate_kernel("rowReduceLooped_" #dim "_reduce_" #name, \
+#define instantiate_row_reduce_looped(name, itype, otype, op, dim) \
+  instantiate_kernel("row_reduce_looped_" #dim "_reduce_" #name,   \
                      row_reduce_looped, \
                      itype, otype, op, dim)
 
-#define instantiate_row_reduce_general(name, itype, otype, op)     \
-  instantiate_row_reduce_small(name, itype, otype, op, 0)          \
-  instantiate_row_reduce_small(name, itype, otype, op, 1)          \
-  instantiate_row_reduce_small(name, itype, otype, op, 2)          \
-  instantiate_row_reduce_small(name, itype, otype, op, 3)          \
-  instantiate_row_reduce_small(name, itype, otype, op, 4)          \
-  instantiate_row_reduce_looped(name, itype, otype, op, 0)         \
-  instantiate_row_reduce_looped(name, itype, otype, op, 1)         \
-  instantiate_row_reduce_looped(name, itype, otype, op, 2)         \
-  instantiate_row_reduce_looped(name, itype, otype, op, 3)         \
-  instantiate_row_reduce_looped(name, itype, otype, op, 4)         \
-  instantiate_kernel("rowReduceSimple_" #name, \
-                     row_reduce_simple, \
+#define instantiate_row_reduce_general(name, itype, otype, op) \
+  instantiate_row_reduce_small(name, itype, otype, op, 0)      \
+  instantiate_row_reduce_small(name, itype, otype, op, 1)      \
+  instantiate_row_reduce_small(name, itype, otype, op, 2)      \
+  instantiate_row_reduce_small(name, itype, otype, op, 3)      \
+  instantiate_row_reduce_small(name, itype, otype, op, 4)      \
+  instantiate_row_reduce_looped(name, itype, otype, op, 0)     \
+  instantiate_row_reduce_looped(name, itype, otype, op, 1)     \
+  instantiate_row_reduce_looped(name, itype, otype, op, 2)     \
+  instantiate_row_reduce_looped(name, itype, otype, op, 3)     \
+  instantiate_row_reduce_looped(name, itype, otype, op, 4)     \
+  instantiate_kernel("row_reduce_simple_" #name,               \
+                     row_reduce_simple,                        \
                      itype, otype, op)
 
-#define instantiate_same_row_reduce_helper(name, tname, type, op) \
+#define instantiate_same_row_reduce_helper(name, tname, type, op)  \
   instantiate_row_reduce_general(name##tname, type, type, op<type>)
 
 instantiate_reduce_ops(instantiate_same_row_reduce_helper, instantiate_reduce_helper_types)

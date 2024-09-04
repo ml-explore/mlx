@@ -255,8 +255,9 @@ void all_reduce_dispatch(
     std::vector<array>& copies) {
   // Set the kernel
   std::ostringstream kname;
-  kname << "allReduce_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  const std::string func_name = "all_reduce";
+  kname << func_name << "_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), func_name, op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
 
   size_t in_size = in.size();
@@ -309,9 +310,9 @@ void all_reduce_dispatch(
 
     // 2nd pass
     std::ostringstream kname_2nd_pass;
-    kname_2nd_pass << "allReduce_" << op_name << type_to_name(intermediate);
-    auto kernel_2nd_pass =
-        get_reduce_kernel(d, kname_2nd_pass.str(), op_name, intermediate, out);
+    kname_2nd_pass << func_name << "_" << op_name << type_to_name(intermediate);
+    auto kernel_2nd_pass = get_reduce_kernel(
+        d, kname_2nd_pass.str(), func_name, op_name, intermediate, out);
     compute_encoder->setComputePipelineState(kernel_2nd_pass);
     size_t intermediate_size = n_rows;
     grid_dims = MTL::Size(threadgroup_2nd_pass, 1, 1);
@@ -335,8 +336,10 @@ void row_reduce_small(
   // Set the kernel
   std::ostringstream kname;
   int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
-  kname << "rowReduceSmall_" << n << "_reduce_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  const std::string func_name = "row_reduce_small";
+  kname << func_name << "_" << n << "_reduce_" << op_name << type_to_name(in);
+  auto kernel =
+      get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
   compute_encoder->setComputePipelineState(kernel);
 
   // Figure out the grid dims
@@ -370,8 +373,9 @@ void row_reduce_simple(
     const Stream& s) {
   // Set the kernel
   std::ostringstream kname;
-  kname << "rowReduceSimple_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  const std::string func_name = "row_reduce_simple";
+  kname << func_name << "_" << op_name << type_to_name(in);
+  auto kernel = get_reduce_kernel(d, kname.str(), func_name, op_name, in, out);
   compute_encoder->setComputePipelineState(kernel);
 
   // Figure out the grid dims
@@ -407,8 +411,10 @@ void row_reduce_looped(
   // Set the kernel
   std::ostringstream kname;
   int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
-  kname << "rowReduceLooped_" << n << "_reduce_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  const std::string func_name = "row_reduce_looped";
+  kname << func_name << "_" << n << "_reduce_" << op_name << type_to_name(in);
+  auto kernel =
+      get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
   compute_encoder->setComputePipelineState(kernel);
 
   // Figure out the grid
@@ -497,8 +503,10 @@ void strided_reduce_small(
   // Set the kernel
   int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
   std::ostringstream kname;
-  kname << "colReduceSmall_" << n << "_reduce_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  const std::string func_name = "col_reduce_small";
+  kname << func_name << "_" << n << "_reduce_" << op_name << type_to_name(in);
+  auto kernel =
+      get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n);
   compute_encoder->setComputePipelineState(kernel);
 
   // Launch
@@ -535,9 +543,11 @@ void strided_reduce_looped(
   // Set the kernel
   int n = (args.reduce_ndim < 5) ? std::max(1, args.reduce_ndim) : 0;
   std::ostringstream kname;
-  kname << "colReduceLooped_" << n << "_" << BM << "_" << BN << "_reduce_"
+  const std::string func_name = "col_reduce_looped";
+  kname << func_name << "_" << n << "_" << BM << "_" << BN << "_reduce_"
         << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  auto kernel =
+      get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n, BM, BN);
   compute_encoder->setComputePipelineState(kernel);
 
   // Launch
