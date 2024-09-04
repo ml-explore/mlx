@@ -3505,33 +3505,19 @@ array conv_general(
       kernel_dilation,
       input_dilation);
 
-  if (transpose) {
-    return array(
-        out_shape,
-        in.dtype(),
-        std::make_shared<ConvolutionTranspose>(
-            to_stream(s),
-            stride,
-            padding_lo,
-            kernel_dilation,
-            input_dilation,
-            groups,
-            flip),
-        {in, wt});
-  } else {
-    return array(
-        out_shape,
-        in.dtype(),
-        std::make_shared<Convolution>(
-            to_stream(s),
-            stride,
-            padding_lo,
-            kernel_dilation,
-            input_dilation,
-            groups,
-            flip),
-        {in, wt});
-  }
+  return array(
+      out_shape,
+      in.dtype(),
+      std::make_shared<Convolution>(
+          to_stream(s),
+          stride,
+          padding_lo,
+          kernel_dilation,
+          input_dilation,
+          groups,
+          flip,
+          transpose),
+      {in, wt});
 }
 
 array quantized_matmul(

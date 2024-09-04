@@ -646,14 +646,16 @@ class Convolution : public UnaryPrimitive {
       const std::vector<int>& kernel_dilation,
       const std::vector<int>& input_dilation,
       const int groups = 1,
-      const bool flip = false)
+      const bool flip = false,
+      const bool transpose = false)
       : UnaryPrimitive(stream),
         padding_(padding),
         kernel_strides_(kernel_strides),
         kernel_dilation_(kernel_dilation),
         input_dilation_(input_dilation),
         groups_(groups),
-        flip_(flip) {}
+        flip_(flip),
+        transpose_(transpose) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -674,47 +676,7 @@ class Convolution : public UnaryPrimitive {
   std::vector<int> input_dilation_;
   int groups_;
   bool flip_;
-
-  void eval(const std::vector<array>& inputs, array& out);
-};
-
-class ConvolutionTranspose : public UnaryPrimitive {
- public:
-  explicit ConvolutionTranspose(
-      Stream stream,
-      const std::vector<int>& kernel_strides,
-      const std::vector<int>& padding,
-      const std::vector<int>& kernel_dilation,
-      const std::vector<int>& input_dilation,
-      const int groups = 1,
-      const bool flip = false)
-      : UnaryPrimitive(stream),
-        padding_(padding),
-        kernel_strides_(kernel_strides),
-        kernel_dilation_(kernel_dilation),
-        input_dilation_(input_dilation),
-        groups_(groups),
-        flip_(flip) {}
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  std::vector<array> vjp(
-      const std::vector<array>& primals,
-      const std::vector<array>& cotangents,
-      const std::vector<int>& argnums,
-      const std::vector<array>& outputs) override;
-
-  DEFINE_PRINT(Convolution)
-  bool is_equivalent(const Primitive& other) const override;
-
- private:
-  std::vector<int> padding_;
-  std::vector<int> kernel_strides_;
-  std::vector<int> kernel_dilation_;
-  std::vector<int> input_dilation_;
-  int groups_;
-  bool flip_;
+  bool transpose_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };
