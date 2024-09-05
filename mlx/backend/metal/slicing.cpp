@@ -11,8 +11,8 @@ namespace mlx::core {
 void slice_gpu(
     const array& in,
     array& out,
-    std::vector<int> start_indices,
-    std::vector<int> strides,
+    const std::vector<int>& start_indices,
+    const std::vector<int>& strides,
     const Stream& s) {
   // Calculate out strides, initial offset and if copy needs to be made
   auto [copy_needed, data_offset, inp_strides] =
@@ -34,7 +34,15 @@ void slice_gpu(
         /* const Stream& s = */ s);
   } else {
     std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};
-    shared_buffer_slice(in, ostrides, data_offset, out);
+    size_t data_end = 1;
+    for (int i = 0; i < strides.size(); ++i) {
+      if (in.shape()[i] > 1) {
+        auto end_idx = start_indices[i] + out.shape()[i] * strides[i] - 1;
+        data_end += end_idx * in.strides()[i];
+      }
+    }
+    size_t data_size = data_end - data_offset;
+    shared_buffer_slice(in, ostrides, data_offset, data_size, out);
   }
 }
 

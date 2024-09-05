@@ -24,8 +24,8 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Make sure that the last dimension is contiguous
   std::vector<array> copies;
   auto check_input = [&copies, &s](const array& x) -> const array& {
-    bool no_copy = x.strides()[x.ndim() - 1] == 1;
-    if (x.ndim() > 1) {
+    bool no_copy = x.flags().contiguous && x.strides()[x.ndim() - 1] == 1;
+    if (no_copy && x.ndim() > 1) {
       auto s = x.strides()[x.ndim() - 2];
       no_copy &= (s == 0 || s == x.shape().back());
     }

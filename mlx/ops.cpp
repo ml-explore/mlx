@@ -615,6 +615,10 @@ inline auto normalize_slice(
 
       out_shape[i] = (stop[i] - start[i] + strides[i] - 1) / strides[i];
     }
+    // Simplify the stride if it's unused
+    if (out_shape[i] == 1) {
+      strides[i] = 1;
+    }
   }
 
   return std::make_pair(has_neg_strides, out_shape);

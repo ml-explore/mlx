@@ -505,8 +505,16 @@ void Slice::eval(const std::vector<array>& inputs, array& out) {
         /* int64_t o_offset = */ 0,
         /* CopyType ctype = */ CopyType::General);
   } else {
+    size_t data_end = 1;
+    for (int i = 0; i < end_indices_.size(); ++i) {
+      if (in.shape()[i] > 1) {
+        auto end_idx = start_indices_[i] + out.shape()[i] * strides_[i] - 1;
+        data_end += end_idx * in.strides()[i];
+      }
+    }
+    size_t data_size = data_end - data_offset;
     std::vector<size_t> ostrides{inp_strides.begin(), inp_strides.end()};
-    shared_buffer_slice(in, ostrides, data_offset, out);
+    shared_buffer_slice(in, ostrides, data_offset, data_size, out);
   }
 }
 
