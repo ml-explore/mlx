@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include <map>
 #include <optional>
 
 #include "mlx/utils.h"
@@ -66,13 +65,13 @@ array affine_dequantize(
 
 typedef std::variant<int, bool, Dtype> TemplateArg;
 
-typedef std::function<std::map<std::string, array>(
-    std::map<std::string, array>&,
-    std::map<std::string, std::vector<int>>,
-    std::map<std::string, Dtype>,
+typedef std::function<std::vector<array>(
+    const std::vector<array>&,
+    const std::vector<std::vector<int>>&,
+    const std::vector<Dtype>&,
     std::tuple<int, int, int>,
     std::tuple<int, int, int>,
-    std::optional<std::map<std::string, TemplateArg>>,
+    std::vector<std::pair<std::string, TemplateArg>>,
     std::optional<float>,
     bool,
     StreamOrDevice)>
@@ -80,6 +79,8 @@ typedef std::function<std::map<std::string, array>(
 
 MetalKernelFunction metal_kernel(
     const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
     const std::string& source,
     const std::string& header = "",
     bool ensure_row_contiguous = true,
