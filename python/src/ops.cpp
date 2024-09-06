@@ -3238,12 +3238,12 @@ void init_ops(nb::module_& m) {
         1D convolution over an input with several channels
 
         Args:
-            input (array): input array of shape (``N``, ``H``, ``C_in``)
-            weight (array): weight array of shape (``C_out``, ``H``, ``C_in``)
-            stride (int, optional): kernel stride. Default: ``1``.
-            padding (int, optional): input padding. Default: ``0``.
-            dilation (int, optional): kernel dilation. Default: ``1``.
-            groups (int, optional): input feature groups. Default: ``1``.
+            input (array): Input array of shape ``(N, H, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, C_in)``.
+            stride (int, optional): Kernel stride. Default: ``1``.
+            padding (int, optional): Input padding. Default: ``0``.
+            dilation (int, optional): Kernel dilation. Default: ``1``.
+            groups (int, optional): Input feature groups. Default: ``1``.
 
         Returns:
             array: The convolved array.
@@ -3296,8 +3296,8 @@ void init_ops(nb::module_& m) {
         2D convolution over an input with several channels
 
         Args:
-            input (array): input array of shape ``(N, H, W, C_in)``
-            weight (array): weight array of shape ``(C_out, H, W, C_in)``
+            input (array): Input array of shape ``(N, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, W, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 2 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3368,8 +3368,8 @@ void init_ops(nb::module_& m) {
         Note: Only the default ``groups=1`` is currently supported.
 
         Args:
-            input (array): input array of shape ``(N, D, H, W, C_in)``
-            weight (array): weight array of shape ``(C_out, D, H, W, C_in)``
+            input (array): Input array of shape ``(N, D, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, D, H, W, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 3 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3401,12 +3401,12 @@ void init_ops(nb::module_& m) {
         1D transposed convolution over an input with several channels
 
         Args:
-            input (array): input array of shape (``N``, ``H``, ``C_in``)
-            weight (array): weight array of shape (``C_out``, ``H``, ``C_in``)
-            stride (int, optional): kernel stride. Default: ``1``.
-            padding (int, optional): input padding. Default: ``0``.
-            dilation (int, optional): kernel dilation. Default: ``1``.
-            groups (int, optional): input feature groups. Default: ``1``.
+            input (array): Input array of shape ``(N, H, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, C_in)``.
+            stride (int, optional): Kernel stride. Default: ``1``.
+            padding (int, optional): Input padding. Default: ``0``.
+            dilation (int, optional): Kernel dilation. Default: ``1``.
+            groups (int, optional): Input feature groups. Default: ``1``.
 
         Returns:
             array: The convolved array.
@@ -3461,8 +3461,8 @@ void init_ops(nb::module_& m) {
         Note: Only the default ``groups=1`` is currently supported.
 
         Args:
-            input (array): input array of shape ``(N, H, W, C_in)``
-            weight (array): weight array of shape ``(C_out, H, W, C_in)``
+            input (array): Input array of shape ``(N, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, H, W, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 2 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3533,8 +3533,8 @@ void init_ops(nb::module_& m) {
         Note: Only the default ``groups=1`` is currently supported.
 
         Args:
-            input (array): input array of shape ``(N, D, H, W, C_in)``
-            weight (array): weight array of shape ``(C_out, D, H, W, C_in)``
+            input (array): Input array of shape ``(N, D, H, W, C_in)``.
+            weight (array): Weight array of shape ``(C_out, D, H, W, C_in)``.
             stride (int or tuple(int), optional): :obj:`tuple` of size 3 with
                 kernel strides. All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3562,7 +3562,6 @@ void init_ops(nb::module_& m) {
          const std::variant<int, std::vector<int>>& input_dilation,
          int groups,
          bool flip,
-         bool transpose,
          StreamOrDevice s) {
         std::vector<int> stride_vec;
         std::vector<int> padding_lo_vec;
@@ -3613,7 +3612,6 @@ void init_ops(nb::module_& m) {
             std::move(input_dilation_vec),
             /* int groups = */ groups,
             /* bool flip = */ flip,
-            /* bool transpose = */ transpose,
             s);
       },
       nb::arg(),
@@ -3624,17 +3622,16 @@ void init_ops(nb::module_& m) {
       "input_dilation"_a = 1,
       "groups"_a = 1,
       "flip"_a = false,
-      "transpose"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def conv_general(input: array, weight: array, /, stride: Union[int, Sequence[int]] = 1, padding: Union[int, Sequence[int], tuple[Sequence[int], Sequence[int]]] = 0, kernel_dilation: Union[int, Sequence[int]] = 1, input_dilation: Union[int, Sequence[int]] = 1, groups: int = 1, flip: bool = False, transpose: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def conv_general(input: array, weight: array, /, stride: Union[int, Sequence[int]] = 1, padding: Union[int, Sequence[int], tuple[Sequence[int], Sequence[int]]] = 0, kernel_dilation: Union[int, Sequence[int]] = 1, input_dilation: Union[int, Sequence[int]] = 1, groups: int = 1, flip: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         General convolution over an input with several channels
 
         Args:
-            input (array): Input array of shape ``(N, ..., C_in)``
-            weight (array): Weight array of shape ``(C_out, ..., C_in)``
+            input (array): Input array of shape ``(N, ..., C_in)``.
+            weight (array): Weight array of shape ``(C_out, ..., C_in)``.
             stride (int or list(int), optional): :obj:`list` with kernel strides.
                 All spatial dimensions get the same stride if
                 only one number is specified. Default: ``1``.
@@ -3652,7 +3649,6 @@ void init_ops(nb::module_& m) {
                 the weights are processed. Performs the cross-correlation operator when
                 ``flip`` is ``False`` and the convolution operator otherwise.
                 Default: ``False``.
-            transpose (bool, optional): Perform transposed convolution.
 
         Returns:
             array: The convolved array.

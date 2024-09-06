@@ -45,7 +45,6 @@ Operations
    conv1d
    conv2d
    conv3d
-   conv3d
    conv_transpose1d
    conv_transpose2d
    conv_transpose3d

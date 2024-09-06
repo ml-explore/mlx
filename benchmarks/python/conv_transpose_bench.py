@@ -8,9 +8,6 @@ import mlx.core as mx
 import numpy as np
 import torch
 
-device_name = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"])
-device_name = device_name.decode("utf-8").strip("\n")
-
 N_warmup = 10
 N_iter_bench = 100
 N_iter_func = 5

@@ -1191,7 +1191,6 @@ array conv_general(
     std::vector<int> input_dilation = {},
     int groups = 1,
     bool flip = false,
-    bool transpose = false,
     StreamOrDevice s = {});
 
 /** General convolution with a filter */
@@ -1204,7 +1203,6 @@ inline array conv_general(
     std::vector<int> input_dilation = {},
     int groups = 1,
     bool flip = false,
-    bool transpose = false,
     StreamOrDevice s = {}) {
   return conv_general(
       /* const array& input = */ input,
@@ -1216,7 +1214,6 @@ inline array conv_general(
       /* std::vector<int> input_dilation = */ input_dilation,
       /* int groups = */ groups,
       /* bool flip = */ flip,
-      /* bool transpose = */ transpose,
       /* StreamOrDevice s = */ s);
 }
 

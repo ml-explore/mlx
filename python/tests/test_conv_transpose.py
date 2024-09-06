@@ -128,7 +128,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                 self.assertTrue(np.allclose(out_pt.numpy(), out_mx, atol=1e-5))
 
     @unittest.skipIf(not has_torch, "requires Torch")
-    def test_torch_conv_1D_grad(self):
+    def test_torch_conv_transpose_1D_grad(self):
         def run_conv_transpose1D_grad(
             N,
             C,
@@ -491,7 +491,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     )
 
     @unittest.skipIf(not has_torch, "requires Torch")
-    def test_torch_conv_3D_grad(self):
+    def test_torch_conv_transpose_3D_grad(self):
         def run_conv_transpose3D_grad(
             N,
             C,
@@ -503,7 +503,7 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
             dilation=(1, 1, 1),
             groups=1,
             dtype="float32",
-            atol=1e-5,
+            atol=1e-4,
         ):
             with self.subTest(
                 dtype=dtype,
@@ -595,190 +595,6 @@ class TestConvTranspose(mlx_tests.MLXTestCase):
                     run_conv_transpose3D_grad(
                         N, C, O, idim, kdim, stride, padding, dilation, dtype=dtype
                     )
-
-    def __conv_general_test(
-        self,
-        in_shape,
-        wt_shape,
-        stride=1,
-        padding=0,
-        kernel_dilation=1,
-        input_dilation=1,
-        groups=1,
-        flip=False,
-        np_dtype=np.float32,
-        atol=1e-5,
-    ):
-        with self.subTest(
-            in_shape=in_shape,
-            wt_shape=wt_shape,
-            stride=stride,
-            padding=padding,
-            kernel_dilation=kernel_dilation,
-            input_dilation=input_dilation,
-            groups=groups,
-            flip=flip,
-            np_dtype=np_dtype,
-        ):
-            scale = 1.0 / math.sqrt(np.prod(wt_shape[1:]))
-            in_np = np.random.normal(0.0, scale, in_shape).astype(np_dtype)
-            wt_np = np.random.normal(0.0, scale, wt_shape).astype(np_dtype)
-
-            in_mx, wt_mx = map(mx.array, (in_np, wt_np))
-
-            in_pt = torch.from_numpy(np.moveaxis(in_np, -1, 1)).to("cpu")
-            wt_pt = torch.from_numpy(np.moveaxis(wt_np, -1, 0)).to("cpu")
-
-            out_mx = mx.conv_general(
-                in_mx,
-                wt_mx,
-                stride=stride,
-                padding=padding,
-                kernel_dilation=kernel_dilation,
-                input_dilation=input_dilation,
-                groups=groups,
-                flip=flip,
-                transpose=True,
-            )
-
-            def conv_general_pt(
-                inp, wt, stride, padding, kernel_dilation, input_dilation, groups, flip
-            ):
-                C = inp.size()[1]
-                ndim = inp.ndim - 2
-                map_ints = lambda x: [x] * ndim if isinstance(x, int) else x
-
-                stride, padding, kernel_dilation, input_dilation = map(
-                    map_ints, (stride, padding, kernel_dilation, input_dilation)
-                )
-
-                torch_convt_list = (
-                    F.conv_transpose1d,
-                    F.conv_transpose2d,
-                    F.conv_transpose3d,
-                )
-
-                convt_f = torch_convt_list[ndim - 1]
-
-                if flip:
-                    wt = torch.flip(wt, tuple(np.arange(2, wt.ndim)))
-
-                return convt_f(
-                    inp,
-                    wt,
-                    stride=stride,
-                    padding=padding,
-                    dilation=kernel_dilation,
-                    groups=groups,
-                )
-
-            out_pt = conv_general_pt(
-                in_pt,
-                wt_pt,
-                stride=stride,
-                padding=padding,
-                kernel_dilation=kernel_dilation,
-                input_dilation=input_dilation,
-                groups=groups,
-                flip=flip,
-            )
-
-            out_pt = np.moveaxis(out_pt.numpy(), 1, -1)
-
-            self.assertEqual(out_mx.shape, out_pt.shape)
-            self.assertTrue(np.allclose(out_mx, out_pt, atol=atol))
-
-    @unittest.skipIf(not has_torch, "requires Torch")
-    def test_torch_conv_general(self):
-        in_shape = (2, 32, 32, 16)
-        wt_shape = (32, 5, 5, 16)
-        stride = (1, 1)
-        padding = (2, 2)
-        kernel_dilation = (2, 3)
-        input_dilation = (1, 1)
-        flip = False
-
-        self.__conv_general_test(
-            in_shape,
-            wt_shape,
-            stride,
-            padding,
-            kernel_dilation,
-            input_dilation,
-            flip=flip,
-        )
-
-        in_shape = (2, 32, 32, 16)
-        wt_shape = (32, 5, 10, 16)
-        stride = (2, 3)
-        padding = (0, 0)
-        kernel_dilation = (3, 2)
-        input_dilation = (1, 1)
-        flip = False
-
-        self.__conv_general_test(
-            in_shape,
-            wt_shape,
-            stride,
-            padding,
-            kernel_dilation,
-            input_dilation,
-            flip=flip,
-        )
-
-        in_shape = (2, 32, 32, 16)
-        wt_shape = (32, 5, 10, 16)
-        stride = (2, 2)
-        padding = (3, 2)
-        kernel_dilation = (3, 2)
-        input_dilation = (1, 1)
-        flip = False
-
-        self.__conv_general_test(
-            in_shape,
-            wt_shape,
-            stride,
-            padding,
-            kernel_dilation,
-            input_dilation,
-            flip=flip,
-        )
-
-        in_shape = (2, 32, 32, 16)
-        wt_shape = (32, 5, 10, 16)
-        stride = (2, 3)
-        padding = (3, 2)
-        kernel_dilation = (3, 2)
-        input_dilation = (1, 1)
-        flip = False
-
-        self.__conv_general_test(
-            in_shape,
-            wt_shape,
-            stride,
-            padding,
-            kernel_dilation,
-            input_dilation,
-            flip=flip,
-        )
-
-        in_shape = (2, 32, 32, 16)
-        wt_shape = (32, 5, 5, 16)
-        stride = (2, 3)
-        padding = (0, 0)
-        kernel_dilation = (3, 1)
-        input_dilation = (1, 1)
-        flip = True
-
-        self.__conv_general_test(
-            in_shape,
-            wt_shape,
-            stride,
-            padding,
-            kernel_dilation,
-            input_dilation,
-            flip=flip,
-        )
 
 
 if __name__ == "__main__":

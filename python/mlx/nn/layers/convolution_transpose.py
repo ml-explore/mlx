@@ -21,9 +21,9 @@ class ConvTranspose1d(Module):
         out_channels (int): The number of output channels
         kernel_size (int): The size of the convolution filters
         stride (int, optional): The stride when applying the filter.
-            Default: 1.
+            Default: ``1``.
         padding (int, optional): How many positions to 0-pad the input with.
-            Default: 0.
+            Default: ``0``.
         dilation (int, optional): The dilation of the convolution.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
             Default: ``True``
@@ -86,9 +86,9 @@ class ConvTranspose2d(Module):
         out_channels (int): The number of output channels.
         kernel_size (int or tuple): The size of the convolution filters.
         stride (int or tuple, optional): The size of the stride when
-            applying the filter. Default: 1.
+            applying the filter. Default: ``1``.
         padding (int or tuple, optional): How many positions to 0-pad
-            the input with. Default: 0.
+            the input with. Default: ``0``.
         dilation (int or tuple, optional): The dilation of the convolution.
         bias (bool, optional): If ``True`` add a learnable bias to the
             output. Default: ``True``

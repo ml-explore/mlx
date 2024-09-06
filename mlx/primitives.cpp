@@ -909,144 +909,115 @@ std::vector<array> Convolution::vjp(
   auto& wt = primals[1];
   auto& cotan = cotangents[0];
 
-  if (transpose_) {
-    auto padding = padding_;
+  for (int a : argnums) {
+    // Grads for input
+    if (a == 0) {
+      std::vector<int> padding_lo = padding_;
+      std::vector<int> padding_hi = padding_;
 
-    for (int i = 0; i < padding.size(); i++) {
-      int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
-      padding[i] = wt_size - padding_[i] - 1;
-    }
+      for (int i = 0; i < padding_lo.size(); ++i) {
+        int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
+        padding_lo[i] = wt_size - padding_[i] - 1;
 
-    for (int a : argnums) {
-      // Grads for input
-      if (a == 0) {
-        auto wt_trans = swapaxes(wt, 0, -1, stream());
-
-        auto grad = conv_general(
-            /* const array& input = */ cotan,
-            /* const array& weight = */ wt_trans,
-            /* std::vector<int> stride = */ input_dilation_,
-            /* std::vector<int> padding_lo = */ padding,
-            /* std::vector<int> padding_hi = */ padding,
-            /* std::vector<int> kernel_dilation = */ kernel_dilation_,
-            /* std::vector<int> input_dilation = */ kernel_strides_,
-            /* int groups = */ 1,
-            /* bool flip = */ !flip_,
-            /* bool transpose = */ false,
-            stream());
-
-        grads.push_back(grad);
+        int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
+        int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
+        padding_hi[i] = in_size - out_size + padding_[i];
       }
-      // Grads for weight
-      else if (a == 1) {
+
+      // Check for negative padding
+      bool has_neg_padding = false;
+      for (auto& pd : padding_lo) {
+        has_neg_padding |= (pd < 0);
+      }
+      for (auto& pd : padding_hi) {
+        has_neg_padding |= (pd < 0);
+      }
+
+      auto padding_lo_ = std::vector<int>(padding_lo);
+      auto padding_hi_ = std::vector<int>(padding_hi);
+
+      // Use negative padding on the gradient output
+      if (has_neg_padding) {
+        for (auto& p : padding_lo_) {
+          p = std::max(0, p);
+        }
+        for (auto& p : padding_hi_) {
+          p = std::max(0, p);
+        }
+      }
+
+      auto wt_trans = swapaxes(wt, 0, -1, stream());
+
+      auto grad = conv_general(
+          /* const array& input = */ cotan,
+          /* const array& weight = */ wt_trans,
+          /* std::vector<int> stride = */ input_dilation_,
+          /* std::vector<int> padding_lo = */ padding_lo,
+          /* std::vector<int> padding_hi = */ padding_hi,
+          /* std::vector<int> kernel_dilation = */ kernel_dilation_,
+          /* std::vector<int> input_dilation = */ kernel_strides_,
+          /* int groups = */ 1,
+          /* bool flip = */ !flip_,
+          stream());
+
+      // Handle negative padding
+      if (has_neg_padding) {
+        std::vector<int> starts(grad.ndim(), 0);
+        std::vector<int> stops = grad.shape();
+
+        for (int i = 0; i < grad.ndim() - 2; i++) {
+          if (padding_lo[i] < 0) {
+            starts[i + 1] -= padding_lo[i];
+            padding_lo[i] = 0;
+          }
+
+          if (padding_hi[i] < 0) {
+            stops[i + 1] += padding_hi[i];
+            padding_hi[i] = 0;
+          }
+        }
+
+        grad = slice(grad, std::move(starts), std::move(stops), stream());
+      }
+
+      grads.push_back(grad);
+    }
+    // Grads for weight
+    else if (a == 1) {
+      bool no_dilation = true;
+
+      for (int i = 0; i < input_dilation_.size(); i++) {
+        no_dilation &= (input_dilation_[i] == 1) && (kernel_dilation_[i] == 1);
+      }
+
+      if (no_dilation && !flip_) {
+        auto grad = conv_weight_backward_patches(
+            in, wt, cotan, kernel_strides_, padding_, stream());
+        grads.push_back(grad);
+      } else {
         auto cotan_trans = swapaxes(cotan, 0, -1, stream());
         auto in_trans = swapaxes(in, 0, -1, stream());
 
-        auto grad_trans = conv_general(
-            /* const array& input = */ cotan_trans,
-            /* const array& weight = */ in_trans,
-            /* std::vector<int> stride = */ kernel_dilation_,
-            /* std::vector<int> padding_lo = */ padding,
-            /* std::vector<int> padding_hi = */ padding,
-            /* std::vector<int> kernel_dilation = */ input_dilation_,
-            /* std::vector<int> input_dilation = */ kernel_strides_,
-            /* int groups = */ 1,
-            /* bool flip = */ !flip_,
-            /* bool transpose = */ false,
-            stream());
-        auto grad = swapaxes(grad_trans, 0, -1, stream());
-
-        grads.push_back(grad_trans);
-      }
-    }
-  } else {
-    for (int a : argnums) {
-      // Grads for input
-      if (a == 0) {
-        std::vector<int> padding_lo = padding_;
-        std::vector<int> padding_hi = padding_;
-
-        for (int i = 0; i < padding_lo.size(); ++i) {
-          int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
-          padding_lo[i] = wt_size - padding_[i] - 1;
-
-          int in_size = 1 + input_dilation_[i] * (in.shape(1 + i) - 1);
-          int out_size = 1 + kernel_strides_[i] * (cotan.shape(1 + i) - 1);
-          padding_hi[i] = in_size - out_size + padding_[i];
-        }
-
-        // Check for negative padding
-        bool has_neg_padding = false;
-        for (auto& pd : padding_lo) {
-          has_neg_padding |= (pd < 0);
-        }
-        for (auto& pd : padding_hi) {
-          has_neg_padding |= (pd < 0);
-        }
-
-        auto padding_lo_ = std::vector<int>(padding_lo);
-        auto padding_hi_ = std::vector<int>(padding_hi);
-
-        // Use negative padding on the gradient output
-        if (has_neg_padding) {
-          for (auto& p : padding_lo_) {
-            p = std::max(0, p);
-          }
-          for (auto& p : padding_hi_) {
-            p = std::max(0, p);
-          }
-        }
-
-        auto wt_trans = swapaxes(wt, 0, -1, stream());
-
-        auto grad = conv_general(
-            /* const array& input = */ cotan,
-            /* const array& weight = */ wt_trans,
-            /* std::vector<int> stride = */ input_dilation_,
-            /* std::vector<int> padding_lo = */ padding_lo,
-            /* std::vector<int> padding_hi = */ padding_hi,
-            /* std::vector<int> kernel_dilation = */ kernel_dilation_,
-            /* std::vector<int> input_dilation = */ kernel_strides_,
-            /* int groups = */ 1,
-            /* bool flip = */ !flip_,
-            /* bool transpose = */ false,
-            stream());
-
-        // Handle negative padding
-        if (has_neg_padding) {
-          std::vector<int> starts(grad.ndim(), 0);
-          std::vector<int> stops = grad.shape();
-
-          for (int i = 0; i < grad.ndim() - 2; i++) {
-            if (padding_lo[i] < 0) {
-              starts[i + 1] -= padding_lo[i];
-              padding_lo[i] = 0;
-            }
-
-            if (padding_hi[i] < 0) {
-              stops[i + 1] += padding_hi[i];
-              padding_hi[i] = 0;
-            }
+        if (flip_) {
+          auto padding = padding_;
+          for (int i = 0; i < padding.size(); i++) {
+            int wt_size = 1 + kernel_dilation_[i] * (wt.shape(1 + i) - 1);
+            padding[i] = wt_size - padding_[i] - 1;
           }
 
-          grad = slice(grad, std::move(starts), std::move(stops), stream());
-        }
-
-        grads.push_back(grad);
-      }
-      // Grads for weight
-      else if (a == 1) {
-        bool no_dilation = true;
-
-        for (int i = 0; i < input_dilation_.size(); i++) {
-          no_dilation &=
-              (input_dilation_[i] == 1) && (kernel_dilation_[i] == 1);
-        }
-
-        if (no_dilation) {
-          auto grad = conv_weight_backward_patches(
-              in, wt, cotan, kernel_strides_, padding_, stream());
-          grads.push_back(grad);
+          auto grad_trans = conv_general(
+              /* const array& input = */ cotan_trans,
+              /* const array& weight = */ in_trans,
+              /* std::vector<int> stride = */ kernel_dilation_,
+              /* std::vector<int> padding_lo = */ padding,
+              /* std::vector<int> padding_hi = */ padding,
+              /* std::vector<int> kernel_dilation = */ input_dilation_,
+              /* std::vector<int> input_dilation = */ kernel_strides_,
+              /* int groups = */ 1,
+              /* bool flip = */ false,
+              stream());
+          auto grad = swapaxes(grad_trans, 0, -1, stream());
+          grads.push_back(grad_trans);
         } else {
           std::vector<int> padding_lo = padding_;
           std::vector<int> padding_hi = padding_;
@@ -1069,8 +1040,7 @@ std::vector<array> Convolution::vjp(
               /* std::vector<int> kernel_dilation = */ kernel_strides_,
               /* std::vector<int> input_dilation = */ input_dilation_,
               /* int groups = */ 1,
-              /* bool flip = */ flip_,
-              /* bool transpose = */ false,
+              /* bool flip = */ false,
               stream());
           auto grad = swapaxes(grad_trans, 0, -1, stream());
           grads.push_back(grad);
@@ -1088,8 +1058,7 @@ bool Convolution::is_equivalent(const Primitive& other) const {
       kernel_strides_ == c_other.kernel_strides_ &&
       kernel_dilation_ == c_other.kernel_dilation_ &&
       input_dilation_ == c_other.input_dilation_ &&
-      groups_ == c_other.groups_ && flip_ == c_other.flip_ &&
-      transpose_ == c_other.transpose_;
+      groups_ == c_other.groups_ && flip_ == c_other.flip_;
 }
 
 std::vector<array> Copy::vjp(

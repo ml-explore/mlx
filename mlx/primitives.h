@@ -646,16 +646,14 @@ class Convolution : public UnaryPrimitive {
       const std::vector<int>& kernel_dilation,
       const std::vector<int>& input_dilation,
       const int groups = 1,
-      const bool flip = false,
-      const bool transpose = false)
+      const bool flip = false)
       : UnaryPrimitive(stream),
         padding_(padding),
         kernel_strides_(kernel_strides),
         kernel_dilation_(kernel_dilation),
         input_dilation_(input_dilation),
         groups_(groups),
-        flip_(flip),
-        transpose_(transpose) {}
+        flip_(flip) {}
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -676,7 +674,6 @@ class Convolution : public UnaryPrimitive {
   std::vector<int> input_dilation_;
   int groups_;
   bool flip_;
-  bool transpose_;
 
   void eval(const std::vector<array>& inputs, array& out);
 };
