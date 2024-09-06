@@ -39,7 +39,7 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::optional<array>& mask = std::nullopt,
-    const std::optional<int>& memory_efficient_threshold = std::nullopt,
+    const std::optional<int> memory_efficient_threshold = std::nullopt,
     StreamOrDevice s = {});
 
 std::tuple<array, array, array> affine_quantize(
@@ -66,37 +66,23 @@ array affine_dequantize(
 
 typedef std::variant<int, bool, Dtype> TemplateArg;
 
-class MetalKernel {
- public:
-  MetalKernel(
-      const std::string& name,
-      const std::string& source,
-      const std::string& header = "",
-      bool ensure_row_contiguous = true,
-      bool atomic_outputs = false)
-      : name_(name),
-        source_(source),
-        header_(header),
-        ensure_row_contiguous_(ensure_row_contiguous),
-        atomic_outputs_(atomic_outputs) {}
+typedef std::function<std::map<std::string, array>(
+    std::map<std::string, array>&,
+    std::map<std::string, std::vector<int>>,
+    std::map<std::string, Dtype>,
+    std::tuple<int, int, int>,
+    std::tuple<int, int, int>,
+    std::optional<std::map<std::string, TemplateArg>>,
+    std::optional<float>,
+    bool,
+    StreamOrDevice)>
+    MetalKernelFunction;
 
-  std::map<std::string, array> operator()(
-      std::map<std::string, array>& inputs,
-      std::map<std::string, std::vector<int>> output_shapes,
-      std::map<std::string, Dtype> output_dtypes,
-      std::tuple<int, int, int> grid,
-      std::tuple<int, int, int> threadgroup,
-      std::optional<std::map<std::string, TemplateArg>> template_args =
-          std::nullopt,
-      std::optional<float> init_value = std::nullopt,
-      bool verbose = false,
-      StreamOrDevice s = {});
+MetalKernelFunction metal_kernel(
+    const std::string& name,
+    const std::string& source,
+    const std::string& header = "",
+    bool ensure_row_contiguous = true,
+    bool atomic_outputs = false);
 
- private:
-  std::string name_;
-  std::string source_;
-  std::string header_;
-  bool ensure_row_contiguous_;
-  bool atomic_outputs_;
-};
 } // namespace mlx::core::fast

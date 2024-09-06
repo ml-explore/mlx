@@ -515,7 +515,7 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::optional<array>& mask,
-    const std::optional<int>& memory_efficient_threshold,
+    const std::optional<int> memory_efficient_threshold,
     StreamOrDevice s) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
@@ -943,11 +943,11 @@ void validate_output_shapes(
 
 void write_signature(
     std::string func_name,
-    std::string& source,
-    std::map<std::string, array>& inputs,
-    std::map<std::string, std::vector<int>>& output_shapes,
-    std::map<std::string, Dtype>& output_dtypes,
-    std::optional<std::map<std::string, TemplateArg>> template_args,
+    const std::string& source,
+    const std::map<std::string, array>& inputs,
+    const std::map<std::string, std::vector<int>>& output_shapes,
+    const std::map<std::string, Dtype>& output_dtypes,
+    const std::optional<std::map<std::string, TemplateArg>> template_args,
     std::vector<CustomKernelShapeInfo>& shape_infos,
     bool atomic_outputs,
     std::ostringstream& kernel_source) {
@@ -1094,107 +1094,115 @@ std::string write_template(std::map<std::string, TemplateArg>& template_args) {
   return template_def.str();
 }
 
-std::map<std::string, array> MetalKernel::operator()(
-    std::map<std::string, array>& inputs,
-    std::map<std::string, std::vector<int>> output_shapes,
-    std::map<std::string, Dtype> output_dtypes,
-    std::tuple<int, int, int> grid,
-    std::tuple<int, int, int> threadgroup,
-    std::optional<std::map<std::string, TemplateArg>> template_args,
-    std::optional<float> init_value,
-    bool verbose,
-    StreamOrDevice s_) {
-  validate_output_shapes(output_shapes, output_dtypes);
+MetalKernelFunction metal_kernel(
+    const std::string& name,
+    const std::string& source,
+    const std::string& header /* = "" */,
+    bool ensure_row_contiguous /* = true */,
+    bool atomic_outputs /* = false */) {
+  return [name, source, header, ensure_row_contiguous, atomic_outputs](
+             std::map<std::string, array>& inputs,
+             std::map<std::string, std::vector<int>> output_shapes,
+             std::map<std::string, Dtype> output_dtypes,
+             std::tuple<int, int, int> grid,
+             std::tuple<int, int, int> threadgroup,
+             std::optional<std::map<std::string, TemplateArg>> template_args =
+                 std::nullopt,
+             std::optional<float> init_value = std::nullopt,
+             bool verbose = false,
+             StreamOrDevice s_ = {}) {
+    validate_output_shapes(output_shapes, output_dtypes);
 
-  auto s = to_stream(s_);
-  if (s.device != Device::gpu) {
-    throw std::invalid_argument(
-        "[metal_kernel] MetalKernel only works on GPU.");
-  }
+    auto s = to_stream(s_);
+    if (s.device != Device::gpu) {
+      throw std::invalid_argument(
+          "[metal_kernel] MetalKernel only works on GPU.");
+    }
 
-  std::ostringstream func_name;
+    std::ostringstream func_name;
 
-  std::string template_def = "";
-  bool needs_template = template_args && template_args.value().size() > 0;
-  std::string hash_key = "";
-  if (needs_template) {
-    std::regex disallowed_chars("\\<|\\>|(, )");
-    template_def = write_template(template_args.value());
-    hash_key = std::regex_replace(template_def, disallowed_chars, "_");
-    hash_key.pop_back();
-  }
+    std::string template_def = "";
+    bool needs_template = template_args && template_args.value().size() > 0;
+    std::string hash_key = "";
+    if (needs_template) {
+      std::regex disallowed_chars("\\<|\\>|(, )");
+      template_def = write_template(template_args.value());
+      hash_key = std::regex_replace(template_def, disallowed_chars, "_");
+      hash_key.pop_back();
+    }
 
-  func_name << "custom_kernel_" << name_ << hash_key;
-  std::string kernel_name = func_name.str();
+    func_name << "custom_kernel_" << name << hash_key;
+    std::string kernel_name = func_name.str();
 
-  std::ostringstream kernel_source;
-  kernel_source << header_ << std::endl;
+    std::ostringstream kernel_source;
+    kernel_source << header << std::endl;
 
-  std::vector<CustomKernelShapeInfo> shape_infos;
-  write_signature(
-      func_name.str(),
-      source_,
-      inputs,
-      output_shapes,
-      output_dtypes,
-      template_args,
-      shape_infos,
-      atomic_outputs_,
-      kernel_source);
+    std::vector<CustomKernelShapeInfo> shape_infos;
+    write_signature(
+        func_name.str(),
+        source,
+        inputs,
+        output_shapes,
+        output_dtypes,
+        template_args,
+        shape_infos,
+        atomic_outputs,
+        kernel_source);
 
-  if (needs_template) {
-    template_def = func_name.str() + template_def;
-    kernel_source << std::endl
-                  << "template [[host_name(\"" << kernel_name
-                  << "\")]] [[kernel]] decltype(" << template_def << ") "
-                  << template_def << ";" << std::endl;
-  }
+    if (needs_template) {
+      template_def = func_name.str() + template_def;
+      kernel_source << std::endl
+                    << "template [[host_name(\"" << kernel_name
+                    << "\")]] [[kernel]] decltype(" << template_def << ") "
+                    << template_def << ";" << std::endl;
+    }
 
-  if (verbose) {
-    std::cout << "Generated source code for `" << name_ << "`:" << std::endl
-              << "```" << std::endl
-              << kernel_source.str() << std::endl
-              << "```" << std::endl;
-  }
+    if (verbose) {
+      std::cout << "Generated source code for `" << name << "`:" << std::endl
+                << "```" << std::endl
+                << kernel_source.str() << std::endl
+                << "```" << std::endl;
+    }
 
-  std::vector<array> in_arrs;
-  for (const auto& kv : inputs) {
-    in_arrs.push_back(kv.second);
-  }
+    std::vector<array> in_arrs;
+    for (const auto& kv : inputs) {
+      in_arrs.push_back(kv.second);
+    }
 
-  std::vector<std::string> out_keys;
-  std::vector<std::vector<int>> out_shapes;
-  for (const auto& [name, shape] : output_shapes) {
-    out_keys.push_back(name);
-    out_shapes.push_back(shape);
-  }
+    std::vector<std::string> out_keys;
+    std::vector<std::vector<int>> out_shapes;
+    for (const auto& [name, shape] : output_shapes) {
+      out_keys.push_back(name);
+      out_shapes.push_back(shape);
+    }
 
-  std::vector<Dtype> out_dtypes;
-  for (const auto& kv : output_dtypes) {
-    out_dtypes.push_back(kv.second);
-  }
+    std::vector<Dtype> out_dtypes;
+    for (const auto& kv : output_dtypes) {
+      out_dtypes.push_back(kv.second);
+    }
 
-  std::map<std::string, array> outputs;
-  auto outputs_vec = array::make_arrays(
-      out_shapes,
-      out_dtypes,
-      std::make_shared<CustomKernel>(
-          s,
-          kernel_name,
-          kernel_source.str(),
-          grid,
-          threadgroup,
-          shape_infos,
-          ensure_row_contiguous_,
-          init_value),
-      in_arrs);
+    std::map<std::string, array> outputs;
+    auto outputs_vec = array::make_arrays(
+        out_shapes,
+        out_dtypes,
+        std::make_shared<CustomKernel>(
+            s,
+            kernel_name,
+            kernel_source.str(),
+            grid,
+            threadgroup,
+            shape_infos,
+            ensure_row_contiguous,
+            init_value),
+        in_arrs);
 
-  int i = 0;
-  for (const auto& key : out_keys) {
-    outputs.insert({key, outputs_vec[i]});
-    i++;
-  }
-  return outputs;
+    int i = 0;
+    for (const auto& key : out_keys) {
+      outputs.insert({key, outputs_vec[i]});
+      i++;
+    }
+    return outputs;
+  };
 }
 
 } // namespace mlx::core::fast
