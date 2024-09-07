@@ -911,7 +911,7 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Throw error
   else {
     throw std::invalid_argument(
-        "[Convolution::eval_gpu] Only supports 1D or 2D convolutions.");
+        "[Convolution::eval_gpu] Only supports 1D, 2D or 3D convolutions.");
   }
 
   // Clear copies
