@@ -1425,8 +1425,8 @@ array where(
 array nan_to_num(
     const array& a,
     float nan /* = 0.0f */,
-    const std::optional<float>& posinf_ /* = std::nullopt */,
-    const std::optional<float>& neginf_ /* = std::nullopt */,
+    const std::optional<float> posinf_ /* = std::nullopt */,
+    const std::optional<float> neginf_ /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
   Dtype dtype = a.dtype();
   if (!issubdtype(dtype, inexact)) {

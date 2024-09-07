@@ -416,8 +416,8 @@ array where(
 array nan_to_num(
     const array& a,
     float nan = 0.0f,
-    const std::optional<float>& posinf = std::nullopt,
-    const std::optional<float>& neginf = std::nullopt,
+    const std::optional<float> posinf = std::nullopt,
+    const std::optional<float> neginf = std::nullopt,
     StreamOrDevice s = {});
 
 /** True if all elements in the array are true (or non-zero). **/
