@@ -174,4 +174,31 @@ void copy_gpu_inplace(
       in, out, in.shape(), istride, ostrides, ioffset, 0, ctype, s);
 }
 
+void fill_gpu(const array& val, array& out, const Stream& s) {
+  if (out.size() == 0) {
+    return;
+  }
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+  bool use_2d = out.data_size() > UINT32_MAX;
+  auto& d = metal::device(s.device);
+  std::string kernel_name = std::string(use_2d ? "s2" : "s") + "_copy" +
+      type_to_name(val) + type_to_name(out);
+  auto kernel = get_copy_kernel(d, kernel_name, val, out);
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  compute_encoder->setComputePipelineState(kernel);
+
+  compute_encoder.set_input_array(val, 0);
+  compute_encoder.set_output_array(out, 1);
+
+  size_t nthreads = out.data_size();
+  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                               : MTL::Size(nthreads, 1, 1);
+  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  if (thread_group_size > nthreads) {
+    thread_group_size = nthreads;
+  }
+  MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+  compute_encoder.dispatchThreads(grid_dims, group_dims);
+}
+
 } // namespace mlx::core

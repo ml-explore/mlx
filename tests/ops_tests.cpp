@@ -2463,6 +2463,28 @@ TEST_CASE("test pad") {
   CHECK_EQ(pad(x, 1).shape(), std::vector<int>{3, 4, 5});
   CHECK_EQ(pad(x, {0, 1}).shape(), std::vector<int>{2, 3, 4});
   CHECK_EQ(pad(x, {{1, 1}, {1, 2}, {3, 1}}).shape(), std::vector<int>{3, 5, 7});
+
+  x = array({1.0f, 2.0f, 3.0f, 4.0f}, {2, 2});
+  auto padded_x = pad(x, 1);
+  auto expected = array(
+      {0.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       1.0f,
+       2.0f,
+       0.0f,
+       0.0f,
+       3.0f,
+       4.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       0.0f,
+       0.0f},
+      {4, 4});
+  CHECK(array_equal(padded_x, expected).item<bool>());
 }
 
 TEST_CASE("test power") {
