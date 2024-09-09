@@ -972,7 +972,7 @@ void write_signature(
       {"threadgroups_per_grid", "uint3"},
       {"threads_per_grid", "uint3"},
       {"threads_per_simdgroup", "uint"},
-      {"thread_per_threadgroup", "uint3"},
+      {"threads_per_threadgroup", "uint3"},
   };
   std::vector<std::pair<std::string, std::string>> attrs;
   for (const auto& [attr, dtype] : metal_attributes) {
