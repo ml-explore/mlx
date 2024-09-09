@@ -733,6 +733,31 @@ class TestCompile(mlx_tests.MLXTestCase):
             expected = fn(x)
             self.assertTrue(mx.array_equal(expected, out))
 
+    def test_compile_without_captured_inputs(self):
+        x = mx.array([1, 2, 3]) + 2
+
+        def fn(a):
+            y = x + 1
+            return a + y
+
+        with self.assertRaises(ValueError):
+            y = mx.compile(fn)(x)
+
+        x = mx.array([1.0, 2.0]) + mx.array([1.0, 2.0])
+        y = None
+
+        def fn(x):
+            nonlocal y
+            if y is None:
+                y = mx.array([1.0, 2.0])
+
+            y = y + x
+            return y
+
+        fn(x)
+        with self.assertRaises(ValueError):
+            y = mx.compile(fn)(x)
+
 
 if __name__ == "__main__":
     unittest.main()
