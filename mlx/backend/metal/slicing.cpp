@@ -85,7 +85,7 @@ void pad_gpu(
     std::vector<int> low_pad_size,
     const Stream& s) {
   // Fill output with val
-  copy_gpu(val, out, CopyType::Scalar, s);
+  fill_gpu(val, out, s);
 
   // Find offset for start of input values
   size_t data_offset = 0;
