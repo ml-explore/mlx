@@ -38,8 +38,12 @@ jobs:
       - run:
           name: Install Python package
           command: |
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py build_ext --inplace
-            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" CMAKE_BUILD_PARALLEL_LEVEL="" python3 setup.py develop
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
+              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
+              python3 setup.py build_ext --inplace
+            CMAKE_ARGS="-DMLX_BUILD_METAL=OFF" \
+              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
+              python3 setup.py develop
       - run:
           name: Generate package stubs
           command: |
@@ -53,7 +57,9 @@ jobs:
       - run:
           name: Build CPP only
           command: |
-            mkdir -p build && cd build && cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG && make -j
+            mkdir -p build && cd build 
+            cmake .. -DMLX_BUILD_METAL=OFF -DCMAKE_BUILD_TYPE=DEBUG
+            make -j `nproc`
       - run:
           name: Run CPP tests
           command: ./build/tests/tests
@@ -86,7 +92,7 @@ jobs:
           name: Install Python package
           command: |
             source env/bin/activate
-            CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e . -v
+            CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
@@ -113,7 +119,7 @@ jobs:
           name: Build CPP only
           command: |
             source env/bin/activate
-            mkdir -p build && cd build && cmake .. && make -j
+            mkdir -p build && cd build && cmake .. && make -j `sysctl -n hw.ncpu`
       - run:
           name: Run CPP tests
           command: |
@@ -123,14 +129,23 @@ jobs:
           command: |
             source env/bin/activate
             cd build/
-            cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel -DBUILD_SHARED_LIBS=ON -DMLX_BUILD_CPU=OFF -DMLX_BUILD_SAFETENSORS=OFF -DMLX_BUILD_GGUF=OFF -DMLX_METAL_JIT=ON
-            make -j
+            cmake .. -DCMAKE_BUILD_TYPE=MinSizeRel \
+              -DBUILD_SHARED_LIBS=ON \
+              -DMLX_BUILD_CPU=OFF \
+              -DMLX_BUILD_SAFETENSORS=OFF \
+              -DMLX_BUILD_GGUF=OFF \
+              -DMLX_METAL_JIT=ON
+            make -j `sysctl -n hw.ncpu`
       - run:
           name: Run Python tests with JIT
           command: |
             source env/bin/activate
-            CMAKE_BUILD_PARALLEL_LEVEL="" CMAKE_ARGS="-DMLX_METAL_JIT=ON" pip install -e . -v
-            LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu_jit
+            CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
+              CMAKE_ARGS="-DMLX_METAL_JIT=ON" \
+              pip install -e . -v
+            LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 \
+              METAL_DEBUG_ERROR_MODE=0 \
+              python -m xmlrunner discover -v python/tests -o test-results/gpu_jit
 
   build_release:
     parameters:
@@ -167,7 +182,7 @@ jobs:
           command: |
             source env/bin/activate
             DEV_RELEASE=1 \
-              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
               pip install . -v
       - run:
           name: Generate package stubs
@@ -180,7 +195,7 @@ jobs:
           command: |
             source env/bin/activate
             << parameters.build_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` \
               python -m build -w
       - when:
           condition: << parameters.build_env >>
@@ -229,12 +244,12 @@ jobs:
             pip install patchelf
             pip install build
             << parameters.extra_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               pip install . -v
             pip install typing_extensions
             python setup.py generate_stubs 
             << parameters.extra_env >> \
-              CMAKE_BUILD_PARALLEL_LEVEL="" \
+              CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
