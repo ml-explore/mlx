@@ -614,9 +614,16 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
     out.copy_shared_buffer(
         in, strides, in.flags(), in.data_size() * ibytes / obytes);
   } else {
-    auto tmp = array(in.shape(), in.dtype(), nullptr, {});
+    auto tmp = array(
+        in.shape(), in.dtype() == bool_ ? uint8 : in.dtype(), nullptr, {});
     tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
-    copy_inplace(in, tmp, CopyType::General);
+    if (in.dtype() == bool_) {
+      auto in_tmp = array(in.shape(), uint8, nullptr, {});
+      in_tmp.copy_shared_buffer(in);
+      copy_inplace(in_tmp, tmp, CopyType::General);
+    } else {
+      copy_inplace(in, tmp, CopyType::General);
+    }
 
     auto flags = out.flags();
     flags.contiguous = true;

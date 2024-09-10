@@ -333,7 +333,7 @@ template <typename SrcT, typename... Args>
 void copy(const array& src, array& dst, CopyType ctype, Args&&... args) {
   switch (dst.dtype()) {
     case bool_:
-      copy<SrcT, uint8_t>(src, dst, ctype, std::forward<Args>(args)...);
+      copy<SrcT, bool>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint8:
       copy<SrcT, uint8_t>(src, dst, ctype, std::forward<Args>(args)...);
@@ -382,7 +382,7 @@ inline void copy_inplace_dispatch(
     Args&&... args) {
   switch (src.dtype()) {
     case bool_:
-      copy<uint8_t>(src, dst, ctype, std::forward<Args>(args)...);
+      copy<bool>(src, dst, ctype, std::forward<Args>(args)...);
       break;
     case uint8:
       copy<uint8_t>(src, dst, ctype, std::forward<Args>(args)...);
