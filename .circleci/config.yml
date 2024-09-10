@@ -92,7 +92,7 @@ jobs:
           name: Install Python package
           command: |
             source env/bin/activate
-            CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install -e . -v
+            DEBUG=1 CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install -e . -v
       - run:
           name: Generate package stubs
           command: |
