@@ -803,7 +803,7 @@ class PyCustomFunction {
             "[custom vmap] Function should only accept positional arguments");
       }
 
-      int arr_index;
+      int arr_index = 0;
       auto new_axes =
           nb::cast<nb::tuple>(tree_map(args, [&](nb::handle element) {
             int axis = axes[arr_index++];
