@@ -241,6 +241,10 @@ void MetalAllocator::free(Buffer buffer) {
   }
 }
 
+size_t MetalAllocator::size(Buffer buffer) const {
+  return static_cast<MTL::Buffer*>(buffer.ptr())->length();
+}
+
 MetalAllocator& allocator() {
   // By creating the |allocator_| on heap, the destructor of MetalAllocator will
   // not be called on exit and all the buffers will be leaked. This is necessary

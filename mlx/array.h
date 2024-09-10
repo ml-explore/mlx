@@ -324,6 +324,10 @@ class array {
     return array_desc_->data->buffer;
   }
 
+  size_t buffer_size() const {
+    return allocator::allocator().size(buffer());
+  }
+
   // Return a copy of the shared pointer
   // to the array::Data struct
   std::shared_ptr<Data> data_shared_ptr() const {

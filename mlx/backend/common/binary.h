@@ -43,13 +43,18 @@ void set_binary_op_output_data(
     array& out,
     BinaryOpType bopt,
     bool donate_with_move = false) {
+  constexpr size_t donation_extra = 16384;
+  bool b_donatable = b.is_donatable() && b.itemsize() == out.itemsize() &&
+      b.buffer_size() <= out.nbytes() + donation_extra;
+  bool a_donatable = a.is_donatable() && a.itemsize() == out.itemsize() &&
+      a.buffer_size() <= out.nbytes() + donation_extra;
   switch (bopt) {
     case BinaryOpType::ScalarScalar:
       out.set_data(
           allocator::malloc_or_wait(out.itemsize()), 1, a.strides(), a.flags());
       break;
     case BinaryOpType::ScalarVector:
-      if (b.is_donatable() && b.itemsize() == out.itemsize()) {
+      if (b_donatable) {
         if (donate_with_move) {
           out.move_shared_buffer(b);
         } else {
@@ -64,7 +69,7 @@ void set_binary_op_output_data(
       }
       break;
     case BinaryOpType::VectorScalar:
-      if (a.is_donatable() && a.itemsize() == out.itemsize()) {
+      if (a_donatable) {
         if (donate_with_move) {
           out.move_shared_buffer(a);
         } else {
@@ -79,13 +84,13 @@ void set_binary_op_output_data(
       }
       break;
     case BinaryOpType::VectorVector:
-      if (a.is_donatable() && a.itemsize() == out.itemsize()) {
+      if (a_donatable) {
         if (donate_with_move) {
           out.move_shared_buffer(a);
         } else {
           out.copy_shared_buffer(a);
         }
-      } else if (b.is_donatable() && b.itemsize() == out.itemsize()) {
+      } else if (b_donatable) {
         if (donate_with_move) {
           out.move_shared_buffer(b);
         } else {
@@ -100,16 +105,14 @@ void set_binary_op_output_data(
       }
       break;
     case BinaryOpType::General:
-      if (a.is_donatable() && a.flags().row_contiguous &&
-          a.itemsize() == out.itemsize() && a.size() == out.size()) {
+      if (a_donatable && a.flags().row_contiguous && a.size() == out.size()) {
         if (donate_with_move) {
           out.move_shared_buffer(a);
         } else {
           out.copy_shared_buffer(a);
         }
       } else if (
-          b.is_donatable() && b.flags().row_contiguous &&
-          b.itemsize() == out.itemsize() && b.size() == out.size()) {
+          b_donatable && b.flags().row_contiguous && b.size() == out.size()) {
         if (donate_with_move) {
           out.move_shared_buffer(b);
         } else {
