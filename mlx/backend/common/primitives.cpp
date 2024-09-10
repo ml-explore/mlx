@@ -612,7 +612,7 @@ void View::eval_cpu(const std::vector<array>& inputs, array& out) {
       strides[i] /= obytes;
     }
     out.copy_shared_buffer(
-        in, strides, in.flags(), in.data_size() * obytes / ibytes);
+        in, strides, in.flags(), in.data_size() * ibytes / obytes);
   } else {
     auto tmp = array(in.shape(), in.dtype(), nullptr, {});
     tmp.set_data(allocator::malloc_or_wait(tmp.nbytes()));
