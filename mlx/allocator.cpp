@@ -35,6 +35,9 @@ void CommonAllocator::free(Buffer buffer) {
 }
 
 size_t CommonAllocator::size(Buffer buffer) const {
+  if (buffer.ptr() == nullptr) {
+    return 0;
+  }
   return *static_cast<size_t*>(buffer.ptr());
 }
 
