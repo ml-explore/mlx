@@ -155,4 +155,11 @@ inline auto check_contiguity(
       no_broadcast_data_size, is_row_contiguous, is_col_contiguous);
 }
 
+inline bool is_donatable(const array& in, const array& out) {
+  constexpr size_t donation_extra = 16384;
+
+  return in.is_donatable() && in.itemsize() == out.itemsize() &&
+      in.buffer_size() <= out.nbytes() + donation_extra;
+}
+
 } // namespace mlx::core

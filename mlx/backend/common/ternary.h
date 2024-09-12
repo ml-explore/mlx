@@ -41,7 +41,7 @@ void set_ternary_op_output_data(
     TernaryOpType topt,
     bool donate_with_move = false) {
   auto maybe_donate = [&out, donate_with_move](const array& x) {
-    if (x.is_donatable() && x.itemsize() == out.itemsize()) {
+    if (is_donatable(x, out)) {
       if (donate_with_move) {
         out.move_shared_buffer(x);
       } else {

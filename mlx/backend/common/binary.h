@@ -43,11 +43,8 @@ void set_binary_op_output_data(
     array& out,
     BinaryOpType bopt,
     bool donate_with_move = false) {
-  constexpr size_t donation_extra = 16384;
-  bool b_donatable = b.is_donatable() && b.itemsize() == out.itemsize() &&
-      b.buffer_size() <= out.nbytes() + donation_extra;
-  bool a_donatable = a.is_donatable() && a.itemsize() == out.itemsize() &&
-      a.buffer_size() <= out.nbytes() + donation_extra;
+  bool b_donatable = is_donatable(b, out);
+  bool a_donatable = is_donatable(a, out);
   switch (bopt) {
     case BinaryOpType::ScalarScalar:
       out.set_data(
