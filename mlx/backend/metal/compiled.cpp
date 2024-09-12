@@ -87,11 +87,11 @@ inline void build_kernel(
   os << "    uint3 pos [[thread_position_in_grid]]," << std::endl
      << "    uint3 grid [[threads_per_grid]]) {" << std::endl;
   if (use_big_index) {
-     // This is only used for contiguous kernels which don't have
-     // a third grid dimension
-     os << "  size_t index = pos.x + grid.x * size_t(pos.y);";
+    // This is only used for contiguous kernels which don't have
+    // a third grid dimension
+    os << "  size_t index = pos.x + grid.x * size_t(pos.y);";
   } else {
-     os << "  uint index = pos.x + grid.x * (pos.y + grid.y * pos.z);";
+    os << "  uint index = pos.x + grid.x * (pos.y + grid.y * pos.z);";
   }
   os << std::endl;
 
@@ -255,7 +255,6 @@ void Compiled::eval_gpu(
 
     lib = d.get_library(kernel_lib_, kernel.str());
   }
-
 
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
