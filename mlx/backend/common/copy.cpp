@@ -137,6 +137,165 @@ inline void copy_general_dim4(const array& src, array& dst) {
 }
 
 template <typename SrcT, typename DstT, typename stride_t>
+void copy_general_dim5(
+    const array& src,
+    array& dst,
+    const std::vector<int>& data_shape,
+    const std::vector<stride_t>& i_strides,
+    int64_t i_offset) {
+  const SrcT* src_ptr = src.data<SrcT>() + i_offset;
+  DstT* dst_ptr = dst.data<DstT>();
+  
+  // Pre-compute loop bounds and strides
+  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2], d3 = data_shape[3], d4 = data_shape[4];
+  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2], s3 = i_strides[3], s4 = i_strides[4];
+
+  // Pre-compute stride adjustments
+  const stride_t s3_adj = s3 - s4 * d4;
+  const stride_t s2_adj = s2 - s3 * d3;
+  const stride_t s1_adj = s1 - s2 * d2;
+  const stride_t s0_adj = s0 - s1 * d1;
+
+  stride_t src_idx = 0;
+  stride_t dst_idx = 0;
+
+  for (int i = 0; i < d0; ++i) {
+    for (int j = 0; j < d1; ++j) {
+      for (int k = 0; k < d2; ++k) {
+        for (int l = 0; l < d3; ++l) {
+          for (int m = 0; m < d4; ++m) {
+            dst_ptr[dst_idx++] = static_cast<DstT>(src_ptr[src_idx]);
+            src_idx += s4;
+          }
+          src_idx += s3_adj;
+        }
+        src_idx += s2_adj;
+      }
+      src_idx += s1_adj;
+    }
+    src_idx += s0_adj;
+  }
+}
+
+template <typename SrcT, typename DstT>
+inline void copy_general_dim5(const array& src, array& dst) {
+  return copy_general_dim5<SrcT, DstT, size_t>(
+      src, dst, src.shape(), src.strides(), 0);
+}
+
+template <typename SrcT, typename DstT, typename stride_t>
+void copy_general_dim6(
+    const array& src,
+    array& dst,
+    const std::vector<int>& data_shape,
+    const std::vector<stride_t>& i_strides,
+    int64_t i_offset) {
+  const SrcT* src_ptr = src.data<SrcT>() + i_offset;
+  DstT* dst_ptr = dst.data<DstT>();
+  
+  // Pre-compute loop bounds and strides
+  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2], 
+            d3 = data_shape[3], d4 = data_shape[4], d5 = data_shape[5];
+  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2], 
+                 s3 = i_strides[3], s4 = i_strides[4], s5 = i_strides[5];
+
+  // Pre-compute stride adjustments
+  const stride_t s4_adj = s4 - s5 * d5;
+  const stride_t s3_adj = s3 - s4 * d4;
+  const stride_t s2_adj = s2 - s3 * d3;
+  const stride_t s1_adj = s1 - s2 * d2;
+  const stride_t s0_adj = s0 - s1 * d1;
+
+  stride_t src_idx = 0;
+  stride_t dst_idx = 0;
+
+  for (int i = 0; i < d0; ++i) {
+    for (int j = 0; j < d1; ++j) {
+      for (int k = 0; k < d2; ++k) {
+        for (int l = 0; l < d3; ++l) {
+          for (int m = 0; m < d4; ++m) {
+            for (int n = 0; n < d5; ++n) {
+              dst_ptr[dst_idx++] = static_cast<DstT>(src_ptr[src_idx]);
+              src_idx += s5;
+            }
+            src_idx += s4_adj;
+          }
+          src_idx += s3_adj;
+        }
+        src_idx += s2_adj;
+      }
+      src_idx += s1_adj;
+    }
+    src_idx += s0_adj;
+  }
+}
+
+template <typename SrcT, typename DstT>
+inline void copy_general_dim6(const array& src, array& dst) {
+  return copy_general_dim6<SrcT, DstT, size_t>(
+      src, dst, src.shape(), src.strides(), 0);
+}
+
+template <typename SrcT, typename DstT, typename stride_t>
+void copy_general_dim7(
+    const array& src,
+    array& dst,
+    const std::vector<int>& data_shape,
+    const std::vector<stride_t>& i_strides,
+    int64_t i_offset) {
+  const SrcT* src_ptr = src.data<SrcT>() + i_offset;
+  DstT* dst_ptr = dst.data<DstT>();
+  
+  // Pre-compute loop bounds and strides
+  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2], 
+            d3 = data_shape[3], d4 = data_shape[4], d5 = data_shape[5],
+            d6 = data_shape[6];
+  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2], 
+                 s3 = i_strides[3], s4 = i_strides[4], s5 = i_strides[5],
+                 s6 = i_strides[6];
+
+  // Pre-compute stride adjustments
+  const stride_t s5_adj = s5 - s6 * d6;
+  const stride_t s4_adj = s4 - s5 * d5;
+  const stride_t s3_adj = s3 - s4 * d4;
+  const stride_t s2_adj = s2 - s3 * d3;
+  const stride_t s1_adj = s1 - s2 * d2;
+  const stride_t s0_adj = s0 - s1 * d1;
+
+  stride_t src_idx = 0;
+  stride_t dst_idx = 0;
+
+  for (int i = 0; i < d0; ++i) {
+    for (int j = 0; j < d1; ++j) {
+      for (int k = 0; k < d2; ++k) {
+        for (int l = 0; l < d3; ++l) {
+          for (int m = 0; m < d4; ++m) {
+            for (int n = 0; n < d5; ++n) {
+              for (int p = 0; p < d6; ++p) {
+                dst_ptr[dst_idx++] = static_cast<DstT>(src_ptr[src_idx]);
+                src_idx += s6;
+              }
+              src_idx += s5_adj;
+            }
+            src_idx += s4_adj;
+          }
+          src_idx += s3_adj;
+        }
+        src_idx += s2_adj;
+      }
+      src_idx += s1_adj;
+    }
+    src_idx += s0_adj;
+  }
+}
+
+template <typename SrcT, typename DstT>
+inline void copy_general_dim7(const array& src, array& dst) {
+  return copy_general_dim7<SrcT, DstT, size_t>(
+      src, dst, src.shape(), src.strides(), 0);
+}
+
+template <typename SrcT, typename DstT, typename stride_t>
 void copy_general(
     const array& src,
     array& dst,
@@ -160,6 +319,18 @@ void copy_general(
       return;
     case 4:
       copy_general_dim4<SrcT, DstT, stride_t>(
+          src, dst, new_shape, new_strides[0], i_offset);
+      return;
+    case 5:
+      copy_general_dim5<SrcT, DstT, stride_t>(
+          src, dst, new_shape, new_strides[0], i_offset);
+      return;
+    case 6:
+      copy_general_dim6<SrcT, DstT, stride_t>(
+          src, dst, new_shape, new_strides[0], i_offset);
+      return;
+    case 7:
+      copy_general_dim7<SrcT, DstT, stride_t>(
           src, dst, new_shape, new_strides[0], i_offset);
       return;
   }

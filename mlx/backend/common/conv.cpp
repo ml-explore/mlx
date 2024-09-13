@@ -910,7 +910,8 @@ void explicit_gemm_conv_ND_cpu(
     array out,
     const std::vector<int>& padding,
     const std::vector<int>& wt_strides,
-    const std::vector<int>& wt_dilation) {
+    const std::vector<int>& wt_dilation,
+    const bool flip) {
   const int N = in.shape(0); // Batch size, should be the same as out.shape(0)
   const auto iDim = std::vector<int>(
       in.shape().begin() + 1, in.shape().end() - 1); // Input spatial dim
@@ -1000,6 +1001,30 @@ void explicit_gemm_conv_ND_cpu(
     copy(wt, gemm_wt, ctype);
   }
 
+  if (flip) {
+    auto gemm_wt_ = array(gemm_wt.shape(), float32, nullptr, {});
+    copy(gemm_wt, gemm_wt_, CopyType::Vector);
+
+    const int ndim = wt.ndim();
+    const int N = wt.shape(0);
+    const int C = wt.shape(ndim - 1);
+
+    // Calculate the total size of the spatial dimensions
+    int spatial_size = 1;
+    for (int d = 1; d < ndim - 1; ++d) {
+      spatial_size *= wt.shape(d);
+    }
+
+    // Use vDSP to reverse the spatial dimensions for each N,C combination
+    for (int n = 0; n < N; ++n) {
+      for (int c = 0; c < C; ++c) {
+        float* src = gemm_wt_.data<float>() + (n * spatial_size * C + c);
+        vDSP_vrvrs(src, C, spatial_size);
+      }
+    }
+    gemm_wt = gemm_wt_;
+  }
+
   if (out.dtype() != float32) {
     gemm_out = array(out.shape(), float32, nullptr, {});
     gemm_out.set_data(allocator::malloc_or_wait(gemm_out.nbytes()));
@@ -1042,9 +1067,14 @@ void conv_1D_cpu(
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
     bool flip) {
+  const int groups = in.shape().back() / wt.shape().back();
   if (wt_dilation[0] == 1 && in_dilation[0] == 1 && !flip) {
     return explicit_gemm_conv_1D_cpu(
         in, wt, out, padding, wt_strides, wt_dilation);
+  }
+  if (wt_dilation[0] == 1 && in_dilation[0] == 1 && groups == 1) {
+    return explicit_gemm_conv_ND_cpu(
+        in, wt, out, padding, wt_strides, wt_dilation, flip);
   }
 
   return dispatch_slow_conv_1D(
@@ -1060,6 +1090,13 @@ void conv_2D_cpu(
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
     bool flip) {
+  const int groups = in.shape().back() / wt.shape().back();
+  if (wt_dilation[0] == 1 && wt_dilation[1] == 1 && in_dilation[0] == 1 &&
+      in_dilation[1] == 1 && groups == 1) {
+    return explicit_gemm_conv_ND_cpu(
+        in, wt, out, padding, wt_strides, wt_dilation, flip);
+  }
+
   return dispatch_slow_conv_2D(
       in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
 }
@@ -1073,6 +1110,13 @@ void conv_3D_cpu(
     const std::vector<int>& wt_dilation,
     const std::vector<int>& in_dilation,
     bool flip) {
+  const int groups = in.shape().back() / wt.shape().back();
+  if (wt_dilation[0] == 1 && wt_dilation[1] == 1 && wt_dilation[2] == 1 &&
+      in_dilation[0] == 1 && in_dilation[1] == 1 && in_dilation[2] == 1 && groups == 1) {
+    return explicit_gemm_conv_ND_cpu(
+        in, wt, out, padding, wt_strides, wt_dilation, flip);
+  }
+
   return dispatch_slow_conv_3D(
       in, wt, out, padding, wt_strides, wt_dilation, in_dilation, flip);
 }
