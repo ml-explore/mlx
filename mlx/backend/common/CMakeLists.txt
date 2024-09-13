@@ -51,6 +51,7 @@ target_sources(
           ${CMAKE_CURRENT_SOURCE_DIR}/svd.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/inverse.cpp
           ${CMAKE_CURRENT_SOURCE_DIR}/cholesky.cpp
+          ${CMAKE_CURRENT_SOURCE_DIR}/utils.cpp
           ${CMAKE_CURRENT_BINARY_DIR}/compiled_preamble.cpp)
 
 if(IOS)

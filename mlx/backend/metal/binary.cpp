@@ -19,7 +19,7 @@
 
 namespace mlx::core {
 
-constexpr int MAX_BINARY_SPECIALIZED_DIMS = 5;
+constexpr int MAX_BINARY_SPECIALIZED_DIMS = 3;
 
 std::string get_kernel_name(
     BinaryOpType bopt,
@@ -172,10 +172,20 @@ void binary_op_gpu_inplace(
   }
 
   // Try to collapse contiguous dims
-  auto [shape, strides] = collapse_contiguous_dims(a, b, out);
-  auto& strides_a = strides[0];
-  auto& strides_b = strides[1];
-  auto& strides_out = strides[2];
+  auto maybe_collapse = [bopt, &a, &b, &out]() {
+    if (bopt == BinaryOpType::General) {
+      // The size cap here should ideally be `UINT32_MAX` but we are
+      // limitied by the shape being an int.
+      auto [shape, strides] = collapse_contiguous_dims(
+          {a, b, out},
+          /* size_cap = */ INT32_MAX);
+      return std::make_tuple(shape, strides[0], strides[1], strides[2]);
+    } else {
+      std::vector<size_t> e;
+      return std::make_tuple(std::vector<int>{}, e, e, e);
+    }
+  };
+  auto [shape, strides_a, strides_b, strides_out] = maybe_collapse();
 
   bool use_2d = out.data_size() > UINT32_MAX;
   std::string kernel_name = get_kernel_name(bopt, op, a, use_2d, shape.size());

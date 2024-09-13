@@ -16,10 +16,6 @@
   instantiate_kernel("gg1_copy" #tname, copy_gg_nd1, itype, otype) \
   instantiate_kernel("gg2_copy" #tname, copy_gg_nd2, itype, otype) \
   instantiate_kernel("gg3_copy" #tname, copy_gg_nd3, itype, otype) \
-  instantiate_kernel("g4_copy" #tname, copy_g_nd, itype, otype, 4) \
-  instantiate_kernel("g5_copy" #tname, copy_g_nd, itype, otype, 5) \
-  instantiate_kernel("gg4_copy" #tname, copy_gg_nd, itype, otype, 4) \
-  instantiate_kernel("gg5_copy" #tname, copy_gg_nd, itype, otype, 5) \
   instantiate_kernel("g_copy" #tname, copy_g, itype, otype) \
   instantiate_kernel("gg_copy" #tname, copy_gg, itype, otype)
 

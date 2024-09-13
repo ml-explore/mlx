@@ -8,7 +8,7 @@
 
 namespace mlx::core {
 
-constexpr int MAX_TERNARY_SPECIALIZED_DIMS = 5;
+constexpr int MAX_TERNARY_SPECIALIZED_DIMS = 3;
 
 void ternary_op_gpu_inplace(
     const std::vector<array>& inputs,
