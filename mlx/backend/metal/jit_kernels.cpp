@@ -1,5 +1,4 @@
 // Copyright © 2024 Apple Inc.
-#include <map>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/jit/arange.h"
@@ -66,7 +65,7 @@ void add_binary_kernels(
     Dtype out_type,
     const std::string op,
     std::ostringstream& kernel_source) {
-  const std::map<std::string, std::string> kernel_types = {
+  const std::array<std::pair<std::string, std::string>, 11> kernel_types = {{
       {"ss", "binary_ss"},
       {"vs", "binary_vs"},
       {"sv", "binary_sv"},
@@ -78,7 +77,7 @@ void add_binary_kernels(
       {"g2", "binary_g_nd2"},
       {"g3", "binary_g_nd3"},
       {"gn", "binary_g"},
-  };
+  }};
   for (auto& [name, func] : kernel_types) {
     std::string template_def;
     template_def = get_template_definition(
@@ -135,14 +134,14 @@ MTL::ComputePipelineState* get_ternary_kernel(
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    const std::map<std::string, std::string> kernel_types = {
+    const std::array<std::pair<std::string, std::string>, 6> kernel_types = {{
         {"v", "ternary_v"},
         {"v2", "ternary_v2"},
         {"g", "ternary_g"},
         {"g1", "ternary_g_nd1"},
         {"g2", "ternary_g_nd2"},
         {"g3", "ternary_g_nd3"},
-    };
+    }};
     kernel_source << metal::utils() << metal::ternary_ops() << metal::ternary();
     for (auto& [name, func] : kernel_types) {
       std::string template_def;
@@ -289,10 +288,10 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
   if (lib == nullptr) {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::sort();
-    std::vector<std::pair<std::string, std::string>> kernel_types = {
-        {"sort_", "mb_block_sort"},
-        {"partition_", "mb_block_partition"},
-        {"merge_", "mb_block_merge"}};
+    std::array<std::pair<std::string, std::string>, 3> kernel_types = {
+        {{"sort_", "mb_block_sort"},
+         {"partition_", "mb_block_partition"},
+         {"merge_", "mb_block_merge"}}};
     for (auto& [name, func] : kernel_types) {
       kernel_source << get_template_definition(
           name + lib_name,
