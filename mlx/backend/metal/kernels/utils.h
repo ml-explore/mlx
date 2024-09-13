@@ -86,36 +86,8 @@ struct Limits<complex64_t> {
 template <typename stride_t>
 METAL_FUNC stride_t elem_to_loc(
     uint elem,
-    device const int* shape,
-    device const stride_t* strides,
-    int ndim) {
-  stride_t loc = 0;
-  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
-    loc += (elem % shape[i]) * strides[i];
-    elem /= shape[i];
-  }
-  return loc;
-}
-
-template <typename stride_t>
-METAL_FUNC stride_t elem_to_loc(
-    uint elem,
     constant const int* shape,
     constant const stride_t* strides,
-    int ndim) {
-  stride_t loc = 0;
-  for (int i = ndim - 1; i >= 0 && elem > 0; --i) {
-    loc += (elem % shape[i]) * strides[i];
-    elem /= shape[i];
-  }
-  return loc;
-}
-
-template <typename stride_t>
-METAL_FUNC stride_t elem_to_loc(
-    stride_t elem,
-    device const int* shape,
-    device const stride_t* strides,
     int ndim) {
   stride_t loc = 0;
   for (int i = ndim - 1; i >= 0 && elem > 0; --i) {

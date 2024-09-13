@@ -22,8 +22,8 @@ template <typename T, typename Op>
 [[kernel]] void unary_g(
     device const T* in,
     device T* out,
-    device const int* in_shape,
-    device const size_t* in_strides,
+    constant const int* in_shape,
+    constant const size_t* in_strides,
     device const int& ndim,
     uint index [[thread_position_in_grid]]) {
   auto idx = elem_to_loc(index, in_shape, in_strides, ndim);
