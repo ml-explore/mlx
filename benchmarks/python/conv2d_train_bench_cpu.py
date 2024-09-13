@@ -3,7 +3,6 @@ import time
 import mlx.core as mx
 import mlx.nn
 import mlx.optimizers as opt
-
 import torch
 
 
@@ -19,16 +18,22 @@ def bench_mlx(steps: int = 20) -> float:
             self.net = mlx.nn.Sequential(
                 mlx.nn.Conv2d(in_channels, hidden_channels, kernel_size=3, padding=1),
                 mlx.nn.ReLU(),
-                mlx.nn.Conv2d(hidden_channels, 2*hidden_channels, kernel_size=3, padding=1),
+                mlx.nn.Conv2d(
+                    hidden_channels, 2 * hidden_channels, kernel_size=3, padding=1
+                ),
                 mlx.nn.ReLU(),
-                mlx.nn.ConvTranspose2d(2*hidden_channels, hidden_channels, kernel_size=3, padding=1),
+                mlx.nn.ConvTranspose2d(
+                    2 * hidden_channels, hidden_channels, kernel_size=3, padding=1
+                ),
                 mlx.nn.ReLU(),
-                mlx.nn.ConvTranspose2d(hidden_channels, in_channels, kernel_size=3, padding=1),
+                mlx.nn.ConvTranspose2d(
+                    hidden_channels, in_channels, kernel_size=3, padding=1
+                ),
             )
 
         def __call__(self, input):
             return self.net(input)
-    
+
     benchNet = BenchNetMLX(3)
     mx.eval(benchNet.parameters())
     optim = opt.Adam(learning_rate=1e-3)
@@ -43,7 +48,7 @@ def bench_mlx(steps: int = 20) -> float:
     def loss_fn(params, image):
         benchNet.update(params)
         pred_image = benchNet(image)
-        return (pred_image-image).abs().mean()
+        return (pred_image - image).abs().mean()
 
     def step(params, image):
         loss, grads = mx.value_and_grad(loss_fn)(params, image)
@@ -60,7 +65,7 @@ def bench_mlx(steps: int = 20) -> float:
         end_time = time.perf_counter()
 
         print(f"{i:3d}, time={(end_time-start_time) * 1000:7.2f} ms")
-        total_time += (end_time-start_time) * 1000
+        total_time += (end_time - start_time) * 1000
 
     return total_time
 
@@ -77,16 +82,22 @@ def bench_torch(steps: int = 20) -> float:
             self.net = torch.nn.Sequential(
                 torch.nn.Conv2d(in_channels, hidden_channels, kernel_size=3, padding=1),
                 torch.nn.ReLU(),
-                torch.nn.Conv2d(hidden_channels, 2*hidden_channels, kernel_size=3, padding=1),
+                torch.nn.Conv2d(
+                    hidden_channels, 2 * hidden_channels, kernel_size=3, padding=1
+                ),
                 torch.nn.ReLU(),
-                torch.nn.ConvTranspose2d(2*hidden_channels, hidden_channels, kernel_size=3, padding=1),
+                torch.nn.ConvTranspose2d(
+                    2 * hidden_channels, hidden_channels, kernel_size=3, padding=1
+                ),
                 torch.nn.ReLU(),
-                torch.nn.ConvTranspose2d(hidden_channels, in_channels, kernel_size=3, padding=1),
+                torch.nn.ConvTranspose2d(
+                    hidden_channels, in_channels, kernel_size=3, padding=1
+                ),
             )
 
         def forward(self, input):
             return self.net(input)
-    
+
     benchNet = BenchNetTorch(3).to(device)
     optim = torch.optim.Adam(benchNet.parameters(), lr=1e-3)
 
@@ -109,13 +120,13 @@ def bench_torch(steps: int = 20) -> float:
         end_time = time.perf_counter()
 
         print(f"{i:3d}, time={(end_time-start_time) * 1000:7.2f} ms")
-        total_time += (end_time-start_time) * 1000
+        total_time += (end_time - start_time) * 1000
 
     return total_time
 
 
 def main():
-    steps = 20  
+    steps = 20
     time_mlx = bench_mlx(steps)
     time_torch = bench_torch(steps)
 

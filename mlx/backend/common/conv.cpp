@@ -1112,7 +1112,8 @@ void conv_3D_cpu(
     bool flip) {
   const int groups = in.shape().back() / wt.shape().back();
   if (wt_dilation[0] == 1 && wt_dilation[1] == 1 && wt_dilation[2] == 1 &&
-      in_dilation[0] == 1 && in_dilation[1] == 1 && in_dilation[2] == 1 && groups == 1) {
+      in_dilation[0] == 1 && in_dilation[1] == 1 && in_dilation[2] == 1 &&
+      groups == 1) {
     return explicit_gemm_conv_ND_cpu(
         in, wt, out, padding, wt_strides, wt_dilation, flip);
   }

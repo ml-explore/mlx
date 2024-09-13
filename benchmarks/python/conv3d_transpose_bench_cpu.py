@@ -27,7 +27,9 @@ def make_mx_conv_3D(strides=(1, 1, 1), padding=(0, 0, 0), groups=1):
     def mx_conv_3D(a, b):
         ys = []
         for i in range(N_iter_func):
-            y = mx.conv_transpose3d(a, b, stride=strides, padding=padding, groups=groups)
+            y = mx.conv_transpose3d(
+                a, b, stride=strides, padding=padding, groups=groups
+            )
             ys.append(y)
         mx.eval(ys)
         return ys
@@ -40,7 +42,9 @@ def make_pt_conv_3D(strides=(1, 1, 1), padding=(0, 0, 0), groups=1):
     def pt_conv_3D(a, b):
         ys = []
         for i in range(N_iter_func):
-            y = torch.conv_transpose3d(a, b, stride=strides, padding=padding, groups=groups)
+            y = torch.conv_transpose3d(
+                a, b, stride=strides, padding=padding, groups=groups
+            )
             ys.append(y)
         return ys
 
@@ -66,7 +70,9 @@ def bench_shape(N, D, H, W, C, kD, kH, kW, O, strides, padding, groups, np_dtype
     time_torch = bench(f_pt, a_pt, b_pt)
     time_mlx = bench(f_mx, a_mx, b_mx)
 
-    out_mx = mx.conv_transpose3d(a_mx, b_mx, stride=strides, padding=padding, groups=groups)
+    out_mx = mx.conv_transpose3d(
+        a_mx, b_mx, stride=strides, padding=padding, groups=groups
+    )
     out_pt = torch.conv_transpose3d(
         a_pt.to("cpu"), b_pt.to("cpu"), stride=strides, padding=padding, groups=groups
     )

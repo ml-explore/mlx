@@ -145,10 +145,12 @@ void copy_general_dim5(
     int64_t i_offset) {
   const SrcT* src_ptr = src.data<SrcT>() + i_offset;
   DstT* dst_ptr = dst.data<DstT>();
-  
+
   // Pre-compute loop bounds and strides
-  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2], d3 = data_shape[3], d4 = data_shape[4];
-  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2], s3 = i_strides[3], s4 = i_strides[4];
+  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2],
+            d3 = data_shape[3], d4 = data_shape[4];
+  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2],
+                 s3 = i_strides[3], s4 = i_strides[4];
 
   // Pre-compute stride adjustments
   const stride_t s3_adj = s3 - s4 * d4;
@@ -192,11 +194,11 @@ void copy_general_dim6(
     int64_t i_offset) {
   const SrcT* src_ptr = src.data<SrcT>() + i_offset;
   DstT* dst_ptr = dst.data<DstT>();
-  
+
   // Pre-compute loop bounds and strides
-  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2], 
+  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2],
             d3 = data_shape[3], d4 = data_shape[4], d5 = data_shape[5];
-  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2], 
+  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2],
                  s3 = i_strides[3], s4 = i_strides[4], s5 = i_strides[5];
 
   // Pre-compute stride adjustments
@@ -245,12 +247,12 @@ void copy_general_dim7(
     int64_t i_offset) {
   const SrcT* src_ptr = src.data<SrcT>() + i_offset;
   DstT* dst_ptr = dst.data<DstT>();
-  
+
   // Pre-compute loop bounds and strides
-  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2], 
+  const int d0 = data_shape[0], d1 = data_shape[1], d2 = data_shape[2],
             d3 = data_shape[3], d4 = data_shape[4], d5 = data_shape[5],
             d6 = data_shape[6];
-  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2], 
+  const stride_t s0 = i_strides[0], s1 = i_strides[1], s2 = i_strides[2],
                  s3 = i_strides[3], s4 = i_strides[4], s5 = i_strides[5],
                  s6 = i_strides[6];
 
