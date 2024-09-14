@@ -255,6 +255,9 @@ Group init(bool strict /* = false */) {
     }
   }
 
+  // Ensure the communication stream is alive before
+  // the graph is evaluated
+  detail::communication_stream();
   return Group(global_group);
 }
 
