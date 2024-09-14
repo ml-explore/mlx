@@ -9,7 +9,7 @@ import torch
 N_warmup = 1
 N_iter_bench = 10
 N_iter_func = 5
-mx.set_default_device(mx.DeviceType.cpu)
+mx.set_default_device(mx.cpu)
 
 
 def bench(f, a, b):

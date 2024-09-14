@@ -7,7 +7,7 @@ import torch
 
 
 def bench_mlx(steps: int = 20, shape=(10, 32, 32, 32, 3)) -> float:
-    mx.set_default_device(mx.DeviceType.cpu)
+    mx.set_default_device(mx.cpu)
 
     class BenchNetMLX(mlx.nn.Module):
         # simple encoder-decoder net

@@ -684,6 +684,26 @@ void dispatch_slow_conv_3D(
 // Explicit gemm conv
 ///////////////////////////////////////////////////////////////////////////////
 
+template <typename T>
+void flip_spatial_dims(
+    T* x,
+    size_t out_channels,
+    size_t spatial_size,
+    size_t in_channels) {
+  for (size_t i = 0; i < out_channels; i++) {
+    T* top = x + i * spatial_size * in_channels;
+    T* bottom =
+        x + i * spatial_size * in_channels + (spatial_size - 1) * in_channels;
+    for (size_t j = 0; j < spatial_size / 2; j++) {
+      for (size_t k = 0; k < in_channels; k++) {
+        std::swap(top[k], bottom[k]);
+      }
+      top += in_channels;
+      bottom -= in_channels;
+    }
+  }
+}
+
 void explicit_gemm_conv_1D_cpu(
     const array& in,
     const array& wt,
@@ -1006,8 +1026,6 @@ void explicit_gemm_conv_ND_cpu(
     copy(gemm_wt, gemm_wt_, CopyType::Vector);
 
     const int ndim = wt.ndim();
-    const int N = wt.shape(0);
-    const int C = wt.shape(ndim - 1);
 
     // Calculate the total size of the spatial dimensions
     int spatial_size = 1;
@@ -1016,12 +1034,7 @@ void explicit_gemm_conv_ND_cpu(
     }
 
     // Use vDSP to reverse the spatial dimensions for each N,C combination
-    for (int n = 0; n < N; ++n) {
-      for (int c = 0; c < C; ++c) {
-        float* src = gemm_wt_.data<float>() + (n * spatial_size * C + c);
-        vDSP_vrvrs(src, C, spatial_size);
-      }
-    }
+    flip_spatial_dims(gemm_wt_.data<float>(), O, spatial_size, C);
     gemm_wt = gemm_wt_;
   }
 
