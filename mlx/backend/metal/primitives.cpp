@@ -199,7 +199,6 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 }
 
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
-  static Stream io_stream = new_stream(Device::cpu);
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
 
   auto read_task = [out = out,
@@ -213,7 +212,7 @@ void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
     fut.wait();
     out.event().signal();
   };
-  scheduler::enqueue(io_stream, std::move(signal_task));
+  scheduler::enqueue(io_stream(), std::move(signal_task));
   auto& d = metal::device(stream().device);
   d.end_encoding(stream().index);
   auto command_buffer = d.get_command_buffer(stream().index);
