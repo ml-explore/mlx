@@ -838,7 +838,7 @@ array clip(
   if (!a_min.has_value() && !a_max.has_value()) {
     throw std::invalid_argument("At most one of a_min and a_max may be None");
   }
-  array result = astype(a, a.dtype(), s);
+  array result = a;
   if (a_min.has_value()) {
     result = maximum(result, a_min.value(), s);
   }

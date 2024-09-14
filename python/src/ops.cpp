@@ -2827,10 +2827,10 @@ void init_ops(nb::module_& m) {
         std::optional<array> min_ = std::nullopt;
         std::optional<array> max_ = std::nullopt;
         if (min) {
-          min_ = to_array(min.value());
+          min_ = to_arrays(a, min.value()).second;
         }
         if (max) {
-          max_ = to_array(max.value());
+          max_ = to_arrays(a, max.value()).second;
         }
         return clip(a, min_, max_, s);
       },
