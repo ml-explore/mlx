@@ -114,7 +114,7 @@ DEFAULT(Tanh)
 DEFAULT(Transpose)
 DEFAULT(Inverse)
 DEFAULT(Cholesky)
-DEFAULT(EighPrimitive)
+DEFAULT_MULTI(EighPrimitive)
 
 namespace {
 
