@@ -685,11 +685,17 @@ void dispatch_slow_conv_3D(
 ///////////////////////////////////////////////////////////////////////////////
 
 template <typename T>
-void flip_spatial_dims(
-    T* x,
-    size_t out_channels,
-    size_t spatial_size,
-    size_t in_channels) {
+void flip_spatial_dims_inplace(array& wt) {
+  T* x = wt.data<T>();
+  size_t out_channels = wt.shape(0);
+  size_t in_channels = wt.shape(-1);
+
+  // Calculate the total size of the spatial dimensions
+  int spatial_size = 1;
+  for (int d = 1; d < wt.ndim() - 1; ++d) {
+    spatial_size *= wt.shape(d);
+  }
+
   for (size_t i = 0; i < out_channels; i++) {
     T* top = x + i * spatial_size * in_channels;
     T* bottom =
@@ -1025,16 +1031,7 @@ void explicit_gemm_conv_ND_cpu(
     auto gemm_wt_ = array(gemm_wt.shape(), float32, nullptr, {});
     copy(gemm_wt, gemm_wt_, CopyType::Vector);
 
-    const int ndim = wt.ndim();
-
-    // Calculate the total size of the spatial dimensions
-    int spatial_size = 1;
-    for (int d = 1; d < ndim - 1; ++d) {
-      spatial_size *= wt.shape(d);
-    }
-
-    // Use vDSP to reverse the spatial dimensions for each N,C combination
-    flip_spatial_dims(gemm_wt_.data<float>(), O, spatial_size, C);
+    flip_spatial_dims_inplace<float>(gemm_wt_);
     gemm_wt = gemm_wt_;
   }
 
