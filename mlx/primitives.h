@@ -2196,36 +2196,21 @@ class Cholesky : public UnaryPrimitive {
   bool upper_;
 };
 
-class Eigvalsh : public UnaryPrimitive {
+class EighPrimitive : public Primitive {
  public:
-  explicit Eigvalsh(Stream stream, bool upper)
-      : UnaryPrimitive(stream), upper_(upper) {}
+  explicit EighPrimitive(Stream stream, bool upper, bool compute_eigenvectors)
+      : Primitive(stream), upper_(upper), compute_eigenvectors_(compute_eigenvectors) {}
 
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs) override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs) override;
 
   DEFINE_VMAP()
-  DEFINE_PRINT(Eigvalsh)
+  DEFINE_PRINT(EighPrimitive)
 
  private:
-  void eval(const std::vector<array>& inputs, array& output);
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
   bool upper_;
-};
-
-class Eigh : public UnaryPrimitive {
- public:
-  explicit Eigh(Stream stream, bool upper)
-      : UnaryPrimitive(stream), upper_(upper) {}
-
-  void eval_cpu(const std::vector<array>& inputs, array& out) override;
-  void eval_gpu(const std::vector<array>& inputs, array& out) override;
-
-  DEFINE_VMAP()
-  DEFINE_PRINT(Eigh)
-
- private:
-  void eval(const std::vector<array>& inputs, array& output);
-  bool upper_;
+  bool compute_eigenvectors_;
 };
 
 } // namespace mlx::core

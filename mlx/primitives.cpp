@@ -767,20 +767,30 @@ std::pair<std::vector<array>, std::vector<int>> Cholesky::vmap(
   return {{linalg::cholesky(a, upper_, stream())}, {ax}};
 }
 
-std::pair<std::vector<array>, std::vector<int>> Eigvalsh::vmap(
+std::pair<std::vector<array>, std::vector<int>> EighPrimitive::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  
   auto ax = axes[0] >= 0 ? 0 : -1;
   auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
-  return {{linalg::eigvalsh(a, upper_, stream())}, {ax}};
-}
-
-std::pair<std::vector<array>, std::vector<int>> Eigh::vmap(
-    const std::vector<array>& inputs,
-    const std::vector<int>& axes) {
-  auto ax = axes[0] >= 0 ? 0 : -1;
-  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
-  return {{linalg::eigh(a, upper_, stream())}, {ax}};
+  
+  array values, vectors;
+  linalg::eigh_impl(a, values, vectors, upper_, compute_eigenvectors_);
+  
+  std::vector<array> outputs;
+  std::vector<int> out_axes;
+  
+  outputs.push_back(values);
+  out_axes.push_back(ax);
+  
+  if (compute_eigenvectors_) {
+    outputs.push_back(vectors);
+    out_axes.push_back(ax);
+  }
+  
+  return {outputs, out_axes};
 }
 
 std::vector<array> Concatenate::vjp(
