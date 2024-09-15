@@ -85,6 +85,6 @@ array cross(
 
 array eigvalsh(const array& a, bool upper = false, StreamOrDevice s = {});
 
-array eigh(const array& a, bool upper = false, StreamOrDevice s = {});
+std::pair<array, array> eigh(const array& a, bool upper = false, StreamOrDevice s = {});
 
 } // namespace mlx::core::linalg
