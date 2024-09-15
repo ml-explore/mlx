@@ -23,11 +23,22 @@ void free(Buffer buffer) {
 }
 
 Buffer CommonAllocator::malloc(size_t size, bool) {
-  return Buffer{std::malloc(size)};
+  void* ptr = std::malloc(size + sizeof(size_t));
+  if (ptr != nullptr) {
+    *static_cast<size_t*>(ptr) = size;
+  }
+  return Buffer{ptr};
 }
 
 void CommonAllocator::free(Buffer buffer) {
-  std::free(buffer.raw_ptr());
+  std::free(buffer.ptr());
+}
+
+size_t CommonAllocator::size(Buffer buffer) const {
+  if (buffer.ptr() == nullptr) {
+    return 0;
+  }
+  return *static_cast<size_t*>(buffer.ptr());
 }
 
 Buffer malloc_or_wait(size_t size) {

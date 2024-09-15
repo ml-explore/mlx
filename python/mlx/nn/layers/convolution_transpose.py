@@ -7,8 +7,8 @@ import mlx.core as mx
 from mlx.nn.layers.base import Module
 
 
-class Conv1d(Module):
-    """Applies a 1-dimensional convolution over the multi-channel input sequence.
+class ConvTranspose1d(Module):
+    """Applies a 1-dimensional transposed convolution over the multi-channel input sequence.
 
     The channels are expected to be last i.e. the input shape should be ``NLC`` where:
 
@@ -63,14 +63,16 @@ class Conv1d(Module):
         )
 
     def __call__(self, x):
-        y = mx.conv1d(x, self.weight, self.stride, self.padding, self.dilation)
+        y = mx.conv_transpose1d(
+            x, self.weight, self.stride, self.padding, self.dilation
+        )
         if "bias" in self:
             y = y + self.bias
         return y
 
 
-class Conv2d(Module):
-    """Applies a 2-dimensional convolution over the multi-channel input image.
+class ConvTranspose2d(Module):
+    """Applies a 2-dimensional transposed convolution over the multi-channel input image.
 
     The channels are expected to be last i.e. the input shape should be ``NHWC`` where:
 
@@ -130,14 +132,16 @@ class Conv2d(Module):
         )
 
     def __call__(self, x):
-        y = mx.conv2d(x, self.weight, self.stride, self.padding, self.dilation)
+        y = mx.conv_transpose2d(
+            x, self.weight, self.stride, self.padding, self.dilation
+        )
         if "bias" in self:
             y = y + self.bias
         return y
 
 
-class Conv3d(Module):
-    """Applies a 3-dimensional convolution over the multi-channel input image.
+class ConvTranspose3d(Module):
+    """Applies a 3-dimensional transposed convolution over the multi-channel input image.
 
     The channels are expected to be last i.e. the input shape should be ``NDHWC`` where:
 
@@ -196,7 +200,7 @@ class Conv3d(Module):
         )
 
     def __call__(self, x):
-        y = mx.conv3d(x, self.weight, self.stride, self.padding)
+        y = mx.conv_transpose3d(x, self.weight, self.stride, self.padding)
         if "bias" in self:
             y = y + self.bias
         return y

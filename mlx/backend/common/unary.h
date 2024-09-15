@@ -12,7 +12,7 @@ namespace mlx::core {
 namespace {
 
 void set_unary_output_data(const array& in, array& out) {
-  if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+  if (is_donatable(in, out)) {
     out.copy_shared_buffer(in);
   } else {
     auto size = in.data_size();

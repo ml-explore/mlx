@@ -17,9 +17,8 @@ void CustomKernel::eval_gpu(
   for (auto& out : outputs) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     if (init_value_) {
-      array init = array(init_value_.value(), out.dtype());
-      copy_gpu(init, out, CopyType::Scalar, s);
-      copies.push_back(init);
+      copies.emplace_back(init_value_.value(), out.dtype());
+      fill_gpu(copies.back(), out, s);
     }
   }
 

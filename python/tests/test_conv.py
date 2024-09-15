@@ -866,6 +866,37 @@ class TestConv(mlx_tests.MLXTestCase):
             flip=flip,
         )
 
+    def test_conv_general_flip_grad(self):
+        for s in (1, 2):
+            w = mx.random.normal(shape=(1, 2, 2, 1))
+            x = mx.random.normal(shape=(1, 2, 2, 1))
+
+            def conv_t(w):
+                return mx.conv_general(
+                    x,
+                    w,
+                    stride=1,
+                    padding=(1, 1),
+                    kernel_dilation=1,
+                    input_dilation=s,
+                    flip=True,
+                )
+
+            cotan = mx.random.normal(shape=(1, 2 + s, 2 + s, 1))
+
+            dw = mx.vjp(conv_t, (w,), (cotan,))[1][0]
+
+            x = x.squeeze()
+            cotan = cotan.squeeze()
+            dw = dw.squeeze()
+
+            dw00 = (cotan[:-1:s, :-1:s] * x).sum()
+            dw01 = (cotan[:-1:s, 1::s] * x).sum()
+            dw10 = (cotan[1::s, :-1:s] * x).sum()
+            dw11 = (cotan[1::s, 1::s] * x).sum()
+            expected = mx.array([[dw00, dw01], [dw10, dw11]])
+            self.assertTrue(mx.allclose(dw, expected))
+
 
 if __name__ == "__main__":
     unittest.main()

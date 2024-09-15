@@ -56,6 +56,7 @@ class MetalAllocator : public allocator::Allocator {
  public:
   virtual Buffer malloc(size_t size, bool allow_swap = false) override;
   virtual void free(Buffer buffer) override;
+  virtual size_t size(Buffer buffer) const override;
   size_t get_active_memory() {
     return active_memory_;
   };

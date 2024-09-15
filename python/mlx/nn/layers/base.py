@@ -112,6 +112,7 @@ class Module(dict):
             self[key] = val
         else:
             super(Module, self).__setattr__(key, val)
+            self.pop(key, None)
 
     def load_weights(
         self,

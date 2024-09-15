@@ -1125,7 +1125,7 @@ void Convolution::eval(const std::vector<array>& inputs, array& out) {
   else {
     std::ostringstream msg;
     msg << "[Convolution::eval] Convolution currently only supports"
-        << " 1D and 2D convolutions. Got inputs with " << in.ndim() - 2
+        << " 1D, 2D and 3D convolutions. Got inputs with " << in.ndim() - 2
         << " spatial dimensions";
     throw std::invalid_argument(msg.str());
   }

@@ -1116,6 +1116,22 @@ void init_array(nb::module_& m) {
           "stream"_a = nb::none(),
           "See :func:`mean`.")
       .def(
+          "std",
+          [](const array& a,
+             const IntOrVec& axis,
+             bool keepdims,
+             int ddof,
+             StreamOrDevice s) {
+            return mlx::core::std(
+                a, get_reduce_axes(axis, a.ndim()), keepdims, ddof, s);
+          },
+          "axis"_a = nb::none(),
+          "keepdims"_a = false,
+          "ddof"_a = 0,
+          nb::kw_only(),
+          "stream"_a = nb::none(),
+          "See :func:`std`.")
+      .def(
           "var",
           [](const array& a,
              const IntOrVec& axis,

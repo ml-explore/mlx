@@ -314,7 +314,7 @@ class Transformer(Module):
         norm_first (bool, optional): if ``True``, encoder and decoder layers
             will perform layer normalization before attention and MLP
             operations, otherwise after. Default: ``True``.
-        chekpoint (bool, optional): if ``True`` perform gradient checkpointing
+        checkpoint (bool, optional): if ``True`` perform gradient checkpointing
             to reduce the memory usage at the expense of more computation.
             Default: ``False``.
     """

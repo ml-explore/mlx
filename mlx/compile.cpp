@@ -306,21 +306,27 @@ std::pair<std::vector<array>, std::vector<array>> compile_trace(
 // Traverses the graph to build a tape and a map of array ids to their parents
 std::pair<std::vector<array>, ParentsMap> compile_dfs(
     const std::vector<array>& inputs,
-    const std::vector<array>& outputs) {
+    const std::vector<array>& outputs,
+    const std::vector<array>& original_inputs) {
   std::function<void(const array&)> recurse;
   std::vector<array> tape;
   std::unordered_set<std::uintptr_t> input_set;
+  std::unordered_set<std::uintptr_t> original_input_set;
   std::unordered_map<std::uintptr_t, std::vector<std::pair<array, int>>>
       parents_map;
   for (int i = 0; i < inputs.size(); ++i) {
-    auto in = inputs[i];
-    input_set.insert(in.id());
+    input_set.insert(inputs[i].id());
+    original_input_set.insert(original_inputs[i].id());
   }
 
   // DFS the graph to build the tape, and log parents and scalars
   std::unordered_set<std::uintptr_t> cache;
   recurse = [&](const array& a) {
     auto id = a.id();
+    if (original_input_set.find(id) != original_input_set.end()) {
+      throw std::invalid_argument(
+          "[compile] Attempting to compile a function with uncaptured inputs is not allowed.");
+    }
     if (cache.find(id) != cache.end()) {
       return;
     }
@@ -833,7 +839,7 @@ std::function<std::vector<array>(const std::vector<array>&)> compile(
       std::unordered_map<uintptr_t, std::vector<std::pair<array, int>>>
           parents_map;
       std::tie(entry.tape, parents_map) =
-          compile_dfs(entry.inputs, entry.outputs);
+          compile_dfs(entry.inputs, entry.outputs, inputs);
 
       // Simplify the tape
       if (compile_mode() != CompileMode::no_simplify) {

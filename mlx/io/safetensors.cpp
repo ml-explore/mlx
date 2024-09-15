@@ -147,7 +147,7 @@ SafetensorsLoad load_safetensors(
 }
 
 SafetensorsLoad load_safetensors(const std::string& file, StreamOrDevice s) {
-  return load_safetensors(std::make_shared<io::ParallelFileReader>(file, 4), s);
+  return load_safetensors(std::make_shared<io::ParallelFileReader>(file), s);
 }
 
 void save_safetensors(

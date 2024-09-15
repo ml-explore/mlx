@@ -10,7 +10,7 @@ Allocator& allocator() {
 }
 
 void* Buffer::raw_ptr() {
-  return ptr_;
+  return static_cast<size_t*>(ptr_) + 1;
 }
 
 } // namespace mlx::core::allocator

@@ -41,6 +41,7 @@ class Allocator {
  public:
   virtual Buffer malloc(size_t size, bool allow_swap = false) = 0;
   virtual void free(Buffer buffer) = 0;
+  virtual size_t size(Buffer buffer) const = 0;
 
   Allocator() = default;
   Allocator(const Allocator& other) = delete;
@@ -57,6 +58,7 @@ class CommonAllocator : public Allocator {
  public:
   virtual Buffer malloc(size_t size, bool allow_swap = false) override;
   virtual void free(Buffer buffer) override;
+  virtual size_t size(Buffer buffer) const override;
 
  private:
   CommonAllocator() = default;

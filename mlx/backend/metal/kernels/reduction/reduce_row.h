@@ -193,7 +193,7 @@ template <
     typename T,
     typename U,
     typename Op,
-    int NDIMS = 0,
+    int NDIMS,
     int N_READS = REDUCE_N_READS>
 [[kernel]] void row_reduce_small(
     const device T* in [[buffer(0)]],
@@ -306,7 +306,7 @@ template <
     typename T,
     typename U,
     typename Op,
-    int NDIMS = 0,
+    int NDIMS,
     int N_READS = REDUCE_N_READS>
 [[kernel]] void row_reduce_looped(
     const device T* in [[buffer(0)]],

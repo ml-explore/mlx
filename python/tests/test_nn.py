@@ -67,6 +67,12 @@ class TestBase(mlx_tests.MLXTestCase):
         model = Model()
         self.assertTrue(mx.array_equal(model.val, mx.array(1.0)))
 
+        model.val = None
+        self.assertEqual(model.val, None)
+
+        model.val = mx.array([3])
+        self.assertEqual(model.val.item(), 3)
+
     def test_model_with_dict(self):
         class DictModule(nn.Module):
             def __init__(self):

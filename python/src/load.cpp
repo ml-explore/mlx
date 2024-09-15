@@ -138,6 +138,21 @@ class PyFileReader : public io::Reader {
 
   void read(char* data, size_t n) override {
     nb::gil_scoped_acquire gil;
+    _read(data, n);
+  }
+
+  void read(char* data, size_t n, size_t offset) override {
+    nb::gil_scoped_acquire gil;
+    seek_func_(offset, (int)std::ios_base::beg);
+    _read(data, n);
+  }
+
+  std::string label() const override {
+    return "python file object";
+  }
+
+ private:
+  void _read(char* data, size_t n) {
     auto memview = PyMemoryView_FromMemory(data, n, PyBUF_WRITE);
     nb::object bytes_read = readinto_func_(nb::handle(memview));
 
@@ -146,16 +161,6 @@ class PyFileReader : public io::Reader {
     }
   }
 
-  void read(char* data, size_t n, size_t offset) override {
-    seek(offset);
-    read(data, n);
-  }
-
-  std::string label() const override {
-    return "python file object";
-  }
-
- private:
   nb::object pyistream_;
   nb::object readinto_func_;
   nb::object seek_func_;
