@@ -776,19 +776,15 @@ std::pair<std::vector<array>, std::vector<int>> EighPrimitive::vmap(
   auto ax = axes[0] >= 0 ? 0 : -1;
   auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
   
-  array values, vectors;
-  linalg::eigh_impl(a, values, vectors, upper_, compute_eigenvectors_);
-  
   std::vector<array> outputs;
-  std::vector<int> out_axes;
-  
-  outputs.push_back(values);
-  out_axes.push_back(ax);
-  
   if (compute_eigenvectors_) {
-    outputs.push_back(vectors);
-    out_axes.push_back(ax);
+    auto [values, vectors] = linalg::eigh(a, upper_, stream());
+    outputs = {values, vectors};
+  } else {
+    outputs = {linalg::eigvalsh(a, upper_, stream())};
   }
+  
+  std::vector<int> out_axes(outputs.size(), ax);
   
   return {outputs, out_axes};
 }

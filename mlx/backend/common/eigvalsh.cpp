@@ -1,5 +1,6 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#include "mlx/array.h" 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/linalg.h"
@@ -148,14 +149,32 @@ void eigh_impl(
 void EighPrimitive::eval(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
-  if (inputs[0].dtype() != float32) {
-    throw std::runtime_error("[EighPrimitive::eval] only supports float32.");
+  // Validate the number of inputs
+  if (inputs.size() != 1) {
+    throw std::invalid_argument("[EighPrimitive::eval] Expected exactly one input array.");
   }
 
-  array values, vectors;
-  eigh_impl(inputs[0], values, vectors, upper_, compute_eigenvectors_);
+  const array& input = inputs[0];
 
+  // Ensure the input array is evaluated before accessing its data
+  const_cast<array&>(input).eval();
+
+  // Validate the data type
+  Dtype input_dtype = input.dtype();  // Changed from 'dtype_t' to 'Dtype'
+
+  // Validate the number of dimensions (expecting at least 2D)
+  if (input.ndim() < 2) {
+    throw std::invalid_argument("[EighPrimitive::eval] Input array must be at least 2-dimensional.");
+  }
+
+  array values{};
+  array vectors{};
+  eigh_impl(input, values, vectors, upper_, compute_eigenvectors_);
+
+  // Ensure the output arrays are evaluated
+  values.eval();
   if (compute_eigenvectors_) {
+    vectors.eval();
     outputs = {values, vectors};
   } else {
     outputs = {values};

@@ -2195,7 +2195,6 @@ class Cholesky : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& output);
   bool upper_;
 };
-
 class EighPrimitive : public Primitive {
  public:
   explicit EighPrimitive(Stream stream, bool upper, bool compute_eigenvectors)
@@ -2206,6 +2205,24 @@ class EighPrimitive : public Primitive {
 
   DEFINE_VMAP()
   DEFINE_PRINT(EighPrimitive)
+
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override {
+    auto shape = inputs[0].shape();
+    shape.pop_back();  // Remove last dimension for eigenvalues
+    if (compute_eigenvectors_) {
+      return {shape, inputs[0].shape()};  // Eigenvalues and eigenvectors
+    } else {
+      return {shape};  // Only eigenvalues
+    }
+  }
+
+  bool is_equivalent(const Primitive& other) const override {
+    if (auto* p = dynamic_cast<const EighPrimitive*>(&other)) {
+      return upper_ == p->upper_ && compute_eigenvectors_ == p->compute_eigenvectors_;
+    }
+    return false;
+  }
 
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
