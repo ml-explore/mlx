@@ -401,12 +401,8 @@ void Cholesky::eval_gpu(const std::vector<array>& inputs, array& out) {
       "[Cholesky::eval_gpu] Metal Cholesky decomposition NYI.");
 }
 
-void Eigvalsh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  throw std::runtime_error("[Eigvalsh::eval_gpu] Metal Eigvalsh NYI.");
-}
-
-void Eigh::eval_gpu(const std::vector<array>& inputs, array& out) {
-  throw std::runtime_error("[Eigh::eval_gpu] Metal Eigh NYI.");
+void EighPrimitive::eval_gpu(const std::vector<array>& inputs, array& out) {
+  throw std::runtime_error("[Eigvalsh::eval_gpu] Metal EighPrimitive NYI.");
 }
 
 void View::eval_gpu(const std::vector<array>& inputs, array& out) {

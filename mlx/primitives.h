@@ -2195,6 +2195,7 @@ class Cholesky : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& output);
   bool upper_;
 };
+
 class EighPrimitive : public Primitive {
  public:
   explicit EighPrimitive(Stream stream, bool upper, bool compute_eigenvectors)
