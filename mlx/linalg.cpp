@@ -485,11 +485,11 @@ array eigvalsh(
   return array(
       out_shape,
       a.dtype(),
-      std::make_shared<Eigvalsh>(to_stream(s), upper),
+      std::make_shared<EighPrimitive>(to_stream(s), upper, false),
       {astype(a, a.dtype(), s)});
 }
 
-array eigh(
+std::pair<array, array> eigh(
     const array& a,
     bool upper /* = false */,
     StreamOrDevice s /* = {} */) {
@@ -513,11 +513,12 @@ array eigh(
         "[linalg::eigh] Eigenvectors are only defined for square matrices.");
   }
 
-  return array(
-      a.shape(),
-      a.dtype(),
-      std::make_shared<Eigh>(to_stream(s), upper),
+  auto out = array::make_arrays(
+      {std::vector<int>(a.shape().begin(), a.shape().end() - 1), a.shape()},
+      {a.dtype(), a.dtype()},
+      std::make_shared<EighPrimitive>(to_stream(s), upper, true),
       {astype(a, a.dtype(), s)});
+  return std::make_pair(out[0], out[1]);
 }
 
 } // namespace mlx::core::linalg
