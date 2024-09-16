@@ -391,7 +391,7 @@ TEST_CASE("test matrix pseudo-inverse") {
   }
 }
 
-TEST_CASE("[mlx.core.linalg.cross_product] basic tests") {
+TEST_CASE("test cross product") {
   using namespace mlx::core::linalg;
 
   // Test for vectors of length 3
@@ -401,7 +401,7 @@ TEST_CASE("[mlx.core.linalg.cross_product] basic tests") {
   array expected = array(
       {2.0 * 6.0 - 3.0 * 5.0, 3.0 * 4.0 - 1.0 * 6.0, 1.0 * 5.0 - 2.0 * 4.0});
 
-  array result = cross_product(a, b);
+  array result = cross(a, b);
   CHECK(allclose(result, expected).item<bool>());
 
   // Test for vectors of length 3 with negative values
@@ -413,28 +413,25 @@ TEST_CASE("[mlx.core.linalg.cross_product] basic tests") {
        -3.0 * 4.0 - (-1.0 * 6.0),
        -1.0 * -5.0 - (-2.0 * 4.0)});
 
-  result = cross_product(a, b);
+  result = cross(a, b);
   CHECK(allclose(result, expected).item<bool>());
 
   // Test for incorrect vector size (should throw)
-  array c = array({1.0, 2.0});
-  CHECK_THROWS(cross_product(a, c));
+  b = array({1.0, 2.0});
+  expected = array(
+      {-2.0 * 0.0 - (-3.0 * 2.0),
+       -3.0 * 1.0 - (-1.0 * 0.0),
+       -1.0 * 2.0 - (-2.0 * 1.0)});
+
+  result = cross(a, b);
+  CHECK(allclose(result, expected).item<bool>());
 
   // Test for vectors of length 3 with integer values
   a = array({1, 2, 3});
   b = array({4, 5, 6});
 
-  expected = array({
-    2 * 6 - 3 * 5,
-    3 * 4 - 1 * 6,
-    1 * 5 - 2 * 4
-  });
+  expected = array({2 * 6 - 3 * 5, 3 * 4 - 1 * 6, 1 * 5 - 2 * 4});
 
-  result = cross_product(a, b);
+  result = cross(a, b);
   CHECK(allclose(result, expected).item<bool>());
-
-  // Test for vectors of different data types (should throw)
-  array d = array({1.0, 2.0, 3.0}, dtype = float32);
-  array e = array({4, 5, 6}, dtype = int32);
-  CHECK_THROWS(cross_product(d, e));
 }

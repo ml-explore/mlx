@@ -316,7 +316,6 @@ void init_linalg(nb::module_& parent_module) {
           ``U`` matrix such that ``dot(U.T, U) = a``.
       )pbdoc");
   m.def(
-<<<<<<< HEAD
       "cholesky_inv",
       &cholesky_inv,
       "a"_a,
@@ -379,24 +378,27 @@ void init_linalg(nb::module_& parent_module) {
             array: ``aplus`` such that ``a @ aplus @ a = a``
       )pbdoc");
   m.def(
-      "cross_product",
-      &cross_product,
+      "cross",
+      &cross,
       "a"_a,
       "b"_a,
       "axis"_a = -1,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def cross_product(a: array, b: array, *, axis: int = -1, stream: Union[None, Stream, Device] = None) -> array"),
+          "def cross(a: array, b: array, axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Compute the cross product of two vectors along a specified axis.
-        The cross product is defined only for dimensions with 3 elements along the specified axis.
-        The function requires both input arrays to be of the same shape.
+        Compute the cross product of two arrays along a specified axis.
+
+        The cross product is defined for arrays with size 2 or 3 in the
+        specified axis. If the size is 2 then the third value is assumed
+        to be zero.
 
         Args:
             a (array): Input array.
             b (array): Input array.
-            axis (int, optional): Axis along which to compute the cross product. Default is the last axis.
+            axis (int, optional): Axis along which to compute the cross
+              product. Default: ``-1``.
             stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
