@@ -43,12 +43,8 @@ if(MLX_METAL_JIT)
   make_jit_source(scan)
   make_jit_source(sort)
   make_jit_source(
-    reduce
-    kernels/reduction/reduce_all.h
-    kernels/reduction/reduce_col.h
-    kernels/reduction/reduce_row.h
-    kernels/reduction/reduce_init.h
-  )
+    reduce kernels/reduction/reduce_all.h kernels/reduction/reduce_col.h
+    kernels/reduction/reduce_row.h kernels/reduction/reduce_init.h)
   make_jit_source(
     steel/gemm/gemm kernels/steel/utils.h kernels/steel/gemm/loader.h
     kernels/steel/gemm/mma.h kernels/steel/gemm/params.h
