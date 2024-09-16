@@ -81,7 +81,7 @@ class RNN(Module):
         all_hidden = []
         for idx in range(x.shape[-2]):
             if hidden is not None:
-                hidden = x[..., idx, :] + hidden @ self.Whh.T
+                hidden = mx.addmm(x[..., idx, :], hidden, self.Whh.T)
             else:
                 hidden = x[..., idx, :]
             hidden = self.nonlinearity(hidden)
@@ -269,7 +269,7 @@ class LSTM(Module):
         for idx in range(x.shape[-2]):
             ifgo = x[..., idx, :]
             if hidden is not None:
-                ifgo = ifgo + hidden @ self.Wh.T
+                ifgo = mx.addmm(ifgo, hidden, self.Wh.T)
             i, f, g, o = mx.split(ifgo, 4, axis=-1)
 
             i = mx.sigmoid(i)
