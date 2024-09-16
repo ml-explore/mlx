@@ -62,9 +62,9 @@ cmake_policy(SET CMP0135 NEW)
 add_library(mlx)
 
 if (MLX_BUILD_METAL)
-  find_library(METAL_LIB Metal)
-  find_library(FOUNDATION_LIB Foundation)
-  find_library(QUARTZ_LIB QuartzCore)
+  set(METAL_LIB "-framework Metal")
+  set(FOUNDATION_LIB "-framework Foundation")
+  set(QUARTZ_LIB "-framework QuartzCore")
 endif()
 
 if (MLX_BUILD_METAL AND NOT METAL_LIB)
