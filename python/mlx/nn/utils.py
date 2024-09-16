@@ -110,7 +110,7 @@ def average_gradients(
         return tree_map(_average, gradients)
 
     else:
-        flat_grads = sorted(tree_flatten(gradients), key=lambda x: x[0])
+        flat_grads = tree_flatten(gradients)
         if len(flat_grads) == 0:
             return gradients
 
