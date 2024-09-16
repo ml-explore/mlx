@@ -203,7 +203,7 @@ FetchContent_Declare(fmt
   EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(fmt)
-target_link_libraries(mlx PRIVATE fmt::fmt-header-only)
+target_link_libraries(mlx PRIVATE $<BUILD_INTERFACE:fmt::fmt-header-only>)
 
 if (MLX_BUILD_PYTHON_BINDINGS)
   message(STATUS "Building Python bindings.")
@@ -251,6 +251,7 @@ install(
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     COMPONENT headers
     FILES_MATCHING PATTERN "*.h"
+    PATTERN "backend/metal/kernels.h" EXCLUDE
 )
 
 # Install metal dependencies
