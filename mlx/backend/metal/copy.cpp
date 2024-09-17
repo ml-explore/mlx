@@ -98,12 +98,9 @@ void copy_gpu_inplace(
     if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
       if (shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
         kname << shape.size();
-      } else if (shape[ndim - 1] % 4 == 0) {
+      } else if (shape[ndim - 1] >= 4) {
         work_per_thread = 4;
         kname << "_n4";
-      } else if (shape[ndim - 1] % 2 == 0) {
-        work_per_thread = 2;
-        kname << "_n2";
       }
     }
     kname << "_copy";
@@ -144,7 +141,7 @@ void copy_gpu_inplace(
 
     if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
       compute_encoder->setBytes(&ndim, sizeof(int), 5);
-      dim0 /= work_per_thread;
+      dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     }
 
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32

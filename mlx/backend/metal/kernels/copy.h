@@ -82,10 +82,17 @@ template <typename T, typename U, int N = 1>
     uint3 grid_dim [[threads_per_grid]]) {
   auto src_idx = elem_to_loc(
       {N * index.x, index.y, index.z}, src_shape, src_strides, ndim);
+  if (N == 1) {
+    int64_t dst_idx =
+        index.x + grid_dim.x * (index.y + int64_t(grid_dim.y) * index.z);
+    dst[dst_idx] = static_cast<U>(src[src_idx]);
+    return;
+  }
+  auto xshape = src_shape[ndim - 1];
   int64_t dst_idx =
-      N * (index.x + grid_dim.x * (index.y + int64_t(grid_dim.y) * index.z));
+      N * index.x + xshape * (index.y + int64_t(grid_dim.y) * index.z);
   auto src_xstride = src_strides[ndim - 1];
-  for (int i = 0; i < N; ++i) {
+  for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
     dst[dst_idx + i] = static_cast<U>(src[src_idx]);
     src_idx += src_xstride;
   }
@@ -142,9 +149,14 @@ template <typename T, typename U, int N = 1>
       src_strides,
       dst_strides,
       ndim);
+  if (N == 1) {
+    dst[idx.y] = static_cast<U>(src[idx.x]);
+    return;
+  }
   auto src_xstride = src_strides[ndim - 1];
   auto dst_xstride = dst_strides[ndim - 1];
-  for (int i = 0; i < N; ++i) {
+  auto xshape = src_shape[ndim - 1];
+  for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
     dst[idx.y] = static_cast<U>(src[idx.x]);
     idx.x += src_xstride;
     idx.y += dst_xstride;
