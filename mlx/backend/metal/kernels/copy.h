@@ -71,20 +71,6 @@ template <typename T, typename U>
   dst[dst_idx] = static_cast<U>(src[src_idx]);
 }
 
-template <typename T, typename U, int DIM>
-[[kernel]] void copy_g_nd(
-    device const T* src [[buffer(0)]],
-    device U* dst [[buffer(1)]],
-    constant const int* src_shape [[buffer(2)]],
-    constant const int64_t* src_strides [[buffer(3)]],
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {
-  auto src_idx = elem_to_loc_nd<DIM>(index, src_shape, src_strides);
-  int64_t dst_idx =
-      index.x + (int64_t)grid_dim.x * (index.y + (int64_t)grid_dim.y * index.z);
-  dst[dst_idx] = static_cast<U>(src[src_idx]);
-}
-
 template <typename T, typename U>
 [[kernel]] void copy_g(
     device const T* src [[buffer(0)]],
@@ -133,19 +119,6 @@ template <typename T, typename U>
     uint3 index [[thread_position_in_grid]]) {
   auto src_idx = elem_to_loc_3(index, src_strides);
   auto dst_idx = elem_to_loc_3(index, dst_strides);
-  dst[dst_idx] = static_cast<U>(src[src_idx]);
-}
-
-template <typename T, typename U, int DIM>
-[[kernel]] void copy_gg_nd(
-    device const T* src [[buffer(0)]],
-    device U* dst [[buffer(1)]],
-    constant const int* src_shape [[buffer(2)]],
-    constant const int64_t* src_strides [[buffer(3)]],
-    constant const int64_t* dst_strides [[buffer(4)]],
-    uint3 index [[thread_position_in_grid]]) {
-  auto src_idx = elem_to_loc_nd<DIM>(index, src_shape, src_strides);
-  auto dst_idx = elem_to_loc_nd<DIM>(index, src_shape, dst_strides);
   dst[dst_idx] = static_cast<U>(src[src_idx]);
 }
 

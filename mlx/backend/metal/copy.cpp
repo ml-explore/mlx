@@ -10,7 +10,7 @@
 
 namespace mlx::core {
 
-constexpr int MAX_COPY_SPECIALIZED_DIMS = 5;
+constexpr int MAX_COPY_SPECIALIZED_DIMS = 3;
 
 void copy_gpu(const array& in, array& out, CopyType ctype, const Stream& s) {
   if (ctype == CopyType::Vector) {
@@ -59,10 +59,20 @@ void copy_gpu_inplace(
   }
 
   // Try to collapse contiguous dims
-  auto [shape, strides] = collapse_contiguous_dims(
-      data_shape, std::vector{strides_in_pre, strides_out_pre});
-  auto& strides_in_ = strides[0];
-  auto& strides_out_ = strides[1];
+  auto maybe_collapse =
+      [ctype, &data_shape, &strides_in_pre, &strides_out_pre]() {
+        if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+          auto [shape, strides] = collapse_contiguous_dims(
+              data_shape,
+              std::vector{strides_in_pre, strides_out_pre},
+              /* size_cap = */ INT32_MAX);
+          return std::make_tuple(shape, strides[0], strides[1]);
+        } else {
+          std::vector<stride_t> e;
+          return std::make_tuple(std::vector<int>{}, e, e);
+        }
+      };
+  auto [shape, strides_in_, strides_out_] = maybe_collapse();
 
   bool use_2d = out.data_size() > UINT32_MAX;
   auto& d = metal::device(s.device);
