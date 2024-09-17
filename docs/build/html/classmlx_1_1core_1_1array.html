@@ -232,6 +232,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:ab3daf04c27c4593d9d73c397b8484a08"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a634466ce661485394f2fdc3bd6796bcd" id="r_a634466ce661485394f2fdc3bd6796bcd"><td class="memItemLeft" align="right" valign="top">const <a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">allocator::Buffer</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a634466ce661485394f2fdc3bd6796bcd">buffer</a> () const</td></tr>
 <tr class="separator:a634466ce661485394f2fdc3bd6796bcd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a914577c63755b2e862d2da68bbf8e3dd" id="r_a914577c63755b2e862d2da68bbf8e3dd"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a914577c63755b2e862d2da68bbf8e3dd">buffer_size</a> () const</td></tr>
+<tr class="separator:a914577c63755b2e862d2da68bbf8e3dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab84c792117e29cdf90ef3433303f6141" id="r_ab84c792117e29cdf90ef3433303f6141"><td class="memItemLeft" align="right" valign="top">std::shared_ptr&lt; <a class="el" href="structmlx_1_1core_1_1array_1_1_data.html">Data</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ab84c792117e29cdf90ef3433303f6141">data_shared_ptr</a> () const</td></tr>
 <tr class="separator:ab84c792117e29cdf90ef3433303f6141"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a72e3ce6c03fefe272cadf214bd127b95" id="r_a72e3ce6c03fefe272cadf214bd127b95"><td class="memTemplParams" colspan="2">template&lt;typename T &gt; </td></tr>
@@ -709,6 +711,31 @@ template&lt;typename T &gt; </div>
 
 </div>
 </div>
+<a id="a914577c63755b2e862d2da68bbf8e3dd" name="a914577c63755b2e862d2da68bbf8e3dd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a914577c63755b2e862d2da68bbf8e3dd">&#9670;&#160;</a></span>buffer_size()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">size_t mlx::core::array::buffer_size </td>
+          <td>(</td>
+          <td class="paramname"><span class="paramname"></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a92974c656c35a972ad241f80584bbd29" name="a92974c656c35a972ad241f80584bbd29"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a92974c656c35a972ad241f80584bbd29">&#9670;&#160;</a></span>copy_shared_buffer() <span class="overload">[1/2]</span></h2>
 
@@ -865,6 +892,7 @@ template&lt;typename T &gt; </div>
 </div><div class="memdoc">
 
 <p>The size (in elements) of the underlying buffer the array points to. </p>
+<p>This can be different than the actual size of the array if the array has been broadcast or irregularly strided. If <code>first</code> is the offset into the data buffer of the first element of the array (i.e. the offset corresponding to <code>arr[0, 0, ...]</code>) and last is the offset into the data buffer of the last element of the array (i.e. the offset corresponding to <code>arr[-1, -1, ...]</code>) then <code>data_size = last - first</code>. Note, <code>data_size</code> is in units of <code>item_size</code> (not bytes). </p>
 
 </div>
 </div>
