@@ -428,6 +428,8 @@ Functions</h2></td></tr>
 <tr class="separator:a50214cf406957fab27c8bef32046f030"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3a8fe7ba84714dbb5fdc81e93a07abc8" id="r_a3a8fe7ba84714dbb5fdc81e93a07abc8"><td class="memItemLeft" align="right" valign="top">std::pair&lt; int, int &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3a8fe7ba84714dbb5fdc81e93a07abc8">decompose_hadamard</a> (int n)</td></tr>
 <tr class="separator:a3a8fe7ba84714dbb5fdc81e93a07abc8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a954de19249da7c1fa39b89bdc47368aa" id="r_a954de19249da7c1fa39b89bdc47368aa"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a954de19249da7c1fa39b89bdc47368aa">load</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, size_t offset, const std::shared_ptr&lt; <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html">io::Reader</a> &gt; &amp;reader, bool swap_endianess)</td></tr>
+<tr class="separator:a954de19249da7c1fa39b89bdc47368aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac97b5a6f009ca3d99854ce9512c20dba" id="r_ac97b5a6f009ca3d99854ce9512c20dba"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1core_1_1_reduction_plan.html">ReductionPlan</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac97b5a6f009ca3d99854ce9512c20dba">get_reduction_plan</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const std::vector&lt; int &gt; &amp;axes)</td></tr>
 <tr class="separator:ac97b5a6f009ca3d99854ce9512c20dba"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9a9254ce9975ec247a2718bc02d6f201" id="r_a9a9254ce9975ec247a2718bc02d6f201"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9a9254ce9975ec247a2718bc02d6f201">nd_loop</a> (std::function&lt; void(int)&gt; callback, const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; size_t &gt; &amp;strides)</td></tr>
@@ -440,10 +442,10 @@ Functions</h2></td></tr>
 <tr class="memitem:a064d61b6ddc9e5d1e261a7e33de71083" id="r_a064d61b6ddc9e5d1e261a7e33de71083"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
 <tr class="memitem:a064d61b6ddc9e5d1e261a7e33de71083"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a064d61b6ddc9e5d1e261a7e33de71083">reduction_op</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::vector&lt; int &gt; &amp;axes, U init, Op <a class="el" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>)</td></tr>
 <tr class="separator:a064d61b6ddc9e5d1e261a7e33de71083"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a07ae007c87cf2d723a0fa7b25a2b6a93" id="r_a07ae007c87cf2d723a0fa7b25a2b6a93"><td class="memItemLeft" align="right" valign="top">std::tuple&lt; bool, int64_t, std::vector&lt; int64_t &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a07ae007c87cf2d723a0fa7b25a2b6a93">prepare_slice</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, std::vector&lt; int &gt; &amp;start_indices, std::vector&lt; int &gt; &amp;strides)</td></tr>
-<tr class="separator:a07ae007c87cf2d723a0fa7b25a2b6a93"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a427f2c255dfc6e1f83f97587b08e71bc" id="r_a427f2c255dfc6e1f83f97587b08e71bc"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a427f2c255dfc6e1f83f97587b08e71bc">shared_buffer_slice</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const std::vector&lt; size_t &gt; &amp;out_strides, size_t data_offset, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
-<tr class="separator:a427f2c255dfc6e1f83f97587b08e71bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a70f45639df899de421fe0f22f90877f2" id="r_a70f45639df899de421fe0f22f90877f2"><td class="memItemLeft" align="right" valign="top">std::tuple&lt; bool, int64_t, std::vector&lt; int64_t &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a70f45639df899de421fe0f22f90877f2">prepare_slice</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const std::vector&lt; int &gt; &amp;start_indices, const std::vector&lt; int &gt; &amp;strides)</td></tr>
+<tr class="separator:a70f45639df899de421fe0f22f90877f2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aea2a6a4eddfd4cfac89d20786059de2a" id="r_aea2a6a4eddfd4cfac89d20786059de2a"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aea2a6a4eddfd4cfac89d20786059de2a">shared_buffer_slice</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const std::vector&lt; size_t &gt; &amp;out_strides, size_t data_offset, size_t data_size, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
+<tr class="separator:aea2a6a4eddfd4cfac89d20786059de2a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4950c3248e70280b406a4f1430a85880" id="r_a4950c3248e70280b406a4f1430a85880"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
 <tr class="memitem:a4950c3248e70280b406a4f1430a85880"><td class="memTemplItemLeft" align="right" valign="top">stride_t&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a4950c3248e70280b406a4f1430a85880">elem_to_loc</a> (int elem, const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; stride_t &gt; &amp;strides)</td></tr>
 <tr class="separator:a4950c3248e70280b406a4f1430a85880"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -465,6 +467,8 @@ Functions</h2></td></tr>
 <tr class="memitem:a847b0a276663d9ddb5cac905ee977f03" id="r_a847b0a276663d9ddb5cac905ee977f03"><td class="memTemplParams" colspan="2">template&lt;typename stride_t &gt; </td></tr>
 <tr class="memitem:a847b0a276663d9ddb5cac905ee977f03"><td class="memTemplItemLeft" align="right" valign="top">auto&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a847b0a276663d9ddb5cac905ee977f03">check_contiguity</a> (const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; stride_t &gt; &amp;strides)</td></tr>
 <tr class="separator:a847b0a276663d9ddb5cac905ee977f03"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af650e831ce21759da1ac103037d08d84" id="r_af650e831ce21759da1ac103037d08d84"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af650e831ce21759da1ac103037d08d84">is_donatable</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
+<tr class="separator:af650e831ce21759da1ac103037d08d84"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad884f4a36308b5b4f8a5d990d2e086df" id="r_ad884f4a36308b5b4f8a5d990d2e086df"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad884f4a36308b5b4f8a5d990d2e086df">binary_op_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs, const std::string &amp;<a class="el" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
 <tr class="separator:ad884f4a36308b5b4f8a5d990d2e086df"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a094876ea5a2a2445ab64efc8222da202" id="r_a094876ea5a2a2445ab64efc8222da202"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a094876ea5a2a2445ab64efc8222da202">binary_op_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::string &amp;<a class="el" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
@@ -484,6 +488,8 @@ Functions</h2></td></tr>
 <tr class="separator:a8e1ccb0ed9387b0a789311d9f8964803"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae55b801b09ccf55cba96278163a9b1ef" id="r_ae55b801b09ccf55cba96278163a9b1ef"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae55b801b09ccf55cba96278163a9b1ef">copy_gpu_inplace</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::vector&lt; int64_t &gt; &amp;istride, int64_t ioffset, <a class="el" href="#abd84ff6c5245e4e170b2ef5247594337">CopyType</a> ctype, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
 <tr class="separator:ae55b801b09ccf55cba96278163a9b1ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae789dbda2a0f4e21aa0984f6a5dc986c" id="r_ae789dbda2a0f4e21aa0984f6a5dc986c"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae789dbda2a0f4e21aa0984f6a5dc986c">fill_gpu</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;val, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
+<tr class="separator:ae789dbda2a0f4e21aa0984f6a5dc986c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a76f614e9956a6ca05a9be4db5a483446" id="r_a76f614e9956a6ca05a9be4db5a483446"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a76f614e9956a6ca05a9be4db5a483446">get_arange_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:a76f614e9956a6ca05a9be4db5a483446"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a15175e8e2b1e26726c63393e4d68b628" id="r_a15175e8e2b1e26726c63393e4d68b628"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a15175e8e2b1e26726c63393e4d68b628">get_unary_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a> out_type, const std::string <a class="el" href="common_2binary_8h.html#a70228731d29946574b238d21fb4b360c">op</a>)</td></tr>
@@ -506,8 +512,8 @@ Functions</h2></td></tr>
 <tr class="separator:afb57825bb763050cc9a9d194aa41ac36"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a51c4bb09230348bd0252e22bfdc9bc89" id="r_a51c4bb09230348bd0252e22bfdc9bc89"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a51c4bb09230348bd0252e22bfdc9bc89">get_reduce_init_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
 <tr class="separator:a51c4bb09230348bd0252e22bfdc9bc89"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5d6843dcbdbd4d12851fc2edbafbc9e6" id="r_a5d6843dcbdbd4d12851fc2edbafbc9e6"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5d6843dcbdbd4d12851fc2edbafbc9e6">get_reduce_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, const std::string &amp;op_name, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out)</td></tr>
-<tr class="separator:a5d6843dcbdbd4d12851fc2edbafbc9e6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7aa91fcfe8b9caa42d60a957f11bfe6b" id="r_a7aa91fcfe8b9caa42d60a957f11bfe6b"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7aa91fcfe8b9caa42d60a957f11bfe6b">get_reduce_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, const std::string &amp;func_name, const std::string &amp;op_name, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, int ndim=-1, int bm=-1, int bn=-1)</td></tr>
+<tr class="separator:a7aa91fcfe8b9caa42d60a957f11bfe6b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a84fa8e0aee321a9d614433a0b933103b" id="r_a84fa8e0aee321a9d614433a0b933103b"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a84fa8e0aee321a9d614433a0b933103b">get_steel_gemm_fused_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, const std::string &amp;hash_name, const <a class="el" href="namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54">metal::MTLFCList</a> &amp;func_consts, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, bool transpose_a, bool transpose_b, int bm, int bn, int bk, int wm, int wn)</td></tr>
 <tr class="separator:a84fa8e0aee321a9d614433a0b933103b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af48c6f2f72b61dbd6766e4f5fea85df5" id="r_af48c6f2f72b61dbd6766e4f5fea85df5"><td class="memItemLeft" align="right" valign="top">MTL::ComputePipelineState *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#af48c6f2f72b61dbd6766e4f5fea85df5">get_steel_gemm_splitk_kernel</a> (<a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const std::string &amp;kernel_name, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, bool transpose_a, bool transpose_b, int bm, int bn, int bk, int wm, int wn, bool mn_aligned, bool k_aligned)</td></tr>
@@ -539,8 +545,8 @@ Functions</h2></td></tr>
 <tr class="separator:ab1eeca8ec6fa31819ee108fa6ed2c41b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa0332c64ee9965f05026c30a0b778000" id="r_aa0332c64ee9965f05026c30a0b778000"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa0332c64ee9965f05026c30a0b778000">strided_reduce_general_dispatch</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::string &amp;op_name, const <a class="el" href="structmlx_1_1core_1_1_reduction_plan.html">ReductionPlan</a> &amp;plan, const std::vector&lt; int &gt; &amp;axes, <a class="el" href="structmlx_1_1core_1_1metal_1_1_command_encoder.html">CommandEncoder</a> &amp;compute_encoder, <a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">metal::Device</a> &amp;d, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
 <tr class="separator:aa0332c64ee9965f05026c30a0b778000"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5ab133d67da9c16621f61690e27fccfd" id="r_a5ab133d67da9c16621f61690e27fccfd"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5ab133d67da9c16621f61690e27fccfd">slice_gpu</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, std::vector&lt; int &gt; start_indices, std::vector&lt; int &gt; strides, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
-<tr class="separator:a5ab133d67da9c16621f61690e27fccfd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a59048c5ff114c101a496bf33f62e3de9" id="r_a59048c5ff114c101a496bf33f62e3de9"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a59048c5ff114c101a496bf33f62e3de9">slice_gpu</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, const std::vector&lt; int &gt; &amp;start_indices, const std::vector&lt; int &gt; &amp;strides, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
+<tr class="separator:a59048c5ff114c101a496bf33f62e3de9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a050299d0d366ca5c9d09d1004dcc3e7d" id="r_a050299d0d366ca5c9d09d1004dcc3e7d"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a050299d0d366ca5c9d09d1004dcc3e7d">concatenate_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, int axis, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
 <tr class="separator:a050299d0d366ca5c9d09d1004dcc3e7d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6e2054d396ae487d810642dc19cdd0b0" id="r_a6e2054d396ae487d810642dc19cdd0b0"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6e2054d396ae487d810642dc19cdd0b0">pad_gpu</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;in, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;val, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, std::vector&lt; int &gt; axes, std::vector&lt; int &gt; low_pad_size, const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;s)</td></tr>
@@ -913,9 +919,9 @@ Functions</h2></td></tr>
 <tr class="memitem:ga8a2056f8c9bb30914c40bcf509386491" id="r_ga8a2056f8c9bb30914c40bcf509386491"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga8a2056f8c9bb30914c40bcf509386491">where</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;condition, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;y, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:ga8a2056f8c9bb30914c40bcf509386491"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classmlx_1_1core_1_1_select.html">Select</a> from x or y depending on condition.  <br /></td></tr>
 <tr class="separator:ga8a2056f8c9bb30914c40bcf509386491"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ga506d1b63e391e45a7d8dc10cfd71e78d" id="r_ga506d1b63e391e45a7d8dc10cfd71e78d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga506d1b63e391e45a7d8dc10cfd71e78d">nan_to_num</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, float nan=0.0f, const std::optional&lt; float &gt; &amp;posinf=std::nullopt, const std::optional&lt; float &gt; &amp;neginf=std::nullopt, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="memdesc:ga506d1b63e391e45a7d8dc10cfd71e78d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Replace NaN and infinities with finite numbers.  <br /></td></tr>
-<tr class="separator:ga506d1b63e391e45a7d8dc10cfd71e78d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gab1467c6a9e675152e768afd6dcfb61de" id="r_gab1467c6a9e675152e768afd6dcfb61de"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#gab1467c6a9e675152e768afd6dcfb61de">nan_to_num</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, float nan=0.0f, const std::optional&lt; float &gt; posinf=std::nullopt, const std::optional&lt; float &gt; neginf=std::nullopt, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:gab1467c6a9e675152e768afd6dcfb61de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Replace NaN and infinities with finite numbers.  <br /></td></tr>
+<tr class="separator:gab1467c6a9e675152e768afd6dcfb61de"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ga3b1b90ef1275ca17655b6d7f25d3ee68" id="r_ga3b1b90ef1275ca17655b6d7f25d3ee68"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga3b1b90ef1275ca17655b6d7f25d3ee68">all</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, bool keepdims, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:ga3b1b90ef1275ca17655b6d7f25d3ee68"><td class="mdescLeft">&#160;</td><td class="mdescRight">True if all elements in the array are true (or non-zero).  <br /></td></tr>
 <tr class="separator:ga3b1b90ef1275ca17655b6d7f25d3ee68"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -1349,6 +1355,15 @@ Functions</h2></td></tr>
 <tr class="memitem:ga6e9907d2f14dc4803e4306b3dbc4b3ca" id="r_ga6e9907d2f14dc4803e4306b3dbc4b3ca"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga6e9907d2f14dc4803e4306b3dbc4b3ca">conv3d</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, const std::tuple&lt; int, int, int &gt; &amp;stride={1, 1, 1}, const std::tuple&lt; int, int, int &gt; &amp;padding={0, 0, 0}, const std::tuple&lt; int, int, int &gt; &amp;dilation={1, 1, 1}, int groups=1, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:ga6e9907d2f14dc4803e4306b3dbc4b3ca"><td class="mdescLeft">&#160;</td><td class="mdescRight">3D convolution with a filter  <br /></td></tr>
 <tr class="separator:ga6e9907d2f14dc4803e4306b3dbc4b3ca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gaa30bf1adcd78d1c2595d07b215731714" id="r_gaa30bf1adcd78d1c2595d07b215731714"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#gaa30bf1adcd78d1c2595d07b215731714">conv_transpose1d</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, int stride=1, int padding=0, int dilation=1, int groups=1, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:gaa30bf1adcd78d1c2595d07b215731714"><td class="mdescLeft">&#160;</td><td class="mdescRight">1D transposed convolution with a filter  <br /></td></tr>
+<tr class="separator:gaa30bf1adcd78d1c2595d07b215731714"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gaebb59971cb9bc45005dc1d398e4f0a3d" id="r_gaebb59971cb9bc45005dc1d398e4f0a3d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#gaebb59971cb9bc45005dc1d398e4f0a3d">conv_transpose2d</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, const std::pair&lt; int, int &gt; &amp;stride={1, 1}, const std::pair&lt; int, int &gt; &amp;padding={0, 0}, const std::pair&lt; int, int &gt; &amp;dilation={1, 1}, int groups=1, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:gaebb59971cb9bc45005dc1d398e4f0a3d"><td class="mdescLeft">&#160;</td><td class="mdescRight">2D transposed convolution with a filter  <br /></td></tr>
+<tr class="separator:gaebb59971cb9bc45005dc1d398e4f0a3d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga8db814da631d9cd32a8d6563bf4ac530" id="r_ga8db814da631d9cd32a8d6563bf4ac530"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga8db814da631d9cd32a8d6563bf4ac530">conv_transpose3d</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, const std::tuple&lt; int, int, int &gt; &amp;stride={1, 1, 1}, const std::tuple&lt; int, int, int &gt; &amp;padding={0, 0, 0}, const std::tuple&lt; int, int, int &gt; &amp;dilation={1, 1, 1}, int groups=1, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:ga8db814da631d9cd32a8d6563bf4ac530"><td class="mdescLeft">&#160;</td><td class="mdescRight">3D transposed convolution with a filter  <br /></td></tr>
+<tr class="separator:ga8db814da631d9cd32a8d6563bf4ac530"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ga6381c7062b232ac21f3fdc3136aaf86e" id="r_ga6381c7062b232ac21f3fdc3136aaf86e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga6381c7062b232ac21f3fdc3136aaf86e">quantized_matmul</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, bool <a class="el" href="group__ops.html#gac1869f3b7094869b44fe7ac4ce58638b">transpose</a>=true, int group_size=64, int bits=4, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:ga6381c7062b232ac21f3fdc3136aaf86e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quantized matmul multiplies x with a quantized matrix w.  <br /></td></tr>
 <tr class="separator:ga6381c7062b232ac21f3fdc3136aaf86e"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -3753,6 +3768,32 @@ template&lt;typename... Arrays, typename  = enable_for_arrays_t&lt;Arrays...&gt;
 
 </div>
 </div>
+<a id="ae789dbda2a0f4e21aa0984f6a5dc986c" name="ae789dbda2a0f4e21aa0984f6a5dc986c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae789dbda2a0f4e21aa0984f6a5dc986c">&#9670;&#160;</a></span>fill_gpu()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::fill_gpu </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>val</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>s</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a8dc169474a51a1f4f761d5752819bd7c" name="a8dc169474a51a1f4f761d5752819bd7c"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a8dc169474a51a1f4f761d5752819bd7c">&#9670;&#160;</a></span>get_2d_grid_dims()</h2>
 
@@ -4151,8 +4192,8 @@ template&lt;typename... Arrays, typename  = enable_for_arrays_t&lt;Arrays...&gt;
 
 </div>
 </div>
-<a id="a5d6843dcbdbd4d12851fc2edbafbc9e6" name="a5d6843dcbdbd4d12851fc2edbafbc9e6"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5d6843dcbdbd4d12851fc2edbafbc9e6">&#9670;&#160;</a></span>get_reduce_kernel()</h2>
+<a id="a7aa91fcfe8b9caa42d60a957f11bfe6b" name="a7aa91fcfe8b9caa42d60a957f11bfe6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7aa91fcfe8b9caa42d60a957f11bfe6b">&#9670;&#160;</a></span>get_reduce_kernel()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -4170,6 +4211,11 @@ template&lt;typename... Arrays, typename  = enable_for_arrays_t&lt;Arrays...&gt;
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const std::string &amp;</td>          <td class="paramname"><span class="paramname"><em>func_name</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">const std::string &amp;</td>          <td class="paramname"><span class="paramname"><em>op_name</em>, </span></td>
         </tr>
         <tr>
@@ -4180,7 +4226,22 @@ template&lt;typename... Arrays, typename  = enable_for_arrays_t&lt;Arrays...&gt;
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>&#160;)</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>ndim</em><span class="paramdefsep"> = </span><span class="paramdefval">-1</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>bm</em><span class="paramdefsep"> = </span><span class="paramdefval">-1</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>bn</em><span class="paramdefsep"> = </span><span class="paramdefval">-1</span></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -4931,6 +4992,35 @@ template&lt;typename... Args&gt; </div>
 
 </div>
 </div>
+<a id="af650e831ce21759da1ac103037d08d84" name="af650e831ce21759da1ac103037d08d84"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af650e831ce21759da1ac103037d08d84">&#9670;&#160;</a></span>is_donatable()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">bool mlx::core::is_donatable </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>in</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="adacbc4526e8964b267a8ec3eb1bc1a32" name="adacbc4526e8964b267a8ec3eb1bc1a32"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#adacbc4526e8964b267a8ec3eb1bc1a32">&#9670;&#160;</a></span>is_power_of_2()</h2>
 
@@ -5181,8 +5271,39 @@ template&lt;typename... Args&gt; </div>
 
 </div>
 </div>
+<a id="a954de19249da7c1fa39b89bdc47368aa" name="a954de19249da7c1fa39b89bdc47368aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a954de19249da7c1fa39b89bdc47368aa">&#9670;&#160;</a></span>load() <span class="overload">[1/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::load </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>offset</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::shared_ptr&lt; <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html">io::Reader</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>reader</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>swap_endianess</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="abada9bfa834d7423959362386720f3db" name="abada9bfa834d7423959362386720f3db"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abada9bfa834d7423959362386720f3db">&#9670;&#160;</a></span>load() <span class="overload">[1/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#abada9bfa834d7423959362386720f3db">&#9670;&#160;</a></span>load() <span class="overload">[2/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -5205,7 +5326,7 @@ template&lt;typename... Args&gt; </div>
 </div>
 </div>
 <a id="ac71a08bf4c052ae3c77e9e89cbea071d" name="ac71a08bf4c052ae3c77e9e89cbea071d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac71a08bf4c052ae3c77e9e89cbea071d">&#9670;&#160;</a></span>load() <span class="overload">[2/2]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ac71a08bf4c052ae3c77e9e89cbea071d">&#9670;&#160;</a></span>load() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -16169,8 +16290,8 @@ template&lt;typename stride_t &gt; </div>
 
 </div>
 </div>
-<a id="a07ae007c87cf2d723a0fa7b25a2b6a93" name="a07ae007c87cf2d723a0fa7b25a2b6a93"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a07ae007c87cf2d723a0fa7b25a2b6a93">&#9670;&#160;</a></span>prepare_slice()</h2>
+<a id="a70f45639df899de421fe0f22f90877f2" name="a70f45639df899de421fe0f22f90877f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70f45639df899de421fe0f22f90877f2">&#9670;&#160;</a></span>prepare_slice()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -16183,12 +16304,12 @@ template&lt;typename stride_t &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>start_indices</em>, </span></td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>start_indices</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>&#160;)</td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -16846,8 +16967,8 @@ template&lt;typename T &gt; </div>
 
 </div>
 </div>
-<a id="a427f2c255dfc6e1f83f97587b08e71bc" name="a427f2c255dfc6e1f83f97587b08e71bc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a427f2c255dfc6e1f83f97587b08e71bc">&#9670;&#160;</a></span>shared_buffer_slice()</h2>
+<a id="aea2a6a4eddfd4cfac89d20786059de2a" name="aea2a6a4eddfd4cfac89d20786059de2a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aea2a6a4eddfd4cfac89d20786059de2a">&#9670;&#160;</a></span>shared_buffer_slice()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -16866,6 +16987,11 @@ template&lt;typename T &gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>data_offset</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>data_size</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -16902,8 +17028,8 @@ template&lt;typename T &gt; </div>
 
 </div>
 </div>
-<a id="a5ab133d67da9c16621f61690e27fccfd" name="a5ab133d67da9c16621f61690e27fccfd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5ab133d67da9c16621f61690e27fccfd">&#9670;&#160;</a></span>slice_gpu()</h2>
+<a id="a59048c5ff114c101a496bf33f62e3de9" name="a59048c5ff114c101a496bf33f62e3de9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a59048c5ff114c101a496bf33f62e3de9">&#9670;&#160;</a></span>slice_gpu()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -16921,12 +17047,12 @@ template&lt;typename T &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::vector&lt; int &gt;</td>          <td class="paramname"><span class="paramname"><em>start_indices</em>, </span></td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>start_indices</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::vector&lt; int &gt;</td>          <td class="paramname"><span class="paramname"><em>strides</em>, </span></td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>strides</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>

@@ -53,8 +53,9 @@ Array
     array.sqrt
     array.square
     array.squeeze
-    array.swapaxes
+    array.std
     array.sum
+    array.swapaxes
     array.transpose
     array.T
     array.var

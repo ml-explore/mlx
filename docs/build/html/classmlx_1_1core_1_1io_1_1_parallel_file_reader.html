@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.10.0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>MLX: mlx::core::io::FileReader Class Reference</title>
+<title>MLX: mlx::core::io::ParallelFileReader Class Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -71,53 +71,55 @@ $(function() {
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="namespacemlx.html">mlx</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core.html">core</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core_1_1io.html">io</a></li><li class="navelem"><a class="el" href="classmlx_1_1core_1_1io_1_1_file_reader.html">FileReader</a></li>  </ul>
+<li class="navelem"><a class="el" href="namespacemlx.html">mlx</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core.html">core</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core_1_1io.html">io</a></li><li class="navelem"><a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html">ParallelFileReader</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
   <div class="summary">
 <a href="#pub-methods">Public Member Functions</a> &#124;
-<a href="classmlx_1_1core_1_1io_1_1_file_reader-members.html">List of all members</a>  </div>
-  <div class="headertitle"><div class="title">mlx::core::io::FileReader Class Reference</div></div>
+<a href="classmlx_1_1core_1_1io_1_1_parallel_file_reader-members.html">List of all members</a>  </div>
+  <div class="headertitle"><div class="title">mlx::core::io::ParallelFileReader Class Reference</div></div>
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="load_8h_source.html">load.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="io_2load_8h_source.html">load.h</a>&gt;</code></p>
 <div class="dynheader">
-Inheritance diagram for mlx::core::io::FileReader:</div>
+Inheritance diagram for mlx::core::io::ParallelFileReader:</div>
 <div class="dyncontent">
  <div class="center">
-  <img src="classmlx_1_1core_1_1io_1_1_file_reader.png" usemap="#mlx::core::io::FileReader_map" alt=""/>
-  <map id="mlx::core::io::FileReader_map" name="mlx::core::io::FileReader_map">
-<area href="classmlx_1_1core_1_1io_1_1_reader.html" alt="mlx::core::io::Reader" shape="rect" coords="0,0,146,24"/>
+  <img src="classmlx_1_1core_1_1io_1_1_parallel_file_reader.png" usemap="#mlx::core::io::ParallelFileReader_map" alt=""/>
+  <map id="mlx::core::io::ParallelFileReader_map" name="mlx::core::io::ParallelFileReader_map">
+<area href="classmlx_1_1core_1_1io_1_1_reader.html" alt="mlx::core::io::Reader" shape="rect" coords="0,0,189,24"/>
   </map>
 </div></div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a77a9664157f906be6795ddcbbf7b7be5" id="r_a77a9664157f906be6795ddcbbf7b7be5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a77a9664157f906be6795ddcbbf7b7be5">FileReader</a> (std::string file_path)</td></tr>
-<tr class="separator:a77a9664157f906be6795ddcbbf7b7be5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5611fbeeb8f2d665a9da15f3103f8d53" id="r_a5611fbeeb8f2d665a9da15f3103f8d53"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5611fbeeb8f2d665a9da15f3103f8d53">~FileReader</a> () override</td></tr>
-<tr class="separator:a5611fbeeb8f2d665a9da15f3103f8d53"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a97ccdbd79886d9b95b32e5cd4741d150" id="r_a97ccdbd79886d9b95b32e5cd4741d150"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a97ccdbd79886d9b95b32e5cd4741d150">is_open</a> () const override</td></tr>
-<tr class="separator:a97ccdbd79886d9b95b32e5cd4741d150"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4ecb046dfa7dab346d096adab3a1c318" id="r_a4ecb046dfa7dab346d096adab3a1c318"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4ecb046dfa7dab346d096adab3a1c318">good</a> () const override</td></tr>
-<tr class="separator:a4ecb046dfa7dab346d096adab3a1c318"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aa47428656f87fb1ff89378a6041bf68f" id="r_aa47428656f87fb1ff89378a6041bf68f"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa47428656f87fb1ff89378a6041bf68f">tell</a> () override</td></tr>
-<tr class="separator:aa47428656f87fb1ff89378a6041bf68f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aab62cc43970bd5de2c0115b1cc0a6af4" id="r_aab62cc43970bd5de2c0115b1cc0a6af4"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aab62cc43970bd5de2c0115b1cc0a6af4">seek</a> (int64_t off, std::ios_base::seekdir way=std::ios_base::beg) override</td></tr>
-<tr class="separator:aab62cc43970bd5de2c0115b1cc0a6af4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6a5fa6067fea53ba7dbcddcb7d713a7d" id="r_a6a5fa6067fea53ba7dbcddcb7d713a7d"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6a5fa6067fea53ba7dbcddcb7d713a7d">read</a> (char *data, size_t n) override</td></tr>
-<tr class="separator:a6a5fa6067fea53ba7dbcddcb7d713a7d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7415da4cb14c328ed07901ff1c266221" id="r_a7415da4cb14c328ed07901ff1c266221"><td class="memItemLeft" align="right" valign="top">std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7415da4cb14c328ed07901ff1c266221">label</a> () const override</td></tr>
-<tr class="separator:a7415da4cb14c328ed07901ff1c266221"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6cdb4547408f8cbca9e2ddd82514e697" id="r_a6cdb4547408f8cbca9e2ddd82514e697"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6cdb4547408f8cbca9e2ddd82514e697">ParallelFileReader</a> (std::string file_path)</td></tr>
+<tr class="separator:a6cdb4547408f8cbca9e2ddd82514e697"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae9e3fc1cc3e827dae4d3d107f6780817" id="r_ae9e3fc1cc3e827dae4d3d107f6780817"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae9e3fc1cc3e827dae4d3d107f6780817">~ParallelFileReader</a> () override</td></tr>
+<tr class="separator:ae9e3fc1cc3e827dae4d3d107f6780817"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a653009adbcbce8248bc666df502fdbde" id="r_a653009adbcbce8248bc666df502fdbde"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a653009adbcbce8248bc666df502fdbde">is_open</a> () const override</td></tr>
+<tr class="separator:a653009adbcbce8248bc666df502fdbde"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac54a2c693acc3d9e6e942412148ffcc9" id="r_ac54a2c693acc3d9e6e942412148ffcc9"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac54a2c693acc3d9e6e942412148ffcc9">good</a> () const override</td></tr>
+<tr class="separator:ac54a2c693acc3d9e6e942412148ffcc9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2e92131428f0ffa98fff781b8c35d9e5" id="r_a2e92131428f0ffa98fff781b8c35d9e5"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2e92131428f0ffa98fff781b8c35d9e5">tell</a> () override</td></tr>
+<tr class="separator:a2e92131428f0ffa98fff781b8c35d9e5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a673c16b669f3cee13f387b7b0a1f39f7" id="r_a673c16b669f3cee13f387b7b0a1f39f7"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a673c16b669f3cee13f387b7b0a1f39f7">seek</a> (int64_t, std::ios_base::seekdir=std::ios_base::beg) override</td></tr>
+<tr class="separator:a673c16b669f3cee13f387b7b0a1f39f7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6691826fc8d28f83792bfa2f92660a3b" id="r_a6691826fc8d28f83792bfa2f92660a3b"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6691826fc8d28f83792bfa2f92660a3b">read</a> (char *data, size_t n) override</td></tr>
+<tr class="separator:a6691826fc8d28f83792bfa2f92660a3b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2b83b4576f1942db869171cccbf607df" id="r_a2b83b4576f1942db869171cccbf607df"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2b83b4576f1942db869171cccbf607df">read</a> (char *data, size_t n, size_t offset) override</td></tr>
+<tr class="separator:a2b83b4576f1942db869171cccbf607df"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a361d3b34bc493825c893cce256da46c8" id="r_a361d3b34bc493825c893cce256da46c8"><td class="memItemLeft" align="right" valign="top">std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a361d3b34bc493825c893cce256da46c8">label</a> () const override</td></tr>
+<tr class="separator:a361d3b34bc493825c893cce256da46c8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1io_1_1_reader"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1io_1_1_reader')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html">mlx::core::io::Reader</a></td></tr>
 <tr class="memitem:a81cd4747d81311c87dc6753f2d0d8b16 inherit pub_methods_classmlx_1_1core_1_1io_1_1_reader" id="r_a81cd4747d81311c87dc6753f2d0d8b16"><td class="memItemLeft" align="right" valign="top">virtual&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html#a81cd4747d81311c87dc6753f2d0d8b16">~Reader</a> ()=default</td></tr>
 <tr class="separator:a81cd4747d81311c87dc6753f2d0d8b16 inherit pub_methods_classmlx_1_1core_1_1io_1_1_reader"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="a77a9664157f906be6795ddcbbf7b7be5" name="a77a9664157f906be6795ddcbbf7b7be5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a77a9664157f906be6795ddcbbf7b7be5">&#9670;&#160;</a></span>FileReader()</h2>
+<a id="a6cdb4547408f8cbca9e2ddd82514e697" name="a6cdb4547408f8cbca9e2ddd82514e697"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6cdb4547408f8cbca9e2ddd82514e697">&#9670;&#160;</a></span>ParallelFileReader()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -126,7 +128,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">mlx::core::io::FileReader::FileReader </td>
+          <td class="memname">mlx::core::io::ParallelFileReader::ParallelFileReader </td>
           <td>(</td>
           <td class="paramtype">std::string</td>          <td class="paramname"><span class="paramname"><em>file_path</em></span></td><td>)</td>
           <td></td>
@@ -141,8 +143,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a5611fbeeb8f2d665a9da15f3103f8d53" name="a5611fbeeb8f2d665a9da15f3103f8d53"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5611fbeeb8f2d665a9da15f3103f8d53">&#9670;&#160;</a></span>~FileReader()</h2>
+<a id="ae9e3fc1cc3e827dae4d3d107f6780817" name="ae9e3fc1cc3e827dae4d3d107f6780817"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9e3fc1cc3e827dae4d3d107f6780817">&#9670;&#160;</a></span>~ParallelFileReader()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -151,7 +153,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">mlx::core::io::FileReader::~FileReader </td>
+          <td class="memname">mlx::core::io::ParallelFileReader::~ParallelFileReader </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"></span></td><td>)</td>
           <td></td>
@@ -167,8 +169,8 @@ Public Member Functions</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a4ecb046dfa7dab346d096adab3a1c318" name="a4ecb046dfa7dab346d096adab3a1c318"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a4ecb046dfa7dab346d096adab3a1c318">&#9670;&#160;</a></span>good()</h2>
+<a id="ac54a2c693acc3d9e6e942412148ffcc9" name="ac54a2c693acc3d9e6e942412148ffcc9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac54a2c693acc3d9e6e942412148ffcc9">&#9670;&#160;</a></span>good()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -177,7 +179,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">bool mlx::core::io::FileReader::good </td>
+          <td class="memname">bool mlx::core::io::ParallelFileReader::good </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"></span></td><td>)</td>
           <td> const</td>
@@ -194,8 +196,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a97ccdbd79886d9b95b32e5cd4741d150" name="a97ccdbd79886d9b95b32e5cd4741d150"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a97ccdbd79886d9b95b32e5cd4741d150">&#9670;&#160;</a></span>is_open()</h2>
+<a id="a653009adbcbce8248bc666df502fdbde" name="a653009adbcbce8248bc666df502fdbde"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a653009adbcbce8248bc666df502fdbde">&#9670;&#160;</a></span>is_open()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -204,7 +206,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">bool mlx::core::io::FileReader::is_open </td>
+          <td class="memname">bool mlx::core::io::ParallelFileReader::is_open </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"></span></td><td>)</td>
           <td> const</td>
@@ -221,8 +223,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a7415da4cb14c328ed07901ff1c266221" name="a7415da4cb14c328ed07901ff1c266221"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7415da4cb14c328ed07901ff1c266221">&#9670;&#160;</a></span>label()</h2>
+<a id="a361d3b34bc493825c893cce256da46c8" name="a361d3b34bc493825c893cce256da46c8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a361d3b34bc493825c893cce256da46c8">&#9670;&#160;</a></span>label()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -231,7 +233,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">std::string mlx::core::io::FileReader::label </td>
+          <td class="memname">std::string mlx::core::io::ParallelFileReader::label </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"></span></td><td>)</td>
           <td> const</td>
@@ -248,8 +250,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="a6a5fa6067fea53ba7dbcddcb7d713a7d" name="a6a5fa6067fea53ba7dbcddcb7d713a7d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6a5fa6067fea53ba7dbcddcb7d713a7d">&#9670;&#160;</a></span>read()</h2>
+<a id="a6691826fc8d28f83792bfa2f92660a3b" name="a6691826fc8d28f83792bfa2f92660a3b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6691826fc8d28f83792bfa2f92660a3b">&#9670;&#160;</a></span>read() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -258,7 +260,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">void mlx::core::io::FileReader::read </td>
+          <td class="memname">void mlx::core::io::ParallelFileReader::read </td>
           <td>(</td>
           <td class="paramtype">char *</td>          <td class="paramname"><span class="paramname"><em>data</em>, </span></td>
         </tr>
@@ -270,7 +272,7 @@ Public Member Functions</h2></td></tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
@@ -279,8 +281,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="aab62cc43970bd5de2c0115b1cc0a6af4" name="aab62cc43970bd5de2c0115b1cc0a6af4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aab62cc43970bd5de2c0115b1cc0a6af4">&#9670;&#160;</a></span>seek()</h2>
+<a id="a2b83b4576f1942db869171cccbf607df" name="a2b83b4576f1942db869171cccbf607df"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2b83b4576f1942db869171cccbf607df">&#9670;&#160;</a></span>read() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -289,14 +291,50 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">void mlx::core::io::FileReader::seek </td>
+          <td class="memname">void mlx::core::io::ParallelFileReader::read </td>
           <td>(</td>
-          <td class="paramtype">int64_t</td>          <td class="paramname"><span class="paramname"><em>off</em>, </span></td>
+          <td class="paramtype">char *</td>          <td class="paramname"><span class="paramname"><em>data</em>, </span></td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::ios_base::seekdir</td>          <td class="paramname"><span class="paramname"><em>way</em><span class="paramdefsep"> = </span><span class="paramdefval">std::ios_base::beg</span></span>&#160;)</td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>n</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>offset</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Implements <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html#a3e82cc31bd2a8594f19dc9858dca3efc">mlx::core::io::Reader</a>.</p>
+
+</div>
+</div>
+<a id="a673c16b669f3cee13f387b7b0a1f39f7" name="a673c16b669f3cee13f387b7b0a1f39f7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a673c16b669f3cee13f387b7b0a1f39f7">&#9670;&#160;</a></span>seek()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::io::ParallelFileReader::seek </td>
+          <td>(</td>
+          <td class="paramtype">int64_t</td>          <td class="paramname"><span class="paramname">, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::ios_base::seekdir</td>          <td class="paramname"><span class="paramname"><span class="paramdefsep"> = </span><span class="paramdefval">std::ios_base::beg</span></span>&#160;)</td>
         </tr>
       </table>
   </td>
@@ -310,8 +348,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="aa47428656f87fb1ff89378a6041bf68f" name="aa47428656f87fb1ff89378a6041bf68f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa47428656f87fb1ff89378a6041bf68f">&#9670;&#160;</a></span>tell()</h2>
+<a id="a2e92131428f0ffa98fff781b8c35d9e5" name="a2e92131428f0ffa98fff781b8c35d9e5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e92131428f0ffa98fff781b8c35d9e5">&#9670;&#160;</a></span>tell()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -320,7 +358,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">size_t mlx::core::io::FileReader::tell </td>
+          <td class="memname">size_t mlx::core::io::ParallelFileReader::tell </td>
           <td>(</td>
           <td class="paramname"><span class="paramname"></span></td><td>)</td>
           <td></td>
@@ -338,7 +376,7 @@ Public Member Functions</h2></td></tr>
 </div>
 </div>
 <hr/>The documentation for this class was generated from the following file:<ul>
-<li>mlx/io/<a class="el" href="load_8h_source.html">load.h</a></li>
+<li>mlx/io/<a class="el" href="io_2load_8h_source.html">load.h</a></li>
 </ul>
 </div><!-- contents -->
 <!-- start footer part -->

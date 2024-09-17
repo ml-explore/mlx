@@ -111,11 +111,13 @@ Public Types</h2></td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a936b320f7b0a435f96e018c25f35e7ed" id="r_a936b320f7b0a435f96e018c25f35e7ed"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a936b320f7b0a435f96e018c25f35e7ed">AllReduce</a> (<a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> <a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8831cb61ac633431b78b5fb99c0ea9ff">group</a>, <a class="el" href="#abb4560980e5d01aed14175ce8f6fc924">ReduceType</a> reduce_type)</td></tr>
-<tr class="separator:a936b320f7b0a435f96e018c25f35e7ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2d1ea56cbf72a316680ea90aa6da1c2d" id="r_a2d1ea56cbf72a316680ea90aa6da1c2d"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2d1ea56cbf72a316680ea90aa6da1c2d">AllReduce</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> <a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8831cb61ac633431b78b5fb99c0ea9ff">group</a>, <a class="el" href="#abb4560980e5d01aed14175ce8f6fc924">ReduceType</a> reduce_type)</td></tr>
+<tr class="separator:a2d1ea56cbf72a316680ea90aa6da1c2d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:acdc1965ad64ee9ee6328fe150a97902e" id="r_acdc1965ad64ee9ee6328fe150a97902e"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acdc1965ad64ee9ee6328fe150a97902e">eval_cpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
 <tr class="memdesc:acdc1965ad64ee9ee6328fe150a97902e"><td class="mdescLeft">&#160;</td><td class="mdescRight">A primitive must know how to evaluate itself on the CPU/GPU for the given inputs and populate the output arrays.  <br /></td></tr>
 <tr class="separator:acdc1965ad64ee9ee6328fe150a97902e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a52df7155f56b8450581b2fd2747cad20" id="r_a52df7155f56b8450581b2fd2747cad20"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a52df7155f56b8450581b2fd2747cad20">eval_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
+<tr class="separator:a52df7155f56b8450581b2fd2747cad20"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3f2dc71859847ca675ec4bfbe125035a" id="r_a3f2dc71859847ca675ec4bfbe125035a"><td class="memItemLeft" align="right" valign="top">std::pair&lt; std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;, std::vector&lt; int &gt; &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3f2dc71859847ca675ec4bfbe125035a">vmap</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, const std::vector&lt; int &gt; &amp;axes) override</td></tr>
 <tr class="memdesc:a3f2dc71859847ca675ec4bfbe125035a"><td class="mdescLeft">&#160;</td><td class="mdescRight">The primitive must know how to vectorize itself across the given axes.  <br /></td></tr>
 <tr class="separator:a3f2dc71859847ca675ec4bfbe125035a"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -129,10 +131,8 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a6814f9008a683c6911d5b8991ef770ab"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print the primitive.  <br /></td></tr>
 <tr class="separator:a6814f9008a683c6911d5b8991ef770ab"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html">mlx::core::distributed::DistPrimitive</a></td></tr>
-<tr class="memitem:a9e4b0b92776aca0c1331450ae4955cef inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive" id="r_a9e4b0b92776aca0c1331450ae4955cef"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a9e4b0b92776aca0c1331450ae4955cef">DistPrimitive</a> (<a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> <a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8831cb61ac633431b78b5fb99c0ea9ff">group</a>)</td></tr>
-<tr class="separator:a9e4b0b92776aca0c1331450ae4955cef inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a611ac8dfd9b4f49617ee8976ff3e15e9 inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive" id="r_a611ac8dfd9b4f49617ee8976ff3e15e9"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a611ac8dfd9b4f49617ee8976ff3e15e9">eval_gpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
-<tr class="separator:a611ac8dfd9b4f49617ee8976ff3e15e9 inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8c54166951522c2a52ef39fce8c87f8f inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive" id="r_a8c54166951522c2a52ef39fce8c87f8f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8c54166951522c2a52ef39fce8c87f8f">DistPrimitive</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> <a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8831cb61ac633431b78b5fb99c0ea9ff">group</a>)</td></tr>
+<tr class="separator:a8c54166951522c2a52ef39fce8c87f8f inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8831cb61ac633431b78b5fb99c0ea9ff inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive" id="r_a8831cb61ac633431b78b5fb99c0ea9ff"><td class="memItemLeft" align="right" valign="top">const <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_dist_primitive.html#a8831cb61ac633431b78b5fb99c0ea9ff">group</a> () const</td></tr>
 <tr class="separator:a8831cb61ac633431b78b5fb99c0ea9ff inherit pub_methods_classmlx_1_1core_1_1distributed_1_1_dist_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1_primitive"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1_primitive')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1_primitive.html">mlx::core::Primitive</a></td></tr>
@@ -185,8 +185,8 @@ Public Member Functions</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="a936b320f7b0a435f96e018c25f35e7ed" name="a936b320f7b0a435f96e018c25f35e7ed"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a936b320f7b0a435f96e018c25f35e7ed">&#9670;&#160;</a></span>AllReduce()</h2>
+<a id="a2d1ea56cbf72a316680ea90aa6da1c2d" name="a2d1ea56cbf72a316680ea90aa6da1c2d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2d1ea56cbf72a316680ea90aa6da1c2d">&#9670;&#160;</a></span>AllReduce()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -197,6 +197,11 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="memname">mlx::core::distributed::AllReduce::AllReduce </td>
           <td>(</td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a></td>          <td class="paramname"><span class="paramname"><em>stream</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a></td>          <td class="paramname"><span class="paramname"><em>group</em>, </span></td>
         </tr>
         <tr>
@@ -246,6 +251,37 @@ Public Member Functions</h2></td></tr>
 <p>To avoid unnecessary allocations, the evaluation function is responsible for allocating space for the array. </p>
 
 <p>Implements <a class="el" href="classmlx_1_1core_1_1_primitive.html#a1596dc50b910538eae14878e98f07575">mlx::core::Primitive</a>.</p>
+
+</div>
+</div>
+<a id="a52df7155f56b8450581b2fd2747cad20" name="a52df7155f56b8450581b2fd2747cad20"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a52df7155f56b8450581b2fd2747cad20">&#9670;&#160;</a></span>eval_gpu()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::distributed::AllReduce::eval_gpu </td>
+          <td>(</td>
+          <td class="paramtype">const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>inputs</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>outputs</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Implements <a class="el" href="classmlx_1_1core_1_1_primitive.html#ad217376dcf5eff691d731566faec2ba2">mlx::core::Primitive</a>.</p>
 
 </div>
 </div>

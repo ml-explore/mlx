@@ -99,6 +99,10 @@ Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html" title="A distributed::Group represents a group of independent mlx processes that can communicate.">distributed::Group</a> represents a group of independent mlx processes that can communicate.  <a href="structmlx_1_1core_1_1distributed_1_1_group.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_recv.html">Recv</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_send.html">Send</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
@@ -107,14 +111,20 @@ Functions</h2></td></tr>
 <tr class="memitem:a33633c058c7ec82cca4f237243c6810d" id="r_a33633c058c7ec82cca4f237243c6810d"><td class="memItemLeft" align="right" valign="top"><a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a33633c058c7ec82cca4f237243c6810d">init</a> (bool strict=false)</td></tr>
 <tr class="memdesc:a33633c058c7ec82cca4f237243c6810d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Initialize the distributed backend and return the group containing all discoverable processes.  <br /></td></tr>
 <tr class="separator:a33633c058c7ec82cca4f237243c6810d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad1c6aa544781765060552cacfa845001" id="r_ad1c6aa544781765060552cacfa845001"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad1c6aa544781765060552cacfa845001">all_sum</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt; group=std::nullopt)</td></tr>
-<tr class="separator:ad1c6aa544781765060552cacfa845001"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:abf45499dd1209ba7162908f14634d2ba" id="r_abf45499dd1209ba7162908f14634d2ba"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#abf45499dd1209ba7162908f14634d2ba">all_gather</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt; group=std::nullopt)</td></tr>
-<tr class="separator:abf45499dd1209ba7162908f14634d2ba"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a67ccb1a5445fc6f5db49dd36a15e5980" id="r_a67ccb1a5445fc6f5db49dd36a15e5980"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a67ccb1a5445fc6f5db49dd36a15e5980">all_sum</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt; group=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a67ccb1a5445fc6f5db49dd36a15e5980"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a82ef5e8cc7ac62cd228e51b1c1b77cb7" id="r_a82ef5e8cc7ac62cd228e51b1c1b77cb7"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a82ef5e8cc7ac62cd228e51b1c1b77cb7">all_gather</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt; group=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> S={})</td></tr>
+<tr class="separator:a82ef5e8cc7ac62cd228e51b1c1b77cb7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5a8360edaa3a528a3927fce4d2cf1777" id="r_a5a8360edaa3a528a3927fce4d2cf1777"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5a8360edaa3a528a3927fce4d2cf1777">send</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, int dst, std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt; group=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a5a8360edaa3a528a3927fce4d2cf1777"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a10f9d39c02e6e5db600912c03de8b393" id="r_a10f9d39c02e6e5db600912c03de8b393"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a10f9d39c02e6e5db600912c03de8b393">recv</a> (std::vector&lt; int &gt; shape, <a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a> dtype, int src, std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt; group=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a10f9d39c02e6e5db600912c03de8b393"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2822b78bce2c679e6ff940b2fca944f0" id="r_a2822b78bce2c679e6ff940b2fca944f0"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2822b78bce2c679e6ff940b2fca944f0">recv_like</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, int src, std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt; group=std::nullopt, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a2822b78bce2c679e6ff940b2fca944f0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="abf45499dd1209ba7162908f14634d2ba" name="abf45499dd1209ba7162908f14634d2ba"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abf45499dd1209ba7162908f14634d2ba">&#9670;&#160;</a></span>all_gather()</h2>
+<a id="a82ef5e8cc7ac62cd228e51b1c1b77cb7" name="a82ef5e8cc7ac62cd228e51b1c1b77cb7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82ef5e8cc7ac62cd228e51b1c1b77cb7">&#9670;&#160;</a></span>all_gather()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -127,15 +137,20 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>group</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span></span>&#160;)</td>
+          <td class="paramtype">std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>group</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>S</em><span class="paramdefsep"> = </span><span class="paramdefval">{}</span></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="ad1c6aa544781765060552cacfa845001" name="ad1c6aa544781765060552cacfa845001"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad1c6aa544781765060552cacfa845001">&#9670;&#160;</a></span>all_sum()</h2>
+<a id="a67ccb1a5445fc6f5db49dd36a15e5980" name="a67ccb1a5445fc6f5db49dd36a15e5980"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a67ccb1a5445fc6f5db49dd36a15e5980">&#9670;&#160;</a></span>all_sum()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -148,7 +163,12 @@ Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>group</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span></span>&#160;)</td>
+          <td class="paramtype">std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>group</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em><span class="paramdefsep"> = </span><span class="paramdefval">{}</span></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -186,6 +206,104 @@ Functions</h2></td></tr>
           <td>(</td>
           <td class="paramname"><span class="paramname"></span></td><td>)</td>
           <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a10f9d39c02e6e5db600912c03de8b393" name="a10f9d39c02e6e5db600912c03de8b393"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a10f9d39c02e6e5db600912c03de8b393">&#9670;&#160;</a></span>recv()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::distributed::recv </td>
+          <td>(</td>
+          <td class="paramtype">std::vector&lt; int &gt;</td>          <td class="paramname"><span class="paramname"><em>shape</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a></td>          <td class="paramname"><span class="paramname"><em>dtype</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>src</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>group</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em><span class="paramdefsep"> = </span><span class="paramdefval">{}</span></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2822b78bce2c679e6ff940b2fca944f0" name="a2822b78bce2c679e6ff940b2fca944f0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2822b78bce2c679e6ff940b2fca944f0">&#9670;&#160;</a></span>recv_like()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::distributed::recv_like </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>x</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>src</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>group</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em><span class="paramdefsep"> = </span><span class="paramdefval">{}</span></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5a8360edaa3a528a3927fce4d2cf1777" name="a5a8360edaa3a528a3927fce4d2cf1777"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a8360edaa3a528a3927fce4d2cf1777">&#9670;&#160;</a></span>send()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::distributed::send </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>x</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>dst</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::optional&lt; <a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>group</em><span class="paramdefsep"> = </span><span class="paramdefval">std::nullopt</span>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em><span class="paramdefsep"> = </span><span class="paramdefval">{}</span></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

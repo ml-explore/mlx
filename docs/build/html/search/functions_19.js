@@ -7,9 +7,9 @@ var searchData=
   ['_7econcurrentcontext_4',['~ConcurrentContext',['../structmlx_1_1core_1_1metal_1_1_command_encoder_1_1_concurrent_context.html#a28bafec56edec3091e8716d8ccfb6ee1',1,'mlx::core::metal::CommandEncoder::ConcurrentContext']]],
   ['_7edata_5',['~Data',['../structmlx_1_1core_1_1array_1_1_data.html#a1cf69d9709206578c4e87e9c1daad5e1',1,'mlx::core::array::Data']]],
   ['_7edevice_6',['~Device',['../classmlx_1_1core_1_1metal_1_1_device.html#a4f39c28c6cdd1d2da1918f5871bcba6e',1,'mlx::core::metal::Device']]],
-  ['_7efilereader_7',['~FileReader',['../classmlx_1_1core_1_1io_1_1_file_reader.html#a5611fbeeb8f2d665a9da15f3103f8d53',1,'mlx::core::io::FileReader']]],
-  ['_7efilewriter_8',['~FileWriter',['../classmlx_1_1core_1_1io_1_1_file_writer.html#ac325f51cd22050b6359056290e8ef42c',1,'mlx::core::io::FileWriter']]],
-  ['_7eintracing_9',['~InTracing',['../structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a',1,'mlx::core::detail::InTracing']]],
+  ['_7efilewriter_7',['~FileWriter',['../classmlx_1_1core_1_1io_1_1_file_writer.html#ac325f51cd22050b6359056290e8ef42c',1,'mlx::core::io::FileWriter']]],
+  ['_7eintracing_8',['~InTracing',['../structmlx_1_1core_1_1detail_1_1_in_tracing.html#a83d57d7fa63bcb0ff72080191d0f177a',1,'mlx::core::detail::InTracing']]],
+  ['_7eparallelfilereader_9',['~ParallelFileReader',['../classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#ae9e3fc1cc3e827dae4d3d107f6780817',1,'mlx::core::io::ParallelFileReader']]],
   ['_7eprimitive_10',['~Primitive',['../classmlx_1_1core_1_1_primitive.html#a29f70eb2d3b7e6c5fe52779c03f03777',1,'mlx::core::Primitive']]],
   ['_7ereader_11',['~Reader',['../classmlx_1_1core_1_1io_1_1_reader.html#a81cd4747d81311c87dc6753f2d0d8b16',1,'mlx::core::io::Reader']]],
   ['_7eretaingraph_12',['~RetainGraph',['../structmlx_1_1core_1_1detail_1_1_retain_graph.html#a6bd6dc2e1caf2f764f39856a72ff6cbc',1,'mlx::core::detail::RetainGraph']]],
@@ -17,6 +17,7 @@ var searchData=
   ['_7estreamcontext_14',['~StreamContext',['../structmlx_1_1core_1_1_stream_context.html#ac5be1c576d22b3d0b0a6fcc7e6abe659',1,'mlx::core::StreamContext']]],
   ['_7estreamthread_15',['~StreamThread',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a71de50591388b6e2cc6c57827e1a1ad4',1,'mlx::core::scheduler::StreamThread']]],
   ['_7ethread_5fpool_16',['~thread_pool',['../classpocketfft_1_1detail_1_1threading_1_1thread__pool.html#a68f71e79fa93379fcc5819e533b45472',1,'pocketfft::detail::threading::thread_pool']]],
-  ['_7eunaryprimitive_17',['~UnaryPrimitive',['../classmlx_1_1core_1_1_unary_primitive.html#ac0677ab99a5ca660ed6ab7902ea364de',1,'mlx::core::UnaryPrimitive']]],
-  ['_7ewriter_18',['~Writer',['../classmlx_1_1core_1_1io_1_1_writer.html#a0e42f93a64118e9f5ede54ffe1bda045',1,'mlx::core::io::Writer']]]
+  ['_7ethreadpool_17',['~ThreadPool',['../class_thread_pool.html#a44d3d2ab618970605e684efc216655eb',1,'ThreadPool']]],
+  ['_7eunaryprimitive_18',['~UnaryPrimitive',['../classmlx_1_1core_1_1_unary_primitive.html#ac0677ab99a5ca660ed6ab7902ea364de',1,'mlx::core::UnaryPrimitive']]],
+  ['_7ewriter_19',['~Writer',['../classmlx_1_1core_1_1io_1_1_writer.html#a0e42f93a64118e9f5ede54ffe1bda045',1,'mlx::core::io::Writer']]]
 ];

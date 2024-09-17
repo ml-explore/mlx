@@ -89,6 +89,12 @@ Functions</h2></td></tr>
 <tr class="separator:aa1d225b25f7b6426c48c5e35860ee960"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aeb5a1726358213bc75756506f7b54d04" id="r_aeb5a1726358213bc75756506f7b54d04"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aeb5a1726358213bc75756506f7b54d04">all_gather</a> (<a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> group, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;output)</td></tr>
 <tr class="separator:aeb5a1726358213bc75756506f7b54d04"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abf33511660ac71df5fc92f2aad6c6e08" id="r_abf33511660ac71df5fc92f2aad6c6e08"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#abf33511660ac71df5fc92f2aad6c6e08">send</a> (<a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> group, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, int dst)</td></tr>
+<tr class="memdesc:abf33511660ac71df5fc92f2aad6c6e08"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_send.html">Send</a> an array to the dst rank.  <br /></td></tr>
+<tr class="separator:abf33511660ac71df5fc92f2aad6c6e08"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a003de04deb00ecbb19179b3f557df548" id="r_a003de04deb00ecbb19179b3f557df548"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a003de04deb00ecbb19179b3f557df548">recv</a> (<a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a> group, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, int src)</td></tr>
+<tr class="memdesc:a003de04deb00ecbb19179b3f557df548"><td class="mdescLeft">&#160;</td><td class="mdescRight"><a class="el" href="classmlx_1_1core_1_1distributed_1_1_recv.html">Recv</a> an array from the src rank.  <br /></td></tr>
+<tr class="separator:a003de04deb00ecbb19179b3f557df548"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
 <a id="aeb5a1726358213bc75756506f7b54d04" name="aeb5a1726358213bc75756506f7b54d04"></a>
@@ -157,6 +163,62 @@ Functions</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a003de04deb00ecbb19179b3f557df548" name="a003de04deb00ecbb19179b3f557df548"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a003de04deb00ecbb19179b3f557df548">&#9670;&#160;</a></span>recv()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::distributed::detail::recv </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a></td>          <td class="paramname"><span class="paramname"><em>group</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>out</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>src</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="classmlx_1_1core_1_1distributed_1_1_recv.html">Recv</a> an array from the src rank. </p>
+
+</div>
+</div>
+<a id="abf33511660ac71df5fc92f2aad6c6e08" name="abf33511660ac71df5fc92f2aad6c6e08"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abf33511660ac71df5fc92f2aad6c6e08">&#9670;&#160;</a></span>send()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::distributed::detail::send </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="structmlx_1_1core_1_1distributed_1_1_group.html">Group</a></td>          <td class="paramname"><span class="paramname"><em>group</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>input</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>dst</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p><a class="el" href="classmlx_1_1core_1_1distributed_1_1_send.html">Send</a> an array to the dst rank. </p>
 
 </div>
 </div>

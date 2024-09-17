@@ -74,20 +74,20 @@ Then simply build and install MLX using pip:
 
 .. code-block:: shell
 
-  CMAKE_BUILD_PARALLEL_LEVEL="" pip install .
+  CMAKE_BUILD_PARALLEL_LEVEL=8 pip install .
 
 For developing, install the package with development dependencies, and use an
 editable install:
 
 .. code-block:: shell
 
-  CMAKE_BUILD_PARALLEL_LEVEL="" pip install -e ".[dev]"
+  CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e ".[dev]"
 
 Once the development dependencies are installed, you can build faster with:
 
 .. code-block:: shell
 
- CMAKE_BUILD_PARALLEL_LEVEL="" python setup.py build_ext -j --inplace
+ CMAKE_BUILD_PARALLEL_LEVEL=8 python setup.py build_ext --inplace
 
 Run the tests with:
 

@@ -96,11 +96,13 @@ Inheritance diagram for mlx::core::metal::MetalAllocator:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a6c0feb9b1ff9977f76c69745393944bc" id="r_a6c0feb9b1ff9977f76c69745393944bc"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6c0feb9b1ff9977f76c69745393944bc">malloc</a> (size_t size, bool allow_swap=false) override</td></tr>
+<tr class="memitem:a6c0feb9b1ff9977f76c69745393944bc" id="r_a6c0feb9b1ff9977f76c69745393944bc"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6c0feb9b1ff9977f76c69745393944bc">malloc</a> (size_t <a class="el" href="#a51f6587e8065be16f0418ca42a796e05">size</a>, bool allow_swap=false) override</td></tr>
 <tr class="memdesc:a6c0feb9b1ff9977f76c69745393944bc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Allocator for Metal GPUs.  <br /></td></tr>
 <tr class="separator:a6c0feb9b1ff9977f76c69745393944bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a109a0a37fb0b3be381a62dc3b1a54bf0" id="r_a109a0a37fb0b3be381a62dc3b1a54bf0"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a109a0a37fb0b3be381a62dc3b1a54bf0">free</a> (<a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a> buffer) override</td></tr>
 <tr class="separator:a109a0a37fb0b3be381a62dc3b1a54bf0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a51f6587e8065be16f0418ca42a796e05" id="r_a51f6587e8065be16f0418ca42a796e05"><td class="memItemLeft" align="right" valign="top">virtual size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a51f6587e8065be16f0418ca42a796e05">size</a> (<a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a> buffer) const override</td></tr>
+<tr class="separator:a51f6587e8065be16f0418ca42a796e05"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7a3ad4e33d57a47474c98e2f88e775d7" id="r_a7a3ad4e33d57a47474c98e2f88e775d7"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a7a3ad4e33d57a47474c98e2f88e775d7">get_active_memory</a> ()</td></tr>
 <tr class="separator:a7a3ad4e33d57a47474c98e2f88e775d7"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac7972a3fe58e69489de775a0f152da17" id="r_ac7972a3fe58e69489de775a0f152da17"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ac7972a3fe58e69489de775a0f152da17">get_peak_memory</a> ()</td></tr>
@@ -347,6 +349,33 @@ Friends</h2></td></tr>
         </tr>
       </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a51f6587e8065be16f0418ca42a796e05" name="a51f6587e8065be16f0418ca42a796e05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a51f6587e8065be16f0418ca42a796e05">&#9670;&#160;</a></span>size()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual size_t mlx::core::metal::MetalAllocator::size </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a></td>          <td class="paramname"><span class="paramname"><em>buffer</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Implements <a class="el" href="classmlx_1_1core_1_1allocator_1_1_allocator.html#a2adf9a9c968f113dde830cc0dc27dcc6">mlx::core::allocator::Allocator</a>.</p>
 
 </div>
 </div>

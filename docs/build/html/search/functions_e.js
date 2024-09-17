@@ -1,7 +1,7 @@
 var searchData=
 [
   ['n_5factive_5ftasks_0',['n_active_tasks',['../classmlx_1_1core_1_1scheduler_1_1_scheduler.html#a3c9fa21442974acba3409d49bb033131',1,'mlx::core::scheduler::Scheduler::n_active_tasks()'],['../namespacemlx_1_1core_1_1scheduler.html#a9bf641981df5fc16b0fb0dbacc0c3afd',1,'mlx::core::scheduler::n_active_tasks()']]],
-  ['nan_5fto_5fnum_1',['nan_to_num',['../group__ops.html#ga506d1b63e391e45a7d8dc10cfd71e78d',1,'mlx::core']]],
+  ['nan_5fto_5fnum_1',['nan_to_num',['../group__ops.html#gab1467c6a9e675152e768afd6dcfb61de',1,'mlx::core']]],
   ['nbytes_2',['nbytes',['../classmlx_1_1core_1_1array.html#a387b67cd3ef5cfc1e749c371766c4a05',1,'mlx::core::array']]],
   ['nd_5floop_3',['nd_loop',['../namespacemlx_1_1core.html#a9a9254ce9975ec247a2718bc02d6f201',1,'mlx::core']]],
   ['ndarr_4',['ndarr',['../classpocketfft_1_1detail_1_1ndarr.html#a8f0037a172d96cb1ad915a5069175fa2',1,'pocketfft::detail::ndarr']]],

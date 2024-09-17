@@ -85,10 +85,10 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:adf7aeb18cd1d5042cf6d9b46b582d8ce" id="r_adf7aeb18cd1d5042cf6d9b46b582d8ce"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS = 0, int N_READS = REDUCE_N_READS&gt; </td></tr>
+<tr class="memitem:adf7aeb18cd1d5042cf6d9b46b582d8ce" id="r_adf7aeb18cd1d5042cf6d9b46b582d8ce"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS, int N_READS = REDUCE_N_READS&gt; </td></tr>
 <tr class="memitem:adf7aeb18cd1d5042cf6d9b46b582d8ce"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#adf7aeb18cd1d5042cf6d9b46b582d8ce">col_reduce_small</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, uint3 gid, uint3 gsize, uint simd_lane_id, uint simd_group_id, uint3 tid, uint3 tsize)</td></tr>
 <tr class="separator:adf7aeb18cd1d5042cf6d9b46b582d8ce"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a11bfc6112ae2386ac03f5ea7b7d93385" id="r_a11bfc6112ae2386ac03f5ea7b7d93385"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS = 0, int BM = 8, int BN = 128&gt; </td></tr>
+<tr class="memitem:a11bfc6112ae2386ac03f5ea7b7d93385" id="r_a11bfc6112ae2386ac03f5ea7b7d93385"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt; </td></tr>
 <tr class="memitem:a11bfc6112ae2386ac03f5ea7b7d93385"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a11bfc6112ae2386ac03f5ea7b7d93385">col_reduce_looped</a> (const device T *in, device U *out, const constant size_t &amp;reduction_size, const constant size_t &amp;reduction_stride, const constant int *shape, const constant size_t *strides, const constant int &amp;ndim, const constant int *reduce_shape, const constant size_t *reduce_strides, const constant int &amp;reduce_ndim, const constant size_t &amp;non_col_reductions, uint3 gid, uint3 gsize, uint simd_lane_id, uint simd_group_id)</td></tr>
 <tr class="memdesc:a11bfc6112ae2386ac03f5ea7b7d93385"><td class="mdescLeft">&#160;</td><td class="mdescRight">Our approach is the following simple looped approach:  <br /></td></tr>
 <tr class="separator:a11bfc6112ae2386ac03f5ea7b7d93385"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -100,7 +100,7 @@ Functions</h2></td></tr>
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int NDIMS = 0, int BM = 8, int BN = 128&gt; </div>
+template&lt;typename T , typename U , typename Op , int NDIMS, int BM, int BN&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void col_reduce_looped </td>
@@ -197,7 +197,7 @@ template&lt;typename T , typename U , typename Op , int NDIMS = 0, int BM = 8, i
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename U , typename Op , int NDIMS = 0, int N_READS = REDUCE_N_READS&gt; </div>
+template&lt;typename T , typename U , typename Op , int NDIMS, int N_READS = REDUCE_N_READS&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void col_reduce_small </td>

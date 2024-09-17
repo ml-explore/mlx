@@ -82,14 +82,14 @@ $(function() {
 </div><!--header-->
 <div class="contents">
 
-<p><code>#include &lt;<a class="el" href="load_8h_source.html">load.h</a>&gt;</code></p>
+<p><code>#include &lt;<a class="el" href="io_2load_8h_source.html">load.h</a>&gt;</code></p>
 <div class="dynheader">
 Inheritance diagram for mlx::core::io::Reader:</div>
 <div class="dyncontent">
  <div class="center">
   <img src="classmlx_1_1core_1_1io_1_1_reader.png" usemap="#mlx::core::io::Reader_map" alt=""/>
   <map id="mlx::core::io::Reader_map" name="mlx::core::io::Reader_map">
-<area href="classmlx_1_1core_1_1io_1_1_file_reader.html" alt="mlx::core::io::FileReader" shape="rect" coords="0,56,146,80"/>
+<area href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html" alt="mlx::core::io::ParallelFileReader" shape="rect" coords="0,56,189,80"/>
   </map>
 </div></div>
 <table class="memberdecls">
@@ -105,6 +105,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:acea55078bd39ccaa27a9a36f17a39cd1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad8d74e2c62b579511089faa4cc6f50a1" id="r_ad8d74e2c62b579511089faa4cc6f50a1"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ad8d74e2c62b579511089faa4cc6f50a1">read</a> (char *data, size_t n)=0</td></tr>
 <tr class="separator:ad8d74e2c62b579511089faa4cc6f50a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3e82cc31bd2a8594f19dc9858dca3efc" id="r_a3e82cc31bd2a8594f19dc9858dca3efc"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a3e82cc31bd2a8594f19dc9858dca3efc">read</a> (char *data, size_t n, size_t offset)=0</td></tr>
+<tr class="separator:a3e82cc31bd2a8594f19dc9858dca3efc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8c244daf52fd5ebb9a2c7e5f4ae793cd" id="r_a8c244daf52fd5ebb9a2c7e5f4ae793cd"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8c244daf52fd5ebb9a2c7e5f4ae793cd">label</a> () const =0</td></tr>
 <tr class="separator:a8c244daf52fd5ebb9a2c7e5f4ae793cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a81cd4747d81311c87dc6753f2d0d8b16" id="r_a81cd4747d81311c87dc6753f2d0d8b16"><td class="memItemLeft" align="right" valign="top">virtual&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a81cd4747d81311c87dc6753f2d0d8b16">~Reader</a> ()=default</td></tr>
@@ -160,7 +162,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_file_reader.html#a4ecb046dfa7dab346d096adab3a1c318">mlx::core::io::FileReader</a>.</p>
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#ac54a2c693acc3d9e6e942412148ffcc9">mlx::core::io::ParallelFileReader</a>.</p>
 
 </div>
 </div>
@@ -187,7 +189,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_file_reader.html#a97ccdbd79886d9b95b32e5cd4741d150">mlx::core::io::FileReader</a>.</p>
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a653009adbcbce8248bc666df502fdbde">mlx::core::io::ParallelFileReader</a>.</p>
 
 </div>
 </div>
@@ -214,12 +216,12 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_file_reader.html#a7415da4cb14c328ed07901ff1c266221">mlx::core::io::FileReader</a>.</p>
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a361d3b34bc493825c893cce256da46c8">mlx::core::io::ParallelFileReader</a>.</p>
 
 </div>
 </div>
 <a id="ad8d74e2c62b579511089faa4cc6f50a1" name="ad8d74e2c62b579511089faa4cc6f50a1"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad8d74e2c62b579511089faa4cc6f50a1">&#9670;&#160;</a></span>read()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ad8d74e2c62b579511089faa4cc6f50a1">&#9670;&#160;</a></span>read() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -245,7 +247,43 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_file_reader.html#a6a5fa6067fea53ba7dbcddcb7d713a7d">mlx::core::io::FileReader</a>.</p>
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a6691826fc8d28f83792bfa2f92660a3b">mlx::core::io::ParallelFileReader</a>.</p>
+
+</div>
+</div>
+<a id="a3e82cc31bd2a8594f19dc9858dca3efc" name="a3e82cc31bd2a8594f19dc9858dca3efc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e82cc31bd2a8594f19dc9858dca3efc">&#9670;&#160;</a></span>read() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void mlx::core::io::Reader::read </td>
+          <td>(</td>
+          <td class="paramtype">char *</td>          <td class="paramname"><span class="paramname"><em>data</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>n</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>offset</em></span>&#160;)</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a2b83b4576f1942db869171cccbf607df">mlx::core::io::ParallelFileReader</a>.</p>
 
 </div>
 </div>
@@ -276,7 +314,7 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_file_reader.html#aab62cc43970bd5de2c0115b1cc0a6af4">mlx::core::io::FileReader</a>.</p>
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a673c16b669f3cee13f387b7b0a1f39f7">mlx::core::io::ParallelFileReader</a>.</p>
 
 </div>
 </div>
@@ -303,12 +341,12 @@ Public Member Functions</h2></td></tr>
 </table>
 </div><div class="memdoc">
 
-<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_file_reader.html#aa47428656f87fb1ff89378a6041bf68f">mlx::core::io::FileReader</a>.</p>
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1io_1_1_parallel_file_reader.html#a2e92131428f0ffa98fff781b8c35d9e5">mlx::core::io::ParallelFileReader</a>.</p>
 
 </div>
 </div>
 <hr/>The documentation for this class was generated from the following file:<ul>
-<li>mlx/io/<a class="el" href="load_8h_source.html">load.h</a></li>
+<li>mlx/io/<a class="el" href="io_2load_8h_source.html">load.h</a></li>
 </ul>
 </div><!-- contents -->
 <!-- start footer part -->

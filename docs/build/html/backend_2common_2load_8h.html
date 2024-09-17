@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.10.0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>MLX: Member List</title>
+<title>MLX: mlx/backend/common/load.h File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -71,19 +71,34 @@ $(function() {
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="namespacemlx.html">mlx</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core.html">core</a></li><li class="navelem"><a class="el" href="namespacemlx_1_1core_1_1fast.html">fast</a></li><li class="navelem"><a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html">MetalKernel</a></li>  </ul>
+<li class="navelem"><a class="el" href="dir_938ab0ecf10b8b860ff766c820f665fd.html">mlx</a></li><li class="navelem"><a class="el" href="dir_1d446c9bd3c99228254c9484e0bc5c06.html">backend</a></li><li class="navelem"><a class="el" href="dir_f149b24a1b5be11cd70151abe517e3f8.html">common</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div class="header">
-  <div class="headertitle"><div class="title">mlx::core::fast::MetalKernel Member List</div></div>
+  <div class="summary">
+<a href="#namespaces">Namespaces</a> &#124;
+<a href="#func-members">Functions</a>  </div>
+  <div class="headertitle"><div class="title">load.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-
-<p>This is the complete list of members for <a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html">mlx::core::fast::MetalKernel</a>, including all inherited members.</p>
-<table class="directory">
-  <tr class="even"><td class="entry"><a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html#aa3bb7e33f51b36b1d91c551b6aa711b4">MetalKernel</a>(const std::string &amp;name, const std::string &amp;source, bool ensure_row_contiguous)</td><td class="entry"><a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html">mlx::core::fast::MetalKernel</a></td><td class="entry"><span class="mlabel">inline</span></td></tr>
-  <tr class="odd"><td class="entry"><a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html#afcb6509d9140bd9b9b419881a3a998cb">operator()</a>(std::map&lt; std::string, array &gt; &amp;inputs, std::map&lt; std::string, std::vector&lt; int &gt; &gt; output_shapes, std::map&lt; std::string, Dtype &gt; output_dtypes, std::tuple&lt; int, int, int &gt; grid, std::tuple&lt; int, int, int &gt; threadgroup, std::optional&lt; std::map&lt; std::string, TemplateArg &gt; &gt; template_args=std::nullopt, bool verbose=false, StreamOrDevice s={})</td><td class="entry"><a class="el" href="classmlx_1_1core_1_1fast_1_1_metal_kernel.html">mlx::core::fast::MetalKernel</a></td><td class="entry"></td></tr>
-</table></div><!-- contents -->
+<div class="textblock"><code>#include &quot;<a class="el" href="array_8h_source.html">mlx/array.h</a>&quot;</code><br />
+<code>#include &quot;<a class="el" href="io_2load_8h_source.html">mlx/io/load.h</a>&quot;</code><br />
+</div>
+<p><a href="backend_2common_2load_8h_source.html">Go to the source code of this file.</a></p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:namespacemlx" id="r_namespacemlx"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx.html">mlx</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:namespacemlx_1_1core" id="r_namespacemlx_1_1core"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html">mlx::core</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:a954de19249da7c1fa39b89bdc47368aa" id="r_a954de19249da7c1fa39b89bdc47368aa"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html#a954de19249da7c1fa39b89bdc47368aa">mlx::core::load</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;out, size_t offset, const std::shared_ptr&lt; <a class="el" href="classmlx_1_1core_1_1io_1_1_reader.html">io::Reader</a> &gt; &amp;reader, bool swap_endianess)</td></tr>
+<tr class="separator:a954de19249da7c1fa39b89bdc47368aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+</div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>
 Generated by&#160;<a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.10.0

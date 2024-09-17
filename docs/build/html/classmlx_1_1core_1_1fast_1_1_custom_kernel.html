@@ -95,8 +95,8 @@ Inheritance diagram for mlx::core::fast::CustomKernel:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a95096f69c0849707cf61904513fb82dc" id="r_a95096f69c0849707cf61904513fb82dc"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a95096f69c0849707cf61904513fb82dc">CustomKernel</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, std::string name, std::string source, std::tuple&lt; int, int, int &gt; grid, std::tuple&lt; int, int, int &gt; threadgroup, std::vector&lt; <a class="el" href="structmlx_1_1core_1_1fast_1_1_custom_kernel_shape_info.html">CustomKernelShapeInfo</a> &gt; shape_infos, bool ensure_row_contiguous)</td></tr>
-<tr class="separator:a95096f69c0849707cf61904513fb82dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a954893e07f0d36715b4e1e414b6f2153" id="r_a954893e07f0d36715b4e1e414b6f2153"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a954893e07f0d36715b4e1e414b6f2153">CustomKernel</a> (<a class="el" href="structmlx_1_1core_1_1_stream.html">Stream</a> <a class="el" href="classmlx_1_1core_1_1_primitive.html#a46e6257397a662528f9f831842ac456a">stream</a>, std::string name, std::string source, std::tuple&lt; int, int, int &gt; grid, std::tuple&lt; int, int, int &gt; threadgroup, std::vector&lt; <a class="el" href="structmlx_1_1core_1_1fast_1_1_custom_kernel_shape_info.html">CustomKernelShapeInfo</a> &gt; shape_infos, bool ensure_row_contiguous, std::optional&lt; float &gt; init_value)</td></tr>
+<tr class="separator:a954893e07f0d36715b4e1e414b6f2153"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4ad1b7a9919753c759093f3e21a15bad" id="r_a4ad1b7a9919753c759093f3e21a15bad"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4ad1b7a9919753c759093f3e21a15bad">eval_cpu</a> (const std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;inputs, std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; &amp;outputs) override</td></tr>
 <tr class="memdesc:a4ad1b7a9919753c759093f3e21a15bad"><td class="mdescLeft">&#160;</td><td class="mdescRight">A primitive must know how to evaluate itself on the CPU/GPU for the given inputs and populate the output arrays.  <br /></td></tr>
 <tr class="separator:a4ad1b7a9919753c759093f3e21a15bad"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -143,8 +143,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a50bbddd43e1ba0cf5f127cd7aa756a9e inherit pub_methods_classmlx_1_1core_1_1_primitive"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
-<a id="a95096f69c0849707cf61904513fb82dc" name="a95096f69c0849707cf61904513fb82dc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a95096f69c0849707cf61904513fb82dc">&#9670;&#160;</a></span>CustomKernel()</h2>
+<a id="a954893e07f0d36715b4e1e414b6f2153" name="a954893e07f0d36715b4e1e414b6f2153"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a954893e07f0d36715b4e1e414b6f2153">&#9670;&#160;</a></span>CustomKernel()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -185,7 +185,12 @@ Public Member Functions</h2></td></tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>ensure_row_contiguous</em></span>&#160;)</td>
+          <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>ensure_row_contiguous</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::optional&lt; float &gt;</td>          <td class="paramname"><span class="paramname"><em>init_value</em></span>&#160;)</td>
         </tr>
       </table>
   </td>

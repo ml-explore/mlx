@@ -166,15 +166,15 @@ Functions</h2></td></tr>
 <tr class="memitem:acfc43edcf0c742ddc090d22cb7229284" id="r_acfc43edcf0c742ddc090d22cb7229284"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
 <tr class="memitem:acfc43edcf0c742ddc090d22cb7229284"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#acfc43edcf0c742ddc090d22cb7229284">bs_qmm_n</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
 <tr class="separator:acfc43edcf0c742ddc090d22cb7229284"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a47610f886f988d84c3e789eb564a6c44" id="r_a47610f886f988d84c3e789eb564a6c44"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
-<tr class="memitem:a47610f886f988d84c3e789eb564a6c44"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a47610f886f988d84c3e789eb564a6c44">affine_quantize</a> (const device T *w, device uint8_t *out, device T *scales, device T *biases, uint index)</td></tr>
-<tr class="separator:a47610f886f988d84c3e789eb564a6c44"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a57cd320aab5fa1abb65f79b0b781f575" id="r_a57cd320aab5fa1abb65f79b0b781f575"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
-<tr class="memitem:a57cd320aab5fa1abb65f79b0b781f575"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a57cd320aab5fa1abb65f79b0b781f575">affine_quantize_scales_biases</a> (const device T *w, const device T *scales, const device T *biases, device uint8_t *out, uint index)</td></tr>
-<tr class="separator:a57cd320aab5fa1abb65f79b0b781f575"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aecc3db76dcae742776e71ec8fca470c5" id="r_aecc3db76dcae742776e71ec8fca470c5"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
-<tr class="memitem:aecc3db76dcae742776e71ec8fca470c5"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aecc3db76dcae742776e71ec8fca470c5">affine_dequantize</a> (const device uint8_t *w, const device T *scales, const device T *biases, device T *out, uint index)</td></tr>
-<tr class="separator:aecc3db76dcae742776e71ec8fca470c5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a47bcf4a14566e01e14bd3c155811db59" id="r_a47bcf4a14566e01e14bd3c155811db59"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
+<tr class="memitem:a47bcf4a14566e01e14bd3c155811db59"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a47bcf4a14566e01e14bd3c155811db59">affine_quantize</a> (const device T *w, device uint8_t *out, device T *scales, device T *biases, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a47bcf4a14566e01e14bd3c155811db59"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7561acefd7b55e7e2b25393be08bb99c" id="r_a7561acefd7b55e7e2b25393be08bb99c"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
+<tr class="memitem:a7561acefd7b55e7e2b25393be08bb99c"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7561acefd7b55e7e2b25393be08bb99c">affine_quantize_scales_biases</a> (const device T *w, const device T *scales, const device T *biases, device uint8_t *out, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a7561acefd7b55e7e2b25393be08bb99c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6076203615038eb06816158f7b3869c6" id="r_a6076203615038eb06816158f7b3869c6"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
+<tr class="memitem:a6076203615038eb06816158f7b3869c6"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6076203615038eb06816158f7b3869c6">affine_dequantize</a> (const device uint8_t *w, const device T *scales, const device T *biases, device T *out, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a6076203615038eb06816158f7b3869c6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="var-members" name="var-members"></a>
 Variables</h2></td></tr>
@@ -315,8 +315,8 @@ template&lt;typename T &gt; </div>
 
 </div>
 </div>
-<a id="aecc3db76dcae742776e71ec8fca470c5" name="aecc3db76dcae742776e71ec8fca470c5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aecc3db76dcae742776e71ec8fca470c5">&#9670;&#160;</a></span>affine_dequantize()</h2>
+<a id="a6076203615038eb06816158f7b3869c6" name="a6076203615038eb06816158f7b3869c6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6076203615038eb06816158f7b3869c6">&#9670;&#160;</a></span>affine_dequantize()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -346,15 +346,20 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a47610f886f988d84c3e789eb564a6c44" name="a47610f886f988d84c3e789eb564a6c44"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a47610f886f988d84c3e789eb564a6c44">&#9670;&#160;</a></span>affine_quantize()</h2>
+<a id="a47bcf4a14566e01e14bd3c155811db59" name="a47bcf4a14566e01e14bd3c155811db59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47bcf4a14566e01e14bd3c155811db59">&#9670;&#160;</a></span>affine_quantize()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -384,15 +389,20 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
 
 </div>
 </div>
-<a id="a57cd320aab5fa1abb65f79b0b781f575" name="a57cd320aab5fa1abb65f79b0b781f575"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a57cd320aab5fa1abb65f79b0b781f575">&#9670;&#160;</a></span>affine_quantize_scales_biases()</h2>
+<a id="a7561acefd7b55e7e2b25393be08bb99c" name="a7561acefd7b55e7e2b25393be08bb99c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7561acefd7b55e7e2b25393be08bb99c">&#9670;&#160;</a></span>affine_quantize_scales_biases()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -422,7 +432,12 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>index</em>, </span></td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint2</td>          <td class="paramname"><span class="paramname"><em>grid_dim</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">
