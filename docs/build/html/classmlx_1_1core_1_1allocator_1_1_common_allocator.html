@@ -96,11 +96,13 @@ Inheritance diagram for mlx::core::allocator::CommonAllocator:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a4f3d5de6b8c0eba22e9403b28a5ef3f0" id="r_a4f3d5de6b8c0eba22e9403b28a5ef3f0"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4f3d5de6b8c0eba22e9403b28a5ef3f0">malloc</a> (size_t size, bool allow_swap=false) override</td></tr>
+<tr class="memitem:a4f3d5de6b8c0eba22e9403b28a5ef3f0" id="r_a4f3d5de6b8c0eba22e9403b28a5ef3f0"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a4f3d5de6b8c0eba22e9403b28a5ef3f0">malloc</a> (size_t <a class="el" href="#aafa92e8310db089b1ac72b840777e26b">size</a>, bool allow_swap=false) override</td></tr>
 <tr class="memdesc:a4f3d5de6b8c0eba22e9403b28a5ef3f0"><td class="mdescLeft">&#160;</td><td class="mdescRight">A general CPU allocator.  <br /></td></tr>
 <tr class="separator:a4f3d5de6b8c0eba22e9403b28a5ef3f0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a84b50d1a3cbffa12c1a6cf0ed8c71079" id="r_a84b50d1a3cbffa12c1a6cf0ed8c71079"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a84b50d1a3cbffa12c1a6cf0ed8c71079">free</a> (<a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a> buffer) override</td></tr>
 <tr class="separator:a84b50d1a3cbffa12c1a6cf0ed8c71079"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aafa92e8310db089b1ac72b840777e26b" id="r_aafa92e8310db089b1ac72b840777e26b"><td class="memItemLeft" align="right" valign="top">virtual size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aafa92e8310db089b1ac72b840777e26b">size</a> (<a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a> buffer) const override</td></tr>
+<tr class="separator:aafa92e8310db089b1ac72b840777e26b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classmlx_1_1core_1_1allocator_1_1_allocator"><td colspan="2" onclick="javascript:dynsection.toggleInherit('pub_methods_classmlx_1_1core_1_1allocator_1_1_allocator')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classmlx_1_1core_1_1allocator_1_1_allocator.html">mlx::core::allocator::Allocator</a></td></tr>
 <tr class="memitem:a5803678a418fef687fc65fa9d5c37b65 inherit pub_methods_classmlx_1_1core_1_1allocator_1_1_allocator" id="r_a5803678a418fef687fc65fa9d5c37b65"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1allocator_1_1_allocator.html#a5803678a418fef687fc65fa9d5c37b65">Allocator</a> ()=default</td></tr>
 <tr class="separator:a5803678a418fef687fc65fa9d5c37b65 inherit pub_methods_classmlx_1_1core_1_1allocator_1_1_allocator"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -178,6 +180,33 @@ Friends</h2></td></tr>
 <p>A general CPU allocator. </p>
 
 <p>Implements <a class="el" href="classmlx_1_1core_1_1allocator_1_1_allocator.html#a9a17d2c7a97772bf4a15e6c74af34ca4">mlx::core::allocator::Allocator</a>.</p>
+
+</div>
+</div>
+<a id="aafa92e8310db089b1ac72b840777e26b" name="aafa92e8310db089b1ac72b840777e26b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aafa92e8310db089b1ac72b840777e26b">&#9670;&#160;</a></span>size()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual size_t mlx::core::allocator::CommonAllocator::size </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a></td>          <td class="paramname"><span class="paramname"><em>buffer</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">override</span><span class="mlabel">virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Implements <a class="el" href="classmlx_1_1core_1_1allocator_1_1_allocator.html#a2adf9a9c968f113dde830cc0dc27dcc6">mlx::core::allocator::Allocator</a>.</p>
 
 </div>
 </div>
