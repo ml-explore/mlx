@@ -97,7 +97,7 @@ $(function() { codefold.init(0); });
 <div class="line"><a id="l00012" name="l00012"></a><span class="lineno">   12</span><span class="keyword">namespace </span>{</div>
 <div class="line"><a id="l00013" name="l00013"></a><span class="lineno">   13</span> </div>
 <div class="line"><a id="l00014" name="l00014"></a><span class="lineno">   14</span><span class="keywordtype">void</span> set_unary_output_data(<span class="keyword">const</span> array&amp; in, array&amp; out) {</div>
-<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>  <span class="keywordflow">if</span> (in.is_donatable() &amp;&amp; in.itemsize() == out.itemsize()) {</div>
+<div class="line"><a id="l00015" name="l00015"></a><span class="lineno">   15</span>  <span class="keywordflow">if</span> (<a class="code hl_function" href="namespacemlx_1_1core.html#af650e831ce21759da1ac103037d08d84">is_donatable</a>(in, out)) {</div>
 <div class="line"><a id="l00016" name="l00016"></a><span class="lineno">   16</span>    out.copy_shared_buffer(in);</div>
 <div class="line"><a id="l00017" name="l00017"></a><span class="lineno">   17</span>  } <span class="keywordflow">else</span> {</div>
 <div class="line"><a id="l00018" name="l00018"></a><span class="lineno">   18</span>    <span class="keyword">auto</span> size = in.data_size();</div>
@@ -219,6 +219,7 @@ $(function() { codefold.init(0); });
 <div class="ttc" id="anamespacemlx_1_1core_html_a9778d50afbf456b0bd738751243b3b68"><div class="ttname"><a href="namespacemlx_1_1core.html#a9778d50afbf456b0bd738751243b3b68">mlx::core::uint8</a></div><div class="ttdeci">constexpr Dtype uint8</div><div class="ttdef"><b>Definition</b> dtype.h:60</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_abf228ee9d8ec48c03bb15adcc4e1f3ec"><div class="ttname"><a href="namespacemlx_1_1core.html#abf228ee9d8ec48c03bb15adcc4e1f3ec">mlx::core::float16</a></div><div class="ttdeci">constexpr Dtype float16</div><div class="ttdef"><b>Definition</b> dtype.h:70</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_ac63820d6fe10545907c33faf466a929e"><div class="ttname"><a href="namespacemlx_1_1core.html#ac63820d6fe10545907c33faf466a929e">mlx::core::uint32</a></div><div class="ttdeci">constexpr Dtype uint32</div><div class="ttdef"><b>Definition</b> dtype.h:62</div></div>
+<div class="ttc" id="anamespacemlx_1_1core_html_af650e831ce21759da1ac103037d08d84"><div class="ttname"><a href="namespacemlx_1_1core.html#af650e831ce21759da1ac103037d08d84">mlx::core::is_donatable</a></div><div class="ttdeci">bool is_donatable(const array &amp;in, const array &amp;out)</div><div class="ttdef"><b>Definition</b> utils.h:158</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_af99db87e0078bfcdb383f5689bc874d4"><div class="ttname"><a href="namespacemlx_1_1core.html#af99db87e0078bfcdb383f5689bc874d4">mlx::core::complex64</a></div><div class="ttdeci">constexpr Dtype complex64</div><div class="ttdef"><b>Definition</b> dtype.h:73</div></div>
 <div class="ttc" id="autils_8h_html"><div class="ttname"><a href="utils_8h.html">utils.h</a></div></div>
 </div><!-- fragment --></div><!-- contents -->
