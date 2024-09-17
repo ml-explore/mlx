@@ -100,7 +100,7 @@ void copy_gpu_inplace(
         kname << shape.size();
       } else if (shape[ndim - 1] >= 4) {
         work_per_thread = 4;
-        kname << "_n4";
+        kname << "n4";
       }
     }
     kname << "_copy";

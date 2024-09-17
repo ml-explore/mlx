@@ -177,7 +177,7 @@ MTL::ComputePipelineState* get_copy_kernel(
                "g3_" + lib_name, "copy_g_nd3", in_type, out_type)
         << get_template_definition("g_" + lib_name, "copy_g", in_type, out_type)
         << get_template_definition(
-               "g_n4_" + lib_name, "copy_g", in_type, out_type, 4)
+               "gn4_" + lib_name, "copy_g", in_type, out_type, 4)
         << get_template_definition(
                "gg1_" + lib_name, "copy_gg_nd1", in_type, out_type)
         << get_template_definition(
@@ -187,7 +187,7 @@ MTL::ComputePipelineState* get_copy_kernel(
         << get_template_definition(
                "gg_" + lib_name, "copy_gg", in_type, out_type)
         << get_template_definition(
-               "gg_n4_" + lib_name, "copy_gg", in_type, out_type, 4);
+               "ggn4_" + lib_name, "copy_gg", in_type, out_type, 4);
     lib = d.get_library(lib_name, kernel_source.str());
   }
   return d.get_kernel(kernel_name, lib);
