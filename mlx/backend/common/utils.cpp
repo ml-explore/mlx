@@ -1,7 +1,5 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/utils.h" // TODO
-#include <iostream> // TODO
 #include "mlx/backend/common/utils.h"
 
 namespace mlx::core {
@@ -75,7 +73,7 @@ std::tuple<std::vector<int>, std::vector<std::vector<int64_t>>>
 collapse_contiguous_dims(
     const std::vector<int>& shape,
     const std::vector<std::vector<int64_t>>& strides,
-    int64_t size_cap /* = std::numeric_limits<int64_t>::max() */) {
+    int64_t size_cap /* = std::numeric_limits<int32_t>::max() */) {
   return collapse_contiguous_dims_impl(shape, strides, size_cap);
 }
 
@@ -83,7 +81,7 @@ std::tuple<std::vector<int>, std::vector<std::vector<size_t>>>
 collapse_contiguous_dims(
     const std::vector<int>& shape,
     const std::vector<std::vector<size_t>>& strides,
-    size_t size_cap /* = std::numeric_limits<size_t>::max() */) {
+    size_t size_cap /* = std::numeric_limits<int32>::max() */) {
   return collapse_contiguous_dims_impl(shape, strides, size_cap);
 }
 

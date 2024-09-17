@@ -303,7 +303,7 @@ void Compiled::eval_gpu(
       initial_strides.push_back(std::move(xstrides));
     }
     std::tie(shape, strides) =
-        collapse_contiguous_dims(output_shape, initial_strides);
+        collapse_contiguous_dims(output_shape, initial_strides, INT32_MAX);
   }
 
   bool use_2d = false;
