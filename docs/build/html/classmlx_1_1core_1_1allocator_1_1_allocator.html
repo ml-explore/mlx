@@ -96,11 +96,13 @@ Inheritance diagram for mlx::core::allocator::Allocator:</div>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a9a17d2c7a97772bf4a15e6c74af34ca4" id="r_a9a17d2c7a97772bf4a15e6c74af34ca4"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9a17d2c7a97772bf4a15e6c74af34ca4">malloc</a> (size_t size, bool allow_swap=false)=0</td></tr>
+<tr class="memitem:a9a17d2c7a97772bf4a15e6c74af34ca4" id="r_a9a17d2c7a97772bf4a15e6c74af34ca4"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a9a17d2c7a97772bf4a15e6c74af34ca4">malloc</a> (size_t <a class="el" href="#a2adf9a9c968f113dde830cc0dc27dcc6">size</a>, bool allow_swap=false)=0</td></tr>
 <tr class="memdesc:a9a17d2c7a97772bf4a15e6c74af34ca4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Abstract base class for a memory allocator.  <br /></td></tr>
 <tr class="separator:a9a17d2c7a97772bf4a15e6c74af34ca4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae963d551be646ae0e13df2c16f2beefb" id="r_ae963d551be646ae0e13df2c16f2beefb"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae963d551be646ae0e13df2c16f2beefb">free</a> (<a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a> buffer)=0</td></tr>
 <tr class="separator:ae963d551be646ae0e13df2c16f2beefb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2adf9a9c968f113dde830cc0dc27dcc6" id="r_a2adf9a9c968f113dde830cc0dc27dcc6"><td class="memItemLeft" align="right" valign="top">virtual size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2adf9a9c968f113dde830cc0dc27dcc6">size</a> (<a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a> buffer) const =0</td></tr>
+<tr class="separator:a2adf9a9c968f113dde830cc0dc27dcc6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a5803678a418fef687fc65fa9d5c37b65" id="r_a5803678a418fef687fc65fa9d5c37b65"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a5803678a418fef687fc65fa9d5c37b65">Allocator</a> ()=default</td></tr>
 <tr class="separator:a5803678a418fef687fc65fa9d5c37b65"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa05c081ce80dc036f9d3dd8c195259d2" id="r_aa05c081ce80dc036f9d3dd8c195259d2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa05c081ce80dc036f9d3dd8c195259d2">Allocator</a> (const <a class="el" href="classmlx_1_1core_1_1allocator_1_1_allocator.html">Allocator</a> &amp;other)=delete</td></tr>
@@ -323,6 +325,33 @@ Public Member Functions</h2></td></tr>
   </tr>
 </table>
 </div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2adf9a9c968f113dde830cc0dc27dcc6" name="a2adf9a9c968f113dde830cc0dc27dcc6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2adf9a9c968f113dde830cc0dc27dcc6">&#9670;&#160;</a></span>size()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual size_t mlx::core::allocator::Allocator::size </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1allocator_1_1_buffer.html">Buffer</a></td>          <td class="paramname"><span class="paramname"><em>buffer</em></span></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Implemented in <a class="el" href="classmlx_1_1core_1_1allocator_1_1_common_allocator.html#aafa92e8310db089b1ac72b840777e26b">mlx::core::allocator::CommonAllocator</a>, and <a class="el" href="classmlx_1_1core_1_1metal_1_1_metal_allocator.html#a51f6587e8065be16f0418ca42a796e05">mlx::core::metal::MetalAllocator</a>.</p>
 
 </div>
 </div>
