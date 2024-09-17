@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.core.fast.layer_norm &#8212; MLX 0.17.0 documentation</title>
+    <title>mlx.core.fast.layer_norm &#8212; MLX 0.17.3 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../_static/documentation_options.js?v=50b3d22e"></script>
+    <script src="../../_static/documentation_options.js?v=47c75248"></script>
     <script src="../../_static/doctools.js?v=888ff710"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.17.0 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.17.0 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.17.3 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.17.3 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -220,8 +220,9 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.sqrt.html">mlx.core.array.sqrt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.square.html">mlx.core.array.square</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.squeeze.html">mlx.core.array.squeeze</a></li>
-<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.swapaxes.html">mlx.core.array.swapaxes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.std.html">mlx.core.array.std</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.sum.html">mlx.core.array.sum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.array.swapaxes.html">mlx.core.array.swapaxes</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.transpose.html">mlx.core.array.transpose</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.T.html">mlx.core.array.T</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.var.html">mlx.core.array.var</a></li>
@@ -283,6 +284,10 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.convolve.html">mlx.core.convolve</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.conv1d.html">mlx.core.conv1d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.conv2d.html">mlx.core.conv2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.conv3d.html">mlx.core.conv3d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.conv_transpose1d.html">mlx.core.conv_transpose1d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.conv_transpose2d.html">mlx.core.conv_transpose2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.conv_transpose3d.html">mlx.core.conv_transpose3d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.conv_general.html">mlx.core.conv_general</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.cos.html">mlx.core.cos</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.cosh.html">mlx.core.cosh</a></li>
@@ -316,6 +321,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.hadamard_transform.html">mlx.core.hadamard_transform</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.identity.html">mlx.core.identity</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.inner.html">mlx.core.inner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.isfinite.html">mlx.core.isfinite</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.isclose.html">mlx.core.isclose</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.isinf.html">mlx.core.isinf</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.isnan.html">mlx.core.isnan</a></li>
@@ -515,6 +521,9 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Conv1d.html">mlx.nn.Conv1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Conv2d.html">mlx.nn.Conv2d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Conv3d.html">mlx.nn.Conv3d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.ConvTranspose1d.html">mlx.nn.ConvTranspose1d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.ConvTranspose2d.html">mlx.nn.ConvTranspose2d</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.ConvTranspose3d.html">mlx.nn.ConvTranspose3d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Dropout.html">mlx.nn.Dropout</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Dropout2d.html">mlx.nn.Dropout2d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Dropout3d.html">mlx.nn.Dropout3d</a></li>
@@ -652,6 +661,9 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.init.html">mlx.core.distributed.init</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.all_sum.html">mlx.core.distributed.all_sum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.all_gather.html">mlx.core.distributed.all_gather</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.send.html">mlx.core.distributed.send</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.recv.html">mlx.core.distributed.recv</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.recv_like.html">mlx.core.distributed.recv_like</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-22"><i class="fa-solid fa-chevron-down"></i></label><ul>

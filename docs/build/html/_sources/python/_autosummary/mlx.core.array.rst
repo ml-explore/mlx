@@ -50,6 +50,7 @@
       ~array.sqrt
       ~array.square
       ~array.squeeze
+      ~array.std
       ~array.sum
       ~array.swapaxes
       ~array.tolist
