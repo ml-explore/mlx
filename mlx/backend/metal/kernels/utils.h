@@ -149,15 +149,16 @@ elem_to_loc_3(uint3 elem, constant const stride_t strides[3]) {
 ///////////////////////////////////////////////////////////////////////////////
 // Multiple Arrays with generic dims
 
+template <typename stride_t>
 METAL_FUNC ulong2 elem_to_loc_2_nd(
     uint3 elem,
     constant const int* shape,
-    constant const size_t* a_strides,
-    constant const size_t* b_strides,
+    constant const stride_t* a_strides,
+    constant const stride_t* b_strides,
     int ndim) {
   ulong2 loc = {
-      elem.x * a_strides[ndim - 1] + elem.y * a_strides[ndim - 2],
-      elem.x * b_strides[ndim - 1] + elem.y * b_strides[ndim - 2]};
+      ulong(elem.x * a_strides[ndim - 1] + elem.y * a_strides[ndim - 2]),
+      ulong(elem.x * b_strides[ndim - 1] + elem.y * b_strides[ndim - 2])};
   for (int d = ndim - 3; d >= 0; --d) {
     uint l = elem.z % shape[d];
     loc.x += l * a_strides[d];
