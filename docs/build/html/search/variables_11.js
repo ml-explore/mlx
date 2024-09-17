@@ -26,13 +26,10 @@ var searchData=
   ['read_5fiw_23',['read_iw',['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_large_filter.html#a17550360cae0a942a9552d7a67827512',1,'mlx::steel::Conv2DInputBlockLoaderLargeFilter::read_iw'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_small_channels.html#aa2a1a870ff51889975f6ffb2b8caa31c',1,'mlx::steel::Conv2DInputBlockLoaderSmallChannels::read_iw'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_general.html#a53a683adf280e4806363020754525261',1,'mlx::steel::Conv2DInputBlockLoaderGeneral::read_iw']]],
   ['read_5fn_24',['read_n',['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_large_filter.html#aeb67767e2d60d5ff0279a55553f3184e',1,'mlx::steel::Conv2DInputBlockLoaderLargeFilter::read_n'],['../structmlx_1_1steel_1_1_conv2_d_weight_block_loader.html#a5afa232b7c84b5025247ac4f83eb9ca9',1,'mlx::steel::Conv2DWeightBlockLoader::read_n'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_small_channels.html#ae363abc696400f4e334314576ea31421',1,'mlx::steel::Conv2DInputBlockLoaderSmallChannels::read_n'],['../structmlx_1_1steel_1_1_conv2_d_weight_block_loader_small_channels.html#aa0af8ce417077695e9c51f1568dbc6b7',1,'mlx::steel::Conv2DWeightBlockLoaderSmallChannels::read_n'],['../structmlx_1_1steel_1_1_conv2_d_input_block_loader_general.html#afe5caaf38b574d3380533856c493dd92',1,'mlx::steel::Conv2DInputBlockLoaderGeneral::read_n']]],
   ['real_25',['real',['../structcomplex64__t.html#abbd4a0092eca9f112c1c5ae1a133a27e',1,'complex64_t']]],
-  ['reduce_5finit_5fkernels_26',['reduce_init_kernels',['../metal_2jit_2reduce_8h.html#a70a2370dad16f739798f1cb7971639fc',1,'reduce.h']]],
-  ['reduce_5fkernels_27',['reduce_kernels',['../metal_2jit_2reduce_8h.html#a7c35d2df72c0127d0d17eb9845e62328',1,'reduce.h']]],
-  ['reduce_5fn_5freads_28',['REDUCE_N_READS',['../defines_8h.html#a2ad505864a2ab786147766900bc18c21',1,'defines.h']]],
-  ['reduce_5fn_5fwrites_29',['REDUCE_N_WRITES',['../defines_8h.html#a68c33274e15a2f163f7631a36280d82f',1,'defines.h']]],
-  ['reduce_5fnon_5fatomic_5fkernels_30',['reduce_non_atomic_kernels',['../metal_2jit_2reduce_8h.html#a67d99d341955f4b7754c272a0106d3a1',1,'reduce.h']]],
-  ['results_31',['results',['../structmlx_1_1steel_1_1_block_m_m_a.html#a6dfb5ff1f174951ad7c0630ff190c95a',1,'mlx::steel::BlockMMA']]],
-  ['rms_5flooped_5flimit_32',['RMS_LOOPED_LIMIT',['../defines_8h.html#a717a175676c3f96d74adfde7e751a541',1,'defines.h']]],
-  ['rms_5fn_5freads_33',['RMS_N_READS',['../defines_8h.html#a89c0a33ba39a881ad3458ffdde62a24f',1,'defines.h']]],
-  ['row_5fcontiguous_34',['row_contiguous',['../structmlx_1_1core_1_1array_1_1_flags.html#a3170fa381dc7a90f6eabcc029bdf9bfd',1,'mlx::core::array::Flags']]]
+  ['reduce_5fn_5freads_26',['REDUCE_N_READS',['../defines_8h.html#a2ad505864a2ab786147766900bc18c21',1,'defines.h']]],
+  ['reduce_5fn_5fwrites_27',['REDUCE_N_WRITES',['../defines_8h.html#a68c33274e15a2f163f7631a36280d82f',1,'defines.h']]],
+  ['results_28',['results',['../structmlx_1_1steel_1_1_block_m_m_a.html#a6dfb5ff1f174951ad7c0630ff190c95a',1,'mlx::steel::BlockMMA']]],
+  ['rms_5flooped_5flimit_29',['RMS_LOOPED_LIMIT',['../defines_8h.html#a717a175676c3f96d74adfde7e751a541',1,'defines.h']]],
+  ['rms_5fn_5freads_30',['RMS_N_READS',['../defines_8h.html#a89c0a33ba39a881ad3458ffdde62a24f',1,'defines.h']]],
+  ['row_5fcontiguous_31',['row_contiguous',['../structmlx_1_1core_1_1array_1_1_flags.html#a3170fa381dc7a90f6eabcc029bdf9bfd',1,'mlx::core::array::Flags']]]
 ];
