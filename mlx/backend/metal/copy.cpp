@@ -73,9 +73,11 @@ void copy_gpu_inplace(
         }
       };
   auto [shape, strides_in_, strides_out_] = maybe_collapse();
+  int ndim = shape.size();
 
   bool use_2d = out.data_size() > UINT32_MAX;
   auto& d = metal::device(s.device);
+  int work_per_thread = 1;
   std::string kernel_name;
   {
     std::ostringstream kname;
@@ -93,9 +95,13 @@ void copy_gpu_inplace(
         kname << "gg";
         break;
     }
-    if ((ctype == CopyType::General || ctype == CopyType::GeneralGeneral) &&
-        shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
-      kname << shape.size();
+    if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
+      if (shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
+        kname << shape.size();
+      } else if (shape[ndim - 1] >= 4) {
+        work_per_thread = 4;
+        kname << "n4";
+      }
     }
     kname << "_copy";
     kname << type_to_name(in) << type_to_name(out);
@@ -115,20 +121,14 @@ void copy_gpu_inplace(
   compute_encoder.set_output_array(out, 1, out_offset);
 
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
-    int ndim = shape.size();
     std::vector<int64_t> strides_in{strides_in_.begin(), strides_in_.end()};
     std::vector<int64_t> strides_out{strides_out_.begin(), strides_out_.end()};
-
     if (ndim > 3) {
       set_vector_bytes(compute_encoder, shape, ndim, 2);
     }
     set_vector_bytes(compute_encoder, strides_in, ndim, 3);
     if (ctype == CopyType::GeneralGeneral) {
       set_vector_bytes(compute_encoder, strides_out, ndim, 4);
-    }
-
-    if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
-      compute_encoder->setBytes(&ndim, sizeof(int), 5);
     }
 
     int dim0 = ndim > 0 ? shape[ndim - 1] : 1;
@@ -138,6 +138,11 @@ void copy_gpu_inplace(
     for (auto& s : shape)
       data_size *= s;
     int rest = data_size / (dim0 * dim1);
+
+    if (ndim > MAX_COPY_SPECIALIZED_DIMS) {
+      compute_encoder->setBytes(&ndim, sizeof(int), 5);
+      dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
+    }
 
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
