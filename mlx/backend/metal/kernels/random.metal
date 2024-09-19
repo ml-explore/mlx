@@ -69,9 +69,9 @@ rbits threefry2x32_hash(const thread uint2& key, uint2 count) {
     device char* out,
     device const bool& odd,
     device const uint& bytes_per_key,
-    device const int& ndim,
-    device const int* key_shape,
-    device const size_t* key_strides,
+    constant const int& ndim,
+    constant const int* key_shape,
+    constant const size_t* key_strides,
     uint2 grid_dim [[threads_per_grid]],
     uint2 index [[thread_position_in_grid]]) {
   auto kidx = 2 * index.x;

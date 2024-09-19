@@ -14,3 +14,7 @@ repos:
     -   id: isort
         args:
             - --profile=black
+- repo: https://github.com/cheshirekow/cmake-format-precommit
+  rev: v0.6.13
+  hooks:
+    - id: cmake-format

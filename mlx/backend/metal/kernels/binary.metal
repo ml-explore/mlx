@@ -21,8 +21,6 @@
   instantiate_kernel("g1" #op #tname, binary_g_nd1, itype, otype, op)   \
   instantiate_kernel("g2" #op #tname, binary_g_nd2, itype, otype, op)   \
   instantiate_kernel("g3" #op #tname, binary_g_nd3, itype, otype, op)   \
-  instantiate_kernel("g4" #op #tname, binary_g_nd, itype, otype, op, 4) \
-  instantiate_kernel("g5" #op #tname, binary_g_nd,  itype, otype, op, 5)
 
 #define instantiate_binary_integer(op)                   \
   instantiate_binary_all(op, uint8, uint8_t, uint8_t)    \

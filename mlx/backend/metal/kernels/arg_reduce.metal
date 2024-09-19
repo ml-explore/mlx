@@ -70,16 +70,16 @@ IndexValPair<U> simd_shuffle_down(IndexValPair<U> data, uint16_t delta) {
       simd_shuffle_down(data.index, delta), simd_shuffle_down(data.val, delta)};
 }
 
-template <typename T, typename Op, int N_READS>
+template <typename T, typename Op, int N_READS = 4>
 [[kernel]] void arg_reduce_general(
     const device T* in [[buffer(0)]],
     device uint32_t* out [[buffer(1)]],
-    const device int* shape [[buffer(2)]],
-    const device size_t* in_strides [[buffer(3)]],
-    const device size_t* out_strides [[buffer(4)]],
-    const device size_t& ndim [[buffer(5)]],
-    const device size_t& axis_stride [[buffer(6)]],
-    const device size_t& axis_size [[buffer(7)]],
+    const constant int* shape [[buffer(2)]],
+    const constant size_t* in_strides [[buffer(3)]],
+    const constant size_t* out_strides [[buffer(4)]],
+    const constant size_t& ndim [[buffer(5)]],
+    const constant size_t& axis_stride [[buffer(6)]],
+    const constant size_t& axis_size [[buffer(7)]],
     uint gid [[thread_position_in_grid]],
     uint lid [[thread_position_in_threadgroup]],
     uint lsize [[threads_per_threadgroup]],
@@ -159,28 +159,12 @@ template <typename T, typename Op, int N_READS>
   }
 }
 
-#define instantiate_arg_reduce_helper(name, itype, op) \
-  template [[host_name(name)]] [[kernel]] void         \
-  arg_reduce_general<itype, op<itype>, 4>(             \
-      const device itype* in [[buffer(0)]],            \
-      device uint32_t* out [[buffer(1)]],              \
-      const device int* shape [[buffer(2)]],           \
-      const device size_t* in_strides [[buffer(3)]],   \
-      const device size_t* out_strides [[buffer(4)]],  \
-      const device size_t& ndim [[buffer(5)]],         \
-      const device size_t& axis_stride [[buffer(6)]],  \
-      const device size_t& axis_size [[buffer(7)]],    \
-      uint gid [[thread_position_in_grid]],            \
-      uint lid [[thread_position_in_threadgroup]],     \
-      uint lsize [[threads_per_threadgroup]],          \
-      uint simd_size [[threads_per_simdgroup]],        \
-      uint simd_lane_id [[thread_index_in_simdgroup]], \
-      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
-
 // clang-format off
 #define instantiate_arg_reduce(name, itype)                      \
-  instantiate_arg_reduce_helper("argmin_" #name , itype, ArgMin) \
-  instantiate_arg_reduce_helper("argmax_" #name , itype, ArgMax)
+  instantiate_kernel(                                            \
+      "argmin_" #name, arg_reduce_general, itype, ArgMin<itype>) \
+  instantiate_kernel(                                            \
+      "argmax_" #name, arg_reduce_general, itype, ArgMax<itype>)
 
 instantiate_arg_reduce(bool_, bool)
 instantiate_arg_reduce(uint8, uint8_t)

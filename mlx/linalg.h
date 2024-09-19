@@ -78,4 +78,13 @@ array eigvalsh(const array& a, bool upper = false, StreamOrDevice s = {});
 
 std::pair<array, array> eigh(const array& a, bool upper = false, StreamOrDevice s = {});
 
+/**
+ * Compute the cross product of two arrays along the given axis.
+ */
+array cross(
+    const array& a,
+    const array& b,
+    int axis = -1,
+    StreamOrDevice s = {});
+
 } // namespace mlx::core::linalg

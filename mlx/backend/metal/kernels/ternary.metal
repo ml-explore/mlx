@@ -16,8 +16,6 @@
   instantiate_kernel("g1_" #op #tname, ternary_g_nd1, type, op)   \
   instantiate_kernel("g2_" #op #tname, ternary_g_nd2, type, op)   \
   instantiate_kernel("g3_" #op #tname, ternary_g_nd3, type, op)   \
-  instantiate_kernel("g4_" #op #tname, ternary_g_nd, type, op, 4) \
-  instantiate_kernel("g5_" #op #tname, ternary_g_nd, type, op, 5)
 
 #define instantiate_ternary_types(op)               \
   instantiate_ternary_all(op, bool_, bool)          \

@@ -268,6 +268,54 @@ class TestLinalg(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             mx.linalg.eigvalsh(mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))  # Non-square matrix
 
+    def test_cross_product(self):
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.array([4.0, 5.0, 6.0])
+        result = mx.linalg.cross(a, b)
+        expected = np.cross(a, b)
+        self.assertTrue(np.allclose(result, expected))
+
+        # Test with negative values
+        a = mx.array([-1.0, -2.0, -3.0])
+        b = mx.array([4.0, -5.0, 6.0])
+        result = mx.linalg.cross(a, b)
+        expected = np.cross(a, b)
+        self.assertTrue(np.allclose(result, expected))
+
+        # Test with integer values
+        a = mx.array([1, 2, 3])
+        b = mx.array([4, 5, 6])
+        result = mx.linalg.cross(a, b)
+        expected = np.cross(a, b)
+        self.assertTrue(np.allclose(result, expected))
+
+        # Test with 2D arrays and axis parameter
+        a = mx.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+        b = mx.array([[4.0, 5.0, 6.0], [1.0, 2.0, 3.0]])
+        result = mx.linalg.cross(a, b, axis=1)
+        expected = np.cross(a, b, axis=1)
+        self.assertTrue(np.allclose(result, expected))
+
+        # Test with broadcast
+        a = mx.random.uniform(shape=(2, 1, 3))
+        b = mx.random.uniform(shape=(1, 2, 3))
+        result = mx.linalg.cross(a, b)
+        expected = np.cross(a, b)
+        self.assertTrue(np.allclose(result, expected))
+
+        # Type promotion
+        a = mx.array([1.0, 2.0, 3.0])
+        b = mx.array([4, 5, 6])
+        result = mx.linalg.cross(a, b)
+        expected = np.cross(a, b)
+        self.assertTrue(np.allclose(result, expected))
+
+        # Test with incorrect vector size (should raise an exception)
+        a = mx.array([1.0])
+        b = mx.array([4.0])
+        with self.assertRaises(ValueError):
+            mx.linalg.cross(a, b)
+
 
 if __name__ == "__main__":
     unittest.main()
