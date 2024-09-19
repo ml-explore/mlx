@@ -25,7 +25,10 @@ template <typename T, typename Op>
     constant const int* in_shape,
     constant const size_t* in_strides,
     device const int& ndim,
-    uint index [[thread_position_in_grid]]) {
+    uint3 index [[thread_position_in_grid]],
+    uint3 grid_dim [[threads_per_grid]]) {
   auto idx = elem_to_loc(index, in_shape, in_strides, ndim);
-  out[index] = Op()(in[idx]);
+  size_t out_idx =
+      index.x + grid_dim.x * (index.y + size_t(grid_dim.y) * index.z);
+  out[out_idx] = Op()(in[idx]);
 }

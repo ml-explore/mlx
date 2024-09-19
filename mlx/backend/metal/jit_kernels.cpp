@@ -88,6 +88,13 @@ void add_binary_kernels(
         op);
     kernel_source << template_def;
   }
+  kernel_source << get_template_definition(
+      "gn4" + lib_name,
+      func,
+      get_type_string(in_type),
+      get_type_string(out_type),
+      op,
+      4);
 }
 
 MTL::ComputePipelineState* get_binary_kernel(
