@@ -9,38 +9,6 @@ namespace mlx::core {
 
 namespace {
 
-template <typename T, typename U, typename Op>
-void binary_op_dispatch_dims(
-    const array& a,
-    const array& b,
-    array& out_a,
-    array& out_b,
-    Op op,
-    int dim,
-    int stride) {
-  // Number of dimensions to loop over for vectorized ops
-  switch (dim) {
-    case 1:
-      binary_op_dims1<T, U, Op>(a, b, out_a, out_b, op, stride);
-      return;
-    case 2:
-      binary_op_dims2<T, U, Op>(a, b, out_a, out_b, op, stride);
-      return;
-  }
-
-  const T* a_ptr = a.data<T>();
-  const T* b_ptr = b.data<T>();
-  U* dst_a = out_a.data<U>();
-  U* dst_b = out_b.data<U>();
-  for (size_t i = 0; i < out_a.size(); i += stride) {
-    int a_idx = elem_to_loc(i, a.shape(), a.strides());
-    int b_idx = elem_to_loc(i, b.shape(), b.strides());
-    op(a_ptr + a_idx, b_ptr + b_idx, dst_a, dst_b, stride);
-    dst_a += stride;
-    dst_b += stride;
-  }
-}
-
 template <typename T, typename U, typename Op, int D>
 void binary_op_dims(
     const array& a,
@@ -206,6 +174,7 @@ void binary_op(
 
   // The full computation is scalar scalar so call the base op once
   if (bopt == BinaryOpType::General) {
+    binary_op_dispatch_dims<T, U, Op>(a, b, out_a, out_b, op);
     return;
   }
 
