@@ -254,10 +254,21 @@ void ternary_op(
   // The full computation is scalar-scalar-scalar so we call the base op once.
   if (topt == TernaryOpType::ScalarScalarScalar) {
     *(out.data<U>()) = op(*a.data<T1>(), *b.data<T2>(), *c.data<T3>());
-    return;
+  } else if (topt == TernaryOpType::VectorVectorVector) {
+    const T1* a_ptr = a.data<T1>();
+    const T2* b_ptr = b.data<T2>();
+    const T3* c_ptr = c.data<T3>();
+    U* out_ptr = out.data<U>();
+    for (size_t i = 0; i < out.size(); ++i) {
+      *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
+      a_ptr++;
+      b_ptr++;
+      c_ptr++;
+      out_ptr++;
+    }
+  } else {
+    ternary_op_dispatch_dims<T1, T2, T3, U>(a, b, c, out, op);
   }
-
-  ternary_op_dispatch_dims<T1, T2, T3, U>(a, b, c, out, op);
 }
 
 } // namespace
