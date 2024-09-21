@@ -234,12 +234,13 @@ void binary_op_dims(
     size_t a_offset,
     size_t b_offset,
     size_t o_offset) {
+  int axis = shape.size() - D;
+  auto stride_a = a_strides[axis];
+  auto stride_b = b_strides[axis];
+  auto stride_out = out_strides[axis];
+  auto N = shape[axis];
+
   if constexpr (D > 1) {
-    int axis = shape.size() - D;
-    auto stride_a = a_strides[axis];
-    auto stride_b = b_strides[axis];
-    auto stride_out = out_strides[axis];
-    auto N = shape[axis];
     for (int i = 0; i < N; i++) {
       binary_op_dims<T, U, Op, D - 1>(
           a,
@@ -258,11 +259,6 @@ void binary_op_dims(
       o_offset += stride_out;
     }
   } else {
-    int axis = shape.size() - 1;
-    auto stride_a = a_strides[axis];
-    auto stride_b = b_strides[axis];
-    auto stride_out = out_strides[axis];
-    auto N = shape[axis];
     const T* a_ptr = a.data<T>() + a_offset;
     const T* b_ptr = b.data<T>() + b_offset;
     U* out_ptr = out.data<U>() + o_offset;

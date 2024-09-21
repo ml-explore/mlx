@@ -35,11 +35,12 @@ inline void copy_general_general_dims(
     const std::vector<stride_t>& o_strides,
     int64_t i_offset,
     int64_t o_offset) {
+  int axis = data_shape.size() - D;
+  auto stride_src = i_strides[axis];
+  auto stride_dst = o_strides[axis];
+  auto N = data_shape[axis];
+
   if constexpr (D > 1) {
-    int axis = data_shape.size() - D;
-    auto stride_src = i_strides[axis];
-    auto stride_dst = o_strides[axis];
-    auto N = data_shape[axis];
     for (int i = 0; i < N; i++) {
       copy_general_general_dims<SrcT, DstT, stride_t, D - 1>(
           src, dst, data_shape, i_strides, o_strides, i_offset, o_offset);
@@ -47,10 +48,6 @@ inline void copy_general_general_dims(
       o_offset += stride_dst;
     }
   } else {
-    int axis = data_shape.size() - 1;
-    auto stride_src = i_strides[axis];
-    auto stride_dst = o_strides[axis];
-    auto N = data_shape[axis];
     const SrcT* src_ptr = src.data<SrcT>() + i_offset;
     DstT* dst_ptr = dst.data<DstT>() + o_offset;
     for (int i = 0; i < N; i++) {

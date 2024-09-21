@@ -1,6 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
 #pragma once
+#include <numeric>
 #include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/ops.h"
@@ -71,128 +72,63 @@ void set_ternary_op_output_data(
       break;
   }
 }
-
-template <typename T1, typename T2, typename T3, typename U, typename Op>
-void ternary_op_dims1(
+template <typename T1, typename T2, typename T3, typename U, typename Op, int D>
+void ternary_op_dims(
     const array& a,
     const array& b,
     const array& c,
     array& out,
-    Op op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
-  const T3* c_ptr = c.data<T3>();
+    Op op,
+    const std::vector<int>& shape,
+    const std::vector<size_t>& a_strides,
+    const std::vector<size_t>& b_strides,
+    const std::vector<size_t>& c_strides,
+    const std::vector<size_t>& out_strides,
+    size_t a_offset,
+    size_t b_offset,
+    size_t c_offset,
+    size_t o_offset) {
+  int axis = shape.size() - D;
+  auto stride_a = a_strides[axis];
+  auto stride_b = b_strides[axis];
+  auto stride_c = c_strides[axis];
+  auto stride_out = out_strides[axis];
+  auto N = shape[axis];
 
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  size_t c_idx = 0;
-  for (size_t i = 0; i < out.size(); ++i) {
-    dst[i] = op(a_ptr[a_idx], b_ptr[b_idx], c_ptr[c_idx]);
-    a_idx += a.strides()[0];
-    b_idx += b.strides()[0];
-    c_idx += c.strides()[0];
-  }
-}
-
-template <typename T1, typename T2, typename T3, typename U, typename Op>
-void ternary_op_dims2(
-    const array& a,
-    const array& b,
-    const array& c,
-    array& out,
-    Op op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
-  const T3* c_ptr = c.data<T3>();
-
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  size_t c_idx = 0;
-  size_t out_idx = 0;
-  for (size_t i = 0; i < a.shape()[0]; ++i) {
-    for (size_t j = 0; j < a.shape()[1]; ++j) {
-      dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx], c_ptr[c_idx]);
-      a_idx += a.strides()[1];
-      b_idx += b.strides()[1];
-      c_idx += c.strides()[1];
+  if constexpr (D > 1) {
+    for (int i = 0; i < N; i++) {
+      ternary_op_dims<T1, T2, T3, U, Op, D - 1>(
+          a,
+          b,
+          c,
+          out,
+          op,
+          shape,
+          a_strides,
+          b_strides,
+          c_strides,
+          out_strides,
+          a_offset,
+          b_offset,
+          c_offset,
+          o_offset);
+      a_offset += stride_a;
+      b_offset += stride_b;
+      c_offset += stride_c;
+      o_offset += stride_out;
     }
-    a_idx += a.strides()[0] - a.strides()[1] * a.shape()[1];
-    b_idx += b.strides()[0] - b.strides()[1] * b.shape()[1];
-    c_idx += c.strides()[0] - c.strides()[1] * c.shape()[1];
-  }
-}
-
-template <typename T1, typename T2, typename T3, typename U, typename Op>
-void ternary_op_dims3(
-    const array& a,
-    const array& b,
-    const array& c,
-    array& out,
-    Op op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
-  const T3* c_ptr = c.data<T3>();
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  size_t c_idx = 0;
-  size_t out_idx = 0;
-  for (size_t i = 0; i < a.shape()[0]; ++i) {
-    for (size_t j = 0; j < a.shape()[1]; ++j) {
-      for (size_t k = 0; k < a.shape()[2]; ++k) {
-        dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx], c_ptr[c_idx]);
-        a_idx += a.strides()[2];
-        b_idx += b.strides()[2];
-        c_idx += c.strides()[2];
-      }
-      a_idx += a.strides()[1] - a.strides()[2] * a.shape()[2];
-      b_idx += b.strides()[1] - b.strides()[2] * b.shape()[2];
-      c_idx += c.strides()[1] - c.strides()[2] * c.shape()[2];
+  } else {
+    const T1* a_ptr = a.data<T1>() + a_offset;
+    const T2* b_ptr = b.data<T2>() + b_offset;
+    const T3* c_ptr = c.data<T3>() + c_offset;
+    U* out_ptr = out.data<U>() + o_offset;
+    for (int i = 0; i < N; i++) {
+      *out_ptr = op(*a_ptr, *b_ptr, *c_ptr);
+      a_ptr += stride_a;
+      b_ptr += stride_b;
+      c_ptr += stride_c;
+      out_ptr += stride_out;
     }
-    a_idx += a.strides()[0] - a.strides()[1] * a.shape()[1];
-    b_idx += b.strides()[0] - b.strides()[1] * b.shape()[1];
-    c_idx += c.strides()[0] - c.strides()[1] * c.shape()[1];
-  }
-}
-
-template <typename T1, typename T2, typename T3, typename U, typename Op>
-void ternary_op_dims4(
-    const array& a,
-    const array& b,
-    const array& c,
-    array& out,
-    Op op) {
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
-  const T3* c_ptr = c.data<T3>();
-
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  size_t c_idx = 0;
-  size_t out_idx = 0;
-  for (size_t i = 0; i < a.shape()[0]; ++i) {
-    for (size_t j = 0; j < a.shape()[1]; ++j) {
-      for (size_t k = 0; k < a.shape()[2]; ++k) {
-        for (size_t ii = 0; ii < a.shape()[3]; ++ii) {
-          dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx], c_ptr[c_idx]);
-          a_idx += a.strides()[3];
-          b_idx += b.strides()[3];
-          c_idx += c.strides()[3];
-        }
-        a_idx += a.strides()[2] - a.strides()[3] * a.shape()[3];
-        b_idx += b.strides()[2] - b.strides()[3] * b.shape()[3];
-        c_idx += c.strides()[2] - c.strides()[3] * c.shape()[3];
-      }
-      a_idx += a.strides()[1] - a.strides()[2] * a.shape()[2];
-      b_idx += b.strides()[1] - b.strides()[2] * b.shape()[2];
-      c_idx += c.strides()[1] - c.strides()[2] * c.shape()[2];
-    }
-    a_idx += a.strides()[0] - a.strides()[1] * a.shape()[1];
-    b_idx += b.strides()[0] - b.strides()[1] * b.shape()[1];
-    c_idx += c.strides()[0] - c.strides()[1] * c.shape()[1];
   }
 }
 
@@ -203,30 +139,105 @@ void ternary_op_dispatch_dims(
     const array& c,
     array& out,
     Op op) {
-  switch (out.ndim()) {
+  auto [new_shape, new_strides] = collapse_contiguous_dims(
+      a.shape(), {a.strides(), b.strides(), c.strides(), out.strides()});
+  const auto& a_strides = new_strides[0];
+  const auto& b_strides = new_strides[1];
+  const auto& c_strides = new_strides[2];
+  const auto& out_strides = new_strides[3];
+
+  switch (new_shape.size()) {
     case 1:
-      ternary_op_dims1<T1, T2, T3, U, Op>(a, b, c, out, op);
+      ternary_op_dims<T1, T2, T3, U, Op, 1>(
+          a,
+          b,
+          c,
+          out,
+          op,
+          new_shape,
+          a_strides,
+          b_strides,
+          c_strides,
+          out_strides,
+          0,
+          0,
+          0,
+          0);
       return;
     case 2:
-      ternary_op_dims2<T1, T2, T3, U, Op>(a, b, c, out, op);
+      ternary_op_dims<T1, T2, T3, U, Op, 2>(
+          a,
+          b,
+          c,
+          out,
+          op,
+          new_shape,
+          a_strides,
+          b_strides,
+          c_strides,
+          out_strides,
+          0,
+          0,
+          0,
+          0);
       return;
     case 3:
-      ternary_op_dims3<T1, T2, T3, U, Op>(a, b, c, out, op);
+      ternary_op_dims<T1, T2, T3, U, Op, 3>(
+          a,
+          b,
+          c,
+          out,
+          op,
+          new_shape,
+          a_strides,
+          b_strides,
+          c_strides,
+          out_strides,
+          0,
+          0,
+          0,
+          0);
       return;
     case 4:
-      ternary_op_dims4<T1, T2, T3, U, Op>(a, b, c, out, op);
+      ternary_op_dims<T1, T2, T3, U, Op, 4>(
+          a,
+          b,
+          c,
+          out,
+          op,
+          new_shape,
+          a_strides,
+          b_strides,
+          c_strides,
+          out_strides,
+          0,
+          0,
+          0,
+          0);
       return;
   }
 
-  const T1* a_ptr = a.data<T1>();
-  const T2* b_ptr = b.data<T2>();
-  const T3* c_ptr = c.data<T3>();
-  U* dst = out.data<U>();
-  for (size_t i = 0; i < out.size(); i++) {
-    int a_idx = elem_to_loc(i, a.shape(), a.strides());
-    int b_idx = elem_to_loc(i, b.shape(), b.strides());
-    int c_idx = elem_to_loc(i, c.shape(), c.strides());
-    dst[i] = op(a_ptr[a_idx], b_ptr[b_idx], c_ptr[c_idx]);
+  int size = std::accumulate(
+      new_shape.end() - 4, new_shape.end(), 1, std::multiplies<int>());
+  for (int i = 0; i < a.size(); i += size) {
+    auto a_offset = elem_to_loc(i, new_shape, a_strides);
+    auto b_offset = elem_to_loc(i, new_shape, b_strides);
+    auto c_offset = elem_to_loc(i, new_shape, c_strides);
+    ternary_op_dims<T1, T2, T3, U, Op, 4>(
+        a,
+        b,
+        c,
+        out,
+        op,
+        new_shape,
+        a_strides,
+        b_strides,
+        c_strides,
+        out_strides,
+        a_offset,
+        b_offset,
+        c_offset,
+        i);
   }
 }
 
