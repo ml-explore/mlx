@@ -2,6 +2,7 @@
 
 #pragma once
 #include <cassert>
+#include <numeric>
 
 #include "mlx/allocator.h"
 #include "mlx/array.h"
@@ -220,17 +221,57 @@ struct DefaultVectorVector {
   }
 };
 
-template <typename T, typename U, typename Op>
-void binary_op_dims1(const array& a, const array& b, array& out, Op op) {
-  const T* a_ptr = a.data<T>();
-  const T* b_ptr = b.data<T>();
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  for (size_t i = 0; i < out.size(); ++i) {
-    dst[i] = op(a_ptr[a_idx], b_ptr[b_idx]);
-    a_idx += a.strides()[0];
-    b_idx += b.strides()[0];
+template <typename T, typename U, typename Op, int D>
+void binary_op_dims(
+    const array& a,
+    const array& b,
+    array& out,
+    Op op,
+    const std::vector<int>& shape,
+    const std::vector<size_t>& a_strides,
+    const std::vector<size_t>& b_strides,
+    const std::vector<size_t>& out_strides,
+    size_t a_offset,
+    size_t b_offset,
+    size_t o_offset) {
+  if constexpr (D > 1) {
+    int axis = shape.size() - D;
+    auto stride_a = a_strides[axis];
+    auto stride_b = b_strides[axis];
+    auto stride_out = out_strides[axis];
+    auto N = shape[axis];
+    for (int i = 0; i < N; i++) {
+      binary_op_dims<T, U, Op, D - 1>(
+          a,
+          b,
+          out,
+          op,
+          shape,
+          a_strides,
+          b_strides,
+          out_strides,
+          a_offset,
+          b_offset,
+          o_offset);
+      a_offset += stride_a;
+      b_offset += stride_b;
+      o_offset += stride_out;
+    }
+  } else {
+    int axis = shape.size() - 1;
+    auto stride_a = a_strides[axis];
+    auto stride_b = b_strides[axis];
+    auto stride_out = out_strides[axis];
+    auto N = shape[axis];
+    const T* a_ptr = a.data<T>() + a_offset;
+    const T* b_ptr = b.data<T>() + b_offset;
+    U* out_ptr = out.data<U>() + o_offset;
+    for (int i = 0; i < N; i++) {
+      *out_ptr = op(*a_ptr, *b_ptr);
+      a_ptr += stride_a;
+      b_ptr += stride_b;
+      out_ptr += stride_out;
+    }
   }
 }
 
@@ -251,25 +292,6 @@ void binary_op_dims1(
     a_idx += a.strides()[0];
     b_idx += b.strides()[0];
     dst += stride;
-  }
-}
-
-template <typename T, typename U, typename Op>
-void binary_op_dims2(const array& a, const array& b, array& out, Op op) {
-  const T* a_ptr = a.data<T>();
-  const T* b_ptr = b.data<T>();
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  size_t out_idx = 0;
-  for (size_t i = 0; i < a.shape()[0]; ++i) {
-    for (size_t j = 0; j < a.shape()[1]; ++j) {
-      dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx]);
-      a_idx += a.strides()[1];
-      b_idx += b.strides()[1];
-    }
-    a_idx += a.strides()[0] - a.strides()[1] * a.shape()[1];
-    b_idx += b.strides()[0] - b.strides()[1] * b.shape()[1];
   }
 }
 
@@ -298,83 +320,53 @@ void binary_op_dims2(
 }
 
 template <typename T, typename U, typename Op>
-void binary_op_dims3(const array& a, const array& b, array& out, Op op) {
-  const T* a_ptr = a.data<T>();
-  const T* b_ptr = b.data<T>();
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  size_t out_idx = 0;
-  for (size_t i = 0; i < a.shape()[0]; ++i) {
-    for (size_t j = 0; j < a.shape()[1]; ++j) {
-      for (size_t k = 0; k < a.shape()[2]; ++k) {
-        dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx]);
-        a_idx += a.strides()[2];
-        b_idx += b.strides()[2];
-      }
-      a_idx += a.strides()[1] - a.strides()[2] * a.shape()[2];
-      b_idx += b.strides()[1] - b.strides()[2] * b.shape()[2];
-    }
-    a_idx += a.strides()[0] - a.strides()[1] * a.shape()[1];
-    b_idx += b.strides()[0] - b.strides()[1] * b.shape()[1];
-  }
-}
-
-template <typename T, typename U, typename Op>
-void binary_op_dims4(const array& a, const array& b, array& out, Op op) {
-  const T* a_ptr = a.data<T>();
-  const T* b_ptr = b.data<T>();
-  U* dst = out.data<U>();
-  size_t a_idx = 0;
-  size_t b_idx = 0;
-  size_t out_idx = 0;
-  for (size_t i = 0; i < a.shape()[0]; ++i) {
-    for (size_t j = 0; j < a.shape()[1]; ++j) {
-      for (size_t k = 0; k < a.shape()[2]; ++k) {
-        for (size_t ii = 0; ii < a.shape()[3]; ++ii) {
-          dst[out_idx++] = op(a_ptr[a_idx], b_ptr[b_idx]);
-          a_idx += a.strides()[3];
-          b_idx += b.strides()[3];
-        }
-        a_idx += a.strides()[2] - a.strides()[3] * a.shape()[3];
-        b_idx += b.strides()[2] - b.strides()[3] * b.shape()[3];
-      }
-      a_idx += a.strides()[1] - a.strides()[2] * a.shape()[2];
-      b_idx += b.strides()[1] - b.strides()[2] * b.shape()[2];
-    }
-    a_idx += a.strides()[0] - a.strides()[1] * a.shape()[1];
-    b_idx += b.strides()[0] - b.strides()[1] * b.shape()[1];
-  }
-}
-
-template <typename T, typename U, typename Op>
 void binary_op_dispatch_dims(
     const array& a,
     const array& b,
     array& out,
     Op op) {
-  switch (out.ndim()) {
+  auto [new_shape, new_strides] = collapse_contiguous_dims(
+      a.shape(), {a.strides(), b.strides(), out.strides()});
+  const auto& a_strides = new_strides[0];
+  const auto& b_strides = new_strides[1];
+  const auto& out_strides = new_strides[2];
+
+  switch (new_shape.size()) {
     case 1:
-      binary_op_dims1<T, U, Op>(a, b, out, op);
+      binary_op_dims<T, U, Op, 1>(
+          a, b, out, op, new_shape, a_strides, b_strides, out_strides, 0, 0, 0);
       return;
     case 2:
-      binary_op_dims2<T, U, Op>(a, b, out, op);
+      binary_op_dims<T, U, Op, 2>(
+          a, b, out, op, new_shape, a_strides, b_strides, out_strides, 0, 0, 0);
       return;
     case 3:
-      binary_op_dims3<T, U, Op>(a, b, out, op);
+      binary_op_dims<T, U, Op, 3>(
+          a, b, out, op, new_shape, a_strides, b_strides, out_strides, 0, 0, 0);
       return;
     case 4:
-      binary_op_dims4<T, U, Op>(a, b, out, op);
+      binary_op_dims<T, U, Op, 4>(
+          a, b, out, op, new_shape, a_strides, b_strides, out_strides, 0, 0, 0);
       return;
   }
 
-  const T* a_ptr = a.data<T>();
-  const T* b_ptr = b.data<T>();
-  U* dst = out.data<U>();
-  for (size_t i = 0; i < out.size(); i++) {
-    int a_idx = elem_to_loc(i, a.shape(), a.strides());
-    int b_idx = elem_to_loc(i, b.shape(), b.strides());
-    dst[i] = op(a_ptr[a_idx], b_ptr[b_idx]);
+  int size = std::accumulate(
+      new_shape.end() - 4, new_shape.end(), 1, std::multiplies<int>());
+  for (int i = 0; i < a.size(); i += size) {
+    auto a_offset = elem_to_loc(i, new_shape, a_strides);
+    auto b_offset = elem_to_loc(i, new_shape, b_strides);
+    binary_op_dims<T, U, Op, 4>(
+        a,
+        b,
+        out,
+        op,
+        new_shape,
+        a_strides,
+        b_strides,
+        out_strides,
+        a_offset,
+        b_offset,
+        i);
   }
 }
 
