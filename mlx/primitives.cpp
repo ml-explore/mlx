@@ -473,16 +473,16 @@ std::pair<std::vector<array>, std::vector<int>> ArgPartition::vmap(
 
 std::vector<array> ArgPartition::vjp(
     const std::vector<array>& primals,
-    const std::vector<array>& cotangents,
-    const std::vector<int>& argnums,
+    const std::vector<array>&,
+    const std::vector<int>&,
     const std::vector<array>&) {
   return {zeros_like(primals[0], stream())};
 }
 
 std::vector<array> ArgPartition::jvp(
-    const std::vector<array>& primals,
+    const std::vector<array>&,
     const std::vector<array>& tangents,
-    const std::vector<int>& argnums) {
+    const std::vector<int>&) {
   return {zeros_like(tangents[0], stream())};
 }
 
@@ -508,6 +508,21 @@ std::pair<std::vector<array>, std::vector<int>> ArgReduce::vmap(
     out.push_back(argmax(in, reduce_ax, true, stream()));
   }
   return {out, axes};
+}
+
+std::vector<array> ArgReduce::vjp(
+    const std::vector<array>& primals,
+    const std::vector<array>&,
+    const std::vector<int>&,
+    const std::vector<array>&) {
+  return {zeros_like(primals[0], stream())};
+}
+
+std::vector<array> ArgReduce::jvp(
+    const std::vector<array>&,
+    const std::vector<array>& tangents,
+    const std::vector<int>&) {
+  return {zeros_like(tangents[0], stream())};
 }
 
 std::pair<std::vector<array>, std::vector<int>> ArgSort::vmap(
