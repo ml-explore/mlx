@@ -121,6 +121,7 @@ Operations
    pad
    power
    prod
+   put_along_axis
    quantize
    quantized_matmul
    radians
