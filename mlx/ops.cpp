@@ -2767,6 +2767,53 @@ array take_along_axis(
   return reshape(out, out_shape, s);
 }
 
+array put_along_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
+    std::ostringstream msg;
+    msg << "[put_along_axis] Received invalid axis " << " for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (indices.ndim() != a.ndim()) {
+    std::ostringstream msg;
+    msg << "[put_along_axis] Indices of dimension " << indices.ndim()
+        << " does not match array of dimension " << a.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Allow negative axis
+  axis = axis < 0 ? a.ndim() + axis : axis;
+
+  std::vector<array> nd_indices;
+  std::vector<int> index_shape(a.ndim(), 1);
+  for (int i = 0; i < a.ndim(); ++i) {
+    if (i == axis) {
+      nd_indices.push_back(indices);
+    } else {
+      // Reshape so they can be broadcast
+      index_shape[i] = a.shape(i);
+      nd_indices.push_back(reshape(arange(a.shape(i), s), index_shape, s));
+      index_shape[i] = 1;
+    }
+  }
+
+  auto update = astype(broadcast_to(values, indices.shape(), s), a.dtype(), s);
+  {
+    auto update_shape = update.shape();
+    update_shape.resize(update_shape.size() + a.ndim(), 1);
+    update = reshape(update, std::move(update_shape), s);
+  }
+  std::vector<int> dims(a.ndim());
+  std::iota(dims.begin(), dims.end(), 0);
+  return scatter(a, nd_indices, update, dims, s);
+}
+
 /** Scatter updates to given indices */
 array scatter(
     const array& a,
@@ -2853,7 +2900,6 @@ array scatter(
   }
 
   inputs.insert(inputs.begin(), a);
-  // TODO promote or cast?
   inputs.push_back(astype(updates, a.dtype(), s));
 
   return array(
