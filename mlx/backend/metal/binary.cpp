@@ -19,8 +19,6 @@
 
 namespace mlx::core {
 
-constexpr int MAX_BINARY_SPECIALIZED_DIMS = 3;
-
 std::string get_kernel_name(
     BinaryOpType bopt,
     const std::string& op,
@@ -44,7 +42,7 @@ std::string get_kernel_name(
       break;
     case BinaryOpType::General:
       kname << "g";
-      if (ndim <= MAX_BINARY_SPECIALIZED_DIMS) {
+      if (ndim <= 3) {
         kname << ndim;
       } else {
         kname << "n";

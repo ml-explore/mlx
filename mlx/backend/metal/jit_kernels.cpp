@@ -90,7 +90,7 @@ void add_binary_kernels(
   }
   kernel_source << get_template_definition(
       "gn4" + lib_name,
-      func,
+      "binary_g",
       get_type_string(in_type),
       get_type_string(out_type),
       op,
@@ -156,6 +156,8 @@ MTL::ComputePipelineState* get_ternary_kernel(
           name + "_" + lib_name, func, get_type_string(type), op);
       kernel_source << template_def;
     }
+    kernel_source << get_template_definition(
+        "gn4_" + lib_name, "ternary_g", get_type_string(type), op, 4);
     lib = d.get_library(lib_name, kernel_source.str());
   }
   return d.get_kernel(kernel_name, lib);
