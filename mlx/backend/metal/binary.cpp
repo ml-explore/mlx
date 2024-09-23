@@ -52,7 +52,7 @@ std::string get_kernel_name(
       }
       break;
   }
-  kname << op << type_to_name(a);
+  kname << "_" << op << type_to_name(a);
   return kname.str();
 }
 

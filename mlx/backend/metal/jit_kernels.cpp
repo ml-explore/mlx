@@ -81,7 +81,7 @@ void add_binary_kernels(
   for (auto& [name, func] : kernel_types) {
     std::string template_def;
     template_def = get_template_definition(
-        name + lib_name,
+        name + "_" + lib_name,
         func,
         get_type_string(in_type),
         get_type_string(out_type),
@@ -89,7 +89,7 @@ void add_binary_kernels(
     kernel_source << template_def;
   }
   kernel_source << get_template_definition(
-      "gn4" + lib_name,
+      "gn4_" + lib_name,
       "binary_g",
       get_type_string(in_type),
       get_type_string(out_type),
@@ -103,7 +103,7 @@ MTL::ComputePipelineState* get_binary_kernel(
     Dtype in_type,
     Dtype out_type,
     const std::string op) {
-  std::string lib_name = kernel_name.substr(2);
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
@@ -120,7 +120,7 @@ MTL::ComputePipelineState* get_binary_two_kernel(
     Dtype in_type,
     Dtype out_type,
     const std::string op) {
-  std::string lib_name = kernel_name.substr(2);
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
