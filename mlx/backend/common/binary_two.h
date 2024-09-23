@@ -139,8 +139,7 @@ void binary_op_dispatch_dims(
       return;
   }
 
-  int size = std::accumulate(
-      new_shape.end() - 4, new_shape.end(), 1, std::multiplies<int>());
+  int size = out_strides[out_strides.size() - 5];
   for (int i = 0; i < a.size(); i += size) {
     auto a_offset = elem_to_loc(i, new_shape, a_strides);
     auto b_offset = elem_to_loc(i, new_shape, b_strides);
