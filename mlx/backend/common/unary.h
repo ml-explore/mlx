@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "mlx/allocator.h"
 #include "mlx/array.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/utils.h"

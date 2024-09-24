@@ -2,9 +2,7 @@
 
 #pragma once
 
-#include <iostream> // TODO
 #include <vector>
-#include "mlx/utils.h" // TODO
 
 #include "mlx/array.h"
 

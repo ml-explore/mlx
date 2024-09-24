@@ -2,7 +2,6 @@
 
 #pragma once
 #include <cassert>
-#include <numeric>
 
 #include "mlx/allocator.h"
 #include "mlx/array.h"
