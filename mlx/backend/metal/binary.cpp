@@ -73,11 +73,7 @@ void binary_op_gpu_inplace(
   // Try to collapse contiguous dims
   auto maybe_collapse = [bopt, &a, &b, &out]() {
     if (bopt == BinaryOpType::General) {
-      // The size cap here should ideally be `UINT32_MAX` but we are
-      // limitied by the shape being an int.
-      auto [shape, strides] = collapse_contiguous_dims(
-          {a, b, out},
-          /* size_cap = */ INT32_MAX);
+      auto [shape, strides] = collapse_contiguous_dims(a, b, out);
       return std::make_tuple(shape, strides[0], strides[1], strides[2]);
     } else {
       std::vector<size_t> e;
