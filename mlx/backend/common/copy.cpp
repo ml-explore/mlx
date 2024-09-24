@@ -101,6 +101,25 @@ inline void copy_general_general(const array& src, array& dst) {
       src, dst, src.shape(), src.strides(), dst.strides(), 0, 0);
 }
 
+template <typename SrcT, typename DstT, typename StrideT>
+void copy_general(
+    const array& src,
+    array& dst,
+    const std::vector<int>& data_shape,
+    const std::vector<StrideT>& i_strides,
+    const std::vector<StrideT>&,
+    int64_t i_offset,
+    int64_t o_offset) {
+  copy_general_general<SrcT, DstT, StrideT>(
+      src,
+      dst,
+      data_shape,
+      i_strides,
+      make_contiguous_strides<StrideT>(data_shape),
+      i_offset,
+      o_offset);
+}
+
 template <typename SrcT, typename DstT>
 inline void copy_general(const array& src, array& dst) {
   copy_general_general<SrcT, DstT, size_t>(
@@ -123,6 +142,8 @@ void copy(const array& src, array& dst, CopyType ctype, Args&&... args) {
       copy_vector<SrcT, DstT>(src, dst);
       return;
     case CopyType::General:
+      copy_general<SrcT, DstT>(src, dst, std::forward<Args>(args)...);
+      return;
     case CopyType::GeneralGeneral:
       copy_general_general<SrcT, DstT>(src, dst, std::forward<Args>(args)...);
       return;
