@@ -185,8 +185,8 @@ void binary_op_dims(
     const std::vector<size_t>& out_strides,
     size_t a_offset,
     size_t b_offset,
-    size_t o_offset) {
-  int axis = shape.size() - D;
+    size_t o_offset,
+    int axis) {
   auto stride_a = a_strides[axis];
   auto stride_b = b_strides[axis];
   auto stride_out = out_strides[axis];
@@ -194,7 +194,7 @@ void binary_op_dims(
 
   if constexpr (D > 1) {
     for (int i = 0; i < N; i++) {
-      binary_op_dims<T, U, Op, D - 1>(
+      binary_op_dims<T, U, Op, D - 1, Strided>(
           a,
           b,
           out,
@@ -205,7 +205,8 @@ void binary_op_dims(
           out_strides,
           a_offset,
           b_offset,
-          o_offset);
+          o_offset,
+          axis + 1);
       a_offset += stride_a;
       b_offset += stride_b;
       o_offset += stride_out;
@@ -241,27 +242,23 @@ void binary_op_dispatch_dims(
   switch (dim) {
     case 1:
       binary_op_dims<T, U, Op, 1, Strided>(
-          a, b, out, op, shape, a_strides, b_strides, out_strides, 0, 0, 0);
+          a, b, out, op, shape, a_strides, b_strides, out_strides, 0, 0, 0, 0);
       return;
     case 2:
       binary_op_dims<T, U, Op, 2, Strided>(
-          a, b, out, op, shape, a_strides, b_strides, out_strides, 0, 0, 0);
+          a, b, out, op, shape, a_strides, b_strides, out_strides, 0, 0, 0, 0);
       return;
     case 3:
       binary_op_dims<T, U, Op, 3, Strided>(
-          a, b, out, op, shape, a_strides, b_strides, out_strides, 0, 0, 0);
-      return;
-    case 4:
-      binary_op_dims<T, U, Op, 4, Strided>(
-          a, b, out, op, shape, a_strides, b_strides, out_strides, 0, 0, 0);
+          a, b, out, op, shape, a_strides, b_strides, out_strides, 0, 0, 0, 0);
       return;
   }
 
-  int size = out_strides[dim - 5];
+  int size = out_strides[dim - 4];
   for (int i = 0; i < a.size(); i += size) {
     auto a_offset = elem_to_loc(i, shape, a_strides);
     auto b_offset = elem_to_loc(i, shape, b_strides);
-    binary_op_dims<T, U, Op, 4, Strided>(
+    binary_op_dims<T, U, Op, 3, Strided>(
         a,
         b,
         out,
@@ -272,7 +269,8 @@ void binary_op_dispatch_dims(
         out_strides,
         a_offset,
         b_offset,
-        i);
+        i,
+        dim - 3);
   }
 }
 
