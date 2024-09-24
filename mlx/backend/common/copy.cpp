@@ -59,32 +59,37 @@ void copy_general_general(
     const std::vector<StrideT>& o_strides,
     int64_t i_offset,
     int64_t o_offset) {
-  auto [new_shape, new_strides] = collapse_contiguous_dims(
+  auto [shape, strides] = collapse_contiguous_dims(
       data_shape, std::vector<std::vector<StrideT>>{i_strides, o_strides});
   auto src_ptr = src.data<SrcT>() + i_offset;
   auto dst_ptr = dst.data<DstT>() + o_offset;
-  int ndim = new_shape.size();
+  int ndim = shape.size();
   if (ndim == 1) {
     copy_dims<SrcT, DstT, StrideT, 1>(
-        src_ptr, dst_ptr, new_shape, new_strides[0], new_strides[1], 0);
+        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
     return;
   } else if (ndim == 2) {
     copy_dims<SrcT, DstT, StrideT, 2>(
-        src_ptr, dst_ptr, new_shape, new_strides[0], new_strides[1], 0);
+        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
+    return;
+  } else if (ndim == 3) {
+    copy_dims<SrcT, DstT, StrideT, 3>(
+        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
     return;
   }
-  ContiguousIterator<StrideT> in(new_shape, new_strides[0], ndim - 2);
-  ContiguousIterator<StrideT> out(new_shape, new_strides[1], ndim - 2);
+
+  ContiguousIterator<StrideT> in(shape, strides[0], ndim - 3);
+  ContiguousIterator<StrideT> out(shape, strides[1], ndim - 3);
   StrideT stride = std::accumulate(
-      new_shape.end() - 2, new_shape.end(), 1, std::multiplies<StrideT>());
+      shape.end() - 3, shape.end(), 1, std::multiplies<StrideT>());
   for (size_t elem = 0; elem < src.size(); elem += stride) {
-    copy_dims<SrcT, DstT, StrideT, 2>(
+    copy_dims<SrcT, DstT, StrideT, 3>(
         src_ptr + in.loc,
         dst_ptr + out.loc,
-        new_shape,
-        new_strides[0],
-        new_strides[1],
-        ndim - 2);
+        shape,
+        strides[0],
+        strides[1],
+        ndim - 3);
     in.step();
     out.step();
   }
@@ -96,47 +101,9 @@ inline void copy_general_general(const array& src, array& dst) {
       src, dst, src.shape(), src.strides(), dst.strides(), 0, 0);
 }
 
-template <typename SrcT, typename DstT, typename StrideT>
-inline void copy_general(
-    const array& src,
-    array& dst,
-    const std::vector<int>& data_shape,
-    const std::vector<StrideT>& i_strides,
-    const std::vector<StrideT>& o_strides,
-    int64_t i_offset,
-    int64_t o_offset) {
-  auto [shape, strides] = collapse_contiguous_dims(
-      data_shape, std::vector<std::vector<StrideT>>{i_strides, o_strides});
-  auto src_ptr = src.data<SrcT>() + i_offset;
-  auto dst_ptr = dst.data<DstT>() + o_offset;
-
-  int ndim = shape.size();
-  if (ndim == 1) {
-    copy_dims<SrcT, DstT, StrideT, 1>(
-        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-    return;
-  } else if (ndim == 2) {
-    copy_dims<SrcT, DstT, StrideT, 2>(
-        src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
-    return;
-  }
-  ContiguousIterator<StrideT> in(shape, strides[0], ndim - 2);
-  StrideT stride = strides[1][ndim - 3];
-  for (StrideT elem = 0; elem < src.size(); elem += stride) {
-    copy_dims<SrcT, DstT, StrideT, 2>(
-        src_ptr + in.loc,
-        dst_ptr + elem,
-        shape,
-        strides[0],
-        strides[1],
-        ndim - 2);
-    in.step();
-  }
-}
-
 template <typename SrcT, typename DstT>
 inline void copy_general(const array& src, array& dst) {
-  copy_general<SrcT, DstT, size_t>(
+  copy_general_general<SrcT, DstT, size_t>(
       src,
       dst,
       src.shape(),
@@ -156,8 +123,6 @@ void copy(const array& src, array& dst, CopyType ctype, Args&&... args) {
       copy_vector<SrcT, DstT>(src, dst);
       return;
     case CopyType::General:
-      copy_general<SrcT, DstT>(src, dst, std::forward<Args>(args)...);
-      return;
     case CopyType::GeneralGeneral:
       copy_general_general<SrcT, DstT>(src, dst, std::forward<Args>(args)...);
       return;

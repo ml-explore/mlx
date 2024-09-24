@@ -245,13 +245,25 @@ void binary_op_dispatch_dims(
           out_strides,
           0);
       return;
+    case 3:
+      binary_op_dims<T, U, Op, 3, Strided>(
+          a_ptr,
+          b_ptr,
+          out_ptr,
+          op,
+          shape,
+          a_strides,
+          b_strides,
+          out_strides,
+          0);
+      return;
   }
 
-  ContiguousIterator<size_t> a_it(shape, a_strides, dim - 2);
-  ContiguousIterator<size_t> b_it(shape, b_strides, dim - 2);
-  size_t stride = out_strides[dim - 3];
+  ContiguousIterator<size_t> a_it(shape, a_strides, dim - 3);
+  ContiguousIterator<size_t> b_it(shape, b_strides, dim - 3);
+  size_t stride = out_strides[dim - 4];
   for (size_t elem = 0; elem < a.size(); elem += stride) {
-    binary_op_dims<T, U, Op, 2, Strided>(
+    binary_op_dims<T, U, Op, 3, Strided>(
         a_ptr + a_it.loc,
         b_ptr + b_it.loc,
         out_ptr + elem,
@@ -260,7 +272,7 @@ void binary_op_dispatch_dims(
         a_strides,
         b_strides,
         out_strides,
-        dim - 2);
+        dim - 3);
     a_it.step();
     b_it.step();
   }
