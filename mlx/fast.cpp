@@ -918,6 +918,7 @@ array affine_dequantize(
 
 std::string write_signature(
     std::string func_name,
+    const std::string& header,
     const std::string& source,
     const std::vector<std::string>& input_names,
     const std::vector<array>& inputs,
@@ -928,10 +929,12 @@ std::string write_signature(
     const std::vector<CustomKernelShapeInfo>& shape_infos,
     bool atomic_outputs) {
   std::string kernel_source;
+  kernel_source.reserve(header.size() + source.size() + 16384);
+  kernel_source += header;
   // Auto-generate a function signature based on `template_args`
   // and the dtype/shape of the arrays passed as `inputs`.
   if (!template_args.empty()) {
-    std::string template_string = "template <";
+    kernel_source += "template <";
     int i = 0;
     for (const auto& [name, arg] : template_args) {
       std::string param_type;
@@ -943,15 +946,18 @@ std::string write_signature(
         param_type = "typename";
       }
       if (i > 0) {
-        template_string += ", ";
+        kernel_source += ", ";
       }
-      template_string += (param_type + " " + name);
+      kernel_source += param_type;
+      kernel_source += " ";
+      kernel_source += name;
       i++;
     }
-    template_string += ">\n";
-    kernel_source += template_string;
+    kernel_source += ">\n";
   }
-  kernel_source += ("[[kernel]] void " + func_name + "(\n");
+  kernel_source += "[[kernel]] void ";
+  kernel_source += func_name;
+  kernel_source += "(\n";
 
   int index = 0;
   constexpr int max_constant_array_size = 8;
@@ -963,53 +969,51 @@ std::string write_signature(
     std::string location =
         arr.size() < max_constant_array_size ? "constant" : "device";
     std::string ref = arr.ndim() == 0 ? "&" : "*";
-    std::string input_string = "  const " + location + " " + dtype + ref + " " +
-        name + " [[buffer(" + std::to_string(index) + ")]],\n";
+    kernel_source += "  const " + location + " " + dtype + ref + " " + name +
+        " [[buffer(" + std::to_string(index) + ")]],\n";
     index++;
     // Add input shape, strides and ndim if present in the source
     if (arr.ndim() > 0) {
       if (shape_infos[i].shape) {
-        input_string +=
+        kernel_source +=
             ("  const constant int* " + name + "_shape [[buffer(" +
              std::to_string(index) + ")]],\n");
         index++;
       }
       if (shape_infos[i].strides) {
-        input_string +=
+        kernel_source +=
             ("  const constant size_t* " + name + "_strides [[buffer(" +
              std::to_string(index) + ")]],\n");
         index++;
       }
       if (shape_infos[i].ndim) {
-        input_string +=
+        kernel_source +=
             ("  const constant int& " + name + "_ndim [[buffer(" +
              std::to_string(index) + ")]],\n");
         index++;
       }
     }
-    kernel_source += input_string;
   }
   // Add outputs
   for (int i = 0; i < output_names.size(); ++i) {
     const auto& name = output_names[i];
     const auto& dtype = output_dtypes[i];
-    std::string output_string = "  device ";
+    kernel_source += "  device ";
     auto type_string = get_type_string(dtype);
     if (atomic_outputs) {
-      output_string += ("atomic<" + type_string + ">");
+      kernel_source += ("atomic<" + type_string + ">");
     } else {
-      output_string += type_string;
+      kernel_source += type_string;
     }
-    output_string +=
+    kernel_source +=
         ("* " + name + " [[buffer(" + std::to_string(index) + ")]]");
     if (index < inputs.size() + output_names.size() - 1 ||
         attributes.size() > 0) {
-      output_string += ",\n";
+      kernel_source += ",\n";
     } else {
-      output_string += ") {\n";
+      kernel_source += ") {\n";
     }
     index++;
-    kernel_source += output_string;
   }
 
   index = 0;
@@ -1021,7 +1025,9 @@ std::string write_signature(
     }
     index++;
   }
-  return kernel_source + source + "\n}\n";
+  kernel_source += source;
+  kernel_source += "\n}\n";
+  return kernel_source;
 }
 
 std::string write_template(
@@ -1148,17 +1154,18 @@ MetalKernelFunction metal_kernel(
     func_name << "custom_kernel_" << name << hash_key;
     std::string kernel_name = func_name.str();
 
-    std::string kernel_source = header +
-        write_signature(kernel_name,
-                        source,
-                        input_names,
-                        inputs,
-                        output_names,
-                        output_dtypes,
-                        template_args,
-                        attributes,
-                        shape_infos,
-                        atomic_outputs);
+    std::string kernel_source = write_signature(
+        kernel_name,
+        header,
+        source,
+        input_names,
+        inputs,
+        output_names,
+        output_dtypes,
+        template_args,
+        attributes,
+        shape_infos,
+        atomic_outputs);
 
     if (!template_args.empty()) {
       template_def = kernel_name + template_def;
