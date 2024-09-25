@@ -1061,9 +1061,9 @@ MetalKernelFunction metal_kernel(
   std::vector<CustomKernelShapeInfo> shape_infos;
   for (auto& n : input_names) {
     CustomKernelShapeInfo shape_info;
-    shape_info.shape = source.find(name + "_shape") != std::string::npos;
-    shape_info.strides = source.find(name + "_strides") != std::string::npos;
-    shape_info.ndim = source.find(name + "_ndim") != std::string::npos;
+    shape_info.shape = source.find(n + "_shape") != std::string::npos;
+    shape_info.strides = source.find(n + "_strides") != std::string::npos;
+    shape_info.ndim = source.find(n + "_ndim") != std::string::npos;
     shape_infos.push_back(shape_info);
   }
   const std::vector<std::pair<std::string, std::string>> metal_attributes = {
