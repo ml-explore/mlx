@@ -59,6 +59,12 @@ void copy_general_general(
     const std::vector<StrideT>& o_strides,
     int64_t i_offset,
     int64_t o_offset) {
+  if (data_shape.empty()) {
+    auto val = static_cast<DstT>(*(src.data<SrcT>() + i_offset));
+    auto dst_ptr = dst.data<DstT>() + o_offset;
+    *dst_ptr = val;
+    return;
+  }
   auto [shape, strides] = collapse_contiguous_dims(
       data_shape, std::vector<std::vector<StrideT>>{i_strides, o_strides});
   auto src_ptr = src.data<SrcT>() + i_offset;
