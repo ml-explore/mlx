@@ -47,12 +47,21 @@ struct Dtype {
     generic
   };
 
-  Val val;
-  const uint8_t size;
-  constexpr explicit Dtype(Val val, uint8_t size) : val(val), size(size) {}
+  constexpr explicit Dtype(Val val, uint8_t size) : val_(val), size_(size) {}
+
   constexpr operator Val() const {
-    return val;
+    return val_;
   }
+  constexpr Val val() const {
+    return val_;
+  }
+  constexpr uint8_t size() const {
+    return size_;
+  }
+
+ private:
+  Val val_;
+  uint8_t size_;
 };
 
 inline constexpr Dtype bool_{Dtype::Val::bool_, sizeof(bool)};
@@ -91,7 +100,7 @@ bool issubdtype(const Dtype::Category& a, const Dtype::Category& b);
 Dtype promote_types(const Dtype& t1, const Dtype& t2);
 
 inline uint8_t size_of(const Dtype& t) {
-  return t.size;
+  return t.size();
 }
 
 Dtype::Kind kindof(const Dtype& t);
