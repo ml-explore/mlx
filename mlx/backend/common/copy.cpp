@@ -77,12 +77,11 @@ void copy_general_general(
         src_ptr, dst_ptr, shape, strides[0], strides[1], 0);
     return;
   }
-
   ContiguousIterator<StrideT> in(shape, strides[0], ndim - 3);
   ContiguousIterator<StrideT> out(shape, strides[1], ndim - 3);
   StrideT stride = std::accumulate(
       shape.end() - 3, shape.end(), 1, std::multiplies<StrideT>());
-  for (size_t elem = 0; elem < src.size(); elem += stride) {
+  for (StrideT elem = 0; elem < src.size(); elem += stride) {
     copy_dims<SrcT, DstT, StrideT, 3>(
         src_ptr + in.loc,
         dst_ptr + out.loc,
