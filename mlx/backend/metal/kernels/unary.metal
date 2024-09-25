@@ -5,10 +5,11 @@
 #include "mlx/backend/metal/kernels/unary_ops.h"
 #include "mlx/backend/metal/kernels/unary.h"
 
-#define instantiate_unary_all(op, tname, type)            \
-  instantiate_kernel("v" #op #tname, unary_v, type, op)   \
-  instantiate_kernel("v2" #op #tname, unary_v2, type, op) \
-  instantiate_kernel("g" #op #tname, unary_g, type, op)
+#define instantiate_unary_all(op, tname, type)                  \
+  instantiate_kernel("v_" #op #tname, unary_v, type, op)        \
+  instantiate_kernel("v2_" #op #tname, unary_v2, type, op)      \
+  instantiate_kernel("gn4_" #op #tname, unary_g, type, op, 4)   \
+  instantiate_kernel("g_" #op #tname, unary_g, type, op)
 
 #define instantiate_unary_float(op)               \
   instantiate_unary_all(op, float16, half)        \

@@ -37,11 +37,17 @@ void unary_op_gpu_inplace(
     }
   };
   auto [shape, strides] = maybe_collapse();
-
+  int ndim = shape.size();
+  int work_per_thread = (!contig && shape[ndim - 1] > 4) ? 4 : 1;
   size_t nthreads = contig ? in.data_size() : in.size();
   bool use_2d = nthreads > UINT32_MAX;
-  std::string kernel_name =
-      (contig ? (use_2d ? "v2" : "v") : "g") + op + type_to_name(out);
+  std::string kernel_name;
+  if (contig) {
+    kernel_name = (use_2d ? "v2" : "v");
+  } else {
+    kernel_name = (work_per_thread == 4 ? "gn4" : "g");
+  }
+  kernel_name += "_" + op + type_to_name(out);
   auto kernel = get_unary_kernel(d, kernel_name, out.dtype(), op);
 
   MTL::Size grid_dims = use_2d ? get_2d_grid_dims(in.shape(), in.strides())
@@ -53,8 +59,6 @@ void unary_op_gpu_inplace(
       in.data_shared_ptr() == nullptr ? out : in, 0);
   compute_encoder.set_output_array(out, 1);
   if (!contig) {
-    int ndim = shape.size();
-
     // Launch up to 3D grid of threads
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
@@ -65,6 +69,7 @@ void unary_op_gpu_inplace(
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::unary] Must use 1024 sized block");
     }
+    dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     auto group_dims = get_block_dims(dim0, dim1, rest);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder.dispatchThreads(grid_dims, group_dims);

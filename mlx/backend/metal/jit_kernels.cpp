@@ -42,18 +42,19 @@ MTL::ComputePipelineState* get_unary_kernel(
     const std::string& kernel_name,
     Dtype out_type,
     const std::string op) {
-  std::string lib_name = kernel_name.substr(1);
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name);
   if (lib == nullptr) {
     std::ostringstream kernel_source;
-    auto u_def = get_template_definition(
-        "v" + lib_name, "unary_v", get_type_string(out_type), op);
-    auto u2_def = get_template_definition(
-        "v2" + lib_name, "unary_v2", get_type_string(out_type), op);
-    auto g_def = get_template_definition(
-        "g" + lib_name, "unary_g", get_type_string(out_type), op);
-    kernel_source << metal::utils() << metal::unary_ops() << metal::unary()
-                  << u_def << u2_def << g_def;
+    kernel_source << metal::utils() << metal::unary_ops() << metal::unary();
+    kernel_source << get_template_definition(
+        "v_" + lib_name, "unary_v", get_type_string(out_type), op);
+    kernel_source << get_template_definition(
+        "v2_" + lib_name, "unary_v2", get_type_string(out_type), op);
+    kernel_source << get_template_definition(
+        "g_" + lib_name, "unary_g", get_type_string(out_type), op);
+    kernel_source << get_template_definition(
+        "gn4_" + lib_name, "unary_g", get_type_string(out_type), op, 4);
     lib = d.get_library(lib_name, kernel_source.str());
   }
   return d.get_kernel(kernel_name, lib);
