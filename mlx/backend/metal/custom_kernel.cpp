@@ -49,7 +49,7 @@ void CustomKernel::eval_gpu(
   int index = 0;
   for (int i = 0; i < checked_inputs.size(); i++) {
     const array& in = checked_inputs[i];
-    auto shape_info = shape_infos_[i];
+    auto& shape_info = shape_infos_[i];
     compute_encoder.set_input_array(in, index);
     index++;
     if (in.ndim() > 0) {
@@ -68,7 +68,7 @@ void CustomKernel::eval_gpu(
       }
     }
   }
-  for (array out : outputs) {
+  for (auto& out : outputs) {
     compute_encoder.set_output_array(out, index);
     index++;
   }
