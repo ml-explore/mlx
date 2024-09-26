@@ -26,11 +26,7 @@ void ternary_op_gpu_inplace(
   // Try to collapse contiguous dims
   auto maybe_collapse = [topt, &a, &b, &c, &out]() {
     if (topt == TernaryOpType::General) {
-      // The size cap here should ideally be `UINT32_MAX` but we are
-      // limitied by the shape being an int.
-      auto [shape, strides] = collapse_contiguous_dims(
-          {a, b, c, out},
-          /* size_cap = */ INT32_MAX);
+      auto [shape, strides] = collapse_contiguous_dims(a, b, c, out);
       return std::make_tuple(
           shape, strides[0], strides[1], strides[2], strides[3]);
     } else {

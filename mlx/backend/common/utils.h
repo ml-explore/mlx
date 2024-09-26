@@ -8,12 +8,12 @@
 
 namespace mlx::core {
 
-template <typename stride_t>
-inline stride_t elem_to_loc(
+template <typename StrideT>
+inline StrideT elem_to_loc(
     int elem,
     const std::vector<int>& shape,
-    const std::vector<stride_t>& strides) {
-  stride_t loc = 0;
+    const std::vector<StrideT>& strides) {
+  StrideT loc = 0;
   for (int i = shape.size() - 1; i >= 0; --i) {
     auto q_and_r = ldiv(elem, shape[i]);
     loc += q_and_r.rem * strides[i];
@@ -29,9 +29,9 @@ inline size_t elem_to_loc(int elem, const array& a) {
   return elem_to_loc(elem, a.shape(), a.strides());
 }
 
-template <typename stride_t>
-std::vector<stride_t> make_contiguous_strides(const std::vector<int>& shape) {
-  std::vector<stride_t> strides(shape.size(), 1);
+template <typename StrideT>
+std::vector<StrideT> make_contiguous_strides(const std::vector<int>& shape) {
+  std::vector<StrideT> strides(shape.size(), 1);
   for (int i = shape.size() - 1; i > 0; i--) {
     strides[i - 1] = strides[i] * shape[i];
   }
@@ -58,7 +58,7 @@ collapse_contiguous_dims(
 inline std::tuple<std::vector<int>, std::vector<std::vector<size_t>>>
 collapse_contiguous_dims(
     const std::vector<array>& xs,
-    size_t size_cap = std::numeric_limits<size_t>::max()) {
+    size_t size_cap = std::numeric_limits<int32_t>::max()) {
   std::vector<std::vector<size_t>> strides;
   for (auto& x : xs) {
     strides.emplace_back(x.strides());
@@ -73,36 +73,55 @@ inline auto collapse_contiguous_dims(Arrays&&... xs) {
 }
 
 // The single array version of the above.
-inline std::tuple<std::vector<int>, std::vector<size_t>>
-collapse_contiguous_dims(
+std::pair<std::vector<int>, std::vector<int64_t>> collapse_contiguous_dims(
     const std::vector<int>& shape,
-    const std::vector<size_t>& strides) {
-  std::vector<int> collapsed_shape;
-  std::vector<size_t> collapsed_strides;
+    const std::vector<int64_t>& strides,
+    int64_t size_cap = std::numeric_limits<int32_t>::max());
+std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+    const std::vector<int>& shape,
+    const std::vector<size_t>& strides,
+    size_t size_cap = std::numeric_limits<int32_t>::max());
+std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+    const array& a,
+    size_t size_cap = std::numeric_limits<int32_t>::max());
 
-  if (shape.size() > 0) {
-    collapsed_shape.push_back(shape[0]);
-    collapsed_strides.push_back(strides[0]);
-    for (int i = 1; i < shape.size(); i++) {
-      if (strides[i] * shape[i] != collapsed_strides.back() ||
-          collapsed_shape.back() * static_cast<size_t>(shape[i]) >
-              std::numeric_limits<int>::max()) {
-        collapsed_shape.push_back(shape[i]);
-        collapsed_strides.push_back(strides[i]);
-      } else {
-        collapsed_shape.back() *= shape[i];
-        collapsed_strides.back() = strides[i];
-      }
+template <typename StrideT>
+struct ContiguousIterator {
+  inline void step() {
+    int i = dims_;
+    while (pos_[i] == (shape_[i] - 1) && i > 0) {
+      pos_[i] = 0;
+      loc -= (shape_[i] - 1) * strides_[i];
+      i--;
     }
+    pos_[i]++;
+    loc += strides_[i];
   }
 
-  return std::make_tuple(collapsed_shape, collapsed_strides);
-}
+  explicit ContiguousIterator(
+      const std::vector<int>& shape,
+      const std::vector<StrideT>& strides,
+      int dims)
+      : shape_(shape.begin(), shape.begin() + dims),
+        strides_(strides.begin(), strides.begin() + dims) {
+    std::tie(shape_, strides_) = collapse_contiguous_dims(shape_, strides_);
+    dims_ = shape_.size() - 1;
+    pos_ = std::vector<int>(dims_ + 1, 0);
+  }
 
-template <typename stride_t>
+  StrideT loc{0};
+
+ private:
+  std::vector<int> shape_;
+  std::vector<StrideT> strides_;
+  std::vector<int> pos_;
+  int dims_;
+};
+
+template <typename StrideT>
 inline auto check_contiguity(
     const std::vector<int>& shape,
-    const std::vector<stride_t>& strides) {
+    const std::vector<StrideT>& strides) {
   size_t no_broadcast_data_size = 1;
   size_t f_stride = 1;
   size_t b_stride = 1;
