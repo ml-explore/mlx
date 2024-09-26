@@ -969,8 +969,16 @@ std::string write_signature(
     std::string location =
         arr.size() < max_constant_array_size ? "constant" : "device";
     std::string ref = arr.ndim() == 0 ? "&" : "*";
-    kernel_source += "  const " + location + " " + dtype + ref + " " + name +
-        " [[buffer(" + std::to_string(index) + ")]],\n";
+    kernel_source += "  const ";
+    kernel_source += location;
+    kernel_source += " ";
+    kernel_source += dtype;
+    kernel_source += ref;
+    kernel_source += " ";
+    kernel_source += name;
+    kernel_source += " [[buffer(";
+    kernel_source += std::to_string(index);
+    kernel_source += ")]],\n";
     index++;
     // Add input shape, strides and ndim if present in the source
     if (arr.ndim() > 0) {
@@ -1001,12 +1009,17 @@ std::string write_signature(
     kernel_source += "  device ";
     auto type_string = get_type_string(dtype);
     if (atomic_outputs) {
-      kernel_source += ("atomic<" + type_string + ">");
-    } else {
-      kernel_source += type_string;
+      kernel_source += "atomic<";
     }
-    kernel_source +=
-        ("* " + name + " [[buffer(" + std::to_string(index) + ")]]");
+    kernel_source += type_string;
+    if (atomic_outputs) {
+      kernel_source += ">";
+    }
+    kernel_source += "* ";
+    kernel_source += name;
+    kernel_source += " [[buffer(";
+    kernel_source += std::to_string(index);
+    kernel_source += ")]]";
     if (index < inputs.size() + output_names.size() - 1 ||
         attributes.size() > 0) {
       kernel_source += ",\n";
@@ -1018,10 +1031,11 @@ std::string write_signature(
 
   index = 0;
   for (const auto& attr : attributes) {
+    kernel_source += attr;
     if (index < attributes.size() - 1) {
-      kernel_source += (attr + ",\n");
+      kernel_source += ",\n";
     } else {
-      kernel_source += (attr + ") {\n");
+      kernel_source += ") {\n";
     }
     index++;
   }
@@ -1169,10 +1183,13 @@ MetalKernelFunction metal_kernel(
 
     if (!template_args.empty()) {
       template_def = kernel_name + template_def;
-      kernel_source +=
-          ("\ntemplate [[host_name(\"" + kernel_name +
-           "\")]] [[kernel]] decltype(" + template_def + ") " + template_def +
-           ";\n");
+      kernel_source += "\ntemplate [[host_name(\"";
+      kernel_source += kernel_name;
+      kernel_source += "\")]] [[kernel]] decltype(";
+      kernel_source += template_def;
+      kernel_source += ") ";
+      kernel_source += template_def;
+      kernel_source += ";\n";
     }
 
     if (verbose) {
