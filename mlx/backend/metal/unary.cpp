@@ -28,10 +28,7 @@ void unary_op_gpu_inplace(
 
   auto maybe_collapse = [contig, &in, &out]() {
     if (!contig) {
-      auto [shape, strides] = collapse_contiguous_dims(
-          {in, out},
-          /* size_cap = */ INT32_MAX);
-      return std::make_pair(shape, strides[0]);
+      return collapse_contiguous_dims(in);
     } else {
       return std::make_pair(std::vector<int>{}, std::vector<size_t>{});
     }

@@ -86,8 +86,7 @@ collapse_contiguous_dims(
 }
 
 template <typename StrideT>
-std::tuple<std::vector<int>, std::vector<StrideT>>
-collapse_contiguous_dims_impl(
+std::pair<std::vector<int>, std::vector<StrideT>> collapse_contiguous_dims_impl(
     const std::vector<int>& shape,
     const std::vector<StrideT>& strides,
     StrideT size_cap) {
@@ -112,24 +111,24 @@ collapse_contiguous_dims_impl(
     }
   }
 
-  return std::make_tuple(collapsed_shape, collapsed_strides);
+  return std::make_pair(collapsed_shape, collapsed_strides);
 }
 
-std::tuple<std::vector<int>, std::vector<int64_t>> collapse_contiguous_dims(
+std::pair<std::vector<int>, std::vector<int64_t>> collapse_contiguous_dims(
     const std::vector<int>& shape,
     const std::vector<int64_t>& strides,
     int64_t size_cap /* = std::numeric_limits<int32_t>::max() */) {
   return collapse_contiguous_dims_impl<int64_t>(shape, strides, size_cap);
 }
 
-std::tuple<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
     const std::vector<int>& shape,
     const std::vector<size_t>& strides,
     size_t size_cap /* = std::numeric_limits<int32_t>::max() */) {
   return collapse_contiguous_dims_impl<size_t>(shape, strides, size_cap);
 }
 
-std::tuple<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
     const array& a,
     size_t size_cap /* = std::numeric_limits<int32_t>::max()*/) {
   return collapse_contiguous_dims_impl<size_t>(

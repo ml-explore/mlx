@@ -73,15 +73,15 @@ inline auto collapse_contiguous_dims(Arrays&&... xs) {
 }
 
 // The single array version of the above.
-std::tuple<std::vector<int>, std::vector<int64_t>> collapse_contiguous_dims(
+std::pair<std::vector<int>, std::vector<int64_t>> collapse_contiguous_dims(
     const std::vector<int>& shape,
     const std::vector<int64_t>& strides,
     int64_t size_cap = std::numeric_limits<int32_t>::max());
-std::tuple<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
     const std::vector<int>& shape,
     const std::vector<size_t>& strides,
     size_t size_cap = std::numeric_limits<int32_t>::max());
-std::tuple<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
+std::pair<std::vector<int>, std::vector<size_t>> collapse_contiguous_dims(
     const array& a,
     size_t size_cap = std::numeric_limits<int32_t>::max());
 
