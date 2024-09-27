@@ -42,6 +42,11 @@ class Conv1d(Module):
     ):
         super().__init__()
 
+        if groups > 1 and in_channels % groups != 0:
+            raise ValueError(
+                f"The number of input channels ({in_channels}) must be divisible by the number of groups ({groups})"
+            )
+
         scale = math.sqrt(1 / (in_channels * kernel_size))
         self.weight = mx.random.uniform(
             low=-scale,
