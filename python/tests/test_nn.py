@@ -655,7 +655,7 @@ class TestLayers(mlx_tests.MLXTestCase):
             in_channels=C_in, out_channels=C_out, kernel_size=ks, groups=groups
         )
         y = c(x)
-        self.assertEqual(c.weight.shape, (C_out, ks, int(C_in / groups)))
+        self.assertEqual(c.weight.shape, (C_out, ks, C_in // groups))
         self.assertEqual(y.shape, (N, L - ks + 1, C_out))
 
     def test_conv2d(self):

@@ -51,7 +51,7 @@ class Conv1d(Module):
         self.weight = mx.random.uniform(
             low=-scale,
             high=scale,
-            shape=(out_channels, kernel_size, int(in_channels / groups)),
+            shape=(out_channels, kernel_size, in_channels // groups),
         )
         if bias:
             self.bias = mx.zeros((out_channels,))
