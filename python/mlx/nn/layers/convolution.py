@@ -66,7 +66,9 @@ class Conv1d(Module):
         )
 
     def __call__(self, x):
-        y = mx.conv1d(x, self.weight, self.stride, self.padding, self.dilation, self.groups)
+        y = mx.conv1d(
+            x, self.weight, self.stride, self.padding, self.dilation, self.groups
+        )
         if "bias" in self:
             y = y + self.bias
         return y
