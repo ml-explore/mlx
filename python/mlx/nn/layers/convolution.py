@@ -25,6 +25,8 @@ class Conv1d(Module):
         padding (int, optional): How many positions to 0-pad the input with.
             Default: ``0``.
         dilation (int, optional): The dilation of the convolution.
+        groups (int, optional): The number of groups for the convolution.
+            Default: ``1``.
         bias (bool, optional): If ``True`` add a learnable bias to the output.
             Default: ``True``
     """
@@ -44,7 +46,8 @@ class Conv1d(Module):
 
         if groups > 1 and in_channels % groups != 0:
             raise ValueError(
-                f"The number of input channels ({in_channels}) must be divisible by the number of groups ({groups})"
+                f"The number of input channels ({in_channels}) must be "
+                f"divisible by the number of groups ({groups})"
             )
 
         scale = math.sqrt(1 / (in_channels * kernel_size))
