@@ -13,6 +13,7 @@ simple functions.
    :template: nn-module-template.rst
 
    elu
+   celu
    gelu
    gelu_approx
    gelu_fast_approx
