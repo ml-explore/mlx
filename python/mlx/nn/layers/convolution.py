@@ -44,7 +44,7 @@ class Conv1d(Module):
     ):
         super().__init__()
 
-        if groups > 1 and in_channels % groups != 0:
+        if in_channels % groups != 0:
             raise ValueError(
                 f"The number of input channels ({in_channels}) must be "
                 f"divisible by the number of groups ({groups})"
