@@ -13,6 +13,7 @@ Layers
    AvgPool1d
    AvgPool2d
    BatchNorm
+   CELU
    Conv1d
    Conv2d
    Conv3d
@@ -23,6 +24,7 @@ Layers
    Dropout2d
    Dropout3d
    Embedding
+   ELU
    GELU
    GLU
    GroupNorm
@@ -34,6 +36,8 @@ Layers
    LayerNorm
    LeakyReLU
    Linear
+   LogSigmoid
+   LogSoftmax
    LSTM
    MaxPool1d
    MaxPool2d
@@ -49,6 +53,7 @@ Layers
    RoPE
    SELU
    Sequential
+   Sigmoid
    SiLU
    SinusoidalPositionalEncoding
    Softmin
