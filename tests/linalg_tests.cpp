@@ -517,5 +517,3 @@ TEST_CASE("test matrix eigh") {
   // Verify eigendecomposition
   CHECK(allclose(matmul(matmul(eigenvectors, diag(eigenvalues)), transpose(eigenvectors)), A, /* rtol = */ 1e-5, /* atol = */ 1e-5).item<bool>());
 }
-
-
