@@ -984,8 +984,8 @@ std::vector<array> Convolution::vjp(
           return swapaxes(x, 0, -1, stream());
         }
       };
-      auto wt_trans = group_transpose(wt);
 
+      auto wt_trans = group_transpose(wt);
       auto grad = conv_general(
           /* const array& input = */ cotan,
           /* const array& weight = */ wt_trans,
@@ -1069,12 +1069,11 @@ std::vector<array> Convolution::vjp(
 
           auto group_transpose = [this](const array& x) {
             if (groups_ > 1) {
-              // Reshape
               auto shape = x.shape();
-              shape.back() = shape.back() / groups_;
-              shape.push_back(groups_);
+              shape.push_back(shape.back() / groups_);
+              shape[shape.size() - 2] = groups_;
               auto x_trans = swapaxes(
-                  reshape(x, std::move(shape), stream()), 0, -2, stream());
+                  reshape(x, std::move(shape), stream()), 0, -1, stream());
               return flatten(x_trans, -2, -1, stream());
             } else {
               return swapaxes(x, 0, -1, stream());

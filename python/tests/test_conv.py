@@ -905,22 +905,36 @@ class TestConv(mlx_tests.MLXTestCase):
             self.assertTrue(mx.allclose(dw, expected))
 
     def test_conv_groups_grad(self):
-        # 1D conv
-        mx.random.seed(3)
-        w = mx.random.normal(shape=(2, 3, 1))
-        x = mx.random.normal(shape=(1, 5, 2))
-
         def fn(x, w):
             return mx.conv1d(x, w, groups=2)
 
         def fn_gt(x, w):
-            w = w.swapaxes(0, 2)
+            # only supports groups_size_in == group_size_out
+            num_groups = x.shape[-1] // w.shape[-1]
+            group_size = w.shape[-1]
+            x = x.reshape(*x.shape[:-1], num_groups, group_size)
+            w = w[None].swapaxes(1, 2)
             outs = mx.concatenate(
-                [(x[:, i : i + 3] * w).sum(axis=1, keepdims=True) for i in range(3)],
+                [
+                    (x[:, i : i + 3] * w).sum(axis=(1, 3), keepdims=True)
+                    for i in range(3)
+                ],
                 axis=1,
-            )
+            ).flatten(-2, -1)
             return outs
 
+        mx.random.seed(3)
+
+        w = mx.random.normal(shape=(2, 3, 1))
+        x = mx.random.normal(shape=(1, 5, 2))
+        cotans = (mx.ones(shape=(1, 3, 2)),)
+        grads = mx.vjp(fn, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(mx.allclose(expected[0], grads[0]))
+        self.assertTrue(mx.allclose(expected[1], grads[1]))
+
+        w = mx.random.normal(shape=(2, 3, 2))
+        x = mx.random.normal(shape=(1, 5, 4))
         cotans = (mx.ones(shape=(1, 3, 2)),)
         grads = mx.vjp(fn, (x, w), cotans)[1]
         expected = mx.vjp(fn_gt, (x, w), cotans)[1]
