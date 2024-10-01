@@ -419,8 +419,8 @@ TEST_CASE("test matrix eigh") {
 
   // Expected eigenvalues and eigenvectors (calculated analytically)
   array expected_eigenvalues = array({0.0, 5.0});
-  array expected_eigenvectors = array({{-0.4472136, 0.8944272}, {0.8944272, 0.4472136}});
-
+  array expected_eigenvectors({-0.4472136f, 0.8944272f, 0.8944272f, 0.4472136f}, {2, 2}, float32);
+  
   CHECK(allclose(eigenvalues, expected_eigenvalues, /* rtol = */ 1e-5, /* atol = */ 1e-5).item<bool>());
   CHECK(allclose(abs(eigenvectors), abs(expected_eigenvectors), /* rtol = */ 1e-5, /* atol = */ 1e-5).item<bool>());
 
