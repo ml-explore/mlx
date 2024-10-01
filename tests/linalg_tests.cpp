@@ -349,7 +349,6 @@ TEST_CASE("test matrix cholesky") {
             .item<bool>());
 }
 
-<<<<<<< HEAD
 TEST_CASE("test matrix pseudo-inverse") {
   // 0D and 1D throw
   CHECK_THROWS(linalg::pinv(array(0.0), Device::cpu));
@@ -452,7 +451,7 @@ TEST_CASE("test matrix eigvalsh") {
       array({1, 2, 3, 4, 5, 6}, {2, 3}), /* upper = */ true, Device::cpu));
 
   // Test a simple 2x2 symmetric matrix
-  array A = array({{1.0, 2.0}, {2.0, 4.0}});
+  array A = array({{1.0f, 2.0f}, {2.0f, 4.0f}}, float32);
   array eigenvalues = linalg::eigvalsh(A, /* upper = */ true, Device::cpu);
 
   // Expected eigenvalues (calculated analytically)
@@ -465,7 +464,7 @@ TEST_CASE("test matrix eigvalsh") {
             /* atol = */ 1e-5)
             .item<bool>());
 
-  // Test a larger symmetric matrix
+  /// Test a larger symmetric matrix
   const auto prng_key = random::key(42);
   const auto B = random::normal({5, 5}, prng_key);
   const auto B_sym = 0.5 * (B + transpose(B)); // Make sure B is symmetric
@@ -476,15 +475,47 @@ TEST_CASE("test matrix eigvalsh") {
   CHECK(B_eigenvalues.dtype() == float32);
   CHECK(B_eigenvalues.shape() == std::vector<int>{5});
   CHECK(all(isfinite(B_eigenvalues)).item<bool>());
-  CHECK(all(B_eigenvalues [1:] >= B_eigenvalues[:-1]).item<bool>());
+  CHECK(all(B_eigenvalues[slice(1, 5)] >= B_eigenvalues[slice(0, 4)]).item<bool>());
 
-  // Reconstruct the matrix using eigendecomposition and check if it's close to
-  // the original
-  const auto D = diag(B_eigenvalues);
-  const auto V = linalg::eigh(B_sym, /* upper = */ true, Device::cpu)
-                     .second; // Assuming eigh is implemented
-  const auto B_reconstructed = matmul(matmul(V, D), transpose(V));
+  // Reconstruct the matrix using eigendecomposition and check if it's close to the original
+  const auto [eigenvalues, eigenvectors] = linalg::eigh(B_sym, /* upper = */ true, Device::cpu);
+  const auto B_reconstructed = matmul(matmul(eigenvectors, diag(eigenvalues)), transpose(eigenvectors));
 
   CHECK(allclose(B_reconstructed, B_sym, /* rtol = */ 1e-5, /* atol = */ 1e-5)
             .item<bool>());
+
+  // Check that eigvalsh and eigh produce the same eigenvalues
+  CHECK(allclose(B_eigenvalues, eigenvalues, /* rtol = */ 1e-5, /* atol = */ 1e-5)
+            .item<bool>());
 }
+
+TEST_CASE("test matrix eigh") {
+  // 0D and 1D throw
+  CHECK_THROWS(linalg::eigh(array(0.0), /* upper = */ true, Device::cpu));
+  CHECK_THROWS(linalg::eigh(array({0.0, 1.0}), /* upper = */ true, Device::cpu));
+
+  // Unsupported types throw
+  CHECK_THROWS(linalg::eigh(array({0, 1}, {1, 2}), /* upper = */ true, Device::cpu));
+
+  // Non-square throws
+  CHECK_THROWS(linalg::eigh(array({1, 2, 3, 4, 5, 6}, {2, 3}), /* upper = */ true, Device::cpu));
+
+  // Test a simple 2x2 symmetric matrix
+  array A = array({{1.0f, 2.0f}, {2.0f, 4.0f}}, float32);
+  auto [eigenvalues, eigenvectors] = linalg::eigh(A, /* upper = */ true, Device::cpu);
+
+  // Expected eigenvalues and eigenvectors (calculated analytically)
+  array expected_eigenvalues = array({0.0, 5.0});
+  array expected_eigenvectors = array({{-0.4472136, 0.8944272}, {0.8944272, 0.4472136}}, float32);
+
+  CHECK(allclose(eigenvalues, expected_eigenvalues, /* rtol = */ 1e-5, /* atol = */ 1e-5).item<bool>());
+  CHECK(allclose(abs(eigenvectors), abs(expected_eigenvectors), /* rtol = */ 1e-5, /* atol = */ 1e-5).item<bool>());
+
+  // Verify orthogonality of eigenvectors
+  CHECK(allclose(matmul(transpose(eigenvectors), eigenvectors), eye(2), /* rtol = */ 1e-5, /* atol = */ 1e-5).item<bool>());
+
+  // Verify eigendecomposition
+  CHECK(allclose(matmul(matmul(eigenvectors, diag(eigenvalues)), transpose(eigenvectors)), A, /* rtol = */ 1e-5, /* atol = */ 1e-5).item<bool>());
+}
+
+
