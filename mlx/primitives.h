@@ -357,6 +357,7 @@ class ArgPartition : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
+  DEFINE_GRADS()
   DEFINE_PRINT(ArgPartition)
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
@@ -382,6 +383,7 @@ class ArgReduce : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
+  DEFINE_GRADS()
   DEFINE_PRINT(ArgReduce)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<std::vector<int>> output_shapes(

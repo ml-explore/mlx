@@ -81,11 +81,12 @@ constexpr Dtype::Category type_to_category[num_types] = {
 } // namespace
 
 Dtype promote_types(const Dtype& t1, const Dtype& t2) {
-  return Dtype(type_rules[static_cast<int>(t1.val)][static_cast<int>(t2.val)]);
+  return Dtype(
+      type_rules[static_cast<int>(t1.val())][static_cast<int>(t2.val())]);
 }
 
 Dtype::Kind kindof(const Dtype& t) {
-  return type_kinds[static_cast<int>(t.val)];
+  return type_kinds[static_cast<int>(t.val())];
 }
 
 template <>
@@ -167,7 +168,7 @@ bool issubdtype(const Dtype::Category& cat, const Dtype& type) {
 }
 
 bool issubdtype(const Dtype& type, const Dtype::Category& cat) {
-  return issubdtype(type_to_category[static_cast<uint32_t>(type.val)], cat);
+  return issubdtype(type_to_category[static_cast<uint32_t>(type.val())], cat);
 }
 
 bool issubdtype(const Dtype::Category& a, const Dtype::Category& b) {

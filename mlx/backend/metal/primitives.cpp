@@ -200,13 +200,19 @@ void Full::eval_gpu(const std::vector<array>& inputs, array& out) {
 
 void Load::eval_gpu(const std::vector<array>& inputs, array& out) {
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
-
   auto read_task = [out = out,
                     offset = offset_,
                     reader = reader_,
                     swap_endianness = swap_endianness_]() mutable {
     load(out, offset, reader, swap_endianness);
   };
+
+  // Limit the size that the command buffer will wait on to avoid timing out
+  // on the event (<4 seconds).
+  if (out.nbytes() > (1 << 28)) {
+    read_task();
+    return;
+  }
   auto fut = io::thread_pool().enqueue(std::move(read_task)).share();
   auto signal_task = [out = out, fut = std::move(fut)]() {
     fut.wait();

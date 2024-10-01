@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+title: mlx
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Awni
+    family-names: Hannun
+    affiliation: Apple
+  - given-names: Jagrit
+    family-names: Digani
+    affiliation: Apple
+  - given-names: Angelos
+    family-names: Katharopoulos
+    affiliation: Apple
+  - given-names: Ronan
+    family-names: Collobert
+    affiliation: Apple
+repository-code: 'https://github.com/ml-explore'
+abstract: >-
+  MLX: efficient and flexible machine learning on Apple
+  silicon
+license: MIT

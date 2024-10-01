@@ -14,7 +14,7 @@ option(MLX_BUILD_TESTS "Build tests for mlx" ON)
 option(MLX_BUILD_EXAMPLES "Build examples for mlx" ON)
 option(MLX_BUILD_BENCHMARKS "Build benchmarks for mlx" OFF)
 option(MLX_BUILD_PYTHON_BINDINGS "Build python bindings for mlx" OFF)
-option(MLX_BUILD_METAL "Build metal backend" ON)
+option(MLX_BUILD_METAL "Build metal backend" OFF)
 option(MLX_BUILD_CPU "Build cpu backend" ON)
 option(MLX_METAL_DEBUG "Enhance metal debug workflow" OFF)
 option(MLX_ENABLE_X64_MAC "Enable building for x64 macOS" OFF)
@@ -24,7 +24,7 @@ option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.17.3)
+  set(MLX_VERSION 0.18.0)
 endif()
 
 # --------------------- Processor tests -------------------------
@@ -49,13 +49,16 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     else()
       message(WARNING "Building for x86_64 arch is not officially supported.")
     endif()
-    set(MLX_BUILD_METAL OFF)
   elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
-    set(MLX_BUILD_ARM ON)
+    set(MLX_BUILD_METAL ON)
   endif()
 
 else()
   message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
+endif()
+
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
+  set(MLX_BUILD_ARM ON)
 endif()
 
 # ----------------------------- Lib -----------------------------

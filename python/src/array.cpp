@@ -97,7 +97,8 @@ void init_array(nb::module_& m) {
       See the :ref:`list of types <data_types>` for more details
       on available data types.
       )pbdoc")
-      .def_ro("size", &Dtype::size, R"pbdoc(Size of the type in bytes.)pbdoc")
+      .def_prop_ro(
+          "size", &Dtype::size, R"pbdoc(Size of the type in bytes.)pbdoc")
       .def(
           "__repr__",
           [](const Dtype& t) {
@@ -112,7 +113,7 @@ void init_array(nb::module_& m) {
             return nb::isinstance<Dtype>(other) && t == nb::cast<Dtype>(other);
           })
       .def("__hash__", [](const Dtype& t) {
-        return static_cast<int64_t>(t.val);
+        return static_cast<int64_t>(t.val());
       });
 
   m.attr("bool_") = nb::cast(bool_);

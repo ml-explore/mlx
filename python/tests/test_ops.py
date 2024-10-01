@@ -1059,6 +1059,13 @@ class TestOps(mlx_tests.MLXTestCase):
         self.assertEqual(a_npy_taken.shape, a_mlx_taken.shape)
         self.assertListEqual(a_npy_taken.tolist(), a_mlx_taken.tolist())
 
+        # Take with integer index
+        a = mx.arange(8).reshape(2, 4)
+        out = mx.take(a, 1, axis=0)
+        self.assertTrue(mx.array_equal(out, mx.array([4, 5, 6, 7])))
+        out = mx.take(a, 1, axis=1)
+        self.assertTrue(mx.array_equal(out, mx.array([1, 5])))
+
     def test_take_along_axis(self):
         a_np = np.arange(8).reshape(2, 2, 2)
         a_mlx = mx.array(a_np)
@@ -1074,6 +1081,31 @@ class TestOps(mlx_tests.MLXTestCase):
             out_np = np.take_along_axis(a_np, idx_np.reshape(shape), axis=ax)
             out_mlx = mx.take_along_axis(a_mlx, mx.reshape(idx_mlx, shape), axis=ax)
             self.assertTrue(np.array_equal(out_np, np.array(out_mlx)))
+
+    def test_put_along_axis(self):
+        for ax in [None, 0, 1, 2]:
+
+            a_np = np.arange(16).reshape(2, 2, 4).astype(np.int32)
+            a_mlx = mx.array(a_np)
+
+            if ax == None:
+                idx_np = np.random.randint(low=0, high=a_np.size, size=(16,))
+                values_np = np.random.randint(low=0, high=100, size=(16,))
+            else:
+                shape = list(a_np.shape)
+                shape[ax] = 2
+                idx_np = np.random.randint(low=0, high=a_np.shape[ax], size=shape)
+                values_np = np.random.randint(low=0, high=100, size=shape)
+
+            idx_np.astype(np.int32)
+            values_np.astype(a_np.dtype)
+
+            idx_mlx = mx.array(idx_np)
+            values_mlx = mx.array(values_np)
+
+            np.put_along_axis(a_np, idx_np, values_np, axis=ax)
+            out_mlx = mx.put_along_axis(a_mlx, idx_mlx, values_mlx, axis=ax)
+            self.assertTrue(np.array_equal(a_np, out_mlx))
 
     def test_split(self):
         a = mx.array([1, 2, 3])
