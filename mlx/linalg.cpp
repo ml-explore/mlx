@@ -382,7 +382,6 @@ array cholesky_inv(
   }
 }
 
-<<<<<<< HEAD
 array cross(
     const array& a,
     const array& b,

@@ -767,7 +767,7 @@ std::pair<std::vector<array>, std::vector<int>> Cholesky::vmap(
   return {{linalg::cholesky(a, upper_, stream())}, {ax}};
 }
 
-std::pair<std::vector<array>, std::vector<int>> EighPrimitive::vmap(
+std::pair<std::vector<array>, std::vector<int>> Eigh::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {
   assert(inputs.size() == 1);

@@ -81,7 +81,7 @@ DEFAULT_MULTI(SVD)
 DEFAULT(Transpose)
 DEFAULT(Inverse)
 DEFAULT(Cholesky)
-DEFAULT_MULTI(EighPrimitive)
+DEFAULT_MULTI(Eigh)
 
 void Abs::eval_cpu(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);

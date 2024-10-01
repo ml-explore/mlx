@@ -2196,16 +2196,16 @@ class Cholesky : public UnaryPrimitive {
   bool upper_;
 };
 
-class EighPrimitive : public Primitive {
+class Eigh : public Primitive {
  public:
-  explicit EighPrimitive(Stream stream, bool upper, bool compute_eigenvectors)
+  explicit Eigh(Stream stream, bool upper, bool compute_eigenvectors)
       : Primitive(stream), upper_(upper), compute_eigenvectors_(compute_eigenvectors) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs) override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs) override;
 
   DEFINE_VMAP()
-  DEFINE_PRINT(EighPrimitive)
+  DEFINE_PRINT(Eigh)
 
   std::vector<std::vector<int>> output_shapes(
       const std::vector<array>& inputs) override {
@@ -2219,7 +2219,7 @@ class EighPrimitive : public Primitive {
   }
 
   bool is_equivalent(const Primitive& other) const override {
-    if (auto* p = dynamic_cast<const EighPrimitive*>(&other)) {
+    if (auto* p = dynamic_cast<const Eigh*>(&other)) {
       return upper_ == p->upper_ && compute_eigenvectors_ == p->compute_eigenvectors_;
     }
     return false;

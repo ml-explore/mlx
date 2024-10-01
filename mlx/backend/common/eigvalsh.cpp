@@ -146,12 +146,12 @@ void eigh_impl(
   }
 }
 
-void EighPrimitive::eval(
+void Eigh::eval(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   // Validate the number of inputs
   if (inputs.size() != 1) {
-    throw std::invalid_argument("[EighPrimitive::eval] Expected exactly one input array.");
+    throw std::invalid_argument("[Eigh::eval] Expected exactly one input array.");
   }
 
   const array& input = inputs[0];
@@ -164,7 +164,7 @@ void EighPrimitive::eval(
 
   // Validate the number of dimensions (expecting at least 2D)
   if (input.ndim() < 2) {
-    throw std::invalid_argument("[EighPrimitive::eval] Input array must be at least 2-dimensional.");
+    throw std::invalid_argument("[Eigh::eval] Input array must be at least 2-dimensional.");
   }
 
   array values{};
