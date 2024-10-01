@@ -47,6 +47,13 @@ class TestConv(mlx_tests.MLXTestCase):
                     self.assertEqual(c_mx.shape, c_np.shape)
                     self.assertTrue(np.allclose(c_mx, c_np, atol=atol))
 
+    def test_conv_1d_groups_flipped(self):
+        x = mx.broadcast_to(mx.arange(5).astype(mx.float32), (2, 5)).T
+        w = mx.broadcast_to(mx.arange(4).astype(mx.float32), (2, 4))
+        out = mx.conv_general(x[None], w[..., None], flip=True, groups=2)
+        expected = mx.array([4.0, 4.0, 10.0, 10.0]).reshape(1, 2, 2)
+        self.assertTrue(mx.allclose(out, expected))
+
     @unittest.skipIf(not has_torch, "requires Torch")
     def test_torch_conv_1D(self):
         def run_conv1D(
@@ -896,6 +903,29 @@ class TestConv(mlx_tests.MLXTestCase):
             dw11 = (cotan[1::s, 1::s] * x).sum()
             expected = mx.array([[dw00, dw01], [dw10, dw11]])
             self.assertTrue(mx.allclose(dw, expected))
+
+    def test_conv_groups_grad(self):
+        # 1D conv
+        mx.random.seed(3)
+        w = mx.random.normal(shape=(2, 3, 1))
+        x = mx.random.normal(shape=(1, 5, 2))
+
+        def fn(x, w):
+            return mx.conv1d(x, w, groups=2)
+
+        def fn_gt(x, w):
+            w = w.swapaxes(0, 2)
+            outs = mx.concatenate(
+                [(x[:, i : i + 3] * w).sum(axis=1, keepdims=True) for i in range(3)],
+                axis=1,
+            )
+            return outs
+
+        cotans = (mx.ones(shape=(1, 3, 2)),)
+        grads = mx.vjp(fn, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(mx.allclose(expected[0], grads[0]))
+        self.assertTrue(mx.allclose(expected[1], grads[1]))
 
 
 if __name__ == "__main__":
