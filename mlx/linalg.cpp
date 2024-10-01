@@ -446,6 +446,7 @@ std::pair<array, array> eigh(
       std::make_shared<Eigh>(to_stream(s), upper, true),
       {astype(a, a.dtype(), s)});
   return std::make_pair(out[0], out[1]);
+}
 
 array cross(
     const array& a,
