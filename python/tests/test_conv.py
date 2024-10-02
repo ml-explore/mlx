@@ -941,6 +941,30 @@ class TestConv(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(expected[0], grads[0]))
         self.assertTrue(mx.allclose(expected[1], grads[1]))
 
+        # Test with flip
+        def fn(x, w):
+            return mx.conv_general(x, w, groups=2, flip=True)
+
+        def fn_gt_flipped(x, w):
+            w = w[:, ::-1]
+            return fn_gt(x, w)
+
+        w = mx.random.normal(shape=(2, 3, 1))
+        x = mx.random.normal(shape=(1, 5, 2))
+        cotans = (mx.ones(shape=(1, 3, 2)),)
+        grads = mx.vjp(fn, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt_flipped, (x, w), cotans)[1]
+        self.assertTrue(mx.allclose(expected[0], grads[0]))
+        self.assertTrue(mx.allclose(expected[1], grads[1]))
+
+        w = mx.random.normal(shape=(2, 3, 2))
+        x = mx.random.normal(shape=(1, 5, 4))
+        cotans = (mx.ones(shape=(1, 3, 2)),)
+        grads = mx.vjp(fn, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt_flipped, (x, w), cotans)[1]
+        self.assertTrue(mx.allclose(expected[0], grads[0]))
+        self.assertTrue(mx.allclose(expected[1], grads[1]))
+
 
 if __name__ == "__main__":
     unittest.main()
