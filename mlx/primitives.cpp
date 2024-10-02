@@ -1057,7 +1057,11 @@ std::vector<array> Convolution::vjp(
               /* int groups = */ groups_,
               /* bool flip = */ false,
               stream());
-          grads.push_back(group_transpose(grad_trans, -1, 0, -2));
+          if (groups_ > 1) {
+            grads.push_back(group_transpose(grad_trans, -1, 0, -2));
+          } else {
+            grads.push_back(grad_trans);
+          }
         } else {
           std::vector<int> padding_lo = padding_;
           std::vector<int> padding_hi = padding_;

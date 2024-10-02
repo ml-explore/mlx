@@ -906,22 +906,18 @@ class TestConv(mlx_tests.MLXTestCase):
 
     def test_conv_groups_grad(self):
         def fn(x, w):
-            return mx.conv1d(x, w, groups=2)
+            num_groups = x.shape[-1] // w.shape[-1]
+            return mx.conv1d(x, w, groups=num_groups)
 
         def fn_gt(x, w):
-            # only supports groups_size_in == group_size_out
             num_groups = x.shape[-1] // w.shape[-1]
             group_size = w.shape[-1]
-            x = x.reshape(*x.shape[:-1], num_groups, group_size)
-            w = w[None].swapaxes(1, 2)
-            outs = mx.concatenate(
-                [
-                    (x[:, i : i + 3] * w).sum(axis=(1, 3), keepdims=True)
-                    for i in range(3)
-                ],
-                axis=1,
-            ).flatten(-2, -1)
-            return outs
+            ws = w.reshape(num_groups, -1, *w.shape[1:]).split(num_groups)
+            xs = x.reshape(*x.shape[:-1], num_groups, -1).split(num_groups, axis=-2)
+            return mx.concatenate(
+                [mx.conv_general(x.squeeze(-2), w.squeeze(0)) for x, w in zip(xs, ws)],
+                axis=-1,
+            )
 
         mx.random.seed(3)
 
@@ -941,19 +937,46 @@ class TestConv(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(expected[0], grads[0]))
         self.assertTrue(mx.allclose(expected[1], grads[1]))
 
+        w = mx.random.normal(shape=(6, 3, 2))
+        x = mx.random.normal(shape=(1, 5, 4))
+        cotans = (mx.ones(shape=(1, 3, 6)),)
+        grads = mx.vjp(fn, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(mx.allclose(expected[0], grads[0]))
+        self.assertTrue(mx.allclose(expected[1], grads[1]))
+
+        # Test 2D
+        w = mx.random.normal(shape=(2, 3, 3, 1))
+        x = mx.random.normal(shape=(1, 5, 5, 2))
+        cotans = (mx.ones(shape=(1, 3, 3, 2)),)
+        grads = mx.vjp(fn, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(mx.allclose(expected[0], grads[0]))
+        self.assertTrue(mx.allclose(expected[1], grads[1]))
+
         # Test with flip
         def fn(x, w):
-            return mx.conv_general(x, w, groups=2, flip=True)
+            num_groups = x.shape[-1] // w.shape[-1]
+            return mx.conv_general(x, w, groups=num_groups, flip=True)
 
-        def fn_gt_flipped(x, w):
-            w = w[:, ::-1]
-            return fn_gt(x, w)
+        def fn_gt(x, w):
+            num_groups = x.shape[-1] // w.shape[-1]
+            group_size = w.shape[-1]
+            ws = w.reshape(num_groups, -1, *w.shape[1:]).split(num_groups)
+            xs = x.reshape(*x.shape[:-1], num_groups, -1).split(num_groups, axis=-2)
+            return mx.concatenate(
+                [
+                    mx.conv_general(x.squeeze(-2), w.squeeze(0), flip=True)
+                    for x, w in zip(xs, ws)
+                ],
+                axis=-1,
+            )
 
         w = mx.random.normal(shape=(2, 3, 1))
         x = mx.random.normal(shape=(1, 5, 2))
         cotans = (mx.ones(shape=(1, 3, 2)),)
         grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt_flipped, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
         self.assertTrue(mx.allclose(expected[0], grads[0]))
         self.assertTrue(mx.allclose(expected[1], grads[1]))
 
@@ -961,7 +984,16 @@ class TestConv(mlx_tests.MLXTestCase):
         x = mx.random.normal(shape=(1, 5, 4))
         cotans = (mx.ones(shape=(1, 3, 2)),)
         grads = mx.vjp(fn, (x, w), cotans)[1]
-        expected = mx.vjp(fn_gt_flipped, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
+        self.assertTrue(mx.allclose(expected[0], grads[0]))
+        self.assertTrue(mx.allclose(expected[1], grads[1]))
+
+        # Test 2D
+        w = mx.random.normal(shape=(2, 3, 3, 1))
+        x = mx.random.normal(shape=(1, 5, 5, 2))
+        cotans = (mx.ones(shape=(1, 3, 3, 2)),)
+        grads = mx.vjp(fn, (x, w), cotans)[1]
+        expected = mx.vjp(fn_gt, (x, w), cotans)[1]
         self.assertTrue(mx.allclose(expected[0], grads[0]))
         self.assertTrue(mx.allclose(expected[1], grads[1]))
 
