@@ -2202,7 +2202,6 @@ class Eigh : public Primitive {
       : Primitive(stream),
         uplo_(std::move(uplo)),
         compute_eigenvectors_(compute_eigenvectors) {}
-
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -2234,6 +2233,22 @@ class Eigh : public Primitive {
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
   std::string uplo_;
   bool compute_eigenvectors_;
+};
+
+class Solve : public Primitive {
+ public:
+  explicit Solve(Stream stream) : Primitive(stream) {}
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Solve)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
 };
 
 } // namespace mlx::core

@@ -443,7 +443,6 @@ void init_linalg(nb::module_& parent_module) {
   m.def(
       "eigh",
       [](const array& a, const std::string UPLO, StreamOrDevice s) {
-        // TODO avoid cast?
         auto result = eigh(a, UPLO, s);
         return nb::make_tuple(result.first, result.second);
       },
@@ -485,5 +484,24 @@ void init_linalg(nb::module_& parent_module) {
             >>> v
             array([[ 0.707107, -0.707107],
                   [ 0.707107,  0.707107]], dtype=float32)
+      )pbdoc");
+  m.def(
+      "solve",
+      &solve,
+      "a"_a,
+      "b"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def solve(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the solution to a system of linear equations ax = b.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+
+        Returns:
+            array: The unique solution to the system ax = b.
       )pbdoc");
 }

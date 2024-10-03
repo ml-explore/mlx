@@ -5,8 +5,8 @@ Linear Algebra
 
 .. currentmodule:: mlx.core.linalg
 
-.. autosummary:: 
-   :toctree: _autosummary 
+.. autosummary::
+   :toctree: _autosummary
 
     inv
     tri_inv
@@ -18,3 +18,4 @@ Linear Algebra
     svd
     eigvalsh
     eigh
+    solve
