@@ -81,7 +81,9 @@ void CustomKernel::eval_gpu(
 
   if (!copies.empty()) {
     d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
   }
 }
 

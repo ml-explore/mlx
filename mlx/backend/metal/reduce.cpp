@@ -662,7 +662,9 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     if (!copies.empty()) {
       d.get_command_buffer(s.index)->addCompletedHandler(
-          [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+          [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+            copies.clear();
+          });
     }
   }
 

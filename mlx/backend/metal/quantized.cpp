@@ -209,8 +209,12 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     }
   }
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  if (!copies.empty()) {
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
+  }
 }
 
 void GatherQMM::eval_gpu(const std::vector<array>& inputs, array& out) {
@@ -599,8 +603,12 @@ void fast::AffineQuantize::eval_gpu(
                                : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  if (!copies.empty()) {
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
+  }
 }
 
 } // namespace mlx::core

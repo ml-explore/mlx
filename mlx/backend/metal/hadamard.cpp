@@ -196,8 +196,12 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
         s);
   }
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  if (!copies.empty()) {
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
+  }
 }
 
 } // namespace mlx::core
