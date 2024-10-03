@@ -405,4 +405,25 @@ void init_linalg(nb::module_& parent_module) {
         Returns:
             array: The cross product of ``a`` and ``b`` along the specified axis.
       )pbdoc");
+  m.def(
+      "solve",
+      &solve,
+      "a"_a,
+      "b"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def solve(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the solution to a square system of linear equations AX = B.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The unique solution to the system AX = B.
+      )pbdoc");
 }
