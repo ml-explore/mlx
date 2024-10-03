@@ -74,6 +74,8 @@ array pinv(const array& a, StreamOrDevice s = {});
 
 array cholesky_inv(const array& a, bool upper = false, StreamOrDevice s = {});
 
+array solve(const array& a, const array& b, StreamOrDevice s = {});
+
 /**
  * Compute the cross product of two arrays along the given axis.
  */

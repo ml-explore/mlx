@@ -585,4 +585,10 @@ void View::eval_gpu(const std::vector<array>& inputs, array& out) {
   }
 }
 
+void Solve::eval_gpu(
+    const std::vector<array>& inputs,
+    std::vector<array>& outputs) {
+  throw std::runtime_error("[Solve::eval_gpu] Metal Solve NYI.");
+}
+
 } // namespace mlx::core

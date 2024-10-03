@@ -330,6 +330,60 @@ class TestLinalg(mlx_tests.MLXTestCase):
                 mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
             )  # Non-square matrix
 
+    def test_solve(self):
+        mx.random.seed(7)
+
+        # Test 3x3 matrix with 1D rhs
+        a = mx.array([[3.0, 1.0, 2.0], [1.0, 8.0, 6.0], [9.0, 2.0, 5.0]])
+        b = mx.array([11.0, 35.0, 28.0])
+
+        result = mx.linalg.solve(a, b, stream=mx.cpu)
+        expected = np.linalg.solve(a, b)
+        self.assertTrue(np.allclose(result, expected))
+
+        # Test symmetric positive-definite matrix
+        N = 5
+        a = mx.random.uniform(shape=(N, N))
+        a = mx.matmul(a, a.T) + N * mx.eye(N)
+        b = mx.random.uniform(shape=(N, 1))
+
+        result = mx.linalg.solve(a, b, stream=mx.cpu)
+        expected = np.linalg.solve(a, b)
+        self.assertTrue(np.allclose(result, expected, atol=1e-5))
+
+        # Test batch dimension
+        a = mx.random.uniform(shape=(5, 5, 4, 4))
+        b = mx.random.uniform(shape=(5, 5, 4, 1))
+
+        result = mx.linalg.solve(a, b, stream=mx.cpu)
+        expected = np.linalg.solve(a, b)
+        self.assertTrue(np.allclose(result, expected, atol=1e-5))
+
+        # Test large matrix
+        N = 1000
+        a = mx.random.uniform(shape=(N, N))
+        b = mx.random.uniform(shape=(N, 1))
+
+        result = mx.linalg.solve(a, b, stream=mx.cpu)
+        expected = np.linalg.solve(a, b)
+        self.assertTrue(np.allclose(result, expected, atol=1e-2))
+
+        # Test multi-column rhs
+        a = mx.random.uniform(shape=(5, 5))
+        b = mx.random.uniform(shape=(5, 8))
+
+        result = mx.linalg.solve(a, b, stream=mx.cpu)
+        expected = np.linalg.solve(a, b)
+        self.assertTrue(np.allclose(result, expected, atol=1e-5))
+
+        # Test batched multi-column rhs
+        a = mx.concat([a, a, a, a, a, a]).reshape((3, 2, 5, 5))
+        b = mx.concat([b, b, b, b, b, b]).reshape((3, 2, 5, 8))
+
+        result = mx.linalg.solve(a, b, stream=mx.cpu)
+        expected = np.linalg.solve(a, b)
+        self.assertTrue(np.allclose(result, expected, atol=1e-5))
+
 
 if __name__ == "__main__":
     unittest.main()

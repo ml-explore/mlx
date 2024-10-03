@@ -4933,6 +4933,17 @@ std::pair<std::vector<array>, std::vector<int>> SVD::vmap(
   return {{linalg::svd(a, stream())}, {ax, ax, ax}};
 }
 
+std::pair<std::vector<array>, std::vector<int>> Solve::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  auto maybe_move_ax = [this](auto& arr, auto ax) {
+    return ax > 0 ? moveaxis(arr, ax, 0, stream()) : arr;
+  };
+  auto a = maybe_move_ax(inputs[0], axes[0]);
+  auto b = maybe_move_ax(inputs[1], axes[1]);
+  return {{linalg::solve(a, b, stream())}, {0}};
+}
+
 std::pair<std::vector<array>, std::vector<int>> Inverse::vmap(
     const std::vector<array>& inputs,
     const std::vector<int>& axes) {

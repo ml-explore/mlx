@@ -465,3 +465,53 @@ TEST_CASE("test matrix eigh") {
   // Verify eigendecomposition
   CHECK(allclose(matmul(A, eigvecs), eigvals * eigvecs).item<bool>());
 }
+
+TEST_CASE("test solve") {
+  // 0D and 1D throw
+  CHECK_THROWS(linalg::solve(array(0.), array(0.), Device::cpu));
+  CHECK_THROWS(linalg::solve(array({0.}), array({0.}), Device::cpu));
+
+  // Unsupported types throw
+  CHECK_THROWS(
+      linalg::solve(array({0, 1, 1, 2}, {2, 2}), array({1, 3}), Device::cpu));
+
+  // Non-square throws
+  array a = reshape(arange(6), {3, 2});
+  array b = reshape(arange(3), {3, 1});
+  CHECK_THROWS(linalg::solve(a, b, Device::cpu));
+
+  // Test 2x2 matrix with 1D rhs
+  a = array({2., 1., 1., 3.}, {2, 2});
+  b = array({8., 13.}, {2});
+
+  array result = linalg::solve(a, b, Device::cpu);
+  CHECK(allclose(matmul(a, result), b).item<bool>());
+
+  // Test 3x3 matrix
+  a = array({1., 2., 3., 4., 5., 6., 7., 8., 10.}, {3, 3});
+  b = array({6., 15., 25.}, {3, 1});
+
+  result = linalg::solve(a, b, Device::cpu);
+  CHECK(allclose(matmul(a, result), b).item<bool>());
+
+  // Test batch dimension
+  a = reshape(concatenate({a, a, a, a, a}), {5, 3, 3});
+  b = reshape(concatenate({b, b, b, b, b}), {5, 3, 1});
+
+  result = linalg::solve(a, b, Device::cpu);
+  CHECK(allclose(matmul(a, result), b).item<bool>());
+
+  // Test multi-column rhs
+  a = array({2., 1., 1., 1., 3., 2., 1., 0., 0.}, {3, 3});
+  b = array({4., 2., 5., 3., 6., 1.}, {3, 2});
+
+  result = linalg::solve(a, b, Device::cpu);
+  CHECK(allclose(matmul(a, result), b).item<bool>());
+
+  // Test batch multi-column rhs
+  a = reshape(concatenate({a, a, a, a, a}), {5, 3, 3});
+  b = reshape(concatenate({b, b, b, b, b}), {5, 3, 2});
+
+  result = linalg::solve(a, b, Device::cpu);
+  CHECK(allclose(matmul(a, result), b).item<bool>());
+}

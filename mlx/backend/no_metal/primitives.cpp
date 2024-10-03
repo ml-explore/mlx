@@ -124,6 +124,7 @@ NO_GPU(Inverse)
 NO_GPU(Cholesky)
 NO_GPU_MULTI(Eigh)
 NO_GPU(View)
+NO_GPU_MULTI(Solve)
 
 namespace fast {
 NO_GPU_MULTI(LayerNorm)
