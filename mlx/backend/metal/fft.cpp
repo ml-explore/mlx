@@ -576,7 +576,9 @@ void fft_op(
   if (plan.four_step) {
     four_step_fft(in, out, axis, inverse, real, plan, copies, s);
     d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
     return;
   }
 
@@ -741,8 +743,13 @@ void fft_op(
         MTL::Size(batch_size, threadgroup_batch_size, threads_per_fft);
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+
+  if (!copies.empty()) {
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
+  }
 }
 
 void fft_op(

@@ -107,10 +107,12 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 
-  if (copies.size() > 0) {
+  if (!copies.empty()) {
     auto command_buffer = d.get_command_buffer(s.index);
     command_buffer->addCompletedHandler(
-        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
   }
 }
 
