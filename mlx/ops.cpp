@@ -4621,6 +4621,17 @@ array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
       s);
 }
 
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, total_shift, s);
+}
+
 array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
   return roll(a, std::vector<int>{shift}, std::vector<int>{axis}, s);
 }
@@ -4632,6 +4643,18 @@ array roll(
     StreamOrDevice s /* = {} */) {
   std::vector<int> shifts(axes.size(), shift);
   return roll(a, shifts, axes, s);
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, std::vector<int>{total_shift}, std::vector<int>{axis}, s);
 }
 
 } // namespace mlx::core
