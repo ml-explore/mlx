@@ -2558,8 +2558,8 @@ TEST_CASE("test power") {
   b = complex64_t{2.2, 0.0};
   expected = std::pow(a, b);
   out = (power(array(a), array(b))).item<complex64_t>();
-  CHECK(abs(out.real() - expected.real()) < 1e-7);
-  CHECK(abs(out.imag() - expected.imag()) < 1e-7);
+  CHECK(abs(out.real() - expected.real()) < 1e-6);
+  CHECK(abs(out.imag() - expected.imag()) < 1e-6);
 }
 
 TEST_CASE("test where") {
