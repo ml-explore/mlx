@@ -688,6 +688,13 @@ class TestArray(mlx_tests.MLXTestCase):
 
             self.assertEqual(b_npy.dtype, np_dtype)
 
+    def test_array_from_noncontiguous_np(self):
+        for t in [np.int8, np.int32, np.float16, np.float32, np.complex64]:
+            np_arr = np.random.uniform(size=(10, 10)).astype(np.complex64)
+            np_arr = np_arr.T
+            mx_arr = mx.array(np_arr)
+            self.assertTrue(mx.array_equal(np_arr, mx_arr))
+
     def test_array_np_shape_dim_check(self):
         a_npy = np.empty(2**31, dtype=np.bool_)
         with self.assertRaises(ValueError) as e:
