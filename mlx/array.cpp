@@ -242,26 +242,35 @@ array::ArrayDesc::~ArrayDesc() {
   // This calls recursively the destructor and can result in stack overflow, we
   // instead put them in a vector and destroy them one at a time resulting in a
   // max stack depth of 2.
+  if (inputs.empty()) {
+    return;
+  }
+
   std::vector<std::shared_ptr<ArrayDesc>> for_deletion;
 
-  for (array& a : inputs) {
-    if (a.array_desc_ && a.array_desc_.use_count() <= a.siblings().size() + 1) {
-      for_deletion.push_back(std::move(a.array_desc_));
+  auto append_deletable_inputs = [&for_deletion](ArrayDesc& ad) {
+    std::unordered_map<std::uintptr_t, array> input_map;
+    for (array& a : ad.inputs) {
+      if (a.array_desc_) {
+        input_map.insert({a.id(), a});
+      }
     }
-  }
+    ad.inputs.clear();
+    for (auto& [_, a] : input_map) {
+      if (a.array_desc_.use_count() <= a.siblings().size() + 1) {
+        for_deletion.push_back(std::move(a.array_desc_));
+      }
+    }
+  };
+
+  append_deletable_inputs(*this);
 
   while (!for_deletion.empty()) {
     // top is going to be deleted at the end of the block *after* the arrays
     // with inputs have been moved into the vector
     auto top = std::move(for_deletion.back());
     for_deletion.pop_back();
-
-    for (array& a : top->inputs) {
-      if (a.array_desc_ &&
-          a.array_desc_.use_count() <= a.siblings().size() + 1) {
-        for_deletion.push_back(std::move(a.array_desc_));
-      }
-    }
+    append_deletable_inputs(*top);
   }
 }
 
