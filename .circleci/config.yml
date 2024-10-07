@@ -31,7 +31,7 @@ jobs:
           name: Install dependencies
           command: |
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
@@ -83,7 +83,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install numpy
             pip install torch
             pip install tensorflow
@@ -172,7 +172,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install --upgrade setuptools
             pip install numpy
             pip install twine
@@ -237,7 +237,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install --upgrade setuptools
             pip install numpy
             pip install auditwheel
