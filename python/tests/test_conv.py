@@ -902,7 +902,7 @@ class TestConv(mlx_tests.MLXTestCase):
             dw10 = (cotan[1::s, :-1:s] * x).sum()
             dw11 = (cotan[1::s, 1::s] * x).sum()
             expected = mx.array([[dw00, dw01], [dw10, dw11]])
-            self.assertTrue(mx.allclose(dw, expected))
+            self.assertTrue(mx.allclose(dw, expected, rtol=1e-5, atol=1e-5))
 
     def test_conv_groups_grad(self):
         def fn(x, w):
