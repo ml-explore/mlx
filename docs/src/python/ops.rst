@@ -130,6 +130,7 @@ Operations
    repeat
    reshape
    right_shift
+   roll
    round
    rsqrt
    save

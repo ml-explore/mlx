@@ -1456,6 +1456,30 @@ array right_shift(const array& a, const array& b, StreamOrDevice s = {});
 array operator>>(const array& a, const array& b);
 
 array view(const array& a, const Dtype& dtype, StreamOrDevice s = {});
+
+/** Roll elements along an axis and introduce them on the other side */
+array roll(const array& a, int shift, StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    StreamOrDevice s = {});
+array roll(const array& a, int shift, int axis, StreamOrDevice s = {});
+array roll(
+    const array& a,
+    int shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    int axis,
+    StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
+
 /** @} */
 
 } // namespace mlx::core

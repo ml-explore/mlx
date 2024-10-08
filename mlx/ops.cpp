@@ -4567,4 +4567,94 @@ array view(const array& a, const Dtype& dtype, StreamOrDevice s /* = {} */) {
       out_shape, dtype, std::make_shared<View>(to_stream(s), dtype), {a});
 }
 
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  if (axes.empty()) {
+    return a;
+  }
+
+  if (shift.size() < axes.size()) {
+    std::ostringstream msg;
+    msg << "[roll] At least one shift value per axis is required, "
+        << shift.size() << " provided for " << axes.size() << " axes.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  std::vector<array> parts;
+  array result = a;
+  for (int i = 0; i < axes.size(); i++) {
+    int ax = axes[i];
+    if (ax < 0) {
+      ax += a.ndim();
+    }
+    if (ax < 0 || ax >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[roll] Invalid axis " << axes[i] << " for array with " << a.ndim()
+          << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+
+    int sh = shift[i];
+    int split_index =
+        (sh < 0) ? (-sh) % a.shape(ax) : a.shape(ax) - sh % a.shape(ax);
+
+    parts = split(result, std::vector<int>{split_index}, ax, s);
+    std::swap(parts[0], parts[1]);
+    result = concatenate(parts, ax, s);
+  }
+
+  return result;
+}
+
+array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
+  auto shape = a.shape();
+  return reshape(
+      roll(
+          reshape(a, std::vector<int>{-1}, s),
+          std::vector<int>{shift},
+          std::vector<int>{0},
+          s),
+      std::move(shape),
+      s);
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, total_shift, s);
+}
+
+array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
+  return roll(a, std::vector<int>{shift}, std::vector<int>{axis}, s);
+}
+
+array roll(
+    const array& a,
+    int shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  std::vector<int> shifts(axes.size(), shift);
+  return roll(a, shifts, axes, s);
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, std::vector<int>{total_shift}, std::vector<int>{axis}, s);
+}
+
 } // namespace mlx::core
