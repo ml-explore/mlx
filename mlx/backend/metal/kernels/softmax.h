@@ -32,12 +32,12 @@ template <typename T, typename AccT = T, int N_READS = SOFTMAX_N_READS>
     }
   } else {
     for (int i = 0; i < N_READS; i++) {
-      ld[i] = ((lid * N_READS + i) < axis_size) ? AccT(in[i])
-                                                : Limits<AccT>::finite_min;
+      ld[i] =
+          ((lid * N_READS + i) < axis_size) ? AccT(in[i]) : Limits<AccT>::min;
     }
   }
   if (simd_group_id == 0) {
-    local_max[simd_lane_id] = Limits<AccT>::finite_min;
+    local_max[simd_lane_id] = Limits<AccT>::min;
     local_normalizer[simd_lane_id] = 0;
   }
   threadgroup_barrier(mem_flags::mem_threadgroup);

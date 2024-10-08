@@ -33,8 +33,8 @@ namespace {
  * Note: The implementation below is a general fast exp. There could be faster
  *       implementations for numbers strictly < 0.
  */
-inline simd_float16 simd_fast_exp(simd_float16 x) {
-  x *= 1.442695; // multiply with log_2(e)
+inline simd_float16 simd_fast_exp(simd_float16 x_init) {
+  auto x = x_init * 1.442695; // multiply with log_2(e)
   simd_float16 ipart, fpart;
   simd_int16 epart;
   x = simd_clamp(x, -80, 80);
@@ -53,7 +53,9 @@ inline simd_float16 simd_fast_exp(simd_float16 x) {
   // bitshifting
   epart = (simd_int(ipart) + 127) << 23;
 
-  return (*(simd_float16*)&epart) * x;
+  // Avoid supressing NaNs
+  simd_int16 eq = (x_init == x_init);
+  return simd_bitselect(x_init, (*(simd_float16*)&epart) * x, eq);
 }
 
 #if __ARM_FEATURE_FP16_VECTOR_ARITHMETIC
