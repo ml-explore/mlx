@@ -463,15 +463,14 @@ array permutation(
     int axis /* = 0 */,
     const std::optional<array>& key /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
-  auto indices = argsort(bits({x.shape(axis)}, key, s), s);
-  return take(x, indices, axis, s);
+  return take(x, permutation(x.shape(axis), key, s), axis, s);
 }
 
 array permutation(
     int x,
     const std::optional<array>& key /* = std::nullopt */,
     StreamOrDevice s /* = {} */) {
-  return permutation(arange(x, s), 0, key, s);
+  return argsort(bits({x}, key, s), s);
 }
 
 } // namespace mlx::core::random
