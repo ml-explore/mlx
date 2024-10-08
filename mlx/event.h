@@ -20,6 +20,9 @@ class Event {
   // Signal the event at its current value
   void signal();
 
+  // Check if the event has been signaled at its current value
+  bool is_signaled() const;
+
   // Check if the event is valid
   bool valid() const {
     return event_ != nullptr;

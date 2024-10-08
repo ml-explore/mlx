@@ -95,13 +95,29 @@ void array::detach() {
   array_desc_->primitive = nullptr;
 }
 
-void array::eval() {
-  // Ensure the array is ready to be read
-  if (status() == Status::scheduled) {
+bool array::is_available() const {
+  if (status() == Status::available) {
+    return true;
+  } else if (status() == Status::evaluated && event().is_signaled()) {
+    set_status(Status::available);
+    return true;
+  }
+  return false;
+}
+
+void array::wait() {
+  if (!is_available()) {
     event().wait();
     set_status(Status::available);
-  } else if (status() == Status::unscheduled) {
+  }
+}
+
+void array::eval() {
+  // Ensure the array is ready to be read
+  if (status() == Status::unscheduled) {
     mlx::core::eval({*this});
+  } else {
+    wait();
   }
 }
 

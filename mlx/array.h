@@ -344,11 +344,33 @@ class array {
     return static_cast<T*>(array_desc_->data_ptr);
   }
 
-  enum Status { unscheduled, scheduled, available };
+  enum Status {
+    // The ouptut of a computation which has not been scheduled.
+    // For example, the status of `x` in `auto x = a + b`.
+    unscheduled,
 
-  bool is_available() const {
-    return status() == Status::available;
-  }
+    // The ouptut of a computation which has been scheduled but `eval_*` has
+    // not yet been called on the array's primitive. A possible
+    // status of `x` in `auto x = a + b; eval(x);`
+    scheduled,
+
+    // The array's `eval_*` function has been run, but the computation is not
+    // necessarily complete. The array will have memory allocated and if it is
+    // not a tracer then it will be detached from the graph.
+    evaluated,
+
+    // If the array is the output of a computation then the computation
+    // is complete. Constant arrays are always available (e.g. `array({1, 2,
+    // 3})`)
+    available
+  };
+
+  // Check if the array is safe to read.
+  bool is_available() const;
+
+  // Wait on the array to be available. After this `is_available` returns
+  // `true`.
+  void wait();
 
   Status status() const {
     return array_desc_->status;

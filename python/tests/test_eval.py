@@ -51,11 +51,13 @@ class TestEval(mlx_tests.MLXTestCase):
         self.assertTrue(mx.array_equal(z, mx.array([4, 8, 12])))
 
     def test_async_eval_twice(self):
-        x = mx.array(1) + mx.array(1) + mx.array(1)
-        mx.async_eval(x)
-        y = x + 1
-        mx.async_eval(y)
-        self.assertEqual(x.item(), 3)
+        for _ in range(1000):
+            x = mx.array(1) + mx.array(1) + mx.array(1)
+            mx.async_eval(x)
+            y = x + 1
+            mx.async_eval(y)
+            self.assertEqual(x.item(), 3)
+            self.assertEqual(y.item(), 4)
 
     def test_async_eval_in_trace(self):
         def fun(x):

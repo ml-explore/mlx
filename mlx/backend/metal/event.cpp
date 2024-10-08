@@ -27,4 +27,9 @@ void Event::signal() {
   static_cast<MTL::SharedEvent*>(raw_event().get())->setSignaledValue(value());
 }
 
+bool Event::is_signaled() const {
+  return static_cast<MTL::SharedEvent*>(raw_event().get())->signaledValue() >=
+      value();
+}
+
 } // namespace mlx::core
