@@ -458,4 +458,19 @@ array laplace(
   return samples;
 }
 
+array permutation(
+    const array& x,
+    int axis /* = 0 */,
+    const std::optional<array>& key /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  return take(x, permutation(x.shape(axis), key, s), axis, s);
+}
+
+array permutation(
+    int x,
+    const std::optional<array>& key /* = std::nullopt */,
+    StreamOrDevice s /* = {} */) {
+  return argsort(bits({x}, key, s), s);
+}
+
 } // namespace mlx::core::random
