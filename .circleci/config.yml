@@ -253,6 +253,13 @@ jobs:
               python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
+      - when:
+          steps:
+            - run:
+                name: Upload package
+                command: |
+                  source env/bin/activate
+                  twine upload dist/*
       - store_artifacts:
           path: wheelhouse/
 
@@ -333,9 +340,7 @@ workflows:
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
     when:
-      and:
-        - equal: [ main, << pipeline.git.branch >> ]
-        - << pipeline.parameters.test_release >>
+      - << pipeline.parameters.linux_release >>
     jobs:
       - build_linux_test_release:
           matrix:
