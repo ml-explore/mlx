@@ -246,6 +246,7 @@ jobs:
             pip install auditwheel
             pip install patchelf
             pip install build
+            pip install twine
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               pip install . -v
