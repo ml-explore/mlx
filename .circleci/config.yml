@@ -341,7 +341,9 @@ workflows:
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
     when: 
-      condition: << pipeline.parameters.linux_release >>
+      and:
+        - equal: [ linux_dist, << pipeline.git.branch >> ]
+        - << pipeline.parameters.linux_release >>
     jobs:
       - build_linux_test_release:
           matrix:
