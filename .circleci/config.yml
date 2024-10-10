@@ -339,8 +339,7 @@ workflows:
               xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
-    when:
-      - << pipeline.parameters.linux_release >>
+    when: << pipeline.parameters.linux_release >>
     jobs:
       - build_linux_test_release:
           matrix:
