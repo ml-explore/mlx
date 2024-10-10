@@ -211,7 +211,7 @@ jobs:
       - store_artifacts:
           path: dist/
 
-  build_linux_test_release:
+  build_linux_release:
     parameters:
       python_version:
         type: string
@@ -343,10 +343,10 @@ workflows:
   linux_test_release:
     when: 
       and:
-        - equal: [ linux_dist, << pipeline.git.branch >> ]
+        - equal: [ main, << pipeline.git.branch >> ]
         - << pipeline.parameters.linux_release >>
     jobs:
-      - build_linux_test_release:
+      - build_linux_release:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
