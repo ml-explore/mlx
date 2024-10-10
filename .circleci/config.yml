@@ -253,11 +253,11 @@ jobs:
               python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
-        - run:
-            name: Upload package
-            command: |
-              source env/bin/activate
-              twine upload dist/*
+      - run:
+          name: Upload package
+          command: |
+            source env/bin/activate
+            twine upload dist/*
       - store_artifacts:
           path: wheelhouse/
 
