@@ -13,7 +13,7 @@ parameters:
   test_release:
     type: boolean
     default: false
-  linux_test_release:
+  linux_release:
     type: boolean
     default: false
 
