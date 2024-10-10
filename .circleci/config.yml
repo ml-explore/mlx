@@ -261,7 +261,7 @@ jobs:
           name: Upload package
           command: |
             source env/bin/activate
-            twine upload dist/*
+            twine upload wheelhouse/*
       - store_artifacts:
           path: wheelhouse/
 
