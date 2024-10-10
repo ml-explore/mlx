@@ -13,6 +13,9 @@ parameters:
   test_release:
     type: boolean
     default: false
+  linux_test_release:
+    type: boolean
+    default: false
 
 jobs:
   linux_build_and_test:
