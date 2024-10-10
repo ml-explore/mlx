@@ -341,7 +341,7 @@ workflows:
               xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
               build_env: ["DEV_RELEASE=1"]
   linux_test_release:
-    when: 
+    when:
       and:
         - equal: [ main, << pipeline.git.branch >> ]
         - << pipeline.parameters.linux_release >>
