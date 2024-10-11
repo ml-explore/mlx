@@ -64,8 +64,7 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
     kernel_name = lib_name;
   }
 
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gather();
     std::string out_type_str = get_type_string(out.dtype());
@@ -83,8 +82,8 @@ void Gather::eval_gpu(const std::vector<array>& inputs, array& out) {
         idx_args,
         idx_arr,
         idx_ndim);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kernel_name, lib);
@@ -236,8 +235,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
     kernel_name = kname.str();
   }
 
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::reduce_utils()
                   << metal::scatter();
@@ -277,8 +275,8 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         nidx,
         idx_args,
         idx_arr);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
 
   auto& compute_encoder = d.get_command_encoder(s.index);
   auto kernel = d.get_kernel(kernel_name, lib);
