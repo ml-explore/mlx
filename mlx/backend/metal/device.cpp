@@ -515,12 +515,12 @@ MTL::ComputePipelineState* Device::get_kernel(
     const std::string& hash_name /* = "" */,
     const MTLFCList& func_consts /* = {} */,
     const std::vector<MTL::Function*>& linked_functions /* = {} */) {
+  const auto& kname = hash_name.empty() ? base_name : hash_name;
   {
     // Multiple readers allowed
     std::shared_lock lock(kernel_mtx_);
 
     // Look for cached kernel
-    const auto& kname = hash_name.empty() ? base_name : hash_name;
     if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
       return it->second;
     }
@@ -534,19 +534,18 @@ MTL::ComputePipelineState* Device::get_kernel(
     const std::string& hash_name /*  = "" */,
     const MTLFCList& func_consts /*  = {} */,
     const std::vector<MTL::Function*>& linked_functions /*  = {} */) {
+  const auto& kname = hash_name.size() == 0 ? base_name : hash_name;
   {
     // Multiple readers allowed
     std::shared_lock lock(kernel_mtx_);
 
     // Look for cached kernel
-    const auto& kname = hash_name.size() == 0 ? base_name : hash_name;
     if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
       return it->second;
     }
-
-    // Search for cached metal lib
-    MTL::Library* mtl_lib = get_library_(lib_name);
   }
+  // Search for cached metal lib
+  MTL::Library* mtl_lib = get_library_(lib_name);
   return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
 }
 
