@@ -440,12 +440,13 @@ MTL::Library* Device::get_library_(const std::string& name) {
 MTL::Library* Device::get_library(
     const std::string& name,
     const std::function<std::string(void)>& builder) {
-  std::shared_lock rlock(library_mtx_);
-  if (auto it = library_map_.find(name); it != library_map_.end()) {
-    return it->second;
+  {
+    std::shared_lock rlock(library_mtx_);
+    if (auto it = library_map_.find(name); it != library_map_.end()) {
+      return it->second;
+    }
   }
 
-  rlock.unlock();
   std::unique_lock wlock(library_mtx_);
   if (auto it = library_map_.find(name); it != library_map_.end()) {
     return it->second;
@@ -514,15 +515,16 @@ MTL::ComputePipelineState* Device::get_kernel(
     const std::string& hash_name /* = "" */,
     const MTLFCList& func_consts /* = {} */,
     const std::vector<MTL::Function*>& linked_functions /* = {} */) {
-  // Multiple readers allowed
-  std::shared_lock lock(kernel_mtx_);
+  {
+    // Multiple readers allowed
+    std::shared_lock lock(kernel_mtx_);
 
-  // Look for cached kernel
-  const auto& kname = hash_name.empty() ? base_name : hash_name;
-  if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-    return it->second;
+    // Look for cached kernel
+    const auto& kname = hash_name.empty() ? base_name : hash_name;
+    if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
+      return it->second;
+    }
   }
-  lock.unlock();
   return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
 }
 
@@ -532,18 +534,19 @@ MTL::ComputePipelineState* Device::get_kernel(
     const std::string& hash_name /*  = "" */,
     const MTLFCList& func_consts /*  = {} */,
     const std::vector<MTL::Function*>& linked_functions /*  = {} */) {
-  // Multiple readers allowed
-  std::shared_lock lock(kernel_mtx_);
+  {
+    // Multiple readers allowed
+    std::shared_lock lock(kernel_mtx_);
 
-  // Look for cached kernel
-  const auto& kname = hash_name.size() == 0 ? base_name : hash_name;
-  if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
-    return it->second;
+    // Look for cached kernel
+    const auto& kname = hash_name.size() == 0 ? base_name : hash_name;
+    if (auto it = kernel_map_.find(kname); it != kernel_map_.end()) {
+      return it->second;
+    }
+
+    // Search for cached metal lib
+    MTL::Library* mtl_lib = get_library_(lib_name);
   }
-
-  // Search for cached metal lib
-  MTL::Library* mtl_lib = get_library_(lib_name);
-  lock.unlock();
   return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
 }
 
