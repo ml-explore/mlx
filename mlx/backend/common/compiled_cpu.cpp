@@ -325,26 +325,23 @@ void Compiled::eval_cpu(
   }
 
   // Get the function
-  auto fn_ptr = compile(
-      kernel_name,
-      [&]() {
-        std::ostringstream kernel;
-        kernel << get_kernel_preamble() << std::endl;
-        kernel << "extern \"C\"  {" << std::endl;
-        build_kernel(
-            kernel,
-            kernel_name,
-            inputs_,
-            outputs_,
-            tape_,
-            constant_ids_,
-            contiguous,
-            ndim);
-        // Close extern "C"
-        kernel << "}" << std::endl;
-        return kernel.str();
-      }
-  );
+  auto fn_ptr = compile(kernel_name, [&]() {
+    std::ostringstream kernel;
+    kernel << get_kernel_preamble() << std::endl;
+    kernel << "extern \"C\"  {" << std::endl;
+    build_kernel(
+        kernel,
+        kernel_name,
+        inputs_,
+        outputs_,
+        tape_,
+        constant_ids_,
+        contiguous,
+        ndim);
+    // Close extern "C"
+    kernel << "}" << std::endl;
+    return kernel.str();
+  });
 
   compiled_allocate_outputs(
       inputs, outputs, inputs_, constant_ids_, contiguous, false);
