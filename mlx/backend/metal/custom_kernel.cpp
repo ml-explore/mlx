@@ -39,10 +39,8 @@ void CustomKernel::eval_gpu(
 
   auto& d = metal::device(s.device);
   const auto& lib_name = name_;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
-    lib = d.get_library(lib_name, metal::utils() + source_);
-  }
+  auto lib =
+      d.get_library(lib_name, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);

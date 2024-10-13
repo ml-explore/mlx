@@ -202,10 +202,7 @@ void Compiled::eval_gpu(
   // Get the kernel if someone else built it already
   auto& s = stream();
   auto& d = metal::device(s.device);
-  auto lib = d.get_library(kernel_lib_);
-
-  // If not we have to build it ourselves
-  if (lib == nullptr) {
+  auto lib = d.get_library(kernel_lib_, [&]() {
     std::ostringstream kernel;
     kernel << metal::utils() << metal::unary_ops() << metal::binary_ops()
            << metal::ternary_ops();
@@ -252,9 +249,8 @@ void Compiled::eval_gpu(
         /* contiguous = */ false,
         /* ndim = */ 0,
         /* dynamic_dims = */ true);
-
-    lib = d.get_library(kernel_lib_, kernel.str());
-  }
+    return kernel.str();
+  });
 
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
