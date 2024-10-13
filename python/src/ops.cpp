@@ -1308,8 +1308,8 @@ void init_ops(nb::module_& m) {
       "start"_a,
       "stop"_a,
       "step"_a = nb::none(),
-      nb::kw_only(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
           "def arange(start : Union[int, float], stop : Union[int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
@@ -1356,8 +1356,8 @@ void init_ops(nb::module_& m) {
       },
       "stop"_a,
       "step"_a = nb::none(),
-      nb::kw_only(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
           "def arange(stop : Union[int, float], step : Union[None, int, float] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"));
