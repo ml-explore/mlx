@@ -169,8 +169,7 @@ implicit_gemm_conv_2d_general(
         STEEL_PRAGMA_UNROLL
         for (int j = 0; j < mma_t::TN; j++) {
           // Get accumulated result and associated offset in C
-          thread const auto& accum =
-              mma_op.results[i * mma_t::TN + j].thread_elements();
+          thread const auto& accum = mma_op.Ctile.frag_at(i, j);
           int offset = offset_cm + (j * mma_t::TN_stride);
 
           // Apply epilogue and output C
