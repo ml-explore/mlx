@@ -45,3 +45,4 @@ we use a splittable version of Threefry, which is a counter-based PRNG.
    truncated_normal
    uniform
    laplace
+   permutation

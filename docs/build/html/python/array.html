@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>Array &#8212; MLX 0.18.0 documentation</title>
+    <title>Array &#8212; MLX 0.18.1 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../_static/documentation_options.js?v=4033e70d"></script>
+    <script src="../_static/documentation_options.js?v=fbcf6510"></script>
     <script src="../_static/doctools.js?v=888ff710"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.0 documentation - Home"/>
-    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.0 documentation - Home"/>`);</script>
+    <img src="../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.1 documentation - Home"/>
+    <script>document.write(`<img src="../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.1 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -370,6 +370,7 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.repeat.html">mlx.core.repeat</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.reshape.html">mlx.core.reshape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.right_shift.html">mlx.core.right_shift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.roll.html">mlx.core.roll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.round.html">mlx.core.round</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.rsqrt.html">mlx.core.rsqrt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.save.html">mlx.core.save</a></li>
@@ -425,6 +426,7 @@
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.random.truncated_normal.html">mlx.core.random.truncated_normal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
 <li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.random.laplace.html">mlx.core.random.laplace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="_autosummary/mlx.core.random.permutation.html">mlx.core.random.permutation</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -874,7 +876,7 @@ document.write(`
 <td><p>Access the value of a scalar array.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.array.tolist.html#mlx.core.array.tolist" title="mlx.core.array.tolist"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array.tolist</span></code></a>(self)</p></td>
-<td><p>Convert the array to a Python <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.12)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a>.</p></td>
+<td><p>Convert the array to a Python <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.13)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a>.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.array.dtype.html#mlx.core.array.dtype" title="mlx.core.array.dtype"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array.dtype</span></code></a></p></td>
 <td><p>The array's <a class="reference internal" href="_autosummary/mlx.core.Dtype.html#mlx.core.Dtype" title="mlx.core.Dtype"><code class="xref py py-class docutils literal notranslate"><span class="pre">Dtype</span></code></a>.</p></td>
@@ -973,7 +975,7 @@ document.write(`
 <td><p>See <a class="reference internal" href="_autosummary/mlx.core.reciprocal.html#mlx.core.reciprocal" title="mlx.core.reciprocal"><code class="xref py py-func docutils literal notranslate"><span class="pre">reciprocal()</span></code></a>.</p></td>
 </tr>
 <tr class="row-even"><td><p><a class="reference internal" href="_autosummary/mlx.core.array.reshape.html#mlx.core.array.reshape" title="mlx.core.array.reshape"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array.reshape</span></code></a>(self, *shape[, stream])</p></td>
-<td><p>Equivalent to <a class="reference internal" href="_autosummary/mlx.core.reshape.html#mlx.core.reshape" title="mlx.core.reshape"><code class="xref py py-func docutils literal notranslate"><span class="pre">reshape()</span></code></a> but the shape can be passed either as a <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.12)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tuple</span></code></a> or as separate arguments.</p></td>
+<td><p>Equivalent to <a class="reference internal" href="_autosummary/mlx.core.reshape.html#mlx.core.reshape" title="mlx.core.reshape"><code class="xref py py-func docutils literal notranslate"><span class="pre">reshape()</span></code></a> but the shape can be passed either as a <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><code class="xref py py-obj docutils literal notranslate"><span class="pre">tuple</span></code></a> or as separate arguments.</p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="_autosummary/mlx.core.array.round.html#mlx.core.array.round" title="mlx.core.array.round"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array.round</span></code></a>(self[, decimals, stream])</p></td>
 <td><p>See <a class="reference internal" href="_autosummary/mlx.core.round.html#mlx.core.round" title="mlx.core.round"><code class="xref py py-func docutils literal notranslate"><span class="pre">round()</span></code></a>.</p></td>
