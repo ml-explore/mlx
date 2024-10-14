@@ -80,9 +80,9 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            brew install python@3.8
+            brew install python@3.9
             brew install openmpi
-            python3.8 -m venv env
+            python3.9 -m venv env
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
