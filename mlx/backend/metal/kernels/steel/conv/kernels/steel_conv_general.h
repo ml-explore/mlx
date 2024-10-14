@@ -142,8 +142,8 @@ implicit_gemm_conv_2d_general(
   // Store results to device memory
   {
     // Adjust for simdgroup and thread locatio
-    int offset_m = c_row + mma_op.sm + mma_op.tm;
-    int offset_n = c_col + mma_op.sn + mma_op.tn;
+    int offset_m = c_row + mma_op.sm;
+    int offset_n = c_col + mma_op.sn;
     C += offset_n;
 
     if (offset_n >= gemm_params->N)
