@@ -18,7 +18,7 @@ using namespace metal;
 namespace mlx {
 namespace steel {
 
-template <typename T, int kFragRows_ = 8, int kFragCols_ = 8>
+template <typename T, int kFragRows_, int kFragCols_>
 struct BaseMMAFrag {
   static_assert(
       kFragRows_ == 8,
@@ -26,9 +26,12 @@ struct BaseMMAFrag {
   static_assert(
       kFragCols_ == 8,
       "Only 8 x 8 fragment matrices are currently supported");
+};
 
-  STEEL_CONST int kFragRows = kFragRows_;
-  STEEL_CONST int kFragCols = kFragCols_;
+template <typename T>
+struct BaseMMAFrag<T, 8, 8> {
+  STEEL_CONST int kFragRows = 8;
+  STEEL_CONST int kFragCols = 8;
   STEEL_CONST int kElemsPerFrag = (kFragRows * kFragCols) / 32;
 
   typedef metal::simdgroup_matrix<T, kFragRows, kFragCols> mat_type;
@@ -74,7 +77,7 @@ template <
     typename T,
     int kTileRows_,
     int kTileCols_,
-    class MMAFrag_ = BaseMMAFrag<T>>
+    class MMAFrag_ = BaseMMAFrag<T, 8, 8>>
 struct MMATile {
   using MMAFrag_t = MMAFrag_;
   using elem_type = T;
@@ -272,12 +275,13 @@ template <
     typename Epilogue = TransformNone<U, AccumType>>
 struct BlockMMA {
   // MMAFrag size
-  STEEL_CONST short MMAFrag_size = 8;
+  STEEL_CONST short kFragSize = 8;
+  using MMAFrag_acc_t = BaseMMAFrag<AccumType, kFragSize, kFragSize>;
 
   // Warp tile simdgroup matrix strides along M
-  STEEL_CONST short TM_stride = MMAFrag_size * WM;
+  STEEL_CONST short TM_stride = kFragSize * WM;
   // Warp tile simdgroup matrix strides along M
-  STEEL_CONST short TN_stride = MMAFrag_size * WN;
+  STEEL_CONST short TN_stride = kFragSize * WN;
 
   // Warp tile size along M
   STEEL_CONST short TM = BM / TM_stride;
@@ -293,13 +297,13 @@ struct BlockMMA {
   STEEL_CONST int B_str_n = transpose_b ? ldb_tgp : 1; // N
 
   // Threadgroup strides along K
-  STEEL_CONST short tile_stride_a = MMAFrag_size * A_str_k;
-  STEEL_CONST short tile_stride_b = MMAFrag_size * B_str_k;
+  STEEL_CONST short tile_stride_a = kFragSize * A_str_k;
+  STEEL_CONST short tile_stride_b = kFragSize * B_str_k;
 
   // Simdgroup matrices
-  MMATile<AccumType, TM, 1> Atile;
-  MMATile<AccumType, 1, TN> Btile;
-  MMATile<AccumType, TM, TN> Ctile;
+  MMATile<AccumType, TM, 1, MMAFrag_acc_t> Atile;
+  MMATile<AccumType, 1, TN, MMAFrag_acc_t> Btile;
+  MMATile<AccumType, TM, TN, MMAFrag_acc_t> Ctile;
 
   // Offsets within threadgroup
   short sm;
@@ -315,10 +319,10 @@ struct BlockMMA {
     // Determine thread position in simdgroup matrix
     Ctile.clear();
 
-    int tm = MMAFrag_size * (simd_group_id / WN);
-    int tn = MMAFrag_size * (simd_group_id % WN);
+    int tm = kFragSize * (simd_group_id / WN);
+    int tn = kFragSize * (simd_group_id % WN);
 
-    short2 simd_coord = decltype(Ctile)::MMAFrag_t::get_coord(simd_lane_id);
+    short2 simd_coord = MMAFrag_acc_t::get_coord(simd_lane_id);
     sm = simd_coord.y;
     sn = simd_coord.x;
 
@@ -336,9 +340,9 @@ struct BlockMMA {
     As += As_offset;
     Bs += Bs_offset;
 
-    // Iterate over BK in blocks of MMAFrag_size
+    // Iterate over BK in blocks of kFragSize
     STEEL_PRAGMA_UNROLL
-    for (short kk = 0; kk < BK; kk += MMAFrag_size) {
+    for (short kk = 0; kk < BK; kk += kFragSize) {
       simdgroup_barrier(mem_flags::mem_none);
 
       Atile.template load<T, WM, 1, A_str_m, A_str_k>(As);
@@ -419,8 +423,10 @@ struct BlockMMA {
         int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
 
         // Apply epilogue
-        accum[0] = epilogue_op.apply(accum[0], C[offset_c]);
-        accum[1] = epilogue_op.apply(accum[1], C[offset_c + fdc]);
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < decltype(Ctile)::kElemsPerFrag; k++) {
+          accum[k] = epilogue_op.apply(accum[k], C[offset_c + k * fdc]);
+        }
       }
     }
   }
@@ -449,19 +455,23 @@ struct BlockMMA {
         thread auto& accum = Ctile.frag_at(i, j);
         int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
 
-        // Read C
-        U c_elems[2] = {0};
+        constexpr short kelems = decltype(Ctile)::kElemsPerFrag;
 
-        if ((j * TN_stride + 1) < dst_tile_dims.x) {
-          c_elems[0] = C[offset_c];
-          c_elems[1] = C[offset_c + fdc];
-        } else if ((j * TN_stride) < dst_tile_dims.x) {
-          c_elems[0] = C[offset_c];
+        // Read C
+        U c_elems[kelems] = {0};
+
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < kelems; k++) {
+          if ((j * TN_stride + k) < dst_tile_dims.x) {
+            c_elems[k] = C[offset_c + k * fdc];
+          }
         }
 
         // Apply epilogue
-        accum[0] = epilogue_op.apply(accum[0], c_elems[0]);
-        accum[1] = epilogue_op.apply(accum[1], c_elems[1]);
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < kelems; k++) {
+          accum[k] = epilogue_op.apply(accum[k], c_elems[k]);
+        }
       }
     }
   }
@@ -478,6 +488,8 @@ struct BlockMMA {
     C += (sm)*ldc + (sn)*fdc;
     D += (sm)*ldd + sn;
 
+    constexpr short kelems = decltype(Ctile)::kElemsPerFrag;
+
     // Loop over all simdgroup tiles
     STEEL_PRAGMA_UNROLL
     for (short i = 0; i < TM; i++) {
@@ -489,13 +501,10 @@ struct BlockMMA {
         int offset_d = (i * TM_stride) * ldd + (j * TN_stride);
 
         // Apply epilogue
-        U outs[2] = {
-            epilogue_op.apply(accum[0], C[offset_c]),
-            epilogue_op.apply(accum[1], C[offset_c + fdc])};
-
-        // Write out D
-        D[offset_d] = outs[0];
-        D[offset_d + 1] = outs[1];
+        STEEL_PRAGMA_UNROLL
+        for (short k = 0; k < kelems; k++) {
+          D[offset_d + k] = epilogue_op.apply(accum[k], C[offset_c + k * fdc]);
+        }
       }
     }
   }
@@ -516,6 +525,8 @@ struct BlockMMA {
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;
 
+    constexpr short kelems = decltype(Ctile)::kElemsPerFrag;
+
     STEEL_PRAGMA_UNROLL
     for (int i = 0; i < TM; i++) {
       if (i * TM_stride < dst_tile_dims.y) {
@@ -526,13 +537,13 @@ struct BlockMMA {
           int offset_c = (i * TM_stride) * ldc + (j * TN_stride) * fdc;
           int offset_d = (i * TM_stride) * ldd + (j * TN_stride);
 
-          // Apply epilogue and output C
-          if (j * TN_stride < dst_tile_dims.x) {
-            D[offset_d] = epilogue_op.apply(accum[0], C[offset_c]);
-          }
-
-          if (j * TN_stride + 1 < dst_tile_dims.x) {
-            D[offset_d + 1] = epilogue_op.apply(accum[1], C[offset_c + fdc]);
+          // Apply epilogue
+          STEEL_PRAGMA_UNROLL
+          for (short k = 0; k < kelems; k++) {
+            if ((j * TN_stride + k) < dst_tile_dims.x) {
+              D[offset_d + k] =
+                  epilogue_op.apply(accum[k], C[offset_c + k * fdc]);
+            }
           }
         }
       }

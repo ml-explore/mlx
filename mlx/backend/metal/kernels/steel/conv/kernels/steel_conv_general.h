@@ -172,13 +172,14 @@ implicit_gemm_conv_2d_general(
           thread const auto& accum = mma_op.Ctile.frag_at(i, j);
           int offset = offset_cm + (j * mma_t::TN_stride);
 
-          // Apply epilogue and output C
-          if (j * mma_t::TN_stride < diff) {
-            C[offset] = Epilogue::apply(accum[0]);
-          }
+          constexpr short kelems = decltype(mma_op.Ctile)::kElemsPerFrag;
 
-          if (j * mma_t::TN_stride + 1 < diff) {
-            C[offset + 1] = Epilogue::apply(accum[1]);
+          // Apply epilogue and output C
+          STEEL_PRAGMA_UNROLL
+          for (short k = 0; k < kelems; k++) {
+            if ((j * mma_t::TN_stride + k) < diff) {
+              C[offset + k] = Epilogue::apply(accum[k]);
+            }
           }
         }
       }
