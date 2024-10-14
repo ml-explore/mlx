@@ -63,7 +63,7 @@ void add_binary_kernels(
     Dtype out_type,
     const std::string op,
     std::ostringstream& kernel_source) {
-  const std::array<std::pair<std::string, std::string>, 11> kernel_types = {{
+  const std::array<std::pair<std::string, std::string>, 10> kernel_types = {{
       {"ss", "binary_ss"},
       {"vs", "binary_vs"},
       {"sv", "binary_sv"},
@@ -135,7 +135,7 @@ MTL::ComputePipelineState* get_ternary_kernel(
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
   auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
-    const std::array<std::pair<std::string, std::string>, 6> kernel_types = {{
+    const std::array<std::pair<std::string, std::string>, 5> kernel_types = {{
         {"v", "ternary_v"},
         {"v2", "ternary_v2"},
         {"g1", "ternary_g_nd1"},
