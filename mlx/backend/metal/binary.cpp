@@ -84,8 +84,7 @@ void binary_op_gpu_inplace(
 
   bool use_2d = out.data_size() > UINT32_MAX;
   auto ndim = shape.size();
-  int work_per_thread =
-      (bopt == BinaryOpType::General && shape[ndim - 1] > 4) ? 4 : 1;
+  int work_per_thread = (bopt == BinaryOpType::General) ? 4 : 1;
   std::string kernel_name =
       get_kernel_name(bopt, op, a, use_2d, shape.size(), work_per_thread);
   auto& d = metal::device(s.device);

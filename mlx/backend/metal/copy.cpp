@@ -98,7 +98,7 @@ void copy_gpu_inplace(
     if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
       if (shape.size() <= MAX_COPY_SPECIALIZED_DIMS) {
         kname << shape.size();
-      } else if (shape[ndim - 1] >= 4) {
+      } else {
         work_per_thread = 4;
         kname << "n4";
       }
