@@ -142,14 +142,13 @@ nb::ndarray<NDParams...> mlx_to_nd_array(const array& a) {
     case float16:
       return mlx_to_nd_array_impl<float16_t, NDParams...>(a);
     case bfloat16:
-      throw nb::type_error(
-          "bfloat16 arrays cannot be converted directly to NumPy.");
+      throw nb::type_error("bfloat16 arrays cannot be converted to NumPy.");
     case float32:
       return mlx_to_nd_array_impl<float, NDParams...>(a);
     case complex64:
       return mlx_to_nd_array_impl<std::complex<float>, NDParams...>(a);
     default:
-      throw nb::type_error("type cannot be converted directly to NumPy.");
+      throw nb::type_error("type cannot be converted to NumPy.");
   }
 }
 
@@ -253,7 +252,7 @@ nb::object tolist(array& a) {
     case complex64:
       return to_list<std::complex<float>>(a, 0, 0);
     default:
-      throw nb::type_error("data type cannot be to Python list.");
+      throw nb::type_error("data type cannot be converted to Python list.");
   }
 }
 
