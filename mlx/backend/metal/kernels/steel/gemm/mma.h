@@ -271,24 +271,30 @@ template <
     typename AccumType = float,
     typename Epilogue = TransformNone<U, AccumType>>
 struct BlockMMA {
+  // MMAFrag size
+  STEEL_CONST short MMAFrag_size = 8;
+
   // Warp tile simdgroup matrix strides along M
-  STEEL_CONST short TM_stride = 8 * WM;
+  STEEL_CONST short TM_stride = MMAFrag_size * WM;
   // Warp tile simdgroup matrix strides along M
-  STEEL_CONST short TN_stride = 8 * WN;
+  STEEL_CONST short TN_stride = MMAFrag_size * WN;
 
   // Warp tile size along M
   STEEL_CONST short TM = BM / TM_stride;
   // Warp tile size along N
   STEEL_CONST short TN = BN / TN_stride;
 
-  STEEL_CONST int A_str_x = transpose_a ? 1 : lda_tgp;
-  STEEL_CONST int A_str_y = transpose_a ? lda_tgp : 1;
+  // Threadgroup A strides
+  STEEL_CONST int A_str_m = transpose_a ? 1 : lda_tgp; // M
+  STEEL_CONST int A_str_k = transpose_a ? lda_tgp : 1; // K
 
-  STEEL_CONST int B_str_x = transpose_b ? 1 : lda_tgp;
-  STEEL_CONST int B_str_y = transpose_b ? ldb_tgp : 1;
+  // Threadgroup B strides
+  STEEL_CONST int B_str_k = transpose_b ? 1 : ldb_tgp; // K
+  STEEL_CONST int B_str_n = transpose_b ? ldb_tgp : 1; // N
 
-  STEEL_CONST short tile_stride_a = {transpose_a ? 8 * lda_tgp : 8};
-  STEEL_CONST short tile_stride_b = {transpose_b ? 8 : 8 * ldb_tgp};
+  // Threadgroup strides along K
+  STEEL_CONST short tile_stride_a = MMAFrag_size * A_str_k;
+  STEEL_CONST short tile_stride_b = MMAFrag_size * B_str_k;
 
   // Simdgroup matrices
   MMATile<AccumType, TM, 1> Atile;
@@ -296,9 +302,6 @@ struct BlockMMA {
   MMATile<AccumType, TM, TN> Ctile;
 
   // Offsets within threadgroup
-  const short tm;
-  const short tn;
-
   short sm;
   short sn;
 
@@ -308,20 +311,23 @@ struct BlockMMA {
   /* Constructor */
   METAL_FUNC BlockMMA(
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
-      ushort simd_lane_id [[thread_index_in_simdgroup]])
-      : tm(8 * (simd_group_id / WN)), tn(8 * (simd_group_id % WN)) {
+      ushort simd_lane_id [[thread_index_in_simdgroup]]) {
     // Determine thread position in simdgroup matrix
     Ctile.clear();
 
-    short qid = simd_lane_id / 4;
-    sm = (qid & 4) + (simd_lane_id / 2) % 4;
-    sn = (qid & 2) * 2 + (simd_lane_id % 2) * 2;
+    int tm = MMAFrag_size * (simd_group_id / WN);
+    int tn = MMAFrag_size * (simd_group_id % WN);
+
+    short2 simd_coord = decltype(Ctile)::MMAFrag_t::get_coord(simd_lane_id);
+    sm = simd_coord.y;
+    sn = simd_coord.x;
 
     // Determine thread and simdgroup offset
-    As_offset =
-        transpose_a ? ((sn)*lda_tgp + (tm + sm)) : ((sn) + (tm + sm) * lda_tgp);
-    Bs_offset =
-        transpose_b ? ((tn + sn) * ldb_tgp + (sm)) : ((sm)*ldb_tgp + (tn + sn));
+    As_offset = (tm + sm) * A_str_m + (sn)*A_str_k; // M, K
+    Bs_offset = (sm)*B_str_k + (tn + sn) * B_str_n; // K, N
+
+    sm += tm;
+    sn += tn;
   }
 
   /* (BM, BK) X (BK, BN) multiply accumulate function */
@@ -330,16 +336,16 @@ struct BlockMMA {
     As += As_offset;
     Bs += Bs_offset;
 
-    // Iterate over BK in blocks of 8
+    // Iterate over BK in blocks of MMAFrag_size
     STEEL_PRAGMA_UNROLL
-    for (short kk = 0; kk < BK; kk += 8) {
+    for (short kk = 0; kk < BK; kk += MMAFrag_size) {
       simdgroup_barrier(mem_flags::mem_none);
 
-      Atile.template load<T, WM, 1, A_str_x, A_str_y>(As);
+      Atile.template load<T, WM, 1, A_str_m, A_str_k>(As);
 
       simdgroup_barrier(mem_flags::mem_none);
 
-      Btile.template load<T, 1, WN, B_str_x, B_str_y>(Bs);
+      Btile.template load<T, 1, WN, B_str_k, B_str_n>(Bs);
 
       simdgroup_barrier(mem_flags::mem_none);
 
@@ -360,7 +366,7 @@ struct BlockMMA {
     }
 
     // Adjust for simdgroup and thread location
-    D += (sm + tm) * ldd + tn + sn;
+    D += sm * ldd + sn;
 
     Ctile.template store<U, WM, WN>(D, ldd);
   }
@@ -374,8 +380,8 @@ struct BlockMMA {
     }
 
     // Adjust for simdgroup and thread location
-    D += (sm + tm) * ldd + (tn + sn);
-    dst_tile_dims -= short2(tn + sn, sm + tm);
+    D += sm * ldd + sn;
+    dst_tile_dims -= short2(sn, sm);
 
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;
@@ -401,7 +407,7 @@ struct BlockMMA {
       const int fdc,
       thread const BinaryEpilogue& epilogue_op) {
     // Adjust for simdgroup and thread location
-    C += (sm + tm) * ldc + (tn + sn) * fdc;
+    C += (sm)*ldc + (sn)*fdc;
 
     // Loop over all simdgroup tiles
     STEEL_PRAGMA_UNROLL
@@ -428,8 +434,8 @@ struct BlockMMA {
       short2 dst_tile_dims,
       thread const BinaryEpilogue& epilogue_op) {
     // Adjust for simdgroup and thread location
-    C += (sm + tm) * ldc + (tn + sn) * fdc;
-    dst_tile_dims -= short2(tn + sn, sm + tm);
+    C += (sm)*ldc + (sn)*fdc;
+    dst_tile_dims -= short2(sn, sm);
 
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;
@@ -469,8 +475,8 @@ struct BlockMMA {
       const int fdc,
       thread const Epilogue& epilogue_op) const {
     // Adjust for simdgroup and thread location
-    C += (sm + tm) * ldc + (tn + sn) * fdc;
-    D += (sm + tm) * ldd + tn + sn;
+    C += (sm)*ldc + (sn)*fdc;
+    D += (sm)*ldd + sn;
 
     // Loop over all simdgroup tiles
     STEEL_PRAGMA_UNROLL
@@ -503,9 +509,9 @@ struct BlockMMA {
       short2 dst_tile_dims,
       thread const Epilogue& epilogue_op) const {
     // Adjust for simdgroup and thread location
-    C += (sm + tm) * ldc + (tn + sn) * fdc;
-    D += (sm + tm) * ldd + tn + sn;
-    dst_tile_dims -= short2(tn + sn, sm + tm);
+    C += (sm)*ldc + (sn)*fdc;
+    D += (sm)*ldd + sn;
+    dst_tile_dims -= short2(sn, sm);
 
     if (dst_tile_dims.x <= 0 || dst_tile_dims.y <= 0)
       return;
