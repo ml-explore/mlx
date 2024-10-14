@@ -95,37 +95,13 @@ inline void build_kernel(
   } else if (work_per_thread > 1) {
     os << "  constexpr int N = " << std::to_string(work_per_thread) << ";\n"
        << "  int xshape = output_shape["
-       << (dynamic_dims ? "ndim" : std::to_string(ndim - 1)) << "];\n"
-       << "  uint index = N * pos.x + xshape * (pos.y + grid.y * pos.z);\n";
+       << (dynamic_dims ? "ndim - 1" : std::to_string(ndim - 1)) << "];\n"
+       << "  size_t index = N * pos.x + xshape * (pos.y + size_t(grid.y) * pos.z);\n";
   } else {
-    os << " uint index = pos.x + grid.x * (pos.y + grid.y * pos.z);\n";
+    os << " size_t index = pos.x + grid.x * (pos.y + size_t(grid.y) * pos.z);\n";
   }
 
-  // Extract the indices per axis to individual uints if we have arrays that
-  // are broadcasted or transposed
-  if (add_indices && !dynamic_dims) {
-    if (ndim == 1) {
-      os << "  uint index_0 = pos.x;\n";
-    } else if (ndim == 2) {
-      os << "  uint index_0 = pos.y;\n"
-         << "  uint index_1 = pos.x;\n";
-    } else if (ndim == 3) {
-      os << "  uint index_0 = pos.z;\n"
-         << "  uint index_1 = pos.y;\n"
-         << "  uint index_2 = pos.x;\n";
-    } else {
-      for (int i = 0; i < ndim - 2; i++) {
-        os << "  uint index_" << i << " = (index / uint(output_strides[" << i
-           << "])) % output_shape[" << i << "];\n";
-      }
-      os << "  uint index_" << ndim - 2 << " = pos.y;\n"
-         << "  uint index_" << ndim - 1 << " = " << work_per_thread
-         << " * pos.x;\n";
-    }
-  }
-
-  // Read constant / contiguous inputs in tmps and make
-  // non-contiguous input indices
+  // Read constant / contiguous inputs in tmps
   std::vector<array> nc_inputs;
   for (int i = 0; i < inputs.size(); ++i) {
     auto& x = inputs[i];
@@ -143,21 +119,55 @@ inline void build_kernel(
     } else if (contiguous) {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
          << xname << "[index];\n";
-    } else if (!dynamic_dims) {
-      int offset = nc_inputs.size() * ndim;
-      os << "  size_t index_" << xname << " = "
-         << "index_0 * " << "in_strides[" << offset << "]";
-      for (int j = 1; j < ndim; j++) {
-        os << " + index_" << j << " * " << "in_strides[" << offset + j << "]";
-      }
-      os << ";\n";
-      nc_inputs.push_back(x);
     } else {
-      os << "  size_t index_" << xname << " = "
-         << "elem_to_loc(index, output_shape, in_strides + " << nc_inputs.size()
-         << "* ndim" << ", ndim);\n";
       nc_inputs.push_back(x);
     }
+  }
+
+  // Initialize the indices for non-contiguous inputs
+  for (int i = 0; i < nc_inputs.size(); ++i) {
+    auto& xname = namer.get_name(nc_inputs[i]);
+    if (ndim == 1) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = elem_to_loc_1(pos.x, "
+         << "in_strides[" << offset << "]);\n";
+    } else if (ndim == 2) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = elem_to_loc_2({pos.x, pos.y}, "
+         << "in_strides + " << offset << ");\n";
+    } else if (ndim == 3) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = elem_to_loc_3(pos, "
+         << "in_strides + " << offset << ");\n";
+    } else if (!dynamic_dims) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = N * pos.x * in_strides["
+         << offset + ndim - 1 << "]"
+         << " + pos.y * in_strides[" << offset + ndim - 2 << "];\n";
+    } else {
+      os << "  size_t index_" << xname << " = N * pos.x * in_strides[ndim * "
+         << i << " + ndim - 1]"
+         << " + pos.y * in_strides[ndim * " << i << " + ndim - 2];\n";
+    }
+  }
+  if (!nc_inputs.empty() && (ndim > 3 || dynamic_dims)) {
+    os << "  uint zpos = pos.z;\n";
+    if (dynamic_dims) {
+      os << "  for (int d = ndim - 3; d >= 0; --d) {\n";
+    } else {
+      os << "  for (int d = " << ndim - 3 << "; d >= 0; --d) {\n";
+    }
+    os << "    uint l = zpos % output_shape[d];\n";
+    for (int i = 0; i < nc_inputs.size(); ++i) {
+      auto& xname = namer.get_name(nc_inputs[i]);
+      os << "    index_" << xname << " += ";
+      if (dynamic_dims) {
+        os << "l * in_strides[" << i << " * ndim + d];\n";
+      } else {
+        os << "l * in_strides[" << i * ndim << " + d];\n";
+      }
+    }
+    os << "    zpos /= output_shape[d];\n  }\n";
   }
 
   // Open per-thread loop

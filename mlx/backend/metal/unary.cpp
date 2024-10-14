@@ -35,7 +35,7 @@ void unary_op_gpu_inplace(
   };
   auto [shape, strides] = maybe_collapse();
   int ndim = shape.size();
-  int work_per_thread = (!contig && shape[ndim - 1] > 4) ? 4 : 1;
+  int work_per_thread = !contig ? 4 : 1;
   size_t nthreads = contig ? in.data_size() : in.size();
   bool use_2d = nthreads > UINT32_MAX;
   std::string kernel_name;

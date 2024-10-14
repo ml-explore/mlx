@@ -38,8 +38,7 @@ void ternary_op_gpu_inplace(
 
   bool use_2d = out.data_size() > UINT_MAX;
   auto ndim = shape.size();
-  int work_per_thread =
-      (topt == TernaryOpType::General && shape[ndim - 1] > 4) ? 4 : 1;
+  int work_per_thread = (topt == TernaryOpType::General) ? 4 : 1;
   std::string kernel_name;
   {
     std::ostringstream kname;
