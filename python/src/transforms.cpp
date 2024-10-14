@@ -13,6 +13,7 @@
 
 #include "mlx/array.h"
 #include "mlx/compile.h"
+#include "mlx/compile_impl.h"
 #include "mlx/graph_utils.h"
 #include "mlx/transforms.h"
 #include "mlx/transforms_impl.h"
