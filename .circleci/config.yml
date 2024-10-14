@@ -13,6 +13,9 @@ parameters:
   test_release:
     type: boolean
     default: false
+  linux_release:
+    type: boolean
+    default: false
 
 jobs:
   linux_build_and_test:
@@ -208,7 +211,7 @@ jobs:
       - store_artifacts:
           path: dist/
 
-  build_linux_test_release:
+  build_linux_release:
     parameters:
       python_version:
         type: string
@@ -243,6 +246,7 @@ jobs:
             pip install auditwheel
             pip install patchelf
             pip install build
+            pip install twine
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               pip install . -v
@@ -253,6 +257,11 @@ jobs:
               python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
+      - run:
+          name: Upload package
+          command: |
+            source env/bin/activate
+            twine upload wheelhouse/*
       - store_artifacts:
           path: wheelhouse/
 
@@ -335,9 +344,9 @@ workflows:
     when:
       and:
         - equal: [ main, << pipeline.git.branch >> ]
-        - << pipeline.parameters.test_release >>
+        - << pipeline.parameters.linux_release >>
     jobs:
-      - build_linux_test_release:
+      - build_linux_release:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
