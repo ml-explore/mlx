@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.utils.tree_map &#8212; MLX 0.18.0 documentation</title>
+    <title>mlx.utils.tree_map &#8212; MLX 0.18.1 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../_static/documentation_options.js?v=4033e70d"></script>
+    <script src="../../_static/documentation_options.js?v=fbcf6510"></script>
     <script src="../../_static/doctools.js?v=888ff710"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.0 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.0 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.1 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.1 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -370,6 +370,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.repeat.html">mlx.core.repeat</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.reshape.html">mlx.core.reshape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.right_shift.html">mlx.core.right_shift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.roll.html">mlx.core.roll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.round.html">mlx.core.round</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.rsqrt.html">mlx.core.rsqrt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.save.html">mlx.core.save</a></li>
@@ -425,6 +426,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.truncated_normal.html">mlx.core.random.truncated_normal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.laplace.html">mlx.core.random.laplace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.random.permutation.html">mlx.core.random.permutation</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -871,13 +873,13 @@ document.write(`
 <h1>mlx.utils.tree_map<a class="headerlink" href="#mlx-utils-tree-map" title="Link to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.utils.tree_map">
-<span class="sig-name descname"><span class="pre">tree_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.12)"><span class="pre">Callable</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">tree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">rest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_leaf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.12)"><span class="pre">Callable</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.12)"><span class="pre">Any</span></a></span></span><a class="headerlink" href="#mlx.utils.tree_map" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">tree_map</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">fn</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">tree</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">rest</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">is_leaf</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Any" title="(in Python v3.13)"><span class="pre">Any</span></a></span></span><a class="headerlink" href="#mlx.utils.tree_map" title="Link to this definition">#</a></dt>
 <dd><p>Applies <code class="docutils literal notranslate"><span class="pre">fn</span></code> to the leaves of the Python tree <code class="docutils literal notranslate"><span class="pre">tree</span></code> and
 returns a new collection with the results.</p>
 <p>If <code class="docutils literal notranslate"><span class="pre">rest</span></code> is provided, every item is assumed to be a superset of <code class="docutils literal notranslate"><span class="pre">tree</span></code>
 and the corresponding leaves are provided as extra positional arguments to
-<code class="docutils literal notranslate"><span class="pre">fn</span></code>. In that respect, <a class="reference internal" href="#mlx.utils.tree_map" title="mlx.utils.tree_map"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tree_map()</span></code></a> is closer to <a class="reference external" href="https://docs.python.org/3/library/itertools.html#itertools.starmap" title="(in Python v3.12)"><code class="xref py py-func docutils literal notranslate"><span class="pre">itertools.starmap()</span></code></a>
-than to <a class="reference external" href="https://docs.python.org/3/library/functions.html#map" title="(in Python v3.12)"><code class="xref py py-func docutils literal notranslate"><span class="pre">map()</span></code></a>.</p>
+<code class="docutils literal notranslate"><span class="pre">fn</span></code>. In that respect, <a class="reference internal" href="#mlx.utils.tree_map" title="mlx.utils.tree_map"><code class="xref py py-meth docutils literal notranslate"><span class="pre">tree_map()</span></code></a> is closer to <a class="reference external" href="https://docs.python.org/3/library/itertools.html#itertools.starmap" title="(in Python v3.13)"><code class="xref py py-func docutils literal notranslate"><span class="pre">itertools.starmap()</span></code></a>
+than to <a class="reference external" href="https://docs.python.org/3/library/functions.html#map" title="(in Python v3.13)"><code class="xref py py-func docutils literal notranslate"><span class="pre">map()</span></code></a>.</p>
 <p>The keyword argument <code class="docutils literal notranslate"><span class="pre">is_leaf</span></code> decides what constitutes a leaf from
 <code class="docutils literal notranslate"><span class="pre">tree</span></code> similar to <a class="reference internal" href="mlx.utils.tree_flatten.html#mlx.utils.tree_flatten" title="mlx.utils.tree_flatten"><code class="xref py py-func docutils literal notranslate"><span class="pre">tree_flatten()</span></code></a>.</p>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">mlx.nn</span> <span class="k">as</span> <span class="nn">nn</span>
@@ -896,7 +898,7 @@ than to <a class="reference external" href="https://docs.python.org/3/library/fu
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>fn</strong> (<em>callable</em>) – The function that processes the leaves of the tree.</p></li>
 <li><p><strong>tree</strong> (<em>Any</em>) – The main Python tree that will be iterated upon.</p></li>
-<li><p><strong>rest</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.12)"><em>tuple</em></a><em>[</em><em>Any</em><em>]</em>) – Extra trees to be iterated together with <code class="docutils literal notranslate"><span class="pre">tree</span></code>.</p></li>
+<li><p><strong>rest</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.13)"><em>tuple</em></a><em>[</em><em>Any</em><em>]</em>) – Extra trees to be iterated together with <code class="docutils literal notranslate"><span class="pre">tree</span></code>.</p></li>
 <li><p><strong>is_leaf</strong> (<em>callable</em><em>, </em><em>optional</em>) – An optional callable that returns <code class="docutils literal notranslate"><span class="pre">True</span></code>
 if the passed object is considered a leaf or <code class="docutils literal notranslate"><span class="pre">False</span></code> otherwise.</p></li>
 </ul>

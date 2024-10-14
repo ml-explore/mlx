@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.nn.SinusoidalPositionalEncoding &#8212; MLX 0.18.0 documentation</title>
+    <title>mlx.nn.SinusoidalPositionalEncoding &#8212; MLX 0.18.1 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../../_static/documentation_options.js?v=4033e70d"></script>
+    <script src="../../../_static/documentation_options.js?v=fbcf6510"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -132,8 +132,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.0 documentation - Home"/>
-    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.0 documentation - Home"/>`);</script>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.1 documentation - Home"/>
+    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.1 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -371,6 +371,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.repeat.html">mlx.core.repeat</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.reshape.html">mlx.core.reshape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.right_shift.html">mlx.core.right_shift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.roll.html">mlx.core.roll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.round.html">mlx.core.round</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.rsqrt.html">mlx.core.rsqrt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.save.html">mlx.core.save</a></li>
@@ -426,6 +427,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.truncated_normal.html">mlx.core.random.truncated_normal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.laplace.html">mlx.core.random.laplace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.permutation.html">mlx.core.random.permutation</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -872,22 +874,22 @@ document.write(`
 <h1>mlx.nn.SinusoidalPositionalEncoding<a class="headerlink" href="#mlx-nn-sinusoidalpositionalencoding" title="Link to this heading">#</a></h1>
 <dl class="py class">
 <dt class="sig sig-object py" id="mlx.nn.SinusoidalPositionalEncoding">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SinusoidalPositionalEncoding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.12)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cos_first</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_turns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.SinusoidalPositionalEncoding" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">SinusoidalPositionalEncoding</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dims</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">min_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.0001</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_freq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">scale</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">cos_first</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">full_turns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.nn.SinusoidalPositionalEncoding" title="Link to this definition">#</a></dt>
 <dd><p>Implements sinusoidal positional encoding.</p>
 <p>For more details see the paper <a class="reference external" href="https://arxiv.org/abs/1706.03762">Attention Is All You Need</a>.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>dims</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a>) – The dimensionality of the resulting positional embeddings.</p></li>
-<li><p><strong>min_freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – The minimum frequency expected. Default:
+<li><p><strong>dims</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – The dimensionality of the resulting positional embeddings.</p></li>
+<li><p><strong>min_freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>optional</em>) – The minimum frequency expected. Default:
 <code class="docutils literal notranslate"><span class="pre">0.0001</span></code>.</p></li>
-<li><p><strong>max_freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – The maximum frequency expected. Default:
+<li><p><strong>max_freq</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>optional</em>) – The maximum frequency expected. Default:
 <code class="docutils literal notranslate"><span class="pre">1</span></code>.</p></li>
-<li><p><strong>scale</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a><em>, </em><em>optional</em>) – A multiplicative scale for the embeddings.
+<li><p><strong>scale</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a><em>, </em><em>optional</em>) – A multiplicative scale for the embeddings.
 Default: <code class="docutils literal notranslate"><span class="pre">sqrt(2/dims)</span></code>.</p></li>
-<li><p><strong>cos_first</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> embed using <code class="docutils literal notranslate"><span class="pre">[cos(x);</span> <span class="pre">sin(x)]</span></code>
+<li><p><strong>cos_first</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a><em>, </em><em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> embed using <code class="docutils literal notranslate"><span class="pre">[cos(x);</span> <span class="pre">sin(x)]</span></code>
 instead of the reverse. Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
-<li><p><strong>full_turns</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.12)"><em>bool</em></a><em>, </em><em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> multiply the frequencies with
+<li><p><strong>full_turns</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.13)"><em>bool</em></a><em>, </em><em>optional</em>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code> multiply the frequencies with
 <span class="math notranslate nohighlight">\(2\pi\)</span>. Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
 </ul>
 </dd>

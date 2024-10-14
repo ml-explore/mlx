@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
-    <title>mlx.optimizers.step_decay &#8212; MLX 0.18.0 documentation</title>
+    <title>mlx.optimizers.step_decay &#8212; MLX 0.18.1 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
   <script src="../../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
 
-    <script src="../../../_static/documentation_options.js?v=4033e70d"></script>
+    <script src="../../../_static/documentation_options.js?v=fbcf6510"></script>
     <script src="../../../_static/doctools.js?v=888ff710"></script>
     <script src="../../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
@@ -131,8 +131,8 @@
       
     
     
-    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.0 documentation - Home"/>
-    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.0 documentation - Home"/>`);</script>
+    <img src="../../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.1 documentation - Home"/>
+    <script>document.write(`<img src="../../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.1 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -370,6 +370,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.repeat.html">mlx.core.repeat</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.reshape.html">mlx.core.reshape</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.right_shift.html">mlx.core.right_shift</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.roll.html">mlx.core.roll</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.round.html">mlx.core.round</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.rsqrt.html">mlx.core.rsqrt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.save.html">mlx.core.save</a></li>
@@ -425,6 +426,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.truncated_normal.html">mlx.core.random.truncated_normal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.uniform.html">mlx.core.random.uniform</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.laplace.html">mlx.core.random.laplace</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../_autosummary/mlx.core.random.permutation.html">mlx.core.random.permutation</a></li>
 </ul>
 </li>
 <li class="toctree-l1 has-children"><a class="reference internal" href="../../transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
@@ -871,14 +873,14 @@ document.write(`
 <h1>mlx.optimizers.step_decay<a class="headerlink" href="#mlx-optimizers-step-decay" title="Link to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.optimizers.step_decay">
-<span class="sig-name descname"><span class="pre">step_decay</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><span class="pre">float</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.12)"><span class="pre">Callable</span></a></span></span><a class="headerlink" href="#mlx.optimizers.step_decay" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">step_decay</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">init</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">decay_rate</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><span class="pre">float</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">step_size</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/typing.html#typing.Callable" title="(in Python v3.13)"><span class="pre">Callable</span></a></span></span><a class="headerlink" href="#mlx.optimizers.step_decay" title="Link to this definition">#</a></dt>
 <dd><p>Make a step decay scheduler.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>init</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a>) – Initial value.</p></li>
-<li><p><strong>decay_rate</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.12)"><em>float</em></a>) – Multiplicative factor to decay by.</p></li>
-<li><p><strong>step_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.12)"><em>int</em></a>) – Decay every <code class="docutils literal notranslate"><span class="pre">step_size</span></code> steps.</p></li>
+<li><p><strong>init</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Initial value.</p></li>
+<li><p><strong>decay_rate</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.13)"><em>float</em></a>) – Multiplicative factor to decay by.</p></li>
+<li><p><strong>step_size</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.13)"><em>int</em></a>) – Decay every <code class="docutils literal notranslate"><span class="pre">step_size</span></code> steps.</p></li>
 </ul>
 </dd>
 </dl>
