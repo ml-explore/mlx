@@ -14,22 +14,7 @@
 
 namespace mlx::core {
 
-// GPU compile is always available if the GPU is available and since we are in
-// this file CPU compile is also available.
-namespace detail {
-bool compile_available_for_device(const Device& device) {
-  return true;
-}
-} // namespace detail
-
-std::string get_temp_file(const std::string& name) {
-  return std::filesystem::temp_directory_path().append(name);
-}
-
-// Return a pointer to a compiled function
-void* compile(
-    const std::string& kernel_name,
-    const std::function<std::string(void)>& source_builder) {
+struct CompilerCache {
   struct DLib {
     DLib(const std::string& libname) {
       lib = dlopen(libname.c_str(), RTLD_NOW);
@@ -46,19 +31,38 @@ void* compile(
     void* lib;
   };
   // Statics to cache compiled libraries and functions
-  static std::list<DLib> libs;
-  static std::unordered_map<std::string, void*> kernels;
-  static std::shared_mutex compile_mtx;
+  std::list<DLib> libs;
+  std::unordered_map<std::string, void*> kernels;
+  std::shared_mutex mtx;
+};
 
+static CompilerCache cache{};
+
+// GPU compile is always available if the GPU is available and since we are in
+// this file CPU compile is also available.
+namespace detail {
+bool compile_available_for_device(const Device& device) {
+  return true;
+}
+} // namespace detail
+
+std::string get_temp_file(const std::string& name) {
+  return std::filesystem::temp_directory_path().append(name);
+}
+
+// Return a pointer to a compiled function
+void* compile(
+    const std::string& kernel_name,
+    const std::function<std::string(void)>& source_builder) {
   {
-    std::shared_lock lock(compile_mtx);
-    if (auto it = kernels.find(kernel_name); it != kernels.end()) {
+    std::shared_lock lock(cache.mtx);
+    if (auto it = cache.kernels.find(kernel_name); it != cache.kernels.end()) {
       return it->second;
     }
   }
 
-  std::unique_lock lock(compile_mtx);
-  if (auto it = kernels.find(kernel_name); it != kernels.end()) {
+  std::unique_lock lock(cache.mtx);
+  if (auto it = cache.kernels.find(kernel_name); it != cache.kernels.end()) {
     return it->second;
   }
   std::string source_code = source_builder();
@@ -112,10 +116,10 @@ void* compile(
   }
 
   // load library
-  libs.emplace_back(shared_lib_path);
+  cache.libs.emplace_back(shared_lib_path);
 
   // Load function
-  void* fun = dlsym(libs.back().lib, kernel_name.c_str());
+  void* fun = dlsym(cache.libs.back().lib, kernel_name.c_str());
   if (!fun) {
     std::ostringstream msg;
     msg << "[Compile::eval_cpu] Failed to load compiled function "
@@ -123,7 +127,7 @@ void* compile(
         << dlerror();
     throw std::runtime_error(msg.str());
   }
-  kernels.insert({kernel_name, fun});
+  cache.kernels.insert({kernel_name, fun});
   return fun;
 }
 
