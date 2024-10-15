@@ -187,7 +187,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qr(a: array, *, stream: Union[None, Stream, Device] = None) -> tuple(array, array)"),
+          "def qr(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
       R"pbdoc(
         The QR factorization of the input matrix.
 
@@ -220,7 +220,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def svd(a: array, *, stream: Union[None, Stream, Device] = None) -> tuple(array, array, array)"),
+          "def svd(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
       R"pbdoc(
         The Singular Value Decomposition (SVD) of the input matrix.
 
