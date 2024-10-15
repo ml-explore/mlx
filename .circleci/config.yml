@@ -22,7 +22,7 @@ jobs:
     parameters:
       upload-docs:
         type: boolean
-        default: false
+        default: true 
     macos:
       xcode: "15.2.0"
     resource_class: macos.m1.medium.gen1
@@ -45,14 +45,14 @@ jobs:
             source env/bin/activate
             cd docs && doxygen && make html O=-W
       - when:
-          condition: << parameters.upload-docs >>
+          not: << parameters.upload-docs >>
           steps:
             - run:
                name: Build documentation
                command: |
                  source env/bin/activate
                  cd docs && doxygen && make html O=-W
-      - unless:
+      - when:
           condition: << parameters.upload-docs >>
           steps:
             - add_ssh_keys:
@@ -67,7 +67,7 @@ jobs:
                  git checkout gh-pages
                  git rebase main
                  cd docs
-                 git rm -f build/html
+                 git rm -rf build/html
                  doxygen && make html O=-W
                  git add -f build/html
                  git commit -m "rebase"
