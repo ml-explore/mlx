@@ -1308,8 +1308,8 @@ void init_ops(nb::module_& m) {
       "start"_a,
       "stop"_a,
       "step"_a = nb::none(),
-      nb::kw_only(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
           "def arange(start : Union[int, float], stop : Union[int, float], step : Union[None, int, float], dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
@@ -1323,10 +1323,7 @@ void init_ops(nb::module_& m) {
           start (float or int, optional): Starting value which defaults to ``0``.
           stop (float or int): Stopping value.
           step (float or int, optional): Increment which defaults to ``1``.
-          dtype (Dtype, optional): Specifies the data type of the output.
-            If unspecified will default to ``float32`` if any of ``start``,
-            ``stop``, or ``step`` are ``float``. Otherwise will default to
-            ``int32``.
+          dtype (Dtype, optional): Specifies the data type of the output. If unspecified will default to ``float32`` if any of ``start``, ``stop``, or ``step`` are ``float``. Otherwise will default to ``int32``.
 
       Returns:
           array: The range of values.
@@ -1356,8 +1353,8 @@ void init_ops(nb::module_& m) {
       },
       "stop"_a,
       "step"_a = nb::none(),
-      nb::kw_only(),
       "dtype"_a = nb::none(),
+      nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
           "def arange(stop : Union[int, float], step : Union[None, int, float] = None, dtype: Optional[Dtype] = None, *, stream: Union[None, Stream, Device] = None) -> array"));
@@ -1398,13 +1395,15 @@ void init_ops(nb::module_& m) {
   m.def(
       "take",
       [](const array& a,
-         const array& indices,
+         const std::variant<int, array>& indices,
          const std::optional<int>& axis,
          StreamOrDevice s) {
-        if (axis.has_value()) {
-          return take(a, indices, axis.value(), s);
+        if (auto pv = std::get_if<int>(&indices); pv) {
+          return axis ? take(a, *pv, axis.value(), s) : take(a, *pv, s);
         } else {
-          return take(a, indices, s);
+          auto indices_ = std::get<array>(indices);
+          return axis ? take(a, indices_, axis.value(), s)
+                      : take(a, indices_, s);
         }
       },
       nb::arg(),
@@ -1413,7 +1412,7 @@ void init_ops(nb::module_& m) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def take(a: array, /, indices: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def take(a: array, /, indices: Union[int, array], axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Take elements along an axis.
 
@@ -1425,7 +1424,7 @@ void init_ops(nb::module_& m) {
 
         Args:
             a (array): Input array.
-            indices (array): Input array with integral type.
+            indices (int or array): Integer index or input array with integral type.
             axis (int, optional): Axis along which to perform the take. If unspecified
               the array is treated as a flattened 1-D vector.
 
@@ -1463,7 +1462,48 @@ void init_ops(nb::module_& m) {
               operation.
 
         Returns:
-            array: The output array with the specified shape and values.
+            array: The output array.
+      )pbdoc");
+  m.def(
+      "put_along_axis",
+      [](const array& a,
+         const array& indices,
+         const array& values,
+         const std::optional<int>& axis,
+         StreamOrDevice s) {
+        if (axis.has_value()) {
+          return put_along_axis(a, indices, values, axis.value(), s);
+        } else {
+          return reshape(
+              put_along_axis(reshape(a, {-1}, s), indices, values, 0, s),
+              a.shape(),
+              s);
+        }
+      },
+      nb::arg(),
+      "indices"_a,
+      "values"_a,
+      "axis"_a.none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def put_along_axis(a: array, /, indices: array, values: array, axis: Optional[int] = None, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Put values along an axis at the specified indices.
+
+        Args:
+            a (array): Destination array.
+            indices (array): Indices array. These should be broadcastable with
+              the input array excluding the `axis` dimension.
+            values (array): Values array. These should be broadcastable with
+              the indices.
+
+            axis (int or None): Axis in the destination to put the values to. If
+              ``axis == None`` the destination is flattened prior to the put
+              operation.
+
+        Returns:
+            array: The output array.
       )pbdoc");
   m.def(
       "full",
@@ -4752,4 +4792,54 @@ void init_ops(nb::module_& m) {
       Returns:
         array: The output array.
     )pbdoc");
+  m.def(
+      "roll",
+      [](const array& a,
+         const IntOrVec& shift,
+         const IntOrVec& axis,
+         StreamOrDevice s) {
+        return std::visit(
+            [&](auto sh, auto ax) -> array {
+              using T = decltype(ax);
+              using V = decltype(sh);
+
+              if constexpr (std::is_same_v<V, std::monostate>) {
+                throw std::invalid_argument(
+                    "[roll] Expected two arguments but only one was given.");
+              } else {
+                if constexpr (std::is_same_v<T, std::monostate>) {
+                  return roll(a, sh, s);
+                } else {
+                  return roll(a, sh, ax, s);
+                }
+              }
+            },
+            shift,
+            axis);
+      },
+      nb::arg(),
+      "shift"_a,
+      "axis"_a = nb::none(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def roll(a: array, shift: Union[int, Tuple[int]], axis: Union[None, int, Tuple[int]] = None, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Roll array elements along a given axis.
+
+        Elements that are rolled beyond the end of the array are introduced at
+        the beggining and vice-versa.
+
+        If the axis is not provided the array is flattened, rolled and then the
+        shape is restored.
+
+        Args:
+          a (array): Input array
+          shift (int or tuple(int)): The number of places by which elements
+            are shifted. If positive the array is rolled to the right, if
+            negative it is rolled to the left. If an int is provided but the
+            axis is a tuple then the same value is used for all axes.
+          axis (int or tuple(int), optional): The axis or axes along which to
+            roll the elements.
+      )pbdoc");
 }

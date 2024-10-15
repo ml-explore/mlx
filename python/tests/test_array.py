@@ -688,6 +688,13 @@ class TestArray(mlx_tests.MLXTestCase):
 
             self.assertEqual(b_npy.dtype, np_dtype)
 
+    def test_array_from_noncontiguous_np(self):
+        for t in [np.int8, np.int32, np.float16, np.float32, np.complex64]:
+            np_arr = np.random.uniform(size=(10, 10)).astype(np.complex64)
+            np_arr = np_arr.T
+            mx_arr = mx.array(np_arr)
+            self.assertTrue(mx.array_equal(np_arr, mx_arr))
+
     def test_array_np_shape_dim_check(self):
         a_npy = np.empty(2**31, dtype=np.bool_)
         with self.assertRaises(ValueError) as e:
@@ -1867,6 +1874,33 @@ class TestArray(mlx_tests.MLXTestCase):
             float(a)
         with self.assertRaises(ValueError):
             int(a)
+
+    def test_deep_graphs(self):
+        # The following tests should simply run cleanly without a segfault or
+        # crash due to exceeding recursion depth limits.
+
+        # Deep graph destroyed without eval
+        x = mx.array([1.0, 2.0])
+        for _ in range(100_000):
+            x = mx.sin(x)
+        del x
+
+        # Duplicate input deep graph destroyed without eval
+        x = mx.array([1.0, 2.0])
+        for _ in range(100_000):
+            x = x + x
+
+        # Deep graph with siblings destroyed without eval
+        x = mx.array([1, 2])
+        for _ in range(100_000):
+            x = mx.concatenate(mx.split(x, 2))
+        del x
+
+        # Deep graph with eval
+        x = mx.array([1.0, 2.0])
+        for _ in range(100_000):
+            x = mx.sin(x)
+        mx.eval(x)
 
 
 if __name__ == "__main__":

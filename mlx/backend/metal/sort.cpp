@@ -254,7 +254,9 @@ void multi_block_sort(
 
   // Clear copies
   d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+      [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+        copies.clear();
+      });
 }
 
 void gpu_merge_sort(

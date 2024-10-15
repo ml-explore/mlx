@@ -370,7 +370,7 @@ void compile_simplify(
   auto get_scalar_rep = [](const array& a) {
     uint64_t v = 0;
     int dtype;
-    switch (a.dtype().size) {
+    switch (a.dtype().size()) {
       case 1:
         v = *a.data<uint8_t>();
         break;
@@ -384,7 +384,7 @@ void compile_simplify(
         v = *a.data<uint64_t>();
         break;
     }
-    return std::make_pair(v, a.dtype().val);
+    return std::make_pair(v, a.dtype().val());
   };
 
   for (auto& a : tape) {

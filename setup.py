@@ -163,7 +163,7 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.17.3"),
+        version=get_version("0.18.1"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
@@ -176,7 +176,7 @@ if __name__ == "__main__":
         include_package_data=True,
         extras_require={
             "dev": [
-                "nanobind==2.1.0",
+                "nanobind==2.2.0",
                 "numpy",
                 "pre-commit",
                 "setuptools>=42",

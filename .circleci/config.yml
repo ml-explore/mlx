@@ -13,6 +13,9 @@ parameters:
   test_release:
     type: boolean
     default: false
+  linux_release:
+    type: boolean
+    default: false
 
 jobs:
   linux_build_and_test:
@@ -31,7 +34,7 @@ jobs:
           name: Install dependencies
           command: |
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install numpy
             sudo apt-get update
             sudo apt-get install libblas-dev liblapack-dev liblapacke-dev
@@ -77,13 +80,13 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            brew install python@3.8
+            brew install python@3.9
             brew install openmpi
-            python3.8 -m venv env
+            python3.9 -m venv env
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install numpy
             pip install torch
             pip install tensorflow
@@ -105,7 +108,7 @@ jobs:
             source env/bin/activate
             LOW_MEMORY=1 DEVICE=cpu python -m xmlrunner discover -v python/tests -o test-results/cpu
             LOW_MEMORY=1 DEVICE=gpu METAL_DEVICE_WRAPPER_TYPE=1 METAL_DEBUG_ERROR_MODE=0 python -m xmlrunner discover -v python/tests -o test-results/gpu
-            mpirun -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
+            mpirun --bind-to none -host localhost:8 -np 8 -x DYLD_LIBRARY_PATH=/opt/homebrew/lib/ python python/tests/mpi_test_distributed.py
       - run:
           name: Build example extension
           command: |
@@ -172,7 +175,7 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install --upgrade setuptools
             pip install numpy
             pip install twine
@@ -208,7 +211,7 @@ jobs:
       - store_artifacts:
           path: dist/
 
-  build_linux_test_release:
+  build_linux_release:
     parameters:
       python_version:
         type: string
@@ -237,12 +240,13 @@ jobs:
             source env/bin/activate
             pip install --upgrade pip
             pip install --upgrade cmake
-            pip install nanobind==2.1.0
+            pip install nanobind==2.2.0
             pip install --upgrade setuptools
             pip install numpy
             pip install auditwheel
             pip install patchelf
             pip install build
+            pip install twine
             << parameters.extra_env >> \
               CMAKE_BUILD_PARALLEL_LEVEL=`nproc` \
               pip install . -v
@@ -253,6 +257,11 @@ jobs:
               python -m build --wheel
             auditwheel show dist/*
             auditwheel repair dist/* --plat manylinux_2_31_x86_64
+      - run:
+          name: Upload package
+          command: |
+            source env/bin/activate
+            twine upload wheelhouse/*
       - store_artifacts:
           path: wheelhouse/
 
@@ -335,9 +344,9 @@ workflows:
     when:
       and:
         - equal: [ main, << pipeline.git.branch >> ]
-        - << pipeline.parameters.test_release >>
+        - << pipeline.parameters.linux_release >>
     jobs:
-      - build_linux_test_release:
+      - build_linux_release:
           matrix:
             parameters:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]

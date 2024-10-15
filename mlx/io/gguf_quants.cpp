@@ -120,7 +120,7 @@ void gguf_load_quantized(
 
   std::vector<int> weights_shape = shape;
   weights_shape.back() /= (weights_per_byte * 4);
-  auto w_nbytes = uint32.size *
+  auto w_nbytes = uint32.size() *
       std::accumulate(weights_shape.begin(),
                       weights_shape.end(),
                       1,
@@ -130,7 +130,7 @@ void gguf_load_quantized(
 
   // For scales and bias
   shape[shape.size() - 1] = shape[shape.size() - 1] / weights_per_block;
-  auto sb_nbytes = float16.size *
+  auto sb_nbytes = float16.size() *
       std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<size_t>());
 
   array scales(allocator::malloc(sb_nbytes), shape, float16);

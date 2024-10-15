@@ -7,18 +7,18 @@
 #include "mlx/backend/metal/kernels/binary_ops.h"
 #include "mlx/backend/metal/kernels/binary_two.h"
 
-#define instantiate_binary_all(op, tname, itype, otype)                 \
-  instantiate_kernel("ss" #op #tname, binary_ss, itype, otype, op)      \
-  instantiate_kernel("sv" #op #tname, binary_sv, itype, otype, op)      \
-  instantiate_kernel("vs" #op #tname, binary_vs, itype, otype, op)      \
-  instantiate_kernel("vv" #op #tname, binary_vv, itype, otype, op)      \
-  instantiate_kernel("sv2" #op #tname, binary_sv2, itype, otype, op)    \
-  instantiate_kernel("vs2" #op #tname, binary_vs2, itype, otype, op)    \
-  instantiate_kernel("vv2" #op #tname, binary_vv2, itype, otype, op)    \
-  instantiate_kernel("gn" #op #tname, binary_g, itype, otype, op)       \
-  instantiate_kernel("g1" #op #tname, binary_g_nd1, itype, otype, op)   \
-  instantiate_kernel("g2" #op #tname, binary_g_nd2, itype, otype, op)   \
-  instantiate_kernel("g3" #op #tname, binary_g_nd3, itype, otype, op)   \
+#define instantiate_binary_all(op, tname, itype, otype)                  \
+  instantiate_kernel("ss_" #op #tname, binary_ss, itype, otype, op)      \
+  instantiate_kernel("sv_" #op #tname, binary_sv, itype, otype, op)      \
+  instantiate_kernel("vs_" #op #tname, binary_vs, itype, otype, op)      \
+  instantiate_kernel("vv_" #op #tname, binary_vv, itype, otype, op)      \
+  instantiate_kernel("sv2_" #op #tname, binary_sv2, itype, otype, op)    \
+  instantiate_kernel("vs2_" #op #tname, binary_vs2, itype, otype, op)    \
+  instantiate_kernel("vv2_" #op #tname, binary_vv2, itype, otype, op)    \
+  instantiate_kernel("gn4_" #op #tname, binary_g, itype, otype, op, 4)   \
+  instantiate_kernel("g1_" #op #tname, binary_g_nd1, itype, otype, op)   \
+  instantiate_kernel("g2_" #op #tname, binary_g_nd2, itype, otype, op)   \
+  instantiate_kernel("g3_" #op #tname, binary_g_nd3, itype, otype, op)   \
 
 #define instantiate_binary_float(op)                \
   instantiate_binary_all(op, float16, half, half)   \

@@ -156,8 +156,7 @@ std::pair<bool, std::vector<size_t>> Reshape::prepare_reshape(
   }
 
   // Firstly let's collapse all the contiguous dimensions of the input
-  auto [shape, _strides] = collapse_contiguous_dims(in);
-  auto& strides = _strides[0];
+  auto [shape, strides] = collapse_contiguous_dims(in);
 
   // If shapes fit exactly in the contiguous dims then no copy is necessary so
   // let's check.

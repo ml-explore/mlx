@@ -1983,6 +1983,12 @@ TEST_CASE("test take") {
   CHECK(array_equal(out, zeros({1, 1, 1})).item<bool>());
   out = take(a, array({0, 1}), 1);
   CHECK(array_equal(out, zeros({1, 2, 1})).item<bool>());
+
+  // Indices have wrong shape
+  a = zeros({2, 3, 4});
+  CHECK_THROWS(take(a, zeros({1, 3, 4}), 1));
+  CHECK_THROWS(take(a, zeros({2, 3, 7}), 1));
+  CHECK_THROWS(take(a, zeros({2, 3, 2}), 0));
 }
 
 TEST_CASE("test take along axis") {
@@ -2000,12 +2006,6 @@ TEST_CASE("test take along axis") {
   CHECK_EQ(out.item<int>(), 1);
   out = take_along_axis(a, array({1}), -1);
   CHECK_EQ(out.item<int>(), 1);
-
-  // Indices have wrong shape
-  a = zeros({2, 3, 4});
-  CHECK_THROWS(take(a, zeros({1, 3, 4}), 1));
-  CHECK_THROWS(take(a, zeros({2, 3, 7}), 1));
-  CHECK_THROWS(take(a, zeros({2, 3, 2}), 0));
 
   // Empty arrays
   a = reshape(array({}), {1, 0});
@@ -2055,6 +2055,48 @@ TEST_CASE("test take along axis") {
   out = take_along_axis(a, inds, 2);
   CHECK(array_equal(out, array({0, 1, 2, 2, 5, 4, 6, 7}, {2, 2, 2}))
             .item<bool>());
+}
+
+TEST_CASE("test put along axis") {
+  // No zero dim arrays
+  auto a = array(1);
+  auto v = array(1);
+  CHECK_THROWS(put_along_axis(a, array(0), v, 0));
+
+  // Index and array size mismatches
+  a = arange(5);
+  CHECK_THROWS(put_along_axis(a, array({1}), array({0}), 1));
+  CHECK_THROWS(put_along_axis(a, array({1}, {1, 1}), array({0}), 0));
+  CHECK_THROWS(put_along_axis(a, array(1), array(0), -1));
+
+  auto expected = array({0, 0, 2, 3, 4});
+  auto out = put_along_axis(a, array({1}), array({0}), 0);
+  CHECK(array_equal(out, expected).item<bool>());
+
+  // Empty arrays
+  a = reshape(array({}), {1, 0});
+  CHECK_THROWS(put_along_axis(a, array({1}), array({0}), 0));
+
+  auto inds = reshape(astype(array({}), int32), {1, 0});
+  out = take_along_axis(a, inds, 0);
+  eval(out); // Make sure it runs
+  CHECK_EQ(out.shape(), std::vector<int>{1, 0});
+
+  a = array({1, 2, 3, 4}, {2, 2});
+  inds = array({0, 1}, {1, 2});
+  out = put_along_axis(a, inds, array({0}), 0);
+  expected = array({0, 2, 3, 0}, {2, 2});
+  CHECK(array_equal(out, expected).item<bool>());
+
+  inds = array({0, 0, 1, 1}, {2, 2}, int32);
+  auto values = array({2, 3, 4, 5}, {2, 2}, int32);
+  out = put_along_axis(a, inds, values, 0);
+  CHECK(array_equal(out, array({2, 3, 4, 5}, {2, 2})).item<bool>());
+
+  inds = array({0, 1}, {2, 1});
+  out = put_along_axis(a, inds, array({0}), 1);
+  expected = array({0, 2, 3, 0}, {2, 2});
+  CHECK(array_equal(out, expected).item<bool>());
 }
 
 TEST_CASE("test scatter") {
@@ -2511,6 +2553,13 @@ TEST_CASE("test power") {
   auto out = (power(array(a), array(b))).item<complex64_t>();
   CHECK(abs(out.real() - expected.real()) < 1e-7);
   CHECK(abs(out.imag() - expected.imag()) < 1e-7);
+
+  a = complex64_t{-1.2, 0.1};
+  b = complex64_t{2.2, 0.0};
+  expected = std::pow(a, b);
+  out = (power(array(a), array(b))).item<complex64_t>();
+  CHECK(abs(out.real() - expected.real()) < 1e-6);
+  CHECK(abs(out.imag() - expected.imag()) < 1e-6);
 }
 
 TEST_CASE("test where") {
@@ -3665,4 +3714,36 @@ TEST_CASE("test view") {
   in = array({1, 2, 3, 4}, int64);
   auto out = view(in, int32);
   CHECK(array_equal(out, array({1, 0, 2, 0, 3, 0, 4, 0})).item<bool>());
+}
+
+TEST_CASE("test roll") {
+  auto x = reshape(arange(10), {2, 5});
+
+  auto y = roll(x, 2);
+  CHECK(array_equal(y, array({8, 9, 0, 1, 2, 3, 4, 5, 6, 7}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, -2);
+  CHECK(array_equal(y, array({2, 3, 4, 5, 6, 7, 8, 9, 0, 1}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, 2, 1);
+  CHECK(array_equal(y, array({3, 4, 0, 1, 2, 8, 9, 5, 6, 7}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, -2, 1);
+  CHECK(array_equal(y, array({2, 3, 4, 0, 1, 7, 8, 9, 5, 6}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, 2, {0, 0, 0});
+  CHECK(array_equal(y, array({0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, 1, {1, 1, 1});
+  CHECK(array_equal(y, array({2, 3, 4, 0, 1, 7, 8, 9, 5, 6}, {2, 5}))
+            .item<bool>());
+
+  y = roll(x, {1, 2}, {0, 1});
+  CHECK(array_equal(y, array({8, 9, 5, 6, 7, 3, 4, 0, 1, 2}, {2, 5}))
+            .item<bool>());
 }

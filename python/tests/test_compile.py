@@ -758,6 +758,20 @@ class TestCompile(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             y = mx.compile(fn)(x)
 
+    def test_compile_dynamic_dims(self):
+        a = mx.random.uniform(shape=(2,) * 10)
+        b = mx.random.uniform(shape=(2,) * 10)
+        a = a.T
+        mx.eval(a, b)
+
+        def fn(a, b):
+            return mx.abs(a + b)
+
+        out = mx.compile(fn)(a, b)
+        expected = fn(a, b)
+        print((out - expected).abs().max())
+        self.assertTrue(mx.allclose(out, expected))
+
 
 if __name__ == "__main__":
     unittest.main()

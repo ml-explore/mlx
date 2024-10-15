@@ -144,9 +144,7 @@ array squeeze(
     StreamOrDevice s = {});
 
 /** Remove singleton dimensions at the given axis. */
-inline array squeeze(const array& a, int axis, StreamOrDevice s = {}) {
-  return squeeze(a, std::vector<int>{axis}, s);
-}
+array squeeze(const array& a, int axis, StreamOrDevice s = {});
 
 /** Remove all singleton dimensions. */
 array squeeze(const array& a, StreamOrDevice s = {});
@@ -171,8 +169,8 @@ array slice(
 /** Slice an array with a stride of 1 in each dimension. */
 array slice(
     const array& a,
-    const std::vector<int>& start,
-    const std::vector<int>& stop,
+    std::vector<int> start,
+    std::vector<int> stop,
     StreamOrDevice s = {});
 
 /** Update a slice from the source array */
@@ -936,14 +934,24 @@ array take(
     const array& indices,
     int axis,
     StreamOrDevice s = {});
+array take(const array& a, int index, int axis, StreamOrDevice s = {});
 
 /** Take array entries at the given indices treating the array as flattened. */
 array take(const array& a, const array& indices, StreamOrDevice s = {});
+array take(const array& a, int index, StreamOrDevice s = {});
 
 /** Take array entries given indices along the axis */
 array take_along_axis(
     const array& a,
     const array& indices,
+    int axis,
+    StreamOrDevice s = {});
+
+/** Put the values into the array at the given indices along the axis */
+array put_along_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
     int axis,
     StreamOrDevice s = {});
 
@@ -1448,6 +1456,30 @@ array right_shift(const array& a, const array& b, StreamOrDevice s = {});
 array operator>>(const array& a, const array& b);
 
 array view(const array& a, const Dtype& dtype, StreamOrDevice s = {});
+
+/** Roll elements along an axis and introduce them on the other side */
+array roll(const array& a, int shift, StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    StreamOrDevice s = {});
+array roll(const array& a, int shift, int axis, StreamOrDevice s = {});
+array roll(
+    const array& a,
+    int shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    int axis,
+    StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
+
 /** @} */
 
 } // namespace mlx::core

@@ -60,32 +60,6 @@ std::string gen_hadamard_codelet(int m) {
   return source.str();
 }
 
-void launch_hadamard(
-    const array& in,
-    array& out,
-    int batch_size,
-    int threads_per,
-    const std::string kernel_name,
-    float scale,
-    const Stream& s) {
-  auto& d = metal::device(s.device);
-
-  const auto& lib_name = kernel_name.substr(1);
-  auto lib = d.get_library(lib_name);
-  auto kernel = d.get_kernel(kernel_name, lib);
-  assert(threads_per <= kernel->maxTotalThreadsPerThreadgroup());
-
-  auto& compute_encoder = d.get_command_encoder(s.index);
-  compute_encoder->setComputePipelineState(kernel);
-  compute_encoder.set_input_array(in, 0);
-  compute_encoder.set_output_array(out, 1);
-  compute_encoder->setBytes(&scale, sizeof(float), 2);
-
-  MTL::Size group_dims = MTL::Size(1, threads_per, 1);
-  MTL::Size grid_dims = MTL::Size(batch_size, threads_per, 1);
-  compute_encoder->dispatchThreads(grid_dims, group_dims);
-}
-
 void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s = stream();
 
@@ -113,7 +87,8 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
   }
 
-  auto [n, m] = decompose_hadamard(in.shape(axis));
+  int n, m;
+  std::tie(n, m) = decompose_hadamard(in.shape(axis));
 
   if (n * (int)size_of(in.dtype()) > MAX_HADAMARD_BYTES) {
     throw std::invalid_argument(
@@ -129,8 +104,7 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto kernel_name = kname.str();
   auto& d = metal::device(s.device);
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     auto codelet = gen_hadamard_codelet(m);
     kernel_source << metal::utils() << codelet << metal::hadamard();
@@ -148,11 +122,30 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
         n,
         m,
         read_width);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
 
   int batch_size = in.size() / n;
   int threads_per = n / max_radix;
+
+  auto& compute_encoder = d.get_command_encoder(s.index);
+
+  auto launch_hadamard = [&](const array& in,
+                             array& out,
+                             const std::string& kernel_name,
+                             float scale) {
+    auto kernel = d.get_kernel(kernel_name, lib);
+    assert(threads_per <= kernel->maxTotalThreadsPerThreadgroup());
+
+    compute_encoder->setComputePipelineState(kernel);
+    compute_encoder.set_input_array(in, 0);
+    compute_encoder.set_output_array(out, 1);
+    compute_encoder->setBytes(&scale, sizeof(float), 2);
+
+    MTL::Size group_dims = MTL::Size(1, threads_per, 1);
+    MTL::Size grid_dims = MTL::Size(batch_size, threads_per, 1);
+    compute_encoder->dispatchThreads(grid_dims, group_dims);
+  };
 
   if (m > 1) {
     // When m is greater than 1, we decompose the
@@ -171,33 +164,22 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
     temp.set_data(allocator::malloc_or_wait(temp.nbytes()));
     copies.push_back(temp);
 
-    launch_hadamard(
-        in_contiguous,
-        temp,
-        batch_size,
-        threads_per,
-        "n" + kernel_name,
-        1.0,
-        s);
+    launch_hadamard(in_contiguous, temp, "n" + kernel_name, 1.0);
 
     // Metal sometimes reports 256 max threads per group for hadamard_m kernel
     threads_per = std::min(n / read_width, MAX_HADAMARD_THREADS_PER_GROUP);
     batch_size = in.size() / m / read_width / threads_per;
-    launch_hadamard(
-        temp, out, batch_size, threads_per, "m" + kernel_name, scale_, s);
+    launch_hadamard(temp, out, "m" + kernel_name, scale_);
   } else {
-    launch_hadamard(
-        in_contiguous,
-        out,
-        batch_size,
-        threads_per,
-        "n" + kernel_name,
-        scale_,
-        s);
+    launch_hadamard(in_contiguous, out, "n" + kernel_name, scale_);
   }
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+  if (!copies.empty()) {
+    d.get_command_buffer(s.index)->addCompletedHandler(
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
+  }
 }
 
 } // namespace mlx::core

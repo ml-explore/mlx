@@ -121,6 +121,7 @@ Operations
    pad
    power
    prod
+   put_along_axis
    quantize
    quantized_matmul
    radians
@@ -129,6 +130,7 @@ Operations
    repeat
    reshape
    right_shift
+   roll
    round
    rsqrt
    save

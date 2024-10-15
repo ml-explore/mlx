@@ -406,16 +406,7 @@ void Reshape::eval(const std::vector<array>& inputs, array& out) {
 
   if (copy_necessary) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    auto out_strides = make_contiguous_strides<size_t>(in.shape());
-    copy_inplace<size_t>(
-        in,
-        out,
-        in.shape(),
-        in.strides(),
-        out_strides,
-        0,
-        0,
-        CopyType::General);
+    copy_inplace(in, out, CopyType::General);
   } else {
     shared_buffer_reshape(in, out_strides, out);
   }

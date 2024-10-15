@@ -24,7 +24,7 @@ option(MLX_METAL_JIT "Use JIT compilation for Metal kernels" OFF)
 option(BUILD_SHARED_LIBS "Build mlx as a shared library" OFF)
 
 if(NOT MLX_VERSION)
-  set(MLX_VERSION 0.17.3)
+  set(MLX_VERSION 0.18.1)
 endif()
 
 # --------------------- Processor tests -------------------------
@@ -47,15 +47,18 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
           "https://ml-explore.github.io/mlx/build/html/install.html#build-from-source"
       )
     else()
+      set(MLX_BUILD_METAL OFF)
       message(WARNING "Building for x86_64 arch is not officially supported.")
     endif()
-    set(MLX_BUILD_METAL OFF)
-  elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
-    set(MLX_BUILD_ARM ON)
   endif()
 
 else()
+  set(MLX_BUILD_METAL OFF)
   message(WARNING "MLX is prioritised for Apple silicon systems using macOS.")
+endif()
+
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm64")
+  set(MLX_BUILD_ARM ON)
 endif()
 
 # ----------------------------- Lib -----------------------------

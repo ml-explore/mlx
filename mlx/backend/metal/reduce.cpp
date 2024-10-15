@@ -449,7 +449,8 @@ void row_reduce_general_dispatch(
   }
 
   // Case 2: Contiguous reduce without non-row reductions
-  if (plan.type == ContiguousReduce && args.reduce_ndim == 0) {
+  if (plan.type == ContiguousReduce && args.reduce_ndim == 0 &&
+      in.size() / args.row_size >= 32) {
     return row_reduce_simple(in, out, op_name, args, compute_encoder, d, s);
   }
 
@@ -661,7 +662,9 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
 
     if (!copies.empty()) {
       d.get_command_buffer(s.index)->addCompletedHandler(
-          [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+          [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+            copies.clear();
+          });
     }
   }
 

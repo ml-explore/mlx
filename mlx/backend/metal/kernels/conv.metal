@@ -113,6 +113,7 @@ template <typename T, int N>
   for (int i = N - 1; i >= 0; --i) {
     int os_ = (oS % params->oS[i]);
     int ws_ = (wS % params->wS[i]);
+    out += ws_ * kernel_stride;
 
     ws_ = params->flip ? params->wS[i] - ws_ - 1 : ws_;
 
@@ -126,7 +127,6 @@ template <typename T, int N>
     oS /= params->oS[i];
     wS /= params->wS[i];
 
-    out += ws_ * kernel_stride;
     kernel_stride *= params->wS[i];
   }
 

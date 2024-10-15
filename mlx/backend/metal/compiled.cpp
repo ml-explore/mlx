@@ -13,6 +13,8 @@
 
 namespace mlx::core {
 
+constexpr int WORK_PER_THREAD = 4;
+
 inline void build_kernel(
     std::ostream& os,
     const std::string& kernel_name,
@@ -23,7 +25,8 @@ inline void build_kernel(
     bool contiguous,
     int ndim,
     bool dynamic_dims,
-    bool use_big_index = false) {
+    bool use_big_index = false,
+    int work_per_thread = 1) {
   // All outputs should have the exact same shape and will be row contiguous
   auto output_shape = outputs[0].shape();
   auto output_strides = outputs[0].strides();
@@ -38,8 +41,8 @@ inline void build_kernel(
   int cnt = 0;
 
   // Start the kernel
-  os << "[[host_name(\"" << kernel_name << "\")]]" << std::endl
-     << "[[kernel]] void " << kernel_name << "(" << std::endl;
+  os << "[[host_name(\"" << kernel_name << "\")]]\n"
+     << "[[kernel]] void " << kernel_name << "(\n";
 
   // Add the input arguments
   for (auto& x : inputs) {
@@ -53,11 +56,11 @@ inline void build_kernel(
     // Scalars and contiguous need no strides
     if (is_scalar(x) || contiguous) {
       os << "    device const " << get_type_string(x.dtype()) << "* " << xname
-         << " [[buffer(" << cnt++ << ")]]," << std::endl;
+         << " [[buffer(" << cnt++ << ")]],\n";
     } else {
       add_indices = true;
       os << "    device const " << get_type_string(x.dtype()) << "* " << xname
-         << " [[buffer(" << cnt++ << ")]]," << std::endl;
+         << " [[buffer(" << cnt++ << ")]],\n";
     }
   }
 
@@ -69,58 +72,37 @@ inline void build_kernel(
   // Add the output arguments
   for (auto& x : outputs) {
     os << "    device " << get_type_string(x.dtype()) << "* "
-       << namer.get_name(x) << " [[buffer(" << cnt++ << ")]]," << std::endl;
+       << namer.get_name(x) << " [[buffer(" << cnt++ << ")]],\n";
   }
   // Add output strides and shape to extract the indices.
   if (!contiguous) {
     os << "    constant const size_t* output_strides [[buffer(" << cnt++
-       << ")]]," << std::endl
-       << "    constant const int* output_shape [[buffer(" << cnt++ << ")]],"
-       << std::endl;
+       << ")]],\n"
+       << "    constant const int* output_shape [[buffer(" << cnt++ << ")]],\n";
   }
   if (dynamic_dims) {
-    os << "    constant const int& ndim [[buffer(" << cnt++ << ")]],"
-       << std::endl;
+    os << "    constant const int& ndim [[buffer(" << cnt++ << ")]],\n";
   }
 
   // The thread index in the whole grid
-  os << "    uint3 pos [[thread_position_in_grid]]," << std::endl
-     << "    uint3 grid [[threads_per_grid]]) {" << std::endl;
+  os << "    uint3 pos [[thread_position_in_grid]],\n"
+     << "    uint3 grid [[threads_per_grid]]) {\n";
+
   if (use_big_index) {
     // This is only used for contiguous kernels which don't have
     // a third grid dimension
-    os << "  size_t index = pos.x + grid.x * size_t(pos.y);";
+    os << "  size_t index = pos.x + grid.x * size_t(pos.y);\n";
+  } else if (work_per_thread > 1) {
+    os << "  constexpr int N = " << std::to_string(work_per_thread) << ";\n"
+       << "  int xshape = output_shape["
+       << (dynamic_dims ? "ndim - 1" : std::to_string(ndim - 1)) << "];\n"
+       << "  size_t index = N * pos.x + xshape * (pos.y + size_t(grid.y) * pos.z);\n";
   } else {
-    os << "  uint index = pos.x + grid.x * (pos.y + grid.y * pos.z);";
-  }
-  os << std::endl;
-
-  // Extract the indices per axis to individual uints if we have arrays that
-  // are broadcasted or transposed
-  if (add_indices) {
-    if (!dynamic_dims) {
-      if (ndim == 1) {
-        os << "  uint index_0 = pos.x;" << std::endl;
-      } else if (ndim == 2) {
-        os << "  uint index_0 = pos.y;" << std::endl
-           << "  uint index_1 = pos.x;" << std::endl;
-      } else if (ndim == 3) {
-        os << "  uint index_0 = pos.z;" << std::endl
-           << "  uint index_1 = pos.y;" << std::endl
-           << "  uint index_2 = pos.x;" << std::endl;
-      } else {
-        for (int i = 0; i < ndim - 2; i++) {
-          os << "  uint index_" << i << " = (index / uint(output_strides[" << i
-             << "])) % output_shape[" << i << "];" << std::endl;
-        }
-        os << "  uint index_" << ndim - 2 << " = pos.y;" << std::endl
-           << "  uint index_" << ndim - 1 << " = pos.x;" << std::endl;
-      }
-    }
+    os << " size_t index = pos.x + grid.x * (pos.y + size_t(grid.y) * pos.z);\n";
   }
 
-  // Read the inputs in tmps
-  int nc_in_count = 0;
+  // Read constant / contiguous inputs in tmps
+  std::vector<array> nc_inputs;
   for (int i = 0; i < inputs.size(); ++i) {
     auto& x = inputs[i];
     auto& xname = namer.get_name(x);
@@ -130,29 +112,75 @@ inline void build_kernel(
       os << "  auto tmp_" << xname << " = static_cast<"
          << get_type_string(x.dtype()) << ">(";
       print_constant(os, x);
-      os << ");" << std::endl;
+      os << ");\n";
     } else if (is_scalar(x)) {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-         << xname << "[0];" << std::endl;
+         << xname << "[0];\n";
     } else if (contiguous) {
       os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-         << xname << "[index];" << std::endl;
-    } else if (!dynamic_dims) {
-      int offset = nc_in_count * ndim;
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-         << xname << "[";
-      os << "index_0 * " << "in_strides[" << offset << "]";
-      for (int i = 1; i < ndim; i++) {
-        os << " + index_" << i << " * " << "in_strides[" << offset + i << "]";
-      }
-      os << "];" << std::endl;
-      nc_in_count++;
+         << xname << "[index];\n";
     } else {
-      os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
-         << xname << "[elem_to_loc(index, output_shape, in_strides + "
-         << nc_in_count * ndim << ", ndim)];" << std::endl;
-      nc_in_count++;
+      nc_inputs.push_back(x);
     }
+  }
+
+  // Initialize the indices for non-contiguous inputs
+  for (int i = 0; i < nc_inputs.size(); ++i) {
+    auto& xname = namer.get_name(nc_inputs[i]);
+    if (ndim == 1) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = elem_to_loc_1(pos.x, "
+         << "in_strides[" << offset << "]);\n";
+    } else if (ndim == 2) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = elem_to_loc_2({pos.x, pos.y}, "
+         << "in_strides + " << offset << ");\n";
+    } else if (ndim == 3) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = elem_to_loc_3(pos, "
+         << "in_strides + " << offset << ");\n";
+    } else if (!dynamic_dims) {
+      int offset = i * ndim;
+      os << "  size_t index_" << xname << " = N * pos.x * in_strides["
+         << offset + ndim - 1 << "]"
+         << " + pos.y * in_strides[" << offset + ndim - 2 << "];\n";
+    } else {
+      os << "  size_t index_" << xname << " = N * pos.x * in_strides[ndim * "
+         << i << " + ndim - 1]"
+         << " + pos.y * in_strides[ndim * " << i << " + ndim - 2];\n";
+    }
+  }
+  if (!nc_inputs.empty() && (ndim > 3 || dynamic_dims)) {
+    os << "  uint zpos = pos.z;\n";
+    if (dynamic_dims) {
+      os << "  for (int d = ndim - 3; d >= 0; --d) {\n";
+    } else {
+      os << "  for (int d = " << ndim - 3 << "; d >= 0; --d) {\n";
+    }
+    os << "    uint l = zpos % output_shape[d];\n";
+    for (int i = 0; i < nc_inputs.size(); ++i) {
+      auto& xname = namer.get_name(nc_inputs[i]);
+      os << "    index_" << xname << " += ";
+      if (dynamic_dims) {
+        os << "l * in_strides[" << i << " * ndim + d];\n";
+      } else {
+        os << "l * in_strides[" << i * ndim << " + d];\n";
+      }
+    }
+    os << "    zpos /= output_shape[d];\n  }\n";
+  }
+
+  // Open per-thread loop
+  if (work_per_thread > 1) {
+    os << "  for (int i = 0; i < N && (int(N * pos.x) + i) < xshape; ++i) {\n";
+  }
+
+  // Read non-contiguous inputs into tmps
+  for (int i = 0; i < nc_inputs.size(); ++i) {
+    auto& x = nc_inputs[i];
+    auto& xname = namer.get_name(x);
+    os << "  " << get_type_string(x.dtype()) << " tmp_" << xname << " = "
+       << xname << "[index_" << xname << "];\n";
   }
 
   // Actually write the computation
@@ -161,25 +189,40 @@ inline void build_kernel(
        << " = ";
     if (is_static_cast(x.primitive())) {
       os << "static_cast<" << get_type_string(x.dtype()) << ">(tmp_"
-         << namer.get_name(x.inputs()[0]) << ");" << std::endl;
+         << namer.get_name(x.inputs()[0]) << ");\n";
     } else {
       x.primitive().print(os);
       os << "()(";
       for (int i = 0; i < x.inputs().size() - 1; i++) {
         os << "tmp_" << namer.get_name(x.inputs()[i]) << ", ";
       }
-      os << "tmp_" << namer.get_name(x.inputs().back()) << ");" << std::endl;
+      os << "tmp_" << namer.get_name(x.inputs().back()) << ");\n";
     }
   }
 
   // Write the outputs from tmps
   for (auto& x : outputs) {
     os << "  " << namer.get_name(x) << "[index] = tmp_" << namer.get_name(x)
-       << ";" << std::endl;
+       << ";\n";
+  }
+  // Increment indices and close per thread loop
+  if (work_per_thread > 1) {
+    for (int i = 0; i < nc_inputs.size(); ++i) {
+      auto& x = nc_inputs[i];
+      auto& xname = namer.get_name(x);
+      if (!dynamic_dims) {
+        os << "  index_" << xname << " += "
+           << "in_strides[" << i * ndim + ndim - 1 << "];\n";
+      } else {
+        os << "  index_" << xname << " += "
+           << "in_strides[" << i << " * ndim + ndim - 1];\n";
+      }
+    }
+    os << "  index++;\n  }\n";
   }
 
   // Finish the kernel
-  os << "}" << std::endl;
+  os << "}\n";
 
   if (cnt > 31) {
     std::ostringstream msg;
@@ -202,10 +245,7 @@ void Compiled::eval_gpu(
   // Get the kernel if someone else built it already
   auto& s = stream();
   auto& d = metal::device(s.device);
-  auto lib = d.get_library(kernel_lib_);
-
-  // If not we have to build it ourselves
-  if (lib == nullptr) {
+  auto lib = d.get_library(kernel_lib_, [&]() {
     std::ostringstream kernel;
     kernel << metal::utils() << metal::unary_ops() << metal::binary_ops()
            << metal::ternary_ops();
@@ -240,7 +280,9 @@ void Compiled::eval_gpu(
           constant_ids_,
           /* contiguous = */ false,
           /* ndim = */ i,
-          /* dynamic_dims = */ false);
+          /* dynamic_dims = */ false,
+          /* use_big_index = */ false,
+          /* work_per_thread = */ i > 3 ? WORK_PER_THREAD : 1);
     }
     build_kernel(
         kernel,
@@ -251,10 +293,11 @@ void Compiled::eval_gpu(
         constant_ids_,
         /* contiguous = */ false,
         /* ndim = */ 0,
-        /* dynamic_dims = */ true);
-
-    lib = d.get_library(kernel_lib_, kernel.str());
-  }
+        /* dynamic_dims = */ true,
+        /* use_big_index = */ false,
+        /* work_per_thread = */ WORK_PER_THREAD);
+    return kernel.str();
+  });
 
   // Figure out which kernel we are using
   auto& output_shape = outputs[0].shape();
@@ -388,6 +431,8 @@ void Compiled::eval_gpu(
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
     size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
     size_t rest = outputs[0].size() / (dim0 * dim1);
+    int work_per_thread = ndim > 3 ? WORK_PER_THREAD : 1;
+    dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::binary] Must use 1024 sized block");

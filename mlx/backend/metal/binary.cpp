@@ -19,14 +19,13 @@
 
 namespace mlx::core {
 
-constexpr int MAX_BINARY_SPECIALIZED_DIMS = 3;
-
 std::string get_kernel_name(
     BinaryOpType bopt,
     const std::string& op,
     const array& a,
     bool use_2d,
-    int ndim) {
+    int ndim,
+    int work_per_thread) {
   std::ostringstream kname;
   switch (bopt) {
     case BinaryOpType::ScalarScalar:
@@ -43,14 +42,17 @@ std::string get_kernel_name(
       break;
     case BinaryOpType::General:
       kname << "g";
-      if (ndim <= MAX_BINARY_SPECIALIZED_DIMS) {
+      if (ndim <= 3) {
         kname << ndim;
       } else {
         kname << "n";
+        if (work_per_thread > 1) {
+          kname << work_per_thread;
+        }
       }
       break;
   }
-  kname << op << type_to_name(a);
+  kname << "_" << op << type_to_name(a);
   return kname.str();
 }
 
@@ -71,11 +73,7 @@ void binary_op_gpu_inplace(
   // Try to collapse contiguous dims
   auto maybe_collapse = [bopt, &a, &b, &out]() {
     if (bopt == BinaryOpType::General) {
-      // The size cap here should ideally be `UINT32_MAX` but we are
-      // limitied by the shape being an int.
-      auto [shape, strides] = collapse_contiguous_dims(
-          {a, b, out},
-          /* size_cap = */ INT32_MAX);
+      auto [shape, strides] = collapse_contiguous_dims(a, b, out);
       return std::make_tuple(shape, strides[0], strides[1], strides[2]);
     } else {
       std::vector<size_t> e;
@@ -85,7 +83,10 @@ void binary_op_gpu_inplace(
   auto [shape, strides_a, strides_b, strides_out] = maybe_collapse();
 
   bool use_2d = out.data_size() > UINT32_MAX;
-  std::string kernel_name = get_kernel_name(bopt, op, a, use_2d, shape.size());
+  auto ndim = shape.size();
+  int work_per_thread = (bopt == BinaryOpType::General) ? 4 : 1;
+  std::string kernel_name =
+      get_kernel_name(bopt, op, a, use_2d, shape.size(), work_per_thread);
   auto& d = metal::device(s.device);
 
   auto kernel = outputs.size() == 2
@@ -110,7 +111,11 @@ void binary_op_gpu_inplace(
   }
 
   if (bopt == BinaryOpType::General) {
-    auto ndim = shape.size();
+    // Launch up to 3D grid of threads
+    size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
+    size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
+    size_t rest = out.size() / (dim0 * dim1);
+
     if (ndim > 3) {
       compute_encoder->setBytes(shape.data(), ndim * sizeof(int), arg_idx++);
       compute_encoder->setBytes(
@@ -118,6 +123,7 @@ void binary_op_gpu_inplace(
       compute_encoder->setBytes(
           strides_b.data(), ndim * sizeof(size_t), arg_idx++);
       compute_encoder->setBytes(&ndim, sizeof(int), arg_idx++);
+      dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     } else {
       // The shape is implicit in the grid for <= 3D
       compute_encoder->setBytes(
@@ -126,10 +132,6 @@ void binary_op_gpu_inplace(
           strides_b.data(), ndim * sizeof(size_t), arg_idx++);
     }
 
-    // Launch up to 3D grid of threads
-    size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
-    size_t dim1 = ndim > 1 ? shape[ndim - 2] : 1;
-    size_t rest = out.size() / (dim0 * dim1);
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::binary] Must use 1024 sized block");

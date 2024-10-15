@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <functional>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -114,29 +115,9 @@ class Device {
     }
   }
 
-  MTL::Library* get_library(const std::string& name);
-
   MTL::Library* get_library(
       const std::string& name,
-      const std::string& source_string,
-      bool cache = true);
-
-  MTL::Library* get_library(
-      const std::string& name,
-      const MTL::StitchedLibraryDescriptor* desc,
-      bool cache = true);
-
-  MTL::Function* get_function(
-      const std::string& base_name,
-      MTL::Library* mtl_lib,
-      const std::string& specialized_name = "",
-      const MTLFCList& func_consts = {});
-
-  MTL::Function* get_function(
-      const std::string& base_name,
-      const std::string& lib_name = "mlx",
-      const std::string& specialized_name = "",
-      const MTLFCList& func_consts = {});
+      const std::function<std::string(void)>& builder);
 
   MTL::ComputePipelineState* get_kernel(
       const std::string& base_name,
@@ -158,8 +139,8 @@ class Device {
  private:
   MTL::Library* get_library_cache_(const std::string& name);
 
-  MTL::Library* get_library_(const std::string& source_string);
-  MTL::Library* get_library_(const MTL::StitchedLibraryDescriptor* desc);
+  MTL::Library* get_library_(const std::string& name);
+  MTL::Library* build_library_(const std::string& source_string);
 
   MTL::Function* get_function_(const std::string& name, MTL::Library* mtl_lib);
 
@@ -181,13 +162,23 @@ class Device {
       const MTL::Function* mtl_function,
       const MTL::LinkedFunctions* linked_functions);
 
+  MTL::ComputePipelineState* get_kernel_(
+      const std::string& base_name,
+      MTL::Library* mtl_lib,
+      const std::string& hash_name,
+      const MTLFCList& func_consts = {},
+      const std::vector<MTL::Function*>& linked_functions = {});
+
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
   std::unordered_map<int32_t, std::unique_ptr<CommandEncoder>> encoder_map_;
+
+  std::shared_mutex kernel_mtx_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
+
+  std::shared_mutex library_mtx_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
-  std::mutex mtx_;
 };
 
 Device& device(mlx::core::Device);

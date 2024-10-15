@@ -39,17 +39,15 @@ void CustomKernel::eval_gpu(
 
   auto& d = metal::device(s.device);
   const auto& lib_name = name_;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
-    lib = d.get_library(lib_name, metal::utils() + source_);
-  }
+  auto lib =
+      d.get_library(lib_name, [this] { return metal::utils() + source_; });
   auto kernel = d.get_kernel(name_, lib);
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   int index = 0;
   for (int i = 0; i < checked_inputs.size(); i++) {
     const array& in = checked_inputs[i];
-    auto shape_info = shape_infos_[i];
+    auto& shape_info = shape_infos_[i];
     compute_encoder.set_input_array(in, index);
     index++;
     if (in.ndim() > 0) {
@@ -68,7 +66,7 @@ void CustomKernel::eval_gpu(
       }
     }
   }
-  for (array out : outputs) {
+  for (auto& out : outputs) {
     compute_encoder.set_output_array(out, index);
     index++;
   }
@@ -81,7 +79,9 @@ void CustomKernel::eval_gpu(
 
   if (!copies.empty()) {
     d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
+        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+          copies.clear();
+        });
   }
 }
 

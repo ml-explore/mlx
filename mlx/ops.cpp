@@ -504,7 +504,20 @@ array squeeze(
       shape.push_back(a.shape(i));
     }
   }
-  return reshape(a, shape, s);
+  return reshape(a, std::move(shape), s);
+}
+
+array squeeze(const array& a, int axis, StreamOrDevice s /* = {} */) {
+  int ax = axis < 0 ? axis + a.ndim() : axis;
+  if (ax < 0 || ax >= a.ndim()) {
+    std::ostringstream msg;
+    msg << "[squeeze] Invalid axis " << axis << " for array with " << a.ndim()
+        << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+  auto shape = a.shape();
+  shape.erase(shape.begin() + ax);
+  return reshape(a, std::move(shape), s);
 }
 
 array squeeze(const array& a, StreamOrDevice s /* = {} */) {
@@ -657,10 +670,15 @@ array slice(
 
 array slice(
     const array& a,
-    const std::vector<int>& start,
-    const std::vector<int>& stop,
+    std::vector<int> start,
+    std::vector<int> stop,
     StreamOrDevice s /* = {} */) {
-  return slice(a, start, stop, std::vector<int>(a.ndim(), 1), to_stream(s));
+  return slice(
+      a,
+      std::move(start),
+      std::move(stop),
+      std::vector<int>(a.ndim(), 1),
+      to_stream(s));
 }
 
 /** Update a slice from the source array */
@@ -2715,11 +2733,41 @@ array take(
   // Squeeze the axis we take over
   std::vector<int> out_shape = out.shape();
   out_shape.erase(out_shape.begin() + indices.ndim() + axis);
-  return reshape(out, out_shape, s);
+  return reshape(out, std::move(out_shape), s);
 }
 
 array take(const array& a, const array& indices, StreamOrDevice s /* = {} */) {
   return take(reshape(a, {-1}, s), indices, 0, s);
+}
+
+array take(const array& a, int index, int axis, StreamOrDevice s /* = {} */) {
+  // Check for valid axis
+  if (axis + static_cast<int>(a.ndim()) < 0 ||
+      axis >= static_cast<int>(a.ndim())) {
+    std::ostringstream msg;
+    msg << "[take] Received invalid axis " << axis << " for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Check for valid take
+  if (a.size() == 0) {
+    throw std::invalid_argument(
+        "[take] Cannot do a non-empty take from an array with zero elements.");
+  }
+
+  // Handle negative axis
+  axis = axis < 0 ? a.ndim() + axis : axis;
+
+  std::vector<int> starts(a.ndim(), 0);
+  std::vector<int> stops = a.shape();
+  starts[axis] = index;
+  stops[axis] = index + 1;
+  return squeeze(slice(a, std::move(starts), std::move(stops), s), axis, s);
+}
+
+array take(const array& a, int index, StreamOrDevice s /* = {} */) {
+  return take(reshape(a, {-1}, s), index, 0, s);
 }
 
 array take_along_axis(
@@ -2764,7 +2812,54 @@ array take_along_axis(
   // Squeeze out the slice shape
   std::vector<int> out_shape(
       out.shape().begin(), out.shape().begin() + a.ndim());
-  return reshape(out, out_shape, s);
+  return reshape(out, std::move(out_shape), s);
+}
+
+array put_along_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  if (axis + a.ndim() < 0 || axis >= static_cast<int>(a.ndim())) {
+    std::ostringstream msg;
+    msg << "[put_along_axis] Received invalid axis " << " for array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (indices.ndim() != a.ndim()) {
+    std::ostringstream msg;
+    msg << "[put_along_axis] Indices of dimension " << indices.ndim()
+        << " does not match array of dimension " << a.ndim() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  // Allow negative axis
+  axis = axis < 0 ? a.ndim() + axis : axis;
+
+  std::vector<array> nd_indices;
+  std::vector<int> index_shape(a.ndim(), 1);
+  for (int i = 0; i < a.ndim(); ++i) {
+    if (i == axis) {
+      nd_indices.push_back(indices);
+    } else {
+      // Reshape so they can be broadcast
+      index_shape[i] = a.shape(i);
+      nd_indices.push_back(reshape(arange(a.shape(i), s), index_shape, s));
+      index_shape[i] = 1;
+    }
+  }
+
+  auto update = astype(broadcast_to(values, indices.shape(), s), a.dtype(), s);
+  {
+    auto update_shape = update.shape();
+    update_shape.resize(update_shape.size() + a.ndim(), 1);
+    update = reshape(update, std::move(update_shape), s);
+  }
+  std::vector<int> dims(a.ndim());
+  std::iota(dims.begin(), dims.end(), 0);
+  return scatter(a, nd_indices, update, dims, s);
 }
 
 /** Scatter updates to given indices */
@@ -2853,7 +2948,6 @@ array scatter(
   }
 
   inputs.insert(inputs.begin(), a);
-  // TODO promote or cast?
   inputs.push_back(astype(updates, a.dtype(), s));
 
   return array(
@@ -4471,6 +4565,96 @@ array view(const array& a, const Dtype& dtype, StreamOrDevice s /* = {} */) {
   }
   return array(
       out_shape, dtype, std::make_shared<View>(to_stream(s), dtype), {a});
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  if (axes.empty()) {
+    return a;
+  }
+
+  if (shift.size() < axes.size()) {
+    std::ostringstream msg;
+    msg << "[roll] At least one shift value per axis is required, "
+        << shift.size() << " provided for " << axes.size() << " axes.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  std::vector<array> parts;
+  array result = a;
+  for (int i = 0; i < axes.size(); i++) {
+    int ax = axes[i];
+    if (ax < 0) {
+      ax += a.ndim();
+    }
+    if (ax < 0 || ax >= a.ndim()) {
+      std::ostringstream msg;
+      msg << "[roll] Invalid axis " << axes[i] << " for array with " << a.ndim()
+          << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+
+    int sh = shift[i];
+    int split_index =
+        (sh < 0) ? (-sh) % a.shape(ax) : a.shape(ax) - sh % a.shape(ax);
+
+    parts = split(result, std::vector<int>{split_index}, ax, s);
+    std::swap(parts[0], parts[1]);
+    result = concatenate(parts, ax, s);
+  }
+
+  return result;
+}
+
+array roll(const array& a, int shift, StreamOrDevice s /* = {} */) {
+  auto shape = a.shape();
+  return reshape(
+      roll(
+          reshape(a, std::vector<int>{-1}, s),
+          std::vector<int>{shift},
+          std::vector<int>{0},
+          s),
+      std::move(shape),
+      s);
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, total_shift, s);
+}
+
+array roll(const array& a, int shift, int axis, StreamOrDevice s /* = {} */) {
+  return roll(a, std::vector<int>{shift}, std::vector<int>{axis}, s);
+}
+
+array roll(
+    const array& a,
+    int shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s /* = {} */) {
+  std::vector<int> shifts(axes.size(), shift);
+  return roll(a, shifts, axes, s);
+}
+
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    int axis,
+    StreamOrDevice s /* = {} */) {
+  int total_shift = 0;
+  for (auto& s : shift) {
+    total_shift += s;
+  }
+  return roll(a, std::vector<int>{total_shift}, std::vector<int>{axis}, s);
 }
 
 } // namespace mlx::core
