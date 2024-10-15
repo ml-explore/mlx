@@ -238,6 +238,13 @@ struct Floor {
   };
 };
 
+struct Imag {
+  template <typename T>
+  T operator()(T x) {
+    return x.imag;
+  };
+};
+
 struct Log {
   template <typename T>
   T operator()(T x) {
@@ -277,6 +284,13 @@ struct Negative {
   template <typename T>
   T operator()(T x) {
     return -x;
+  };
+};
+
+struct Real {
+  template <typename T>
+  T operator()(T x) {
+    return x.real;
   };
 };
 

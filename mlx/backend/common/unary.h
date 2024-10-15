@@ -24,15 +24,15 @@ void set_unary_output_data(const array& in, array& out) {
   }
 }
 
-template <typename T, typename Op>
-void unary_op(const T* a, T* out, Op op, size_t shape, size_t stride) {
+template <typename T, typename U = T, typename Op>
+void unary_op(const T* a, U* out, Op op, size_t shape, size_t stride) {
   for (size_t i = 0; i < shape; i += 1) {
     out[i] = op(*a);
     a += stride;
   }
 }
 
-template <typename T, typename Op>
+template <typename T, typename U = T, typename Op>
 void unary_op(const array& a, array& out, Op op) {
   const T* a_ptr = a.data<T>();
   if (a.flags().contiguous) {

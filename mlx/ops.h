@@ -1480,6 +1480,12 @@ array roll(
     const std::vector<int>& axes,
     StreamOrDevice s = {});
 
+/* The real part of a complex array. */
+array real(const array& a, StreamOrDevice s = {});
+
+/* The imaginary part of a complex array. */
+array imag(const array& a, StreamOrDevice s = {});
+
 /** @} */
 
 } // namespace mlx::core

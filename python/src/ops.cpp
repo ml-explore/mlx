@@ -4842,4 +4842,42 @@ void init_ops(nb::module_& m) {
           axis (int or tuple(int), optional): The axis or axes along which to
             roll the elements.
       )pbdoc");
+  m.def(
+      "real",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::real(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def real(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Returns the real part of a complex array.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The real part of ``a``.
+      )pbdoc");
+  m.def(
+      "imag",
+      [](const ScalarOrArray& a, StreamOrDevice s) {
+        return mlx::core::imag(to_array(a), s);
+      },
+      nb::arg(),
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def imag(a: array, /, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Returns the imaginary part of a complex array.
+
+        Args:
+            a (array): Input array.
+
+        Returns:
+            array: The imaginary part of ``a``.
+      )pbdoc");
 }

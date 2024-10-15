@@ -1106,6 +1106,20 @@ class Hadamard : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Imag : public UnaryPrimitive {
+ public:
+  explicit Imag(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Imag)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
 class Less : public UnaryPrimitive {
  public:
   explicit Less(Stream stream) : UnaryPrimitive(stream) {}
@@ -1559,6 +1573,20 @@ class RandomBits : public UnaryPrimitive {
   int width_;
 
   void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Real : public UnaryPrimitive {
+ public:
+  explicit Real(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Real)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
 class Reshape : public UnaryPrimitive {

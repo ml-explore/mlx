@@ -2680,6 +2680,19 @@ class TestOps(mlx_tests.MLXTestCase):
             y2 = mx.roll(x, s, a)
             self.assertTrue(mx.array_equal(y1, y2).item())
 
+    def test_real_imag(self):
+        x = mx.random.uniform(shape=(4, 4))
+        out = mx.real(x)
+        self.assertTrue(mx.array_equal(x, out))
+
+        out = mx.imag(x)
+        self.assertTrue(mx.array_equal(mx.zeros_like(x), out))
+
+        y = mx.random.uniform(shape=(4, 4))
+        z = x + 1j * y
+        self.assertTrue(mx.array_equal(mx.real(z), x))
+        self.assertTrue(mx.array_equal(mx.imag(z), y))
+
 
 if __name__ == "__main__":
     unittest.main()

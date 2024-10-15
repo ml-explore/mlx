@@ -273,6 +273,10 @@ void Full::eval(const std::vector<array>& inputs, array& out) {
   copy(in, out, ctype);
 }
 
+void Imag::eval_cpu(const std::vector<array>& inputs, array& out) {
+  unary_op<complex64_t, float>(inputs[0], out, detail::Imag());
+}
+
 void Log::eval(const std::vector<array>& inputs, array& out) {
   assert(inputs.size() == 1);
   const auto& in = inputs[0];
@@ -396,6 +400,10 @@ void RandomBits::eval(const std::vector<array>& inputs, array& out) {
       ptr[half_size] = random::threefry2x32_hash(key, count).first;
     }
   }
+}
+
+void Real::eval_cpu(const std::vector<array>& inputs, array& out) {
+  unary_op<complex64_t, float>(inputs[0], out, detail::Real());
 }
 
 void Reshape::eval(const std::vector<array>& inputs, array& out) {

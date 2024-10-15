@@ -44,8 +44,8 @@ void unary_op_gpu_inplace(
   } else {
     kernel_name = (work_per_thread == 4 ? "gn4" : "g");
   }
-  kernel_name += "_" + op + type_to_name(out);
-  auto kernel = get_unary_kernel(d, kernel_name, out.dtype(), op);
+  kernel_name += "_" + op + type_to_name(in) + type_to_name(out);
+  auto kernel = get_unary_kernel(d, kernel_name, in.dtype(), out.dtype(), op);
 
   MTL::Size grid_dims = use_2d ? get_2d_grid_dims(in.shape(), in.strides())
                                : MTL::Size(nthreads, 1, 1);
@@ -124,11 +124,13 @@ UNARY_GPU(Erf)
 UNARY_GPU(ErfInv)
 UNARY_GPU(Exp)
 UNARY_GPU(Expm1)
+UNARY_GPU(Imag)
 UNARY_GPU(Log1p)
 UNARY_GPU(LogicalNot)
 UNARY_GPU(Floor)
 UNARY_GPU(Ceil)
 UNARY_GPU(Negative)
+UNARY_GPU(Real)
 UNARY_GPU(Sigmoid)
 UNARY_GPU(Sign)
 UNARY_GPU(Sin)

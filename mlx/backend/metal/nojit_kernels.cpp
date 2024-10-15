@@ -16,6 +16,7 @@ MTL::ComputePipelineState* get_unary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     Dtype,
+    Dtype,
     const std::string) {
   return d.get_kernel(kernel_name);
 }
