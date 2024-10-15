@@ -44,7 +44,7 @@ jobs:
           command: |
             source env/bin/activate
             cd docs && doxygen && make html O=-W
-      - unless:
+      - when:
           condition: << parameters.upload-docs >>
           steps:
             - run:
@@ -52,13 +52,18 @@ jobs:
                command: |
                  source env/bin/activate
                  cd docs && doxygen && make html O=-W
-      - when:
+      - unless:
           condition: << parameters.upload-docs >>
           steps:
+            - add_ssh_keys:
+                fingerprints:
+                  - "SHA256:OhcVVMovbT0pkgMeiVRyxMnjV9R2t+hKBsNcuxq9h+0"
             - run:
                name: Upload documentation
                command: |
                  source env/bin/activate
+                 git config user.email "mlx@group.apple.com"
+                 git config user.name "CircleCI Docs"
                  git checkout gh-pages
                  git rebase main
                  git rm -f build/html
