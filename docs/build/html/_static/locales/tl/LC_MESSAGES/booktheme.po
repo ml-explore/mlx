@@ -8,59 +8,59 @@ msgstr ""
 "Language: tl\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-msgid "Theme by the"
-msgstr "Tema ng"
-
-msgid "Open an issue"
-msgstr "Magbukas ng isyu"
-
-msgid "Download notebook file"
-msgstr "Mag-download ng file ng notebook"
-
-msgid "Sphinx Book Theme"
-msgstr "Tema ng Sphinx Book"
-
-msgid "Edit this page"
-msgstr "I-edit ang pahinang ito"
-
-msgid "By"
-msgstr "Ni"
-
-msgid "Copyright"
-msgstr "Copyright"
-
-msgid "Source repository"
-msgstr "Pinagmulan ng imbakan"
-
-msgid "previous page"
-msgstr "Nakaraang pahina"
-
-msgid "next page"
-msgstr "Susunod na pahina"
-
-msgid "Toggle navigation"
-msgstr "I-toggle ang pag-navigate"
-
-msgid "suggest edit"
-msgstr "iminumungkahi i-edit"
-
-msgid "open issue"
-msgstr "bukas na isyu"
-
-msgid "Launch"
-msgstr "Ilunsad"
-
 msgid "Print to PDF"
 msgstr "I-print sa PDF"
 
-msgid "By the"
-msgstr "Sa pamamagitan ng"
-
-msgid "Last updated on"
-msgstr "Huling na-update noong"
+msgid "Theme by the"
+msgstr "Tema ng"
 
 msgid "Download source file"
 msgstr "Mag-download ng file ng pinagmulan"
 
+msgid "open issue"
+msgstr "bukas na isyu"
+
+msgid "previous page"
+msgstr "Nakaraang pahina"
+
+msgid "Download notebook file"
+msgstr "Mag-download ng file ng notebook"
+
+msgid "Copyright"
+msgstr "Copyright"
+
 msgid "Download this page"
 msgstr "I-download ang pahinang ito"
+
+msgid "Source repository"
+msgstr "Pinagmulan ng imbakan"
+
+msgid "By"
+msgstr "Ni"
+
+msgid "Last updated on"
+msgstr "Huling na-update noong"
+
+msgid "Toggle navigation"
+msgstr "I-toggle ang pag-navigate"
+
+msgid "Sphinx Book Theme"
+msgstr "Tema ng Sphinx Book"
+
+msgid "suggest edit"
+msgstr "iminumungkahi i-edit"
+
+msgid "Open an issue"
+msgstr "Magbukas ng isyu"
+
+msgid "Launch"
+msgstr "Ilunsad"
+
+msgid "Edit this page"
+msgstr "I-edit ang pahinang ito"
+
+msgid "By the"
+msgstr "Sa pamamagitan ng"
+
+msgid "next page"
+msgstr "Susunod na pahina"
