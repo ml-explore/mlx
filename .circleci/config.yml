@@ -45,7 +45,8 @@ jobs:
             source env/bin/activate
             cd docs && doxygen && make html O=-W
       - when:
-          not: << parameters.upload-docs >>
+          condition:
+            not: << parameters.upload-docs >>
           steps:
             - run:
                name: Build documentation
