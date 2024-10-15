@@ -18,6 +18,37 @@ parameters:
     default: false
 
 jobs:
+  build_documentation:
+    parameters:
+      upload-docs:
+        type: boolean
+        default: false
+    macos:
+      xcode: "15.2.0"
+    resource_class: macos.m1.medium.gen1
+    steps:
+      - checkout
+      - run:
+          name: Install
+          command: |
+            brew install python@3.9
+            python3.9 -m venv env
+            source env/bin/activate
+            pip install --upgrade pip
+            pip install --upgrade cmake
+            pip install -r docs/requirements.txt
+            CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install . -v
+      - run:
+          name: Build documentation
+          command: |
+            source env/bin/activate
+            cd docs
+            doxygen && make html
+      - when:
+          condition: << parameters.upload-docs >>
+          steps:
+            - run: echo "upload"
+
   linux_build_and_test:
     docker:
       - image: cimg/python:3.9
@@ -281,6 +312,7 @@ workflows:
             parameters:
               xcode_version: ["15.0.0", "15.2.0", "16.0.0"]
       - linux_build_and_test
+      - build_documentation 
 
   build_pypi_release:
     when:
