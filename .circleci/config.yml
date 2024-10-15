@@ -66,8 +66,9 @@ jobs:
                  git config user.name "CircleCI Docs"
                  git checkout gh-pages
                  git rebase main
+                 cd docs
                  git rm -f build/html
-                 cd docs && doxygen && make html O=-W
+                 doxygen && make html O=-W
                  git add -f build/html
                  git commit -m "rebase"
                  git push -f origin gh-pages
