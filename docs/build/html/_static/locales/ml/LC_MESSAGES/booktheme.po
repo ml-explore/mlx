@@ -8,59 +8,59 @@ msgstr ""
 "Language: ml\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "PDF- ലേക്ക് പ്രിന്റുചെയ്യുക"
+
 msgid "Theme by the"
 msgstr "പ്രമേയം"
 
-msgid "Open an issue"
-msgstr "ഒരു പ്രശ്നം തുറക്കുക"
-
-msgid "Download notebook file"
-msgstr "നോട്ട്ബുക്ക് ഫയൽ ഡൺലോഡ് ചെയ്യുക"
-
-msgid "Sphinx Book Theme"
-msgstr "സ്ഫിങ്ക്സ് പുസ്തക തീം"
-
-msgid "Edit this page"
-msgstr "ഈ പേജ് എഡിറ്റുചെയ്യുക"
-
-msgid "By"
-msgstr "എഴുതിയത്"
-
-msgid "Copyright"
-msgstr "പകർപ്പവകാശം"
-
-msgid "Source repository"
-msgstr "ഉറവിട ശേഖരം"
-
-msgid "previous page"
-msgstr "മുൻപത്തെ താൾ"
-
-msgid "next page"
-msgstr "അടുത്ത പേജ്"
-
-msgid "Toggle navigation"
-msgstr "നാവിഗേഷൻ ടോഗിൾ ചെയ്യുക"
-
-msgid "suggest edit"
-msgstr "എഡിറ്റുചെയ്യാൻ നിർദ്ദേശിക്കുക"
+msgid "Download source file"
+msgstr "ഉറവിട ഫയൽ ഡൗൺലോഡുചെയ്യുക"
 
 msgid "open issue"
 msgstr "തുറന്ന പ്രശ്നം"
 
-msgid "Launch"
-msgstr "സമാരംഭിക്കുക"
+msgid "previous page"
+msgstr "മുൻപത്തെ താൾ"
 
-msgid "Print to PDF"
-msgstr "PDF- ലേക്ക് പ്രിന്റുചെയ്യുക"
+msgid "Download notebook file"
+msgstr "നോട്ട്ബുക്ക് ഫയൽ ഡൺലോഡ് ചെയ്യുക"
 
-msgid "By the"
+msgid "Copyright"
+msgstr "പകർപ്പവകാശം"
+
+msgid "Download this page"
+msgstr "ഈ പേജ് ഡൗൺലോഡുചെയ്യുക"
+
+msgid "Source repository"
+msgstr "ഉറവിട ശേഖരം"
+
+msgid "By"
 msgstr "എഴുതിയത്"
 
 msgid "Last updated on"
 msgstr "അവസാനം അപ്‌ഡേറ്റുചെയ്‌തത്"
 
-msgid "Download source file"
-msgstr "ഉറവിട ഫയൽ ഡൗൺലോഡുചെയ്യുക"
+msgid "Toggle navigation"
+msgstr "നാവിഗേഷൻ ടോഗിൾ ചെയ്യുക"
 
-msgid "Download this page"
-msgstr "ഈ പേജ് ഡൗൺലോഡുചെയ്യുക"
+msgid "Sphinx Book Theme"
+msgstr "സ്ഫിങ്ക്സ് പുസ്തക തീം"
+
+msgid "suggest edit"
+msgstr "എഡിറ്റുചെയ്യാൻ നിർദ്ദേശിക്കുക"
+
+msgid "Open an issue"
+msgstr "ഒരു പ്രശ്നം തുറക്കുക"
+
+msgid "Launch"
+msgstr "സമാരംഭിക്കുക"
+
+msgid "Edit this page"
+msgstr "ഈ പേജ് എഡിറ്റുചെയ്യുക"
+
+msgid "By the"
+msgstr "എഴുതിയത്"
+
+msgid "next page"
+msgstr "അടുത്ത പേജ്"

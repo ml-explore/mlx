@@ -8,59 +8,59 @@ msgstr ""
 "Language: te\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "PDF కి ముద్రించండి"
+
 msgid "Theme by the"
 msgstr "ద్వారా థీమ్"
 
-msgid "Open an issue"
-msgstr "సమస్యను తెరవండి"
-
-msgid "Download notebook file"
-msgstr "నోట్బుక్ ఫైల్ను డౌన్లోడ్ చేయండి"
-
-msgid "Sphinx Book Theme"
-msgstr "సింహిక పుస్తక థీమ్"
-
-msgid "Edit this page"
-msgstr "ఈ పేజీని సవరించండి"
-
-msgid "By"
-msgstr "ద్వారా"
-
-msgid "Copyright"
-msgstr "కాపీరైట్"
-
-msgid "Source repository"
-msgstr "మూల రిపోజిటరీ"
-
-msgid "previous page"
-msgstr "ముందు పేజి"
-
-msgid "next page"
-msgstr "తరువాతి పేజీ"
-
-msgid "Toggle navigation"
-msgstr "నావిగేషన్‌ను టోగుల్ చేయండి"
-
-msgid "suggest edit"
-msgstr "సవరించమని సూచించండి"
+msgid "Download source file"
+msgstr "మూల ఫైల్‌ను డౌన్‌లోడ్ చేయండి"
 
 msgid "open issue"
 msgstr "ఓపెన్ ఇష్యూ"
 
-msgid "Launch"
-msgstr "ప్రారంభించండి"
+msgid "previous page"
+msgstr "ముందు పేజి"
 
-msgid "Print to PDF"
-msgstr "PDF కి ముద్రించండి"
+msgid "Download notebook file"
+msgstr "నోట్బుక్ ఫైల్ను డౌన్లోడ్ చేయండి"
 
-msgid "By the"
+msgid "Copyright"
+msgstr "కాపీరైట్"
+
+msgid "Download this page"
+msgstr "ఈ పేజీని డౌన్‌లోడ్ చేయండి"
+
+msgid "Source repository"
+msgstr "మూల రిపోజిటరీ"
+
+msgid "By"
 msgstr "ద్వారా"
 
 msgid "Last updated on"
 msgstr "చివరిగా నవీకరించబడింది"
 
-msgid "Download source file"
-msgstr "మూల ఫైల్‌ను డౌన్‌లోడ్ చేయండి"
+msgid "Toggle navigation"
+msgstr "నావిగేషన్‌ను టోగుల్ చేయండి"
 
-msgid "Download this page"
-msgstr "ఈ పేజీని డౌన్‌లోడ్ చేయండి"
+msgid "Sphinx Book Theme"
+msgstr "సింహిక పుస్తక థీమ్"
+
+msgid "suggest edit"
+msgstr "సవరించమని సూచించండి"
+
+msgid "Open an issue"
+msgstr "సమస్యను తెరవండి"
+
+msgid "Launch"
+msgstr "ప్రారంభించండి"
+
+msgid "Edit this page"
+msgstr "ఈ పేజీని సవరించండి"
+
+msgid "By the"
+msgstr "ద్వారా"
+
+msgid "next page"
+msgstr "తరువాతి పేజీ"

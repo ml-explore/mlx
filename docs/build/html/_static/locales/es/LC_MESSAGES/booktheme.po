@@ -8,20 +8,59 @@ msgstr ""
 "Language: es\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "Imprimir en PDF"
+
 msgid "Theme by the"
 msgstr "Tema por el"
 
-msgid "Open an issue"
-msgstr "Abrir un problema"
+msgid "Download source file"
+msgstr "Descargar archivo fuente"
+
+msgid "open issue"
+msgstr "Tema abierto"
 
 msgid "Contents"
 msgstr "Contenido"
 
+msgid "previous page"
+msgstr "pagina anterior"
+
 msgid "Download notebook file"
 msgstr "Descargar archivo de cuaderno"
 
+msgid "Copyright"
+msgstr "Derechos de autor"
+
+msgid "Download this page"
+msgstr "Descarga esta pagina"
+
+msgid "Source repository"
+msgstr "Repositorio de origen"
+
+msgid "By"
+msgstr "Por"
+
+msgid "repository"
+msgstr "repositorio"
+
+msgid "Last updated on"
+msgstr "Ultima actualización en"
+
+msgid "Toggle navigation"
+msgstr "Navegación de palanca"
+
 msgid "Sphinx Book Theme"
 msgstr "Tema del libro de la esfinge"
+
+msgid "suggest edit"
+msgstr "sugerir editar"
+
+msgid "Open an issue"
+msgstr "Abrir un problema"
+
+msgid "Launch"
+msgstr "Lanzamiento"
 
 msgid "Fullscreen mode"
 msgstr "Modo de pantalla completa"
@@ -29,47 +68,8 @@ msgstr "Modo de pantalla completa"
 msgid "Edit this page"
 msgstr "Edita esta página"
 
-msgid "By"
-msgstr "Por"
-
-msgid "Copyright"
-msgstr "Derechos de autor"
-
-msgid "Source repository"
-msgstr "Repositorio de origen"
-
-msgid "previous page"
-msgstr "pagina anterior"
-
-msgid "next page"
-msgstr "siguiente página"
-
-msgid "Toggle navigation"
-msgstr "Navegación de palanca"
-
-msgid "repository"
-msgstr "repositorio"
-
-msgid "suggest edit"
-msgstr "sugerir editar"
-
-msgid "open issue"
-msgstr "Tema abierto"
-
-msgid "Launch"
-msgstr "Lanzamiento"
-
-msgid "Print to PDF"
-msgstr "Imprimir en PDF"
-
 msgid "By the"
 msgstr "Por el"
 
-msgid "Last updated on"
-msgstr "Ultima actualización en"
-
-msgid "Download source file"
-msgstr "Descargar archivo fuente"
-
-msgid "Download this page"
-msgstr "Descarga esta pagina"
+msgid "next page"
+msgstr "siguiente página"
