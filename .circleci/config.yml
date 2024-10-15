@@ -356,6 +356,11 @@ workflows:
               xcode_version: ["15.0.0", "15.2.0"]
               build_env: ["PYPI_RELEASE=1"]
       - build_documentation:
+          filters:
+            tags:
+              only: /^v.*/
+            branches:
+              ignore: /.*/
           upload-docs: true
 
   prb:
