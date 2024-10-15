@@ -8,20 +8,59 @@ msgstr ""
 "Language: fr\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "Imprimer au format PDF"
+
 msgid "Theme by the"
 msgstr "Thème par le"
 
-msgid "Open an issue"
-msgstr "Ouvrez un problème"
+msgid "Download source file"
+msgstr "Télécharger le fichier source"
+
+msgid "open issue"
+msgstr "signaler un problème"
 
 msgid "Contents"
 msgstr "Contenu"
 
+msgid "previous page"
+msgstr "page précédente"
+
 msgid "Download notebook file"
 msgstr "Télécharger le fichier notebook"
 
+msgid "Copyright"
+msgstr "droits d'auteur"
+
+msgid "Download this page"
+msgstr "Téléchargez cette page"
+
+msgid "Source repository"
+msgstr "Dépôt source"
+
+msgid "By"
+msgstr "Par"
+
+msgid "repository"
+msgstr "dépôt"
+
+msgid "Last updated on"
+msgstr "Dernière mise à jour le"
+
+msgid "Toggle navigation"
+msgstr "Basculer la navigation"
+
 msgid "Sphinx Book Theme"
 msgstr "Thème du livre Sphinx"
+
+msgid "suggest edit"
+msgstr "suggestion de modification"
+
+msgid "Open an issue"
+msgstr "Ouvrez un problème"
+
+msgid "Launch"
+msgstr "lancement"
 
 msgid "Fullscreen mode"
 msgstr "Mode plein écran"
@@ -29,47 +68,8 @@ msgstr "Mode plein écran"
 msgid "Edit this page"
 msgstr "Modifier cette page"
 
-msgid "By"
-msgstr "Par"
-
-msgid "Copyright"
-msgstr "droits d'auteur"
-
-msgid "Source repository"
-msgstr "Dépôt source"
-
-msgid "previous page"
-msgstr "page précédente"
-
-msgid "next page"
-msgstr "page suivante"
-
-msgid "Toggle navigation"
-msgstr "Basculer la navigation"
-
-msgid "repository"
-msgstr "dépôt"
-
-msgid "suggest edit"
-msgstr "suggestion de modification"
-
-msgid "open issue"
-msgstr "signaler un problème"
-
-msgid "Launch"
-msgstr "lancement"
-
-msgid "Print to PDF"
-msgstr "Imprimer au format PDF"
-
 msgid "By the"
 msgstr "Par le"
 
-msgid "Last updated on"
-msgstr "Dernière mise à jour le"
-
-msgid "Download source file"
-msgstr "Télécharger le fichier source"
-
-msgid "Download this page"
-msgstr "Téléchargez cette page"
+msgid "next page"
+msgstr "page suivante"

@@ -6,7 +6,7 @@
 
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
     <title>mlx.core.linalg.qr &#8212; MLX 0.18.1 documentation</title>
   
@@ -14,32 +14,32 @@
   
   <script data-cfasync="false">
     document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
-    document.documentElement.dataset.theme = localStorage.getItem("theme") || "light";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
   </script>
   
   <!-- Loaded before other Sphinx assets -->
-  <link href="../../_static/styles/theme.css?digest=5b4479735964841361fd" rel="stylesheet" />
-<link href="../../_static/styles/bootstrap.css?digest=5b4479735964841361fd" rel="stylesheet" />
-<link href="../../_static/styles/pydata-sphinx-theme.css?digest=5b4479735964841361fd" rel="stylesheet" />
+  <link href="../../_static/styles/theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/bootstrap.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+<link href="../../_static/styles/pydata-sphinx-theme.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
 
   
-  <link href="../../_static/vendor/fontawesome/6.1.2/css/all.min.css?digest=5b4479735964841361fd" rel="stylesheet" />
-  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.1.2/webfonts/fa-solid-900.woff2" />
-<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.1.2/webfonts/fa-brands-400.woff2" />
-<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.1.2/webfonts/fa-regular-400.woff2" />
+  <link href="../../_static/vendor/fontawesome/6.5.2/css/all.min.css?digest=dfe6caa3a7d634c4db9b" rel="stylesheet" />
+  <link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-solid-900.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-brands-400.woff2" />
+<link rel="preload" as="font" type="font/woff2" crossorigin href="../../_static/vendor/fontawesome/6.5.2/webfonts/fa-regular-400.woff2" />
 
     <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=fa44fd50" />
-    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=384b581d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/sphinx-book-theme.css?v=a3416100" />
   
   <!-- Pre-loaded scripts that we'll load fully later -->
-  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=5b4479735964841361fd" />
-<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd" />
-  <script src="../../_static/vendor/fontawesome/6.1.2/js/all.min.js?digest=5b4479735964841361fd"></script>
+  <link rel="preload" as="script" href="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b" />
+<link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
+  <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
     <script src="../../_static/documentation_options.js?v=fbcf6510"></script>
-    <script src="../../_static/doctools.js?v=888ff710"></script>
+    <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
-    <script src="../../_static/scripts/sphinx-book-theme.js?v=efea14e4"></script>
+    <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
     <script>DOCUMENTATION_OPTIONS.pagename = 'python/_autosummary/mlx.core.linalg.qr';</script>
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
@@ -54,28 +54,23 @@
 
   
   
-  <a class="skip-link" href="#main-content">Skip to main content</a>
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
   
   <div id="pst-scroll-pixel-helper"></div>
-
   
   <button type="button" class="btn rounded-pill" id="pst-back-to-top">
-    <i class="fa-solid fa-arrow-up"></i>
-    Back to top
-  </button>
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
 
   
   <input type="checkbox"
           class="sidebar-toggle"
-          name="__primary"
-          id="__primary"/>
-  <label class="overlay overlay-primary" for="__primary"></label>
+          id="pst-primary-sidebar-checkbox"/>
+  <label class="overlay overlay-primary" for="pst-primary-sidebar-checkbox"></label>
   
   <input type="checkbox"
           class="sidebar-toggle"
-          name="__secondary"
-          id="__secondary"/>
-  <label class="overlay overlay-secondary" for="__secondary"></label>
+          id="pst-secondary-sidebar-checkbox"/>
+  <label class="overlay overlay-secondary" for="pst-secondary-sidebar-checkbox"></label>
   
   <div class="search-button__wrapper">
     <div class="search-button__overlay"></div>
@@ -97,12 +92,20 @@
   <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
 </form></div>
   </div>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
   
-    <nav class="bd-header navbar navbar-expand-lg bd-navbar">
-    </nav>
+    <header class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+    </header>
   
+
   <div class="bd-container">
     <div class="bd-container__inner bd-page-width">
+      
+      
       
       <div class="bd-sidebar-primary bd-sidebar">
         
@@ -118,6 +121,8 @@
     <div class="sidebar-primary-items__start sidebar-primary__section">
         <div class="sidebar-primary-item">
 
+  
+    
   
 
 <a class="navbar-brand logo" href="../../index.html">
@@ -140,7 +145,7 @@
 
  <script>
  document.write(`
-   <button class="btn navbar-btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+   <button class="btn search-button-field search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
     <i class="fa-solid fa-magnifying-glass"></i>
     <span class="search-button__default-text">Search</span>
     <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
@@ -174,7 +179,7 @@
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">Python API Reference</span></p>
 <ul class="current nav bd-sidenav">
-<li class="toctree-l1 has-children"><a class="reference internal" href="../array.html">Array</a><input class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-1"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../array.html">Array</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.html">mlx.core.array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.astype.html">mlx.core.array.astype</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.at.html">mlx.core.array.at</a></li>
@@ -228,14 +233,14 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.var.html">mlx.core.array.var</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.array.view.html">mlx.core.array.view</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../data_types.html">Data Types</a><input class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-2"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../data_types.html">Data Types</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.Dtype.html">mlx.core.Dtype</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.DtypeCategory.html">mlx.core.DtypeCategory</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.issubdtype.html">mlx.core.issubdtype</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../devices_and_streams.html">Devices and Streams</a><input class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-3"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../devices_and_streams.html">Devices and Streams</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.Device.html">mlx.core.Device</a></li>
 <li class="toctree-l2"><a class="reference internal" href="stream_class.html">mlx.core.Stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.default_device.html">mlx.core.default_device</a></li>
@@ -246,8 +251,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.stream.html">mlx.core.stream</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.synchronize.html">mlx.core.synchronize</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../ops.html">Operations</a><input class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-4"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../ops.html">Operations</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.abs.html">mlx.core.abs</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.add.html">mlx.core.add</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.addmm.html">mlx.core.addmm</a></li>
@@ -412,8 +417,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.zeros.html">mlx.core.zeros</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.zeros_like.html">mlx.core.zeros_like</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../random.html">Random</a><input class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-5"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../random.html">Random</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.bernoulli.html">mlx.core.random.bernoulli</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.categorical.html">mlx.core.random.categorical</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.gumbel.html">mlx.core.random.gumbel</a></li>
@@ -428,8 +433,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.laplace.html">mlx.core.random.laplace</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.random.permutation.html">mlx.core.random.permutation</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms.html">Transforms</a><input class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-6"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../transforms.html">Transforms</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.eval.html">mlx.core.eval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.compile.html">mlx.core.compile</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.custom_function.html">mlx.core.custom_function</a></li>
@@ -441,8 +446,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.vjp.html">mlx.core.vjp</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.vmap.html">mlx.core.vmap</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../fast.html">Fast</a><input class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-7"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../fast.html">Fast</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.rms_norm.html">mlx.core.fast.rms_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.layer_norm.html">mlx.core.fast.layer_norm</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.rope.html">mlx.core.fast.rope</a></li>
@@ -450,8 +455,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.affine_quantize.html">mlx.core.fast.affine_quantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fast.metal_kernel.html">mlx.core.fast.metal_kernel</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../fft.html">FFT</a><input class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-8"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../fft.html">FFT</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fft.fft.html">mlx.core.fft.fft</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fft.ifft.html">mlx.core.fft.ifft</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fft.fft2.html">mlx.core.fft.fft2</a></li>
@@ -465,8 +470,8 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fft.rfftn.html">mlx.core.fft.rfftn</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.fft.irfftn.html">mlx.core.fft.irfftn</a></li>
 </ul>
-</li>
-<li class="toctree-l1 current active has-children"><a class="reference internal" href="../linalg.html">Linear Algebra</a><input checked="" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-9"><i class="fa-solid fa-chevron-down"></i></label><ul class="current">
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="../linalg.html">Linear Algebra</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.inv.html">mlx.core.linalg.inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.tri_inv.html">mlx.core.linalg.tri_inv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.norm.html">mlx.core.linalg.norm</a></li>
@@ -476,8 +481,8 @@
 <li class="toctree-l2 current active"><a class="current reference internal" href="#">mlx.core.linalg.qr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.linalg.svd.html">mlx.core.linalg.svd</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../metal.html">Metal</a><input class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-10"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../metal.html">Metal</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.is_available.html">mlx.core.metal.is_available</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.device_info.html">mlx.core.metal.device_info</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.get_active_memory.html">mlx.core.metal.get_active_memory</a></li>
@@ -490,11 +495,11 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.start_capture.html">mlx.core.metal.start_capture</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.metal.stop_capture.html">mlx.core.metal.stop_capture</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../nn.html">Neural Networks</a><input class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-11"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../nn.html">Neural Networks</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.value_and_grad.html">mlx.nn.value_and_grad</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.nn.quantize.html">mlx.nn.quantize</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/module.html">Module</a><input class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-12"><i class="fa-solid fa-chevron-down"></i></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/module.html">Module</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Module.training.html">mlx.nn.Module.training</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Module.state.html">mlx.nn.Module.state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Module.apply.html">mlx.nn.Module.apply</a></li>
@@ -516,8 +521,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Module.update.html">mlx.nn.Module.update</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Module.update_modules.html">mlx.nn.Module.update_modules</a></li>
 </ul>
-</li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/layers.html">Layers</a><input class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-13"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/layers.html">Layers</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.ALiBi.html">mlx.nn.ALiBi</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.AvgPool1d.html">mlx.nn.AvgPool1d</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.AvgPool2d.html">mlx.nn.AvgPool2d</a></li>
@@ -575,8 +580,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Transformer.html">mlx.nn.Transformer</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.Upsample.html">mlx.nn.Upsample</a></li>
 </ul>
-</li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/functions.html">Functions</a><input class="toctree-checkbox" id="toctree-checkbox-14" name="toctree-checkbox-14" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-14"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/functions.html">Functions</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.elu.html">mlx.nn.elu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.celu.html">mlx.nn.celu</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.gelu.html">mlx.nn.gelu</a></li>
@@ -603,8 +608,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.step.html">mlx.nn.step</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.tanh.html">mlx.nn.tanh</a></li>
 </ul>
-</li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/losses.html">Loss Functions</a><input class="toctree-checkbox" id="toctree-checkbox-15" name="toctree-checkbox-15" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-15"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/losses.html">Loss Functions</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.binary_cross_entropy.html">mlx.nn.losses.binary_cross_entropy</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.cosine_similarity_loss.html">mlx.nn.losses.cosine_similarity_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.cross_entropy.html">mlx.nn.losses.cross_entropy</a></li>
@@ -620,8 +625,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.smooth_l1_loss.html">mlx.nn.losses.smooth_l1_loss</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary_functions/mlx.nn.losses.triplet_loss.html">mlx.nn.losses.triplet_loss</a></li>
 </ul>
-</li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/init.html">Initializers</a><input class="toctree-checkbox" id="toctree-checkbox-16" name="toctree-checkbox-16" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-16"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../nn/init.html">Initializers</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.init.constant.html">mlx.nn.init.constant</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.init.normal.html">mlx.nn.init.normal</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.init.uniform.html">mlx.nn.init.uniform</a></li>
@@ -631,18 +636,18 @@
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.init.he_normal.html">mlx.nn.init.he_normal</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../nn/_autosummary/mlx.nn.init.he_uniform.html">mlx.nn.init.he_uniform</a></li>
 </ul>
-</li>
+</details></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../optimizers.html">Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-17" name="toctree-checkbox-17" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-17"><i class="fa-solid fa-chevron-down"></i></label><ul>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../optimizers/optimizer.html">Optimizer</a><input class="toctree-checkbox" id="toctree-checkbox-18" name="toctree-checkbox-18" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-18"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../optimizers.html">Optimizers</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../optimizers/optimizer.html">Optimizer</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Optimizer.state.html">mlx.optimizers.Optimizer.state</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Optimizer.apply_gradients.html">mlx.optimizers.Optimizer.apply_gradients</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Optimizer.init.html">mlx.optimizers.Optimizer.init</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Optimizer.update.html">mlx.optimizers.Optimizer.update</a></li>
 </ul>
-</li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../optimizers/common_optimizers.html">Common Optimizers</a><input class="toctree-checkbox" id="toctree-checkbox-19" name="toctree-checkbox-19" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-19"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../optimizers/common_optimizers.html">Common Optimizers</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.SGD.html">mlx.optimizers.SGD</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.RMSprop.html">mlx.optimizers.RMSprop</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Adagrad.html">mlx.optimizers.Adagrad</a></li>
@@ -653,19 +658,19 @@
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Adamax.html">mlx.optimizers.Adamax</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.Lion.html">mlx.optimizers.Lion</a></li>
 </ul>
-</li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../optimizers/schedulers.html">Schedulers</a><input class="toctree-checkbox" id="toctree-checkbox-20" name="toctree-checkbox-20" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-20"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../optimizers/schedulers.html">Schedulers</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.cosine_decay.html">mlx.optimizers.cosine_decay</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.exponential_decay.html">mlx.optimizers.exponential_decay</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.join_schedules.html">mlx.optimizers.join_schedules</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.linear_schedule.html">mlx.optimizers.linear_schedule</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../optimizers/_autosummary/mlx.optimizers.step_decay.html">mlx.optimizers.step_decay</a></li>
 </ul>
-</li>
+</details></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.optimizers.clip_grad_norm.html">mlx.optimizers.clip_grad_norm</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../distributed.html">Distributed Communication</a><input class="toctree-checkbox" id="toctree-checkbox-21" name="toctree-checkbox-21" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-21"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../distributed.html">Distributed Communication</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.Group.html">mlx.core.distributed.Group</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.is_available.html">mlx.core.distributed.is_available</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.init.html">mlx.core.distributed.init</a></li>
@@ -675,15 +680,15 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.recv.html">mlx.core.distributed.recv</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.distributed.recv_like.html">mlx.core.distributed.recv_like</a></li>
 </ul>
-</li>
-<li class="toctree-l1 has-children"><a class="reference internal" href="../tree_utils.html">Tree Utils</a><input class="toctree-checkbox" id="toctree-checkbox-22" name="toctree-checkbox-22" type="checkbox"/><label class="toctree-toggle" for="toctree-checkbox-22"><i class="fa-solid fa-chevron-down"></i></label><ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../tree_utils.html">Tree Utils</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_flatten.html">mlx.utils.tree_flatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_unflatten.html">mlx.utils.tree_unflatten</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_map.html">mlx.utils.tree_map</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_map_with_path.html">mlx.utils.tree_map_with_path</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.utils.tree_reduce.html">mlx.utils.tree_reduce</a></li>
 </ul>
-</li>
+</details></li>
 </ul>
 <p aria-level="2" class="caption" role="heading"><span class="caption-text">C++ API Reference</span></p>
 <ul class="nav bd-sidenav">
@@ -709,7 +714,7 @@
 
       </div>
       
-      <main id="main-content" class="bd-main">
+      <main id="main-content" class="bd-main" role="main">
         
         
 
@@ -718,14 +723,14 @@
           <div class="bd-content">
             <div class="bd-article-container">
               
-              <div class="bd-header-article">
+              <div class="bd-header-article d-print-none">
 <div class="header-article-items header-article__inner">
   
     <div class="header-article-items__start">
       
-        <div class="header-article-item"><label class="sidebar-toggle primary-toggle btn btn-sm" for="__primary" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+        <div class="header-article-item"><button class="sidebar-toggle primary-toggle btn btn-sm" title="Toggle primary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
   <span class="fa-solid fa-bars"></span>
-</label></div>
+</button></div>
       
     </div>
   
@@ -818,10 +823,10 @@
 
 <script>
 document.write(`
-  <button class="btn btn-sm navbar-btn theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
-    <span class="theme-switch nav-link" data-mode="light"><i class="fa-solid fa-sun fa-lg"></i></span>
-    <span class="theme-switch nav-link" data-mode="dark"><i class="fa-solid fa-moon fa-lg"></i></span>
-    <span class="theme-switch nav-link" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg"></i></span>
+  <button class="btn btn-sm nav-link pst-navbar-icon theme-switch-button" title="light/dark" aria-label="light/dark" data-bs-placement="bottom" data-bs-toggle="tooltip">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto"></i>
   </button>
 `);
 </script>
@@ -829,14 +834,14 @@ document.write(`
 
 <script>
 document.write(`
-  <button class="btn btn-sm navbar-btn search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+  <button class="btn btn-sm pst-navbar-icon search-button search-button__button" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
     <i class="fa-solid fa-magnifying-glass fa-lg"></i>
   </button>
 `);
 </script>
-<label class="sidebar-toggle secondary-toggle btn btn-sm" for="__secondary"title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
+<button class="sidebar-toggle secondary-toggle btn btn-sm" title="Toggle secondary sidebar" data-bs-placement="bottom" data-bs-toggle="tooltip">
     <span class="fa-solid fa-list"></span>
-</label>
+</button>
 </div></div>
       
     </div>
@@ -867,7 +872,7 @@ document.write(`
               
                 
 <div id="searchbox"></div>
-                <article class="bd-article" role="main">
+                <article class="bd-article">
                   
   <section id="mlx-core-linalg-qr">
 <h1>mlx.core.linalg.qr<a class="headerlink" href="#mlx-core-linalg-qr" title="Link to this heading">#</a></h1>
@@ -916,7 +921,7 @@ in which case the default stream of the default device is used.</p></li>
               
               
               
-                <footer class="prev-next-footer">
+                <footer class="prev-next-footer d-print-none">
                   
 <div class="prev-next-area">
     <a class="left-prev"
@@ -945,6 +950,7 @@ in which case the default stream of the default device is used.</p></li>
             
               
                 <div class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
 
   <div class="sidebar-secondary-item">
   <div class="page-toc tocsection onthispage">
@@ -1001,8 +1007,8 @@ By MLX Contributors
   </div>
   
   <!-- Scripts loaded after <body> so the DOM is not blocked -->
-  <script src="../../_static/scripts/bootstrap.js?digest=5b4479735964841361fd"></script>
-<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=5b4479735964841361fd"></script>
+  <script src="../../_static/scripts/bootstrap.js?digest=dfe6caa3a7d634c4db9b"></script>
+<script src="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b"></script>
 
   <footer class="bd-footer">
   </footer>
