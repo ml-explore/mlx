@@ -8,20 +8,59 @@ msgstr ""
 "Language: lv\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "Drukāt PDF formātā"
+
 msgid "Theme by the"
 msgstr "Autora tēma"
 
-msgid "Open an issue"
-msgstr "Atveriet problēmu"
+msgid "Download source file"
+msgstr "Lejupielādēt avota failu"
+
+msgid "open issue"
+msgstr "atklāts jautājums"
 
 msgid "Contents"
 msgstr "Saturs"
 
+msgid "previous page"
+msgstr "iepriekšējā lapa"
+
 msgid "Download notebook file"
 msgstr "Lejupielādēt piezīmju grāmatiņu"
 
+msgid "Copyright"
+msgstr "Autortiesības"
+
+msgid "Download this page"
+msgstr "Lejupielādējiet šo lapu"
+
+msgid "Source repository"
+msgstr "Avota krātuve"
+
+msgid "By"
+msgstr "Autors"
+
+msgid "repository"
+msgstr "krātuve"
+
+msgid "Last updated on"
+msgstr "Pēdējoreiz atjaunināts"
+
+msgid "Toggle navigation"
+msgstr "Pārslēgt navigāciju"
+
 msgid "Sphinx Book Theme"
 msgstr "Sfinksa grāmatas tēma"
+
+msgid "suggest edit"
+msgstr "ieteikt rediģēt"
+
+msgid "Open an issue"
+msgstr "Atveriet problēmu"
+
+msgid "Launch"
+msgstr "Uzsākt"
 
 msgid "Fullscreen mode"
 msgstr "Pilnekrāna režīms"
@@ -29,47 +68,8 @@ msgstr "Pilnekrāna režīms"
 msgid "Edit this page"
 msgstr "Rediģēt šo lapu"
 
-msgid "By"
-msgstr "Autors"
-
-msgid "Copyright"
-msgstr "Autortiesības"
-
-msgid "Source repository"
-msgstr "Avota krātuve"
-
-msgid "previous page"
-msgstr "iepriekšējā lapa"
-
-msgid "next page"
-msgstr "nākamā lapaspuse"
-
-msgid "Toggle navigation"
-msgstr "Pārslēgt navigāciju"
-
-msgid "repository"
-msgstr "krātuve"
-
-msgid "suggest edit"
-msgstr "ieteikt rediģēt"
-
-msgid "open issue"
-msgstr "atklāts jautājums"
-
-msgid "Launch"
-msgstr "Uzsākt"
-
-msgid "Print to PDF"
-msgstr "Drukāt PDF formātā"
-
 msgid "By the"
 msgstr "Ar"
 
-msgid "Last updated on"
-msgstr "Pēdējoreiz atjaunināts"
-
-msgid "Download source file"
-msgstr "Lejupielādēt avota failu"
-
-msgid "Download this page"
-msgstr "Lejupielādējiet šo lapu"
+msgid "next page"
+msgstr "nākamā lapaspuse"

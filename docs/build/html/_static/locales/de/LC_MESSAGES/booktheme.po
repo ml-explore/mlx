@@ -8,20 +8,59 @@ msgstr ""
 "Language: de\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "In PDF drucken"
+
 msgid "Theme by the"
 msgstr "Thema von der"
 
-msgid "Open an issue"
-msgstr "Öffnen Sie ein Problem"
+msgid "Download source file"
+msgstr "Quelldatei herunterladen"
+
+msgid "open issue"
+msgstr "offenes Thema"
 
 msgid "Contents"
 msgstr "Inhalt"
 
+msgid "previous page"
+msgstr "vorherige Seite"
+
 msgid "Download notebook file"
 msgstr "Notebook-Datei herunterladen"
 
+msgid "Copyright"
+msgstr "Urheberrechte ©"
+
+msgid "Download this page"
+msgstr "Laden Sie diese Seite herunter"
+
+msgid "Source repository"
+msgstr "Quell-Repository"
+
+msgid "By"
+msgstr "Durch"
+
+msgid "repository"
+msgstr "Repository"
+
+msgid "Last updated on"
+msgstr "Zuletzt aktualisiert am"
+
+msgid "Toggle navigation"
+msgstr "Navigation umschalten"
+
 msgid "Sphinx Book Theme"
 msgstr "Sphinx-Buch-Thema"
+
+msgid "suggest edit"
+msgstr "vorschlagen zu bearbeiten"
+
+msgid "Open an issue"
+msgstr "Öffnen Sie ein Problem"
+
+msgid "Launch"
+msgstr "Starten"
 
 msgid "Fullscreen mode"
 msgstr "Vollbildmodus"
@@ -29,47 +68,8 @@ msgstr "Vollbildmodus"
 msgid "Edit this page"
 msgstr "Bearbeite diese Seite"
 
-msgid "By"
-msgstr "Durch"
-
-msgid "Copyright"
-msgstr "Urheberrechte ©"
-
-msgid "Source repository"
-msgstr "Quell-Repository"
-
-msgid "previous page"
-msgstr "vorherige Seite"
-
-msgid "next page"
-msgstr "Nächste Seite"
-
-msgid "Toggle navigation"
-msgstr "Navigation umschalten"
-
-msgid "repository"
-msgstr "Repository"
-
-msgid "suggest edit"
-msgstr "vorschlagen zu bearbeiten"
-
-msgid "open issue"
-msgstr "offenes Thema"
-
-msgid "Launch"
-msgstr "Starten"
-
-msgid "Print to PDF"
-msgstr "In PDF drucken"
-
 msgid "By the"
 msgstr "Bis zum"
 
-msgid "Last updated on"
-msgstr "Zuletzt aktualisiert am"
-
-msgid "Download source file"
-msgstr "Quelldatei herunterladen"
-
-msgid "Download this page"
-msgstr "Laden Sie diese Seite herunter"
+msgid "next page"
+msgstr "Nächste Seite"
