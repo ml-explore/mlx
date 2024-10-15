@@ -8,20 +8,59 @@ msgstr ""
 "Language: it\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "Stampa in PDF"
+
 msgid "Theme by the"
 msgstr "Tema di"
 
-msgid "Open an issue"
-msgstr "Apri un problema"
+msgid "Download source file"
+msgstr "Scarica il file sorgente"
+
+msgid "open issue"
+msgstr "questione aperta"
 
 msgid "Contents"
 msgstr "Contenuti"
 
+msgid "previous page"
+msgstr "pagina precedente"
+
 msgid "Download notebook file"
 msgstr "Scarica il file del taccuino"
 
+msgid "Copyright"
+msgstr "Diritto d'autore"
+
+msgid "Download this page"
+msgstr "Scarica questa pagina"
+
+msgid "Source repository"
+msgstr "Repository di origine"
+
+msgid "By"
+msgstr "Di"
+
+msgid "repository"
+msgstr "repository"
+
+msgid "Last updated on"
+msgstr "Ultimo aggiornamento il"
+
+msgid "Toggle navigation"
+msgstr "Attiva / disattiva la navigazione"
+
 msgid "Sphinx Book Theme"
 msgstr "Tema del libro della Sfinge"
+
+msgid "suggest edit"
+msgstr "suggerisci modifica"
+
+msgid "Open an issue"
+msgstr "Apri un problema"
+
+msgid "Launch"
+msgstr "Lanciare"
 
 msgid "Fullscreen mode"
 msgstr "Modalità schermo intero"
@@ -29,47 +68,8 @@ msgstr "Modalità schermo intero"
 msgid "Edit this page"
 msgstr "Modifica questa pagina"
 
-msgid "By"
-msgstr "Di"
-
-msgid "Copyright"
-msgstr "Diritto d'autore"
-
-msgid "Source repository"
-msgstr "Repository di origine"
-
-msgid "previous page"
-msgstr "pagina precedente"
-
-msgid "next page"
-msgstr "pagina successiva"
-
-msgid "Toggle navigation"
-msgstr "Attiva / disattiva la navigazione"
-
-msgid "repository"
-msgstr "repository"
-
-msgid "suggest edit"
-msgstr "suggerisci modifica"
-
-msgid "open issue"
-msgstr "questione aperta"
-
-msgid "Launch"
-msgstr "Lanciare"
-
-msgid "Print to PDF"
-msgstr "Stampa in PDF"
-
 msgid "By the"
 msgstr "Dal"
 
-msgid "Last updated on"
-msgstr "Ultimo aggiornamento il"
-
-msgid "Download source file"
-msgstr "Scarica il file sorgente"
-
-msgid "Download this page"
-msgstr "Scarica questa pagina"
+msgid "next page"
+msgstr "pagina successiva"
