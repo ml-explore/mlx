@@ -22,7 +22,7 @@ jobs:
     parameters:
       upload-docs:
         type: boolean
-        default: true 
+        default: false
     macos:
       xcode: "15.2.0"
     resource_class: macos.m1.medium.gen1
