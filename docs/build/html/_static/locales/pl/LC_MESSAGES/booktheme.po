@@ -8,20 +8,59 @@ msgstr ""
 "Language: pl\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
+msgid "Print to PDF"
+msgstr "Drukuj do PDF"
+
 msgid "Theme by the"
 msgstr "Motyw autorstwa"
 
-msgid "Open an issue"
-msgstr "Otwórz problem"
+msgid "Download source file"
+msgstr "Pobierz plik źródłowy"
+
+msgid "open issue"
+msgstr "otwarty problem"
 
 msgid "Contents"
 msgstr "Zawartość"
 
+msgid "previous page"
+msgstr "Poprzednia strona"
+
 msgid "Download notebook file"
 msgstr "Pobierz plik notatnika"
 
+msgid "Copyright"
+msgstr "prawa autorskie"
+
+msgid "Download this page"
+msgstr "Pobierz tę stronę"
+
+msgid "Source repository"
+msgstr "Repozytorium źródłowe"
+
+msgid "By"
+msgstr "Przez"
+
+msgid "repository"
+msgstr "magazyn"
+
+msgid "Last updated on"
+msgstr "Ostatnia aktualizacja"
+
+msgid "Toggle navigation"
+msgstr "Przełącz nawigację"
+
 msgid "Sphinx Book Theme"
 msgstr "Motyw książki Sphinx"
+
+msgid "suggest edit"
+msgstr "zaproponuj edycję"
+
+msgid "Open an issue"
+msgstr "Otwórz problem"
+
+msgid "Launch"
+msgstr "Uruchomić"
 
 msgid "Fullscreen mode"
 msgstr "Pełny ekran"
@@ -29,47 +68,8 @@ msgstr "Pełny ekran"
 msgid "Edit this page"
 msgstr "Edytuj tę strone"
 
-msgid "By"
-msgstr "Przez"
-
-msgid "Copyright"
-msgstr "prawa autorskie"
-
-msgid "Source repository"
-msgstr "Repozytorium źródłowe"
-
-msgid "previous page"
-msgstr "Poprzednia strona"
-
-msgid "next page"
-msgstr "Następna strona"
-
-msgid "Toggle navigation"
-msgstr "Przełącz nawigację"
-
-msgid "repository"
-msgstr "magazyn"
-
-msgid "suggest edit"
-msgstr "zaproponuj edycję"
-
-msgid "open issue"
-msgstr "otwarty problem"
-
-msgid "Launch"
-msgstr "Uruchomić"
-
-msgid "Print to PDF"
-msgstr "Drukuj do PDF"
-
 msgid "By the"
 msgstr "Przez"
 
-msgid "Last updated on"
-msgstr "Ostatnia aktualizacja"
-
-msgid "Download source file"
-msgstr "Pobierz plik źródłowy"
-
-msgid "Download this page"
-msgstr "Pobierz tę stronę"
+msgid "next page"
+msgstr "Następna strona"
