@@ -350,6 +350,9 @@ workflows:
               python_version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
               xcode_version: ["15.0.0", "15.2.0"]
               build_env: ["PYPI_RELEASE=1"]
+      - build_documentation:
+          upload-docs: true
+
   prb:
     when:
       matches:
