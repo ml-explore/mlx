@@ -1,27 +1,27 @@
 // Copyright © 2024 Apple Inc.
 
-template <typename T, typename Op>
+template <typename T, typename U, typename Op>
 [[kernel]] void unary_v(
     device const T* in,
-    device T* out,
+    device U* out,
     uint index [[thread_position_in_grid]]) {
   out[index] = Op()(in[index]);
 }
 
-template <typename T, typename Op>
+template <typename T, typename U, typename Op>
 [[kernel]] void unary_v2(
     device const T* in,
-    device T* out,
+    device U* out,
     uint2 index [[thread_position_in_grid]],
     uint2 grid_dim [[threads_per_grid]]) {
   size_t offset = index.x + grid_dim.x * size_t(index.y);
   out[offset] = Op()(in[offset]);
 }
 
-template <typename T, typename Op, int N = 1>
+template <typename T, typename U, typename Op, int N = 1>
 [[kernel]] void unary_g(
     device const T* in,
-    device T* out,
+    device U* out,
     constant const int* in_shape,
     constant const size_t* in_strides,
     device const int& ndim,

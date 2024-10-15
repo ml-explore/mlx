@@ -15,6 +15,7 @@ MTL::ComputePipelineState* get_arange_kernel(
 MTL::ComputePipelineState* get_unary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    Dtype in_type,
     Dtype out_type,
     const std::string op);
 

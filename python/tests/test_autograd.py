@@ -590,6 +590,21 @@ class TestAutograd(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(out1[0], out2[0]))
         self.assertTrue(mx.allclose(dout1[0] + 1, dout2[0]))
 
+    def test_complex_vjps(self):
+        def fun(x):
+            return (2.0 * mx.real(x)).sum()
+
+        x = mx.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
+        dfdx = mx.grad(fun)(x)
+        self.assertTrue(mx.allclose(dfdx, 2 * mx.ones_like(x)))
+
+        def fun(x):
+            return (2.0 * mx.imag(x)).sum()
+
+        x = mx.array([0.0 + 1j, 1.0 + 0.0j, 0.5 + 0.5j])
+        dfdx = mx.grad(fun)(x)
+        self.assertTrue(mx.allclose(dfdx, -2j * mx.ones_like(x)))
+
 
 if __name__ == "__main__":
     unittest.main()
