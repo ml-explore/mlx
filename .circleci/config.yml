@@ -43,12 +43,29 @@ jobs:
           name: Build documentation
           command: |
             source env/bin/activate
-            cd docs
-            doxygen && make html
+            cd docs && doxygen && make html O=-W
+      - unless:
+          condition: << parameters.upload-docs >>
+          steps:
+            - run:
+               name: Build documentation
+               command: |
+                 source env/bin/activate
+                 cd docs && doxygen && make html O=-W
       - when:
           condition: << parameters.upload-docs >>
           steps:
-            - run: echo "upload"
+            - run:
+               name: Upload documentation
+               command: |
+                 source env/bin/activate
+                 git checkout gh-pages
+                 git rebase main
+                 git rm -f build/html
+                 cd docs && doxygen && make html O=-W
+                 git add -f build/html
+                 git commit -m "rebase"
+                 git push -f origin gh-pages
 
   linux_build_and_test:
     docker:
