@@ -2690,7 +2690,9 @@ class TestOps(mlx_tests.MLXTestCase):
 
         y = mx.random.uniform(shape=(4, 4))
         z = x + 1j * y
+        self.assertEqual(mx.real(z).dtype, mx.float32)
         self.assertTrue(mx.array_equal(mx.real(z), x))
+        self.assertEqual(mx.imag(z).dtype, mx.float32)
         self.assertTrue(mx.array_equal(mx.imag(z), y))
 
 

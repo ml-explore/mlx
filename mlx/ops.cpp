@@ -4661,14 +4661,14 @@ array real(const array& a, StreamOrDevice s /* = {} */) {
   if (!issubdtype(a.dtype(), complexfloating)) {
     return a;
   }
-  return array(a.shape(), a.dtype(), std::make_shared<Real>(to_stream(s)), {a});
+  return array(a.shape(), float32, std::make_shared<Real>(to_stream(s)), {a});
 }
 
 array imag(const array& a, StreamOrDevice s /* = {} */) {
   if (!issubdtype(a.dtype(), complexfloating)) {
     return zeros_like(a);
   }
-  return array(a.shape(), a.dtype(), std::make_shared<Imag>(to_stream(s)), {a});
+  return array(a.shape(), float32, std::make_shared<Imag>(to_stream(s)), {a});
 }
 
 } // namespace mlx::core
