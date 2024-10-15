@@ -37,13 +37,13 @@ void unary_op(const array& a, array& out, Op op) {
   const T* a_ptr = a.data<T>();
   if (a.flags().contiguous) {
     set_unary_output_data(a, out);
-    T* dst = out.data<T>();
+    U* dst = out.data<U>();
     for (size_t i = 0; i < a.data_size(); ++i) {
       dst[i] = op(a_ptr[i]);
     }
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    T* dst = out.data<T>();
+    U* dst = out.data<U>();
     size_t shape = a.ndim() > 0 ? a.shape(-1) : 1;
     size_t stride = a.ndim() > 0 ? a.strides(-1) : 1;
     if (a.ndim() <= 1) {
