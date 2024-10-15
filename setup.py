@@ -141,6 +141,8 @@ class GenerateStubs(Command):
             "nanobind.stubgen",
             "-m",
             "mlx.core",
+            "-p",
+            "python/mlx/_stub_patterns.txt",
         ]
         subprocess.run(stub_cmd + ["-r", "-O", out_path])
         # Run again without recursive to specify output file name
