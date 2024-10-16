@@ -39,11 +39,6 @@ jobs:
             pip install --upgrade cmake
             pip install -r docs/requirements.txt
             CMAKE_BUILD_PARALLEL_LEVEL=`sysctl -n hw.ncpu` pip install . -v
-      - run:
-          name: Build documentation
-          command: |
-            source env/bin/activate
-            cd docs && doxygen && make html O=-W
       - when:
           condition:
             not: << parameters.upload-docs >>
