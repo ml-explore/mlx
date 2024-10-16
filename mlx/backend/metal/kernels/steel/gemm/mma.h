@@ -8,6 +8,7 @@
 
 #include "mlx/backend/metal/kernels/steel/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
+#include "mlx/backend/metal/kernels/steel/utils/integral_constant.h"
 
 using namespace metal;
 
@@ -32,7 +33,15 @@ template <typename T>
 struct BaseMMAFrag<T, 8, 8> {
   STEEL_CONST int kFragRows = 8;
   STEEL_CONST int kFragCols = 8;
+
   STEEL_CONST int kElemsPerFrag = (kFragRows * kFragCols) / 32;
+
+  STEEL_CONST int kElemRows = 1;
+  STEEL_CONST int kElemCols = 2;
+
+  static_assert(
+      kElemRows * kElemCols == kElemsPerFrag,
+      "MMAFrag shape is not consistent with MMAFrag size");
 
   typedef metal::simdgroup_matrix<T, kFragRows, kFragCols> mat_type;
   typedef metal::vec<T, kElemsPerFrag> frag_type;
@@ -43,6 +52,94 @@ struct BaseMMAFrag<T, 8, 8> {
     const short fm = (qid & 4) + ((simd_lane_id / 2) % 4);
     const short fn = (qid & 2) * 2 + (simd_lane_id % 2) * 2;
     return short2{fn, fm};
+  }
+
+  template <typename SrcPtrType, typename StrX, typename StrY>
+  METAL_FUNC static constexpr void
+  load(thread frag_type& dst, SrcPtrType src, StrX str_x, StrY str_y) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemRows; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < kElemCols; j++) {
+        dst[i * kElemCols + j] = static_cast<T>(src[i * str_x + j * str_y]);
+      }
+    }
+  }
+
+  template <
+      typename SrcPtrType,
+      typename StrX,
+      typename StrY,
+      typename LimX,
+      typename LimY,
+      typename OffX,
+      typename OffY>
+  METAL_FUNC static constexpr void load_safe(
+      thread frag_type& dst,
+      SrcPtrType src,
+      StrX str_x,
+      StrY str_y,
+      LimX lim_x,
+      LimY lim_y,
+      OffX off_x = Int<0>{},
+      OffY off_y = Int<0>{}) {
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemRows; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < kElemCols; j++) {
+        if ((off_x + i) < lim_x && (off_y + j) < lim_y) {
+          dst[i * kElemCols + j] =
+              static_cast<T>(src[(off_x + i) * str_x + (off_x + j) * str_y]);
+        } else {
+          dst[i * kElemCols + j] = T(0);
+        }
+      }
+    }
+  }
+
+  template <typename DstPtrType, typename StrX, typename StrY>
+  METAL_FUNC static constexpr void
+  store(const thread frag_type& src, DstPtrType dst, StrX str_x, StrY str_y) {
+    using U = pointer_element_t<DstPtrType>;
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemRows; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < kElemCols; j++) {
+        dst[i * str_x + j * str_y] = static_cast<U>(src[i * kElemCols + j]);
+      }
+    }
+  }
+
+  template <
+      typename DstPtrType,
+      typename StrX,
+      typename StrY,
+      typename LimX,
+      typename LimY,
+      typename OffX,
+      typename OffY>
+  METAL_FUNC static constexpr void store_safe(
+      const thread frag_type& src,
+      DstPtrType dst,
+      StrX str_x,
+      StrY str_y,
+      LimX lim_x,
+      LimY lim_y,
+      OffX off_x = Int<0>{},
+      OffY off_y = Int<0>{}) {
+    using U = pointer_element_t<DstPtrType>;
+
+    STEEL_PRAGMA_UNROLL
+    for (short i = 0; i < kElemRows; i++) {
+      STEEL_PRAGMA_UNROLL
+      for (short j = 0; j < kElemCols; j++) {
+        if ((off_x + i) < lim_x && (off_y + j) < lim_y) {
+          dst[(off_x + i) * str_x + (off_y + j) * str_y] =
+              static_cast<U>(src[i * kElemCols + j]);
+        }
+      }
+    }
   }
 
   METAL_FUNC static constexpr void mma(
@@ -144,12 +241,13 @@ struct MMATile {
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
       for (int j = 0; j < kTileCols; ++j) {
-        STEEL_PRAGMA_UNROLL
-        for (int k = 0; k < kElemsPerFrag; ++k) {
-          frag_at(i, j)[k] = static_cast<T>(
-              src[(i * kFragRows) * w_x * str_x +
-                  (j * kFragCols) * w_y * str_y + k * str_y]);
-        }
+        MMAFrag_t::load(
+            frag_at(i, j),
+            &(
+                src[(i * kFragRows) * w_x * str_x +
+                    (j * kFragCols) * w_y * str_y]),
+            str_x,
+            str_y);
       }
     }
   }
@@ -160,11 +258,13 @@ struct MMATile {
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
       for (int j = 0; j < kTileCols; ++j) {
-        STEEL_PRAGMA_UNROLL
-        for (int k = 0; k < kElemsPerFrag; ++k) {
-          dst[(i * kFragRows) * w_x * str_x + (j * kFragCols) * w_y * str_y +
-              k * str_y] = static_cast<U>(frag_at(i, j)[k]);
-        }
+        MMAFrag_t::store(
+            frag_at(i, j),
+            &(
+                dst[(i * kFragRows) * w_x * str_x +
+                    (j * kFragCols) * w_y * str_y]),
+            str_x,
+            str_y);
       }
     }
   }
@@ -175,11 +275,11 @@ struct MMATile {
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
       for (int j = 0; j < kTileCols; ++j) {
-        STEEL_PRAGMA_UNROLL
-        for (int k = 0; k < kElemsPerFrag; ++k) {
-          frag_at(i, j)[k] = static_cast<T>(
-              src[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y + k]);
-        }
+        MMAFrag_t::load(
+            frag_at(i, j),
+            &(src[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y]),
+            ld,
+            1);
       }
     }
   }
@@ -190,11 +290,11 @@ struct MMATile {
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
       for (int j = 0; j < kTileCols; ++j) {
-        STEEL_PRAGMA_UNROLL
-        for (int k = 0; k < kElemsPerFrag; ++k) {
-          dst[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y + k] =
-              static_cast<U>(frag_at(i, j)[k]);
-        }
+        MMAFrag_t::store(
+            frag_at(i, j),
+            &(dst[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y]),
+            ld,
+            1);
       }
     }
   }
@@ -206,13 +306,15 @@ struct MMATile {
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
       for (int j = 0; j < kTileCols; ++j) {
-        STEEL_PRAGMA_UNROLL
-        for (int k = 0; k < kElemsPerFrag; ++k) {
-          int t_row = (i * kFragRows) * w_x;
-          int t_col = (j * kFragCols) * w_y + k;
-          if (t_row < src_tile_dims.y && t_col < src_tile_dims.x)
-            frag_at(i, j)[k] = static_cast<T>(src[t_row * ld + t_col]);
-        }
+        MMAFrag_t::load_safe(
+            frag_at(i, j),
+            src,
+            ld,
+            1,
+            src_tile_dims.y,
+            src_tile_dims.x,
+            (i * kFragRows) * w_x,
+            (j * kFragCols) * w_y);
       }
     }
   }
@@ -224,13 +326,15 @@ struct MMATile {
     for (int i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
       for (int j = 0; j < kTileCols; ++j) {
-        STEEL_PRAGMA_UNROLL
-        for (int k = 0; k < kElemsPerFrag; ++k) {
-          int t_row = (i * kFragRows) * w_x;
-          int t_col = (j * kFragCols) * w_y + k;
-          if (t_row < dst_tile_dims.y && t_col < dst_tile_dims.x)
-            dst[t_row * ld + t_col] = static_cast<U>(frag_at(i, j)[k]);
-        }
+        MMAFrag_t::store_safe(
+            frag_at(i, j),
+            dst,
+            ld,
+            1,
+            dst_tile_dims.y,
+            dst_tile_dims.x,
+            (i * kFragRows) * w_x,
+            (j * kFragCols) * w_y);
       }
     }
   }
