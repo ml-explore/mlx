@@ -79,6 +79,7 @@ template <typename T, int D>
     keys += stride;
     values += stride;
   }
+  threadgroup_barrier(mem_flags::mem_threadgroup);
 
   // Each thread has a partial part of the output so we need to combine them.
 
