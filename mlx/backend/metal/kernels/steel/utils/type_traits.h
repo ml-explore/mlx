@@ -48,6 +48,29 @@ struct is_integral<integral_constant<decltype(val), val>> : true_type {};
 template <class T>
 struct is_static : bool_constant<is_empty<remove_cv_t<T>>::value> {};
 
+template <typename T>
+struct pointer_element {};
+
+template <typename T>
+struct pointer_element<thread T*> {
+  using type = remove_cv_t<T>;
+};
+template <typename T>
+struct pointer_element<device T*> {
+  using type = remove_cv_t<T>;
+};
+template <typename T>
+struct pointer_element<constant T*> {
+  using type = remove_cv_t<T>;
+};
+template <typename T>
+struct pointer_element<threadgroup T*> {
+  using type = remove_cv_t<T>;
+};
+
+template <typename T>
+using pointer_element_t = typename pointer_element<remove_cv_t<T>>::type;
+
 } // namespace metal
 
 #pragma METAL internals : disable
