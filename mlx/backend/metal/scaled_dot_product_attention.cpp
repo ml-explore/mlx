@@ -264,7 +264,7 @@ void sdpa_vector(
     const array& k,
     const array& v,
     array& out,
-    float alpha) {
+    float scale) {
   // Set the kernel name
   std::string kname;
   kname.reserve(64);
@@ -292,6 +292,7 @@ void sdpa_vector(
   compute_encoder.set_output_array(out, 3);
   compute_encoder->setBytes(&gqa_factor, sizeof(int), 4);
   compute_encoder->setBytes(&N, sizeof(int), 5);
+  compute_encoder->setBytes(&scale, sizeof(float), 6);
 
   // Launch
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
@@ -334,7 +335,7 @@ void ScaledDotProductAttention::eval_gpu(
     auto k = ensure_row_contiguous(k_pre);
     auto v = ensure_row_contiguous(v_pre);
 
-    sdpa_vector(s, d, q, k, v, o, 1.0);
+    sdpa_vector(s, d, q, k, v, o, scale_);
 
     if (!copies.empty()) {
       d.get_command_buffer(s.index)->addCompletedHandler(

@@ -10,6 +10,7 @@ template <typename T, int D>
     device T* out [[buffer(3)]],
     const constant int& gqa_factor,
     const constant int& N,
+    const constant float& scale,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -39,7 +40,7 @@ template <typename T, int D>
 
   // Read the query and 0 the output accumulator
   for (int i = 0; i < elem_per_thread; i++) {
-    q[i] = queries[i];
+    q[i] = static_cast<U>(scale) * queries[i];
   }
   for (int i = 0; i < elem_per_thread; i++) {
     o[i] = 0;
