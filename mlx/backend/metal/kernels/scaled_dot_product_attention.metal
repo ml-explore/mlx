@@ -4,8 +4,12 @@
 #include "mlx/backend/metal/kernels/steel/defines.h"
 #include "mlx/backend/metal/kernels/steel/gemm/transforms.h"
 #include "mlx/backend/metal/kernels/steel/utils.h"
+#include "mlx/backend/metal/kernels/utils.h"
 
 #include "mlx/backend/metal/kernels/scaled_dot_product_attention_params.h"
+
+#include "mlx/backend/metal/kernels/sdpa_vector.h"
+
 using namespace metal;
 
 using namespace mlx::steel;
@@ -1467,3 +1471,24 @@ kernel void fast_inference_sdpa_reduce_tiles_half(
   fast_inference_sdpa_reduce_tiles_template<half>(
       O_partials, p_lse, p_maxes, params, O, tid, lid);
 }
+
+// SDPA vector instantiations
+#define instantiate_sdpa_vector(type, head_dim)                              \
+  template [[host_name("sdpa_vector_" #type "_" #head_dim)]] [[kernel]] void \
+  sdpa_vector<type, head_dim>(                                               \
+      const device type* queries [[buffer(0)]],                              \
+      const device type* keys [[buffer(1)]],                                 \
+      const device type* values [[buffer(2)]],                               \
+      device type* out [[buffer(3)]],                                        \
+      const constant int& gqa_factor,                                        \
+      const constant int& N,                                                 \
+      uint3 tid [[threadgroup_position_in_grid]],                            \
+      uint simd_gid [[simdgroup_index_in_threadgroup]],                      \
+      uint simd_lid [[thread_index_in_simdgroup]]);
+
+#define instantiate_sdpa_vector_heads(type)                           \
+  instantiate_sdpa_vector(type, 32) instantiate_sdpa_vector(type, 64) \
+      instantiate_sdpa_vector(type, 128)
+
+instantiate_sdpa_vector_heads(float) instantiate_sdpa_vector_heads(bfloat16_t)
+    instantiate_sdpa_vector_heads(float16_t)

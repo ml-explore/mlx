@@ -7,6 +7,7 @@
 #include <numeric>
 #include <sstream>
 
+#include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/copy.h"
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/kernels/scaled_dot_product_attention_params.h"
@@ -255,20 +256,56 @@ void sdpa_metal(
     return;
   }
 }
+
+void sdpa_vector(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& v,
+    array& out,
+    float alpha) {
+  // Set the kernel name
+  std::string kname;
+  kname.reserve(64);
+  kname += "sdpa_vector_";
+  kname += get_type_string(q.dtype());
+  kname += "_";
+  kname += std::to_string(q.shape(-1));
+
+  // Compute the necessary sizes
+  int gqa_factor = q.shape(1) / k.shape(1);
+  int N = k.shape(2);
+  int B = q.shape(0) * q.shape(1);
+  MTL::Size group_dims(1024, 1, 1);
+  MTL::Size grid_dims(1, B, 1);
+
+  // Get the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Set its arguments
+  compute_encoder.set_input_array(q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(v, 2);
+  compute_encoder.set_output_array(out, 3);
+  compute_encoder->setBytes(&gqa_factor, sizeof(int), 4);
+  compute_encoder->setBytes(&N, sizeof(int), 5);
+
+  // Launch
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+}
+
 } // namespace
 
 void ScaledDotProductAttention::eval_gpu(
     const std::vector<array>& inputs,
     array& out) {
-  assert(inputs.size() >= 3);
+  assert(inputs.size() == 3);
   if (!issubdtype(out.dtype(), floating)) {
     throw std::runtime_error(
         "[ScaledDotProductAttention] Does not yet support non-floating point types.");
-  }
-
-  if (inputs.size() == 4) {
-    out = fallback_(inputs)[0];
-    return;
   }
 
   out.set_data(allocator::malloc_or_wait(out.nbytes()));
@@ -279,6 +316,35 @@ void ScaledDotProductAttention::eval_gpu(
   auto& k_pre = inputs[1];
   auto& v_pre = inputs[2];
   auto& o = out;
+
+  if (q_pre.shape(2) == 1) {
+    std::vector<array> copies;
+    auto ensure_row_contiguous = [&copies, &s](const array& arr) {
+      if (arr.flags().row_contiguous) {
+        return arr;
+      } else {
+        array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
+        copy_gpu(arr, arr_copy, CopyType::General, s);
+        copies.push_back(arr_copy);
+        return arr_copy;
+      }
+    };
+
+    auto q = ensure_row_contiguous(q_pre);
+    auto k = ensure_row_contiguous(k_pre);
+    auto v = ensure_row_contiguous(v_pre);
+
+    sdpa_vector(s, d, q, k, v, o, 1.0);
+
+    if (!copies.empty()) {
+      d.get_command_buffer(s.index)->addCompletedHandler(
+          [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
+            copies.clear();
+          });
+    }
+    return;
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // Init checks and prep
 
