@@ -277,6 +277,7 @@ void sdpa_vector(
   int gqa_factor = q.shape(1) / k.shape(1);
   int N = k.shape(2);
   int B = q.shape(0) * q.shape(1);
+  size_t stride = k.strides()[1];
   MTL::Size group_dims(1024, 1, 1);
   MTL::Size grid_dims(1, B, 1);
 
@@ -292,7 +293,8 @@ void sdpa_vector(
   compute_encoder.set_output_array(out, 3);
   compute_encoder->setBytes(&gqa_factor, sizeof(int), 4);
   compute_encoder->setBytes(&N, sizeof(int), 5);
-  compute_encoder->setBytes(&scale, sizeof(float), 6);
+  compute_encoder->setBytes(&stride, sizeof(size_t), 6);
+  compute_encoder->setBytes(&scale, sizeof(float), 7);
 
   // Launch
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
@@ -320,20 +322,23 @@ void ScaledDotProductAttention::eval_gpu(
 
   if (q_pre.shape(2) == 1) {
     std::vector<array> copies;
-    auto ensure_row_contiguous = [&copies, &s](const array& arr) {
-      if (arr.flags().row_contiguous) {
-        return arr;
-      } else {
+
+    auto ensure_contiguous_except_seq_len = [&copies, &s](const array& arr) {
+      auto& strides = arr.strides();
+      if (strides[3] != 1 || strides[2] != arr.shape(-1) ||
+          strides[0] != strides[1] * arr.shape(1)) {
         array arr_copy(arr.shape(), arr.dtype(), nullptr, {});
         copy_gpu(arr, arr_copy, CopyType::General, s);
         copies.push_back(arr_copy);
         return arr_copy;
+      } else {
+        return arr;
       }
     };
 
-    auto q = ensure_row_contiguous(q_pre);
-    auto k = ensure_row_contiguous(k_pre);
-    auto v = ensure_row_contiguous(v_pre);
+    auto q = ensure_contiguous_except_seq_len(q_pre);
+    auto k = ensure_contiguous_except_seq_len(k_pre);
+    auto v = ensure_contiguous_except_seq_len(v_pre);
 
     sdpa_vector(s, d, q, k, v, o, scale_);
 

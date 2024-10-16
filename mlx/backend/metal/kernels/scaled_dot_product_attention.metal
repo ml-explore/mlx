@@ -1482,6 +1482,7 @@ kernel void fast_inference_sdpa_reduce_tiles_half(
       device type* out [[buffer(3)]],                                        \
       const constant int& gqa_factor,                                        \
       const constant int& N,                                                 \
+      const constant size_t& k_stride,                                       \
       const constant float& scale,                                           \
       uint3 tid [[threadgroup_position_in_grid]],                            \
       uint simd_gid [[simdgroup_index_in_threadgroup]],                      \

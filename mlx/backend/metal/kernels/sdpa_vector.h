@@ -10,6 +10,7 @@ template <typename T, int D>
     device T* out [[buffer(3)]],
     const constant int& gqa_factor,
     const constant int& N,
+    const constant size_t& k_stride,
     const constant float& scale,
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -34,8 +35,8 @@ template <typename T, int D>
   const int head_idx = tid.y;
   const int kv_head_idx = head_idx / gqa_factor;
   queries += head_idx * D + simd_lid * elem_per_thread;
-  keys += kv_head_idx * D * N + simd_gid * D + simd_lid * elem_per_thread;
-  values += kv_head_idx * D * N + simd_gid * D + simd_lid * elem_per_thread;
+  keys += kv_head_idx * k_stride + simd_gid * D + simd_lid * elem_per_thread;
+  values += kv_head_idx * k_stride + simd_gid * D + simd_lid * elem_per_thread;
   out += head_idx * D + simd_gid * elem_per_thread;
 
   // Read the query and 0 the output accumulator
