@@ -4,10 +4,10 @@ import math
 import mlx.core as mx
 from time_utils import time_fn
 
-L = 16384
+L = 1024
 H = 32
-H_k = 32 // 2
-D = 64
+H_k = 32 // 4
+D = 128
 
 
 def attention(q, k, v):
