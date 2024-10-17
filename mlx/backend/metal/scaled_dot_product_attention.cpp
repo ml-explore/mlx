@@ -257,8 +257,9 @@ void ScaledDotProductAttention::eval_gpu(
     auto q = copy_unless(is_matrix_contiguous, q_pre);
     auto k = copy_unless(is_matrix_contiguous, k_pre);
     auto v = copy_unless(is_matrix_contiguous, v_pre);
+    o.set_data(allocator::malloc_or_wait(o.nbytes()));
 
-    sdpa_full_self_attention_metal(s, d, q, k, v, scale_, out);
+    sdpa_full_self_attention_metal(s, d, q, k, v, scale_, o);
   }
 
   if (!copies.empty()) {
