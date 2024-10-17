@@ -68,4 +68,35 @@ instantiate_quantized_all(affine_dequantize)
   instantiate_quantized_groups_aligned(name, 8) \
 
 instantiate_quantized_all_aligned(qmm_t)
-instantiate_quantized_all_aligned(bs_qmm_t) // clang-format on
+instantiate_quantized_all_aligned(bs_qmm_t)
+
+#define instantiate_quantized_quad(name, type, group_size, bits, D) \
+  instantiate_kernel(                                               \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_d_" #D,      \
+      name,                                                         \
+      type,                                                         \
+      group_size,                                                   \
+      bits,                                                         \
+      D)
+
+#define instantiate_quantized_sizes_quad(name, type, group_size, bits) \
+  instantiate_quantized_quad(name, type, group_size, bits, 128)        \
+  instantiate_quantized_quad(name, type, group_size, bits, 96)         \
+  instantiate_quantized_quad(name, type, group_size, bits, 64)
+
+#define instantiate_quantized_types_quad(name, group_size, bits)       \
+  instantiate_quantized_sizes_quad(name, float, group_size, bits)      \
+  instantiate_quantized_sizes_quad(name, float16_t, group_size, bits)  \
+  instantiate_quantized_sizes_quad(name, bfloat16_t, group_size, bits)
+
+#define instantiate_quantized_groups_quad(name, bits)  \
+  instantiate_quantized_types_quad(name, 128, bits)    \
+  instantiate_quantized_types_quad(name, 64, bits)     \
+  instantiate_quantized_types_quad(name, 32, bits)
+
+#define instantiate_quantized_all_quad(name)     \
+  instantiate_quantized_groups_quad(name, 2)     \
+  instantiate_quantized_groups_quad(name, 4)     \
+  instantiate_quantized_groups_quad(name, 8)
+
+instantiate_quantized_all_quad(qmv_quad) // clang-format on

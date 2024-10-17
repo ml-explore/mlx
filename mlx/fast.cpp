@@ -727,15 +727,6 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
 
   int el_per_int = 32 / bits;
 
-  if (w.shape(-1) < 32 * el_per_int) {
-    std::ostringstream msg;
-    msg << "[quantize] The feature dimension (2nd dimension of the matrix) is "
-        << "too small for quantization. We support >=512 for 2 bits, "
-        << ">= 256 for 4 bits and >= 128 for 8 bits. The provided matrix has "
-        << "shape " << w.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
   auto fallback = [group_size, bits, el_per_int, s](
                       const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
