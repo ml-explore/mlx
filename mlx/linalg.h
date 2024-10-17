@@ -74,6 +74,10 @@ array pinv(const array& a, StreamOrDevice s = {});
 
 array cholesky_inv(const array& a, bool upper = false, StreamOrDevice s = {});
 
+array eigvalsh(const array& a, bool upper = false, StreamOrDevice s = {});
+
+std::pair<array, array> eigh(const array& a, bool upper = false, StreamOrDevice s = {});
+
 /**
  * Compute the cross product of two arrays along the given axis.
  */

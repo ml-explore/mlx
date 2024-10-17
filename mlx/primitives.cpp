@@ -767,6 +767,28 @@ std::pair<std::vector<array>, std::vector<int>> Cholesky::vmap(
   return {{linalg::cholesky(a, upper_, stream())}, {ax}};
 }
 
+std::pair<std::vector<array>, std::vector<int>> Eigh::vmap(
+    const std::vector<array>& inputs,
+    const std::vector<int>& axes) {
+  assert(inputs.size() == 1);
+  assert(axes.size() == 1);
+  
+  auto ax = axes[0] >= 0 ? 0 : -1;
+  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  
+  std::vector<array> outputs;
+  if (compute_eigenvectors_) {
+    auto [values, vectors] = linalg::eigh(a, upper_, stream());
+    outputs = {values, vectors};
+  } else {
+    outputs = {linalg::eigvalsh(a, upper_, stream())};
+  }
+  
+  std::vector<int> out_axes(outputs.size(), ax);
+  
+  return {outputs, out_axes};
+}
+
 std::vector<array> Concatenate::vjp(
     const std::vector<array>& primals,
     const std::vector<array>& cotangents,
