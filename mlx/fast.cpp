@@ -622,7 +622,7 @@ array scaled_dot_product_attention(
   const size_t query_sequence_length = q.shape(2);
 
   const bool sdpa_vector_supported_head_dim =
-      query_head_dim == 32 || query_head_dim == 64 || query_head_dim == 128;
+      query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128;
   const bool sdpa_full_supported_head_dim =
       query_head_dim == 64 || query_head_dim == 128;
 
