@@ -618,8 +618,11 @@ array scaled_dot_product_attention(
   };
 
   auto stream = to_stream(s);
+  const size_t value_head_dim = v.shape(-1);
   const size_t query_head_dim = q.shape(-1);
   const size_t query_sequence_length = q.shape(2);
+
+  bool implementation_supports_use_case = query_head_dim == value_head_dim;
 
   const bool sdpa_vector_supported_head_dim =
       query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128;
@@ -635,7 +638,7 @@ array scaled_dot_product_attention(
       !mask.has_value() && sdpa_vector_supported_head_dim &&
       stream.device == Device::gpu;
 
-  bool implementation_supports_use_case =
+  implementation_supports_use_case &=
       supports_sdpa_full || supports_sdpa_vector;
 
   if (implementation_supports_use_case) {
