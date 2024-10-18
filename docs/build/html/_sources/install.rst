@@ -14,7 +14,7 @@ silicon computer is
 To install from PyPI you must meet the following requirements:
 
 - Using an M series chip (Apple silicon)
-- Using a native Python >= 3.8
+- Using a native Python >= 3.9
 - macOS >= 13.5
 
 .. note::
