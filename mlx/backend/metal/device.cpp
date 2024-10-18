@@ -205,6 +205,9 @@ Device::~Device() {
   for (auto& b : buffer_map_) {
     b.second.second->release();
   }
+  for (auto& f : fence_map_) {
+    f.second->release();
+  }
   for (auto& k : kernel_map_) {
     k.second->release();
   }
@@ -228,6 +231,7 @@ void Device::new_queue(int index) {
   queue_map_.insert({index, q});
   buffer_map_.insert({index, {0, nullptr}});
   encoder_map_.insert({index, nullptr});
+  fence_map_.insert({index, device_->newFence()});
 }
 
 int Device::get_command_buffer_ops(int index) {
@@ -270,7 +274,11 @@ void Device::commit_command_buffer(int index) {
 }
 
 void Device::end_encoding(int index) {
-  encoder_map_[index] = nullptr;
+  auto eit = encoder_map_.find(index);
+  if (eit->second != nullptr) {
+    (*eit->second)->updateFence(fence_map_[index]);
+  }
+  eit->second = nullptr;
 }
 
 CommandEncoder& Device::get_command_encoder(int index) {
@@ -278,6 +286,7 @@ CommandEncoder& Device::get_command_encoder(int index) {
   if (eit->second == nullptr) {
     auto cb = get_command_buffer(index);
     eit->second = std::make_unique<CommandEncoder>(cb);
+    (*eit->second)->waitForFence(fence_map_[index]);
   }
   return *(eit->second);
 }

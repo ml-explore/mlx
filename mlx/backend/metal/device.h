@@ -173,6 +173,7 @@ class Device {
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
   std::unordered_map<int32_t, std::unique_ptr<CommandEncoder>> encoder_map_;
+  std::unordered_map<int32_t, MTL::Fence*> fence_map_;
 
   std::shared_mutex kernel_mtx_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;
