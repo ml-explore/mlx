@@ -103,8 +103,8 @@ void* compile(
     source_file.close();
 
     std::ostringstream build_command;
-    build_command << "g++ -std=c++17 -O3 -Wall -fPIC -shared "
-                  << source_file_path << " -o " << shared_lib_path;
+    build_command << "g++ -std=c++17 -O3 -Wall -fPIC -shared '"
+                  << source_file_path << "' -o '" << shared_lib_path << "'";
     std::string build_command_str = build_command.str();
     auto return_code = system(build_command_str.c_str());
     if (return_code) {

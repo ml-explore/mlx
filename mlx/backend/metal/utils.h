@@ -30,8 +30,8 @@ std::string type_to_name(const array& a);
 // Compute the thread block dimensions which fit the given
 // input dimensions.
 // - The thread block dimensions will be powers of two
-// - The thread block size will be less than 1024
-MTL::Size get_block_dims(int dim0, int dim1, int dim2);
+// - The thread block size will be less than 2^pow2
+MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 = 10);
 
 // Computes a 2D grid where each element is < UINT_MAX
 // Assumes:
