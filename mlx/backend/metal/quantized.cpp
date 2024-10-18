@@ -51,21 +51,24 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   auto& s_strides = scales.strides();
   auto& b_strides = biases.strides();
 
+  bool batched = w.ndim() > 2 || !x.flags().row_contiguous;
+
   int D = x.shape(-1);
-  int B = x.shape(-2);
   int O = out.shape(-1);
-  int N = out.size() / B / O;
+
+  int B = batched ? x.shape(-2) : x.size() / D;
+  int N = batched ? out.size() / B / O : 1;
   if (transpose_) {
     if (B < 6 && (D == 128 || D == 64)) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
       kname << "qmv_quad_" << type_string << "_gs_" << group_size_ << "_b_"
-            << bits_ << "_d_" << D;
+            << bits_ << "_d_" << D << "_batch_" << batched;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
       auto template_def = get_template_definition(
-          kname.str(), "qmv_quad", type_string, group_size_, bits_, D);
+          kname.str(), "qmv_quad", type_string, group_size_, bits_, D, batched);
       auto kernel = get_quantized_kernel(d, kname.str(), template_def);
       compute_encoder->setComputePipelineState(kernel);
 
@@ -85,14 +88,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&D, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
 
-      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
-      set_vector_bytes(compute_encoder, x_shape, 8);
-      set_vector_bytes(compute_encoder, x_strides, 9);
-      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
-      set_vector_bytes(compute_encoder, w_shape, 11);
-      set_vector_bytes(compute_encoder, w_strides, 12);
-      set_vector_bytes(compute_encoder, s_strides, 13);
-      set_vector_bytes(compute_encoder, b_strides, 14);
+      if (batched) {
+        compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
+        set_vector_bytes(compute_encoder, x_shape, 8);
+        set_vector_bytes(compute_encoder, x_strides, 9);
+        compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
+        set_vector_bytes(compute_encoder, w_shape, 11);
+        set_vector_bytes(compute_encoder, w_strides, 12);
+        set_vector_bytes(compute_encoder, s_strides, 13);
+        set_vector_bytes(compute_encoder, b_strides, 14);
+      }
 
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
@@ -101,12 +106,12 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
       kname << "qmv_fast_" << type_string << "_gs_" << group_size_ << "_b_"
-            << bits_;
+            << bits_ << "_batch_" << batched;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
       auto template_def = get_template_definition(
-          kname.str(), "qmv_fast", type_string, group_size_, bits_);
+          kname.str(), "qmv_fast", type_string, group_size_, bits_, batched);
       auto kernel = get_quantized_kernel(d, kname.str(), template_def);
       compute_encoder->setComputePipelineState(kernel);
 
@@ -123,14 +128,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&D, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
 
-      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
-      set_vector_bytes(compute_encoder, x_shape, 8);
-      set_vector_bytes(compute_encoder, x_strides, 9);
-      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
-      set_vector_bytes(compute_encoder, w_shape, 11);
-      set_vector_bytes(compute_encoder, w_strides, 12);
-      set_vector_bytes(compute_encoder, s_strides, 13);
-      set_vector_bytes(compute_encoder, b_strides, 14);
+      if (batched) {
+        compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
+        set_vector_bytes(compute_encoder, x_shape, 8);
+        set_vector_bytes(compute_encoder, x_strides, 9);
+        compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
+        set_vector_bytes(compute_encoder, w_shape, 11);
+        set_vector_bytes(compute_encoder, w_strides, 12);
+        set_vector_bytes(compute_encoder, s_strides, 13);
+        set_vector_bytes(compute_encoder, b_strides, 14);
+      }
 
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
@@ -139,12 +146,13 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     else if (B < 6) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
-      kname << "qmv_" << type_string << "_gs_" << group_size_ << "_b_" << bits_;
+      kname << "qmv_" << type_string << "_gs_" << group_size_ << "_b_" << bits_
+            << "_batch_" << batched;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
       auto template_def = get_template_definition(
-          kname.str(), "qmv", type_string, group_size_, bits_);
+          kname.str(), "qmv", type_string, group_size_, bits_, batched);
       auto kernel = get_quantized_kernel(d, kname.str(), template_def);
       compute_encoder->setComputePipelineState(kernel);
 
@@ -161,14 +169,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&D, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
 
-      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
-      set_vector_bytes(compute_encoder, x_shape, 8);
-      set_vector_bytes(compute_encoder, x_strides, 9);
-      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
-      set_vector_bytes(compute_encoder, w_shape, 11);
-      set_vector_bytes(compute_encoder, w_strides, 12);
-      set_vector_bytes(compute_encoder, s_strides, 13);
-      set_vector_bytes(compute_encoder, b_strides, 14);
+      if (batched) {
+        compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
+        set_vector_bytes(compute_encoder, x_shape, 8);
+        set_vector_bytes(compute_encoder, x_strides, 9);
+        compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
+        set_vector_bytes(compute_encoder, w_shape, 11);
+        set_vector_bytes(compute_encoder, w_strides, 12);
+        set_vector_bytes(compute_encoder, s_strides, 13);
+        set_vector_bytes(compute_encoder, b_strides, 14);
+      }
 
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
@@ -179,12 +189,18 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       std::string aligned_n = (O % 32) == 0 ? "true" : "false";
       auto type_string = get_type_string(x.dtype());
       kname << "qmm_t_" << type_string << "_gs_" << group_size_ << "_b_"
-            << bits_ << "_alN_" << aligned_n;
+            << bits_ << "_alN_" << aligned_n << "_batch_" << batched;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
       auto template_def = get_template_definition(
-          kname.str(), "qmm_t", type_string, group_size_, bits_, aligned_n);
+          kname.str(),
+          "qmm_t",
+          type_string,
+          group_size_,
+          bits_,
+          aligned_n,
+          batched);
       auto kernel = get_quantized_kernel(d, kname.str(), template_def);
       compute_encoder->setComputePipelineState(kernel);
 
@@ -205,14 +221,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&O, sizeof(int), 6);
       compute_encoder->setBytes(&D, sizeof(int), 7);
 
-      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 8);
-      set_vector_bytes(compute_encoder, x_shape, 9);
-      set_vector_bytes(compute_encoder, x_strides, 10);
-      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 11);
-      set_vector_bytes(compute_encoder, w_shape, 12);
-      set_vector_bytes(compute_encoder, w_strides, 13);
-      set_vector_bytes(compute_encoder, s_strides, 14);
-      set_vector_bytes(compute_encoder, b_strides, 15);
+      if (batched) {
+        compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 8);
+        set_vector_bytes(compute_encoder, x_shape, 9);
+        set_vector_bytes(compute_encoder, x_strides, 10);
+        compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 11);
+        set_vector_bytes(compute_encoder, w_shape, 12);
+        set_vector_bytes(compute_encoder, w_strides, 13);
+        set_vector_bytes(compute_encoder, s_strides, 14);
+        set_vector_bytes(compute_encoder, b_strides, 15);
+      }
 
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
@@ -221,12 +239,13 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
     if (B < 4) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
-      kname << "qvm_" << type_string << "_gs_" << group_size_ << "_b_" << bits_;
+      kname << "qvm_" << type_string << "_gs_" << group_size_ << "_b_" << bits_
+            << "_batch_" << batched;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
       auto template_def = get_template_definition(
-          kname.str(), "qvm", type_string, group_size_, bits_);
+          kname.str(), "qvm", type_string, group_size_, bits_, batched);
       auto kernel = get_quantized_kernel(d, kname.str(), template_def);
       compute_encoder->setComputePipelineState(kernel);
 
@@ -243,14 +262,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&D, sizeof(int), 5);
       compute_encoder->setBytes(&O, sizeof(int), 6);
 
-      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
-      set_vector_bytes(compute_encoder, x_shape, 8);
-      set_vector_bytes(compute_encoder, x_strides, 9);
-      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
-      set_vector_bytes(compute_encoder, w_shape, 11);
-      set_vector_bytes(compute_encoder, w_strides, 12);
-      set_vector_bytes(compute_encoder, s_strides, 13);
-      set_vector_bytes(compute_encoder, b_strides, 14);
+      if (batched) {
+        compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 7);
+        set_vector_bytes(compute_encoder, x_shape, 8);
+        set_vector_bytes(compute_encoder, x_strides, 9);
+        compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 10);
+        set_vector_bytes(compute_encoder, w_shape, 11);
+        set_vector_bytes(compute_encoder, w_strides, 12);
+        set_vector_bytes(compute_encoder, s_strides, 13);
+        set_vector_bytes(compute_encoder, b_strides, 14);
+      }
 
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
@@ -260,12 +281,12 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
       kname << "qmm_n_" << type_string << "_gs_" << group_size_ << "_b_"
-            << bits_;
+            << bits_ << "_batch_" << batched;
 
       // Encode and dispatch kernel
       auto& compute_encoder = d.get_command_encoder(s.index);
       auto template_def = get_template_definition(
-          kname.str(), "qmm_n", type_string, group_size_, bits_);
+          kname.str(), "qmm_n", type_string, group_size_, bits_, batched);
       auto kernel = get_quantized_kernel(d, kname.str(), template_def);
       compute_encoder->setComputePipelineState(kernel);
 
@@ -293,14 +314,16 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
       compute_encoder->setBytes(&O, sizeof(int), 6);
       compute_encoder->setBytes(&D, sizeof(int), 7);
 
-      compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 8);
-      set_vector_bytes(compute_encoder, x_shape, 9);
-      set_vector_bytes(compute_encoder, x_strides, 10);
-      compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 11);
-      set_vector_bytes(compute_encoder, w_shape, 12);
-      set_vector_bytes(compute_encoder, w_strides, 13);
-      set_vector_bytes(compute_encoder, s_strides, 14);
-      set_vector_bytes(compute_encoder, b_strides, 15);
+      if (batched) {
+        compute_encoder->setBytes(&x_batch_ndims, sizeof(int), 8);
+        set_vector_bytes(compute_encoder, x_shape, 9);
+        set_vector_bytes(compute_encoder, x_strides, 10);
+        compute_encoder->setBytes(&w_batch_ndims, sizeof(int), 11);
+        set_vector_bytes(compute_encoder, w_shape, 12);
+        set_vector_bytes(compute_encoder, w_strides, 13);
+        set_vector_bytes(compute_encoder, s_strides, 14);
+        set_vector_bytes(compute_encoder, b_strides, 15);
+      }
 
       compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
     }
