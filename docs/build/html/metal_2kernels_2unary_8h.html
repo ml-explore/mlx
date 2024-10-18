@@ -98,24 +98,24 @@ $(function(){ initResizable(false); });
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="func-members" name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ada52df4976078091cd7b47c152f326fb" id="r_ada52df4976078091cd7b47c152f326fb"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
-<tr class="memitem:ada52df4976078091cd7b47c152f326fb"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ada52df4976078091cd7b47c152f326fb">unary_v</a> (device const T *in, device T *out, uint index)</td></tr>
-<tr class="separator:ada52df4976078091cd7b47c152f326fb"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a95f7b9c0112cdc84ae10465fb74d29dd" id="r_a95f7b9c0112cdc84ae10465fb74d29dd"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op &gt; </td></tr>
-<tr class="memitem:a95f7b9c0112cdc84ae10465fb74d29dd"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a95f7b9c0112cdc84ae10465fb74d29dd">unary_v2</a> (device const T *in, device T *out, uint2 index, uint2 grid_dim)</td></tr>
-<tr class="separator:a95f7b9c0112cdc84ae10465fb74d29dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3087458e6d5af4e08a4603802f134263" id="r_a3087458e6d5af4e08a4603802f134263"><td class="memTemplParams" colspan="2">template&lt;typename T , typename Op , int N = 1&gt; </td></tr>
-<tr class="memitem:a3087458e6d5af4e08a4603802f134263"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a3087458e6d5af4e08a4603802f134263">unary_g</a> (device const T *in, device T *out, constant const int *in_shape, constant const size_t *in_strides, device const int &amp;ndim, uint3 index, uint3 grid_dim)</td></tr>
-<tr class="separator:a3087458e6d5af4e08a4603802f134263"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a64e4f6737edddb72122e262977ee3014" id="r_a64e4f6737edddb72122e262977ee3014"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
+<tr class="memitem:a64e4f6737edddb72122e262977ee3014"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a64e4f6737edddb72122e262977ee3014">unary_v</a> (device const T *in, device U *out, uint index)</td></tr>
+<tr class="separator:a64e4f6737edddb72122e262977ee3014"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7c7690f0df9d2acc60b63be58d9c7777" id="r_a7c7690f0df9d2acc60b63be58d9c7777"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op &gt; </td></tr>
+<tr class="memitem:a7c7690f0df9d2acc60b63be58d9c7777"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7c7690f0df9d2acc60b63be58d9c7777">unary_v2</a> (device const T *in, device U *out, uint2 index, uint2 grid_dim)</td></tr>
+<tr class="separator:a7c7690f0df9d2acc60b63be58d9c7777"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac965f8d3ed62f8580dbfb645e83d4ae5" id="r_ac965f8d3ed62f8580dbfb645e83d4ae5"><td class="memTemplParams" colspan="2">template&lt;typename T , typename U , typename Op , int N = 1&gt; </td></tr>
+<tr class="memitem:ac965f8d3ed62f8580dbfb645e83d4ae5"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac965f8d3ed62f8580dbfb645e83d4ae5">unary_g</a> (device const T *in, device U *out, constant const int *in_shape, constant const size_t *in_strides, device const int &amp;ndim, uint3 index, uint3 grid_dim)</td></tr>
+<tr class="separator:ac965f8d3ed62f8580dbfb645e83d4ae5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="a3087458e6d5af4e08a4603802f134263" name="a3087458e6d5af4e08a4603802f134263"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3087458e6d5af4e08a4603802f134263">&#9670;&#160;</a></span>unary_g()</h2>
+<a id="ac965f8d3ed62f8580dbfb645e83d4ae5" name="ac965f8d3ed62f8580dbfb645e83d4ae5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac965f8d3ed62f8580dbfb645e83d4ae5">&#9670;&#160;</a></span>unary_g()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename Op , int N = 1&gt; </div>
+template&lt;typename T , typename U , typename Op , int N = 1&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void unary_g </td>
@@ -125,7 +125,7 @@ template&lt;typename T , typename Op , int N = 1&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -157,13 +157,13 @@ template&lt;typename T , typename Op , int N = 1&gt; </div>
 
 </div>
 </div>
-<a id="ada52df4976078091cd7b47c152f326fb" name="ada52df4976078091cd7b47c152f326fb"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ada52df4976078091cd7b47c152f326fb">&#9670;&#160;</a></span>unary_v()</h2>
+<a id="a64e4f6737edddb72122e262977ee3014" name="a64e4f6737edddb72122e262977ee3014"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64e4f6737edddb72122e262977ee3014">&#9670;&#160;</a></span>unary_v()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename Op &gt; </div>
+template&lt;typename T , typename U , typename Op &gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void unary_v </td>
@@ -173,7 +173,7 @@ template&lt;typename T , typename Op &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -185,13 +185,13 @@ template&lt;typename T , typename Op &gt; </div>
 
 </div>
 </div>
-<a id="a95f7b9c0112cdc84ae10465fb74d29dd" name="a95f7b9c0112cdc84ae10465fb74d29dd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a95f7b9c0112cdc84ae10465fb74d29dd">&#9670;&#160;</a></span>unary_v2()</h2>
+<a id="a7c7690f0df9d2acc60b63be58d9c7777" name="a7c7690f0df9d2acc60b63be58d9c7777"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7c7690f0df9d2acc60b63be58d9c7777">&#9670;&#160;</a></span>unary_v2()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , typename Op &gt; </div>
+template&lt;typename T , typename U , typename Op &gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void unary_v2 </td>
@@ -201,7 +201,7 @@ template&lt;typename T , typename Op &gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
+          <td class="paramtype">device U *</td>          <td class="paramname"><span class="paramname"><em>out</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
