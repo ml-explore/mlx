@@ -93,10 +93,10 @@ inline void build_kernel(
     // a third grid dimension
     os << "  size_t index = pos.x + grid.x * size_t(pos.y);\n";
   } else if (work_per_thread > 1) {
-    os << "  constexpr int N = " << std::to_string(work_per_thread) << ";\n"
+    os << "  constexpr int N_ = " << std::to_string(work_per_thread) << ";\n"
        << "  int xshape = output_shape["
        << (dynamic_dims ? "ndim - 1" : std::to_string(ndim - 1)) << "];\n"
-       << "  size_t index = N * pos.x + xshape * (pos.y + size_t(grid.y) * pos.z);\n";
+       << "  size_t index = N_ * pos.x + xshape * (pos.y + size_t(grid.y) * pos.z);\n";
   } else {
     os << " size_t index = pos.x + grid.x * (pos.y + size_t(grid.y) * pos.z);\n";
   }
@@ -141,11 +141,11 @@ inline void build_kernel(
          << "in_strides + " << offset << ");\n";
     } else if (!dynamic_dims) {
       int offset = i * ndim;
-      os << "  size_t index_" << xname << " = N * pos.x * in_strides["
+      os << "  size_t index_" << xname << " = N_ * pos.x * in_strides["
          << offset + ndim - 1 << "]"
          << " + pos.y * in_strides[" << offset + ndim - 2 << "];\n";
     } else {
-      os << "  size_t index_" << xname << " = N * pos.x * in_strides[ndim * "
+      os << "  size_t index_" << xname << " = N_ * pos.x * in_strides[ndim * "
          << i << " + ndim - 1]"
          << " + pos.y * in_strides[ndim * " << i << " + ndim - 2];\n";
     }
@@ -172,7 +172,7 @@ inline void build_kernel(
 
   // Open per-thread loop
   if (work_per_thread > 1) {
-    os << "  for (int i = 0; i < N && (int(N * pos.x) + i) < xshape; ++i) {\n";
+    os << "  for (int i = 0; i < N_ && (int(N_ * pos.x) + i) < xshape; ++i) {\n";
   }
 
   // Read non-contiguous inputs into tmps
@@ -434,10 +434,15 @@ void Compiled::eval_gpu(
     int work_per_thread = ndim > 3 ? WORK_PER_THREAD : 1;
     dim0 = (dim0 + work_per_thread - 1) / work_per_thread;
     NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
-    if (thread_group_size != 1024) {
-      throw std::runtime_error("[Metal::binary] Must use 1024 sized block");
+    int pow2;
+    if (thread_group_size == 1024) {
+      pow2 = 10;
+    } else if (thread_group_size > 512) {
+      pow2 = 9;
+    } else {
+      throw std::runtime_error("[Metal::compiled] Must use > 512 sized block");
     }
-    auto group_dims = get_block_dims(dim0, dim1, rest);
+    auto group_dims = get_block_dims(dim0, dim1, rest, pow2);
     MTL::Size grid_dims = MTL::Size(dim0, dim1, rest);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }

@@ -52,7 +52,7 @@ std::string type_to_name(const array& a) {
   return tname;
 }
 
-MTL::Size get_block_dims(int dim0, int dim1, int dim2) {
+MTL::Size get_block_dims(int dim0, int dim1, int dim2, int pow2 /* = 10 */) {
   int pows[3] = {0, 0, 0};
   int sum = 0;
   while (true) {
@@ -76,7 +76,7 @@ MTL::Size get_block_dims(int dim0, int dim1, int dim2) {
       pows[2]++;
       sum++;
     }
-    if (sum == presum || sum == 10) {
+    if (sum == presum || sum == pow2) {
       break;
     }
   }
