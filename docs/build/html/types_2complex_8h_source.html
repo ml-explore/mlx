@@ -118,7 +118,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00024" name="l00024"></a><span class="lineno">   24</span> </div>
 <div class="foldopen" id="foldopen00025" data-start="{" data-end="}">
 <div class="line"><a id="l00025" name="l00025"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1complex128__t.html#a3e2faf180c0b785646a0e4296f709a5e">   25</a></span>  <span class="keyword">operator</span> float()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    <span class="keywordflow">return</span> real();</div>
+<div class="line"><a id="l00026" name="l00026"></a><span class="lineno">   26</span>    <span class="keywordflow">return</span> <a class="code hl_function" href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">real</a>();</div>
 <div class="line"><a id="l00027" name="l00027"></a><span class="lineno">   27</span>  };</div>
 </div>
 <div class="line"><a id="l00028" name="l00028"></a><span class="lineno">   28</span>};</div>
@@ -140,7 +140,7 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00042" name="l00042"></a><span class="lineno">   42</span> </div>
 <div class="foldopen" id="foldopen00043" data-start="{" data-end="}">
 <div class="line"><a id="l00043" name="l00043"></a><span class="lineno"><a class="line" href="structmlx_1_1core_1_1complex64__t.html#a90d224dd37308345086bb9cc882ef6fc">   43</a></span>  <span class="keyword">operator</span> float()<span class="keyword"> const </span>{</div>
-<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keywordflow">return</span> real();</div>
+<div class="line"><a id="l00044" name="l00044"></a><span class="lineno">   44</span>    <span class="keywordflow">return</span> <a class="code hl_function" href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">real</a>();</div>
 <div class="line"><a id="l00045" name="l00045"></a><span class="lineno">   45</span>  };</div>
 </div>
 <div class="line"><a id="l00046" name="l00046"></a><span class="lineno">   46</span>};</div>
@@ -161,13 +161,13 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00056" name="l00056"></a><span class="lineno">   56</span> </div>
 <div class="foldopen" id="foldopen00057" data-start="{" data-end="}">
 <div class="line"><a id="l00057" name="l00057"></a><span class="lineno"><a class="line" href="namespacemlx_1_1core.html#a8723d145dd49021bfcb8e6c99e1c91a5">   57</a></span><span class="keyword">inline</span> <a class="code hl_struct" href="structmlx_1_1core_1_1complex64__t.html">complex64_t</a> <a class="code hl_function" href="group__ops.html#gab3bfbf82b1e4de7b00bbcf1a2255fbde">operator%</a>(<a class="code hl_struct" href="structmlx_1_1core_1_1complex64__t.html">complex64_t</a> a, <a class="code hl_struct" href="structmlx_1_1core_1_1complex64__t.html">complex64_t</a> b) {</div>
-<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>  <span class="keyword">auto</span> real = a.real() - (b.real() * <span class="keyword">static_cast&lt;</span>int64_t<span class="keyword">&gt;</span>(a.real() / b.real()));</div>
-<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>  <span class="keyword">auto</span> imag = a.imag() - (b.imag() * <span class="keyword">static_cast&lt;</span>int64_t<span class="keyword">&gt;</span>(a.imag() / b.imag()));</div>
-<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>  <span class="keywordflow">if</span> (real != 0 &amp;&amp; ((real &lt; 0) != (b.real() &lt; 0)))</div>
-<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    real += b.real();</div>
-<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>  <span class="keywordflow">if</span> (imag != 0 &amp;&amp; ((imag &lt; 0) != (b.imag() &lt; 0)))</div>
-<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    imag += b.imag();</div>
-<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>  <span class="keywordflow">return</span> {real, imag};</div>
+<div class="line"><a id="l00058" name="l00058"></a><span class="lineno">   58</span>  <span class="keyword">auto</span> <a class="code hl_function" href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">real</a> = a.real() - (b.real() * <span class="keyword">static_cast&lt;</span>int64_t<span class="keyword">&gt;</span>(a.real() / b.real()));</div>
+<div class="line"><a id="l00059" name="l00059"></a><span class="lineno">   59</span>  <span class="keyword">auto</span> <a class="code hl_function" href="group__ops.html#ga7ff592a64d528f0cf4f3d098465da029">imag</a> = a.imag() - (b.imag() * <span class="keyword">static_cast&lt;</span>int64_t<span class="keyword">&gt;</span>(a.imag() / b.imag()));</div>
+<div class="line"><a id="l00060" name="l00060"></a><span class="lineno">   60</span>  <span class="keywordflow">if</span> (<a class="code hl_function" href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">real</a> != 0 &amp;&amp; ((<a class="code hl_function" href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">real</a> &lt; 0) != (b.real() &lt; 0)))</div>
+<div class="line"><a id="l00061" name="l00061"></a><span class="lineno">   61</span>    <a class="code hl_function" href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">real</a> += b.real();</div>
+<div class="line"><a id="l00062" name="l00062"></a><span class="lineno">   62</span>  <span class="keywordflow">if</span> (<a class="code hl_function" href="group__ops.html#ga7ff592a64d528f0cf4f3d098465da029">imag</a> != 0 &amp;&amp; ((<a class="code hl_function" href="group__ops.html#ga7ff592a64d528f0cf4f3d098465da029">imag</a> &lt; 0) != (b.imag() &lt; 0)))</div>
+<div class="line"><a id="l00063" name="l00063"></a><span class="lineno">   63</span>    <a class="code hl_function" href="group__ops.html#ga7ff592a64d528f0cf4f3d098465da029">imag</a> += b.imag();</div>
+<div class="line"><a id="l00064" name="l00064"></a><span class="lineno">   64</span>  <span class="keywordflow">return</span> {<a class="code hl_function" href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">real</a>, <a class="code hl_function" href="group__ops.html#ga7ff592a64d528f0cf4f3d098465da029">imag</a>};</div>
 <div class="line"><a id="l00065" name="l00065"></a><span class="lineno">   65</span>}</div>
 </div>
 <div class="line"><a id="l00066" name="l00066"></a><span class="lineno">   66</span> </div>
@@ -230,9 +230,11 @@ $(function(){ initResizable(false); });
 <div class="ttc" id="agroup__ops_html_ga3a41895f25ed083a36994d95fa102546"><div class="ttname"><a href="group__ops.html#ga3a41895f25ed083a36994d95fa102546">mlx::core::operator&gt;=</a></div><div class="ttdeci">array operator&gt;=(const array &amp;a, const array &amp;b)</div><div class="ttdef"><b>Definition</b> ops.h:345</div></div>
 <div class="ttc" id="agroup__ops_html_ga4c8b8a1632944acaae50f0de6c23ece6"><div class="ttname"><a href="group__ops.html#ga4c8b8a1632944acaae50f0de6c23ece6">mlx::core::operator&lt;=</a></div><div class="ttdeci">array operator&lt;=(const array &amp;a, const array &amp;b)</div><div class="ttdef"><b>Definition</b> ops.h:373</div></div>
 <div class="ttc" id="agroup__ops_html_ga74fd2777adef10e6fe628a9cdadb01cb"><div class="ttname"><a href="group__ops.html#ga74fd2777adef10e6fe628a9cdadb01cb">mlx::core::operator&gt;</a></div><div class="ttdeci">array operator&gt;(const array &amp;a, const array &amp;b)</div><div class="ttdef"><b>Definition</b> ops.h:331</div></div>
+<div class="ttc" id="agroup__ops_html_ga7ff592a64d528f0cf4f3d098465da029"><div class="ttname"><a href="group__ops.html#ga7ff592a64d528f0cf4f3d098465da029">mlx::core::imag</a></div><div class="ttdeci">array imag(const array &amp;a, StreamOrDevice s={})</div></div>
 <div class="ttc" id="agroup__ops_html_gab3bfbf82b1e4de7b00bbcf1a2255fbde"><div class="ttname"><a href="group__ops.html#gab3bfbf82b1e4de7b00bbcf1a2255fbde">mlx::core::operator%</a></div><div class="ttdeci">array operator%(const array &amp;a, const array &amp;b)</div></div>
 <div class="ttc" id="agroup__ops_html_gade2eea48989f4caaf36e89f7bd2a8816"><div class="ttname"><a href="group__ops.html#gade2eea48989f4caaf36e89f7bd2a8816">mlx::core::operator-</a></div><div class="ttdeci">array operator-(const array &amp;a)</div></div>
 <div class="ttc" id="agroup__ops_html_gaee41e2b8f61d563200ff03575ac1d6c3"><div class="ttname"><a href="group__ops.html#gaee41e2b8f61d563200ff03575ac1d6c3">mlx::core::operator&lt;</a></div><div class="ttdeci">array operator&lt;(const array &amp;a, const array &amp;b)</div><div class="ttdef"><b>Definition</b> ops.h:359</div></div>
+<div class="ttc" id="agroup__ops_html_gaf8913cabeb9fb193ba687aaeb2087764"><div class="ttname"><a href="group__ops.html#gaf8913cabeb9fb193ba687aaeb2087764">mlx::core::real</a></div><div class="ttdeci">array real(const array &amp;a, StreamOrDevice s={})</div></div>
 <div class="ttc" id="ahalf__types_8h_html"><div class="ttname"><a href="half__types_8h.html">half_types.h</a></div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html"><div class="ttname"><a href="namespacemlx_1_1core.html">mlx::core</a></div><div class="ttdef"><b>Definition</b> allocator.h:7</div></div>
 <div class="ttc" id="anamespacemlx_1_1core_html_a0b3c76fd03f4df39ec8f9aefdced0861"><div class="ttname"><a href="namespacemlx_1_1core.html#a0b3c76fd03f4df39ec8f9aefdced0861">mlx::core::can_convert_to_complex64</a></div><div class="ttdeci">constexpr bool can_convert_to_complex64</div><div class="ttdef"><b>Definition</b> complex.h:31</div></div>
