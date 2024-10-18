@@ -125,7 +125,7 @@ class TestQuantized(mlx_tests.MLXTestCase):
             if group_size > N:
                 continue
             with self.subTest(shape=(B, M, N), group_size=group_size, bits=bits):
-                x_shape = (1, N) if B == 0 else (B, 1, N)
+                x_shape = (3, 1, N) if B == 0 else (B, 1, N)
                 w_shape = (M, N) if B == 0 else (B, M, N)
                 x = mx.random.normal(shape=x_shape, key=k1)
                 w = mx.random.normal(shape=w_shape, key=k2)
