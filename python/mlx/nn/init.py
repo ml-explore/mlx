@@ -348,3 +348,53 @@ def he_uniform(
         return mx.random.uniform(-limit, limit, a.shape, dtype=dtype)
 
     return initializer
+
+def sparse(
+    mean: float = 0.0, std: float = 1.0, sparsity: float = None, dtype: mx.Dtype = mx.float32
+) -> Callable[[mx.array], mx.array]:
+    r"""An initializer that returns a sparse matrix.
+
+    Args:
+        mean (float, optional): Mean of the normal distribution. Default:
+          ``0.0``.
+        std (float, optional): Standard deviation of the normal distribution.
+          Default: ``1.0``.
+        sparsity (float, optional): The fraction of elements in each column to
+          be set to zero. Default: ``None``.
+        dtype (Dtype, optional): The data type of the array. Default:
+          ``float32``.
+
+    Returns:
+        Callable[[array], array]: An initializer that returns an array with the
+        same shape as the input, filled with samples from a normal distribution.
+
+    Example:
+
+        >>> init_fn = nn.init.sparse(sparsity=0.5)
+        >>> init_fn(mx.zeros((2, 2)))
+        array([[-1.91187, -0.117483],
+       [0, 0]], dtype=float32)
+    """
+
+    def initializer(a: mx.array) -> mx.array:
+
+        if sparsity == None:
+          raise ValueError(f"Sparsity argument cannot be {sparsity}")
+
+        if a.ndim != 2:
+          raise ValueError("Only tensors with 2 dimensions are supported")
+
+        rows, cols = a.shape
+        num_zeros = int(mx.ceil(sparsity*rows))
+
+        a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
+
+        for col_idx in range(cols):
+            row_indices = mx.random.permutation(rows)
+            zero_indices = row_indices[:num_zeros]
+            a[zero_indices, col_idx] = 0
+
+
+        return a
+
+    return initializer
