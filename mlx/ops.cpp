@@ -3592,23 +3592,44 @@ array conv_general(
 }
 
 array quantized_matmul(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
+    const array& in_x,
+    const array& in_w,
+    const array& in_scales,
+    const array& in_biases,
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
+  auto x = in_x;
+  auto w = in_w;
+  auto scales = in_scales;
+  auto biases = in_biases;
+
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
 
-  if (w.ndim() != 2) {
-    std::ostringstream msg;
-    msg << "[quantized_matmul] Batched quantized matmul is not supported for now "
-        << "received w with shape " << w.shape();
-    throw std::invalid_argument(msg.str());
+  // QuantizedMatmul handles w.ndim == 2 case.
+  if (x.ndim() > 2 && w.ndim() > 2) {
+    std::vector<int> bsx_x(x.shape().begin(), x.shape().end() - 2);
+    std::vector<int> bsx_w(w.shape().begin(), w.shape().end() - 2);
+    auto inner_shape = broadcast_shapes(bsx_x, bsx_w);
+
+    // Broadcast x
+    inner_shape.push_back(x.shape(-2));
+    inner_shape.push_back(x.shape(-1));
+    x = broadcast_to(x, inner_shape, s);
+
+    // Broadcast w
+    *(inner_shape.end() - 2) = w.shape(-2);
+    *(inner_shape.end() - 1) = w.shape(-1);
+    w = broadcast_to(w, inner_shape, s);
+
+    *(inner_shape.end() - 1) = scales.shape(-1);
+    scales = broadcast_to(scales, inner_shape, s);
+
+    *(inner_shape.end() - 1) = biases.shape(-1);
+    biases = broadcast_to(biases, inner_shape, s);
   }
 
   auto dtype = result_type(x, scales, biases);

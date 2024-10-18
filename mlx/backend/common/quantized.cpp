@@ -201,55 +201,61 @@ void _qmm_dispatch(
     int group_size,
     bool transposed_w) {
   int K = x.shape(-1);
-  int M = x.size() / K;
+  int M = x.shape(-2);
   int N = out.shape(-1);
 
-  switch (x.dtype()) {
-    case float32:
-      _qmm_dispatch_typed<float>(
-          out.data<float>(),
-          x.data<float>(),
-          w.data<uint32_t>(),
-          scales.data<float>(),
-          biases.data<float>(),
-          M,
-          N,
-          K,
-          bits,
-          group_size,
-          transposed_w);
-      break;
-    case float16:
-      _qmm_dispatch_typed<float16_t>(
-          out.data<float16_t>(),
-          x.data<float16_t>(),
-          w.data<uint32_t>(),
-          scales.data<float16_t>(),
-          biases.data<float16_t>(),
-          M,
-          N,
-          K,
-          bits,
-          group_size,
-          transposed_w);
-      break;
-    case bfloat16:
-      _qmm_dispatch_typed<bfloat16_t>(
-          out.data<bfloat16_t>(),
-          x.data<bfloat16_t>(),
-          w.data<uint32_t>(),
-          scales.data<bfloat16_t>(),
-          biases.data<bfloat16_t>(),
-          M,
-          N,
-          K,
-          bits,
-          group_size,
-          transposed_w);
-      break;
-    default:
-      throw std::invalid_argument(
-          "[quantized_matmul] only floating types are supported");
+  int w_els = w.ndim() > 2 ? w.shape(-1) * w.shape(-2) : 0;
+  int g_els = w.ndim() > 2 ? scales.shape(-1) * scales.shape(-2) : 0;
+
+  int batch_size = x.size() / x.shape(-1) / x.shape(-2);
+  for (int i = 0; i < batch_size; i++) {
+    switch (x.dtype()) {
+      case float32:
+        _qmm_dispatch_typed<float>(
+            out.data<float>() + i * M * N,
+            x.data<float>() + elem_to_loc(i * M * K, x),
+            w.data<uint32_t>() + elem_to_loc(i * w_els, w),
+            scales.data<float>() + elem_to_loc(i * g_els, scales),
+            biases.data<float>() + elem_to_loc(i * g_els, biases),
+            M,
+            N,
+            K,
+            bits,
+            group_size,
+            transposed_w);
+        break;
+      case float16:
+        _qmm_dispatch_typed<float16_t>(
+            out.data<float16_t>() + i * M * N,
+            x.data<float16_t>() + elem_to_loc(i * M * K, x),
+            w.data<uint32_t>() + elem_to_loc(i * w_els, w),
+            scales.data<float16_t>() + elem_to_loc(i * g_els, scales),
+            biases.data<float16_t>() + elem_to_loc(i * g_els, biases),
+            M,
+            N,
+            K,
+            bits,
+            group_size,
+            transposed_w);
+        break;
+      case bfloat16:
+        _qmm_dispatch_typed<bfloat16_t>(
+            out.data<bfloat16_t>() + i * M * N,
+            x.data<bfloat16_t>() + elem_to_loc(i * M * K, x),
+            w.data<uint32_t>() + elem_to_loc(i * w_els, w),
+            scales.data<bfloat16_t>() + elem_to_loc(i * g_els, scales),
+            biases.data<bfloat16_t>() + elem_to_loc(i * g_els, biases),
+            M,
+            N,
+            K,
+            bits,
+            group_size,
+            transposed_w);
+        break;
+      default:
+        throw std::invalid_argument(
+            "[quantized_matmul] only floating types are supported");
+    }
   }
 }
 

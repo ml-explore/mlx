@@ -18,49 +18,61 @@ void _qmm_t_4_64(
     const float* biases,
     int M,
     int N,
-    int K) {
+    int K,
+    int B,
+    bool batched_w) {
   constexpr int bits = 4;
   constexpr int group_size = 64;
   constexpr int bitmask = (1 << bits) - 1;
   constexpr int pack_factor = 32 / bits;
   constexpr int packs_in_group = group_size / pack_factor;
 
-  for (int m = 0; m < M; m++) {
-    const uint32_t* w_local = w;
-    const float* scales_local = scales;
-    const float* biases_local = biases;
+  int w_els = N * K / pack_factor;
+  int g_els = w_els * pack_factor / group_size;
 
-    for (int n = 0; n < N; n++) {
-      const simd_float16* x_local = (simd_float16*)x;
-      simd_float16 sum = 0;
-      for (int k = 0; k < K; k += group_size) {
-        float scale = *scales_local++;
-        float bias = *biases_local++;
+  for (int i = 0; i < B; i++) {
+    for (int m = 0; m < M; m++) {
+      const uint32_t* w_local = w;
+      const float* scales_local = scales;
+      const float* biases_local = biases;
 
-        for (int kw = 0; kw < packs_in_group; kw += 2) {
-          // TODO: vectorize this properly
-          simd_uint16 wi;
-          for (int e = 0; e < 2; e++) {
-            uint32_t wii = *w_local++;
-            for (int p = 0; p < 8; p++) {
-              wi[e * 8 + p] = wii & bitmask;
-              wii >>= bits;
+      for (int n = 0; n < N; n++) {
+        const simd_float16* x_local = (simd_float16*)x;
+        simd_float16 sum = 0;
+        for (int k = 0; k < K; k += group_size) {
+          float scale = *scales_local++;
+          float bias = *biases_local++;
+
+          for (int kw = 0; kw < packs_in_group; kw += 2) {
+            // TODO: vectorize this properly
+            simd_uint16 wi;
+            for (int e = 0; e < 2; e++) {
+              uint32_t wii = *w_local++;
+              for (int p = 0; p < 8; p++) {
+                wi[e * 8 + p] = wii & bitmask;
+                wii >>= bits;
+              }
             }
-          }
-          simd_float16 wf = simd_float(wi);
-          wf *= scale;
-          wf += bias;
+            simd_float16 wf = simd_float(wi);
+            wf *= scale;
+            wf += bias;
 
-          sum += (*x_local) * wf;
-          x_local++;
+            sum += (*x_local) * wf;
+            x_local++;
+          }
         }
+
+        *result = simd_reduce_add(sum);
+        result++;
       }
 
-      *result = simd_reduce_add(sum);
-      result++;
+      x += K;
     }
-
-    x += K;
+    if (batched_w) {
+      w += w_els;
+      scales += g_els;
+      biases += g_els;
+    }
   }
 }
 
@@ -82,8 +94,10 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
   if (condition) {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
     int K = x.shape(-1);
-    int M = x.size() / K;
+    int M = x.shape(-2);
     int N = out.shape(-1);
+    int B = x.size() / K / M;
+    bool batched_w = w.ndim() > 2;
     _qmm_t_4_64(
         out.data<float>(),
         x.data<float>(),
@@ -92,7 +106,9 @@ void QuantizedMatmul::eval_cpu(const std::vector<array>& inputs, array& out) {
         biases.data<float>(),
         M,
         N,
-        K);
+        K,
+        B,
+        batched_w);
   } else {
     eval(inputs, out);
   }
