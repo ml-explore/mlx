@@ -88,6 +88,22 @@ class TestInit(mlx_tests.MLXTestCase):
                 with self.subTest(shape=shape):
                     self.assertEqual(result.shape, shape)
                     self.assertEqual(result.dtype, dtype)
+    
+    def test_sparse(self):
+        mean = 0.0
+        std = 1.0
+        sparsity=0.5
+        for dtype in [mx.float32, mx.float16]:
+            initializer = init.sparse(mean, std, sparsity, dtype=dtype)
+            for shape in [(3,2), (2,2 ), (4,3)]:
+                result = initializer(mx.array(np.empty(shape)))
+                with self.subTest(shape=shape):
+                    self.assertEqual(result.shape, shape)
+                    self.assertEqual(result.dtype, dtype)
+                    self.assertEqual((mx.sum(result==0)>=0.5*shape[0]*shape[1]),True)
+            shape=(1,)
+            with self.assertRaises(ValueError):
+                    result = initializer(mx.array(np.empty(shape)))
 
 
 if __name__ == "__main__":
