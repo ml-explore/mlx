@@ -349,8 +349,12 @@ def he_uniform(
 
     return initializer
 
+
 def sparse(
-    mean: float = 0.0, std: float = 1.0, sparsity: float = None, dtype: mx.Dtype = mx.float32
+    mean: float = 0.0,
+    std: float = 1.0,
+    sparsity: float = None,
+    dtype: mx.Dtype = mx.float32,
 ) -> Callable[[mx.array], mx.array]:
     r"""An initializer that returns a sparse matrix.
 
@@ -379,13 +383,13 @@ def sparse(
     def initializer(a: mx.array) -> mx.array:
 
         if sparsity == None:
-          raise ValueError(f"Sparsity argument cannot be {sparsity}")
+            raise ValueError(f"Sparsity argument cannot be {sparsity}")
 
         if a.ndim != 2:
-          raise ValueError("Only tensors with 2 dimensions are supported")
+            raise ValueError("Only tensors with 2 dimensions are supported")
 
         rows, cols = a.shape
-        num_zeros = int(mx.ceil(sparsity*rows))
+        num_zeros = int(mx.ceil(sparsity * rows))
 
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
@@ -393,7 +397,6 @@ def sparse(
             row_indices = mx.random.permutation(rows)
             zero_indices = row_indices[:num_zeros]
             a[zero_indices, col_idx] = 0
-
 
         return a
 
