@@ -30,8 +30,9 @@ build_kernel(layer_norm)
 build_kernel(random)
 build_kernel(rms_norm)
 build_kernel(rope)
-build_kernel(scaled_dot_product_attention scaled_dot_product_attention_params.h
-             steel/defines.h steel/gemm/transforms.h steel/utils.h)
+build_kernel(
+  scaled_dot_product_attention scaled_dot_product_attention_params.h
+  sdpa_vector.h steel/defines.h steel/gemm/transforms.h steel/utils.h)
 
 set(STEEL_HEADERS
     steel/defines.h
