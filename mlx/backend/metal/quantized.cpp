@@ -56,7 +56,7 @@ void QuantizedMatmul::eval_gpu(const std::vector<array>& inputs, array& out) {
   int O = out.shape(-1);
   int N = out.size() / B / O;
   if (transpose_) {
-    if (B < 6 && (D == 128 || D == 96 || D == 64)) {
+    if (B < 6 && (D == 128 || D == 64)) {
       std::ostringstream kname;
       auto type_string = get_type_string(x.dtype());
       kname << "qmv_quad_" << type_string << "_gs_" << group_size_ << "_b_"

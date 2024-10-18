@@ -121,7 +121,6 @@ class TestQuantized(mlx_tests.MLXTestCase):
             [64, 128, 512, 1024],  # N
             [0, 1, 3, 8],  # B
         )
-        tests = [(128, 4, 512, 128, 3)]
         for group_size, bits, M, N, B in tests:
             if group_size > N:
                 continue
