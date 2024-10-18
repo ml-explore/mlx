@@ -8,7 +8,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>mlx.core.linalg.svd &#8212; MLX 0.18.1 documentation</title>
+    <title>mlx.core.linalg.svd &#8212; MLX 0.19.0 documentation</title>
   
   
   
@@ -36,7 +36,7 @@
 <link rel="preload" as="script" href="../../_static/scripts/pydata-sphinx-theme.js?digest=dfe6caa3a7d634c4db9b" />
   <script src="../../_static/vendor/fontawesome/6.5.2/js/all.min.js?digest=dfe6caa3a7d634c4db9b"></script>
 
-    <script src="../../_static/documentation_options.js?v=fbcf6510"></script>
+    <script src="../../_static/documentation_options.js?v=bce9d2e1"></script>
     <script src="../../_static/doctools.js?v=9a2dae69"></script>
     <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
     <script src="../../_static/scripts/sphinx-book-theme.js?v=887ef09a"></script>
@@ -136,8 +136,8 @@
       
     
     
-    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.18.1 documentation - Home"/>
-    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.18.1 documentation - Home"/>`);</script>
+    <img src="../../_static/mlx_logo.png" class="logo__image only-light" alt="MLX 0.19.0 documentation - Home"/>
+    <script>document.write(`<img src="../../_static/mlx_logo_dark.png" class="logo__image only-dark" alt="MLX 0.19.0 documentation - Home"/>`);</script>
   
   
 </a></div>
@@ -325,6 +325,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.greater_equal.html">mlx.core.greater_equal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.hadamard_transform.html">mlx.core.hadamard_transform</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.identity.html">mlx.core.identity</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.imag.html">mlx.core.imag</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.inner.html">mlx.core.inner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.isfinite.html">mlx.core.isfinite</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.isclose.html">mlx.core.isclose</a></li>
@@ -370,6 +371,7 @@
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.quantize.html">mlx.core.quantize</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.quantized_matmul.html">mlx.core.quantized_matmul</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.radians.html">mlx.core.radians</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mlx.core.real.html">mlx.core.real</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.reciprocal.html">mlx.core.reciprocal</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.remainder.html">mlx.core.remainder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="mlx.core.repeat.html">mlx.core.repeat</a></li>
@@ -878,7 +880,7 @@ document.write(`
 <h1>mlx.core.linalg.svd<a class="headerlink" href="#mlx-core-linalg-svd" title="Link to this heading">#</a></h1>
 <dl class="py function">
 <dt class="sig sig-object py" id="mlx.core.linalg.svd">
-<span class="sig-name descname"><span class="pre">svd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#mlx.core.linalg.svd" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">svd</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">a</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a></span></em>, <em class="sig-param"><span class="o"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">stream</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.13)"><span class="pre">None</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="stream_class.html#mlx.core.Stream" title="mlx.core.Stream"><span class="pre">Stream</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.Device.html#mlx.core.Device" title="mlx.core.Device"><span class="pre">Device</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="mlx.core.array.html#mlx.core.array" title="mlx.core.array"><span class="pre">array</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#mlx.core.linalg.svd" title="Link to this definition">#</a></dt>
 <dd><p>The Singular Value Decomposition (SVD) of the input matrix.</p>
 <p>This function supports arrays with at least 2 dimensions. When the input
 has more than two dimensions, the function iterates over all indices of the first
