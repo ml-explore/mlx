@@ -77,12 +77,7 @@ void CustomKernel::eval_gpu(
   MTL::Size grid_dims = MTL::Size(gx, gy, gz);
   compute_encoder->dispatchThreads(grid_dims, group_dims);
 
-  if (!copies.empty()) {
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core::fast

@@ -262,12 +262,7 @@ void ScaledDotProductAttention::eval_gpu(
     sdpa_full_self_attention_metal(s, d, q, k, v, scale_, o);
   }
 
-  if (!copies.empty()) {
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core::fast

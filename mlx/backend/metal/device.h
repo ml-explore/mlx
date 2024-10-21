@@ -87,18 +87,30 @@ struct CommandEncoder {
   std::unordered_set<MTL::Resource*> concurrent_outputs;
 };
 
-// TODOs
-// - put it all in one structure?
-// - fence should be stream specific
-// - outputs should be stream specific
-// - fence mtx should be stream specific
-// - temporary outputs should not go in the map
 struct Fence {
   Fence(MTL::Fence* fence) : fence(fence) {}
   ~Fence() {
     fence->release();
   }
   MTL::Fence* fence;
+};
+
+struct DeviceStream {
+  DeviceStream(MTL::CommandQueue* queue) : queue(queue) {};
+  ~DeviceStream() {
+    queue->release();
+    if (buffer != nullptr) {
+      buffer->release();
+    }
+  };
+  MTL::CommandQueue* queue;
+  MTL::CommandBuffer* buffer{nullptr};
+  int buffer_ops{0};
+  std::unique_ptr<CommandEncoder> encoder{nullptr};
+  std::shared_ptr<Fence> fence;
+  std::mutex fence_mtx;
+  std::unordered_map<const void*, std::shared_ptr<Fence>> outputs;
+  std::vector<array> temporaries;
 };
 
 class Device {
@@ -153,9 +165,14 @@ class Device {
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
-  std::shared_ptr<Fence> fence_;
+  // Record temporary arrays for the given stream index
+  void add_temporary(array arr, int index);
+  void add_temporaries(std::vector<array> arrays, int index);
 
  private:
+  DeviceStream& get_stream_(int index) {
+    return stream_map_.find(index)->second;
+  }
   MTL::Library* get_library_cache_(const std::string& name);
 
   MTL::Library* get_library_(const std::string& name);
@@ -188,17 +205,8 @@ class Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
-  void remove_outputs(
-      const std::unordered_set<const void*>& outputs,
-      const std::shared_ptr<Fence>& fence);
-
   MTL::Device* device_;
-  std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
-  std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
-  std::unordered_map<int32_t, std::unique_ptr<CommandEncoder>> encoder_map_;
-
-  std::mutex fence_mtx_;
-  std::unordered_map<const void*, std::shared_ptr<Fence>> all_outputs_;
+  std::unordered_map<int32_t, DeviceStream> stream_map_;
 
   std::shared_mutex kernel_mtx_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;

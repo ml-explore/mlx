@@ -91,12 +91,8 @@ void RMSNorm::eval_gpu(
     compute_encoder->setThreadgroupMemoryLength(simd_size * sizeof(float), 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
-  if (!copies.empty()) {
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void RMSNormVJP::eval_gpu(
@@ -204,10 +200,7 @@ void RMSNormVJP::eval_gpu(
   strided_reduce_general_dispatch(
       gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-        copies.clear();
-      });
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void LayerNorm::eval_gpu(
@@ -292,12 +285,8 @@ void LayerNorm::eval_gpu(
     compute_encoder->setBytes(&b_stride, sizeof(uint32_t), 7);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
-  if (!copies.empty()) {
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void LayerNormVJP::eval_gpu(
@@ -425,10 +414,7 @@ void LayerNormVJP::eval_gpu(
         gw_temp, gw, "sum", plan, {0}, compute_encoder, d, s);
   }
 
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-        copies.clear();
-      });
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core::fast

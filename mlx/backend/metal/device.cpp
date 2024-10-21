@@ -208,12 +208,6 @@ Device::Device() {
 
 Device::~Device() {
   auto pool = new_scoped_memory_pool();
-  for (auto& q : queue_map_) {
-    q.second->release();
-  }
-  for (auto& b : buffer_map_) {
-    b.second.second->release();
-  }
   for (auto& k : kernel_map_) {
     k.second->release();
   }
@@ -221,19 +215,6 @@ Device::~Device() {
     l.second->release();
   }
   device_->release();
-}
-
-void Device::remove_outputs(
-    const std::unordered_set<const void*>& outputs,
-    const std::shared_ptr<Fence>& fence) {
-  std::lock_guard<std::mutex> lk(fence_mtx_);
-  for (auto o : outputs) {
-    if (auto it = all_outputs_.find(o); it != all_outputs_.end()) {
-      if (it->second == fence) {
-        all_outputs_.erase(it);
-      }
-    }
-  }
 }
 
 void Device::new_queue(int index) {
@@ -247,81 +228,104 @@ void Device::new_queue(int index) {
     throw std::runtime_error(
         "[metal::Device] Failed to make new command queue.");
   }
-  queue_map_.insert({index, q});
-  buffer_map_.insert({index, {0, nullptr}});
-  encoder_map_.insert({index, nullptr});
+  stream_map_.emplace(index, q);
 }
 
 int Device::get_command_buffer_ops(int index) {
-  return buffer_map_[index].first;
+  return get_stream_(index).buffer_ops;
 }
 
 void Device::increment_command_buffer_ops(int index) {
-  buffer_map_[index].first++;
+  get_stream_(index).buffer_ops++;
 }
 
 MTL::CommandBuffer* Device::get_command_buffer(int index) {
-  auto bit = buffer_map_.find(index);
-  if (bit->second.second == nullptr) {
-    auto qit = queue_map_.find(index);
-    if (qit == queue_map_.end()) {
-      throw std::runtime_error(
-          "[metal::Device] Attempting to get command buffer for invalid queue.");
-    }
-
-    auto cb = qit->second->commandBufferWithUnretainedReferences();
-
-    if (!cb) {
+  auto& stream = get_stream_(index);
+  if (stream.buffer == nullptr) {
+    stream.buffer = stream.queue->commandBufferWithUnretainedReferences();
+    if (!stream.buffer) {
       throw std::runtime_error(
           "[metal::Device] Unable to create new command buffer");
     }
-
     // Increment ref count so the buffer is not garbage collected
-    cb->retain();
-
-    bit->second = {0, cb};
+    stream.buffer->retain();
   }
-  return bit->second.second;
+  return stream.buffer;
 }
 
 void Device::commit_command_buffer(int index) {
-  auto bit = buffer_map_.find(index);
-  bit->second.second->commit();
-  bit->second.second->release();
-  bit->second = {0, nullptr};
+  auto& stream = get_stream_(index);
+  stream.buffer->commit();
+  stream.buffer->release();
+  stream.buffer = nullptr;
+  stream.buffer_ops = 0;
+}
+
+void Device::add_temporary(array arr, int index) {
+  get_stream_(index).temporaries.push_back(std::move(arr));
+}
+
+void Device::add_temporaries(std::vector<array> arrays, int index) {
+  if (arrays.empty()) {
+    return;
+  }
+  auto& stream = get_stream_(index);
+  stream.temporaries.insert(
+      stream.temporaries.end(),
+      std::make_move_iterator(arrays.begin()),
+      std::make_move_iterator(arrays.end()));
 }
 
 void Device::end_encoding(int index) {
-  auto eit = encoder_map_.find(index);
-  if (eit->second != nullptr) {
-    auto& enc = *eit->second;
-    std::lock_guard<std::mutex> lk(fence_mtx_);
+  auto& stream = get_stream_(index);
+  if (stream.encoder != nullptr) {
+    auto& enc = *stream.encoder;
+    // Remove temporaries from inputs and outputs
+    for (auto& t : stream.temporaries) {
+      if (t.data<void>() != nullptr) {
+        enc.all_outputs.erase(t.buffer().ptr());
+        enc.all_inputs.erase(t.buffer().ptr());
+      }
+    }
+    std::lock_guard<std::mutex> lk(stream.fence_mtx);
     for (auto in : enc.all_inputs) {
-      if (auto it = all_outputs_.find(in); it != all_outputs_.end()) {
+      if (auto it = stream.outputs.find(in); it != stream.outputs.end()) {
         enc->waitForFence(it->second->fence);
       }
     }
     for (auto out : enc.all_outputs) {
-      all_outputs_[out] = fence_;
+      stream.outputs[out] = stream.fence;
     }
-    enc->updateFence(fence_->fence);
-    // remove temporaries from outputs?
-    // put temporaries in container
-    enc.cbuf->addCompletedHandler(
-        [this, fence = fence_, outputs = std::move(enc.all_outputs)](
-            MTL::CommandBuffer*) { remove_outputs(outputs, fence); });
+    enc->updateFence(stream.fence->fence);
+    enc.cbuf->addCompletedHandler([&stream,
+                                   fence = std::move(stream.fence),
+                                   outputs = std::move(enc.all_outputs),
+                                   temporaries = std::move(stream.temporaries)](
+                                      MTL::CommandBuffer*) mutable {
+      temporaries.clear();
+      std::lock_guard<std::mutex> lk(stream.fence_mtx);
+      for (auto o : outputs) {
+        if (auto it = stream.outputs.find(o); it != stream.outputs.end()) {
+          if (it->second == fence) {
+            stream.outputs.erase(it);
+          }
+        }
+      }
+    });
   }
-  eit->second = nullptr;
+  stream.encoder = nullptr;
 }
 
 CommandEncoder& Device::get_command_encoder(int index) {
-  auto eit = encoder_map_.find(index);
-  if (eit->second == nullptr) {
-    auto cb = get_command_buffer(index);
-    eit->second = std::make_unique<CommandEncoder>(cb);
-    fence_ = std::make_shared<Fence>(device_->newFence());
+  auto& stream = get_stream_(index);
+  if (stream.encoder == nullptr) {
+    if (stream.buffer == nullptr) {
+      throw std::invalid_argument("TODO");
+    }
+    stream.encoder = std::make_unique<CommandEncoder>(stream.buffer);
+    stream.fence = std::make_shared<Fence>(device_->newFence());
   }
-  return *(eit->second);
+  return *stream.encoder;
 }
 
 void Device::register_library(

@@ -252,11 +252,7 @@ void multi_block_sort(
       (axis == in.ndim() - 1) ? CopyType::Vector : CopyType::General,
       s);
 
-  // Clear copies
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-        copies.clear();
-      });
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void gpu_merge_sort(

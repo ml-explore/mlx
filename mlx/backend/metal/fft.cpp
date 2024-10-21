@@ -575,10 +575,7 @@ void fft_op(
   auto plan = plan_fft(n);
   if (plan.four_step) {
     four_step_fft(in, out, axis, inverse, real, plan, copies, s);
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
+    d.add_temporaries(std::move(copies), s.index);
     return;
   }
 
@@ -744,12 +741,7 @@ void fft_op(
     compute_encoder->dispatchThreads(grid_dims, group_dims);
   }
 
-  if (!copies.empty()) {
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 void fft_op(
@@ -792,8 +784,7 @@ void nd_fft_op(
   }
 
   auto& d = metal::device(s.device);
-  d.get_command_buffer(s.index)->addCompletedHandler(
-      [temp_arrs](MTL::CommandBuffer*) mutable { temp_arrs.clear(); });
+  d.add_temporaries(std::move(temp_arrs), s.index);
 }
 
 void FFT::eval_gpu(const std::vector<array>& inputs, array& out) {

@@ -88,12 +88,8 @@ void Softmax::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&axis_size, sizeof(int), 2);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
-  if (!copies.empty()) {
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core
