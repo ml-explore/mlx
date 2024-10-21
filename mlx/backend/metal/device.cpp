@@ -12,6 +12,7 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
+#include "mlx/backend/metal/resident.h"
 #include "mlx/backend/metal/utils.h"
 
 namespace mlx::core::metal {
@@ -188,6 +189,7 @@ Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   library_map_ = {{"mlx", load_library(device_)}};
+  residency_set_ = setup_residency_set(device_);
 }
 
 Device::~Device() {
@@ -213,6 +215,9 @@ void Device::new_queue(int index) {
         "[metal::Device] Failed to make new command queue.");
   }
   stream_map_.emplace(index, q);
+  if (residency_set_ != nullptr) {
+    q->addResidencySet(residency_set_);
+  }
 }
 
 int Device::get_command_buffer_ops(int index) {
@@ -358,7 +363,7 @@ MTL::Library* Device::build_library_(const std::string& source_string) {
   // Throw error if unable to compile library
   if (!mtl_lib) {
     std::ostringstream msg;
-    msg << "[metal::Device] Unable to build metal library from source" << "\n";
+    msg << "[metal::Device] Unable to build metal library from source\n";
     if (error) {
       msg << error->localizedDescription()->utf8String() << "\n";
     }
@@ -636,6 +641,14 @@ device_info() {
       {"max_recommended_working_set_size",
        raw_device->recommendedMaxWorkingSetSize()},
       {"memory_size", memsize}};
+}
+
+void wire(std::vector<array> arrays) {
+  device(mlx::core::Device::gpu).wire(std::move(arrays));
+}
+
+void unwire(std::vector<array> arrays) {
+  device(mlx::core::Device::gpu).unwire(std::move(arrays));
 }
 
 } // namespace mlx::core::metal

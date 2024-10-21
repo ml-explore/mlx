@@ -6,6 +6,9 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
+#include <nanobind/stl/vector.h>
+
+#include "python/src/trees.h"
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -139,5 +142,33 @@ void init_metal(nb::module_& m) {
 
       Returns:
           dict: A dictionary with string keys and string or integer values.
+      )pbdoc");
+  metal.def(
+      "wire",
+      [](const nb::object& tree) {
+        metal::wire(std::move(tree_flatten(tree)));
+      },
+      R"pbdoc(
+      Keep the arrays resident in memory.
+
+      Args:
+        tree (list or dict): An arbitrarily nested tree of arrays to wire to
+          memory.
+
+      This function is a no-op on macOS < 15.0.
+      )pbdoc");
+  metal.def(
+      "unwire",
+      [](const nb::object& tree) {
+        metal::unwire(std::move(tree_flatten(tree)));
+      },
+      R"pbdoc(
+      Mark the arrays as ok to unwire from memory.
+
+      Args:
+        tree (list or dict): An arbitrarily nested tree of arrays to unwire
+          from memory.
+
+      This function is a no-op on macOS < 15.0.
       )pbdoc");
 }
