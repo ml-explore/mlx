@@ -643,8 +643,8 @@ device_info() {
       {"memory_size", memsize}};
 }
 
-void wire(std::vector<array> arrays) {
-  device(mlx::core::Device::gpu).wire(std::move(arrays));
+size_t wire(std::vector<array> arrays) {
+  return device(mlx::core::Device::gpu).wire(std::move(arrays));
 }
 
 void unwire(std::vector<array> arrays) {

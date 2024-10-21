@@ -182,7 +182,7 @@ class Device {
   void add_temporary(array arr, int index);
   void add_temporaries(std::vector<array> arrays, int index);
 
-  void wire(std::vector<array> arrays);
+  size_t wire(std::vector<array> arrays);
   void unwire(std::vector<array> arrays);
 
  private:

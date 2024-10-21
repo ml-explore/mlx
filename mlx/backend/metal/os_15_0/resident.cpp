@@ -21,13 +21,14 @@ MTL::ResidencySet* setup_residency_set(MTL::Device* d) {
   return residency_set;
 }
 
-void Device::wire(std::vector<array> arrays) {
+size_t Device::wire(std::vector<array> arrays) {
   for (auto& a : arrays) {
     residency_set_->addAllocation(
         static_cast<const MTL::Buffer*>(a.buffer().ptr()));
   }
   residency_set_->commit();
-  //  residency_set_->requestResidency();
+  residency_set_->requestResidency();
+  return residency_set_->allocatedSize();
 }
 
 void Device::unwire(std::vector<array> arrays) {
@@ -36,7 +37,6 @@ void Device::unwire(std::vector<array> arrays) {
         static_cast<const MTL::Buffer*>(a.buffer().ptr()));
   }
   residency_set_->commit();
-  //  residency_set_->endResidency();
 }
 
 } // namespace mlx::core::metal

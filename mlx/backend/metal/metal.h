@@ -72,7 +72,7 @@ std::unordered_map<std::string, std::variant<std::string, size_t>>
 device_info();
 
 /** Keep arrays wired. */
-void wire(std::vector<array> arrays);
+size_t wire(std::vector<array> arrays);
 
 /** Allow arrays to be unwired. */
 void unwire(std::vector<array> arrays);

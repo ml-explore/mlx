@@ -146,7 +146,7 @@ void init_metal(nb::module_& m) {
   metal.def(
       "wire",
       [](const nb::object& tree) {
-        metal::wire(std::move(tree_flatten(tree)));
+        return metal::wire(std::move(tree_flatten(tree)));
       },
       R"pbdoc(
       Keep the arrays resident in memory.
