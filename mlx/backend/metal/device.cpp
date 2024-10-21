@@ -287,17 +287,25 @@ void Device::end_encoding(int index) {
         enc.all_inputs.erase(t.buffer().ptr());
       }
     }
-    std::lock_guard<std::mutex> lk(stream.fence_mtx);
-    for (auto in : enc.all_inputs) {
-      if (auto it = stream.outputs.find(in); it != stream.outputs.end()) {
-        enc->waitForFence(it->second->fence);
+
+    std::unordered_set<std::shared_ptr<Fence>> waiting_on;
+    {
+      std::lock_guard<std::mutex> lk(stream.fence_mtx);
+      for (auto in : enc.all_inputs) {
+        if (auto it = stream.outputs.find(in); it != stream.outputs.end()) {
+          if (waiting_on.find(it->second) == waiting_on.end()) {
+            enc->waitForFence(it->second->fence);
+            waiting_on.insert(it->second);
+          }
+        }
       }
-    }
-    for (auto out : enc.all_outputs) {
-      stream.outputs[out] = stream.fence;
+      for (auto out : enc.all_outputs) {
+        stream.outputs[out] = stream.fence;
+      }
     }
     enc->updateFence(stream.fence->fence);
     enc.cbuf->addCompletedHandler([&stream,
+                                   waiting_on = std::move(waiting_on),
                                    fence = std::move(stream.fence),
                                    outputs = std::move(enc.all_outputs),
                                    temporaries = std::move(stream.temporaries)](
