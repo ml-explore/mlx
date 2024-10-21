@@ -25,7 +25,7 @@ Here is a simple example:
 
 The output of :func:`grad` on :func:`sin` is simply another function. In this
 case it is the gradient of the sine function which is exactly the cosine
-function. To get the second derivative you can do: 
+function. To get the second derivative you can do:
 
 .. code-block:: shell
 
@@ -50,7 +50,7 @@ Automatic Differentiation
 .. _auto diff:
 
 Automatic differentiation in MLX works on functions rather than on implicit
-graphs. 
+graphs.
 
 .. note::
 
@@ -114,7 +114,7 @@ way to do that is the following:
 
    def loss_fn(params, x, y):
       w, b = params["weight"], params["bias"]
-      h = w * x + b 
+      h = w * x + b
       return mx.mean(mx.square(h - y))
 
    params = {"weight": mx.array(1.0), "bias": mx.array(0.0)}
@@ -132,7 +132,7 @@ way to do that is the following:
 
 Notice the tree structure of the parameters is preserved in the gradients.
 
-In some cases you may want to stop gradients from propagating through a 
+In some cases you may want to stop gradients from propagating through a
 part of the function. You can use the :func:`stop_gradient` for that.
 
 
@@ -166,14 +166,14 @@ A naive way to add the elements from two sets of vectors is with a loop:
 Instead you can use :func:`vmap` to automatically vectorize the addition:
 
 .. code-block:: python
-   
+
    # Vectorize over the second dimension of x and the
    # first dimension of y
    vmap_add = mx.vmap(lambda x, y: x + y, in_axes=(1, 0))
 
 The ``in_axes`` parameter can be used to specify which dimensions of the
 corresponding input to vectorize over. Similarly, use ``out_axes`` to specify
-where the vectorized axes should be in the outputs. 
+where the vectorized axes should be in the outputs.
 
 Let's time these two different versions:
 
