@@ -1287,10 +1287,10 @@ array conv_transpose3d(
 
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
+    array x,
+    array w,
+    array scales,
+    array biases,
     bool transpose = true,
     int group_size = 64,
     int bits = 4,

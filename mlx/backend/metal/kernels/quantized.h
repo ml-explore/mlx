@@ -8,6 +8,7 @@ using namespace metal;
 #define MLX_MTL_CONST static constant constexpr const
 
 MLX_MTL_CONST int SIMD_SIZE = 32;
+MLX_MTL_CONST int QUAD_SIZE = 4;
 
 template <typename T, typename U, int values_per_thread, int bits>
 inline U load_vector(const device T* x, thread U* x_thread) {
@@ -371,6 +372,64 @@ struct QuantizedBlockLoader {
   }
 };
 
+template <typename T, int group_size, int bits, int D>
+METAL_FUNC void qmv_quad_impl(
+    const device uint32_t* w,
+    const device T* scales,
+    const device T* biases,
+    const device T* x,
+    device T* y,
+    constant int& in_vec_size,
+    const constant int& out_vec_size,
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint quad_gid [[quadgroup_index_in_threadgroup]],
+    uint quad_lid [[thread_index_in_quadgroup]]) {
+  constexpr int quads_per_simd = SIMD_SIZE / QUAD_SIZE;
+  constexpr int pack_factor = 32 / bits;
+  constexpr int values_per_thread = D / QUAD_SIZE;
+  constexpr int packs_per_thread = values_per_thread / pack_factor;
+  constexpr int scale_step_per_thread = group_size / values_per_thread;
+  constexpr int results_per_quadgroup = 8;
+
+  typedef float U;
+
+  thread U x_thread[values_per_thread];
+  thread U result[results_per_quadgroup] = {0};
+
+  // Adjust positions
+  const int in_vec_size_w = in_vec_size / pack_factor;
+  const int in_vec_size_g = in_vec_size / group_size;
+  const int out_row = tid.x * quads_per_simd * results_per_quadgroup + quad_gid;
+
+  w += out_row * in_vec_size_w + quad_lid * packs_per_thread;
+  scales += out_row * in_vec_size_g + quad_lid / scale_step_per_thread;
+  biases += out_row * in_vec_size_g + quad_lid / scale_step_per_thread;
+  x += tid.y * in_vec_size + quad_lid * values_per_thread;
+  y += tid.y * out_vec_size + out_row;
+
+  U sum = load_vector<T, U, values_per_thread, bits>(x, x_thread);
+
+  for (int row = 0; row < results_per_quadgroup; row++) {
+    const device uint8_t* wl =
+        (const device uint8_t*)(w + row * in_vec_size_w * quads_per_simd);
+    const device T* sl = scales + row * in_vec_size_g * quads_per_simd;
+    const device T* bl = biases + row * in_vec_size_g * quads_per_simd;
+
+    U s = sl[0];
+    U b = bl[0];
+    if (row * quads_per_simd + out_row < out_vec_size) {
+      result[row] += qdot<U, values_per_thread, bits>(wl, x_thread, s, b, sum);
+    }
+  }
+
+  for (int row = 0; row < results_per_quadgroup; row++) {
+    result[row] = quad_sum(result[row]);
+    if (quad_lid == 0 && row * quads_per_simd + out_row < out_vec_size) {
+      y[row * quads_per_simd] = static_cast<T>(result[row]);
+    }
+  }
+}
+
 template <typename T, int group_size, int bits>
 METAL_FUNC void qmv_fast_impl(
     const device uint32_t* w,
@@ -586,10 +645,10 @@ METAL_FUNC void qmv_impl(
 
 template <typename T, const int group_size, const int bits>
 METAL_FUNC void qvm_impl(
-    const device T* x,
     const device uint32_t* w,
     const device T* scales,
     const device T* biases,
+    const device T* x,
     device T* y,
     const constant int& in_vec_size,
     const constant int& out_vec_size,
@@ -697,16 +756,16 @@ template <
     const int BK = 32,
     const int BN = 32>
 METAL_FUNC void qmm_t_impl(
-    const device T* x,
     const device uint32_t* w,
     const device T* scales,
     const device T* biases,
+    const device T* x,
     device T* y,
     threadgroup T* Xs,
     threadgroup T* Ws,
-    const constant int& M,
-    const constant int& N,
     const constant int& K,
+    const constant int& N,
+    const constant int& M,
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -818,16 +877,16 @@ template <
     const int BK = 32,
     const int BN = 32>
 METAL_FUNC void qmm_n_impl(
-    const device T* x,
     const device uint32_t* w,
     const device T* scales,
     const device T* biases,
+    const device T* x,
     device T* y,
     threadgroup T* Xs,
     threadgroup T* Ws,
-    const constant int& M,
-    const constant int& N,
     const constant int& K,
+    const constant int& N,
+    const constant int& M,
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -948,6 +1007,45 @@ METAL_FUNC void adjust_matrix_offsets(
     const device uint32_t*& w,
     const device T*& scales,
     const device T*& biases,
+    device T*& y,
+    int output_stride,
+    const constant int& x_batch_ndims,
+    const constant int* x_shape,
+    const constant size_t* x_strides,
+    const constant int& w_batch_ndims,
+    const constant int* w_shape,
+    const constant size_t* w_strides,
+    const constant size_t* s_strides,
+    const constant size_t* b_strides,
+    uint3 tid [[threadgroup_position_in_grid]]) {
+  // Set the input/output matrices
+  uint32_t x_idx = tid.z;
+  uint32_t w_idx = tid.z;
+  if (x_batch_ndims == 1) {
+    x += x_idx * x_strides[0];
+  } else {
+    x += elem_to_loc(x_idx, x_shape, x_strides, x_batch_ndims);
+  }
+  if (w_batch_ndims == 1) {
+    w += w_idx * w_strides[0];
+    scales += w_idx * s_strides[0];
+    biases += w_idx * b_strides[0];
+  } else {
+    ulong3 idx = elem_to_loc_broadcast(
+        w_idx, w_shape, w_strides, s_strides, b_strides, w_batch_ndims);
+    w += idx.x;
+    scales += idx.y;
+    biases += idx.z;
+  }
+  y += tid.z * output_stride;
+}
+
+template <typename T>
+METAL_FUNC void adjust_matrix_offsets(
+    const device T*& x,
+    const device uint32_t*& w,
+    const device T*& scales,
+    const device T*& biases,
     const device uint32_t* lhs_indices,
     const device uint32_t* rhs_indices,
     device T*& y,
@@ -996,7 +1094,58 @@ METAL_FUNC void adjust_matrix_offsets(
   y += tid.z * output_stride;
 }
 
-template <typename T, int group_size, int bits>
+template <typename T, int group_size, int bits, int D, bool batched>
+[[kernel]] void qmv_quad(
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant size_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant size_t* w_strides [[buffer(12)]],
+    const constant size_t* s_strides [[buffer(13)]],
+    const constant size_t* b_strides [[buffer(14)]],
+    uint3 tid [[threadgroup_position_in_grid]],
+    uint quad_gid [[quadgroup_index_in_threadgroup]],
+    uint quad_lid [[thread_index_in_quadgroup]]) {
+  if (batched) {
+    adjust_matrix_offsets<T>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        out_vec_size,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
+  qmv_quad_impl<T, group_size, bits, D>(
+      w,
+      scales,
+      biases,
+      x,
+      y,
+      in_vec_size,
+      out_vec_size,
+      tid,
+      quad_gid,
+      quad_lid);
+}
+
+template <typename T, int group_size, int bits, bool batched>
 [[kernel]] void qmv_fast(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1005,9 +1154,35 @@ template <typename T, int group_size, int bits>
     device T* y [[buffer(4)]],
     const constant int& in_vec_size [[buffer(5)]],
     const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant size_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant size_t* w_strides [[buffer(12)]],
+    const constant size_t* s_strides [[buffer(13)]],
+    const constant size_t* b_strides [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
+  if (batched) {
+    adjust_matrix_offsets<T>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        out_vec_size,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
   qmv_fast_impl<T, group_size, bits>(
       w,
       scales,
@@ -1021,7 +1196,7 @@ template <typename T, int group_size, int bits>
       simd_lid);
 }
 
-template <typename T, const int group_size, const int bits>
+template <typename T, const int group_size, const int bits, bool batched>
 [[kernel]] void qmv(
     const device uint32_t* w [[buffer(0)]],
     const device T* scales [[buffer(1)]],
@@ -1030,9 +1205,35 @@ template <typename T, const int group_size, const int bits>
     device T* y [[buffer(4)]],
     const constant int& in_vec_size [[buffer(5)]],
     const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant size_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant size_t* w_strides [[buffer(12)]],
+    const constant size_t* s_strides [[buffer(13)]],
+    const constant size_t* b_strides [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
+  if (batched) {
+    adjust_matrix_offsets<T>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        out_vec_size,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
   qmv_impl<T, group_size, bits>(
       w,
       scales,
@@ -1046,23 +1247,49 @@ template <typename T, const int group_size, const int bits>
       simd_lid);
 }
 
-template <typename T, const int group_size, const int bits>
+template <typename T, const int group_size, const int bits, bool batched>
 [[kernel]] void qvm(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
     device T* y [[buffer(4)]],
     const constant int& in_vec_size [[buffer(5)]],
     const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant size_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant size_t* w_strides [[buffer(12)]],
+    const constant size_t* s_strides [[buffer(13)]],
+    const constant size_t* b_strides [[buffer(14)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
+  if (batched) {
+    adjust_matrix_offsets<T>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        out_vec_size,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
   qvm_impl<T, group_size, bits>(
-      x,
       w,
       scales,
       biases,
+      x,
       y,
       in_vec_size,
       out_vec_size,
@@ -1076,18 +1303,27 @@ template <
     const int group_size,
     const int bits,
     const bool aligned_N,
+    const bool batched,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
 [[kernel]] void qmm_t(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
     device T* y [[buffer(4)]],
-    const constant int& M [[buffer(5)]],
+    const constant int& K [[buffer(5)]],
     const constant int& N [[buffer(6)]],
-    const constant int& K [[buffer(7)]],
+    const constant int& M [[buffer(7)]],
+    const constant int& x_batch_ndims [[buffer(8)]],
+    const constant int* x_shape [[buffer(9)]],
+    const constant size_t* x_strides [[buffer(10)]],
+    const constant int& w_batch_ndims [[buffer(11)]],
+    const constant int* w_shape [[buffer(12)]],
+    const constant size_t* w_strides [[buffer(13)]],
+    const constant size_t* s_strides [[buffer(14)]],
+    const constant size_t* b_strides [[buffer(15)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -1099,26 +1335,53 @@ template <
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BN * BK_padded];
 
+  if (batched) {
+    adjust_matrix_offsets<T>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        M * N,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
   qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
-      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+      w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
     typename T,
     const int group_size,
     const int bits,
+    const bool batched,
     const int BM = 32,
     const int BK = 32,
     const int BN = 32>
 [[kernel]] void qmm_n(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
     device T* y [[buffer(4)]],
-    const constant int& M [[buffer(5)]],
+    const constant int& K [[buffer(5)]],
     const constant int& N [[buffer(6)]],
-    const constant int& K [[buffer(7)]],
+    const constant int& M [[buffer(7)]],
+    const constant int& x_batch_ndims [[buffer(8)]],
+    const constant int* x_shape [[buffer(9)]],
+    const constant size_t* x_strides [[buffer(10)]],
+    const constant int& w_batch_ndims [[buffer(11)]],
+    const constant int* w_shape [[buffer(12)]],
+    const constant size_t* w_strides [[buffer(13)]],
+    const constant size_t* s_strides [[buffer(14)]],
+    const constant size_t* b_strides [[buffer(15)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -1131,8 +1394,27 @@ template <
   threadgroup T Xs[BM * BK_padded];
   threadgroup T Ws[BK * BN_padded];
 
+  if (batched) {
+    adjust_matrix_offsets<T>(
+        x,
+        w,
+        scales,
+        biases,
+        y,
+        M * N,
+        x_batch_ndims,
+        x_shape,
+        x_strides,
+        w_batch_ndims,
+        w_shape,
+        w_strides,
+        s_strides,
+        b_strides,
+        tid);
+  }
+
   qmm_n_impl<T, group_size, bits, BM, BK, BN>(
-      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+      w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <typename T, int group_size, int bits>
@@ -1141,23 +1423,23 @@ template <typename T, int group_size, int bits>
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
-    const device uint32_t* lhs_indices [[buffer(4)]],
-    const device uint32_t* rhs_indices [[buffer(5)]],
-    device T* y [[buffer(6)]],
-    const constant int& in_vec_size [[buffer(7)]],
-    const constant int& out_vec_size [[buffer(8)]],
-    const constant int& batch_ndims [[buffer(9)]],
-    const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* lhs_strides [[buffer(11)]],
-    const constant size_t* rhs_strides [[buffer(12)]],
-    const constant int& x_batch_ndims [[buffer(13)]],
-    const constant int* x_shape [[buffer(14)]],
-    const constant size_t* x_strides [[buffer(15)]],
-    const constant int& w_batch_ndims [[buffer(16)]],
-    const constant int* w_shape [[buffer(17)]],
-    const constant size_t* w_strides [[buffer(18)]],
-    const constant size_t* s_strides [[buffer(19)]],
-    const constant size_t* b_strides [[buffer(20)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant size_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant size_t* w_strides [[buffer(12)]],
+    const constant size_t* s_strides [[buffer(13)]],
+    const constant size_t* b_strides [[buffer(14)]],
+    const constant int& batch_ndims [[buffer(15)]],
+    const constant int* batch_shape [[buffer(16)]],
+    const device uint32_t* lhs_indices [[buffer(17)]],
+    const device uint32_t* rhs_indices [[buffer(18)]],
+    const constant size_t* lhs_strides [[buffer(19)]],
+    const constant size_t* rhs_strides [[buffer(20)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -1202,23 +1484,23 @@ template <typename T, int group_size, int bits>
     const device T* scales [[buffer(1)]],
     const device T* biases [[buffer(2)]],
     const device T* x [[buffer(3)]],
-    const device uint32_t* lhs_indices [[buffer(4)]],
-    const device uint32_t* rhs_indices [[buffer(5)]],
-    device T* y [[buffer(6)]],
-    const constant int& in_vec_size [[buffer(7)]],
-    const constant int& out_vec_size [[buffer(8)]],
-    const constant int& batch_ndims [[buffer(9)]],
-    const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* lhs_strides [[buffer(11)]],
-    const constant size_t* rhs_strides [[buffer(12)]],
-    const constant int& x_batch_ndims [[buffer(13)]],
-    const constant int* x_shape [[buffer(14)]],
-    const constant size_t* x_strides [[buffer(15)]],
-    const constant int& w_batch_ndims [[buffer(16)]],
-    const constant int* w_shape [[buffer(17)]],
-    const constant size_t* w_strides [[buffer(18)]],
-    const constant size_t* s_strides [[buffer(19)]],
-    const constant size_t* b_strides [[buffer(20)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant size_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant size_t* w_strides [[buffer(12)]],
+    const constant size_t* s_strides [[buffer(13)]],
+    const constant size_t* b_strides [[buffer(14)]],
+    const constant int& batch_ndims [[buffer(15)]],
+    const constant int* batch_shape [[buffer(16)]],
+    const device uint32_t* lhs_indices [[buffer(17)]],
+    const device uint32_t* rhs_indices [[buffer(18)]],
+    const constant size_t* lhs_strides [[buffer(19)]],
+    const constant size_t* rhs_strides [[buffer(20)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -1259,27 +1541,27 @@ template <typename T, int group_size, int bits>
 
 template <typename T, int group_size, int bits>
 [[kernel]] void bs_qvm(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
-    const device uint32_t* lhs_indices [[buffer(4)]],
-    const device uint32_t* rhs_indices [[buffer(5)]],
-    device T* y [[buffer(6)]],
-    const constant int& in_vec_size [[buffer(7)]],
-    const constant int& out_vec_size [[buffer(8)]],
-    const constant int& batch_ndims [[buffer(9)]],
-    const constant int* batch_shape [[buffer(10)]],
-    const constant size_t* lhs_strides [[buffer(11)]],
-    const constant size_t* rhs_strides [[buffer(12)]],
-    const constant int& x_batch_ndims [[buffer(13)]],
-    const constant int* x_shape [[buffer(14)]],
-    const constant size_t* x_strides [[buffer(15)]],
-    const constant int& w_batch_ndims [[buffer(16)]],
-    const constant int* w_shape [[buffer(17)]],
-    const constant size_t* w_strides [[buffer(18)]],
-    const constant size_t* s_strides [[buffer(19)]],
-    const constant size_t* b_strides [[buffer(20)]],
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& in_vec_size [[buffer(5)]],
+    const constant int& out_vec_size [[buffer(6)]],
+    const constant int& x_batch_ndims [[buffer(7)]],
+    const constant int* x_shape [[buffer(8)]],
+    const constant size_t* x_strides [[buffer(9)]],
+    const constant int& w_batch_ndims [[buffer(10)]],
+    const constant int* w_shape [[buffer(11)]],
+    const constant size_t* w_strides [[buffer(12)]],
+    const constant size_t* s_strides [[buffer(13)]],
+    const constant size_t* b_strides [[buffer(14)]],
+    const constant int& batch_ndims [[buffer(15)]],
+    const constant int* batch_shape [[buffer(16)]],
+    const device uint32_t* lhs_indices [[buffer(17)]],
+    const device uint32_t* rhs_indices [[buffer(18)]],
+    const constant size_t* lhs_strides [[buffer(19)]],
+    const constant size_t* rhs_strides [[buffer(20)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
     uint simd_lid [[thread_index_in_simdgroup]]) {
@@ -1306,10 +1588,10 @@ template <typename T, int group_size, int bits>
       b_strides,
       tid);
   qvm_impl<T, group_size, bits>(
-      x,
       w,
       scales,
       biases,
+      x,
       y,
       in_vec_size,
       out_vec_size,
@@ -1327,28 +1609,28 @@ template <
     const int BK = 32,
     const int BN = 32>
 [[kernel]] void bs_qmm_t(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
-    const device uint32_t* lhs_indices [[buffer(4)]],
-    const device uint32_t* rhs_indices [[buffer(5)]],
-    device T* y [[buffer(6)]],
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& K [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
     const constant int& M [[buffer(7)]],
-    const constant int& N [[buffer(8)]],
-    const constant int& K [[buffer(9)]],
-    const constant int& batch_ndims [[buffer(10)]],
-    const constant int* batch_shape [[buffer(11)]],
-    const constant size_t* lhs_strides [[buffer(12)]],
-    const constant size_t* rhs_strides [[buffer(13)]],
-    const constant int& x_batch_ndims [[buffer(14)]],
-    const constant int* x_shape [[buffer(15)]],
-    const constant size_t* x_strides [[buffer(16)]],
-    const constant int& w_batch_ndims [[buffer(17)]],
-    const constant int* w_shape [[buffer(18)]],
-    const constant size_t* w_strides [[buffer(19)]],
-    const constant size_t* s_strides [[buffer(20)]],
-    const constant size_t* b_strides [[buffer(21)]],
+    const constant int& x_batch_ndims [[buffer(8)]],
+    const constant int* x_shape [[buffer(9)]],
+    const constant size_t* x_strides [[buffer(10)]],
+    const constant int& w_batch_ndims [[buffer(11)]],
+    const constant int* w_shape [[buffer(12)]],
+    const constant size_t* w_strides [[buffer(13)]],
+    const constant size_t* s_strides [[buffer(14)]],
+    const constant size_t* b_strides [[buffer(15)]],
+    const constant int& batch_ndims [[buffer(16)]],
+    const constant int* batch_shape [[buffer(17)]],
+    const device uint32_t* lhs_indices [[buffer(18)]],
+    const device uint32_t* rhs_indices [[buffer(19)]],
+    const constant size_t* lhs_strides [[buffer(20)]],
+    const constant size_t* rhs_strides [[buffer(21)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -1383,7 +1665,7 @@ template <
       b_strides,
       tid);
   qmm_t_impl<T, group_size, bits, aligned_N, BM, BK, BN>(
-      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+      w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <
@@ -1394,28 +1676,28 @@ template <
     const int BK = 32,
     const int BN = 32>
 [[kernel]] void bs_qmm_n(
-    const device T* x [[buffer(0)]],
-    const device uint32_t* w [[buffer(1)]],
-    const device T* scales [[buffer(2)]],
-    const device T* biases [[buffer(3)]],
-    const device uint32_t* lhs_indices [[buffer(4)]],
-    const device uint32_t* rhs_indices [[buffer(5)]],
-    device T* y [[buffer(6)]],
+    const device uint32_t* w [[buffer(0)]],
+    const device T* scales [[buffer(1)]],
+    const device T* biases [[buffer(2)]],
+    const device T* x [[buffer(3)]],
+    device T* y [[buffer(4)]],
+    const constant int& K [[buffer(5)]],
+    const constant int& N [[buffer(6)]],
     const constant int& M [[buffer(7)]],
-    const constant int& N [[buffer(8)]],
-    const constant int& K [[buffer(9)]],
-    const constant int& batch_ndims [[buffer(10)]],
-    const constant int* batch_shape [[buffer(11)]],
-    const constant size_t* lhs_strides [[buffer(12)]],
-    const constant size_t* rhs_strides [[buffer(13)]],
-    const constant int& x_batch_ndims [[buffer(14)]],
-    const constant int* x_shape [[buffer(15)]],
-    const constant size_t* x_strides [[buffer(16)]],
-    const constant int& w_batch_ndims [[buffer(17)]],
-    const constant int* w_shape [[buffer(18)]],
-    const constant size_t* w_strides [[buffer(19)]],
-    const constant size_t* s_strides [[buffer(20)]],
-    const constant size_t* b_strides [[buffer(21)]],
+    const constant int& x_batch_ndims [[buffer(8)]],
+    const constant int* x_shape [[buffer(9)]],
+    const constant size_t* x_strides [[buffer(10)]],
+    const constant int& w_batch_ndims [[buffer(11)]],
+    const constant int* w_shape [[buffer(12)]],
+    const constant size_t* w_strides [[buffer(13)]],
+    const constant size_t* s_strides [[buffer(14)]],
+    const constant size_t* b_strides [[buffer(15)]],
+    const constant int& batch_ndims [[buffer(16)]],
+    const constant int* batch_shape [[buffer(17)]],
+    const device uint32_t* lhs_indices [[buffer(18)]],
+    const device uint32_t* rhs_indices [[buffer(19)]],
+    const constant size_t* lhs_strides [[buffer(20)]],
+    const constant size_t* rhs_strides [[buffer(21)]],
     uint3 tid [[threadgroup_position_in_grid]],
     uint lid [[thread_index_in_threadgroup]],
     uint simd_gid [[simdgroup_index_in_threadgroup]],
@@ -1451,7 +1733,7 @@ template <
       b_strides,
       tid);
   qmm_n_impl<T, group_size, bits, BM, BK, BN>(
-      x, w, scales, biases, y, Xs, Ws, M, N, K, tid, lid, simd_gid, simd_lid);
+      w, scales, biases, x, y, Xs, Ws, K, N, M, tid, lid, simd_gid, simd_lid);
 }
 
 template <typename T, const int group_size, const int bits>
