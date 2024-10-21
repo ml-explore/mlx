@@ -72,16 +72,33 @@ struct CommandEncoder {
   }
 
   ~CommandEncoder();
+  std::unordered_set<const void*> all_inputs;
+  std::unordered_set<const void*> all_outputs;
+  MTL::CommandBuffer* cbuf;
 
  private:
+  void set_array(const array& a, int idx, int64_t offset);
   void maybe_split();
 
   int num_dispatches{0};
-  MTL::CommandBuffer* cbuf;
   MTL::ComputeCommandEncoder* enc;
   bool concurrent{false};
   std::unordered_set<MTL::Resource*> outputs;
   std::unordered_set<MTL::Resource*> concurrent_outputs;
+};
+
+// TODOs
+// - put it all in one structure?
+// - fence should be stream specific
+// - outputs should be stream specific
+// - fence mtx should be stream specific
+// - temporary outputs should not go in the map
+struct Fence {
+  Fence(MTL::Fence* fence) : fence(fence) {}
+  ~Fence() {
+    fence->release();
+  }
+  MTL::Fence* fence;
 };
 
 class Device {
@@ -136,6 +153,8 @@ class Device {
   MTL::ArgumentEncoder* argument_encoder(
       const std::vector<MTL::ArgumentDescriptor*>& arg_descs) const;
 
+  std::shared_ptr<Fence> fence_;
+
  private:
   MTL::Library* get_library_cache_(const std::string& name);
 
@@ -169,11 +188,17 @@ class Device {
       const MTLFCList& func_consts = {},
       const std::vector<MTL::Function*>& linked_functions = {});
 
+  void remove_outputs(
+      const std::unordered_set<const void*>& outputs,
+      const std::shared_ptr<Fence>& fence);
+
   MTL::Device* device_;
   std::unordered_map<int32_t, MTL::CommandQueue*> queue_map_;
   std::unordered_map<int32_t, std::pair<int, MTL::CommandBuffer*>> buffer_map_;
   std::unordered_map<int32_t, std::unique_ptr<CommandEncoder>> encoder_map_;
-  std::unordered_map<int32_t, MTL::Fence*> fence_map_;
+
+  std::mutex fence_mtx_;
+  std::unordered_map<const void*, std::shared_ptr<Fence>> all_outputs_;
 
   std::shared_mutex kernel_mtx_;
   std::unordered_map<std::string, MTL::ComputePipelineState*> kernel_map_;

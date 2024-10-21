@@ -131,7 +131,7 @@ CommandEncoder::~CommandEncoder() {
   enc->release();
 }
 
-void CommandEncoder::set_input_array(
+void CommandEncoder::set_array(
     const array& a,
     int idx,
     int64_t offset /* = 0 */) {
@@ -150,12 +150,21 @@ void CommandEncoder::set_input_array(
   enc->setBuffer(a_buf, base_offset, idx);
 }
 
+void CommandEncoder::set_input_array(
+    const array& a,
+    int idx,
+    int64_t offset /* = 0 */) {
+  all_inputs.insert(a.buffer().ptr());
+  set_array(a, idx, offset);
+}
+
 void CommandEncoder::set_output_array(
     array& a,
     int idx,
     int64_t offset /* = 0 */) {
   // Add barriers before adding the output to the output set
-  set_input_array(a, idx, offset);
+  set_array(a, idx, offset);
+  all_outputs.insert(a.buffer().ptr());
   auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
   if (concurrent) {
     concurrent_outputs.insert(buf);
@@ -205,9 +214,6 @@ Device::~Device() {
   for (auto& b : buffer_map_) {
     b.second.second->release();
   }
-  for (auto& f : fence_map_) {
-    f.second->release();
-  }
   for (auto& k : kernel_map_) {
     k.second->release();
   }
@@ -215,6 +221,19 @@ Device::~Device() {
     l.second->release();
   }
   device_->release();
+}
+
+void Device::remove_outputs(
+    const std::unordered_set<const void*>& outputs,
+    const std::shared_ptr<Fence>& fence) {
+  std::lock_guard<std::mutex> lk(fence_mtx_);
+  for (auto o : outputs) {
+    if (auto it = all_outputs_.find(o); it != all_outputs_.end()) {
+      if (it->second == fence) {
+        all_outputs_.erase(it);
+      }
+    }
+  }
 }
 
 void Device::new_queue(int index) {
@@ -231,7 +250,6 @@ void Device::new_queue(int index) {
   queue_map_.insert({index, q});
   buffer_map_.insert({index, {0, nullptr}});
   encoder_map_.insert({index, nullptr});
-  fence_map_.insert({index, device_->newFence()});
 }
 
 int Device::get_command_buffer_ops(int index) {
@@ -276,7 +294,22 @@ void Device::commit_command_buffer(int index) {
 void Device::end_encoding(int index) {
   auto eit = encoder_map_.find(index);
   if (eit->second != nullptr) {
-    (*eit->second)->updateFence(fence_map_[index]);
+    auto& enc = *eit->second;
+    std::lock_guard<std::mutex> lk(fence_mtx_);
+    for (auto in : enc.all_inputs) {
+      if (auto it = all_outputs_.find(in); it != all_outputs_.end()) {
+        enc->waitForFence(it->second->fence);
+      }
+    }
+    for (auto out : enc.all_outputs) {
+      all_outputs_[out] = fence_;
+    }
+    enc->updateFence(fence_->fence);
+    // remove temporaries from outputs?
+    // put temporaries in container
+    enc.cbuf->addCompletedHandler(
+        [this, fence = fence_, outputs = std::move(enc.all_outputs)](
+            MTL::CommandBuffer*) { remove_outputs(outputs, fence); });
   }
   eit->second = nullptr;
 }
@@ -286,7 +319,7 @@ CommandEncoder& Device::get_command_encoder(int index) {
   if (eit->second == nullptr) {
     auto cb = get_command_buffer(index);
     eit->second = std::make_unique<CommandEncoder>(cb);
-    (*eit->second)->waitForFence(fence_map_[index]);
+    fence_ = std::make_shared<Fence>(device_->newFence());
   }
   return *(eit->second);
 }
