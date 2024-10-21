@@ -2,7 +2,7 @@
 
 constexpr std::string_view scan_kernels = R"(
 template [[host_name("contig_{0}")]] [[kernel]] void
-contiguous_scan<{1}, {2}, {3}<{2}>, 4, {4}, {5}>(
+contiguous_scan<{1}, {2}, {3}<{2}>, {6}, {4}, {5}>(
     const device {1}* in [[buffer(0)]],
     device {2}* out [[buffer(1)]],
     const constant size_t& axis_size [[buffer(2)]],
@@ -14,7 +14,7 @@ contiguous_scan<{1}, {2}, {3}<{2}>, 4, {4}, {5}>(
     uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
 template [[host_name("strided_{0}")]] [[kernel]] void
-strided_scan<{1}, {2}, {3}<{2}>, 4, {4}, {5}>(
+strided_scan<{1}, {2}, {3}<{2}>, {6}, {4}, {5}>(
     const device {1}* in [[buffer(0)]],
     device {2}* out [[buffer(1)]],
     const constant size_t& axis_size [[buffer(2)]],

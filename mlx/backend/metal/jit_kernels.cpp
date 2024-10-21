@@ -235,7 +235,8 @@ MTL::ComputePipelineState* get_scan_kernel(
                          get_type_string(out.dtype()),
                          op_name,
                          inclusive,
-                         reverse);
+                         reverse,
+                         in.itemsize() <= 4 ? 4 : 2);
     return kernel_source.str();
   });
   return d.get_kernel(kernel_name, lib);
