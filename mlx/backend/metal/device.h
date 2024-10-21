@@ -45,13 +45,13 @@ struct CommandEncoder {
 
   struct ConcurrentContext {
     ConcurrentContext(CommandEncoder& enc) : enc(enc) {
-      enc.concurrent = true;
+      enc.concurrent_ = true;
     }
     ~ConcurrentContext() {
-      enc.concurrent = false;
-      enc.outputs.insert(
-          enc.concurrent_outputs.begin(), enc.concurrent_outputs.end());
-      enc.concurrent_outputs.clear();
+      enc.concurrent_ = false;
+      enc.outputs_.insert(
+          enc.concurrent_outputs_.begin(), enc.concurrent_outputs_.end());
+      enc.concurrent_outputs_.clear();
     }
 
    private:
@@ -59,7 +59,7 @@ struct CommandEncoder {
   };
 
   MTL::ComputeCommandEncoder* operator->() {
-    return enc;
+    return enc_;
   }
 
   void set_input_array(const array& a, int idx, int64_t offset = 0);
@@ -70,21 +70,26 @@ struct CommandEncoder {
   ConcurrentContext start_concurrent() {
     return ConcurrentContext(*this);
   }
-
   ~CommandEncoder();
-  std::unordered_set<const void*> all_inputs;
-  std::unordered_set<const void*> all_outputs;
-  MTL::CommandBuffer* cbuf;
+
+  // Inputs to all kernels in the encoder including temporaries
+  std::unordered_set<const void*>& inputs() {
+    return all_inputs_;
+  };
+
+  // Outputs of all kernels in the encoder including temporaries
+  std::unordered_set<const void*> outputs() {
+    return all_outputs_;
+  };
 
  private:
   void set_array(const array& a, int idx, int64_t offset);
-  void maybe_split();
-
-  int num_dispatches{0};
-  MTL::ComputeCommandEncoder* enc;
-  bool concurrent{false};
-  std::unordered_set<MTL::Resource*> outputs;
-  std::unordered_set<MTL::Resource*> concurrent_outputs;
+  MTL::ComputeCommandEncoder* enc_;
+  bool concurrent_{false};
+  std::unordered_set<MTL::Resource*> outputs_;
+  std::unordered_set<MTL::Resource*> concurrent_outputs_;
+  std::unordered_set<const void*> all_inputs_;
+  std::unordered_set<const void*> all_outputs_;
 };
 
 struct Fence {
@@ -104,12 +109,20 @@ struct DeviceStream {
     }
   };
   MTL::CommandQueue* queue;
+  // A map of prior command encoder outputs to their corresponding fence
+  std::unordered_map<const void*, std::shared_ptr<Fence>> outputs;
+  // Used to allow thread-safe access to the outputs map
+  std::mutex fence_mtx;
+
+  // The buffer and buffer op count are updated
+  // between command buffers
   MTL::CommandBuffer* buffer{nullptr};
   int buffer_ops{0};
+
+  // The command encoder, fence, and temporaries are updated between command
+  // encoders
   std::unique_ptr<CommandEncoder> encoder{nullptr};
   std::shared_ptr<Fence> fence;
-  std::mutex fence_mtx;
-  std::unordered_map<const void*, std::shared_ptr<Fence>> outputs;
   std::vector<array> temporaries;
 };
 

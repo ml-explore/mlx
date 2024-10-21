@@ -20,7 +20,6 @@ namespace {
 
 // TODO nicer way to set this or possibly expose as an environment variable
 constexpr int MAX_BUFFERS_PER_QUEUE = 12;
-constexpr int MAX_DISPATCHES_PER_ENCODER = 2;
 
 constexpr const char* default_mtllib_path = METAL_PATH;
 
@@ -121,14 +120,14 @@ MTL::Library* load_library(
 
 } // namespace
 
-CommandEncoder::CommandEncoder(MTL::CommandBuffer* cbuf) : cbuf(cbuf) {
-  enc = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
-  enc->retain();
+CommandEncoder::CommandEncoder(MTL::CommandBuffer* cbuf) {
+  enc_ = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
+  enc_->retain();
 }
 
 CommandEncoder::~CommandEncoder() {
-  enc->endEncoding();
-  enc->release();
+  enc_->endEncoding();
+  enc_->release();
 }
 
 void CommandEncoder::set_array(
@@ -136,25 +135,25 @@ void CommandEncoder::set_array(
     int idx,
     int64_t offset /* = 0 */) {
   auto r_buf = static_cast<MTL::Resource*>(const_cast<void*>(a.buffer().ptr()));
-  if (auto it = outputs.find(r_buf); it != outputs.end()) {
+  if (auto it = outputs_.find(r_buf); it != outputs_.end()) {
     // Insert a barrier
-    enc->memoryBarrier(&r_buf, 1);
+    enc_->memoryBarrier(&r_buf, 1);
 
     // Remove the output
-    outputs.erase(it);
+    outputs_.erase(it);
   }
   auto a_buf = static_cast<const MTL::Buffer*>(a.buffer().ptr());
   auto base_offset = a.data<char>() -
       static_cast<char*>(const_cast<MTL::Buffer*>(a_buf)->contents());
   base_offset += offset;
-  enc->setBuffer(a_buf, base_offset, idx);
+  enc_->setBuffer(a_buf, base_offset, idx);
 }
 
 void CommandEncoder::set_input_array(
     const array& a,
     int idx,
     int64_t offset /* = 0 */) {
-  all_inputs.insert(a.buffer().ptr());
+  all_inputs_.insert(a.buffer().ptr());
   set_array(a, idx, offset);
 }
 
@@ -164,40 +163,25 @@ void CommandEncoder::set_output_array(
     int64_t offset /* = 0 */) {
   // Add barriers before adding the output to the output set
   set_array(a, idx, offset);
-  all_outputs.insert(a.buffer().ptr());
+  all_outputs_.insert(a.buffer().ptr());
   auto buf = static_cast<MTL::Resource*>(a.buffer().ptr());
-  if (concurrent) {
-    concurrent_outputs.insert(buf);
+  if (concurrent_) {
+    concurrent_outputs_.insert(buf);
   } else {
-    outputs.insert(buf);
+    outputs_.insert(buf);
   }
 }
 
 void CommandEncoder::dispatchThreadgroups(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
-  num_dispatches++;
-  enc->dispatchThreadgroups(grid_dims, group_dims);
-  maybe_split();
+  enc_->dispatchThreadgroups(grid_dims, group_dims);
 }
 
 void CommandEncoder::dispatchThreads(
     MTL::Size grid_dims,
     MTL::Size group_dims) {
-  num_dispatches++;
-  enc->dispatchThreads(grid_dims, group_dims);
-  maybe_split();
-}
-
-void CommandEncoder::maybe_split() {
-  if (num_dispatches > MAX_DISPATCHES_PER_ENCODER && !concurrent) {
-    enc->endEncoding();
-    enc->release();
-    num_dispatches = 0;
-    outputs.clear();
-    enc = cbuf->computeCommandEncoder(MTL::DispatchTypeConcurrent);
-    enc->retain();
-  }
+  enc_->dispatchThreads(grid_dims, group_dims);
 }
 
 Device::Device() {
@@ -279,47 +263,63 @@ void Device::add_temporaries(std::vector<array> arrays, int index) {
 void Device::end_encoding(int index) {
   auto& stream = get_stream_(index);
   if (stream.encoder != nullptr) {
+    // Each command encoder has a unique fence. We also store a map of
+    // all previous outputs of command encoders to their corresponding fence.
+    // - The command encoder records its inputs and outputs.
+    // - Wait on a fence if any inputs in the encoder are outputs of a previous
+    //   encoder.
+    // - Update the map of outputs to include this command encoder's outputs.
+    // - Always signal this command encoders fence.
+    // - Add a completion handler for this command encoder that removes outputs
+    //   from the map to limit the growth of the map and avoid unecessary waits
+    // - Temporaries are a special case as they do not cross command encoder
+    //   boundaries. These can be removed early from the encoders inputs and
+    //   outputs since they don't need synchronization.
     auto& enc = *stream.encoder;
     // Remove temporaries from inputs and outputs
     for (auto& t : stream.temporaries) {
       if (t.data<void>() != nullptr) {
-        enc.all_outputs.erase(t.buffer().ptr());
-        enc.all_inputs.erase(t.buffer().ptr());
+        enc.outputs().erase(t.buffer().ptr());
+        enc.inputs().erase(t.buffer().ptr());
       }
     }
 
+    // Keep references to the fences we waited on and put them
+    // in the completion handler so they are not prematurely released
     std::unordered_set<std::shared_ptr<Fence>> waiting_on;
     {
       std::lock_guard<std::mutex> lk(stream.fence_mtx);
-      for (auto in : enc.all_inputs) {
+      for (auto in : enc.inputs()) {
         if (auto it = stream.outputs.find(in); it != stream.outputs.end()) {
+          // If we've already waited on a fence, don't wait on it again.
           if (waiting_on.find(it->second) == waiting_on.end()) {
             enc->waitForFence(it->second->fence);
             waiting_on.insert(it->second);
           }
         }
       }
-      for (auto out : enc.all_outputs) {
+      for (auto out : enc.outputs()) {
         stream.outputs[out] = stream.fence;
       }
     }
     enc->updateFence(stream.fence->fence);
-    enc.cbuf->addCompletedHandler([&stream,
-                                   waiting_on = std::move(waiting_on),
-                                   fence = std::move(stream.fence),
-                                   outputs = std::move(enc.all_outputs),
-                                   temporaries = std::move(stream.temporaries)](
-                                      MTL::CommandBuffer*) mutable {
-      temporaries.clear();
-      std::lock_guard<std::mutex> lk(stream.fence_mtx);
-      for (auto o : outputs) {
-        if (auto it = stream.outputs.find(o); it != stream.outputs.end()) {
-          if (it->second == fence) {
-            stream.outputs.erase(it);
+    stream.buffer->addCompletedHandler(
+        [&stream,
+         waiting_on = std::move(waiting_on),
+         fence = std::move(stream.fence),
+         outputs = std::move(enc.outputs()),
+         temporaries =
+             std::move(stream.temporaries)](MTL::CommandBuffer*) mutable {
+          temporaries.clear();
+          std::lock_guard<std::mutex> lk(stream.fence_mtx);
+          for (auto o : outputs) {
+            if (auto it = stream.outputs.find(o); it != stream.outputs.end()) {
+              if (it->second == fence) {
+                stream.outputs.erase(it);
+              }
+            }
           }
-        }
-      }
-    });
+        });
   }
   stream.encoder = nullptr;
 }
@@ -327,9 +327,6 @@ void Device::end_encoding(int index) {
 CommandEncoder& Device::get_command_encoder(int index) {
   auto& stream = get_stream_(index);
   if (stream.encoder == nullptr) {
-    if (stream.buffer == nullptr) {
-      throw std::invalid_argument("TODO");
-    }
     stream.encoder = std::make_unique<CommandEncoder>(stream.buffer);
     stream.fence = std::make_shared<Fence>(device_->newFence());
   }
