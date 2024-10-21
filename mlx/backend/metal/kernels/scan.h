@@ -1,7 +1,38 @@
 // Copyright © 2023-2024 Apple Inc.
 
+#pragma once
+
+#define DEFINE_SIMD_SCAN()                                               \
+  template <typename T, metal::enable_if_t<sizeof(T) < 8, bool> = true>  \
+  T simd_scan(T val) {                                                   \
+    return simd_scan_impl(val);                                          \
+  }                                                                      \
+                                                                         \
+  template <typename T, metal::enable_if_t<sizeof(T) == 8, bool> = true> \
+  T simd_scan(T val) {                                                   \
+    for (int i = 1; i <= 16; i *= 2) {                                   \
+      val = operator()(val, simd_shuffle_and_fill_up(val, init, i));     \
+    }                                                                    \
+    return val;                                                          \
+  }
+
+#define DEFINE_SIMD_EXCLUSIVE_SCAN()                                     \
+  template <typename T, metal::enable_if_t<sizeof(T) < 8, bool> = true>  \
+  T simd_exclusive_scan(T val) {                                         \
+    return simd_exclusive_scan_impl(val);                                \
+  }                                                                      \
+                                                                         \
+  template <typename T, metal::enable_if_t<sizeof(T) == 8, bool> = true> \
+  T simd_exclusive_scan(T val) {                                         \
+    val = simd_scan(val);                                                \
+    return simd_shuffle_and_fill_up(val, init, 1);                       \
+  }
+
 template <typename U>
 struct CumSum {
+  DEFINE_SIMD_SCAN()
+  DEFINE_SIMD_EXCLUSIVE_SCAN()
+
   static constexpr constant U init = static_cast<U>(0);
 
   template <typename T>
@@ -9,17 +40,20 @@ struct CumSum {
     return a + b;
   }
 
-  U simd_scan(U x) {
+  U simd_scan_impl(U x) {
     return simd_prefix_inclusive_sum(x);
   }
 
-  U simd_exclusive_scan(U x) {
+  U simd_exclusive_scan_impl(U x) {
     return simd_prefix_exclusive_sum(x);
   }
 };
 
 template <typename U>
 struct CumProd {
+  DEFINE_SIMD_SCAN()
+  DEFINE_SIMD_EXCLUSIVE_SCAN()
+
   static constexpr constant U init = static_cast<U>(1.0f);
 
   template <typename T>
@@ -27,11 +61,11 @@ struct CumProd {
     return a * b;
   }
 
-  U simd_scan(U x) {
+  U simd_scan_impl(U x) {
     return simd_prefix_inclusive_product(x);
   }
 
-  U simd_exclusive_scan(U x) {
+  U simd_exclusive_scan_impl(U x) {
     return simd_prefix_exclusive_product(x);
   }
 };
@@ -47,7 +81,7 @@ struct CumProd<bool> {
 
   bool simd_scan(bool x) {
     for (int i = 1; i <= 16; i *= 2) {
-      bool other = simd_shuffle_up(x, i);
+      bool other = simd_shuffle_and_fill_up(x, init, i);
       x &= other;
     }
     return x;
@@ -70,7 +104,7 @@ struct CumMax {
 
   U simd_scan(U x) {
     for (int i = 1; i <= 16; i *= 2) {
-      U other = simd_shuffle_up(x, i);
+      U other = simd_shuffle_and_fill_up(x, init, i);
       x = (x >= other) ? x : other;
     }
     return x;
@@ -93,7 +127,7 @@ struct CumMin {
 
   U simd_scan(U x) {
     for (int i = 1; i <= 16; i *= 2) {
-      U other = simd_shuffle_up(x, i);
+      U other = simd_shuffle_and_fill_up(x, init, i);
       x = (x <= other) ? x : other;
     }
     return x;

@@ -320,3 +320,63 @@ inline complex64_t simd_shuffle_down(complex64_t data, uint16_t delta) {
   return complex64_t(
       simd_shuffle_down(data.real, delta), simd_shuffle_down(data.imag, delta));
 }
+
+inline uint64_t simd_shuffle_up(uint64_t data, uint16_t delta) {
+  return as_type<uint64_t>(metal::simd_shuffle_up(as_type<uint2>(data), delta));
+}
+
+inline int64_t simd_shuffle_up(int64_t data, uint16_t delta) {
+  return as_type<int64_t>(metal::simd_shuffle_up(as_type<uint2>(data), delta));
+}
+
+inline bool simd_shuffle_up(bool data, uint16_t delta) {
+  return simd_shuffle_up(static_cast<uint32_t>(data), delta);
+}
+
+inline complex64_t simd_shuffle_up(complex64_t data, uint16_t delta) {
+  return complex64_t(
+      simd_shuffle_up(data.real, delta), simd_shuffle_up(data.imag, delta));
+}
+
+inline uint64_t
+simd_shuffle_and_fill_up(uint64_t data, uint64_t filling, uint16_t delta) {
+  return as_type<uint64_t>(metal::simd_shuffle_and_fill_up(
+      as_type<uint2>(data), as_type<uint2>(filling), delta));
+}
+
+inline int64_t
+simd_shuffle_and_fill_up(int64_t data, int64_t filling, uint16_t delta) {
+  return as_type<int64_t>(metal::simd_shuffle_and_fill_up(
+      as_type<uint2>(data), as_type<uint2>(filling), delta));
+}
+
+inline bool simd_shuffle_and_fill_up(bool data, bool filling, uint16_t delta) {
+  return simd_shuffle_and_fill_up(
+      static_cast<uint32_t>(data), static_cast<uint32_t>(filling), delta);
+}
+
+inline complex64_t simd_shuffle_and_fill_up(
+    complex64_t data,
+    complex64_t filling,
+    uint16_t delta) {
+  return complex64_t(
+      simd_shuffle_and_fill_up(data.real, filling.real, delta),
+      simd_shuffle_and_fill_up(data.imag, filling.imag, delta));
+}
+
+inline uint64_t simd_shuffle(uint64_t data, uint16_t lane) {
+  return as_type<uint64_t>(metal::simd_shuffle(as_type<uint2>(data), lane));
+}
+
+inline int64_t simd_shuffle(int64_t data, uint16_t lane) {
+  return as_type<int64_t>(metal::simd_shuffle(as_type<uint2>(data), lane));
+}
+
+inline bool simd_shuffle(bool data, uint16_t lane) {
+  return simd_shuffle(static_cast<uint32_t>(data), lane);
+}
+
+inline complex64_t simd_shuffle(complex64_t data, uint16_t lane) {
+  return complex64_t(
+      simd_shuffle(data.real, lane), simd_shuffle(data.imag, lane));
+}
