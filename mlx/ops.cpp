@@ -3592,19 +3592,14 @@ array conv_general(
 }
 
 array quantized_matmul(
-    const array& in_x,
-    const array& in_w,
-    const array& in_scales,
-    const array& in_biases,
+    array x,
+    array w,
+    array scales,
+    array biases,
     bool transpose /* = true */,
     int group_size /* = 64 */,
     int bits /* = 4 */,
     StreamOrDevice s /* = {} */) {
-  auto x = in_x;
-  auto w = in_w;
-  auto scales = in_scales;
-  auto biases = in_biases;
-
   // Check and extract the quantized matrix shape against x
   auto [w_inner_dims, w_outer_dims] = extract_quantized_matmul_dims(
       "quantized_matmul", x, w, scales, biases, transpose, group_size, bits);
