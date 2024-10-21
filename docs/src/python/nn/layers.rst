@@ -29,6 +29,7 @@ Layers
    GLU
    GroupNorm
    GRU
+   GRUCell
    HardShrink
    HardTanh
    Hardswish
