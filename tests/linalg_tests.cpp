@@ -435,3 +435,41 @@ TEST_CASE("test cross product") {
   result = cross(a, b);
   CHECK(allclose(result, expected).item<bool>());
 }
+
+TEST_CASE("test matrix eigh") {
+  // 0D and 1D throw
+  CHECK_THROWS(linalg::eigh(array(0.0)));
+  CHECK_THROWS(linalg::eigh(array({0.0, 1.0})));
+  CHECK_THROWS(linalg::eigvalsh(array(0.0)));
+  CHECK_THROWS(linalg::eigvalsh(array({0.0, 1.0})));
+
+  // Unsupported types throw
+  CHECK_THROWS(linalg::eigh(array({0, 1}, {1, 2})));
+
+  // Non-square throws
+  CHECK_THROWS(linalg::eigh(array({1, 2, 3, 4, 5, 6}, {2, 3})));
+
+  // Test a simple 2x2 symmetric matrix
+  array A = array({1.0, 2.0, 2.0, 4.0}, {2, 2}, float32);
+  auto [eigvals, eigvecs] = linalg::eigh(A, "L", Device::cpu);
+
+  // Expected eigenvalues
+  array expected_eigvals = array({0.0, 5.0});
+  CHECK(allclose(
+            eigvals,
+            expected_eigvals,
+            /* rtol = */ 1e-5,
+            /* atol = */ 1e-5)
+            .item<bool>());
+
+  // Verify orthogonality of eigenvectors
+  CHECK(allclose(
+            matmul(eigvecs, transpose(eigvecs)),
+            eye(2),
+            /* rtol = */ 1e-5,
+            /* atol = */ 1e-5)
+            .item<bool>());
+
+  // Verify eigendecomposition
+  CHECK(allclose(matmul(A, eigvecs), eigvals * eigvecs).item<bool>());
+}

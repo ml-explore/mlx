@@ -83,4 +83,9 @@ array cross(
     int axis = -1,
     StreamOrDevice s = {});
 
+array eigvalsh(const array& a, std::string UPLO = "L", StreamOrDevice s = {});
+
+std::pair<array, array>
+eigh(const array& a, std::string UPLO = "L", StreamOrDevice s = {});
+
 } // namespace mlx::core::linalg

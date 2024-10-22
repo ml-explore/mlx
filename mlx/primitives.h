@@ -2196,4 +2196,44 @@ class Cholesky : public UnaryPrimitive {
   bool upper_;
 };
 
+class Eigh : public Primitive {
+ public:
+  explicit Eigh(Stream stream, std::string uplo, bool compute_eigenvectors)
+      : Primitive(stream),
+        uplo_(std::move(uplo)),
+        compute_eigenvectors_(compute_eigenvectors) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Eigh)
+
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override {
+    auto shape = inputs[0].shape();
+    shape.pop_back(); // Remove last dimension for eigenvalues
+    if (compute_eigenvectors_) {
+      return {shape, inputs[0].shape()}; // Eigenvalues and eigenvectors
+    } else {
+      return {shape}; // Only eigenvalues
+    }
+  }
+
+  bool is_equivalent(const Primitive& other) const override {
+    if (auto* p = dynamic_cast<const Eigh*>(&other)) {
+      return uplo_ == p->uplo_ &&
+          compute_eigenvectors_ == p->compute_eigenvectors_;
+    }
+    return false;
+  }
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+  std::string uplo_;
+  bool compute_eigenvectors_;
+};
+
 } // namespace mlx::core
