@@ -212,17 +212,17 @@ template <
     const device T* in [[buffer(0)]],
     device U* out [[buffer(1)]],
     const constant size_t& axis_size [[buffer(2)]],
-    uint2 gid [[threadgroup_position_in_grid]],
-    uint2 gsize [[threadgroups_per_grid]],
-    uint2 lid [[thread_position_in_threadgroup]],
-    uint2 lsize [[threads_per_threadgroup]],
+    uint3 gid [[threadgroup_position_in_grid]],
+    uint3 gsize [[threadgroups_per_grid]],
+    uint3 lid [[thread_position_in_threadgroup]],
+    uint3 lsize [[threads_per_threadgroup]],
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   constexpr int simd_size = 32;
   Op op;
 
   // Position the pointers
-  size_t offset = (gid.x + gsize.x * size_t(gid.y)) * axis_size;
+  size_t offset = (gid.y + gsize.y * size_t(gid.z)) * axis_size;
   in += offset;
   out += offset;
 
@@ -368,6 +368,7 @@ template <
     device U* out [[buffer(1)]],
     const constant size_t& axis_size [[buffer(2)]],
     const constant size_t& stride [[buffer(3)]],
+    const constant size_t& stride_blocks [[buffer(4)]],
     uint3 gid [[threadgroup_position_in_grid]],
     uint3 gsize [[threadgroups_per_grid]],
     uint3 lid [[thread_position_in_threadgroup]],
@@ -376,11 +377,12 @@ template <
   constexpr int simd_size = 32;
   constexpr int BM = 32;
   constexpr int BN = 32;
+  constexpr int BN_pad = 32 + 16 / sizeof(U);
   constexpr int n_simds = BN / N_READS;
   constexpr int n_scans = BN / n_simds;
   Op op;
 
-  threadgroup U read_buffer[BM * BN];
+  threadgroup U read_buffer[BM * BN_pad];
   U values[n_scans];
   U prefix[n_scans];
   for (int i = 0; i < n_scans; i++) {
@@ -388,35 +390,41 @@ template <
   }
 
   // Compute offsets
-  size_t offset = (gid.y + gsize.y * size_t(gid.z)) * axis_size * stride;
-  int global_index_x = gid.x * BN;
+  size_t full_gid = gid.y + gsize.y * size_t(gid.z);
+  size_t offset = full_gid / stride_blocks * axis_size * stride;
+  size_t global_index_x = full_gid % stride_blocks * BN;
   uint read_offset_y = (lid.x * N_READS) / BN;
   uint read_offset_x = (lid.x * N_READS) % BN;
   uint scan_offset_y = simd_lane_id;
   uint scan_offset_x = simd_group_id * n_scans;
 
+  uint stride_limit = stride - global_index_x;
+  in += offset + global_index_x + read_offset_x;
+  out += offset + global_index_x + read_offset_x;
+  threadgroup U* read_into =
+      read_buffer + read_offset_y * BN_pad + read_offset_x;
+  threadgroup U* read_from =
+      read_buffer + scan_offset_y * BN_pad + scan_offset_x;
+
   for (uint j = 0; j < axis_size; j += BM) {
     // Calculate the indices for the current thread
     uint index_y = j + read_offset_y;
     uint check_index_y = index_y;
-    uint index_x = global_index_x + read_offset_x;
     if (reverse) {
       index_y = axis_size - 1 - index_y;
     }
 
     // Read in SM
-    if (check_index_y < axis_size && (index_x + N_READS) < stride) {
+    if (check_index_y < axis_size && (read_offset_x + N_READS) < stride_limit) {
       for (int i = 0; i < N_READS; i++) {
-        read_buffer[read_offset_y * BN + read_offset_x + i] =
-            in[offset + index_y * stride + index_x + i];
+        read_into[i] = in[index_y * stride + i];
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
-        if (check_index_y < axis_size && (index_x + i) < stride) {
-          read_buffer[read_offset_y * BN + read_offset_x + i] =
-              in[offset + index_y * stride + index_x + i];
+        if (check_index_y < axis_size && (read_offset_x + i) < stride_limit) {
+          read_into[i] = in[index_y * stride + i];
         } else {
-          read_buffer[read_offset_y * BN + read_offset_x + i] = Op::init;
+          read_into[i] = Op::init;
         }
       }
     }
@@ -424,7 +432,7 @@ template <
 
     // Read strided into registers
     for (int i = 0; i < n_scans; i++) {
-      values[i] = read_buffer[scan_offset_y * BN + scan_offset_x + i];
+      values[i] = read_from[i];
     }
     simdgroup_barrier(mem_flags::mem_threadgroup);
 
@@ -437,21 +445,21 @@ template <
 
     // Write to SM
     for (int i = 0; i < n_scans; i++) {
-      read_buffer[scan_offset_y * BN + scan_offset_x + i] = values[i];
+      read_from[i] = values[i];
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
 
     // Write to device memory
     if (!inclusive) {
       if (check_index_y == 0) {
-        if ((index_x + N_READS) < stride) {
+        if ((read_offset_x + N_READS) < stride_limit) {
           for (int i = 0; i < N_READS; i++) {
-            out[offset + index_y * stride + index_x + i] = Op::init;
+            out[index_y * stride + i] = Op::init;
           }
         } else {
           for (int i = 0; i < N_READS; i++) {
-            if ((index_x + i) < stride) {
-              out[offset + index_y * stride + index_x + i] = Op::init;
+            if ((read_offset_x + i) < stride_limit) {
+              out[index_y * stride + i] = Op::init;
             }
           }
         }
@@ -464,16 +472,14 @@ template <
         check_index_y += 1;
       }
     }
-    if (check_index_y < axis_size && (index_x + N_READS) < stride) {
+    if (check_index_y < axis_size && (read_offset_x + N_READS) < stride_limit) {
       for (int i = 0; i < N_READS; i++) {
-        out[offset + index_y * stride + index_x + i] =
-            read_buffer[read_offset_y * BN + read_offset_x + i];
+        out[index_y * stride + i] = read_into[i];
       }
     } else {
       for (int i = 0; i < N_READS; i++) {
-        if (check_index_y < axis_size && (index_x + i) < stride) {
-          out[offset + index_y * stride + index_x + i] =
-              read_buffer[read_offset_y * BN + read_offset_x + i];
+        if (check_index_y < axis_size && (read_offset_x + i) < stride_limit) {
+          out[index_y * stride + i] = read_into[i];
         }
       }
     }

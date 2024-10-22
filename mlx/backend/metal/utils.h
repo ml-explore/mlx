@@ -42,6 +42,14 @@ MTL::Size get_2d_grid_dims(
     const std::vector<int>& shape,
     const std::vector<size_t>& strides);
 
+// Same as above but we do an implicit division with divisor.
+// Basically, equivalent to factorizing
+//    Prod(s \forall s in shape if strides[s] > 0) / divisor.
+MTL::Size get_2d_grid_dims(
+    const std::vector<int>& shape,
+    const std::vector<size_t>& strides,
+    size_t divisor);
+
 inline NS::String* make_string(std::ostringstream& os) {
   std::string string = os.str();
   return NS::String::string(string.c_str(), NS::UTF8StringEncoding);

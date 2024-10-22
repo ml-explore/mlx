@@ -18,10 +18,10 @@ using namespace metal;
       const device itype* in [[buffer(0)]],                             \
       device otype* out [[buffer(1)]],                                  \
       const constant size_t& axis_size [[buffer(2)]],                   \
-      uint2 gid [[threadgroup_position_in_grid]],                       \
-      uint2 gsize [[threadgroups_per_grid]],                            \
-      uint2 lid [[thread_position_in_threadgroup]],                     \
-      uint2 lsize [[threads_per_threadgroup]],                          \
+      uint3 gid [[threadgroup_position_in_grid]],                       \
+      uint3 gsize [[threadgroups_per_grid]],                            \
+      uint3 lid [[thread_position_in_threadgroup]],                     \
+      uint3 lsize [[threads_per_threadgroup]],                          \
       uint simd_lane_id [[thread_index_in_simdgroup]],                  \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
@@ -33,6 +33,7 @@ using namespace metal;
       device otype* out [[buffer(1)]],                               \
       const constant size_t& axis_size [[buffer(2)]],                \
       const constant size_t& stride [[buffer(3)]],                   \
+      const constant size_t& stride_blocks [[buffer(4)]],            \
       uint3 gid [[threadgroup_position_in_grid]],                    \
       uint3 gsize [[threadgroups_per_grid]],                         \
       uint3 lid [[thread_position_in_threadgroup]],                  \
