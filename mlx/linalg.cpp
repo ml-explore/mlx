@@ -454,4 +454,47 @@ array cross(
   return concatenate(outputs, axis, s);
 }
 
+array solve(const array& a, const array& b, StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32 && b.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::solve] Input array must have type float32. Received array "
+        << "with type " << a.dtype() << " and " << b.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::solve] Arrays must have >= 2 dimensions. Received array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (b.ndim() < 1) {
+    std::ostringstream msg;
+    msg << "[linalg::solve] Array must have >= 1 dimension. Received array with "
+        << b.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    std::ostringstream msg;
+    msg << "[linalg::solve] First input must be a square matrix. Received array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != b.shape(b.ndim() - 2)) {
+    std::ostringstream msg;
+    msg << "[linalg::solve] Last dimension of first input with shape "
+        << a.shape() << " must match second to last dimension of"
+        << " second input with shape " << b.shape() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  auto out_type = promote_types(a.dtype(), b.dtype());
+
+  return array(
+      b.shape(), out_type, std::make_shared<Solve>(to_stream(s)), {a, b});
+}
+
 } // namespace mlx::core::linalg
