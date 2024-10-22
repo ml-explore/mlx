@@ -5,7 +5,7 @@
 
 namespace mlx::core::metal {
 
-void Device::wire(std::vector<array>) {}
+size_t Device::wire(std::vector<array>) {}
 void Device::unwire(std::vector<array>) {}
 
 } // namespace mlx::core::metal
