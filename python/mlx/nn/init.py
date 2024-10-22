@@ -389,14 +389,13 @@ def sparse(
             raise ValueError("Only tensors with 2 dimensions are supported")
 
         rows, cols = a.shape
-        num_zeros = int(mx.ceil(sparsity * rows))
+        num_zeros = int(mx.ceil(sparsity * cols))
+
+        order = mx.argsort(mx.random.uniform(shape=(a.shape), axis=1))
 
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
-        for col_idx in range(cols):
-            row_indices = mx.random.permutation(rows)
-            zero_indices = row_indices[:num_zeros]
-            a[zero_indices, col_idx] = 0
+        a[mx.arange(rows).reshape([rows, 1]), order[:, :num_zeros]] = 0
 
         return a
 
