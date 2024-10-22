@@ -276,7 +276,9 @@ class TestLinalg(mlx_tests.MLXTestCase):
         eigenvalues_mx = mx.linalg.eigvalsh(A_mx)
         eigenvalues_np = np.linalg.eigvalsh(A_np)
 
-        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5)
+        )
 
         # Test a larger random symmetric matrix
         n = 5
@@ -288,26 +290,34 @@ class TestLinalg(mlx_tests.MLXTestCase):
         eigenvalues_mx = mx.linalg.eigvalsh(B_mx)
         eigenvalues_np = np.linalg.eigvalsh(B_np)
 
-        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5)
+        )
 
         # Test that eigenvalues are in ascending order
         self.assertTrue(mx.all(eigenvalues_mx[1:] >= eigenvalues_mx[:-1]))
 
         # Test with upper=False
         eigenvalues_mx_lower = mx.linalg.eigvalsh(B_mx, upper=False)
-        eigenvalues_np_lower = np.linalg.eigvalsh(B_np, UPLO='L')
+        eigenvalues_np_lower = np.linalg.eigvalsh(B_np, UPLO="L")
 
-        self.assertTrue(mx.allclose(eigenvalues_mx_lower, mx.array(eigenvalues_np_lower), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx_lower, mx.array(eigenvalues_np_lower), atol=1e-5)
+        )
 
         # Test with batched input
         C_np = rng.random((3, n, n)).astype(np.float32)
-        C_np = (C_np + np.transpose(C_np, (0, 2, 1))) / 2  # Make sure C is symmetric for each batch
+        C_np = (
+            C_np + np.transpose(C_np, (0, 2, 1))
+        ) / 2  # Make sure C is symmetric for each batch
         C_mx = mx.array(C_np)
 
         eigenvalues_mx = mx.linalg.eigvalsh(C_mx)
         eigenvalues_np = np.linalg.eigvalsh(C_np)
 
-        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5)
+        )
 
         # Test that eigenvalues are in ascending order for each batch
         self.assertTrue(mx.all(eigenvalues_mx[:, 1:] >= eigenvalues_mx[:, :-1]))
@@ -317,7 +327,9 @@ class TestLinalg(mlx_tests.MLXTestCase):
             mx.linalg.eigvalsh(mx.array([1.0, 2.0]))  # 1D array
 
         with self.assertRaises(ValueError):
-            mx.linalg.eigvalsh(mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))  # Non-square matrix
+            mx.linalg.eigvalsh(
+                mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+            )  # Non-square matrix
 
     def test_eigh(self):
         # Test a simple 2x2 symmetric matrix
@@ -327,8 +339,14 @@ class TestLinalg(mlx_tests.MLXTestCase):
         eigenvalues_mx, eigenvectors_mx = mx.linalg.eigh(A_mx)
         eigenvalues_np, eigenvectors_np = np.linalg.eigh(A_np)
 
-        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
-        self.assertTrue(mx.allclose(mx.abs(eigenvectors_mx), mx.abs(mx.array(eigenvectors_np)), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5)
+        )
+        self.assertTrue(
+            mx.allclose(
+                mx.abs(eigenvectors_mx), mx.abs(mx.array(eigenvectors_np)), atol=1e-5
+            )
+        )
 
         # Test a larger random symmetric matrix
         n = 5
@@ -340,33 +358,57 @@ class TestLinalg(mlx_tests.MLXTestCase):
         eigenvalues_mx, eigenvectors_mx = mx.linalg.eigh(B_mx)
         eigenvalues_np, eigenvectors_np = np.linalg.eigh(B_np)
 
-        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
-        self.assertTrue(mx.allclose(mx.abs(eigenvectors_mx), mx.abs(mx.array(eigenvectors_np)), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5)
+        )
+        self.assertTrue(
+            mx.allclose(
+                mx.abs(eigenvectors_mx), mx.abs(mx.array(eigenvectors_np)), atol=1e-5
+            )
+        )
 
         # Test that eigenvalues are in ascending order
         self.assertTrue(mx.all(eigenvalues_mx[1:] >= eigenvalues_mx[:-1]))
 
         # Test orthogonality of eigenvectors
         identity = mx.eye(n)
-        self.assertTrue(mx.allclose(eigenvectors_mx.T @ eigenvectors_mx, identity, atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvectors_mx.T @ eigenvectors_mx, identity, atol=1e-5)
+        )
 
         # Test with upper=False
         eigenvalues_mx_lower, eigenvectors_mx_lower = mx.linalg.eigh(B_mx, upper=False)
-        eigenvalues_np_lower, eigenvectors_np_lower = np.linalg.eigh(B_np, UPLO='L')
+        eigenvalues_np_lower, eigenvectors_np_lower = np.linalg.eigh(B_np, UPLO="L")
 
-        self.assertTrue(mx.allclose(eigenvalues_mx_lower, mx.array(eigenvalues_np_lower), atol=1e-5))
-        self.assertTrue(mx.allclose(mx.abs(eigenvectors_mx_lower), mx.abs(mx.array(eigenvectors_np_lower)), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx_lower, mx.array(eigenvalues_np_lower), atol=1e-5)
+        )
+        self.assertTrue(
+            mx.allclose(
+                mx.abs(eigenvectors_mx_lower),
+                mx.abs(mx.array(eigenvectors_np_lower)),
+                atol=1e-5,
+            )
+        )
 
         # Test with batched input
         C_np = rng.random((3, n, n)).astype(np.float32)
-        C_np = (C_np + np.transpose(C_np, (0, 2, 1))) / 2  # Make sure C is symmetric for each batch
+        C_np = (
+            C_np + np.transpose(C_np, (0, 2, 1))
+        ) / 2  # Make sure C is symmetric for each batch
         C_mx = mx.array(C_np)
 
         eigenvalues_mx, eigenvectors_mx = mx.linalg.eigh(C_mx)
         eigenvalues_np, eigenvectors_np = np.linalg.eigh(C_np)
 
-        self.assertTrue(mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5))
-        self.assertTrue(mx.allclose(mx.abs(eigenvectors_mx), mx.abs(mx.array(eigenvectors_np)), atol=1e-5))
+        self.assertTrue(
+            mx.allclose(eigenvalues_mx, mx.array(eigenvalues_np), atol=1e-5)
+        )
+        self.assertTrue(
+            mx.allclose(
+                mx.abs(eigenvectors_mx), mx.abs(mx.array(eigenvectors_np)), atol=1e-5
+            )
+        )
 
         # Test that eigenvalues are in ascending order for each batch
         self.assertTrue(mx.all(eigenvalues_mx[:, 1:] >= eigenvalues_mx[:, :-1]))
@@ -374,14 +416,20 @@ class TestLinalg(mlx_tests.MLXTestCase):
         # Test orthogonality of eigenvectors for each batch
         identity = mx.eye(n)
         for i in range(3):
-            self.assertTrue(mx.allclose(eigenvectors_mx[i].T @ eigenvectors_mx[i], identity, atol=1e-5))
+            self.assertTrue(
+                mx.allclose(
+                    eigenvectors_mx[i].T @ eigenvectors_mx[i], identity, atol=1e-5
+                )
+            )
 
         # Test error cases
         with self.assertRaises(ValueError):
             mx.linalg.eigh(mx.array([1.0, 2.0]))  # 1D array
 
         with self.assertRaises(ValueError):
-            mx.linalg.eigh(mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]))  # Non-square matrix
+            mx.linalg.eigh(
+                mx.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+            )  # Non-square matrix
 
 
 if __name__ == "__main__":

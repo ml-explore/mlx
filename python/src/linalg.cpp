@@ -444,18 +444,21 @@ void init_linalg(nb::module_& parent_module) {
       )pbdoc");
   m.def(
       "eigh",
-      &eigh,
+      [](const array& a, bool upper, StreamOrDevice s) {
+        auto result = eigh(a, upper, s);
+        return nb::make_tuple(result.first, result.second);
+      },
       "a"_a,
       "upper"_a = true,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def eigh(a: array, upper: bool = True, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def eigh(a: array, upper: bool = True, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
       R"pbdoc(
-        Compute the eigenvectors of a complex Hermitian or real symmetric matrix.
+        Compute the eigenvalues and eigenvectors of a complex Hermitian or real symmetric matrix.
 
         This function supports arrays with at least 2 dimensions. When the input
-        has more than two dimensions, the eigenvectors are computed for each matrix
+        has more than two dimensions, the eigenvalues and eigenvectors are computed for each matrix
         in the last two dimensions of ``a``.
 
         Args:
@@ -466,8 +469,10 @@ void init_linalg(nb::module_& parent_module) {
               in which case the default stream of the default device is used.
 
         Returns:
-            array: The normalized eigenvectors. The column v[:, i] is the
-                   eigenvector corresponding to the i-th eigenvalue.
+            Tuple[array, array]: A tuple containing:
+                - The eigenvalues in ascending order.
+                - The normalized eigenvectors. The column v[:, i] is the
+                  eigenvector corresponding to the i-th eigenvalue.
 
         Note:
             The input matrix is assumed to be symmetric (or Hermitian). Only the
@@ -476,9 +481,11 @@ void init_linalg(nb::module_& parent_module) {
 
         Example:
             >>> A = mx.array([[1., -2.], [-2., 1.]])
-            >>> v = mx.linalg.eigh(A)
+            >>> w, v = mx.linalg.eigh(A)
+            >>> w
+            array([-1., 3.], dtype=float32)
             >>> v
             array([[ 0.707107, -0.707107],
-                   [ 0.707107,  0.707107]], dtype=float32)
+                  [ 0.707107,  0.707107]], dtype=float32)
       )pbdoc");
 }

@@ -1,7 +1,7 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#include "mlx/array.h" 
 #include "mlx/allocator.h"
+#include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/linalg.h"
 #include "mlx/primitives.h"
@@ -114,14 +114,20 @@ void eigh_impl(
   const int num_matrices = static_cast<int>(a.size() / (N * N));
 
   std::vector<int> values_shape = {num_matrices, N};
-  values = array(allocator::malloc(num_matrices * N * size_of(a.dtype())), values_shape, a.dtype());
+  values = array(
+      allocator::malloc(num_matrices * N * size_of(a.dtype())),
+      values_shape,
+      a.dtype());
 
   float* matrix = buffer.data<float>();
   float* w = values.data<float>();
 
   if (compute_eigenvectors) {
     std::vector<int> vectors_shape = a.shape();
-    vectors = array(allocator::malloc(a.size() * size_of(a.dtype())), vectors_shape, a.dtype());
+    vectors = array(
+        allocator::malloc(a.size() * size_of(a.dtype())),
+        vectors_shape,
+        a.dtype());
   }
 
   float* vecs = compute_eigenvectors ? vectors.data<float>() : nullptr;
@@ -146,12 +152,11 @@ void eigh_impl(
   }
 }
 
-void Eigh::eval(
-    const std::vector<array>& inputs,
-    std::vector<array>& outputs) {
+void Eigh::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
   // Validate the number of inputs
   if (inputs.size() != 1) {
-    throw std::invalid_argument("[Eigh::eval] Expected exactly one input array.");
+    throw std::invalid_argument(
+        "[Eigh::eval] Expected exactly one input array.");
   }
 
   const array& input = inputs[0];
@@ -160,11 +165,12 @@ void Eigh::eval(
   const_cast<array&>(input).eval();
 
   // Validate the data type
-  Dtype input_dtype = input.dtype();  // Changed from 'dtype_t' to 'Dtype'
+  Dtype input_dtype = input.dtype(); // Changed from 'dtype_t' to 'Dtype'
 
   // Validate the number of dimensions (expecting at least 2D)
   if (input.ndim() < 2) {
-    throw std::invalid_argument("[Eigh::eval] Input array must be at least 2-dimensional.");
+    throw std::invalid_argument(
+        "[Eigh::eval] Input array must be at least 2-dimensional.");
   }
 
   array values{};

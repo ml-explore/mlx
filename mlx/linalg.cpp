@@ -484,14 +484,12 @@ array eigvalsh(
   return array(
       out_shape,
       a.dtype(),
-      std::make_shared<EighPrimitive>(to_stream(s), upper, false),
+      std::make_shared<Eigh>(to_stream(s), upper, false),
       {astype(a, a.dtype(), s)});
 }
 
-std::pair<array, array> eigh(
-    const array& a,
-    bool upper /* = false */,
-    StreamOrDevice s /* = {} */) {
+std::pair<array, array>
+eigh(const array& a, bool upper /* = false */, StreamOrDevice s /* = {} */) {
   if (a.dtype() != float32) {
     std::ostringstream msg;
     msg << "[linalg::eigh] Arrays must be type float32. Received array "
@@ -515,7 +513,7 @@ std::pair<array, array> eigh(
   auto out = array::make_arrays(
       {std::vector<int>(a.shape().begin(), a.shape().end() - 1), a.shape()},
       {a.dtype(), a.dtype()},
-      std::make_shared<EighPrimitive>(to_stream(s), upper, true),
+      std::make_shared<Eigh>(to_stream(s), upper, true),
       {astype(a, a.dtype(), s)});
   return std::make_pair(out[0], out[1]);
 }

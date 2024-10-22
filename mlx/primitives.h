@@ -2199,10 +2199,14 @@ class Cholesky : public UnaryPrimitive {
 class Eigh : public Primitive {
  public:
   explicit Eigh(Stream stream, bool upper, bool compute_eigenvectors)
-      : Primitive(stream), upper_(upper), compute_eigenvectors_(compute_eigenvectors) {}
+      : Primitive(stream),
+        upper_(upper),
+        compute_eigenvectors_(compute_eigenvectors) {}
 
-  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs) override;
-  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs) override;
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
 
   DEFINE_VMAP()
   DEFINE_PRINT(Eigh)
@@ -2210,17 +2214,18 @@ class Eigh : public Primitive {
   std::vector<std::vector<int>> output_shapes(
       const std::vector<array>& inputs) override {
     auto shape = inputs[0].shape();
-    shape.pop_back();  // Remove last dimension for eigenvalues
+    shape.pop_back(); // Remove last dimension for eigenvalues
     if (compute_eigenvectors_) {
-      return {shape, inputs[0].shape()};  // Eigenvalues and eigenvectors
+      return {shape, inputs[0].shape()}; // Eigenvalues and eigenvectors
     } else {
-      return {shape};  // Only eigenvalues
+      return {shape}; // Only eigenvalues
     }
   }
 
   bool is_equivalent(const Primitive& other) const override {
     if (auto* p = dynamic_cast<const Eigh*>(&other)) {
-      return upper_ == p->upper_ && compute_eigenvectors_ == p->compute_eigenvectors_;
+      return upper_ == p->upper_ &&
+          compute_eigenvectors_ == p->compute_eigenvectors_;
     }
     return false;
   }
