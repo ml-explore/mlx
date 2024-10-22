@@ -32,7 +32,7 @@ void CustomKernel::eval_gpu(
       return copies.back();
     }
   };
-  std::vector<const array> checked_inputs;
+  std::vector<array> checked_inputs;
   for (const array& in : inputs) {
     checked_inputs.push_back(check_input(in));
   }
