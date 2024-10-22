@@ -178,9 +178,10 @@ void array::move_shared_buffer(
   array_desc_->flags = flags;
   array_desc_->data_size = data_size;
   auto char_offset = sizeof(char) * itemsize() * offset;
-  array_desc_->data_ptr = static_cast<void*>(
-      static_cast<char*>(other.array_desc_->data_ptr) + char_offset);
+  auto data_ptr = other.array_desc_->data_ptr;
   other.array_desc_->data_ptr = nullptr;
+  array_desc_->data_ptr = static_cast<void*>(
+      static_cast<char*>(data_ptr) + char_offset);
 }
 
 void array::move_shared_buffer(array other) {

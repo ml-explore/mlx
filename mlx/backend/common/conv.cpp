@@ -3,12 +3,7 @@
 #include <cassert>
 #include <numeric>
 
-#ifdef ACCELERATE_NEW_LAPACK
-#include <Accelerate/Accelerate.h>
-#else
-#include <cblas.h>
-#endif
-
+#include "mlx/backend/common/lapack.h"
 #include "mlx/backend/common/copy.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"

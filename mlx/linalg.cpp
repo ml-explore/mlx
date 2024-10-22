@@ -454,67 +454,47 @@ array cross(
   return concatenate(outputs, axis, s);
 }
 
-array eigvalsh(
-    const array& a,
-    bool upper /* = false */,
-    StreamOrDevice s /* = {} */) {
+void validate_eigh(const array& a, const std::string fname) {
   if (a.dtype() != float32) {
     std::ostringstream msg;
-    msg << "[linalg::eigvalsh] Arrays must be type float32. Received array "
+    msg << fname << " Arrays must have type float32. Received array "
         << "with type " << a.dtype() << ".";
     throw std::invalid_argument(msg.str());
   }
 
   if (a.ndim() < 2) {
     std::ostringstream msg;
-    msg << "[linalg::eigvalsh] Arrays must have >= 2 dimensions. Received array "
-           "with "
+    msg << fname << " Arrays must have >= 2 dimensions. Received array with "
         << a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
 
   if (a.shape(-1) != a.shape(-2)) {
-    throw std::invalid_argument(
-        "[linalg::eigvalsh] Eigenvalues are only defined for square matrices.");
+    throw std::invalid_argument(fname + " Only defined for square matrices.");
   }
+}
 
+array eigvalsh(
+    const array& a,
+    std::string UPLO /* = "L" */,
+    StreamOrDevice s /* = {} */) {
+  validate_eigh(a, "[linalg::eigvalsh]");
   std::vector<int> out_shape(a.shape().begin(), a.shape().end() - 1);
-  out_shape.back() = a.shape(-1);
-
   return array(
-      out_shape,
+      std::move(out_shape),
       a.dtype(),
-      std::make_shared<Eigh>(to_stream(s), upper, false),
-      {astype(a, a.dtype(), s)});
+      std::make_shared<Eigh>(to_stream(s), UPLO, false),
+      {a});
 }
 
 std::pair<array, array>
-eigh(const array& a, bool upper /* = false */, StreamOrDevice s /* = {} */) {
-  if (a.dtype() != float32) {
-    std::ostringstream msg;
-    msg << "[linalg::eigh] Arrays must be type float32. Received array "
-        << "with type " << a.dtype() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (a.ndim() < 2) {
-    std::ostringstream msg;
-    msg << "[linalg::eigh] Arrays must have >= 2 dimensions. Received array "
-           "with "
-        << a.ndim() << " dimensions.";
-    throw std::invalid_argument(msg.str());
-  }
-
-  if (a.shape(-1) != a.shape(-2)) {
-    throw std::invalid_argument(
-        "[linalg::eigh] Eigenvectors are only defined for square matrices.");
-  }
-
+eigh(const array& a, std::string UPLO /* = "L" */, StreamOrDevice s /* = {} */) {
+  validate_eigh(a, "[linalg::eigh]");
   auto out = array::make_arrays(
       {std::vector<int>(a.shape().begin(), a.shape().end() - 1), a.shape()},
       {a.dtype(), a.dtype()},
-      std::make_shared<Eigh>(to_stream(s), upper, true),
-      {astype(a, a.dtype(), s)});
+      std::make_shared<Eigh>(to_stream(s), UPLO, true),
+      {a});
   return std::make_pair(out[0], out[1]);
 }
 

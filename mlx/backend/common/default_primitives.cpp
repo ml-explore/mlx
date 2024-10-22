@@ -1,14 +1,10 @@
 // Copyright © 2023-2024 Apple Inc.
 
-#ifdef ACCELERATE_NEW_LAPACK
-#include <Accelerate/Accelerate.h>
-#else
-#include <cblas.h>
-#endif
 #include <cstring>
 
 #include "mlx/array.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/lapack.h"
 #include "mlx/backend/common/utils.h"
 #include "mlx/primitives.h"
 

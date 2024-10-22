@@ -2198,9 +2198,9 @@ class Cholesky : public UnaryPrimitive {
 
 class Eigh : public Primitive {
  public:
-  explicit Eigh(Stream stream, bool upper, bool compute_eigenvectors)
+  explicit Eigh(Stream stream, std::string uplo, bool compute_eigenvectors)
       : Primitive(stream),
-        upper_(upper),
+        uplo_(std::move(uplo)),
         compute_eigenvectors_(compute_eigenvectors) {}
 
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
@@ -2224,7 +2224,7 @@ class Eigh : public Primitive {
 
   bool is_equivalent(const Primitive& other) const override {
     if (auto* p = dynamic_cast<const Eigh*>(&other)) {
-      return upper_ == p->upper_ &&
+      return uplo_ == p->uplo_ &&
           compute_eigenvectors_ == p->compute_eigenvectors_;
     }
     return false;
@@ -2232,7 +2232,7 @@ class Eigh : public Primitive {
 
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
-  bool upper_;
+  std::string uplo_;
   bool compute_eigenvectors_;
 };
 

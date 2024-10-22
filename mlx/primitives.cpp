@@ -773,20 +773,19 @@ std::pair<std::vector<array>, std::vector<int>> Eigh::vmap(
   assert(inputs.size() == 1);
   assert(axes.size() == 1);
 
-  auto ax = axes[0] >= 0 ? 0 : -1;
-  auto a = axes[0] > 0 ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  bool needs_move = axes[0] >= (inputs[0].ndim() - 2);
+  auto a = needs_move ? moveaxis(inputs[0], axes[0], 0, stream()) : inputs[0];
+  auto ax = needs_move ? 0 : axes[0];
 
   std::vector<array> outputs;
   if (compute_eigenvectors_) {
-    auto [values, vectors] = linalg::eigh(a, upper_, stream());
+    auto [values, vectors] = linalg::eigh(a, uplo_, stream());
     outputs = {values, vectors};
   } else {
-    outputs = {linalg::eigvalsh(a, upper_, stream())};
+    outputs = {linalg::eigvalsh(a, uplo_, stream())};
   }
 
-  std::vector<int> out_axes(outputs.size(), ax);
-
-  return {outputs, out_axes};
+  return {outputs, std::vector<int>(outputs.size(), ax)};
 }
 
 std::vector<array> Concatenate::vjp(

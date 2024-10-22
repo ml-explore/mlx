@@ -409,22 +409,21 @@ void init_linalg(nb::module_& parent_module) {
       "eigvalsh",
       &eigvalsh,
       "a"_a,
-      "upper"_a = true,
+      "UPLO"_a = "L",
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig(
-          "def eigvalsh(a: array, upper: bool = True, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Compute the eigenvalues of a complex Hermitian or real symmetric matrix.
 
-        This function supports arrays with at least 2 dimensions. When the input
-        has more than two dimensions, the eigenvalues are computed for each matrix
-        in the last two dimensions of ``a``.
+        This function supports arrays with at least 2 dimensions. When the
+        input has more than two dimensions, the eigenvalues are computed for
+        each matrix in the last two dimensions.
 
         Args:
-            a (array): Input array. Must be a real symmetric or complex Hermitian matrix.
-            upper (bool, optional): Whether to use the upper or lower triangle of the matrix.
-                                    Default is True (upper triangle).
+            a (array): Input array. Must be a real symmetric or complex
+              Hermitian matrix.
+            UPLO (str, optional): Whether to use the upper (``"U"``) or
+              lower (``"L"``) triangle of the matrix.  Default: ``"L"``.
             stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
@@ -432,56 +431,55 @@ void init_linalg(nb::module_& parent_module) {
             array: The eigenvalues in ascending order.
 
         Note:
-            The input matrix is assumed to be symmetric (or Hermitian). Only the
-            upper triangle (if upper=True) or lower triangle (if upper=False) is used.
-            No checks for symmetry are performed.
+            The input matrix is assumed to be symmetric (or Hermitian). Only
+            the selected triangle is used. No checks for symmetry are performed.
 
         Example:
             >>> A = mx.array([[1., -2.], [-2., 1.]])
-            >>> eigenvalues = mx.linalg.eigvalsh(A)
+            >>> eigenvalues = mx.linalg.eigvalsh(A, stream=mx.cpu)
             >>> eigenvalues
             array([-1., 3.], dtype=float32)
       )pbdoc");
   m.def(
       "eigh",
-      [](const array& a, bool upper, StreamOrDevice s) {
-        auto result = eigh(a, upper, s);
+      [](const array& a, const std::string UPLO, StreamOrDevice s) {
+      // TODO avoid cast?
+        auto result = eigh(a, UPLO, s);
         return nb::make_tuple(result.first, result.second);
       },
       "a"_a,
-      "upper"_a = true,
+      "UPLO"_a = "L",
       nb::kw_only(),
       "stream"_a = nb::none(),
-      nb::sig(
-          "def eigh(a: array, upper: bool = True, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
       R"pbdoc(
-        Compute the eigenvalues and eigenvectors of a complex Hermitian or real symmetric matrix.
+        Compute the eigenvalues and eigenvectors of a complex Hermitian or
+        real symmetric matrix.
 
         This function supports arrays with at least 2 dimensions. When the input
-        has more than two dimensions, the eigenvalues and eigenvectors are computed for each matrix
-        in the last two dimensions of ``a``.
+        has more than two dimensions, the eigenvalues and eigenvectors are
+        computed for each matrix in the last two dimensions.
 
         Args:
-            a (array): Input array. Must be a real symmetric or complex Hermitian matrix.
-            upper (bool, optional): Whether to use the upper or lower triangle of the matrix.
-                                    Default is True (upper triangle).
+            a (array): Input array. Must be a real symmetric or complex
+              Hermitian matrix.
+            UPLO (str, optional): Whether to use the upper (``"U"``) or
+               lower (``"L"``) triangle of the matrix.  Default: ``"L"``.
             stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
         Returns:
-            Tuple[array, array]: A tuple containing:
-                - The eigenvalues in ascending order.
-                - The normalized eigenvectors. The column v[:, i] is the
-                  eigenvector corresponding to the i-th eigenvalue.
+            Tuple[array, array]:
+              A tuple containing the eigenvalues in ascending order and
+              the normalized eigenvectors. The column ``v[:, i]`` is the
+              eigenvector corresponding to the i-th eigenvalue.
 
         Note:
-            The input matrix is assumed to be symmetric (or Hermitian). Only the
-            upper triangle (if upper=True) or lower triangle (if upper=False) is used.
-            No checks for symmetry are performed.
+            The input matrix is assumed to be symmetric (or Hermitian). Only
+            the selected triangle is used. No checks for symmetry are performed.
 
         Example:
             >>> A = mx.array([[1., -2.], [-2., 1.]])
-            >>> w, v = mx.linalg.eigh(A)
+            >>> w, v = mx.linalg.eigh(A, stream=mx.cpu)
             >>> w
             array([-1., 3.], dtype=float32)
             >>> v

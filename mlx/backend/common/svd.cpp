@@ -2,7 +2,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
-#include "mlx/backend/common/lapack_helper.h"
+#include "mlx/backend/common/lapack.h"
 #include "mlx/primitives.h"
 
 namespace mlx::core {

@@ -2,39 +2,18 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/lapack.h"
 #include "mlx/primitives.h"
 
-#ifdef ACCELERATE_NEW_LAPACK
-#include <Accelerate/Accelerate.h>
-#else
-#include <lapack.h>
-#endif
-
-// Wrapper to account for differences in
-// LAPACK implementations (basically how to pass the 'uplo' string to fortran).
 int strtri_wrapper(char uplo, char diag, float* matrix, int N) {
   int info;
-
-#ifdef LAPACK_FORTRAN_STRLEN_END
-  strtri_(
-      /* uplo = */ &uplo,
-      /* diag = */ &diag,
-      /* N = */ &N,
-      /* a = */ matrix,
-      /* lda = */ &N,
-      /* info = */ &info,
-      /* uplo_len = */ static_cast<size_t>(1),
-      /* diag_len = */ static_cast<size_t>(1));
-#else
-  strtri_(
+  MLX_LAPACK_FUNC(strtri)(
       /* uplo = */ &uplo,
       /* diag = */ &diag,
       /* N = */ &N,
       /* a = */ matrix,
       /* lda = */ &N,
       /* info = */ &info);
-#endif
-
   return info;
 }
 
