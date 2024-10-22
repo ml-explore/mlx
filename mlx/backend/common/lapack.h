@@ -5,6 +5,7 @@
 #ifdef ACCELERATE_NEW_LAPACK
 #include <Accelerate/Accelerate.h>
 #else
+#include <cblas.h>
 #include <lapack.h>
 #endif
 
