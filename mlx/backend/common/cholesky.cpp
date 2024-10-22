@@ -33,7 +33,8 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
   for (int i = 0; i < num_matrices; i++) {
     // Compute Cholesky factorization.
     int info;
-    MLX_LAPACK_FUNC(spotrf)(
+    MLX_LAPACK_FUNC(spotrf)
+    (
         /* uplo = */ &uplo,
         /* n = */ &N,
         /* a = */ matrix,

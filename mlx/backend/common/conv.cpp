@@ -3,8 +3,8 @@
 #include <cassert>
 #include <numeric>
 
-#include "mlx/backend/common/lapack.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/lapack.h"
 #include "mlx/primitives.h"
 #include "mlx/utils.h"
 

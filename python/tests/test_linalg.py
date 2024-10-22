@@ -276,7 +276,9 @@ class TestLinalg(mlx_tests.MLXTestCase):
             eig_vals, eig_vecs = mx.linalg.eigh(A, stream=mx.cpu, **kwargs)
             eig_vals_np, _ = np.linalg.eigh(A_np, **kwargs)
             self.assertTrue(np.allclose(eig_vals, eig_vals_np, **tols))
-            self.assertTrue(mx.allclose(A @ eig_vecs, eig_vals[..., None, :] * eig_vecs, **tols))
+            self.assertTrue(
+                mx.allclose(A @ eig_vecs, eig_vals[..., None, :] * eig_vecs, **tols)
+            )
 
             eig_vals_only = mx.linalg.eigvalsh(A, stream=mx.cpu, **kwargs)
             self.assertTrue(mx.allclose(eig_vals, eig_vals_only, **tols))
@@ -297,9 +299,7 @@ class TestLinalg(mlx_tests.MLXTestCase):
 
         # Test with batched input
         A_np = np.random.randn(3, n, n).astype(np.float32)
-        A_np = (
-            A_np + np.transpose(A_np, (0, 2, 1))
-        ) / 2
+        A_np = (A_np + np.transpose(A_np, (0, 2, 1))) / 2
         check_eigs_and_vecs(A_np)
 
         # Test error cases

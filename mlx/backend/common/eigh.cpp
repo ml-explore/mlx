@@ -11,9 +11,19 @@ namespace mlx::core {
 
 namespace {
 
-void ssyevd(char jobz, char uplo, float* a, int N, float* w, float* work, int lwork, int* iwork, int liwork) {
+void ssyevd(
+    char jobz,
+    char uplo,
+    float* a,
+    int N,
+    float* w,
+    float* work,
+    int lwork,
+    int* iwork,
+    int liwork) {
   int info;
-  MLX_LAPACK_FUNC(ssyevd)(
+  MLX_LAPACK_FUNC(ssyevd)
+  (
       /* jobz = */ &jobz,
       /* uplo = */ &uplo,
       /* n = */ &N,
@@ -28,7 +38,7 @@ void ssyevd(char jobz, char uplo, float* a, int N, float* w, float* work, int lw
   if (info != 0) {
     std::stringstream msg;
     msg << "[Eigh::eval_cpu] Eigenvalue decomposition failed with error code "
-      << info;
+        << info;
     throw std::runtime_error(msg.str());
   }
 }
@@ -39,11 +49,16 @@ void Eigh::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
   const auto& a = inputs[0];
   auto& values = outputs[0];
 
-  auto vectors = compute_eigenvectors_ ? outputs[1] : array(a.shape(), a.dtype(), nullptr, {});
+  auto vectors = compute_eigenvectors_
+      ? outputs[1]
+      : array(a.shape(), a.dtype(), nullptr, {});
 
   values.set_data(allocator::malloc_or_wait(values.nbytes()));
 
-  copy(a, vectors, a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
+  copy(
+      a,
+      vectors,
+      a.flags().row_contiguous ? CopyType::Vector : CopyType::General);
 
   if (compute_eigenvectors_) {
     // Set the strides and flags so the eigenvectors
@@ -51,7 +66,7 @@ void Eigh::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
     auto flags = vectors.flags();
     auto strides = vectors.strides();
     auto ndim = a.ndim();
-    std::swap(strides[ndim-1], strides[ndim-2]);
+    std::swap(strides[ndim - 1], strides[ndim - 2]);
 
     if (a.size() > 1) {
       flags.row_contiguous = false;
@@ -61,11 +76,7 @@ void Eigh::eval(const std::vector<array>& inputs, std::vector<array>& outputs) {
         flags.col_contiguous = true;
       }
     }
-    vectors.move_shared_buffer(
-        vectors,
-        strides,
-        flags,
-        vectors.data_size());
+    vectors.move_shared_buffer(vectors, strides, flags, vectors.data_size());
   }
 
   auto vec_ptr = vectors.data<float>();

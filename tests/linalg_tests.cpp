@@ -436,7 +436,6 @@ TEST_CASE("test cross product") {
   CHECK(allclose(result, expected).item<bool>());
 }
 
-
 TEST_CASE("test matrix eigh") {
   // 0D and 1D throw
   CHECK_THROWS(linalg::eigh(array(0.0)));

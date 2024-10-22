@@ -443,7 +443,7 @@ void init_linalg(nb::module_& parent_module) {
   m.def(
       "eigh",
       [](const array& a, const std::string UPLO, StreamOrDevice s) {
-      // TODO avoid cast?
+        // TODO avoid cast?
         auto result = eigh(a, UPLO, s);
         return nb::make_tuple(result.first, result.second);
       },

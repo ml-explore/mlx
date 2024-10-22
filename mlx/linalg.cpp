@@ -487,8 +487,10 @@ array eigvalsh(
       {a});
 }
 
-std::pair<array, array>
-eigh(const array& a, std::string UPLO /* = "L" */, StreamOrDevice s /* = {} */) {
+std::pair<array, array> eigh(
+    const array& a,
+    std::string UPLO /* = "L" */,
+    StreamOrDevice s /* = {} */) {
   validate_eigh(a, "[linalg::eigh]");
   auto out = array::make_arrays(
       {std::vector<int>(a.shape().begin(), a.shape().end() - 1), a.shape()},

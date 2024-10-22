@@ -7,7 +7,8 @@
 
 int strtri_wrapper(char uplo, char diag, float* matrix, int N) {
   int info;
-  MLX_LAPACK_FUNC(strtri)(
+  MLX_LAPACK_FUNC(strtri)
+  (
       /* uplo = */ &uplo,
       /* diag = */ &diag,
       /* N = */ &N,
