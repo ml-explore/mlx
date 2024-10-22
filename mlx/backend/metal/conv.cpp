@@ -918,14 +918,8 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
         "[Convolution::eval_gpu] Only supports 1D, 2D or 3D convolutions.");
   }
 
-  // Clear copies
-  if (!copies.empty()) {
-    auto command_buffer = d.get_command_buffer(s.index);
-    command_buffer->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+  // Record copies
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core

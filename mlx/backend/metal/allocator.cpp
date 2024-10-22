@@ -205,7 +205,7 @@ Buffer MetalAllocator::malloc(size_t size, bool allow_swap /* = false */) {
 
     // Allocate new buffer if needed
     size_t res_opt = MTL::ResourceStorageModeShared;
-    res_opt |= MTL::ResourceHazardTrackingModeTracked;
+    res_opt |= MTL::ResourceHazardTrackingModeUntracked;
     lk.unlock();
     buf = device_->newBuffer(size, res_opt);
     lk.lock();

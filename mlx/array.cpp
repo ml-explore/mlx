@@ -180,6 +180,7 @@ void array::move_shared_buffer(
   auto char_offset = sizeof(char) * itemsize() * offset;
   array_desc_->data_ptr = static_cast<void*>(
       static_cast<char*>(other.array_desc_->data_ptr) + char_offset);
+  other.array_desc_->data_ptr = nullptr;
 }
 
 void array::move_shared_buffer(array other) {

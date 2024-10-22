@@ -769,7 +769,6 @@ class TestCompile(mlx_tests.MLXTestCase):
 
         out = mx.compile(fn)(a, b)
         expected = fn(a, b)
-        print((out - expected).abs().max())
         self.assertTrue(mx.allclose(out, expected))
 
     def test_compile_many_inputs(self):

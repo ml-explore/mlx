@@ -174,12 +174,7 @@ void Hadamard::eval_gpu(const std::vector<array>& inputs, array& out) {
     launch_hadamard(in_contiguous, out, "n" + kernel_name, scale_);
   }
 
-  if (!copies.empty()) {
-    d.get_command_buffer(s.index)->addCompletedHandler(
-        [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-          copies.clear();
-        });
-  }
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core

@@ -660,12 +660,7 @@ void Reduce::eval_gpu(const std::vector<array>& inputs, array& out) {
           in, out, op_name, plan, axes_, compute_encoder, d, s);
     }
 
-    if (!copies.empty()) {
-      d.get_command_buffer(s.index)->addCompletedHandler(
-          [copies = std::move(copies)](MTL::CommandBuffer*) mutable {
-            copies.clear();
-          });
-    }
+    d.add_temporaries(std::move(copies), s.index);
   }
 
   // Nothing to reduce just initialize the output
