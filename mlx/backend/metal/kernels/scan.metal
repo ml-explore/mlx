@@ -13,15 +13,15 @@ using namespace metal;
 
 #define instantiate_contiguous_scan(                                    \
     name, itype, otype, op, inclusive, reverse, nreads)                 \
-  template [[host_name("contig_scan_" #name)]] [[kernel]] void      \
+  template [[host_name("contig_scan_" #name)]] [[kernel]] void          \
   contiguous_scan<itype, otype, op<otype>, nreads, inclusive, reverse>( \
       const device itype* in [[buffer(0)]],                             \
       device otype* out [[buffer(1)]],                                  \
       const constant size_t& axis_size [[buffer(2)]],                   \
-      uint gid [[thread_position_in_grid]],                             \
-      uint lid [[thread_position_in_threadgroup]],                      \
-      uint lsize [[threads_per_threadgroup]],                           \
-      uint simd_size [[threads_per_simdgroup]],                         \
+      uint2 gid [[threadgroup_position_in_grid]],                       \
+      uint2 gsize [[threadgroups_per_grid]],                            \
+      uint2 lid [[thread_position_in_threadgroup]],                     \
+      uint2 lsize [[threads_per_threadgroup]],                          \
       uint simd_lane_id [[thread_index_in_simdgroup]],                  \
       uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
@@ -33,10 +33,11 @@ using namespace metal;
       device otype* out [[buffer(1)]],                               \
       const constant size_t& axis_size [[buffer(2)]],                \
       const constant size_t& stride [[buffer(3)]],                   \
-      uint2 gid [[thread_position_in_grid]],                         \
-      uint2 lid [[thread_position_in_threadgroup]],                  \
-      uint2 lsize [[threads_per_threadgroup]],                       \
-      uint simd_size [[threads_per_simdgroup]]);
+      uint3 gid [[threadgroup_position_in_grid]],                    \
+      uint3 gsize [[threadgroups_per_grid]],                         \
+      uint3 lid [[thread_position_in_threadgroup]],                  \
+      uint simd_lane_id [[thread_index_in_simdgroup]],               \
+      uint simd_group_id [[simdgroup_index_in_threadgroup]]);
 
 #define instantiate_scan_helper(name, itype, otype, op, nreads)                                \
   instantiate_contiguous_scan(inclusive_##name, itype, otype, op, true, false, nreads)         \

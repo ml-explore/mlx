@@ -79,7 +79,6 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     int n_reads = (in.itemsize() <= 4) ? 4 : 2;
     constexpr int simd_size = 32;
     int elements_per_simd = n_reads * simd_size;
-    int thread_groups = in.data_size() / size;
     int thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (size <= n_reads * 1024) {
       thread_group_size =
@@ -91,8 +90,9 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     thread_group_size = std::min(
         thread_group_size,
         static_cast<int>(kernel->maxTotalThreadsPerThreadgroup()));
-    MTL::Size grid_dims = MTL::Size(thread_groups * thread_group_size, 1, 1);
-    MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+    auto grid_dims = get_2d_grid_dims(in.shape(), in.strides());
+    grid_dims.width = grid_dims.width * thread_group_size / size;
+    MTL::Size group_dims(thread_group_size, 1, 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     auto& compute_encoder = d.get_command_encoder(s.index);
@@ -106,14 +106,18 @@ void Scan::eval_gpu(const std::vector<array>& inputs, array& out) {
     compute_encoder->setBytes(&stride, sizeof(size_t), 3);
 
     // Compute the thread grid
+    int bm = 32;
+    int bn = 32;
     int n_reads = (in.itemsize() <= 4) ? 4 : 2;
-    int tile_x = 32;
-    int tile_y = 32;
-    int elements_per_tile_x = tile_x * n_reads;
-    int grid_y = in.size() / size / stride;
-    int grid_x = (stride + elements_per_tile_x - 1) / elements_per_tile_x;
-    MTL::Size grid_dims = MTL::Size(grid_x * tile_x, grid_y * tile_y, 1);
-    MTL::Size group_dims = MTL::Size(tile_x, tile_y, 1);
+    int stride_blocks = (stride + bn - 1) / bn;
+    int n_simdgroups = bn / n_reads;
+    int thread_group_size = n_simdgroups * 32;
+    auto tmp_grid_dims = get_2d_grid_dims(in.shape(), in.strides());
+    MTL::Size grid_dims(
+        stride_blocks * thread_group_size,
+        tmp_grid_dims.width / size / stride,
+        tmp_grid_dims.height);
+    MTL::Size group_dims(thread_group_size, 1, 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 
