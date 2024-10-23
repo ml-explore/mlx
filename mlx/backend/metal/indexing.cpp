@@ -262,7 +262,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
         break;
     }
     if (reduce_type_ != Scatter::None) {
-      op_type = fmt::format(op_type, out_type_str);
+      op_type = fmt::format(fmt::runtime(op_type), out_type_str);
     }
     auto [idx_args, idx_arr] = make_index_args(idx_type_str, nidx);
 

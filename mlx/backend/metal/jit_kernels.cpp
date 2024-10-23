@@ -445,8 +445,9 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_accum_kernel(
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_splitk()
                   << fmt::format(
-                         axbpy ? steel_gemm_splitk_accum_axbpy_kernels
-                               : steel_gemm_splitk_accum_kernels,
+                         fmt::runtime(
+                             axbpy ? steel_gemm_splitk_accum_axbpy_kernels
+                                   : steel_gemm_splitk_accum_kernels),
                          "name"_a = lib_name,
                          "atype"_a = get_type_string(in.dtype()),
                          "otype"_a = get_type_string(out.dtype()));
@@ -481,7 +482,7 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_masked()
                   << fmt::format(
-                         steel_gemm_masked_kernels,
+                         fmt::runtime(steel_gemm_masked_kernels),
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
                          "outmasktype"_a = out_mask_type,

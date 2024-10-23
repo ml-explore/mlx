@@ -212,7 +212,7 @@ get_template_definition(std::string name, std::string func, Args... args) {
   std::string base_string = R"(
 template [[host_name("{0}")]] [[kernel]] decltype({1}) {1};
   )";
-  return fmt::format(base_string, name, s.str());
+  return fmt::format(fmt::runtime(base_string), name, s.str());
 }
 
 } // namespace mlx::core
