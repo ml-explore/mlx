@@ -8,8 +8,6 @@
 #include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
-#include "python/src/trees.h"
-
 namespace nb = nanobind;
 using namespace nb::literals;
 
@@ -102,6 +100,35 @@ void init_metal(nb::module_& m) {
         int: The previous cache limit in bytes.
       )pbdoc");
   metal.def(
+      "set_wired_limit",
+      &metal::set_wired_limit,
+      "limit"_a,
+      R"pbdoc(
+      Set the wired size limit.
+
+      .. note::
+         This function is only useful for macOS 15.0 or higher.
+
+      The wired limit is the total size in bytes of memory that will be kept
+      resident. It defaults to ``0``. Setting a wired limit larger
+      than system wired limit is an error. You can increase the system wired limit
+      with ``sudo sysctl iogpu.wired_limit_mb=<size_in_megabytes>``.
+
+      Use :func:`mx.metal.device_info` to query the system wired limit
+      (``"max_recommended_working_set_size"``) and the total memory size
+      (``"memory_size"``).
+
+      .. warning::
+         The wired limit should always be less than the total memory size with some
+         room to spare.
+
+      Args:
+        limit (int): The wired limit in bytes.
+
+      Returns:
+        int: The previous wired limit in bytes.
+      )pbdoc");
+  metal.def(
       "clear_cache",
       &metal::clear_cache,
       R"pbdoc(
@@ -142,33 +169,5 @@ void init_metal(nb::module_& m) {
 
       Returns:
           dict: A dictionary with string keys and string or integer values.
-      )pbdoc");
-  metal.def(
-      "wire",
-      [](const nb::object& tree) {
-        return metal::wire(std::move(tree_flatten(tree)));
-      },
-      R"pbdoc(
-      Keep the arrays resident in memory.
-
-      Args:
-        tree (list or dict): An arbitrarily nested tree of arrays to wire to
-          memory.
-
-      This function is a no-op on macOS < 15.0.
-      )pbdoc");
-  metal.def(
-      "unwire",
-      [](const nb::object& tree) {
-        metal::unwire(std::move(tree_flatten(tree)));
-      },
-      R"pbdoc(
-      Mark the arrays as ok to unwire from memory.
-
-      Args:
-        tree (list or dict): An arbitrarily nested tree of arrays to unwire
-          from memory.
-
-      This function is a no-op on macOS < 15.0.
       )pbdoc");
 }

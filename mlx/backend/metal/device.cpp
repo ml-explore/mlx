@@ -12,7 +12,6 @@
 #include "mlx/backend/metal/device.h"
 #include "mlx/backend/metal/metal.h"
 #include "mlx/backend/metal/metal_impl.h"
-#include "mlx/backend/metal/resident.h"
 #include "mlx/backend/metal/utils.h"
 
 namespace mlx::core::metal {
@@ -189,7 +188,6 @@ Device::Device() {
   auto pool = new_scoped_memory_pool();
   device_ = load_device();
   library_map_ = {{"mlx", load_library(device_)}};
-  residency_set_ = setup_residency_set(device_);
 }
 
 Device::~Device() {
@@ -605,6 +603,21 @@ MTL::ComputePipelineState* Device::get_kernel(
   return get_kernel_(base_name, mtl_lib, kname, func_consts, linked_functions);
 }
 
+void Device::set_residency_set(const MTL::ResidencySet* residency_set) {
+  if (residency_set_ != nullptr) {
+    throw std::runtime_error(
+        "[Device::set_residency_set] Can only be set once.");
+  }
+  if (residency_set == nullptr) {
+    return;
+  }
+  residency_set_ = residency_set;
+  // Attach residency set to existing command queues
+  for (auto& [_, stream] : stream_map_) {
+    stream.queue->addResidencySet(residency_set_);
+  }
+}
+
 Device& device(mlx::core::Device) {
   static Device metal_device;
   return metal_device;
@@ -641,14 +654,6 @@ device_info() {
       {"max_recommended_working_set_size",
        raw_device->recommendedMaxWorkingSetSize()},
       {"memory_size", memsize}};
-}
-
-size_t wire(std::vector<array> arrays) {
-  return device(mlx::core::Device::gpu).wire(std::move(arrays));
-}
-
-void unwire(std::vector<array> arrays) {
-  device(mlx::core::Device::gpu).unwire(std::move(arrays));
 }
 
 } // namespace mlx::core::metal

@@ -47,6 +47,17 @@ class TestMetal(mlx_tests.MLXTestCase):
         mx.metal.reset_peak_memory()
         self.assertEqual(mx.metal.get_peak_memory(), 0)
 
+        old_limit = mx.metal.set_wired_limit(1000)
+        import pdb
+
+        pdb.set_trace()
+        old_limit = mx.metal.set_wired_limit(0)
+        self.assertEqual(old_limit, 1000)
+
+        max_size = mx.metal.device_info()["max_recommended_working_set_size"]
+        with self.assertRaises(ValueError):
+            mx.metal.set_wired_limit(max_size + 10)
+
 
 if __name__ == "__main__":
     unittest.main()

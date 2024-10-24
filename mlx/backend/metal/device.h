@@ -182,8 +182,7 @@ class Device {
   void add_temporary(array arr, int index);
   void add_temporaries(std::vector<array> arrays, int index);
 
-  size_t wire(std::vector<array> arrays);
-  void unwire(std::vector<array> arrays);
+  void set_residency_set(const MTL::ResidencySet* residency_set);
 
  private:
   DeviceStream& get_stream_(int index) {
@@ -229,7 +228,7 @@ class Device {
 
   std::shared_mutex library_mtx_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
-  MTL::ResidencySet* residency_set_;
+  const MTL::ResidencySet* residency_set_{nullptr};
 };
 
 Device& device(mlx::core::Device);

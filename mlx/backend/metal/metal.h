@@ -63,6 +63,14 @@ size_t set_cache_limit(size_t limit);
 /* Clear the memory cache. */
 void clear_cache();
 
+/* Set the wired size limit.
+ *
+ * Note, this function is only useful for macOS 15.0 or higher.
+ *
+ * Returns the previous wired limit.
+ * */
+size_t set_wired_limit(size_t limit);
+
 /** Capture a GPU trace, saving it to an absolute file `path` */
 void start_capture(std::string path = "");
 void stop_capture();
@@ -70,11 +78,5 @@ void stop_capture();
 /** Get information about the GPU and system settings. */
 std::unordered_map<std::string, std::variant<std::string, size_t>>
 device_info();
-
-/** Keep arrays wired. */
-size_t wire(std::vector<array> arrays);
-
-/** Allow arrays to be unwired. */
-void unwire(std::vector<array> arrays);
 
 } // namespace mlx::core::metal

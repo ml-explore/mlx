@@ -56,7 +56,4 @@ device_info() {
       "[metal::device_info] Cannot get device info without metal backend");
 };
 
-void wire(std::vector<array>) {}
-void unwire(std::vector<array>) {}
-
 } // namespace mlx::core::metal

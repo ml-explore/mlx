@@ -1,4 +1,4 @@
-// Copyright © 2023-2024 Apple Inc.
+// Copyright © 2024 Apple Inc.
 
 #pragma once
 
@@ -6,6 +6,24 @@
 
 namespace mlx::core::metal {
 
-MTL::ResidencySet* setup_residency_set(MTL::Device* d);
+class ResidencySet {
+ public:
+  ResidencySet(MTL::Device* d);
+  ~ResidencySet();
+
+  const MTL::ResidencySet* mtl_residency_set() {
+    return wired_set_;
+  }
+
+  void insert(MTL::Allocation* buf);
+  void erase(MTL::Allocation* buf);
+
+  void resize(size_t size);
+
+ private:
+  MTL::ResidencySet* wired_set_;
+  std::unordered_set<const MTL::Allocation*> unwired_set_;
+  size_t capacity_;
+};
 
 } // namespace mlx::core::metal
