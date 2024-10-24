@@ -142,7 +142,7 @@ MTL::Size get_2d_grid_dims(
       }
     }
   }
-  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX) {
+  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX || divisor > 1) {
     throw std::runtime_error("Unable to safely factor shape.");
   }
   return MTL::Size(
