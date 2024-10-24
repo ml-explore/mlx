@@ -48,9 +48,6 @@ class TestMetal(mlx_tests.MLXTestCase):
         self.assertEqual(mx.metal.get_peak_memory(), 0)
 
         old_limit = mx.metal.set_wired_limit(1000)
-        import pdb
-
-        pdb.set_trace()
         old_limit = mx.metal.set_wired_limit(0)
         self.assertEqual(old_limit, 1000)
 
