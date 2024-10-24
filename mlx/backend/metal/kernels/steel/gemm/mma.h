@@ -194,17 +194,14 @@ struct MMATile {
   typedef typename MMAFrag_t::mat_type mat_type;
   typedef typename MMAFrag_t::frag_type frag_type;
 
-  frag_type val_frags[kNumFrags];
+  frag_type val_frags[kNumFrags] = {frag_type(0)};
 
   METAL_FUNC MMATile() thread {}
 
-  METAL_FUNC void clear() {
+  METAL_FUNC constexpr void clear() {
     STEEL_PRAGMA_UNROLL
-    for (int i = 0; i < kTileRows; ++i) {
-      STEEL_PRAGMA_UNROLL
-      for (int j = 0; j < kTileCols; ++j) {
-        frag_at(i, j) = frag_type(0);
-      }
+    for (short i = 0; i < kNumFrags; ++i) {
+      val_frags[i] = frag_type(0);
     }
   }
 
@@ -238,9 +235,9 @@ struct MMATile {
   template <typename U, int w_x, int w_y, int str_x, int str_y>
   METAL_FUNC void load(const threadgroup U* src) {
     STEEL_PRAGMA_UNROLL
-    for (int i = 0; i < kTileRows; ++i) {
+    for (short i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
-      for (int j = 0; j < kTileCols; ++j) {
+      for (short j = 0; j < kTileCols; ++j) {
         MMAFrag_t::load(
             frag_at(i, j),
             &(
@@ -255,9 +252,9 @@ struct MMATile {
   template <typename U, int w_x, int w_y, int str_x, int str_y>
   METAL_FUNC void store(threadgroup U* dst) const {
     STEEL_PRAGMA_UNROLL
-    for (int i = 0; i < kTileRows; ++i) {
+    for (short i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
-      for (int j = 0; j < kTileCols; ++j) {
+      for (short j = 0; j < kTileCols; ++j) {
         MMAFrag_t::store(
             frag_at(i, j),
             &(
@@ -272,9 +269,9 @@ struct MMATile {
   template <typename U, int w_x, int w_y>
   METAL_FUNC void load(const device U* src, const int ld) {
     STEEL_PRAGMA_UNROLL
-    for (int i = 0; i < kTileRows; ++i) {
+    for (short i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
-      for (int j = 0; j < kTileCols; ++j) {
+      for (short j = 0; j < kTileCols; ++j) {
         MMAFrag_t::load(
             frag_at(i, j),
             &(src[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y]),
@@ -347,12 +344,12 @@ METAL_FUNC void tile_matmad(
     thread MMATile<U, K, N>& B,
     thread MMATile<T, M, N>& C) {
   STEEL_PRAGMA_UNROLL
-  for (int m = 0; m < M; ++m) {
+  for (short m = 0; m < M; ++m) {
     STEEL_PRAGMA_UNROLL
-    for (int n = 0; n < N; ++n) {
+    for (short n = 0; n < N; ++n) {
       short n_serp = (m % 2) ? (N - 1 - n) : n;
       STEEL_PRAGMA_UNROLL
-      for (int k = 0; k < K; ++k) {
+      for (short k = 0; k < K; ++k) {
         MMATile<T, M, N>::MMAFrag_t::mma(
             D.frag_at(m, n_serp),
             A.frag_at(m, k),
@@ -393,12 +390,12 @@ struct BlockMMA {
   STEEL_CONST short TN = BN / TN_stride;
 
   // Threadgroup A strides
-  STEEL_CONST int A_str_m = transpose_a ? 1 : lda_tgp; // M
-  STEEL_CONST int A_str_k = transpose_a ? lda_tgp : 1; // K
+  STEEL_CONST short A_str_m = transpose_a ? 1 : lda_tgp; // M
+  STEEL_CONST short A_str_k = transpose_a ? lda_tgp : 1; // K
 
   // Threadgroup B strides
-  STEEL_CONST int B_str_k = transpose_b ? 1 : ldb_tgp; // K
-  STEEL_CONST int B_str_n = transpose_b ? ldb_tgp : 1; // N
+  STEEL_CONST short B_str_k = transpose_b ? 1 : ldb_tgp; // K
+  STEEL_CONST short B_str_n = transpose_b ? ldb_tgp : 1; // N
 
   // Threadgroup strides along K
   STEEL_CONST short tile_stride_a = kFragSize * A_str_k;
@@ -421,10 +418,8 @@ struct BlockMMA {
       ushort simd_group_id [[simdgroup_index_in_threadgroup]],
       ushort simd_lane_id [[thread_index_in_simdgroup]]) {
     // Determine thread position in simdgroup matrix
-    Ctile.clear();
-
-    int tm = kFragSize * (simd_group_id / WN);
-    int tn = kFragSize * (simd_group_id % WN);
+    short tm = kFragSize * (simd_group_id / WN);
+    short tn = kFragSize * (simd_group_id % WN);
 
     short2 simd_coord = MMAFrag_acc_t::get_coord(simd_lane_id);
     sm = simd_coord.y;
