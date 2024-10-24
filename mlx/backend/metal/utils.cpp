@@ -107,6 +107,48 @@ MTL::Size get_2d_grid_dims(
       static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
 }
 
+MTL::Size get_2d_grid_dims(
+    const std::vector<int>& shape,
+    const std::vector<size_t>& strides,
+    size_t divisor) {
+  // Compute the 2d grid dimensions such that the total size of the grid is
+  // divided by divisor.
+  size_t grid_x = 1;
+  size_t grid_y = 1;
+  for (int i = 0; i < shape.size(); ++i) {
+    if (strides[i] == 0) {
+      continue;
+    }
+
+    // No need to add this shape we can just remove it from the divisor.
+    if (divisor % shape[i] == 0) {
+      divisor /= shape[i];
+      continue;
+    }
+
+    if (grid_x * shape[i] < UINT32_MAX) {
+      grid_x *= shape[i];
+    } else {
+      grid_y *= shape[i];
+    }
+
+    if (divisor > 1) {
+      if (grid_x % divisor == 0) {
+        grid_x /= divisor;
+        divisor = 1;
+      } else if (grid_y % divisor == 0) {
+        grid_y /= divisor;
+        divisor = 1;
+      }
+    }
+  }
+  if (grid_y > UINT32_MAX || grid_x > UINT32_MAX || divisor > 1) {
+    throw std::runtime_error("Unable to safely factor shape.");
+  }
+  return MTL::Size(
+      static_cast<uint32_t>(grid_x), static_cast<uint32_t>(grid_y), 1);
+}
+
 std::string get_primitive_string(Primitive* primitive) {
   std::ostringstream op_t;
   primitive->print(op_t);
