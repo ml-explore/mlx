@@ -1875,6 +1875,17 @@ class TestArray(mlx_tests.MLXTestCase):
         with self.assertRaises(ValueError):
             int(a)
 
+    def test_format(self):
+        a = mx.arange(3)
+        self.assertEqual(f"{a[0]:.2f}", "0.00")
+
+        b = 0.35487
+
+        self.assertEqual(f"{b:.1f}", "0.4")
+
+        with self.assertRaises(TypeError):
+            s = f"{a:.2f}"
+
     def test_deep_graphs(self):
         # The following tests should simply run cleanly without a segfault or
         # crash due to exceeding recursion depth limits.
