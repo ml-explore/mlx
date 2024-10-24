@@ -104,11 +104,7 @@ class TestInit(mlx_tests.MLXTestCase):
                         (mx.sum(result == 0) >= 0.5 * shape[0] * shape[1]), True
                     )
             with self.assertRaises(ValueError):
-                result = initializer(
-                    mx.zeros(
-                        1,
-                    )
-                )
+                result = initializer(mx.zeros((1,)))
 
 
 if __name__ == "__main__":
