@@ -210,7 +210,7 @@ get_template_definition(std::string name, std::string func, Args... args) {
   (add_arg(args), ...);
   s << ">";
   return fmt::format(
-      "template [[host_name(\"{0}\")]] [[kernel]] decltype({1}) {1};",
+      "\ntemplate [[host_name(\"{0}\")]] [[kernel]] decltype({1}) {1};\n",
       name,
       s.str());
 }
