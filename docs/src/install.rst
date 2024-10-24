@@ -240,7 +240,7 @@ x86 Shell
 
 .. _build shell:
 
-If the ouptut of ``uname -p``  is ``x86`` then your shell is running as x86 via
+If the output of ``uname -p``  is ``x86`` then your shell is running as x86 via
 Rosetta instead of natively.
 
 To fix this, find the application in Finder (``/Applications`` for iTerm,
