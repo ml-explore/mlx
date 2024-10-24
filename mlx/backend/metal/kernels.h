@@ -209,10 +209,10 @@ get_template_definition(std::string name, std::string func, Args... args) {
   };
   (add_arg(args), ...);
   s << ">";
-  std::string base_string = R"(
-template [[host_name("{0}")]] [[kernel]] decltype({1}) {1};
-  )";
-  return fmt::format(base_string, name, s.str());
+  return fmt::format(
+      "\ntemplate [[host_name(\"{0}\")]] [[kernel]] decltype({1}) {1};\n",
+      name,
+      s.str());
 }
 
 } // namespace mlx::core
