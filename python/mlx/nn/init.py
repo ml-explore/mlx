@@ -387,7 +387,7 @@ def sparse(
         rows, cols = a.shape
         num_zeros = int(mx.ceil(sparsity * cols))
 
-        order = mx.argsort(mx.random.uniform(shape=a.shape, axis=1))
+        order = mx.argsort(mx.random.uniform(shape=a.shape), axis=1)
         a = mx.random.normal(shape=a.shape, scale=std, loc=mean, dtype=dtype)
 
         a[mx.arange(rows).reshape(rows, 1), order[:, :num_zeros]] = 0
