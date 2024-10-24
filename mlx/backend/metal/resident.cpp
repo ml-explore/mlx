@@ -6,8 +6,7 @@
 namespace mlx::core::metal {
 
 // TODO maybe worth including tvos / visionos
-#define supported \
-  "__builtin_available(macOS 15, *) || __builtin_available(iOS 18, *)"
+#define supported __builtin_available(macOS 15, iOS 18, *)
 
 ResidencySet::ResidencySet(MTL::Device* d) {
   if (supported) {
