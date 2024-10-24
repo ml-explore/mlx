@@ -6,6 +6,7 @@
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/variant.h>
+#include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
 using namespace nb::literals;
@@ -97,6 +98,35 @@ void init_metal(nb::module_& m) {
 
       Returns:
         int: The previous cache limit in bytes.
+      )pbdoc");
+  metal.def(
+      "set_wired_limit",
+      &metal::set_wired_limit,
+      "limit"_a,
+      R"pbdoc(
+      Set the wired size limit.
+
+      .. note::
+         This function is only useful for macOS 15.0 or higher.
+
+      The wired limit is the total size in bytes of memory that will be kept
+      resident. It defaults to ``0``. Setting a wired limit larger
+      than system wired limit is an error. You can increase the system wired limit
+      with ``sudo sysctl iogpu.wired_limit_mb=<size_in_megabytes>``.
+
+      Use :func:`mx.metal.device_info` to query the system wired limit
+      (``"max_recommended_working_set_size"``) and the total memory size
+      (``"memory_size"``).
+
+      .. warning::
+         The wired limit should always be less than the total memory size with some
+         room to spare.
+
+      Args:
+        limit (int): The wired limit in bytes.
+
+      Returns:
+        int: The previous wired limit in bytes.
       )pbdoc");
   metal.def(
       "clear_cache",

@@ -63,6 +63,14 @@ size_t set_cache_limit(size_t limit);
 /* Clear the memory cache. */
 void clear_cache();
 
+/* Set the wired size limit.
+ *
+ * Note, this function is only useful for macOS 15.0 or higher.
+ *
+ * Returns the previous wired limit.
+ * */
+size_t set_wired_limit(size_t limit);
+
 /** Capture a GPU trace, saving it to an absolute file `path` */
 void start_capture(std::string path = "");
 void stop_capture();
