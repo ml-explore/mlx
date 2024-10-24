@@ -142,8 +142,8 @@ implicit_gemm_conv_2d_general(
   // Store results to device memory
   {
     // Adjust for simdgroup and thread locatio
-    int offset_m = c_row + mma_op.sm + mma_op.tm;
-    int offset_n = c_col + mma_op.sn + mma_op.tn;
+    int offset_m = c_row + mma_op.sm;
+    int offset_n = c_col + mma_op.sn;
     C += offset_n;
 
     if (offset_n >= gemm_params->N)
@@ -169,17 +169,17 @@ implicit_gemm_conv_2d_general(
         STEEL_PRAGMA_UNROLL
         for (int j = 0; j < mma_t::TN; j++) {
           // Get accumulated result and associated offset in C
-          thread const auto& accum =
-              mma_op.results[i * mma_t::TN + j].thread_elements();
+          thread const auto& accum = mma_op.Ctile.frag_at(i, j);
           int offset = offset_cm + (j * mma_t::TN_stride);
 
-          // Apply epilogue and output C
-          if (j * mma_t::TN_stride < diff) {
-            C[offset] = Epilogue::apply(accum[0]);
-          }
+          constexpr short kelems = decltype(mma_op.Ctile)::kElemsPerFrag;
 
-          if (j * mma_t::TN_stride + 1 < diff) {
-            C[offset + 1] = Epilogue::apply(accum[1]);
+          // Apply epilogue and output C
+          STEEL_PRAGMA_UNROLL
+          for (short k = 0; k < kelems; k++) {
+            if ((j * mma_t::TN_stride + k) < diff) {
+              C[offset + k] = Epilogue::apply(accum[k]);
+            }
           }
         }
       }
