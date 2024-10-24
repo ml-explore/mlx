@@ -46,6 +46,10 @@ size_t set_memory_limit(size_t, bool) {
 size_t set_cache_limit(size_t) {
   return 0;
 }
+size_t set_wired_limit(size_t) {
+  return 0;
+}
+
 void start_capture(std::string) {}
 void stop_capture() {}
 void clear_cache() {}
