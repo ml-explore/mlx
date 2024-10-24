@@ -482,7 +482,7 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_masked()
                   << fmt::format(
-                         fmt::runtime(steel_gemm_masked_kernels),
+                         steel_gemm_masked_kernels,
                          "name"_a = lib_name,
                          "itype"_a = get_type_string(out.dtype()),
                          "outmasktype"_a = out_mask_type,
