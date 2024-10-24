@@ -185,19 +185,73 @@ void sdpa_vector(
   compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
 }
 
+void quant_sdpa_vector(
+    const Stream& s,
+    metal::Device& d,
+    const array& q,
+    const array& k,
+    const array& k_scales,
+    const array& k_biases,
+    const array& v,
+    const array& v_scales,
+    const array& v_biases,
+    array& out,
+    float scale,
+    int group_size,
+    int bits) {
+  // Set the kernel name
+  std::string kname;
+  kname.reserve(96);
+  kname += "quant_sdpa_vector_";
+  kname += get_type_string(q.dtype());
+  kname += "_";
+  kname += std::to_string(q.shape(-1));
+  kname += "_";
+  kname += std::to_string(group_size);
+  kname += "_";
+  kname += std::to_string(bits);
+
+  // Compute the necessary sizes
+  int gqa_factor = q.shape(1) / k.shape(1);
+  int N = k.shape(2);
+  int B = q.shape(0) * q.shape(1);
+  size_t stride = k.strides()[1];
+  size_t group_stride = k_scales.strides()[1];
+  MTL::Size group_dims(128, 1, 1);
+  MTL::Size grid_dims(1, B, 1);
+
+  // Get the kernel
+  auto& compute_encoder = d.get_command_encoder(s.index);
+  auto kernel = d.get_kernel(kname);
+  compute_encoder->setComputePipelineState(kernel);
+
+  // Set its arguments
+  compute_encoder.set_input_array(q.data_shared_ptr() == nullptr ? out : q, 0);
+  compute_encoder.set_input_array(k, 1);
+  compute_encoder.set_input_array(k_scales, 2);
+  compute_encoder.set_input_array(k_biases, 3);
+  compute_encoder.set_input_array(v, 4);
+  compute_encoder.set_input_array(v_scales, 5);
+  compute_encoder.set_input_array(v_biases, 6);
+  compute_encoder.set_output_array(out, 7);
+  compute_encoder->setBytes(&gqa_factor, sizeof(int), 8);
+  compute_encoder->setBytes(&N, sizeof(int), 9);
+  compute_encoder->setBytes(&stride, sizeof(size_t), 10);
+  compute_encoder->setBytes(&group_stride, sizeof(size_t), 11);
+  compute_encoder->setBytes(&scale, sizeof(float), 12);
+
+  // Launch
+  compute_encoder.dispatchThreadgroups(grid_dims, group_dims);
+}
+
 } // namespace
 
 void ScaledDotProductAttention::eval_gpu(
     const std::vector<array>& inputs,
     array& out) {
-  assert(inputs.size() == 3);
-
   auto& s = stream();
   auto& d = metal::device(s.device);
 
-  auto& q_pre = inputs[0];
-  auto& k_pre = inputs[1];
-  auto& v_pre = inputs[2];
   auto& o = out;
 
   std::vector<array> copies;
@@ -236,11 +290,25 @@ void ScaledDotProductAttention::eval_gpu(
     return strides[3] == 1 && strides[2] == shape[3];
   };
 
-  // We are in vector mode ie single query
-  if (q_pre.shape(2) == 1) {
+  if (quantized_) {
+    auto& q_pre = inputs[0];
+    auto& k_pre = inputs[1];
+    auto& k_scales_pre = inputs[2];
+    auto& k_biases_pre = inputs[3];
+    auto& v_pre = inputs[4];
+    auto& v_scales_pre = inputs[5];
+    auto& v_biases_pre = inputs[6];
+
+    // Quantized should only be routed here for single queries
+    assert(q_pre.shape(2) == 1);
+
     auto q = copy_unless(is_contiguous, q_pre);
     auto k = copy_unless(is_contiguous_except_seq_len, k_pre);
+    auto k_scales = copy_unless(is_contiguous_except_seq_len, k_scales_pre);
+    auto k_biases = copy_unless(is_contiguous_except_seq_len, k_biases_pre);
     auto v = copy_unless(is_contiguous_except_seq_len, v_pre);
+    auto v_scales = copy_unless(is_contiguous_except_seq_len, v_scales_pre);
+    auto v_biases = copy_unless(is_contiguous_except_seq_len, v_biases_pre);
 
     // Donate the query if possible
     if (q.is_donatable()) {
@@ -249,17 +317,54 @@ void ScaledDotProductAttention::eval_gpu(
       o.set_data(allocator::malloc_or_wait(o.nbytes()));
     }
 
-    sdpa_vector(s, d, q, k, v, o, scale_);
+    quant_sdpa_vector(
+        s,
+        d,
+        q,
+        k,
+        k_scales,
+        k_biases,
+        v,
+        v_scales,
+        v_biases,
+        o,
+        scale_,
+        group_size_,
+        bits_);
+
   }
 
-  // Full attention mode
+  // Non-quantized
   else {
-    auto q = copy_unless(is_matrix_contiguous, q_pre);
-    auto k = copy_unless(is_matrix_contiguous, k_pre);
-    auto v = copy_unless(is_matrix_contiguous, v_pre);
-    o.set_data(allocator::malloc_or_wait(o.nbytes()));
+    assert(inputs.size() == 3);
+    auto& q_pre = inputs[0];
+    auto& k_pre = inputs[1];
+    auto& v_pre = inputs[2];
 
-    sdpa_full_self_attention_metal(s, d, q, k, v, scale_, o);
+    // We are in vector mode ie single query
+    if (q_pre.shape(2) == 1) {
+      auto q = copy_unless(is_contiguous, q_pre);
+      auto k = copy_unless(is_contiguous_except_seq_len, k_pre);
+      auto v = copy_unless(is_contiguous_except_seq_len, v_pre);
+
+      // Donate the query if possible
+      if (q.is_donatable()) {
+        o.move_shared_buffer(q);
+      } else {
+        o.set_data(allocator::malloc_or_wait(o.nbytes()));
+      }
+
+      sdpa_vector(s, d, q, k, v, o, scale_);
+    }
+    // Full attention mode
+    else {
+      auto q = copy_unless(is_matrix_contiguous, q_pre);
+      auto k = copy_unless(is_matrix_contiguous, k_pre);
+      auto v = copy_unless(is_matrix_contiguous, v_pre);
+      o.set_data(allocator::malloc_or_wait(o.nbytes()));
+
+      sdpa_full_self_attention_metal(s, d, q, k, v, scale_, o);
+    }
   }
 
   d.add_temporaries(std::move(copies), s.index);
