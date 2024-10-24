@@ -243,8 +243,8 @@ struct MMATile {
             &(
                 src[(i * kFragRows) * w_x * str_x +
                     (j * kFragCols) * w_y * str_y]),
-            str_x,
-            str_y);
+            Int<str_x>{},
+            Int<str_y>{});
       }
     }
   }
@@ -260,8 +260,8 @@ struct MMATile {
             &(
                 dst[(i * kFragRows) * w_x * str_x +
                     (j * kFragCols) * w_y * str_y]),
-            str_x,
-            str_y);
+            Int<str_x>{},
+            Int<str_y>{});
       }
     }
   }
@@ -276,7 +276,7 @@ struct MMATile {
             frag_at(i, j),
             &(src[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y]),
             ld,
-            1);
+            Int<1>{});
       }
     }
   }
@@ -291,7 +291,7 @@ struct MMATile {
             frag_at(i, j),
             &(dst[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y]),
             ld,
-            1);
+            Int<1>{});
       }
     }
   }
@@ -307,7 +307,7 @@ struct MMATile {
             frag_at(i, j),
             src,
             ld,
-            1,
+            Int<1>{},
             src_tile_dims.y,
             src_tile_dims.x,
             (i * kFragRows) * w_x,
@@ -327,7 +327,7 @@ struct MMATile {
             frag_at(i, j),
             dst,
             ld,
-            1,
+            Int<1>{},
             dst_tile_dims.y,
             dst_tile_dims.x,
             (i * kFragRows) * w_x,

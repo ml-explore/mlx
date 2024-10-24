@@ -24,29 +24,8 @@ struct make_void {
 template <typename... Ts>
 using void_t = typename make_void<Ts...>::type;
 
-template <class T, T val>
-struct is_integral<integral_constant<T, val>> : true_type {};
-
-template <short val>
-struct is_integral<integral_constant<decltype(val), val>> : true_type {};
-
-template <int val>
-struct is_integral<integral_constant<decltype(val), val>> : true_type {};
-
-template <long val>
-struct is_integral<integral_constant<decltype(val), val>> : true_type {};
-
-template <ushort val>
-struct is_integral<integral_constant<decltype(val), val>> : true_type {};
-
-template <uint val>
-struct is_integral<integral_constant<decltype(val), val>> : true_type {};
-
-template <size_t val>
-struct is_integral<integral_constant<decltype(val), val>> : true_type {};
-
 template <class T>
-struct is_static : bool_constant<is_empty<remove_cv_t<T>>::value> {};
+struct is_static : metal::bool_constant<is_empty<remove_cv_t<T>>::value> {};
 
 template <typename T>
 struct pointer_element {};

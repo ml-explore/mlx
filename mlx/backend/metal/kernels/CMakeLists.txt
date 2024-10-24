@@ -50,7 +50,9 @@ set(STEEL_HEADERS
     steel/gemm/transforms.h
     steel/gemm/kernels/steel_gemm_fused.h
     steel/gemm/kernels/steel_gemm_masked.h
-    steel/gemm/kernels/steel_gemm_splitk.h)
+    steel/gemm/kernels/steel_gemm_splitk.h
+    steel/utils/type_traits.h
+    steel/utils/integral_constant.h)
 
 if(NOT MLX_METAL_JIT)
   build_kernel(arange arange.h)

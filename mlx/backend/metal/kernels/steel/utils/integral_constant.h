@@ -16,16 +16,17 @@ namespace steel {
 
 template <typename T, T v>
 struct integral_constant {
-  typedef T value_type;
-  typedef integral_constant type;
-  static constant constexpr T value = v;
+  static constexpr constant T value = v;
+  using value_type = T;
+  using type = integral_constant;
 
-  METAL_FUNC constexpr operator value_type() const {
+  METAL_FUNC constexpr operator value_type() const noexcept {
     return value;
   }
-  METAL_FUNC constexpr value_type operator()() const {
-    return value;
-  }
+
+  // METAL_FUNC constexpr value_type operator()() const noexcept {
+  //   return value;
+  // }
 };
 
 template <bool B>
@@ -46,19 +47,15 @@ constexpr constant bool is_integral_v = is_integral<T>::value;
 template <int val>
 using Int = integral_constant<int, val>;
 
-template <class T>
-struct is_static
-    : bool_constant<metal::is_empty<metal::remove_cv_t<T>>::value> {};
-
 ///////////////////////////////////////////////////////////////////////////////
 // Binary Operators on Integral constants
 ///////////////////////////////////////////////////////////////////////////////
 
-#define integral_const_binop(_op_, _operator_)              \
+#define integral_const_binop(__op__, __operator__)          \
   template <typename T, T tv, typename U, U uv>             \
-  METAL_FUNC constexpr auto _operator_(                     \
+  METAL_FUNC constexpr auto __operator__(                   \
       integral_constant<T, tv>, integral_constant<U, uv>) { \
-    constexpr auto res = tv _op_ uv;                        \
+    constexpr auto res = tv __op__ uv;                      \
     return integral_constant<decltype(res), res>{};         \
   }
 
@@ -78,65 +75,6 @@ integral_const_binop(&&, operator&&);
 integral_const_binop(||, operator||);
 
 #undef integral_const_binop
-
-///////////////////////////////////////////////////////////////////////////////
-// Specail Binary Operators on Integral constants
-///////////////////////////////////////////////////////////////////////////////
-
-template <
-    typename T,
-    T v,
-    typename U,
-    typename _E = metal::enable_if<is_integral_v<U> && v == 0>>
-METAL_FUNC constexpr integral_constant<decltype(T(0) * U(0)), 0> operator*(
-    integral_constant<T, v>,
-    U) {
-  return {};
-}
-
-template <
-    typename T,
-    T v,
-    typename U,
-    typename _E = metal::enable_if<is_integral_v<U> && v == 0>>
-METAL_FUNC constexpr integral_constant<decltype(T(0) * U(0)), 0> operator*(
-    U,
-    integral_constant<T, v>) {
-  return {};
-}
-
-template <
-    typename T,
-    T v,
-    typename U,
-    typename _E = metal::enable_if<is_integral_v<U> && v == 0>>
-METAL_FUNC constexpr integral_constant<decltype(T(0) / U(1)), 0> operator/(
-    integral_constant<T, v>,
-    U) {
-  return {};
-}
-
-template <
-    typename T,
-    T v,
-    typename U,
-    typename _E = metal::enable_if<is_integral_v<U> && v == 0>>
-METAL_FUNC constexpr integral_constant<decltype(T(0) % U(1)), 0> operator%(
-    integral_constant<T, v>,
-    U) {
-  return {};
-}
-
-template <
-    typename T,
-    T v,
-    typename U,
-    typename _E = metal::enable_if<is_integral_v<U> && (v == 1 || v == -1)>>
-METAL_FUNC constexpr integral_constant<decltype(T(0) % U(1)), 0> operator%(
-    U,
-    integral_constant<T, v>) {
-  return {};
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 // Reduction operators
