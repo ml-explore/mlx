@@ -1879,8 +1879,7 @@ class TestArray(mlx_tests.MLXTestCase):
         a = mx.arange(3)
         self.assertEqual(f"{a[0]:.2f}", "0.00")
 
-        b = 0.35487
-
+        b = mx.array(0.35487)
         self.assertEqual(f"{b:.1f}", "0.4")
 
         with self.assertRaises(TypeError):

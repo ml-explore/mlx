@@ -848,7 +848,7 @@ void init_array(nb::module_& m) {
       .def(
           "__format__",
           [](array& a, nb::object format_spec) {
-            if (a.size() > 1) {
+            if (a.ndim() == 0) {
               throw nb::type_error(
                   "unsupported format string passed to mx.array.__format__");
             }
