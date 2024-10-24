@@ -209,9 +209,6 @@ get_template_definition(std::string name, std::string func, Args... args) {
   };
   (add_arg(args), ...);
   s << ">";
-  std::string base_string = R"(
-
-  )";
   return fmt::format(
       "template [[host_name(\"{0}\")]] [[kernel]] decltype({1}) {1};",
       name,
