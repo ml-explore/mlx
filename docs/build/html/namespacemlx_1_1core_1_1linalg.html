@@ -126,6 +126,10 @@ Functions</h2></td></tr>
 <tr class="memitem:abcda3fbda45183c21e7f27aa0dde64e6" id="r_abcda3fbda45183c21e7f27aa0dde64e6"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#abcda3fbda45183c21e7f27aa0dde64e6">cross</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;b, int axis=-1, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:abcda3fbda45183c21e7f27aa0dde64e6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Compute the cross product of two arrays along the given axis.  <br /></td></tr>
 <tr class="separator:abcda3fbda45183c21e7f27aa0dde64e6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a00c8e24432b0773dac64b8602bd142ba" id="r_a00c8e24432b0773dac64b8602bd142ba"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a00c8e24432b0773dac64b8602bd142ba">eigvalsh</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, std::string UPLO=&quot;L&quot;, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a00c8e24432b0773dac64b8602bd142ba"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2180be504f639fd471ea622641c1b0ca" id="r_a2180be504f639fd471ea622641c1b0ca"><td class="memItemLeft" align="right" valign="top">std::pair&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a2180be504f639fd471ea622641c1b0ca">eigh</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;a, std::string UPLO=&quot;L&quot;, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="separator:a2180be504f639fd471ea622641c1b0ca"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Function Documentation</h2>
 <a id="a46c8a4f806f0a97a4323e91189aa512b" name="a46c8a4f806f0a97a4323e91189aa512b"></a>
@@ -210,6 +214,58 @@ Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Compute the cross product of two arrays along the given axis. </p>
+
+</div>
+</div>
+<a id="a2180be504f639fd471ea622641c1b0ca" name="a2180be504f639fd471ea622641c1b0ca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2180be504f639fd471ea622641c1b0ca">&#9670;&#160;</a></span>eigh()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">std::pair&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; mlx::core::linalg::eigh </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::string</td>          <td class="paramname"><span class="paramname"><em>UPLO</em></span><span class="paramdefsep"> = </span><span class="paramdefval">&quot;L&quot;</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span><span class="paramdefsep"> = </span><span class="paramdefval">{}</span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a00c8e24432b0773dac64b8602bd142ba" name="a00c8e24432b0773dac64b8602bd142ba"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a00c8e24432b0773dac64b8602bd142ba">&#9670;&#160;</a></span>eigvalsh()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::linalg::eigvalsh </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>a</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::string</td>          <td class="paramname"><span class="paramname"><em>UPLO</em></span><span class="paramdefsep"> = </span><span class="paramdefval">&quot;L&quot;</span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a></td>          <td class="paramname"><span class="paramname"><em>s</em></span><span class="paramdefsep"> = </span><span class="paramdefval">{}</span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
 
 </div>
 </div>

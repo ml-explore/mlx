@@ -51,7 +51,7 @@ You can also use an :obj:`array` to index another :obj:`array`:
 .. code-block:: shell
 
   >>> arr = mx.arange(10)
-  >>> idx = mx.array([5, 7]) 
+  >>> idx = mx.array([5, 7])
   >>> arr[idx]
   array([5, 7], dtype=int32)
 
@@ -82,7 +82,7 @@ general, MLX has limited support for operations for which outputs
 operations which MLX does not yet support include :func:`numpy.nonzero` and the
 single input version of :func:`numpy.where`.
 
-In Place Updates 
+In Place Updates
 ----------------
 
 In place updates to indexed arrays are possible in MLX. For example:
