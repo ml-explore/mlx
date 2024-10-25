@@ -240,7 +240,7 @@ x86 Shell
 
 .. _build shell:
 
-If the ouptut of ``uname -p``  is ``x86`` then your shell is running as x86 via
+If the output of ``uname -p``  is ``x86`` then your shell is running as x86 via
 Rosetta instead of natively.
 
 To fix this, find the application in Finder (``/Applications`` for iTerm,
@@ -264,4 +264,4 @@ Also check that cmake is using the correct architecture:
 
 If you see ``"x86_64"``, try re-installing ``cmake``. If you see ``"arm64"``
 but the build errors out with "Building for x86_64 on macOS is not supported."
-wipe your build cahce with ``rm -rf build/`` and try again.
+wipe your build cache with ``rm -rf build/`` and try again.
