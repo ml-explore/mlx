@@ -367,3 +367,14 @@ class MaxPool3d(_Pool3d):
         padding: Optional[Union[int, Tuple[int, int, int]]] = 0,
     ):
         super().__init__(mx.max, -float("inf"), kernel_size, stride, padding)
+
+
+class AvgPool3d(_Pool3d):
+
+    def __init__(
+        self,
+        kernel_size: Union[int, Tuple[int, int, int]],
+        stride: Optional[Union[int, Tuple[int, int, int]]] = None,
+        padding: Optional[Union[int, Tuple[int, int, int]]] = 0,
+    ):
+        super().__init__(mx.mean, 0, kernel_size, stride, padding)
