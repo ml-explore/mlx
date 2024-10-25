@@ -284,9 +284,9 @@ struct MMATile {
   template <typename U, int w_x, int w_y>
   METAL_FUNC void store(device U* dst, const int ld) const {
     STEEL_PRAGMA_UNROLL
-    for (int i = 0; i < kTileRows; ++i) {
+    for (short i = 0; i < kTileRows; ++i) {
       STEEL_PRAGMA_UNROLL
-      for (int j = 0; j < kTileCols; ++j) {
+      for (short j = 0; j < kTileCols; ++j) {
         MMAFrag_t::store(
             frag_at(i, j),
             &(dst[(i * kFragRows) * w_x * ld + (j * kFragCols) * w_y]),
