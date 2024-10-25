@@ -83,7 +83,6 @@ struct CommandEncoder {
   };
 
  private:
-  void set_array(const array& a, int idx, int64_t offset);
   MTL::ComputeCommandEncoder* enc_;
   bool concurrent_{false};
   std::unordered_set<MTL::Resource*> outputs_;
