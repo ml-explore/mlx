@@ -67,6 +67,11 @@ void clear_cache();
  *
  * Note, this function is only useful for macOS 15.0 or higher.
  *
+ * The wired limit is the total size in bytes of memory that will be kept
+ * resident. The default value is ``0``.
+ *
+ * Setting a wired limit larger than system wired limit is an error.
+ *
  * Returns the previous wired limit.
  * */
 size_t set_wired_limit(size_t limit);

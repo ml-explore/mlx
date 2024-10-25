@@ -107,20 +107,23 @@ void init_metal(nb::module_& m) {
       Set the wired size limit.
 
       .. note::
-         This function is only useful for macOS 15.0 or higher.
+         * This function is only useful on macOS 15.0 or higher.
+         * The wired limit should remain strictly less than the total
+           memory size.
 
       The wired limit is the total size in bytes of memory that will be kept
-      resident. It defaults to ``0``. Setting a wired limit larger
-      than system wired limit is an error. You can increase the system wired limit
-      with ``sudo sysctl iogpu.wired_limit_mb=<size_in_megabytes>``.
+      resident. The default value is ``0``.
 
-      Use :func:`mx.metal.device_info` to query the system wired limit
+      Setting a wired limit larger than system wired limit is an error. You can
+      increase the system wired limit with:
+
+      .. code-block::
+
+        sudo sysctl iogpu.wired_limit_mb=<size_in_megabytes>
+
+      Use :func:`device_info` to query the system wired limit
       (``"max_recommended_working_set_size"``) and the total memory size
       (``"memory_size"``).
-
-      .. warning::
-         The wired limit should always be less than the total memory size with some
-         room to spare.
 
       Args:
         limit (int): The wired limit in bytes.
