@@ -1569,6 +1569,69 @@ class TestLayers(mlx_tests.MLXTestCase):
             str(nn.AvgPool2d(kernel_size=(1, 2), stride=2, padding=(1, 2))),
             "AvgPool2d(kernel_size=(1, 2), stride=(2, 2), padding=(1, 2))",
         )
+        # Test 3d pooling
+        x = mx.array(
+            [
+                [
+                    [
+                        [[0, 1, 2], [3, 4, 5], [6, 7, 8]],
+                        [[9, 10, 11], [12, 13, 14], [15, 16, 17]],
+                        [[18, 19, 20], [21, 22, 23], [24, 25, 26]],
+                    ],
+                    [
+                        [[27, 28, 29], [30, 31, 32], [33, 34, 35]],
+                        [[36, 37, 38], [39, 40, 41], [42, 43, 44]],
+                        [[45, 46, 47], [48, 49, 50], [51, 52, 53]],
+                    ],
+                ]
+            ]
+        )
+        expected_max_pool_output_no_padding_stride_1 = [
+            [[[[39, 40, 41], [42, 43, 44]], [[48, 49, 50], [51, 52, 53]]]]
+        ]
+
+        expected_max_pool_output_no_padding_stride_2 = [[[[[39, 40, 41]]]]]
+        expected_max_pool_output_padding_1 = [
+            [
+                [[[0, 1, 2], [6, 7, 8]], [[18, 19, 20], [24, 25, 26]]],
+                [[[27, 28, 29], [33, 34, 35]], [[45, 46, 47], [51, 52, 53]]],
+            ]
+        ]
+        expected_irregular_max_pool_output = [
+            [
+                [[[9, 10, 11], [12, 13, 14], [15, 16, 17]]],
+                [[[36, 37, 38], [39, 40, 41], [42, 43, 44]]],
+            ]
+        ]
+
+        self.assertTrue(
+            np.array_equal(
+                nn.MaxPool3d(kernel_size=2, stride=1, padding=0)(x),
+                expected_max_pool_output_no_padding_stride_1,
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                nn.MaxPool3d(kernel_size=2, stride=2, padding=0)(x),
+                expected_max_pool_output_no_padding_stride_2,
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                nn.MaxPool3d(kernel_size=2, stride=2, padding=1)(x),
+                expected_max_pool_output_padding_1,
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                nn.MaxPool3d(kernel_size=(1, 2, 1), stride=(1, 2, 1))(x),
+                expected_irregular_max_pool_output,
+            )
+        )
+        self.assertEqual(
+            str(nn.MaxPool3d(kernel_size=3, stride=3, padding=2)),
+            "MaxPool3d(kernel_size=(3, 3, 3), stride=(3, 3, 3), padding=(2, 2, 2))",
+        )
 
     def test_set_dtype(self):
         def assert_dtype(layer, dtype):
