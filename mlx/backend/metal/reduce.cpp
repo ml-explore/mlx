@@ -586,9 +586,13 @@ void strided_reduce_atomics(
   MTL::Size group_dims(threadgroup_size, 1, 1);
 
   // Set the kernel
+  int n = 1;
+  const std::string func_name = "col_reduce_atomics";
   std::ostringstream kname;
-  kname << "colAtomic1_8_128_reduce_" << op_name << type_to_name(in);
-  auto kernel = get_reduce_kernel(d, kname.str(), op_name, in, out);
+  kname << func_name << "_" << n << "_" << BM << "_" << BN << "_reduce_"
+        << op_name << type_to_name(in);
+  auto kernel =
+      get_reduce_kernel(d, kname.str(), func_name, op_name, in, out, n, BM, BN);
   compute_encoder->setComputePipelineState(kernel);
 
   // Launch
