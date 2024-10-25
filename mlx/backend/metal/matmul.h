@@ -1,5 +1,7 @@
 // Copyright © 2023 Apple Inc.
 
+#pragma once
+
 #include "mlx/backend/metal/device.h"
 
 namespace mlx::core {
