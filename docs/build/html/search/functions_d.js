@@ -42,8 +42,9 @@ var searchData=
   ['moveaxis_39',['moveaxis',['../group__ops.html#ga24067d10a842db2c9d509ea48135a2c3',1,'mlx::core']]],
   ['mpinplace_40',['MPINPLACE',['../namespacepocketfft_1_1detail.html#af5eedf3cdfc83c0a30807092c39a9ce2',1,'pocketfft::detail']]],
   ['mtl_5fdevice_41',['mtl_device',['../classmlx_1_1core_1_1metal_1_1_device.html#a31dba377f2be44a746db10d1b9367653',1,'mlx::core::metal::Device']]],
-  ['multi_5fiter_42',['multi_iter',['../classpocketfft_1_1detail_1_1multi__iter.html#a9be43bb18840202da6d17988fccc64b9',1,'pocketfft::detail::multi_iter']]],
-  ['multiply_43',['Multiply',['../classmlx_1_1core_1_1_multiply.html#aca5c50f900321f3eb4d6fbcbc225c00c',1,'mlx::core::Multiply']]],
-  ['multiply_44',['multiply',['../group__ops.html#gaf57392e641640b5d06e4c99518391c38',1,'mlx::core']]],
-  ['multivariate_5fnormal_45',['multivariate_normal',['../namespacemlx_1_1core_1_1random.html#a8c37da3c1c0c561cad7499d6d9db81fb',1,'mlx::core::random']]]
+  ['mtl_5fresidency_5fset_42',['mtl_residency_set',['../classmlx_1_1core_1_1metal_1_1_residency_set.html#ac4bfe5ef5e2eaebc458a1ed1953d15e9',1,'mlx::core::metal::ResidencySet']]],
+  ['multi_5fiter_43',['multi_iter',['../classpocketfft_1_1detail_1_1multi__iter.html#a9be43bb18840202da6d17988fccc64b9',1,'pocketfft::detail::multi_iter']]],
+  ['multiply_44',['Multiply',['../classmlx_1_1core_1_1_multiply.html#aca5c50f900321f3eb4d6fbcbc225c00c',1,'mlx::core::Multiply']]],
+  ['multiply_45',['multiply',['../group__ops.html#gaf57392e641640b5d06e4c99518391c38',1,'mlx::core']]],
+  ['multivariate_5fnormal_46',['multivariate_normal',['../namespacemlx_1_1core_1_1random.html#a8c37da3c1c0c561cad7499d6d9db81fb',1,'mlx::core::random']]]
 ];
