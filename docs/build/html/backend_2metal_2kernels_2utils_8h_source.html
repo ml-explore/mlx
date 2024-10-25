@@ -459,7 +459,91 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l00321" name="l00321"></a><span class="lineno">  321</span>      <a class="code hl_function" href="namespacemetal.html#af6e2dd7ae087aba6abac4f0350b7611c">simd_shuffle_down</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#abbd4a0092eca9f112c1c5ae1a133a27e">real</a>, delta), <a class="code hl_function" href="namespacemetal.html#af6e2dd7ae087aba6abac4f0350b7611c">simd_shuffle_down</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#a94037c0cf8451aaff7cb4d154a8426de">imag</a>, delta));</div>
 <div class="line"><a id="l00322" name="l00322"></a><span class="lineno">  322</span>}</div>
 </div>
-<div class="ttc" id="abackend_2metal_2allocator_8h_html_ae704ab07eac590091daa5fc4aec7bddb"><div class="ttname"><a href="backend_2metal_2allocator_8h.html#ae704ab07eac590091daa5fc4aec7bddb">next</a></div><div class="ttdeci">BufferHolder * next</div><div class="ttdef"><b>Definition</b> allocator.h:37</div></div>
+<div class="line"><a id="l00323" name="l00323"></a><span class="lineno">  323</span> </div>
+<div class="foldopen" id="foldopen00324" data-start="{" data-end="}">
+<div class="line"><a id="l00324" name="l00324"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a39e436e0a942912266aae7e0bd82d7c0">  324</a></span><span class="keyword">inline</span> uint64_t <a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">simd_shuffle_up</a>(uint64_t data, uint16_t delta) {</div>
+<div class="line"><a id="l00325" name="l00325"></a><span class="lineno">  325</span>  <span class="keywordflow">return</span> as_type&lt;uint64_t&gt;(<a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">metal::simd_shuffle_up</a>(as_type&lt;uint2&gt;(data), delta));</div>
+<div class="line"><a id="l00326" name="l00326"></a><span class="lineno">  326</span>}</div>
+</div>
+<div class="line"><a id="l00327" name="l00327"></a><span class="lineno">  327</span> </div>
+<div class="foldopen" id="foldopen00328" data-start="{" data-end="}">
+<div class="line"><a id="l00328" name="l00328"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a617f3857caf33c569afa6148135f8b7a">  328</a></span><span class="keyword">inline</span> int64_t <a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">simd_shuffle_up</a>(int64_t data, uint16_t delta) {</div>
+<div class="line"><a id="l00329" name="l00329"></a><span class="lineno">  329</span>  <span class="keywordflow">return</span> as_type&lt;int64_t&gt;(<a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">metal::simd_shuffle_up</a>(as_type&lt;uint2&gt;(data), delta));</div>
+<div class="line"><a id="l00330" name="l00330"></a><span class="lineno">  330</span>}</div>
+</div>
+<div class="line"><a id="l00331" name="l00331"></a><span class="lineno">  331</span> </div>
+<div class="foldopen" id="foldopen00332" data-start="{" data-end="}">
+<div class="line"><a id="l00332" name="l00332"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#ae0f5c42020275a588234e69f1eb7a485">  332</a></span><span class="keyword">inline</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">simd_shuffle_up</a>(<span class="keywordtype">bool</span> data, uint16_t delta) {</div>
+<div class="line"><a id="l00333" name="l00333"></a><span class="lineno">  333</span>  <span class="keywordflow">return</span> <a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">simd_shuffle_up</a>(<span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(data), delta);</div>
+<div class="line"><a id="l00334" name="l00334"></a><span class="lineno">  334</span>}</div>
+</div>
+<div class="line"><a id="l00335" name="l00335"></a><span class="lineno">  335</span> </div>
+<div class="foldopen" id="foldopen00336" data-start="{" data-end="}">
+<div class="line"><a id="l00336" name="l00336"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a92b455bac6a23af51c35ea83de2383eb">  336</a></span><span class="keyword">inline</span> <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a> <a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">simd_shuffle_up</a>(<a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a> data, uint16_t delta) {</div>
+<div class="line"><a id="l00337" name="l00337"></a><span class="lineno">  337</span>  <span class="keywordflow">return</span> <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a>(</div>
+<div class="line"><a id="l00338" name="l00338"></a><span class="lineno">  338</span>      <a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">simd_shuffle_up</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#abbd4a0092eca9f112c1c5ae1a133a27e">real</a>, delta), <a class="code hl_function" href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">simd_shuffle_up</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#a94037c0cf8451aaff7cb4d154a8426de">imag</a>, delta));</div>
+<div class="line"><a id="l00339" name="l00339"></a><span class="lineno">  339</span>}</div>
+</div>
+<div class="line"><a id="l00340" name="l00340"></a><span class="lineno">  340</span> </div>
+<div class="line"><a id="l00341" name="l00341"></a><span class="lineno">  341</span><span class="keyword">inline</span> uint64_t</div>
+<div class="foldopen" id="foldopen00342" data-start="{" data-end="}">
+<div class="line"><a id="l00342" name="l00342"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a5862d5ea154c9b76cf56a630cf6385b4">  342</a></span><a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">simd_shuffle_and_fill_up</a>(uint64_t data, uint64_t filling, uint16_t delta) {</div>
+<div class="line"><a id="l00343" name="l00343"></a><span class="lineno">  343</span>  <span class="keywordflow">return</span> as_type&lt;uint64_t&gt;(<a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">metal::simd_shuffle_and_fill_up</a>(</div>
+<div class="line"><a id="l00344" name="l00344"></a><span class="lineno">  344</span>      as_type&lt;uint2&gt;(data), as_type&lt;uint2&gt;(filling), delta));</div>
+<div class="line"><a id="l00345" name="l00345"></a><span class="lineno">  345</span>}</div>
+</div>
+<div class="line"><a id="l00346" name="l00346"></a><span class="lineno">  346</span> </div>
+<div class="line"><a id="l00347" name="l00347"></a><span class="lineno">  347</span><span class="keyword">inline</span> int64_t</div>
+<div class="foldopen" id="foldopen00348" data-start="{" data-end="}">
+<div class="line"><a id="l00348" name="l00348"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a7bb56415c5412a6a26f70a990915f064">  348</a></span><a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">simd_shuffle_and_fill_up</a>(int64_t data, int64_t filling, uint16_t delta) {</div>
+<div class="line"><a id="l00349" name="l00349"></a><span class="lineno">  349</span>  <span class="keywordflow">return</span> as_type&lt;int64_t&gt;(<a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">metal::simd_shuffle_and_fill_up</a>(</div>
+<div class="line"><a id="l00350" name="l00350"></a><span class="lineno">  350</span>      as_type&lt;uint2&gt;(data), as_type&lt;uint2&gt;(filling), delta));</div>
+<div class="line"><a id="l00351" name="l00351"></a><span class="lineno">  351</span>}</div>
+</div>
+<div class="line"><a id="l00352" name="l00352"></a><span class="lineno">  352</span> </div>
+<div class="foldopen" id="foldopen00353" data-start="{" data-end="}">
+<div class="line"><a id="l00353" name="l00353"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#ad55bd473647f2c6c68e65e5312c132d1">  353</a></span><span class="keyword">inline</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">simd_shuffle_and_fill_up</a>(<span class="keywordtype">bool</span> data, <span class="keywordtype">bool</span> filling, uint16_t delta) {</div>
+<div class="line"><a id="l00354" name="l00354"></a><span class="lineno">  354</span>  <span class="keywordflow">return</span> <a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">simd_shuffle_and_fill_up</a>(</div>
+<div class="line"><a id="l00355" name="l00355"></a><span class="lineno">  355</span>      <span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(data), <span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(filling), delta);</div>
+<div class="line"><a id="l00356" name="l00356"></a><span class="lineno">  356</span>}</div>
+</div>
+<div class="line"><a id="l00357" name="l00357"></a><span class="lineno">  357</span> </div>
+<div class="foldopen" id="foldopen00358" data-start="{" data-end="}">
+<div class="line"><a id="l00358" name="l00358"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a94e02a6ae8c39cbf4cb23aa44df9dbd5">  358</a></span><span class="keyword">inline</span> <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a> <a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">simd_shuffle_and_fill_up</a>(</div>
+<div class="line"><a id="l00359" name="l00359"></a><span class="lineno">  359</span>    <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a> data,</div>
+<div class="line"><a id="l00360" name="l00360"></a><span class="lineno">  360</span>    <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a> filling,</div>
+<div class="line"><a id="l00361" name="l00361"></a><span class="lineno">  361</span>    uint16_t delta) {</div>
+<div class="line"><a id="l00362" name="l00362"></a><span class="lineno">  362</span>  <span class="keywordflow">return</span> <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a>(</div>
+<div class="line"><a id="l00363" name="l00363"></a><span class="lineno">  363</span>      <a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">simd_shuffle_and_fill_up</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#abbd4a0092eca9f112c1c5ae1a133a27e">real</a>, filling.<a class="code hl_variable" href="structcomplex64__t.html#abbd4a0092eca9f112c1c5ae1a133a27e">real</a>, delta),</div>
+<div class="line"><a id="l00364" name="l00364"></a><span class="lineno">  364</span>      <a class="code hl_function" href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">simd_shuffle_and_fill_up</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#a94037c0cf8451aaff7cb4d154a8426de">imag</a>, filling.<a class="code hl_variable" href="structcomplex64__t.html#a94037c0cf8451aaff7cb4d154a8426de">imag</a>, delta));</div>
+<div class="line"><a id="l00365" name="l00365"></a><span class="lineno">  365</span>}</div>
+</div>
+<div class="line"><a id="l00366" name="l00366"></a><span class="lineno">  366</span> </div>
+<div class="foldopen" id="foldopen00367" data-start="{" data-end="}">
+<div class="line"><a id="l00367" name="l00367"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a71986ecdd7d18f975dd22c3df7421ce2">  367</a></span><span class="keyword">inline</span> uint64_t <a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">simd_shuffle</a>(uint64_t data, uint16_t lane) {</div>
+<div class="line"><a id="l00368" name="l00368"></a><span class="lineno">  368</span>  <span class="keywordflow">return</span> as_type&lt;uint64_t&gt;(<a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">metal::simd_shuffle</a>(as_type&lt;uint2&gt;(data), lane));</div>
+<div class="line"><a id="l00369" name="l00369"></a><span class="lineno">  369</span>}</div>
+</div>
+<div class="line"><a id="l00370" name="l00370"></a><span class="lineno">  370</span> </div>
+<div class="foldopen" id="foldopen00371" data-start="{" data-end="}">
+<div class="line"><a id="l00371" name="l00371"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#a3bdbdfeb7a1dde40cd3ce1df8d9213b5">  371</a></span><span class="keyword">inline</span> int64_t <a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">simd_shuffle</a>(int64_t data, uint16_t lane) {</div>
+<div class="line"><a id="l00372" name="l00372"></a><span class="lineno">  372</span>  <span class="keywordflow">return</span> as_type&lt;int64_t&gt;(<a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">metal::simd_shuffle</a>(as_type&lt;uint2&gt;(data), lane));</div>
+<div class="line"><a id="l00373" name="l00373"></a><span class="lineno">  373</span>}</div>
+</div>
+<div class="line"><a id="l00374" name="l00374"></a><span class="lineno">  374</span> </div>
+<div class="foldopen" id="foldopen00375" data-start="{" data-end="}">
+<div class="line"><a id="l00375" name="l00375"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#ab4cbcdb054f9165130da91a3334da0cf">  375</a></span><span class="keyword">inline</span> <span class="keywordtype">bool</span> <a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">simd_shuffle</a>(<span class="keywordtype">bool</span> data, uint16_t lane) {</div>
+<div class="line"><a id="l00376" name="l00376"></a><span class="lineno">  376</span>  <span class="keywordflow">return</span> <a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">simd_shuffle</a>(<span class="keyword">static_cast&lt;</span>uint32_t<span class="keyword">&gt;</span>(data), lane);</div>
+<div class="line"><a id="l00377" name="l00377"></a><span class="lineno">  377</span>}</div>
+</div>
+<div class="line"><a id="l00378" name="l00378"></a><span class="lineno">  378</span> </div>
+<div class="foldopen" id="foldopen00379" data-start="{" data-end="}">
+<div class="line"><a id="l00379" name="l00379"></a><span class="lineno"><a class="line" href="backend_2metal_2kernels_2utils_8h.html#ab8175b66bcc080fb89f738143568c30b">  379</a></span><span class="keyword">inline</span> <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a> <a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">simd_shuffle</a>(<a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a> data, uint16_t lane) {</div>
+<div class="line"><a id="l00380" name="l00380"></a><span class="lineno">  380</span>  <span class="keywordflow">return</span> <a class="code hl_struct" href="structcomplex64__t.html">complex64_t</a>(</div>
+<div class="line"><a id="l00381" name="l00381"></a><span class="lineno">  381</span>      <a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">simd_shuffle</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#abbd4a0092eca9f112c1c5ae1a133a27e">real</a>, lane), <a class="code hl_function" href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">simd_shuffle</a>(data.<a class="code hl_variable" href="structcomplex64__t.html#a94037c0cf8451aaff7cb4d154a8426de">imag</a>, lane));</div>
+<div class="line"><a id="l00382" name="l00382"></a><span class="lineno">  382</span>}</div>
+</div>
+<div class="ttc" id="abackend_2metal_2allocator_8h_html_ae704ab07eac590091daa5fc4aec7bddb"><div class="ttname"><a href="backend_2metal_2allocator_8h.html#ae704ab07eac590091daa5fc4aec7bddb">next</a></div><div class="ttdeci">BufferHolder * next</div><div class="ttdef"><b>Definition</b> allocator.h:38</div></div>
 <div class="ttc" id="abackend_2metal_2kernels_2bf16_8h_html"><div class="ttname"><a href="backend_2metal_2kernels_2bf16_8h.html">bf16.h</a></div></div>
 <div class="ttc" id="abackend_2metal_2kernels_2bf16_8h_html_a7782de82393104dd4ad754ce3b316e82"><div class="ttname"><a href="backend_2metal_2kernels_2bf16_8h.html#a7782de82393104dd4ad754ce3b316e82">bfloat16_t</a></div><div class="ttdeci">struct _MLX_BFloat16 bfloat16_t</div><div class="ttdef"><b>Definition</b> bf16.h:257</div></div>
 <div class="ttc" id="abackend_2metal_2kernels_2complex_8h_html"><div class="ttname"><a href="backend_2metal_2kernels_2complex_8h.html">complex.h</a></div></div>
@@ -475,8 +559,11 @@ $(function(){ initResizable(false); });
 <div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_acb8ddf4a29129846b673c50ba7078773"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#acb8ddf4a29129846b673c50ba7078773">float16_t</a></div><div class="ttdeci">half float16_t</div><div class="ttdef"><b>Definition</b> utils.h:10</div></div>
 <div class="ttc" id="abackend_2metal_2kernels_2utils_8h_html_ad6c45cacca97899cd362df49c06fea79"><div class="ttname"><a href="backend_2metal_2kernels_2utils_8h.html#ad6c45cacca97899cd362df49c06fea79">elem_to_loc_2</a></div><div class="ttdeci">METAL_FUNC stride_t elem_to_loc_2(uint2 elem, constant const stride_t strides[2])</div><div class="ttdef"><b>Definition</b> utils.h:139</div></div>
 <div class="ttc" id="adefines_8h_html"><div class="ttname"><a href="defines_8h.html">defines.h</a></div></div>
+<div class="ttc" id="anamespacemetal_html_a1ca14116bf50639b214d8414b5bbaaa6"><div class="ttname"><a href="namespacemetal.html#a1ca14116bf50639b214d8414b5bbaaa6">metal::simd_shuffle_and_fill_up</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_shuffle_and_fill_up(bfloat16_t data, bfloat16_t filling_data, ushort delta, ushort modulo)</div><div class="ttdef"><b>Definition</b> bf16_math.h:391</div></div>
+<div class="ttc" id="anamespacemetal_html_a259ed115bc3c58f88eb35830916b26d4"><div class="ttname"><a href="namespacemetal.html#a259ed115bc3c58f88eb35830916b26d4">metal::simd_shuffle</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_shuffle(bfloat16_t data, ushort simd_lane_id)</div><div class="ttdef"><b>Definition</b> bf16_math.h:391</div></div>
 <div class="ttc" id="anamespacemetal_html_a423a9f4f2fc7ef5ec7eda061277b51b6"><div class="ttname"><a href="namespacemetal.html#a423a9f4f2fc7ef5ec7eda061277b51b6">metal::log</a></div><div class="ttdeci">METAL_FUNC bfloat16_t log(bfloat16_t x)</div><div class="ttdef"><b>Definition</b> bf16_math.h:234</div></div>
 <div class="ttc" id="anamespacemetal_html_af6e2dd7ae087aba6abac4f0350b7611c"><div class="ttname"><a href="namespacemetal.html#af6e2dd7ae087aba6abac4f0350b7611c">metal::simd_shuffle_down</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_shuffle_down(bfloat16_t data, ushort delta)</div><div class="ttdef"><b>Definition</b> bf16_math.h:391</div></div>
+<div class="ttc" id="anamespacemetal_html_afe81c5fbde3f4890458b081909242c55"><div class="ttname"><a href="namespacemetal.html#afe81c5fbde3f4890458b081909242c55">metal::simd_shuffle_up</a></div><div class="ttdeci">METAL_FUNC bfloat16_t simd_shuffle_up(bfloat16_t data, ushort delta)</div><div class="ttdef"><b>Definition</b> bf16_math.h:391</div></div>
 <div class="ttc" id="anamespacepocketfft_1_1detail_html_afb987c919e9424a996d0fc8b3c23cc84"><div class="ttname"><a href="namespacepocketfft_1_1detail.html#afb987c919e9424a996d0fc8b3c23cc84">pocketfft::detail::stride_t</a></div><div class="ttdeci">std::vector&lt; ptrdiff_t &gt; stride_t</div><div class="ttdef"><b>Definition</b> pocketfft.h:103</div></div>
 <div class="ttc" id="astruct___m_l_x___b_float16_html"><div class="ttname"><a href="struct___m_l_x___b_float16.html">_MLX_BFloat16</a></div><div class="ttdef"><b>Definition</b> bf16.h:54</div></div>
 <div class="ttc" id="astruct_limits_html"><div class="ttname"><a href="struct_limits.html">Limits</a></div><div class="ttdef"><b>Definition</b> utils.h:17</div></div>

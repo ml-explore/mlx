@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=11"/>
 <meta name="generator" content="Doxygen 1.12.0"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>MLX: mlx/backend/common/lapack_helper.h File Reference</title>
+<title>MLX: mlx/backend/metal/resident.h File Reference</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -83,45 +83,35 @@ $(function(){ initResizable(false); });
 
 <div id="nav-path" class="navpath">
   <ul>
-<li class="navelem"><a class="el" href="dir_938ab0ecf10b8b860ff766c820f665fd.html">mlx</a></li><li class="navelem"><a class="el" href="dir_1d446c9bd3c99228254c9484e0bc5c06.html">backend</a></li><li class="navelem"><a class="el" href="dir_f149b24a1b5be11cd70151abe517e3f8.html">common</a></li>  </ul>
+<li class="navelem"><a class="el" href="dir_938ab0ecf10b8b860ff766c820f665fd.html">mlx</a></li><li class="navelem"><a class="el" href="dir_1d446c9bd3c99228254c9484e0bc5c06.html">backend</a></li><li class="navelem"><a class="el" href="dir_d0c977ea65824390717cdb7efc36c157.html">metal</a></li>  </ul>
 </div>
 </div><!-- top -->
 <div id="doc-content">
 <div class="header">
   <div class="summary">
-<a href="#define-members">Macros</a>  </div>
-  <div class="headertitle"><div class="title">lapack_helper.h File Reference</div></div>
+<a href="#nested-classes">Classes</a> &#124;
+<a href="#namespaces">Namespaces</a>  </div>
+  <div class="headertitle"><div class="title">resident.h File Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="textblock"><code>#include &lt;lapack.h&gt;</code><br />
+<div class="textblock"><code>#include &quot;<a class="el" href="backend_2metal_2device_8h_source.html">mlx/backend/metal/device.h</a>&quot;</code><br />
 </div>
-<p><a href="lapack__helper_8h_source.html">Go to the source code of this file.</a></p>
+<p><a href="resident_8h_source.html">Go to the source code of this file.</a></p>
 <table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
-Macros</h2></td></tr>
-<tr class="memitem:ae22db9704827bf013a0a61f21a47464b" id="r_ae22db9704827bf013a0a61f21a47464b"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ae22db9704827bf013a0a61f21a47464b">MLX_LAPACK_FUNC</a>(<a class="el" href="types_2bf16_8h.html#af900396d7b72ff2a7002e8befe8cf8f1">f</a>)</td></tr>
-<tr class="separator:ae22db9704827bf013a0a61f21a47464b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="nested-classes" name="nested-classes"></a>
+Classes</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1metal_1_1_residency_set.html">mlx::core::metal::ResidencySet</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="namespaces" name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx.html">mlx</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core.html">mlx::core</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">namespace &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="namespacemlx_1_1core_1_1metal.html">mlx::core::metal</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
-<h2 class="groupheader">Macro Definition Documentation</h2>
-<a id="ae22db9704827bf013a0a61f21a47464b" name="ae22db9704827bf013a0a61f21a47464b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae22db9704827bf013a0a61f21a47464b">&#9670;&#160;</a></span>MLX_LAPACK_FUNC</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">#define MLX_LAPACK_FUNC</td>
-          <td>(</td>
-          <td class="paramtype"></td>          <td class="paramname"><span class="paramname"><em><a class="el" href="types_2bf16_8h.html#af900396d7b72ff2a7002e8befe8cf8f1">f</a></em></span></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line"><a class="code hl_variable" href="types_2bf16_8h.html#af900396d7b72ff2a7002e8befe8cf8f1">f</a>##_</div>
-<div class="ttc" id="atypes_2bf16_8h_html_af900396d7b72ff2a7002e8befe8cf8f1"><div class="ttname"><a href="types_2bf16_8h.html#af900396d7b72ff2a7002e8befe8cf8f1">f</a></div><div class="ttdeci">float f</div><div class="ttdef"><b>Definition</b> bf16.h:16</div></div>
-</div><!-- fragment -->
-</div>
-</div>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

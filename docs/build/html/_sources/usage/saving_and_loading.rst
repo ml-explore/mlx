@@ -8,33 +8,33 @@ Saving and Loading Arrays
 MLX supports multiple array serialization formats.
 
 .. list-table:: Serialization Formats
-   :widths: 20 8 25 25 
+   :widths: 20 8 25 25
    :header-rows: 1
 
-   * - Format 
-     - Extension 
+   * - Format
+     - Extension
      - Function
-     - Notes 
-   * - NumPy 
-     - ``.npy`` 
+     - Notes
+   * - NumPy
+     - ``.npy``
      - :func:`save`
      - Single arrays only
-   * - NumPy archive 
-     - ``.npz`` 
+   * - NumPy archive
+     - ``.npz``
      - :func:`savez` and :func:`savez_compressed`
-     - Multiple arrays 
+     - Multiple arrays
    * - Safetensors
-     - ``.safetensors`` 
+     - ``.safetensors``
      - :func:`save_safetensors`
-     - Multiple arrays 
-   * - GGUF 
-     - ``.gguf`` 
+     - Multiple arrays
+   * - GGUF
+     - ``.gguf``
      - :func:`save_gguf`
      - Multiple arrays
 
 The :func:`load` function will load any of the supported serialization
 formats. It determines the format from the extensions. The output of
-:func:`load` depends on the format. 
+:func:`load` depends on the format.
 
 Here's an example of saving a single array to a file:
 

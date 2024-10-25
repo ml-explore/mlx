@@ -809,9 +809,9 @@ Functions</h2></td></tr>
 <tr class="memitem:ga8db814da631d9cd32a8d6563bf4ac530" id="r_ga8db814da631d9cd32a8d6563bf4ac530"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ga8db814da631d9cd32a8d6563bf4ac530">mlx::core::conv_transpose3d</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, const std::tuple&lt; int, int, int &gt; &amp;stride={1, 1, 1}, const std::tuple&lt; int, int, int &gt; &amp;padding={0, 0, 0}, const std::tuple&lt; int, int, int &gt; &amp;dilation={1, 1, 1}, int groups=1, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:ga8db814da631d9cd32a8d6563bf4ac530"><td class="mdescLeft">&#160;</td><td class="mdescRight">3D transposed convolution with a filter  <br /></td></tr>
 <tr class="separator:ga8db814da631d9cd32a8d6563bf4ac530"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ga6381c7062b232ac21f3fdc3136aaf86e" id="r_ga6381c7062b232ac21f3fdc3136aaf86e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#ga6381c7062b232ac21f3fdc3136aaf86e">mlx::core::quantized_matmul</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, bool <a class="el" href="#gac1869f3b7094869b44fe7ac4ce58638b">transpose</a>=true, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="memdesc:ga6381c7062b232ac21f3fdc3136aaf86e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quantized matmul multiplies x with a quantized matrix w.  <br /></td></tr>
-<tr class="separator:ga6381c7062b232ac21f3fdc3136aaf86e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gabfa4208fb1f9b1cdd0abc563b19175af" id="r_gabfa4208fb1f9b1cdd0abc563b19175af"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#gabfa4208fb1f9b1cdd0abc563b19175af">mlx::core::quantized_matmul</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> x, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> w, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> scales, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> biases, bool <a class="el" href="#gac1869f3b7094869b44fe7ac4ce58638b">transpose</a>=true, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:gabfa4208fb1f9b1cdd0abc563b19175af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quantized matmul multiplies x with a quantized matrix w.  <br /></td></tr>
+<tr class="separator:gabfa4208fb1f9b1cdd0abc563b19175af"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:gab43cc28690da7cdd43b43065adbd31da" id="r_gab43cc28690da7cdd43b43065adbd31da"><td class="memItemLeft" align="right" valign="top">std::tuple&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#gab43cc28690da7cdd43b43065adbd31da">mlx::core::quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, int group_size=64, int bits=4, <a class="el" href="namespacemlx_1_1core.html#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:gab43cc28690da7cdd43b43065adbd31da"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quantize a matrix along its last axis.  <br /></td></tr>
 <tr class="separator:gab43cc28690da7cdd43b43065adbd31da"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -7148,8 +7148,8 @@ template&lt;typename T &gt; </div>
 
 </div>
 </div>
-<a id="ga6381c7062b232ac21f3fdc3136aaf86e" name="ga6381c7062b232ac21f3fdc3136aaf86e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ga6381c7062b232ac21f3fdc3136aaf86e">&#9670;&#160;</a></span>quantized_matmul()</h2>
+<a id="gabfa4208fb1f9b1cdd0abc563b19175af" name="gabfa4208fb1f9b1cdd0abc563b19175af"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#gabfa4208fb1f9b1cdd0abc563b19175af">&#9670;&#160;</a></span>quantized_matmul()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -7157,22 +7157,22 @@ template&lt;typename T &gt; </div>
         <tr>
           <td class="memname"><a class="el" href="classmlx_1_1core_1_1array.html">array</a> mlx::core::quantized_matmul </td>
           <td>(</td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a></td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a></td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>scales</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a></td>          <td class="paramname"><span class="paramname"><em>scales</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a></td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

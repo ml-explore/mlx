@@ -17,7 +17,7 @@ var searchData=
   ['general_5fc2r_14',['general_c2r',['../namespacepocketfft_1_1detail.html#ac8ee38e8d8bcda875c99eeaf567550fc',1,'pocketfft::detail']]],
   ['general_5fnd_15',['general_nd',['../namespacepocketfft_1_1detail.html#ab47f52551920af5eb9f57fbbded0f4f0',1,'pocketfft::detail']]],
   ['general_5fr2c_16',['general_r2c',['../namespacepocketfft_1_1detail.html#a055a39b0a337ca12217717196eb92fed',1,'pocketfft::detail']]],
-  ['get_5f2d_5fgrid_5fdims_17',['get_2d_grid_dims',['../namespacemlx_1_1core.html#a8dc169474a51a1f4f761d5752819bd7c',1,'mlx::core']]],
+  ['get_5f2d_5fgrid_5fdims_17',['get_2d_grid_dims',['../namespacemlx_1_1core.html#a8dc169474a51a1f4f761d5752819bd7c',1,'mlx::core::get_2d_grid_dims(const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; size_t &gt; &amp;strides)'],['../namespacemlx_1_1core.html#a187b9a932c7b3d67ee42d9d12fcb1bb1',1,'mlx::core::get_2d_grid_dims(const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; size_t &gt; &amp;strides, size_t divisor)']]],
   ['get_5factive_5fmemory_18',['get_active_memory',['../classmlx_1_1core_1_1metal_1_1_metal_allocator.html#a7a3ad4e33d57a47474c98e2f88e775d7',1,'mlx::core::metal::MetalAllocator::get_active_memory()'],['../namespacemlx_1_1core_1_1metal.html#a7b75c2639016ac4d350fa6c9da386667',1,'mlx::core::metal::get_active_memory()']]],
   ['get_5farange_5fkernel_19',['get_arange_kernel',['../namespacemlx_1_1core.html#a76f614e9956a6ca05a9be4db5a483446',1,'mlx::core']]],
   ['get_5fbinary_5fkernel_20',['get_binary_kernel',['../namespacemlx_1_1core.html#a4decd4a07d91487e6903f6e3c8b7513a',1,'mlx::core']]],

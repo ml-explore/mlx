@@ -131,54 +131,63 @@ Functions</h2></td></tr>
 <tr class="memitem:aecff265b63566d0d5689cfc4e5b037d2" id="r_aecff265b63566d0d5689cfc4e5b037d2"><td class="memTemplParams" colspan="2">template&lt;typename U , int N, int bits&gt; </td></tr>
 <tr class="memitem:aecff265b63566d0d5689cfc4e5b037d2"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aecff265b63566d0d5689cfc4e5b037d2">dequantize</a> (const device uint8_t *w, U scale, U bias, threadgroup U *w_local)</td></tr>
 <tr class="separator:aecff265b63566d0d5689cfc4e5b037d2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad5cf1cf63656bc1780685d22169cd4ef" id="r_ad5cf1cf63656bc1780685d22169cd4ef"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits, int D&gt; </td></tr>
+<tr class="memitem:ad5cf1cf63656bc1780685d22169cd4ef"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad5cf1cf63656bc1780685d22169cd4ef">qmv_quad_impl</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint quad_gid, uint quad_lid)</td></tr>
+<tr class="separator:ad5cf1cf63656bc1780685d22169cd4ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aba7687e6f8f1d29c0a1b2a3db150bd81" id="r_aba7687e6f8f1d29c0a1b2a3db150bd81"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
 <tr class="memitem:aba7687e6f8f1d29c0a1b2a3db150bd81"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#aba7687e6f8f1d29c0a1b2a3db150bd81">qmv_fast_impl</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
 <tr class="separator:aba7687e6f8f1d29c0a1b2a3db150bd81"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8e13c7d895624f738d2a6d9893b687fd" id="r_a8e13c7d895624f738d2a6d9893b687fd"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
 <tr class="memitem:a8e13c7d895624f738d2a6d9893b687fd"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a8e13c7d895624f738d2a6d9893b687fd">qmv_impl</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
 <tr class="separator:a8e13c7d895624f738d2a6d9893b687fd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a9d466e3e3af0d75cfc4eddcf46cb13e4" id="r_a9d466e3e3af0d75cfc4eddcf46cb13e4"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
-<tr class="memitem:a9d466e3e3af0d75cfc4eddcf46cb13e4"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a9d466e3e3af0d75cfc4eddcf46cb13e4">qvm_impl</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a9d466e3e3af0d75cfc4eddcf46cb13e4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac7b6accc41b026ef8efc312987aa9efe" id="r_ac7b6accc41b026ef8efc312987aa9efe"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
-<tr class="memitem:ac7b6accc41b026ef8efc312987aa9efe"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ac7b6accc41b026ef8efc312987aa9efe">qmm_t_impl</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, threadgroup T *Xs, threadgroup T *Ws, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:ac7b6accc41b026ef8efc312987aa9efe"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5f7b71eef2e328af3225d7c777ffb339" id="r_a5f7b71eef2e328af3225d7c777ffb339"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
-<tr class="memitem:a5f7b71eef2e328af3225d7c777ffb339"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a5f7b71eef2e328af3225d7c777ffb339">qmm_n_impl</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, threadgroup T *Xs, threadgroup T *Ws, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a5f7b71eef2e328af3225d7c777ffb339"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4a8c8db7d5d480733726fd6d1a645e12" id="r_a4a8c8db7d5d480733726fd6d1a645e12"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
+<tr class="memitem:a4a8c8db7d5d480733726fd6d1a645e12"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a4a8c8db7d5d480733726fd6d1a645e12">qvm_impl</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a4a8c8db7d5d480733726fd6d1a645e12"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af5750a35e8f5462218effba719f7f5b8" id="r_af5750a35e8f5462218effba719f7f5b8"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
+<tr class="memitem:af5750a35e8f5462218effba719f7f5b8"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#af5750a35e8f5462218effba719f7f5b8">qmm_t_impl</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, threadgroup T *Xs, threadgroup T *Ws, const constant int &amp;K, const constant int &amp;N, const constant int &amp;M, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:af5750a35e8f5462218effba719f7f5b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0ba59096494f1001c195312571523ae9" id="r_a0ba59096494f1001c195312571523ae9"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
+<tr class="memitem:a0ba59096494f1001c195312571523ae9"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a0ba59096494f1001c195312571523ae9">qmm_n_impl</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, threadgroup T *Xs, threadgroup T *Ws, const constant int &amp;K, const constant int &amp;N, const constant int &amp;M, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a0ba59096494f1001c195312571523ae9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:accab1f9e17a65242347c051f98e4c0be" id="r_accab1f9e17a65242347c051f98e4c0be"><td class="memTemplParams" colspan="2">template&lt;typename T &gt; </td></tr>
+<tr class="memitem:accab1f9e17a65242347c051f98e4c0be"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#accab1f9e17a65242347c051f98e4c0be">adjust_matrix_offsets</a> (const device T *&amp;x, const device uint32_t *&amp;w, const device T *&amp;scales, const device T *&amp;biases, device T *&amp;y, int output_stride, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid)</td></tr>
+<tr class="separator:accab1f9e17a65242347c051f98e4c0be"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3ab400746ad77be89c30d25638e01698" id="r_a3ab400746ad77be89c30d25638e01698"><td class="memTemplParams" colspan="2">template&lt;typename T &gt; </td></tr>
 <tr class="memitem:a3ab400746ad77be89c30d25638e01698"><td class="memTemplItemLeft" align="right" valign="top">METAL_FUNC void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a3ab400746ad77be89c30d25638e01698">adjust_matrix_offsets</a> (const device T *&amp;x, const device uint32_t *&amp;w, const device T *&amp;scales, const device T *&amp;biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *&amp;y, int output_stride, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid)</td></tr>
 <tr class="separator:a3ab400746ad77be89c30d25638e01698"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad6d0aa9b080358581844d6583aa2f4ea" id="r_ad6d0aa9b080358581844d6583aa2f4ea"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
-<tr class="memitem:ad6d0aa9b080358581844d6583aa2f4ea"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad6d0aa9b080358581844d6583aa2f4ea">qmv_fast</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:ad6d0aa9b080358581844d6583aa2f4ea"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ae024e11c3e38dda71fef772ff0a82fe2" id="r_ae024e11c3e38dda71fef772ff0a82fe2"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
-<tr class="memitem:ae024e11c3e38dda71fef772ff0a82fe2"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ae024e11c3e38dda71fef772ff0a82fe2">qmv</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:ae024e11c3e38dda71fef772ff0a82fe2"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2cce78e6692cfcbab8f6aa89afa61580" id="r_a2cce78e6692cfcbab8f6aa89afa61580"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
-<tr class="memitem:a2cce78e6692cfcbab8f6aa89afa61580"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a2cce78e6692cfcbab8f6aa89afa61580">qvm</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a2cce78e6692cfcbab8f6aa89afa61580"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af9b25269ab95632e343631eeef79dc8d" id="r_af9b25269ab95632e343631eeef79dc8d"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
-<tr class="memitem:af9b25269ab95632e343631eeef79dc8d"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#af9b25269ab95632e343631eeef79dc8d">qmm_t</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:af9b25269ab95632e343631eeef79dc8d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab5c4cfe531d7a0e1c19353060e3d3a6c" id="r_ab5c4cfe531d7a0e1c19353060e3d3a6c"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
-<tr class="memitem:ab5c4cfe531d7a0e1c19353060e3d3a6c"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ab5c4cfe531d7a0e1c19353060e3d3a6c">qmm_n</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, device T *y, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:ab5c4cfe531d7a0e1c19353060e3d3a6c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6f92bb9f3d29d707bfc680bebe1c80f7" id="r_a6f92bb9f3d29d707bfc680bebe1c80f7"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
-<tr class="memitem:a6f92bb9f3d29d707bfc680bebe1c80f7"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6f92bb9f3d29d707bfc680bebe1c80f7">bs_qmv_fast</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a6f92bb9f3d29d707bfc680bebe1c80f7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a03ba4a4a5fe9955319b0aa477d2d7d98" id="r_a03ba4a4a5fe9955319b0aa477d2d7d98"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
-<tr class="memitem:a03ba4a4a5fe9955319b0aa477d2d7d98"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a03ba4a4a5fe9955319b0aa477d2d7d98">bs_qmv</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a03ba4a4a5fe9955319b0aa477d2d7d98"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3af1c89416632c9275b8218a33cb8a04" id="r_a3af1c89416632c9275b8218a33cb8a04"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
-<tr class="memitem:a3af1c89416632c9275b8218a33cb8a04"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a3af1c89416632c9275b8218a33cb8a04">bs_qvm</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a3af1c89416632c9275b8218a33cb8a04"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3acc2ace766cb855f13da2d1834e7dc7" id="r_a3acc2ace766cb855f13da2d1834e7dc7"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
-<tr class="memitem:a3acc2ace766cb855f13da2d1834e7dc7"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a3acc2ace766cb855f13da2d1834e7dc7">bs_qmm_t</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:a3acc2ace766cb855f13da2d1834e7dc7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:acfc43edcf0c742ddc090d22cb7229284" id="r_acfc43edcf0c742ddc090d22cb7229284"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
-<tr class="memitem:acfc43edcf0c742ddc090d22cb7229284"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#acfc43edcf0c742ddc090d22cb7229284">bs_qmm_n</a> (const device T *x, const device uint32_t *w, const device T *scales, const device T *biases, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, device T *y, const constant int &amp;M, const constant int &amp;N, const constant int &amp;K, const constant int &amp;batch_ndims, const constant int *batch_shape, const constant size_t *lhs_strides, const constant size_t *rhs_strides, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
-<tr class="separator:acfc43edcf0c742ddc090d22cb7229284"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7ce5f53a4d6d1555e9402d545408d0ad" id="r_a7ce5f53a4d6d1555e9402d545408d0ad"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits, int D, bool batched&gt; </td></tr>
+<tr class="memitem:a7ce5f53a4d6d1555e9402d545408d0ad"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7ce5f53a4d6d1555e9402d545408d0ad">qmv_quad</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint quad_gid, uint quad_lid)</td></tr>
+<tr class="separator:a7ce5f53a4d6d1555e9402d545408d0ad"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7bd1d9f17c86c8fd34ec13678cff755f" id="r_a7bd1d9f17c86c8fd34ec13678cff755f"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits, bool batched&gt; </td></tr>
+<tr class="memitem:a7bd1d9f17c86c8fd34ec13678cff755f"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a7bd1d9f17c86c8fd34ec13678cff755f">qmv_fast</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a7bd1d9f17c86c8fd34ec13678cff755f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a639c50a08b5cf57e8be5279a116274bd" id="r_a639c50a08b5cf57e8be5279a116274bd"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, bool batched&gt; </td></tr>
+<tr class="memitem:a639c50a08b5cf57e8be5279a116274bd"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a639c50a08b5cf57e8be5279a116274bd">qmv</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a639c50a08b5cf57e8be5279a116274bd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad84f7d5ab9e32dbbe3ca759ae5d5d5c5" id="r_ad84f7d5ab9e32dbbe3ca759ae5d5d5c5"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, bool batched&gt; </td></tr>
+<tr class="memitem:ad84f7d5ab9e32dbbe3ca759ae5d5d5c5"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ad84f7d5ab9e32dbbe3ca759ae5d5d5c5">qvm</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:ad84f7d5ab9e32dbbe3ca759ae5d5d5c5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abe2e3ef0ee4ec2cb61dc5330ad463d10" id="r_abe2e3ef0ee4ec2cb61dc5330ad463d10"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const bool batched, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
+<tr class="memitem:abe2e3ef0ee4ec2cb61dc5330ad463d10"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#abe2e3ef0ee4ec2cb61dc5330ad463d10">qmm_t</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;K, const constant int &amp;N, const constant int &amp;M, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:abe2e3ef0ee4ec2cb61dc5330ad463d10"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2ce135e392dbf9a3e5180fb083792ed7" id="r_a2ce135e392dbf9a3e5180fb083792ed7"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const bool batched, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
+<tr class="memitem:a2ce135e392dbf9a3e5180fb083792ed7"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a2ce135e392dbf9a3e5180fb083792ed7">qmm_n</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;K, const constant int &amp;N, const constant int &amp;M, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a2ce135e392dbf9a3e5180fb083792ed7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a530b720e123e59d73ea89a0a2d0946b7" id="r_a530b720e123e59d73ea89a0a2d0946b7"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
+<tr class="memitem:a530b720e123e59d73ea89a0a2d0946b7"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a530b720e123e59d73ea89a0a2d0946b7">bs_qmv_fast</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, const constant int &amp;batch_ndims, const constant int *batch_shape, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, const constant size_t *lhs_strides, const constant size_t *rhs_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a530b720e123e59d73ea89a0a2d0946b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acf4c7fc77821a83b31aedfb48443d3ed" id="r_acf4c7fc77821a83b31aedfb48443d3ed"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
+<tr class="memitem:acf4c7fc77821a83b31aedfb48443d3ed"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#acf4c7fc77821a83b31aedfb48443d3ed">bs_qmv</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, const constant int &amp;batch_ndims, const constant int *batch_shape, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, const constant size_t *lhs_strides, const constant size_t *rhs_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:acf4c7fc77821a83b31aedfb48443d3ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6d6e3c31e44f232e58ae9d605e1f4494" id="r_a6d6e3c31e44f232e58ae9d605e1f4494"><td class="memTemplParams" colspan="2">template&lt;typename T , int group_size, int bits&gt; </td></tr>
+<tr class="memitem:a6d6e3c31e44f232e58ae9d605e1f4494"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a6d6e3c31e44f232e58ae9d605e1f4494">bs_qvm</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;in_vec_size, const constant int &amp;out_vec_size, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, const constant int &amp;batch_ndims, const constant int *batch_shape, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, const constant size_t *lhs_strides, const constant size_t *rhs_strides, uint3 tid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a6d6e3c31e44f232e58ae9d605e1f4494"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab1ae143eba2afceb8df63f38b26f9a84" id="r_ab1ae143eba2afceb8df63f38b26f9a84"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
+<tr class="memitem:ab1ae143eba2afceb8df63f38b26f9a84"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#ab1ae143eba2afceb8df63f38b26f9a84">bs_qmm_t</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;K, const constant int &amp;N, const constant int &amp;M, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, const constant int &amp;batch_ndims, const constant int *batch_shape, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, const constant size_t *lhs_strides, const constant size_t *rhs_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:ab1ae143eba2afceb8df63f38b26f9a84"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1a66b061c46383952a0f067c3848971f" id="r_a1a66b061c46383952a0f067c3848971f"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits, const int BM = 32, const int BK = 32, const int BN = 32&gt; </td></tr>
+<tr class="memitem:a1a66b061c46383952a0f067c3848971f"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a1a66b061c46383952a0f067c3848971f">bs_qmm_n</a> (const device uint32_t *w, const device T *scales, const device T *biases, const device T *x, device T *y, const constant int &amp;K, const constant int &amp;N, const constant int &amp;M, const constant int &amp;x_batch_ndims, const constant int *x_shape, const constant size_t *x_strides, const constant int &amp;w_batch_ndims, const constant int *w_shape, const constant size_t *w_strides, const constant size_t *s_strides, const constant size_t *b_strides, const constant int &amp;batch_ndims, const constant int *batch_shape, const device uint32_t *lhs_indices, const device uint32_t *rhs_indices, const constant size_t *lhs_strides, const constant size_t *rhs_strides, uint3 tid, uint lid, uint simd_gid, uint simd_lid)</td></tr>
+<tr class="separator:a1a66b061c46383952a0f067c3848971f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a47bcf4a14566e01e14bd3c155811db59" id="r_a47bcf4a14566e01e14bd3c155811db59"><td class="memTemplParams" colspan="2">template&lt;typename T , const int group_size, const int bits&gt; </td></tr>
 <tr class="memitem:a47bcf4a14566e01e14bd3c155811db59"><td class="memTemplItemLeft" align="right" valign="top">void&#160;</td><td class="memTemplItemRight" valign="bottom"><a class="el" href="#a47bcf4a14566e01e14bd3c155811db59">affine_quantize</a> (const device T *w, device uint8_t *out, device T *scales, device T *biases, uint2 index, uint2 grid_dim)</td></tr>
 <tr class="separator:a47bcf4a14566e01e14bd3c155811db59"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -193,6 +202,8 @@ Functions</h2></td></tr>
 Variables</h2></td></tr>
 <tr class="memitem:a62969a218d93680f5e35d0c61b160b99" id="r_a62969a218d93680f5e35d0c61b160b99"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a62969a218d93680f5e35d0c61b160b99">SIMD_SIZE</a> = 32</td></tr>
 <tr class="separator:a62969a218d93680f5e35d0c61b160b99"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a803e4d5a1459844ba647aea5b004e133" id="r_a803e4d5a1459844ba647aea5b004e133"><td class="memItemLeft" align="right" valign="top">static constant constexpr const int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a803e4d5a1459844ba647aea5b004e133">QUAD_SIZE</a> = 4</td></tr>
+<tr class="separator:a803e4d5a1459844ba647aea5b004e133"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Macro Definition Documentation</h2>
 <a id="a0386011c52d03e60885a31e6fbd903dd" name="a0386011c52d03e60885a31e6fbd903dd"></a>
@@ -211,7 +222,7 @@ Variables</h2></td></tr>
 </div>
 <h2 class="groupheader">Function Documentation</h2>
 <a id="a3ab400746ad77be89c30d25638e01698" name="a3ab400746ad77be89c30d25638e01698"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3ab400746ad77be89c30d25638e01698">&#9670;&#160;</a></span>adjust_matrix_offsets()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a3ab400746ad77be89c30d25638e01698">&#9670;&#160;</a></span>adjust_matrix_offsets() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -277,6 +288,94 @@ template&lt;typename T &gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>x_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>x_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>x_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>w_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>w_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>w_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>s_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="accab1f9e17a65242347c051f98e4c0be" name="accab1f9e17a65242347c051f98e4c0be"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#accab1f9e17a65242347c051f98e4c0be">&#9670;&#160;</a></span>adjust_matrix_offsets() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T &gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void adjust_matrix_offsets </td>
+          <td>(</td>
+          <td class="paramtype">const device T *&amp;</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *&amp;</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *&amp;</td>          <td class="paramname"><span class="paramname"><em>scales</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *&amp;</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device T *&amp;</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>output_stride</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -457,8 +556,8 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
 
 </div>
 </div>
-<a id="acfc43edcf0c742ddc090d22cb7229284" name="acfc43edcf0c742ddc090d22cb7229284"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#acfc43edcf0c742ddc090d22cb7229284">&#9670;&#160;</a></span>bs_qmm_n()</h2>
+<a id="a1a66b061c46383952a0f067c3848971f" name="a1a66b061c46383952a0f067c3848971f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1a66b061c46383952a0f067c3848971f">&#9670;&#160;</a></span>bs_qmm_n()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -468,11 +567,6 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="memname">void bs_qmm_n </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -488,12 +582,7 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -503,7 +592,7 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -513,27 +602,7 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -578,6 +647,36 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
         </tr>
         <tr>
@@ -600,8 +699,8 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
 
 </div>
 </div>
-<a id="a3acc2ace766cb855f13da2d1834e7dc7" name="a3acc2ace766cb855f13da2d1834e7dc7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3acc2ace766cb855f13da2d1834e7dc7">&#9670;&#160;</a></span>bs_qmm_t()</h2>
+<a id="ab1ae143eba2afceb8df63f38b26f9a84" name="ab1ae143eba2afceb8df63f38b26f9a84"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab1ae143eba2afceb8df63f38b26f9a84">&#9670;&#160;</a></span>bs_qmm_t()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -611,11 +710,6 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="memname">void bs_qmm_t </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -631,12 +725,7 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -646,7 +735,7 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -656,27 +745,7 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -721,6 +790,36 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
         </tr>
         <tr>
@@ -743,8 +842,8 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
 
 </div>
 </div>
-<a id="a03ba4a4a5fe9955319b0aa477d2d7d98" name="a03ba4a4a5fe9955319b0aa477d2d7d98"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a03ba4a4a5fe9955319b0aa477d2d7d98">&#9670;&#160;</a></span>bs_qmv()</h2>
+<a id="acf4c7fc77821a83b31aedfb48443d3ed" name="acf4c7fc77821a83b31aedfb48443d3ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acf4c7fc77821a83b31aedfb48443d3ed">&#9670;&#160;</a></span>bs_qmv()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -774,16 +873,6 @@ template&lt;typename T , int group_size, int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
         </tr>
         <tr>
@@ -795,26 +884,6 @@ template&lt;typename T , int group_size, int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_vec_size</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -859,6 +928,36 @@ template&lt;typename T , int group_size, int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
         </tr>
         <tr>
@@ -876,8 +975,8 @@ template&lt;typename T , int group_size, int bits&gt; </div>
 
 </div>
 </div>
-<a id="a6f92bb9f3d29d707bfc680bebe1c80f7" name="a6f92bb9f3d29d707bfc680bebe1c80f7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6f92bb9f3d29d707bfc680bebe1c80f7">&#9670;&#160;</a></span>bs_qmv_fast()</h2>
+<a id="a530b720e123e59d73ea89a0a2d0946b7" name="a530b720e123e59d73ea89a0a2d0946b7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a530b720e123e59d73ea89a0a2d0946b7">&#9670;&#160;</a></span>bs_qmv_fast()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -907,16 +1006,6 @@ template&lt;typename T , int group_size, int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
         </tr>
         <tr>
@@ -928,26 +1017,6 @@ template&lt;typename T , int group_size, int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_vec_size</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -988,6 +1057,36 @@ template&lt;typename T , int group_size, int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1009,8 +1108,8 @@ template&lt;typename T , int group_size, int bits&gt; </div>
 
 </div>
 </div>
-<a id="a3af1c89416632c9275b8218a33cb8a04" name="a3af1c89416632c9275b8218a33cb8a04"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3af1c89416632c9275b8218a33cb8a04">&#9670;&#160;</a></span>bs_qvm()</h2>
+<a id="a6d6e3c31e44f232e58ae9d605e1f4494" name="a6d6e3c31e44f232e58ae9d605e1f4494"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6d6e3c31e44f232e58ae9d605e1f4494">&#9670;&#160;</a></span>bs_qvm()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1020,11 +1119,6 @@ template&lt;typename T , int group_size, int bits&gt; </div>
         <tr>
           <td class="memname">void bs_qvm </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -1040,12 +1134,7 @@ template&lt;typename T , int group_size, int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1061,26 +1150,6 @@ template&lt;typename T , int group_size, int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_vec_size</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1121,6 +1190,36 @@ template&lt;typename T , int group_size, int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>batch_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_indices</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>lhs_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>rhs_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1347,22 +1446,17 @@ template&lt;typename U , int values_per_thread, int bits&gt; </div>
 
 </div>
 </div>
-<a id="ab5c4cfe531d7a0e1c19353060e3d3a6c" name="ab5c4cfe531d7a0e1c19353060e3d3a6c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab5c4cfe531d7a0e1c19353060e3d3a6c">&#9670;&#160;</a></span>qmm_n()</h2>
+<a id="a2ce135e392dbf9a3e5180fb083792ed7" name="a2ce135e392dbf9a3e5180fb083792ed7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2ce135e392dbf9a3e5180fb083792ed7">&#9670;&#160;</a></span>qmm_n()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , const int group_size, const int bits, const int BM = 32, const int BK = 32, const int BN = 32&gt; </div>
+template&lt;typename T , const int group_size, const int bits, const bool batched, const int BM = 32, const int BK = 32, const int BN = 32&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void qmm_n </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -1378,12 +1472,17 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1393,7 +1492,47 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>x_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>x_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>x_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>w_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>w_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>w_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>s_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1420,8 +1559,8 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
 
 </div>
 </div>
-<a id="a5f7b71eef2e328af3225d7c777ffb339" name="a5f7b71eef2e328af3225d7c777ffb339"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5f7b71eef2e328af3225d7c777ffb339">&#9670;&#160;</a></span>qmm_n_impl()</h2>
+<a id="a0ba59096494f1001c195312571523ae9" name="a0ba59096494f1001c195312571523ae9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ba59096494f1001c195312571523ae9">&#9670;&#160;</a></span>qmm_n_impl()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1431,11 +1570,6 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="memname">METAL_FUNC void qmm_n_impl </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -1447,6 +1581,11 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1466,7 +1605,7 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1476,7 +1615,7 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1503,22 +1642,17 @@ template&lt;typename T , const int group_size, const int bits, const int BM = 32
 
 </div>
 </div>
-<a id="af9b25269ab95632e343631eeef79dc8d" name="af9b25269ab95632e343631eeef79dc8d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af9b25269ab95632e343631eeef79dc8d">&#9670;&#160;</a></span>qmm_t()</h2>
+<a id="abe2e3ef0ee4ec2cb61dc5330ad463d10" name="abe2e3ef0ee4ec2cb61dc5330ad463d10"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abe2e3ef0ee4ec2cb61dc5330ad463d10">&#9670;&#160;</a></span>qmm_t()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const int BM = 32, const int BK = 32, const int BN = 32&gt; </div>
+template&lt;typename T , const int group_size, const int bits, const bool aligned_N, const bool batched, const int BM = 32, const int BK = 32, const int BN = 32&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void qmm_t </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -1534,12 +1668,17 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1549,7 +1688,47 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>x_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>x_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>x_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>w_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>w_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>w_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>s_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1576,8 +1755,8 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
 
 </div>
 </div>
-<a id="ac7b6accc41b026ef8efc312987aa9efe" name="ac7b6accc41b026ef8efc312987aa9efe"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac7b6accc41b026ef8efc312987aa9efe">&#9670;&#160;</a></span>qmm_t_impl()</h2>
+<a id="af5750a35e8f5462218effba719f7f5b8" name="af5750a35e8f5462218effba719f7f5b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5750a35e8f5462218effba719f7f5b8">&#9670;&#160;</a></span>qmm_t_impl()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1587,11 +1766,6 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="memname">METAL_FUNC void qmm_t_impl </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -1603,6 +1777,11 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1622,7 +1801,7 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1632,7 +1811,7 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>K</em></span>, </td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>M</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1659,13 +1838,13 @@ template&lt;typename T , const int group_size, const int bits, const bool aligne
 
 </div>
 </div>
-<a id="ae024e11c3e38dda71fef772ff0a82fe2" name="ae024e11c3e38dda71fef772ff0a82fe2"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ae024e11c3e38dda71fef772ff0a82fe2">&#9670;&#160;</a></span>qmv()</h2>
+<a id="a639c50a08b5cf57e8be5279a116274bd" name="a639c50a08b5cf57e8be5279a116274bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a639c50a08b5cf57e8be5279a116274bd">&#9670;&#160;</a></span>qmv()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , const int group_size, const int bits&gt; </div>
+template&lt;typename T , const int group_size, const int bits, bool batched&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void qmv </td>
@@ -1705,6 +1884,46 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>x_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>x_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>x_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>w_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>w_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>w_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>s_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
         </tr>
         <tr>
@@ -1722,13 +1941,13 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
 
 </div>
 </div>
-<a id="ad6d0aa9b080358581844d6583aa2f4ea" name="ad6d0aa9b080358581844d6583aa2f4ea"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad6d0aa9b080358581844d6583aa2f4ea">&#9670;&#160;</a></span>qmv_fast()</h2>
+<a id="a7bd1d9f17c86c8fd34ec13678cff755f" name="a7bd1d9f17c86c8fd34ec13678cff755f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7bd1d9f17c86c8fd34ec13678cff755f">&#9670;&#160;</a></span>qmv_fast()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , int group_size, int bits&gt; </div>
+template&lt;typename T , int group_size, int bits, bool batched&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void qmv_fast </td>
@@ -1764,6 +1983,46 @@ template&lt;typename T , int group_size, int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_vec_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>x_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>x_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>x_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>w_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>w_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>w_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>s_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1911,6 +2170,172 @@ template&lt;typename T , int group_size, int bits&gt; </div>
 
 </div>
 </div>
+<a id="a7ce5f53a4d6d1555e9402d545408d0ad" name="a7ce5f53a4d6d1555e9402d545408d0ad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ce5f53a4d6d1555e9402d545408d0ad">&#9670;&#160;</a></span>qmv_quad()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , int group_size, int bits, int D, bool batched&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">void qmv_quad </td>
+          <td>(</td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>scales</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>in_vec_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_vec_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>x_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>x_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>x_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>w_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>w_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>w_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>s_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>quad_gid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>quad_lid</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad5cf1cf63656bc1780685d22169cd4ef" name="ad5cf1cf63656bc1780685d22169cd4ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad5cf1cf63656bc1780685d22169cd4ef">&#9670;&#160;</a></span>qmv_quad_impl()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<div class="memtemplate">
+template&lt;typename T , int group_size, int bits, int D&gt; </div>
+      <table class="memname">
+        <tr>
+          <td class="memname">METAL_FUNC void qmv_quad_impl </td>
+          <td>(</td>
+          <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>scales</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>in_vec_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_vec_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint3</td>          <td class="paramname"><span class="paramname"><em>tid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>quad_gid</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">uint</td>          <td class="paramname"><span class="paramname"><em>quad_lid</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ae756f6817b584c60f5dcdd1d9c6b4f58" name="ae756f6817b584c60f5dcdd1d9c6b4f58"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ae756f6817b584c60f5dcdd1d9c6b4f58">&#9670;&#160;</a></span>qouter()</h2>
 
@@ -1957,22 +2382,17 @@ template&lt;typename U , int values_per_thread, int bits&gt; </div>
 
 </div>
 </div>
-<a id="a2cce78e6692cfcbab8f6aa89afa61580" name="a2cce78e6692cfcbab8f6aa89afa61580"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2cce78e6692cfcbab8f6aa89afa61580">&#9670;&#160;</a></span>qvm()</h2>
+<a id="ad84f7d5ab9e32dbbe3ca759ae5d5d5c5" name="ad84f7d5ab9e32dbbe3ca759ae5d5d5c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad84f7d5ab9e32dbbe3ca759ae5d5d5c5">&#9670;&#160;</a></span>qvm()</h2>
 
 <div class="memitem">
 <div class="memproto">
 <div class="memtemplate">
-template&lt;typename T , const int group_size, const int bits&gt; </div>
+template&lt;typename T , const int group_size, const int bits, bool batched&gt; </div>
       <table class="memname">
         <tr>
           <td class="memname">void qvm </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -1988,6 +2408,11 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
         <tr>
           <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
           <td class="paramtype">device T *</td>          <td class="paramname"><span class="paramname"><em>y</em></span>, </td>
         </tr>
         <tr>
@@ -1999,6 +2424,46 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>out_vec_size</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>x_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>x_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>x_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int &amp;</td>          <td class="paramname"><span class="paramname"><em>w_batch_ndims</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant int *</td>          <td class="paramname"><span class="paramname"><em>w_shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>w_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>s_strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const constant size_t *</td>          <td class="paramname"><span class="paramname"><em>b_strides</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -2020,8 +2485,8 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
 
 </div>
 </div>
-<a id="a9d466e3e3af0d75cfc4eddcf46cb13e4" name="a9d466e3e3af0d75cfc4eddcf46cb13e4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9d466e3e3af0d75cfc4eddcf46cb13e4">&#9670;&#160;</a></span>qvm_impl()</h2>
+<a id="a4a8c8db7d5d480733726fd6d1a645e12" name="a4a8c8db7d5d480733726fd6d1a645e12"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4a8c8db7d5d480733726fd6d1a645e12">&#9670;&#160;</a></span>qvm_impl()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -2031,11 +2496,6 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
         <tr>
           <td class="memname">METAL_FUNC void qvm_impl </td>
           <td>(</td>
-          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
           <td class="paramtype">const device uint32_t *</td>          <td class="paramname"><span class="paramname"><em>w</em></span>, </td>
         </tr>
         <tr>
@@ -2047,6 +2507,11 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>biases</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const device T *</td>          <td class="paramname"><span class="paramname"><em>x</em></span>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -2084,6 +2549,28 @@ template&lt;typename T , const int group_size, const int bits&gt; </div>
 </div>
 </div>
 <h2 class="groupheader">Variable Documentation</h2>
+<a id="a803e4d5a1459844ba647aea5b004e133" name="a803e4d5a1459844ba647aea5b004e133"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a803e4d5a1459844ba647aea5b004e133">&#9670;&#160;</a></span>QUAD_SIZE</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">constant constexpr const int QUAD_SIZE = 4</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span><span class="mlabel">constexpr</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a62969a218d93680f5e35d0c61b160b99" name="a62969a218d93680f5e35d0c61b160b99"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a62969a218d93680f5e35d0c61b160b99">&#9670;&#160;</a></span>SIMD_SIZE</h2>
 

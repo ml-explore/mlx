@@ -77,7 +77,7 @@ var searchData=
   ['mlx_5fatomic_5ffetch_5for_5fexplicit_74',['mlx_atomic_fetch_or_explicit',['../atomic_8h.html#ab7391f197001471e4788312bdb6ab37a',1,'atomic.h']]],
   ['mlx_5fatomic_5fload_5fexplicit_75',['mlx_atomic_load_explicit',['../atomic_8h.html#a253a4e8c2c5768a069e2791b627dfc99',1,'atomic.h']]],
   ['mlx_5fatomic_5fstore_5fexplicit_76',['mlx_atomic_store_explicit',['../atomic_8h.html#a0ae453140b0819a4c02f265334de98c0',1,'atomic.h']]],
-  ['mlx_5flapack_5ffunc_77',['MLX_LAPACK_FUNC',['../lapack__helper_8h.html#ae22db9704827bf013a0a61f21a47464b',1,'lapack_helper.h']]],
+  ['mlx_5flapack_5ffunc_77',['MLX_LAPACK_FUNC',['../lapack_8h.html#ae22db9704827bf013a0a61f21a47464b',1,'lapack.h']]],
   ['mlx_5fmtl_5fconst_78',['MLX_MTL_CONST',['../kernels_2gemv__masked_8h.html#a0386011c52d03e60885a31e6fbd903dd',1,'MLX_MTL_CONST:&#160;gemv_masked.h'],['../quantized_8h.html#a0386011c52d03e60885a31e6fbd903dd',1,'MLX_MTL_CONST:&#160;quantized.h'],['../sort_8h.html#a0386011c52d03e60885a31e6fbd903dd',1,'MLX_MTL_CONST:&#160;sort.h']]],
   ['mlx_5fmtl_5floop_5funroll_79',['MLX_MTL_LOOP_UNROLL',['../sort_8h.html#ad34b622323cebef136669fedd7229515',1,'sort.h']]],
   ['mlx_5fmtl_5fpragma_5funroll_80',['MLX_MTL_PRAGMA_UNROLL',['../kernels_2gemv__masked_8h.html#a069b682d7d21827461544817d722bfd3',1,'MLX_MTL_PRAGMA_UNROLL:&#160;gemv_masked.h'],['../backend_2metal_2kernels_2utils_8h.html#a069b682d7d21827461544817d722bfd3',1,'MLX_MTL_PRAGMA_UNROLL:&#160;utils.h']]],
@@ -93,10 +93,11 @@ var searchData=
   ['mpinplace_90',['MPINPLACE',['../namespacepocketfft_1_1detail.html#af5eedf3cdfc83c0a30807092c39a9ce2',1,'pocketfft::detail']]],
   ['mtl_5fconst_91',['MTL_CONST',['../defines_8h.html#a767ed9f2604de22b259cee02c4ce1d22',1,'defines.h']]],
   ['mtl_5fdevice_92',['mtl_device',['../classmlx_1_1core_1_1metal_1_1_device.html#a31dba377f2be44a746db10d1b9367653',1,'mlx::core::metal::Device']]],
-  ['mtlfclist_93',['MTLFCList',['../namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54',1,'mlx::core::metal']]],
-  ['mtx_94',['mtx',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a70410c9e612f871663929f1e8441a976',1,'mlx::core::scheduler::StreamThread']]],
-  ['multi_5fiter_95',['multi_iter',['../classpocketfft_1_1detail_1_1multi__iter.html',1,'pocketfft::detail::multi_iter&lt; N &gt;'],['../classpocketfft_1_1detail_1_1multi__iter.html#a9be43bb18840202da6d17988fccc64b9',1,'pocketfft::detail::multi_iter::multi_iter()']]],
-  ['multiply_96',['Multiply',['../structmlx_1_1core_1_1detail_1_1_multiply.html',1,'mlx::core::detail::Multiply'],['../classmlx_1_1core_1_1_multiply.html',1,'mlx::core::Multiply'],['../struct_multiply.html',1,'Multiply'],['../classmlx_1_1core_1_1_multiply.html#aca5c50f900321f3eb4d6fbcbc225c00c',1,'mlx::core::Multiply::Multiply()']]],
-  ['multiply_97',['multiply',['../group__ops.html#gaf57392e641640b5d06e4c99518391c38',1,'mlx::core']]],
-  ['multivariate_5fnormal_98',['multivariate_normal',['../namespacemlx_1_1core_1_1random.html#a8c37da3c1c0c561cad7499d6d9db81fb',1,'mlx::core::random']]]
+  ['mtl_5fresidency_5fset_93',['mtl_residency_set',['../classmlx_1_1core_1_1metal_1_1_residency_set.html#ac4bfe5ef5e2eaebc458a1ed1953d15e9',1,'mlx::core::metal::ResidencySet']]],
+  ['mtlfclist_94',['MTLFCList',['../namespacemlx_1_1core_1_1metal.html#a616e09a1ef321d527770721cef264c54',1,'mlx::core::metal']]],
+  ['mtx_95',['mtx',['../structmlx_1_1core_1_1scheduler_1_1_stream_thread.html#a70410c9e612f871663929f1e8441a976',1,'mlx::core::scheduler::StreamThread']]],
+  ['multi_5fiter_96',['multi_iter',['../classpocketfft_1_1detail_1_1multi__iter.html',1,'pocketfft::detail::multi_iter&lt; N &gt;'],['../classpocketfft_1_1detail_1_1multi__iter.html#a9be43bb18840202da6d17988fccc64b9',1,'pocketfft::detail::multi_iter::multi_iter()']]],
+  ['multiply_97',['Multiply',['../structmlx_1_1core_1_1detail_1_1_multiply.html',1,'mlx::core::detail::Multiply'],['../classmlx_1_1core_1_1_multiply.html',1,'mlx::core::Multiply'],['../struct_multiply.html',1,'Multiply'],['../classmlx_1_1core_1_1_multiply.html#aca5c50f900321f3eb4d6fbcbc225c00c',1,'mlx::core::Multiply::Multiply()']]],
+  ['multiply_98',['multiply',['../group__ops.html#gaf57392e641640b5d06e4c99518391c38',1,'mlx::core']]],
+  ['multivariate_5fnormal_99',['multivariate_normal',['../namespacemlx_1_1core_1_1random.html#a8c37da3c1c0c561cad7499d6d9db81fb',1,'mlx::core::random']]]
 ];

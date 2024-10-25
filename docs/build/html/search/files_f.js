@@ -8,5 +8,6 @@ var searchData=
   ['reduce_5fcol_2eh_5',['reduce_col.h',['../reduce__col_8h.html',1,'']]],
   ['reduce_5finit_2eh_6',['reduce_init.h',['../reduce__init_8h.html',1,'']]],
   ['reduce_5frow_2eh_7',['reduce_row.h',['../reduce__row_8h.html',1,'']]],
-  ['reduce_5futils_2eh_8',['reduce_utils.h',['../reduce__utils_8h.html',1,'']]]
+  ['reduce_5futils_2eh_8',['reduce_utils.h',['../reduce__utils_8h.html',1,'']]],
+  ['resident_2eh_9',['resident.h',['../resident_8h.html',1,'']]]
 ];

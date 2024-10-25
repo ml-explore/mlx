@@ -10,13 +10,14 @@ var searchData=
   ['reductionplan_7',['ReductionPlan',['../structmlx_1_1core_1_1_reduction_plan.html',1,'mlx::core']]],
   ['remainder_8',['Remainder',['../structmlx_1_1core_1_1detail_1_1_remainder.html',1,'mlx::core::detail::Remainder'],['../classmlx_1_1core_1_1_remainder.html',1,'mlx::core::Remainder'],['../struct_remainder.html',1,'Remainder']]],
   ['reshape_9',['Reshape',['../classmlx_1_1core_1_1_reshape.html',1,'mlx::core']]],
-  ['retaingraph_10',['RetainGraph',['../structmlx_1_1core_1_1detail_1_1_retain_graph.html',1,'mlx::core::detail']]],
-  ['rev_5fiter_11',['rev_iter',['../classpocketfft_1_1detail_1_1rev__iter.html',1,'pocketfft::detail']]],
-  ['rfftp_12',['rfftp',['../classpocketfft_1_1detail_1_1rfftp.html',1,'pocketfft::detail']]],
-  ['rightshift_13',['RightShift',['../structmlx_1_1core_1_1detail_1_1_right_shift.html',1,'mlx::core::detail::RightShift'],['../struct_right_shift.html',1,'RightShift']]],
-  ['rmsnorm_14',['RMSNorm',['../classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html',1,'mlx::core::fast']]],
-  ['rmsnormvjp_15',['RMSNormVJP',['../classmlx_1_1core_1_1fast_1_1_r_m_s_norm_v_j_p.html',1,'mlx::core::fast']]],
-  ['rope_16',['RoPE',['../classmlx_1_1core_1_1fast_1_1_ro_p_e.html',1,'mlx::core::fast']]],
-  ['round_17',['Round',['../structmlx_1_1core_1_1detail_1_1_round.html',1,'mlx::core::detail::Round'],['../classmlx_1_1core_1_1_round.html',1,'mlx::core::Round'],['../struct_round.html',1,'Round']]],
-  ['rsqrt_18',['Rsqrt',['../structmlx_1_1core_1_1detail_1_1_rsqrt.html',1,'mlx::core::detail::Rsqrt'],['../struct_rsqrt.html',1,'Rsqrt']]]
+  ['residencyset_10',['ResidencySet',['../classmlx_1_1core_1_1metal_1_1_residency_set.html',1,'mlx::core::metal']]],
+  ['retaingraph_11',['RetainGraph',['../structmlx_1_1core_1_1detail_1_1_retain_graph.html',1,'mlx::core::detail']]],
+  ['rev_5fiter_12',['rev_iter',['../classpocketfft_1_1detail_1_1rev__iter.html',1,'pocketfft::detail']]],
+  ['rfftp_13',['rfftp',['../classpocketfft_1_1detail_1_1rfftp.html',1,'pocketfft::detail']]],
+  ['rightshift_14',['RightShift',['../structmlx_1_1core_1_1detail_1_1_right_shift.html',1,'mlx::core::detail::RightShift'],['../struct_right_shift.html',1,'RightShift']]],
+  ['rmsnorm_15',['RMSNorm',['../classmlx_1_1core_1_1fast_1_1_r_m_s_norm.html',1,'mlx::core::fast']]],
+  ['rmsnormvjp_16',['RMSNormVJP',['../classmlx_1_1core_1_1fast_1_1_r_m_s_norm_v_j_p.html',1,'mlx::core::fast']]],
+  ['rope_17',['RoPE',['../classmlx_1_1core_1_1fast_1_1_ro_p_e.html',1,'mlx::core::fast']]],
+  ['round_18',['Round',['../structmlx_1_1core_1_1detail_1_1_round.html',1,'mlx::core::detail::Round'],['../classmlx_1_1core_1_1_round.html',1,'mlx::core::Round'],['../struct_round.html',1,'Round']]],
+  ['rsqrt_19',['Rsqrt',['../structmlx_1_1core_1_1detail_1_1_rsqrt.html',1,'mlx::core::detail::Rsqrt'],['../struct_rsqrt.html',1,'Rsqrt']]]
 ];
