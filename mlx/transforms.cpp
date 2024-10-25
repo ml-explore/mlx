@@ -126,18 +126,6 @@ array eval_impl(std::vector<array> outputs, bool async) {
           a.has_primitive()) {
         // If the array is evaluated and is no longer a tracer, detach it
         a.detach();
-      } else if (a.status() == array::Status::unscheduled) {
-        // Lookup corresponding event and increment counter
-        auto& stream = a.primitive().stream();
-        auto e = events.find(stream.index);
-        if (e == events.end()) {
-          e = events.emplace(stream.index, Event{stream}).first;
-        }
-        e->second.set_value(e->second.value() + 1);
-        a.attach_event(e->second);
-        for (auto& s : a.siblings()) {
-          s.attach_event(e->second);
-        }
       }
       dfs.pop();
     }
@@ -175,13 +163,25 @@ array eval_impl(std::vector<array> outputs, bool async) {
     auto arr = std::move(tape.back());
     tape.pop_back();
 
+    auto stream = arr.primitive().stream();
+
+    // Lookup corresponding event and increment counter
+    auto e = events.find(stream.index);
+    if (e == events.end()) {
+      e = events.emplace(stream.index, Event{stream}).first;
+    }
+    e->second.set_value(e->second.value() + 1);
+    arr.attach_event(e->second);
+    for (auto& s : arr.siblings()) {
+      s.attach_event(e->second);
+    }
+
     // Set the status of the array and siblings.
     arr.set_status(array::Status::scheduled);
     for (auto& s : arr.siblings()) {
       s.set_status(array::Status::scheduled);
     }
 
-    auto stream = arr.primitive().stream();
     std::vector<std::shared_future<void>> arr_deps;
     bool signal = needs_signal.find(arr.id()) != needs_signal.end();
 
