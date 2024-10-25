@@ -208,6 +208,8 @@ Classes</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1_dtype.html">Dtype</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_eigh.html">Eigh</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_equal.html">Equal</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1_erf.html">Erf</a></td></tr>
@@ -593,6 +595,8 @@ Functions</h2></td></tr>
 <tr class="separator:a0f0f59d3ffe2d16a684e5fc093302e15"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8dc169474a51a1f4f761d5752819bd7c" id="r_a8dc169474a51a1f4f761d5752819bd7c"><td class="memItemLeft" align="right" valign="top">MTL::Size&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a8dc169474a51a1f4f761d5752819bd7c">get_2d_grid_dims</a> (const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; size_t &gt; &amp;strides)</td></tr>
 <tr class="separator:a8dc169474a51a1f4f761d5752819bd7c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a187b9a932c7b3d67ee42d9d12fcb1bb1" id="r_a187b9a932c7b3d67ee42d9d12fcb1bb1"><td class="memItemLeft" align="right" valign="top">MTL::Size&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a187b9a932c7b3d67ee42d9d12fcb1bb1">get_2d_grid_dims</a> (const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; size_t &gt; &amp;strides, size_t divisor)</td></tr>
+<tr class="separator:a187b9a932c7b3d67ee42d9d12fcb1bb1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aed148d95e7b5221f1312473deded0d27" id="r_aed148d95e7b5221f1312473deded0d27"><td class="memItemLeft" align="right" valign="top">NS::String *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aed148d95e7b5221f1312473deded0d27">make_string</a> (std::ostringstream &amp;os)</td></tr>
 <tr class="separator:aed148d95e7b5221f1312473deded0d27"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a79817d2432e782e596c9c49a08b93be2" id="r_a79817d2432e782e596c9c49a08b93be2"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a79817d2432e782e596c9c49a08b93be2">debug_set_stream_queue_label</a> (MTL::CommandQueue *queue, int index)</td></tr>
@@ -1396,9 +1400,9 @@ Functions</h2></td></tr>
 <tr class="memitem:ga8db814da631d9cd32a8d6563bf4ac530" id="r_ga8db814da631d9cd32a8d6563bf4ac530"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga8db814da631d9cd32a8d6563bf4ac530">conv_transpose3d</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;input, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;weight, const std::tuple&lt; int, int, int &gt; &amp;stride={1, 1, 1}, const std::tuple&lt; int, int, int &gt; &amp;padding={0, 0, 0}, const std::tuple&lt; int, int, int &gt; &amp;dilation={1, 1, 1}, int groups=1, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:ga8db814da631d9cd32a8d6563bf4ac530"><td class="mdescLeft">&#160;</td><td class="mdescRight">3D transposed convolution with a filter  <br /></td></tr>
 <tr class="separator:ga8db814da631d9cd32a8d6563bf4ac530"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ga6381c7062b232ac21f3fdc3136aaf86e" id="r_ga6381c7062b232ac21f3fdc3136aaf86e"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#ga6381c7062b232ac21f3fdc3136aaf86e">quantized_matmul</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;x, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;scales, const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;biases, bool <a class="el" href="group__ops.html#gac1869f3b7094869b44fe7ac4ce58638b">transpose</a>=true, int group_size=64, int bits=4, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
-<tr class="memdesc:ga6381c7062b232ac21f3fdc3136aaf86e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quantized matmul multiplies x with a quantized matrix w.  <br /></td></tr>
-<tr class="separator:ga6381c7062b232ac21f3fdc3136aaf86e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gabfa4208fb1f9b1cdd0abc563b19175af" id="r_gabfa4208fb1f9b1cdd0abc563b19175af"><td class="memItemLeft" align="right" valign="top"><a class="el" href="classmlx_1_1core_1_1array.html">array</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#gabfa4208fb1f9b1cdd0abc563b19175af">quantized_matmul</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> x, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> w, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> scales, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> biases, bool <a class="el" href="group__ops.html#gac1869f3b7094869b44fe7ac4ce58638b">transpose</a>=true, int group_size=64, int bits=4, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
+<tr class="memdesc:gabfa4208fb1f9b1cdd0abc563b19175af"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quantized matmul multiplies x with a quantized matrix w.  <br /></td></tr>
+<tr class="separator:gabfa4208fb1f9b1cdd0abc563b19175af"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:gab43cc28690da7cdd43b43065adbd31da" id="r_gab43cc28690da7cdd43b43065adbd31da"><td class="memItemLeft" align="right" valign="top">std::tuple&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a>, <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__ops.html#gab43cc28690da7cdd43b43065adbd31da">quantize</a> (const <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &amp;w, int group_size=64, int bits=4, <a class="el" href="#a95fc1013cc48fbfee0c54310711a5e58">StreamOrDevice</a> s={})</td></tr>
 <tr class="memdesc:gab43cc28690da7cdd43b43065adbd31da"><td class="mdescLeft">&#160;</td><td class="mdescRight">Quantize a matrix along its last axis.  <br /></td></tr>
 <tr class="separator:gab43cc28690da7cdd43b43065adbd31da"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -4012,7 +4016,7 @@ template&lt;typename... Arrays, typename  = enable_for_arrays_t&lt;Arrays...&gt;
 </div>
 </div>
 <a id="a8dc169474a51a1f4f761d5752819bd7c" name="a8dc169474a51a1f4f761d5752819bd7c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8dc169474a51a1f4f761d5752819bd7c">&#9670;&#160;</a></span>get_2d_grid_dims()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a8dc169474a51a1f4f761d5752819bd7c">&#9670;&#160;</a></span>get_2d_grid_dims() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -4026,6 +4030,32 @@ template&lt;typename... Arrays, typename  = enable_for_arrays_t&lt;Arrays...&gt;
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const std::vector&lt; size_t &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a187b9a932c7b3d67ee42d9d12fcb1bb1" name="a187b9a932c7b3d67ee42d9d12fcb1bb1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a187b9a932c7b3d67ee42d9d12fcb1bb1">&#9670;&#160;</a></span>get_2d_grid_dims() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">MTL::Size mlx::core::get_2d_grid_dims </td>
+          <td>(</td>
+          <td class="paramtype">const std::vector&lt; int &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>shape</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::vector&lt; size_t &gt; &amp;</td>          <td class="paramname"><span class="paramname"><em>strides</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>divisor</em></span>&#160;)</td>
         </tr>
       </table>
 </div><div class="memdoc">

@@ -135,6 +135,12 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:afa0cac9d800c21a8a7f6cb224256abaf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6e33e2b1287324fb4a6575e0da5e5881" id="r_a6e33e2b1287324fb4a6575e0da5e5881"><td class="memItemLeft" align="right" valign="top">MTL::ArgumentEncoder *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a6e33e2b1287324fb4a6575e0da5e5881">argument_encoder</a> (const std::vector&lt; MTL::ArgumentDescriptor * &gt; &amp;arg_descs) const</td></tr>
 <tr class="separator:a6e33e2b1287324fb4a6575e0da5e5881"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acb90010af0cffe27fd8cc6c253d3a576" id="r_acb90010af0cffe27fd8cc6c253d3a576"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#acb90010af0cffe27fd8cc6c253d3a576">add_temporary</a> (<a class="el" href="classmlx_1_1core_1_1array.html">array</a> arr, int index)</td></tr>
+<tr class="separator:acb90010af0cffe27fd8cc6c253d3a576"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a72ad17c96fc6ce825bc77f0bed657901" id="r_a72ad17c96fc6ce825bc77f0bed657901"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a72ad17c96fc6ce825bc77f0bed657901">add_temporaries</a> (std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt; arrays, int index)</td></tr>
+<tr class="separator:a72ad17c96fc6ce825bc77f0bed657901"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a03a2f0c712660a1bd437cb16e4aba79f" id="r_a03a2f0c712660a1bd437cb16e4aba79f"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a03a2f0c712660a1bd437cb16e4aba79f">set_residency_set</a> (const MTL::ResidencySet *residency_set)</td></tr>
+<tr class="separator:a03a2f0c712660a1bd437cb16e4aba79f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="ae0db74570eb4b19d8cf19774db91bfd6" name="ae0db74570eb4b19d8cf19774db91bfd6"></a>
@@ -197,6 +203,48 @@ Public Member Functions</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
+<a id="a72ad17c96fc6ce825bc77f0bed657901" name="a72ad17c96fc6ce825bc77f0bed657901"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a72ad17c96fc6ce825bc77f0bed657901">&#9670;&#160;</a></span>add_temporaries()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::metal::Device::add_temporaries </td>
+          <td>(</td>
+          <td class="paramtype">std::vector&lt; <a class="el" href="classmlx_1_1core_1_1array.html">array</a> &gt;</td>          <td class="paramname"><span class="paramname"><em>arrays</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acb90010af0cffe27fd8cc6c253d3a576" name="acb90010af0cffe27fd8cc6c253d3a576"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb90010af0cffe27fd8cc6c253d3a576">&#9670;&#160;</a></span>add_temporary()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::metal::Device::add_temporary </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classmlx_1_1core_1_1array.html">array</a></td>          <td class="paramname"><span class="paramname"><em>arr</em></span>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int</td>          <td class="paramname"><span class="paramname"><em>index</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a6e33e2b1287324fb4a6575e0da5e5881" name="a6e33e2b1287324fb4a6575e0da5e5881"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a6e33e2b1287324fb4a6575e0da5e5881">&#9670;&#160;</a></span>argument_encoder()</h2>
 
@@ -516,6 +564,23 @@ Public Member Functions</h2></td></tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">const std::string &amp;</td>          <td class="paramname"><span class="paramname"><em>lib_path</em></span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a03a2f0c712660a1bd437cb16e4aba79f" name="a03a2f0c712660a1bd437cb16e4aba79f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a03a2f0c712660a1bd437cb16e4aba79f">&#9670;&#160;</a></span>set_residency_set()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void mlx::core::metal::Device::set_residency_set </td>
+          <td>(</td>
+          <td class="paramtype">const MTL::ResidencySet *</td>          <td class="paramname"><span class="paramname"><em>residency_set</em></span></td><td>)</td>
+          <td></td>
         </tr>
       </table>
 </div><div class="memdoc">

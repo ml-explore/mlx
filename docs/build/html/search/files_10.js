@@ -1,7 +1,7 @@
 var searchData=
 [
   ['scaled_5fdot_5fproduct_5fattention_5fparams_2eh_0',['scaled_dot_product_attention_params.h',['../scaled__dot__product__attention__params_8h.html',1,'']]],
-  ['scan_2eh_1',['scan.h',['../jit_2scan_8h.html',1,'(Global Namespace)'],['../kernels_2scan_8h.html',1,'(Global Namespace)']]],
+  ['scan_2eh_1',['scan.h',['../scan_8h.html',1,'']]],
   ['scatter_2eh_2',['scatter.h',['../scatter_8h.html',1,'']]],
   ['scheduler_2eh_3',['scheduler.h',['../scheduler_8h.html',1,'']]],
   ['sdpa_5fvector_2eh_4',['sdpa_vector.h',['../sdpa__vector_8h.html',1,'']]],

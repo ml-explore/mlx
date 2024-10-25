@@ -13,7 +13,7 @@ compute graph is recorded. The actual computation only happens if an
 :func:`eval` is performed.
 
 MLX uses lazy evaluation because it has some nice features, some of which we
-describe below. 
+describe below.
 
 Transforming Compute Graphs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -116,7 +116,7 @@ saving functions) will also evaluate the array.
 
 Calling :func:`array.item` on a scalar array will also evaluate it. In the
 example above, printing the loss (``print(loss)``) or adding the loss scalar to
-a list (``losses.append(loss.item())``) would cause a graph evaluation. If 
+a list (``losses.append(loss.item())``) would cause a graph evaluation. If
 these lines are before ``mx.eval(loss, model.parameters())`` then this
 will be a partial evaluation, computing only the forward pass.
 

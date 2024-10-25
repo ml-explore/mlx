@@ -16,3 +16,5 @@ Linear Algebra
     cross
     qr
     svd
+    eigvalsh
+    eigh

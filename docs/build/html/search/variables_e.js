@@ -6,5 +6,6 @@ var searchData=
   ['ortho_3',['ortho',['../structpocketfft_1_1detail_1_1_exec_dcst.html#aea17551a49acaca5e7808dc181d38b7f',1,'pocketfft::detail::ExecDcst']]],
   ['os_4',['oS',['../struct_m_l_x_conv_params.html#a19ccb9fecfccdc18b6a7f0cc43adbc6e',1,'MLXConvParams']]],
   ['out_5',['out',['../struct_read_writer.html#abea3b913c952c505d0ca4e529c7316ef',1,'ReadWriter']]],
-  ['out_5fstrides_6',['out_strides',['../struct_m_l_x_conv_params.html#a0c8b2cfc26859a2af9d39a2cfcc3aea6',1,'MLXConvParams']]]
+  ['out_5fstrides_6',['out_strides',['../struct_m_l_x_conv_params.html#a0c8b2cfc26859a2af9d39a2cfcc3aea6',1,'MLXConvParams']]],
+  ['outputs_7',['outputs',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a55a7a92c6abad369c99a5ede7a2521b9',1,'mlx::core::metal::DeviceStream']]]
 ];

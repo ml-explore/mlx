@@ -3,10 +3,10 @@
 Conversion to NumPy and Other Frameworks
 ========================================
 
-MLX array supports conversion between other frameworks with either:  
+MLX array supports conversion between other frameworks with either:
 
-* The `Python Buffer Protocol <https://docs.python.org/3/c-api/buffer.html>`_. 
-* `DLPack <https://dmlc.github.io/dlpack/latest/>`_.  
+* The `Python Buffer Protocol <https://docs.python.org/3/c-api/buffer.html>`_.
+* `DLPack <https://dmlc.github.io/dlpack/latest/>`_.
 
 Let's convert an array to NumPy and back.
 
@@ -66,7 +66,7 @@ even though no in-place operations on MLX memory are executed.
 PyTorch
 -------
 
-.. warning:: 
+.. warning::
 
    PyTorch Support for :obj:`memoryview` is experimental and can break for
    multi-dimensional arrays. Casting to NumPy first is advised for now.

@@ -20,7 +20,7 @@ Both ``a`` and ``b`` live in unified memory.
 
 In MLX, rather than moving arrays to devices, you specify the device when you
 run the operation. Any device can perform any operation on ``a`` and ``b``
-without needing to move them from one memory location to another. For example: 
+without needing to move them from one memory location to another. For example:
 
 .. code-block:: python
 

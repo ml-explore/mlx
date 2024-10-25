@@ -2577,7 +2577,55 @@ $(function(){ initResizable(false); });
 <div class="line"><a id="l02197" name="l02197"></a><span class="lineno"> 2197</span>};</div>
 </div>
 <div class="line"><a id="l02198" name="l02198"></a><span class="lineno"> 2198</span> </div>
-<div class="line"><a id="l02199" name="l02199"></a><span class="lineno"> 2199</span>} <span class="comment">// namespace mlx::core</span></div>
+<div class="foldopen" id="foldopen02199" data-start="{" data-end="};">
+<div class="line"><a id="l02199" name="l02199"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html"> 2199</a></span>class <a class="code hl_class" href="classmlx_1_1core_1_1_eigh.html">Eigh</a> : public <a class="code hl_class" href="classmlx_1_1core_1_1_primitive.html">Primitive</a> {</div>
+<div class="line"><a id="l02200" name="l02200"></a><span class="lineno"> 2200</span> <span class="keyword">public</span>:</div>
+<div class="foldopen" id="foldopen02201" data-start="{" data-end="}">
+<div class="line"><a id="l02201" name="l02201"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html#ad8f5d012ebd5942abeffecca77fcddda"> 2201</a></span>  <span class="keyword">explicit</span> <a class="code hl_function" href="classmlx_1_1core_1_1_eigh.html#ad8f5d012ebd5942abeffecca77fcddda">Eigh</a>(<a class="code hl_struct" href="structmlx_1_1core_1_1_stream.html">Stream</a> stream, std::string uplo, <span class="keywordtype">bool</span> compute_eigenvectors)</div>
+<div class="line"><a id="l02202" name="l02202"></a><span class="lineno"> 2202</span>      : <a class="code hl_class" href="classmlx_1_1core_1_1_primitive.html">Primitive</a>(stream),</div>
+<div class="line"><a id="l02203" name="l02203"></a><span class="lineno"> 2203</span>        uplo_(<a class="code hl_function" href="group__ops.html#ga2a466024f8061febc0a64be557644cb0">std</a>::move(uplo)),</div>
+<div class="line"><a id="l02204" name="l02204"></a><span class="lineno"> 2204</span>        compute_eigenvectors_(compute_eigenvectors) {}</div>
+</div>
+<div class="line"><a id="l02205" name="l02205"></a><span class="lineno"> 2205</span> </div>
+<div class="line"><a id="l02206" name="l02206"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html#a894b32e17229394f6a43b4a0655fd8be"> 2206</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1_eigh.html#a894b32e17229394f6a43b4a0655fd8be">eval_cpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)</div>
+<div class="line"><a id="l02207" name="l02207"></a><span class="lineno"> 2207</span>      <span class="keyword">override</span>;</div>
+<div class="line"><a id="l02208" name="l02208"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html#a67775b41c0a15e356f08d51d9736baa2"> 2208</a></span>  <span class="keywordtype">void</span> <a class="code hl_function" href="classmlx_1_1core_1_1_eigh.html#a67775b41c0a15e356f08d51d9736baa2">eval_gpu</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs)</div>
+<div class="line"><a id="l02209" name="l02209"></a><span class="lineno"> 2209</span>      <span class="keyword">override</span>;</div>
+<div class="line"><a id="l02210" name="l02210"></a><span class="lineno"> 2210</span> </div>
+<div class="line"><a id="l02211" name="l02211"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html#ab2f2ea5326e2f6045f9b7250692c240f"> 2211</a></span>  <a class="code hl_define" href="primitives_8h.html#adc0fbd79fe0d1114dc85da4ed99798bd">DEFINE_VMAP</a>()</div>
+<div class="line"><a id="l02212" name="l02212"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html#a2b8e47ecd60cd7330716761c5fb1fe84"> 2212</a></span>  <a class="code hl_define" href="primitives_8h.html#a1d3a37af519e16f6a703b1e9ebd0f592">DEFINE_PRINT</a>(<a class="code hl_class" href="classmlx_1_1core_1_1_eigh.html">Eigh</a>)</div>
+<div class="line"><a id="l02213" name="l02213"></a><span class="lineno"> 2213</span> </div>
+<div class="foldopen" id="foldopen02214" data-start="{" data-end="}">
+<div class="line"><a id="l02214" name="l02214"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html#a68c890a4172711fbab8baef8da40a9c5"> 2214</a></span>  std::vector&lt;std::vector&lt;<span class="keywordtype">int</span>&gt;&gt; output_shapes(</div>
+<div class="line"><a id="l02215" name="l02215"></a><span class="lineno"> 2215</span>      const std::vector&lt;<a class="code hl_class" href="classmlx_1_1core_1_1array.html">array</a>&gt;&amp; inputs)<span class="keyword"> override </span>{</div>
+<div class="line"><a id="l02216" name="l02216"></a><span class="lineno"> 2216</span>    <span class="keyword">auto</span> shape = inputs[0].shape();</div>
+<div class="line"><a id="l02217" name="l02217"></a><span class="lineno"> 2217</span>    shape.pop_back(); <span class="comment">// Remove last dimension for eigenvalues</span></div>
+<div class="line"><a id="l02218" name="l02218"></a><span class="lineno"> 2218</span>    <span class="keywordflow">if</span> (compute_eigenvectors_) {</div>
+<div class="line"><a id="l02219" name="l02219"></a><span class="lineno"> 2219</span>      <span class="keywordflow">return</span> {shape, inputs[0].shape()}; <span class="comment">// Eigenvalues and eigenvectors</span></div>
+<div class="line"><a id="l02220" name="l02220"></a><span class="lineno"> 2220</span>    } <span class="keywordflow">else</span> {</div>
+<div class="line"><a id="l02221" name="l02221"></a><span class="lineno"> 2221</span>      <span class="keywordflow">return</span> {shape}; <span class="comment">// Only eigenvalues</span></div>
+<div class="line"><a id="l02222" name="l02222"></a><span class="lineno"> 2222</span>    }</div>
+<div class="line"><a id="l02223" name="l02223"></a><span class="lineno"> 2223</span>  }</div>
+</div>
+<div class="line"><a id="l02224" name="l02224"></a><span class="lineno"> 2224</span> </div>
+<div class="foldopen" id="foldopen02225" data-start="{" data-end="}">
+<div class="line"><a id="l02225" name="l02225"></a><span class="lineno"><a class="line" href="classmlx_1_1core_1_1_eigh.html#a09414e3fe88a952408d164d6dd0af381"> 2225</a></span>  <span class="keywordtype">bool</span> <a class="code hl_function" href="classmlx_1_1core_1_1_eigh.html#a09414e3fe88a952408d164d6dd0af381">is_equivalent</a>(<span class="keyword">const</span> <a class="code hl_class" href="classmlx_1_1core_1_1_primitive.html">Primitive</a>&amp; other)<span class="keyword"> const override </span>{</div>
+<div class="line"><a id="l02226" name="l02226"></a><span class="lineno"> 2226</span>    <span class="keywordflow">if</span> (<span class="keyword">auto</span>* p = <span class="keyword">dynamic_cast&lt;</span><span class="keyword">const </span><a class="code hl_class" href="classmlx_1_1core_1_1_eigh.html">Eigh</a>*<span class="keyword">&gt;</span>(&amp;other)) {</div>
+<div class="line"><a id="l02227" name="l02227"></a><span class="lineno"> 2227</span>      <span class="keywordflow">return</span> uplo_ == p-&gt;uplo_ &amp;&amp;</div>
+<div class="line"><a id="l02228" name="l02228"></a><span class="lineno"> 2228</span>          compute_eigenvectors_ == p-&gt;compute_eigenvectors_;</div>
+<div class="line"><a id="l02229" name="l02229"></a><span class="lineno"> 2229</span>    }</div>
+<div class="line"><a id="l02230" name="l02230"></a><span class="lineno"> 2230</span>    <span class="keywordflow">return</span> <span class="keyword">false</span>;</div>
+<div class="line"><a id="l02231" name="l02231"></a><span class="lineno"> 2231</span>  }</div>
+</div>
+<div class="line"><a id="l02232" name="l02232"></a><span class="lineno"> 2232</span> </div>
+<div class="line"><a id="l02233" name="l02233"></a><span class="lineno"> 2233</span> <span class="keyword">private</span>:</div>
+<div class="line"><a id="l02234" name="l02234"></a><span class="lineno"> 2234</span>  <span class="keywordtype">void</span> <a class="code hl_function" href="namespacemlx_1_1core.html#a7d6e097d8effed52f4713672e471f299">eval</a>(<span class="keyword">const</span> std::vector&lt;array&gt;&amp; inputs, std::vector&lt;array&gt;&amp; outputs);</div>
+<div class="line"><a id="l02235" name="l02235"></a><span class="lineno"> 2235</span>  std::string uplo_;</div>
+<div class="line"><a id="l02236" name="l02236"></a><span class="lineno"> 2236</span>  <span class="keywordtype">bool</span> compute_eigenvectors_;</div>
+<div class="line"><a id="l02237" name="l02237"></a><span class="lineno"> 2237</span>};</div>
+</div>
+<div class="line"><a id="l02238" name="l02238"></a><span class="lineno"> 2238</span> </div>
+<div class="line"><a id="l02239" name="l02239"></a><span class="lineno"> 2239</span>} <span class="comment">// namespace mlx::core</span></div>
 <div class="ttc" id="aarray_8h_html"><div class="ttname"><a href="array_8h.html">array.h</a></div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1_abs_html"><div class="ttname"><a href="classmlx_1_1core_1_1_abs.html">mlx::core::Abs</a></div><div class="ttdef"><b>Definition</b> primitives.h:155</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1_abs_html_a0a976e636dd8505b473fbdddf949f514"><div class="ttname"><a href="classmlx_1_1core_1_1_abs.html#a0a976e636dd8505b473fbdddf949f514">mlx::core::Abs::eval_gpu</a></div><div class="ttdeci">void eval_gpu(const std::vector&lt; array &gt; &amp;inputs, array &amp;out) override</div></div>
@@ -2719,6 +2767,11 @@ $(function(){ initResizable(false); });
 <div class="ttc" id="aclassmlx_1_1core_1_1_divide_html_a62fc71e8998be65ff18285dbbd21eedb"><div class="ttname"><a href="classmlx_1_1core_1_1_divide.html#a62fc71e8998be65ff18285dbbd21eedb">mlx::core::Divide::Divide</a></div><div class="ttdeci">Divide(Stream stream)</div><div class="ttdef"><b>Definition</b> primitives.h:809</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1_divide_html_a823443c2a8e8b81bbcaeee6ddbcdbf49"><div class="ttname"><a href="classmlx_1_1core_1_1_divide.html#a823443c2a8e8b81bbcaeee6ddbcdbf49">mlx::core::Divide::eval_cpu</a></div><div class="ttdeci">void eval_cpu(const std::vector&lt; array &gt; &amp;inputs, array &amp;out) override</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1_divide_html_abffda0ce37221ddc28dc9eea794f6bc7"><div class="ttname"><a href="classmlx_1_1core_1_1_divide.html#abffda0ce37221ddc28dc9eea794f6bc7">mlx::core::Divide::eval_gpu</a></div><div class="ttdeci">void eval_gpu(const std::vector&lt; array &gt; &amp;inputs, array &amp;out) override</div></div>
+<div class="ttc" id="aclassmlx_1_1core_1_1_eigh_html"><div class="ttname"><a href="classmlx_1_1core_1_1_eigh.html">mlx::core::Eigh</a></div><div class="ttdef"><b>Definition</b> primitives.h:2199</div></div>
+<div class="ttc" id="aclassmlx_1_1core_1_1_eigh_html_a09414e3fe88a952408d164d6dd0af381"><div class="ttname"><a href="classmlx_1_1core_1_1_eigh.html#a09414e3fe88a952408d164d6dd0af381">mlx::core::Eigh::is_equivalent</a></div><div class="ttdeci">bool is_equivalent(const Primitive &amp;other) const override</div><div class="ttdoc">Equivalence check defaults to false unless overridden by the primitive.</div><div class="ttdef"><b>Definition</b> primitives.h:2225</div></div>
+<div class="ttc" id="aclassmlx_1_1core_1_1_eigh_html_a67775b41c0a15e356f08d51d9736baa2"><div class="ttname"><a href="classmlx_1_1core_1_1_eigh.html#a67775b41c0a15e356f08d51d9736baa2">mlx::core::Eigh::eval_gpu</a></div><div class="ttdeci">void eval_gpu(const std::vector&lt; array &gt; &amp;inputs, std::vector&lt; array &gt; &amp;outputs) override</div></div>
+<div class="ttc" id="aclassmlx_1_1core_1_1_eigh_html_a894b32e17229394f6a43b4a0655fd8be"><div class="ttname"><a href="classmlx_1_1core_1_1_eigh.html#a894b32e17229394f6a43b4a0655fd8be">mlx::core::Eigh::eval_cpu</a></div><div class="ttdeci">void eval_cpu(const std::vector&lt; array &gt; &amp;inputs, std::vector&lt; array &gt; &amp;outputs) override</div><div class="ttdoc">A primitive must know how to evaluate itself on the CPU/GPU for the given inputs and populate the out...</div></div>
+<div class="ttc" id="aclassmlx_1_1core_1_1_eigh_html_ad8f5d012ebd5942abeffecca77fcddda"><div class="ttname"><a href="classmlx_1_1core_1_1_eigh.html#ad8f5d012ebd5942abeffecca77fcddda">mlx::core::Eigh::Eigh</a></div><div class="ttdeci">Eigh(Stream stream, std::string uplo, bool compute_eigenvectors)</div><div class="ttdef"><b>Definition</b> primitives.h:2201</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1_equal_html"><div class="ttname"><a href="classmlx_1_1core_1_1_equal.html">mlx::core::Equal</a></div><div class="ttdef"><b>Definition</b> primitives.h:880</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1_equal_html_a4af81cf2dd071db5bbf8ce1df95fdf36"><div class="ttname"><a href="classmlx_1_1core_1_1_equal.html#a4af81cf2dd071db5bbf8ce1df95fdf36">mlx::core::Equal::Equal</a></div><div class="ttdeci">Equal(Stream stream, bool equal_nan=false)</div><div class="ttdef"><b>Definition</b> primitives.h:882</div></div>
 <div class="ttc" id="aclassmlx_1_1core_1_1_equal_html_aabb8aa61fa581defddcdca1274b1b454"><div class="ttname"><a href="classmlx_1_1core_1_1_equal.html#aabb8aa61fa581defddcdca1274b1b454">mlx::core::Equal::eval_cpu</a></div><div class="ttdeci">void eval_cpu(const std::vector&lt; array &gt; &amp;inputs, array &amp;out) override</div></div>

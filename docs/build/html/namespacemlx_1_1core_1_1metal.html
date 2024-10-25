@@ -102,7 +102,13 @@ Classes</h2></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1metal_1_1_device.html">Device</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1metal_1_1_device_stream.html">DeviceStream</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="structmlx_1_1core_1_1metal_1_1_fence.html">Fence</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1metal_1_1_metal_allocator.html">MetalAllocator</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classmlx_1_1core_1_1metal_1_1_residency_set.html">ResidencySet</a></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
@@ -190,6 +196,8 @@ Functions</h2></td></tr>
 <tr class="separator:ab09c9b60f1e886ab859e6a066c9a5b9d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a22b3384ebd17f2fca198f81b9f1b6dc3" id="r_a22b3384ebd17f2fca198f81b9f1b6dc3"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a22b3384ebd17f2fca198f81b9f1b6dc3">clear_cache</a> ()</td></tr>
 <tr class="separator:a22b3384ebd17f2fca198f81b9f1b6dc3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a31eab4828d31d292bc84e07b0d961e1e" id="r_a31eab4828d31d292bc84e07b0d961e1e"><td class="memItemLeft" align="right" valign="top">size_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#a31eab4828d31d292bc84e07b0d961e1e">set_wired_limit</a> (size_t limit)</td></tr>
+<tr class="separator:a31eab4828d31d292bc84e07b0d961e1e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa47cb5651bf3b65c46ab216b7e504d77" id="r_aa47cb5651bf3b65c46ab216b7e504d77"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="#aa47cb5651bf3b65c46ab216b7e504d77">start_capture</a> (std::string path=&quot;&quot;)</td></tr>
 <tr class="memdesc:aa47cb5651bf3b65c46ab216b7e504d77"><td class="mdescLeft">&#160;</td><td class="mdescRight">Capture a GPU trace, saving it to an absolute file <code>path</code>  <br /></td></tr>
 <tr class="separator:aa47cb5651bf3b65c46ab216b7e504d77"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -785,6 +793,23 @@ Functions</h2></td></tr>
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">bool</td>          <td class="paramname"><span class="paramname"><em>relaxed</em></span><span class="paramdefsep"> = </span><span class="paramdefval">true</span>&#160;)</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a31eab4828d31d292bc84e07b0d961e1e" name="a31eab4828d31d292bc84e07b0d961e1e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31eab4828d31d292bc84e07b0d961e1e">&#9670;&#160;</a></span>set_wired_limit()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">size_t mlx::core::metal::set_wired_limit </td>
+          <td>(</td>
+          <td class="paramtype">size_t</td>          <td class="paramname"><span class="paramname"><em>limit</em></span></td><td>)</td>
+          <td></td>
         </tr>
       </table>
 </div><div class="memdoc">
