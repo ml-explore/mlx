@@ -1,56 +1,13 @@
 // Copyright © 2024 Apple Inc.
 
-#include "mlx/allocator.h"
-#include "mlx/backend/common/copy.h"
-#include "mlx/backend/common/lapack_helper.h"
-#include "mlx/primitives.h"
-
-#ifdef ACCELERATE_NEW_LAPACK
-#include <Accelerate/Accelerate.h>
-#else
-#include <lapack.h>
-#endif
-
 #include <cassert>
 
+#include "mlx/allocator.h"
+#include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/lapack.h"
+#include "mlx/primitives.h"
+
 namespace mlx::core {
-
-namespace {
-
-// Wrapper to account for differences in
-// LAPACK implementations (basically how to pass the 'trans' string to fortran).
-int sgetrs_wrapper(char trans, int N, int NRHS, int* ipiv, float* a, float* b) {
-  int info;
-
-#ifdef LAPACK_FORTRAN_STRLEN_END
-  sgetrs_(
-      /* trans */ &trans,
-      /* n */ &N,
-      /* nrhs */ &NRHS,
-      /* a */ a,
-      /* lda */ &N,
-      /* ipiv */ ipiv,
-      /* b */ b,
-      /* ldb */ &N,
-      /* info */ &info,
-      /* trans_len = */ static_cast<size_t>(1));
-#else
-  sgetrs_(
-      /* trans */ &trans,
-      /* n */ &N,
-      /* nrhs */ &NRHS,
-      /* a */ a,
-      /* lda */ &N,
-      /* ipiv */ ipiv,
-      /* b */ b,
-      /* ldb */ &N,
-      /* info */ &info);
-#endif
-
-  return info;
-}
-
-} // namespace
 
 void solve_impl(const array& a, const array& b, array& out) {
   int N = a.shape(-2);
@@ -59,12 +16,14 @@ void solve_impl(const array& a, const array& b, array& out) {
 
   // copy b into out and make it col-contiguous
   auto flags = out.flags();
-  flags.col_contiguous = true;
+  auto ndim = b.ndim();
+  flags.col_contiguous = ndim <= 2;
   flags.row_contiguous = false;
-  std::vector<size_t> strides(a.ndim(), 0);
-  std::copy(out.strides().begin(), out.strides().end(), strides.begin());
-  strides[a.ndim() - 2] = 1;
-  strides[a.ndim() - 1] = N;
+  flags.contiguous = true;
+  auto strides = out.strides();
+  if (ndim >= 2) {
+    std::swap(strides[ndim - 1], strides[ndim - 2]);
+  }
 
   out.set_data(
       allocator::malloc_or_wait(out.nbytes()), out.nbytes(), strides, flags);
@@ -96,19 +55,29 @@ void solve_impl(const array& a, const array& b, array& out) {
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "solve_impl: sgetrf_ failed with code " << info
+      ss << "[Solve::eval_cpu] sgetrf_ failed with code " << info
          << ((info > 0) ? " because matrix is singular"
                         : " becuase argument had an illegal value");
       throw std::runtime_error(ss.str());
     }
 
-    static constexpr char trans = 'T';
     // Solve the system using the LU factors from sgetrf
-    info = sgetrs_wrapper(trans, N, NRHS, ipiv_ptr, a_ptr, out_ptr);
+    static constexpr char trans = 'T';
+    MLX_LAPACK_FUNC(sgetrs)
+    (
+        /* trans */ &trans,
+        /* n */ &N,
+        /* nrhs */ &NRHS,
+        /* a */ a_ptr,
+        /* lda */ &N,
+        /* ipiv */ ipiv_ptr,
+        /* b */ out_ptr,
+        /* ldb */ &N,
+        /* info */ &info);
 
     if (info != 0) {
       std::stringstream ss;
-      ss << "solve_impl: sgetrs_ failed with code " << info;
+      ss << "[Solve::eval_cpu] sgetrs_ failed with code " << info;
       throw std::runtime_error(ss.str());
     }
 
@@ -122,9 +91,6 @@ void Solve::eval(
     const std::vector<array>& inputs,
     std::vector<array>& outputs) {
   assert(inputs.size() == 2);
-  if (inputs[0].dtype() != float32 || inputs[1].dtype() != float32) {
-    throw std::runtime_error("[Solve::eval] only supports float32.");
-  }
   solve_impl(inputs[0], inputs[1], outputs[0]);
 }
 
