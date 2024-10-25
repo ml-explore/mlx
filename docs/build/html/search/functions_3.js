@@ -42,7 +42,7 @@ var searchData=
   ['conj_39',['conj',['../namespacepocketfft_1_1detail.html#a66d79051d502046a9b9f103e744dbad3',1,'pocketfft::detail']]],
   ['conjugate_40',['Conjugate',['../classmlx_1_1core_1_1_conjugate.html#a627f9e6a8729fb3ffb3ca3228d007c87',1,'mlx::core::Conjugate']]],
   ['conjugate_41',['conjugate',['../group__ops.html#ga5b596906bf8cdc8d97ed6ddc9aeb4c23',1,'mlx::core']]],
-  ['contiguous_5fscan_42',['contiguous_scan',['../kernels_2scan_8h.html#a1f9c197dc09641f3fbb2e886c85b0675',1,'scan.h']]],
+  ['contiguous_5fscan_42',['contiguous_scan',['../scan_8h.html#a60d279b9add7d56639bb209408f09d79',1,'scan.h']]],
   ['contiguousiterator_43',['ContiguousIterator',['../structmlx_1_1core_1_1_contiguous_iterator.html#a68794af4a442d3d8ac4647817af8e1f6',1,'mlx::core::ContiguousIterator::ContiguousIterator()'],['../structmlx_1_1core_1_1_contiguous_iterator.html#a6cb378408b6f546eeb6ade1a4faafe3c',1,'mlx::core::ContiguousIterator::ContiguousIterator(const array &amp;a)'],['../structmlx_1_1core_1_1_contiguous_iterator.html#a16bdacb53f65b7284068cd49d4cba292',1,'mlx::core::ContiguousIterator::ContiguousIterator(const std::vector&lt; int &gt; &amp;shape, const std::vector&lt; StrideT &gt; &amp;strides, int dims)']]],
   ['conv_44',['conv',['../namespacemlx_1_1core_1_1metal.html#ab1704e853394c725668c06752ebb5c24',1,'mlx::core::metal']]],
   ['conv1d_45',['conv1d',['../group__ops.html#ga30d47e08093c03a3676f235f9f559411',1,'mlx::core']]],
