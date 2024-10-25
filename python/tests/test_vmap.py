@@ -462,6 +462,21 @@ class TestVmap(mlx_tests.MLXTestCase):
         expected[:, 0] = mx.array([1, 2, 3])[:, None]
         self.assertTrue(mx.allclose(out, expected))
 
+    def test_vmap_nodep_output(self):
+        a = mx.random.uniform(shape=(2, 3, 4))
+        b = mx.random.uniform(shape=(4, 3))
+
+        def const_func(a, b):
+            return mx.array(2)
+
+        out = mx.vmap(const_func, in_axes=(0, None))(a, b)
+        self.assertTrue(mx.array_equal(mx.full((2,), 2), out))
+        out = mx.vmap(const_func, in_axes=(None, 0))(a, b)
+        self.assertTrue(mx.array_equal(mx.full((4,), 2), out))
+
+        with self.assertRaises(ValueError):
+            out = mx.vmap(const_func, in_axes=(None, None))(a, b)
+
 
 if __name__ == "__main__":
     unittest.main()
