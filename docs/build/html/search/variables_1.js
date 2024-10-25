@@ -29,6 +29,7 @@ var searchData=
   ['bs_5foffset_26',['Bs_offset',['../structmlx_1_1steel_1_1_block_m_m_a.html#a92f6aeee432f53638447eac842f43eca',1,'mlx::steel::BlockMMA']]],
   ['bsimd_27',['Bsimd',['../structmlx_1_1steel_1_1_block_m_m_a.html#a3de506004b428d3487bae05ad9e757e6',1,'mlx::steel::BlockMMA']]],
   ['buf_28',['buf',['../struct_read_writer.html#a23bac3c96dd0265ddbee1f256be45ff5',1,'ReadWriter::buf'],['../backend_2metal_2allocator_8h.html#a15aa5cc1baf29be08d55cca88509e697',1,'buf:&#160;allocator.h']]],
-  ['buffer_29',['buffer',['../structmlx_1_1core_1_1array_1_1_data.html#a9a51e2d12ba505027cc0fca86bdd39ad',1,'mlx::core::array::Data']]],
-  ['buffers_30',['buffers',['../struct_indices.html#ad705070a740579c07d109ae4f3d86e76',1,'Indices']]]
+  ['buffer_29',['buffer',['../structmlx_1_1core_1_1array_1_1_data.html#a9a51e2d12ba505027cc0fca86bdd39ad',1,'mlx::core::array::Data::buffer'],['../structmlx_1_1core_1_1metal_1_1_device_stream.html#a99183c92599edfeb75f7fa0f37e1d9eb',1,'mlx::core::metal::DeviceStream::buffer']]],
+  ['buffer_5fops_30',['buffer_ops',['../structmlx_1_1core_1_1metal_1_1_device_stream.html#ab6048b329e65a59033834f3bdd351782',1,'mlx::core::metal::DeviceStream']]],
+  ['buffers_31',['buffers',['../struct_indices.html#ad705070a740579c07d109ae4f3d86e76',1,'Indices']]]
 ];
