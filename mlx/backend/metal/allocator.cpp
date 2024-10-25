@@ -168,8 +168,6 @@ size_t MetalAllocator::set_memory_limit(size_t limit, bool relaxed) {
   return limit;
 };
 
-// TODO consider putting this on the stream so it doesn't race with
-// async eval
 size_t MetalAllocator::set_wired_limit(size_t limit) {
   std::swap(limit, wired_limit_);
   residency_set_.resize(wired_limit_);
