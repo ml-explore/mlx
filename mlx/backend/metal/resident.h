@@ -11,6 +11,9 @@ class ResidencySet {
   ResidencySet(MTL::Device* d);
   ~ResidencySet();
 
+  ResidencySet(const ResidencySet&) = delete;
+  ResidencySet& operator=(const ResidencySet&) = delete;
+
   const MTL::ResidencySet* mtl_residency_set() {
     return wired_set_;
   }
@@ -21,9 +24,9 @@ class ResidencySet {
   void resize(size_t size);
 
  private:
-  MTL::ResidencySet* wired_set_;
+  MTL::ResidencySet* wired_set_{nullptr};
   std::unordered_set<const MTL::Allocation*> unwired_set_;
-  size_t capacity_;
+  size_t capacity_{0};
 };
 
 } // namespace mlx::core::metal
