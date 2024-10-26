@@ -1,6 +1,4 @@
 import itertools
-import os
-import subprocess
 import sys
 import time
 
@@ -19,9 +17,9 @@ def timeit(fn, *args):
     return ms
 
 
-N = [1, 2]  # , 4, 8, 16, 32, 64]
-HW = [9, 18]  # , 36, 72]
-C = [16, 32]  # , 64, 128, 256]
+N = [1, 4, 8, 16, 32, 64]
+HW = [9, 18, 36, 72]
+C = [16, 32, 64, 64, 128, 256]
 
 if len(sys.argv) > 1:
     times = []
@@ -38,6 +36,12 @@ if len(sys.argv) > 1:
     print(",".join(times))
     exit(0)
 
+import os
+import subprocess
+
+import matplotlib.pyplot as plt
+import numpy as np
+
 env = os.environ
 env["MLX_USE_WINOGRAD_CONV"] = "1"
 winograd = subprocess.run(
@@ -50,18 +54,22 @@ no_winograd = subprocess.run(
 )
 no_winograd = [float(t) for t in no_winograd.stdout.decode().split(",")]
 
-import matplotlib.pyplot as plt
-
 k = 0
 for n in N:
     res_mat = np.zeros((len(HW), len(C)))
-    for i in range(hw):
-        for j in range(c):
+    for i in range(len(HW)):
+        for j in range(len(C)):
             res_mat[i, j] = winograd[k] / no_winograd[k]
-    plt.imshow(res_mat)
+            k += 1
     ax = plt.gca()
-    ax.set_xticks(HW)
-    ax.set_yticks(C)
-    plt.xlabel("Height/Width")
-    plt.ylabel("Channels In/Out")
+    p = ax.imshow(res_mat, cmap="RdBu")
+    ax.set_xticks(list(range(len(C))))
+    ax.set_yticks(list(range(len(HW))))
+    ax.set_xticklabels(C)
+    ax.set_yticklabels(HW)
+    plt.gcf().colorbar(p, ax=ax)
+
+    plt.title("Conv 2D: (Time Winograd / Time No Winograd)")
+    plt.xlabel("Channels In/Out")
+    plt.ylabel("Height/Width")
     plt.savefig(f"winograd_vs_no_batch{n}.png")
