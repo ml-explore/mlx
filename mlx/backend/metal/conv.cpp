@@ -19,6 +19,18 @@ using namespace mlx::steel;
 
 namespace mlx::core {
 
+bool use_winograd() {
+  auto get_val = []() {
+    if (const char* buff_str = std::getenv("MLX_USE_WINOGRAD_CONV")) {
+      return atoi(buff_str) != 0;
+    } else {
+      return true;
+    }
+  };
+  static bool use_winograd_ = get_val();
+  return use_winograd_;
+}
+
 namespace {
 
 template <int N>
@@ -769,7 +781,7 @@ void conv_2D_gpu(
   }
 
   // Direct to winograd conv
-  if (!flip && is_stride_one && is_kdil_one && is_idil_one &&
+  if (use_winograd() && !flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
       conv_params.C % 32 == 0 && conv_params.O % 32 == 0 &&
       (channels_large || (channels_med && inp_large))) {
