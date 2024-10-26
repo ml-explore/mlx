@@ -17,7 +17,7 @@ def timeit(fn, *args):
     return ms
 
 
-N = [1, 4, 8, 16, 32, 64]
+N = [1]  # 4, 8, 16, 32, 64]
 HW = [9, 18, 36, 72]
 C = [16, 32, 64, 64, 128, 256]
 
@@ -41,6 +41,7 @@ import subprocess
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import TwoSlopeNorm
 
 env = os.environ
 env["MLX_USE_WINOGRAD_CONV"] = "1"
@@ -56,18 +57,25 @@ no_winograd = [float(t) for t in no_winograd.stdout.decode().split(",")]
 
 k = 0
 for n in N:
+
     res_mat = np.zeros((len(HW), len(C)))
     for i in range(len(HW)):
         for j in range(len(C)):
             res_mat[i, j] = winograd[k] / no_winograd[k]
             k += 1
+
+    cb_min = min(res_mat.min(), 0.5)
+    cb_max = max(res_mat.max(), 2.0)
+    norm = TwoSlopeNorm(vmin=cb_min, vmax=cb_max, vcenter=1.0)
+    plt.clf()
     ax = plt.gca()
-    p = ax.imshow(res_mat, cmap="RdBu")
+    p = ax.imshow(res_mat, norm=norm, cmap="RdBu")
     ax.set_xticks(list(range(len(C))))
     ax.set_yticks(list(range(len(HW))))
     ax.set_xticklabels(C)
     ax.set_yticklabels(HW)
-    plt.gcf().colorbar(p, ax=ax)
+    cb = plt.gcf().colorbar(p, ax=ax)
+    cb.set_ticks([cb_min, cb_max])
 
     plt.title("Conv 2D: (Time Winograd / Time No Winograd)")
     plt.xlabel("Channels In/Out")
