@@ -509,8 +509,8 @@ TEST_CASE("test solve") {
   CHECK(allclose(matmul(a, result), b).item<bool>());
 
   // Test batch multi-column rhs
-  a = reshape(concatenate({a, a, a, a, a}), {5, 3, 3});
-  b = reshape(concatenate({b, b, b, b, b}), {5, 3, 2});
+  a = broadcast_to(a, {5, 3, 3});
+  b = broadcast_to(b, {5, 3, 2});
 
   result = linalg::solve(a, b, Device::cpu);
   CHECK(allclose(matmul(a, result), b).item<bool>());

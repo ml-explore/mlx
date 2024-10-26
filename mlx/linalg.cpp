@@ -519,19 +519,26 @@ std::pair<array, array> eigh(
   return std::make_pair(out[0], out[1]);
 }
 
-array solve(const array& a, const array& b, StreamOrDevice s /* = {} */) {
-  if (a.ndim() < 2) {
+array solve(const array& in_a, const array& in_b, StreamOrDevice s /* = {} */) {
+  if (in_a.ndim() < 2) {
     std::ostringstream msg;
     msg << "[linalg::solve] First input must have >= 2 dimensions. "
-        << "Received array with " << a.ndim() << " dimensions.";
+        << "Received array with " << in_a.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
   }
 
-  if (b.ndim() < 1) {
+  if (in_b.ndim() < 1) {
     std::ostringstream msg;
     msg << "[linalg::solve] Second input must have >= 1 dimensions. "
-        << "Received array with " << b.ndim() << " dimensions.";
+        << "Received array with " << in_b.ndim() << " dimensions.";
     throw std::invalid_argument(msg.str());
+  }
+
+  auto a = in_a;
+  auto b = in_b;
+  if (b.ndim() == 1) {
+    // Insert a singleton dim at the end
+    b = expand_dims(b, -1, s);
   }
 
   if (a.shape(-1) != a.shape(-2)) {
@@ -541,7 +548,7 @@ array solve(const array& a, const array& b, StreamOrDevice s /* = {} */) {
     throw std::invalid_argument(msg.str());
   }
 
-  if (a.shape(-1) != b.shape(b.ndim() - 2)) {
+  if (a.shape(-1) != b.shape(-2)) {
     std::ostringstream msg;
     msg << "[linalg::solve] Last dimension of first input with shape "
         << a.shape() << " must match second to last dimension of"
@@ -554,12 +561,35 @@ array solve(const array& a, const array& b, StreamOrDevice s /* = {} */) {
     std::ostringstream msg;
     msg << "[linalg::solve] Input array must have type float32. Received arrays "
         << "with type " << a.dtype() << " and " << b.dtype() << ".";
+    throw std::invalid_argument(msg.str());
   }
-  return array(
+
+  // Broadcast leading dimensions
+  if (a.ndim() > 2 || b.ndim() > 2) {
+    std::vector<int> bsx_a(a.shape().begin(), a.shape().end() - 2);
+    std::vector<int> bsx_b(b.shape().begin(), b.shape().end() - 2);
+    auto inner_shape = broadcast_shapes(bsx_a, bsx_b);
+
+    // Broadcast a
+    inner_shape.push_back(a.shape(-2));
+    inner_shape.push_back(a.shape(-1));
+    a = broadcast_to(a, inner_shape, s);
+
+    // Broadcast b
+    *(inner_shape.end() - 2) = b.shape(-2);
+    *(inner_shape.end() - 1) = b.shape(-1);
+    b = broadcast_to(b, inner_shape, s);
+  }
+
+  auto out = array(
       b.shape(),
       out_type,
       std::make_shared<Solve>(to_stream(s)),
       {astype(a, out_type, s), astype(b, out_type, s)});
+  if (in_b.ndim() == 1) {
+    return squeeze(out, -1, s);
+  }
+  return out;
 }
 
 } // namespace mlx::core::linalg

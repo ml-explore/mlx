@@ -12,26 +12,24 @@ namespace mlx::core {
 void solve_impl(const array& a, const array& b, array& out) {
   int N = a.shape(-2);
   int NRHS = out.shape(-1);
-  std::vector<int> ipiv(N);
 
-  // copy b into out and make it col-contiguous
+  // Copy b into out and make it col contiguous
+  auto ndim = out.ndim();
   auto flags = out.flags();
-  auto ndim = b.ndim();
-  flags.col_contiguous = ndim <= 2;
+  flags.col_contiguous = ndim == 2;
   flags.row_contiguous = false;
   flags.contiguous = true;
   auto strides = out.strides();
-  if (ndim >= 2) {
-    std::swap(strides[ndim - 1], strides[ndim - 2]);
-  }
-
+  strides[ndim - 1] = N;
+  strides[ndim - 2] = 1;
   out.set_data(
       allocator::malloc_or_wait(out.nbytes()), out.nbytes(), strides, flags);
-  copy_inplace(b, out, CopyType::GeneralGeneral);
+  copy_inplace(
+      b, out, b.shape(), b.strides(), strides, 0, 0, CopyType::GeneralGeneral);
 
   // lapack clobbers the input, so we have to make a copy. the copy doesn't need
   // to be col-contiguous because sgetrs has a transpose parameter (trans='T').
-  array a_cpy(a.shape(), float32, nullptr, {});
+  array a_cpy(a.shape(), a.dtype(), nullptr, {});
   copy(
       a,
       a_cpy,
@@ -39,7 +37,9 @@ void solve_impl(const array& a, const array& b, array& out) {
 
   float* a_ptr = a_cpy.data<float>();
   float* out_ptr = out.data<float>();
-  int* ipiv_ptr = ipiv.data();
+
+  auto ipiv = array::Data{allocator::malloc_or_wait(sizeof(int) * N)};
+  int* ipiv_ptr = static_cast<int*>(ipiv.buffer.raw_ptr());
 
   int info;
   size_t num_matrices = a.size() / (N * N);

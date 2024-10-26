@@ -377,8 +377,8 @@ class TestLinalg(mlx_tests.MLXTestCase):
         self.assertTrue(np.allclose(result, expected, atol=1e-5))
 
         # Test batched multi-column rhs
-        a = mx.concat([a, a, a, a, a, a]).reshape((3, 2, 5, 5))
-        b = mx.concat([b, b, b, b, b, b]).reshape((3, 2, 5, 8))
+        a = mx.broadcast_to(a, (3, 2, 5, 5))
+        b = mx.broadcast_to(b, (3, 1, 5, 8))
 
         result = mx.linalg.solve(a, b, stream=mx.cpu)
         expected = np.linalg.solve(a, b)
