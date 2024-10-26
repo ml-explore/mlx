@@ -783,8 +783,7 @@ void conv_2D_gpu(
   // Direct to winograd conv
   if (use_winograd() && !flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
-      conv_params.C % 32 == 0 && conv_params.O % 32 == 0 &&
-      (channels_large || (channels_med && inp_large))) {
+      conv_params.C % 32 == 0 && conv_params.O % 32 == 0) {
     return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 
