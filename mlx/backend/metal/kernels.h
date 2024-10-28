@@ -79,6 +79,8 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
 MTL::ComputePipelineState* get_reduce_init_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& func_name,
+    const std::string& op_name,
     const array& out);
 
 MTL::ComputePipelineState* get_reduce_kernel(

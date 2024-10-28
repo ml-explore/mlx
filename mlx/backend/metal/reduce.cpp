@@ -231,8 +231,10 @@ void init_reduce(
     CommandEncoder& compute_encoder,
     metal::Device& d,
     const Stream& s) {
-  auto kernel = get_reduce_init_kernel(
-      d, "init_reduce_" + op_name + type_to_name(out), out);
+  std::ostringstream kname;
+  const std::string func_name = "init_reduce";
+  kname << func_name << "_" << op_name << type_to_name(out);
+  auto kernel = get_reduce_init_kernel(d, kname.str(), func_name, op_name, out);
   size_t nthreads = out.size();
   MTL::Size grid_dims = MTL::Size(nthreads, 1, 1);
   NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
