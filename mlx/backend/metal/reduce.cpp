@@ -534,9 +534,9 @@ void strided_reduce_looped(
 
   // Figure out the grid dims
   auto out_grid_size = output_grid_for_col_reduce(out, args);
-  int BN = (args.reduction_stride <= 1024) ? 32 : 128;
+  int BN = 32;
   int BM = 1024 / BN;
-  int threadgroup_size = 4 * 32;
+  int threadgroup_size = 8 * 32;
   MTL::Size grid_dims(
       threadgroup_size * ((args.reduction_stride + BN - 1) / BN),
       out_grid_size.width,
@@ -627,9 +627,8 @@ void strided_reduce_general_dispatch(
       col_reduce_parallelization *= out.shape(i);
     }
   }
-  if (in.itemsize() == 4 && col_reduce_parallelization < 8 &&
-      args.reduce_ndim == 0 &&
-      args.reduction_size / args.reduction_stride > 1) {
+  if (in.itemsize() < 8 && col_reduce_parallelization < 8 &&
+      args.reduce_ndim == 0 && args.reduction_size > args.reduction_stride) {
     init_reduce(out, op_name, compute_encoder, d, s);
     return strided_reduce_atomics(
         in, out, op_name, args, compute_encoder, d, s);

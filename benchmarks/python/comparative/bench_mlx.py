@@ -144,6 +144,13 @@ def reduction(op, axis, x):
     mx.eval(ys)
 
 
+def sum_and_add(axis, x, y):
+    z = x.sum(axis=axis, keepdims=True)
+    for i in range(50):
+        z = (z + y).sum(axis=axis, keepdims=True)
+    mx.eval(z)
+
+
 def softmax(axis, x):
     ys = []
     for i in range(100):
@@ -504,6 +511,9 @@ if __name__ == "__main__":
 
     elif args.benchmark == "selu":
         print(bench(selu, x))
+
+    elif args.benchmark == "sum_and_add":
+        print(bench(sum_and_add, axis, *xs))
 
     else:
         raise ValueError("Unknown benchmark")

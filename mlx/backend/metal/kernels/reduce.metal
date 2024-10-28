@@ -129,7 +129,6 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
                      itype, otype, op, dim, bm, bn)
 
 #define instantiate_col_reduce_looped(name, itype, otype, op, dim)        \
-  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 8, 128) \
   instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32)
 
 #define instantiate_col_reduce_general(name, itype, otype, op) \

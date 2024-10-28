@@ -216,7 +216,7 @@ template <typename T, typename U, typename Op, int NDIMS, int BM, int BN>
     uint simd_lane_id [[thread_index_in_simdgroup]],
     uint simd_group_id [[simdgroup_index_in_threadgroup]]) {
   Op op;
-  constexpr int n_simdgroups = 4;
+  constexpr int n_simdgroups = 8;
   constexpr short tgp_size = n_simdgroups * simd_size;
   constexpr short n_reads = (BM * BN) / tgp_size;
   constexpr short n_read_blocks = BN / n_reads;
