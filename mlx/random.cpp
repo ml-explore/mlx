@@ -290,8 +290,14 @@ array bernoulli(
     throw std::invalid_argument(
         "[bernoulli] bernoulli probability `p` must be a float type.");
   }
-  auto res = uniform(shape, p.dtype(), key, s);
-  res = less(res, p, s);
+
+  // Place p on the scale [0, UINT32_MAX]
+  auto p_uint = astype(
+      multiply(p, array(std::numeric_limits<uint32_t>::max(), float32), s),
+      uint32,
+      s);
+  auto res = bits(shape, key, s);
+  res = less(res, p_uint, s);
   if (res.shape() != shape) {
     throw std::invalid_argument(
         "[bernoulli] shape of `p` is incompatible with argument `shape`.");
