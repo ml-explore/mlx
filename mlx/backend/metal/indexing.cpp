@@ -197,7 +197,7 @@ void Scatter::eval_gpu(const std::vector<array>& inputs, array& out) {
 
   auto idx_to_out = idx_size / out.size();
   int nwork;
-  if (idx_to_out < 1) {
+  if (idx_ndim <= 1 || idx_to_out < 1) {
     nwork = 1;
   } else if (idx_to_out <= 4) {
     nwork = 4;

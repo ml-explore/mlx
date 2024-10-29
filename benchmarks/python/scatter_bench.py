@@ -54,7 +54,7 @@ if __name__ == "__main__":
         (100_000, 64),
         (1_000_000, 64),
         (100_000,),
-        (2_000_00,),
+        (200_000,),
         (20_000_000,),
         (10000, 64),
         (100, 64),
@@ -94,4 +94,3 @@ if __name__ == "__main__":
         print(f"Dst: {dst_shape}, X {x_shape}, Indices {idx_shape}")
         benchmark_scatter_mlx(dst_shape, x_shape, idx_shape)
         benchmark_scatter_torch(dst_shape, x_shape, idx_shape, device=device)
-        exit(0)
