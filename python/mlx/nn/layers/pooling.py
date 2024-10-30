@@ -332,38 +332,3 @@ class AvgPool2d(_Pool2d):
         padding: Optional[Union[int, Tuple[int, int]]] = 0,
     ):
         super().__init__(mx.mean, 0, kernel_size, stride, padding)
-
-
-class _Pool3d(_Pool):
-    def __init__(
-        self,
-        pooling_function,
-        padding_value,
-        kernel_size: Union[int, Tuple[int, int, int]],
-        stride: Optional[Union[int, Tuple[int, int, int]]] = None,
-        padding: Optional[Union[int, Tuple[int, int, int]]] = 0,
-    ):
-        class_name = type(self).__name__
-        msg = "[{}] '{}' must be an integer or a tuple containing 3 integers"
-        kernel_size = _value_or_list(
-            kernel_size, 3, msg.format(class_name, "kernel_size")
-        )
-        if stride is not None:
-            stride = _value_or_list(stride, 3, msg.format(class_name, "stride"))
-        else:
-            stride = kernel_size
-        padding = _value_or_list(padding, 3, msg.format(class_name, "padding"))
-        padding = [(p, p) for p in padding]
-
-        super().__init__(pooling_function, kernel_size, stride, padding, padding_value)
-
-
-class MaxPool3d(_Pool3d):
-
-    def __init__(
-        self,
-        kernel_size: Union[int, Tuple[int, int, int]],
-        stride: Optional[Union[int, Tuple[int, int, int]]] = None,
-        padding: Optional[Union[int, Tuple[int, int, int]]] = 0,
-    ):
-        super().__init__(mx.max, -float("inf"), kernel_size, stride, padding)
