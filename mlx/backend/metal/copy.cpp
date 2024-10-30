@@ -120,6 +120,7 @@ void copy_gpu_inplace(
   compute_encoder.set_input_array(donate_in ? out : in, 0, inp_offset);
   compute_encoder.set_output_array(out, 1, out_offset);
 
+  auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   if (ctype == CopyType::General || ctype == CopyType::GeneralGeneral) {
     std::vector<int64_t> strides_in{strides_in_.begin(), strides_in_.end()};
     std::vector<int64_t> strides_out{strides_out_.begin(), strides_out_.end()};
@@ -145,7 +146,6 @@ void copy_gpu_inplace(
     }
 
     // NB assuming thread_group_size is a power of 2 larger than 32 x 32
-    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::copy] Must use 1024 sized block");
     }
@@ -155,13 +155,12 @@ void copy_gpu_inplace(
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     size_t nthreads = out.data_size();
-    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                                 : MTL::Size(nthreads, 1, 1);
-    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                                 : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
@@ -205,14 +204,14 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   compute_encoder.set_input_array(val, 0);
   compute_encoder.set_output_array(out, 1);
 
+  auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   size_t nthreads = out.data_size();
-  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                               : MTL::Size(nthreads, 1, 1);
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   if (thread_group_size > nthreads) {
     thread_group_size = nthreads;
   }
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                               : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 

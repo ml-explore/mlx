@@ -72,6 +72,7 @@ void ternary_op_gpu_inplace(
   compute_encoder.set_input_array(donate_c ? out : c, 2);
   compute_encoder.set_output_array(out, 3);
 
+  auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   if (topt == TernaryOpType::General) {
     // Launch up to 3D grid of threads
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
@@ -93,7 +94,6 @@ void ternary_op_gpu_inplace(
       compute_encoder->setBytes(strides_c.data(), ndim * sizeof(size_t), 6);
     }
 
-    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size != 1024) {
       throw std::runtime_error("[Metal::ternary] Must use 1024 sized block");
     }
@@ -103,13 +103,12 @@ void ternary_op_gpu_inplace(
   } else {
     // Launch a 1D or 2D grid of threads
     size_t nthreads = out.data_size();
-    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
-                                 : MTL::Size(nthreads, 1, 1);
-    NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
     if (thread_group_size > nthreads) {
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                                 : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }

@@ -47,9 +47,7 @@ void unary_op_gpu_inplace(
   kernel_name += "_" + op + type_to_name(in) + type_to_name(out);
   auto kernel = get_unary_kernel(d, kernel_name, in.dtype(), out.dtype(), op);
 
-  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(in.shape(), in.strides())
-                               : MTL::Size(nthreads, 1, 1);
-  NS::UInteger thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
+  auto thread_group_size = kernel->maxTotalThreadsPerThreadgroup();
   auto& compute_encoder = d.get_command_encoder(s.index);
   compute_encoder->setComputePipelineState(kernel);
   compute_encoder.set_input_array(
@@ -75,6 +73,8 @@ void unary_op_gpu_inplace(
       thread_group_size = nthreads;
     }
     MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
+    MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                                 : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   }
 }
