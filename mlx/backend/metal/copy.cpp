@@ -209,16 +209,9 @@ void fill_gpu(const array& val, array& out, const Stream& s) {
   if (thread_group_size > nthreads) {
     thread_group_size = nthreads;
   }
-  MTL::Size grid_dims;
   MTL::Size group_dims = MTL::Size(thread_group_size, 1, 1);
-  if (use_2d) {
-    grid_dims = get_2d_grid_dims(out.shape(), out.strides());
-    if (grid_dims.width < thread_group_size) {
-      std::swap(group_dims.width, group_dims.height);
-    }
-  } else {
-    grid_dims = MTL::Size(nthreads, 1, 1);
-  }
+  MTL::Size grid_dims = use_2d ? get_2d_grid_dims(out.shape(), out.strides())
+                               : MTL::Size(nthreads, 1, 1);
   compute_encoder.dispatchThreads(grid_dims, group_dims);
 }
 
