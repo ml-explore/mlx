@@ -62,7 +62,6 @@ html_theme_options = {
 
 html_favicon=html_theme_options["logo"]["image_light"]
 
-
 # -- Options for HTMLHelp output ---------------------------------------------
 
 htmlhelp_basename = "mlx_doc"
