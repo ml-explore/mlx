@@ -423,15 +423,10 @@ void Compiled::eval_gpu(
     size_t nthreads = outputs[0].data_size();
     MTL::Size group_dims(
         std::min(nthreads, kernel->maxTotalThreadsPerThreadgroup()), 1, 1);
-    MTL::Size grid_dims;
-    if (use_2d) {
-      grid_dims = get_2d_grid_dims(outputs[0].shape(), outputs[0].strides());
-      if (grid_dims.width < group_dims.width) {
-        std::swap(group_dims.width, group_dims.height);
-      }
-    } else {
-      grid_dims = MTL::Size(nthreads, 1, 1);
-    }
+
+    MTL::Size grid_dims = use_2d
+        ? get_2d_grid_dims(outputs[0].shape(), outputs[0].strides())
+        : MTL::Size(nthreads, 1, 1);
     compute_encoder.dispatchThreads(grid_dims, group_dims);
   } else {
     size_t dim0 = ndim > 0 ? shape[ndim - 1] : 1;
