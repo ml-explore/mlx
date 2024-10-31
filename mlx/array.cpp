@@ -271,6 +271,9 @@ array::ArrayDesc::~ArrayDesc() {
     for (array& a : ad.inputs) {
       if (a.array_desc_) {
         input_map.insert({a.id(), a});
+        for (auto& s : a.siblings()) {
+          input_map.insert({s.id(), s});
+        }
       }
     }
     ad.inputs.clear();
