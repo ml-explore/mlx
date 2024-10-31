@@ -136,6 +136,10 @@ class Device {
     return device_;
   };
 
+  const std::string& get_architecture() {
+    return arch_;
+  }
+
   void new_queue(int index);
   MTL::CommandBuffer* get_command_buffer(int index);
   int get_command_buffer_ops(int index);
@@ -228,6 +232,7 @@ class Device {
   std::shared_mutex library_mtx_;
   std::unordered_map<std::string, MTL::Library*> library_map_;
   const MTL::ResidencySet* residency_set_{nullptr};
+  std::string arch_;
 };
 
 Device& device(mlx::core::Device);
