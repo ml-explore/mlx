@@ -23,6 +23,7 @@ var searchData=
   ['is_20',['iS',['../struct_m_l_x_conv_params.html#a72e1c3b4da0f70622cf18036bbf97fe6',1,'MLXConvParams']]],
   ['is_5farray_5fv_21',['is_array_v',['../namespacemlx_1_1core.html#a01b0d64a75dfa2e95d6c7b5c53d708af',1,'mlx::core']]],
   ['is_5farrays_5fv_22',['is_arrays_v',['../namespacemlx_1_1core.html#a94c1057929b390e5613304afa16dfbda',1,'mlx::core']]],
-  ['is_5fmetal_5fatomic_23',['is_metal_atomic',['../atomic_8h.html#a91a8bdcae647947a83c6689d7f252d24',1,'atomic.h']]],
-  ['is_5fpower_5fof_5f2_5f_24',['is_power_of_2_',['../backend_2metal_2kernels_2fft_8h.html#a2a4df90e329b84ee6c1890ba7c265c9c',1,'fft.h']]]
+  ['is_5fintegral_5fv_23',['is_integral_v',['../namespacemlx_1_1steel.html#a92a3465716ea7fd682d22cecc08d45fd',1,'mlx::steel']]],
+  ['is_5fmetal_5fatomic_24',['is_metal_atomic',['../atomic_8h.html#a91a8bdcae647947a83c6689d7f252d24',1,'atomic.h']]],
+  ['is_5fpower_5fof_5f2_5f_25',['is_power_of_2_',['../backend_2metal_2kernels_2fft_8h.html#a2a4df90e329b84ee6c1890ba7c265c9c',1,'fft.h']]]
 ];
