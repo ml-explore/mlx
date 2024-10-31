@@ -128,8 +128,14 @@ instantiate_all_reduce(sumbool_, bool, uint32_t, Sum<uint32_t>)
                      col_reduce_atomics,                                          \
                      itype, otype, op, dim, bm, bn)
 
+#define instantiate_col_reduce_2pass_tile(name, itype, otype, op, dim, bm, bn)  \
+  instantiate_kernel("col_reduce_2pass_" #dim "_" #bm "_" #bn "_reduce_" #name, \
+                     col_reduce_2pass,                                          \
+                     itype, otype, op, dim, bm, bn)
+
 #define instantiate_col_reduce_looped(name, itype, otype, op, dim)        \
-  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32)
+  instantiate_col_reduce_looped_tile(name, itype, otype, op, dim, 32, 32) \
+  instantiate_col_reduce_2pass_tile(name, itype, otype, op, dim, 32, 32)
 
 #define instantiate_col_reduce_general(name, itype, otype, op) \
   instantiate_col_reduce_small(name, itype, otype, op, 0)      \

@@ -37,6 +37,7 @@ void strided_reduce_general_dispatch(
     const std::vector<int>& axes,
     CommandEncoder& compute_encoder,
     metal::Device& d,
-    const Stream& s);
+    const Stream& s,
+    std::vector<array>& copies);
 
 } // namespace mlx::core
