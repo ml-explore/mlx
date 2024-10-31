@@ -9,6 +9,7 @@ struct Indices {
   const array<const device IdxT*, NIDX> buffers;
   const constant int* shapes;
   const constant size_t* strides;
+  const constant bool* row_contiguous;
   const int ndim;
 };
 
