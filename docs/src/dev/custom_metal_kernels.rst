@@ -76,6 +76,9 @@ Putting this all together, the generated function signature for ``myexp`` is as 
 
   template [[host_name("custom_kernel_myexp_float")]] [[kernel]] decltype(custom_kernel_myexp_float<float>) custom_kernel_myexp_float<float>;
 
+Note: ``grid`` and ``threadgroup`` are parameters to the Metal `dispatchThreads function <https://developer.apple.com/documentation/metal/mtlcomputecommandencoder/2866532-dispatchthreads>`_.
+This means we will launch ``mx.prod(grid)`` threads, subdivided into ``threadgroup`` size threadgroups.
+
 Passing ``verbose=True`` to ``mx.fast.metal_kernel.__call__`` will print the generated code for debugging purposes.
 
 Using Shape/Strides
