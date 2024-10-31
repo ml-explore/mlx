@@ -1647,6 +1647,60 @@ class TestLayers(mlx_tests.MLXTestCase):
             "MaxPool3d(kernel_size=(3, 3, 3), stride=(3, 3, 3), padding=(2, 2, 2))",
         )
 
+        expected_avg_pool_output_no_padding_stride_1 = [[[[[19.5, 20.5, 21.5],
+                                                        [22.5, 23.5, 24.5]],
+                                                        [[28.5, 29.5, 30.5],
+                                                        [31.5, 32.5, 33.5]]]]
+                                                        ]
+
+        expected_avg_pool_output_no_padding_stride_2 = [[[[[19.5, 20.5, 21.5]]]]]
+        expected_avg_pool_output_padding_1 = [
+                                                    [[[[0, 0.125, 0.25],
+                                                    [1.125, 1.375, 1.625]],
+                                                    [[3.375, 3.625, 3.875],
+                                                    [9, 9.5, 10]]],
+                                                    [[[3.375, 3.5, 3.625],
+                                                    [7.875, 8.125, 8.375]],
+                                                    [[10.125, 10.375, 10.625],
+                                                    [22.5, 23, 23.5]]]]
+            ]
+        expected_irregular_avg_pool_output = [[[[[4.5, 5.5, 6.5],
+                                                [7.5, 8.5, 9.5],
+                                                [10.5, 11.5, 12.5]]],
+                                                [[[31.5, 32.5, 33.5],
+                                                [34.5, 35.5, 36.5],
+                                                [37.5, 38.5, 39.5]]]]
+                                                ]
+
+        self.assertTrue(
+            np.array_equal(
+                nn.AvgPool3d(kernel_size=2, stride=1, padding=0)(x),
+                expected_avg_pool_output_no_padding_stride_1,
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                nn.AvgPool3d(kernel_size=2, stride=2, padding=0)(x),
+                expected_avg_pool_output_no_padding_stride_2,
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                nn.AvgPool3d(kernel_size=2, stride=2, padding=1)(x),
+                expected_avg_pool_output_padding_1,
+            )
+        )
+        self.assertTrue(
+            np.array_equal(
+                nn.AvgPool3d(kernel_size=(1, 2, 1), stride=(1, 2, 1))(x),
+                expected_irregular_avg_pool_output,
+            )
+        )
+        self.assertEqual(
+            str(nn.AvgPool3d(kernel_size=3, stride=3, padding=2)),
+            "AvgPool3d(kernel_size=(3, 3, 3), stride=(3, 3, 3), padding=(2, 2, 2))",
+        )
+
     def test_set_dtype(self):
         def assert_dtype(layer, dtype):
             for k, v in tree_flatten(layer.parameters()):
