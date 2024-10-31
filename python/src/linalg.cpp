@@ -19,6 +19,10 @@ nb::tuple svd_helper(const mx::array& a, mx::StreamOrDevice s /* = {} */) {
   const auto result = mx::linalg::svd(a, s);
   return nb::make_tuple(result.at(0), result.at(1), result.at(2));
 }
+nb::tuple lu_helper(const array& a, StreamOrDevice s /* = {} */) {
+  const auto result = lu(a, s);
+  return nb::make_tuple(result.at(0), result.at(1), result.at(2));
+}
 } // namespace
 
 void init_linalg(nb::module_& parent_module) {
@@ -262,7 +266,7 @@ void init_linalg(nb::module_& parent_module) {
       "tri_inv",
       &mx::linalg::tri_inv,
       "a"_a,
-      "upper"_a,
+      "upper"_a = false,
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
@@ -276,7 +280,7 @@ void init_linalg(nb::module_& parent_module) {
 
         Args:
             a (array): Input array.
-            upper (array): Whether the array is upper or lower triangular. Defaults to ``False``.
+            upper (bool, optional): Whether the array is upper or lower triangular. Defaults to ``False``.
             stream (Stream, optional): Stream or device. Defaults to ``None``
               in which case the default stream of the default device is used.
 
@@ -484,6 +488,44 @@ void init_linalg(nb::module_& parent_module) {
                   [ 0.707107,  0.707107]], dtype=float32)
       )pbdoc");
   m.def(
+      "lu",
+      &lu_helper,
+      "a"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def lu(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
+      R"pbdoc(
+        Compute the LU factorization of the given matrix ``A``.
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            tuple(array, array, array): The ``P``, ``L``, and ``U`` matrices, such that ``A = P @ L @ U``
+      )pbdoc");
+  m.def(
+      "lu_factor",
+      &lu_factor,
+      "a"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def lu_factor(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
+      R"pbdoc(
+        Computes a compact representation of the LU factorization.
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            tuple(array, array): The ``LU`` matrix and ``pivots`` array.
+      )pbdoc");
+  m.def(
       "solve",
       &solve,
       "a"_a,
@@ -493,13 +535,38 @@ void init_linalg(nb::module_& parent_module) {
       nb::sig(
           "def solve(a: array, b: array, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
-        Compute the solution to a system of linear equations ax = b.
+        Compute the solution to a system of linear equations ``AX = B``.
 
         Args:
             a (array): Input array.
             b (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
 
         Returns:
-            array: The unique solution to the system ax = b.
+            array: The unique solution to the system ``AX = B``.
+      )pbdoc");
+  m.def(
+      "solve_triangular",
+      &solve_triangular,
+      "a"_a,
+      "b"_a,
+      "upper"_a = false,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def solve_triangular(a: array, b: array, upper: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Computes the solution of a triangular system of linear equations ``AX = B``.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+            upper (bool, optional): Whether the array is upper or lower triangular. Default ``False``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The unique solution to the system ``AX = B``.
       )pbdoc");
 }

@@ -2349,17 +2349,16 @@ class Eigh : public Primitive {
   bool compute_eigenvectors_;
 };
 
-class Solve : public Primitive {
+/* LU Factorization primitive. */
+class LUF : public Primitive {
  public:
-  explicit Solve(Stream stream) : Primitive(stream) {}
+  explicit LUF(Stream stream) : Primitive(stream) {}
   void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
   void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
       override;
 
-  DEFINE_VMAP()
-  DEFINE_PRINT(Solve)
-  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_PRINT(LUF)
 
  private:
   void eval(const std::vector<array>& inputs, std::vector<array>& outputs);

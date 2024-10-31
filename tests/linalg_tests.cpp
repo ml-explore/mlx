@@ -466,6 +466,26 @@ TEST_CASE("test matrix eigh") {
   CHECK(allclose(matmul(A, eigvecs), eigvals * eigvecs).item<bool>());
 }
 
+TEST_CASE("test lu") {
+  // Test 2x2 matrix
+  array a = array({1., 2., 3., 4.}, {2, 2});
+  auto out = linalg::lu(a, Device::cpu);
+  array expected = matmul(matmul(out[0], out[1]), out[2]);
+  CHECK(allclose(a, expected).item<bool>());
+
+  // Test 3x3 matrix
+  a = array({1., 2., 3., 4., 5., 6., 7., 8., 10.}, {3, 3});
+  out = linalg::lu(a, Device::cpu);
+  expected = matmul(matmul(out[0], out[1]), out[2]);
+  CHECK(allclose(a, expected).item<bool>());
+
+  // Test batch dimension
+  a = broadcast_to(a, {3, 3, 3});
+  out = linalg::lu(a, Device::cpu);
+  expected = matmul(matmul(out[0], out[1]), out[2]);
+  CHECK(allclose(a, expected).item<bool>());
+}
+
 TEST_CASE("test solve") {
   // 0D and 1D throw
   CHECK_THROWS(linalg::solve(array(0.), array(0.), Device::cpu));
@@ -495,8 +515,8 @@ TEST_CASE("test solve") {
   CHECK(allclose(matmul(a, result), b).item<bool>());
 
   // Test batch dimension
-  a = reshape(concatenate({a, a, a, a, a}), {5, 3, 3});
-  b = reshape(concatenate({b, b, b, b, b}), {5, 3, 1});
+  a = broadcast_to(a, {5, 3, 3});
+  b = broadcast_to(b, {5, 3, 1});
 
   result = linalg::solve(a, b, Device::cpu);
   CHECK(allclose(matmul(a, result), b).item<bool>());
@@ -514,4 +534,23 @@ TEST_CASE("test solve") {
 
   result = linalg::solve(a, b, Device::cpu);
   CHECK(allclose(matmul(a, result), b).item<bool>());
+}
+
+TEST_CASE("test solve_triangluar") {
+  // Test lower triangular matrix
+  array a = array({2., 0., 0., 3., 1., 0., 1., -1., 1.}, {3, 3});
+  array b = array({2., 5., 0.});
+
+  array result =
+      linalg::solve_triangular(a, b, /* upper = */ false, Device::cpu);
+  array expected = array({1., 2., 1.});
+  CHECK(allclose(expected, result).item<bool>());
+
+  // Test upper triangular matrix
+  a = array({2., 1., 3., 0., 4., 2., 0., 0., 1.}, {3, 3});
+  b = array({5., 14., 3.});
+
+  result = linalg::solve_triangular(a, b, /* upper = */ true, Device::cpu);
+  expected = array({-3., 2., 3.});
+  CHECK(allclose(expected, result).item<bool>());
 }
