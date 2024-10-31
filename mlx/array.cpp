@@ -95,13 +95,29 @@ void array::detach() {
   array_desc_->primitive = nullptr;
 }
 
-void array::eval() {
-  // Ensure the array is ready to be read
-  if (status() == Status::scheduled) {
+bool array::is_available() const {
+  if (status() == Status::available) {
+    return true;
+  } else if (status() == Status::evaluated && event().is_signaled()) {
+    set_status(Status::available);
+    return true;
+  }
+  return false;
+}
+
+void array::wait() {
+  if (!is_available()) {
     event().wait();
     set_status(Status::available);
-  } else if (status() == Status::unscheduled) {
+  }
+}
+
+void array::eval() {
+  // Ensure the array is ready to be read
+  if (status() == Status::unscheduled) {
     mlx::core::eval({*this});
+  } else {
+    wait();
   }
 }
 
@@ -162,8 +178,10 @@ void array::move_shared_buffer(
   array_desc_->flags = flags;
   array_desc_->data_size = data_size;
   auto char_offset = sizeof(char) * itemsize() * offset;
-  array_desc_->data_ptr = static_cast<void*>(
-      static_cast<char*>(other.array_desc_->data_ptr) + char_offset);
+  auto data_ptr = other.array_desc_->data_ptr;
+  other.array_desc_->data_ptr = nullptr;
+  array_desc_->data_ptr =
+      static_cast<void*>(static_cast<char*>(data_ptr) + char_offset);
 }
 
 void array::move_shared_buffer(array other) {
@@ -242,25 +260,35 @@ array::ArrayDesc::~ArrayDesc() {
   // This calls recursively the destructor and can result in stack overflow, we
   // instead put them in a vector and destroy them one at a time resulting in a
   // max stack depth of 2.
+  if (inputs.empty()) {
+    return;
+  }
+
   std::vector<std::shared_ptr<ArrayDesc>> for_deletion;
 
-  for (array& a : inputs) {
-    if (a.array_desc_.use_count() == 1) {
-      for_deletion.push_back(std::move(a.array_desc_));
+  auto append_deletable_inputs = [&for_deletion](ArrayDesc& ad) {
+    std::unordered_map<std::uintptr_t, array> input_map;
+    for (array& a : ad.inputs) {
+      if (a.array_desc_) {
+        input_map.insert({a.id(), a});
+      }
     }
-  }
+    ad.inputs.clear();
+    for (auto& [_, a] : input_map) {
+      if (a.array_desc_.use_count() <= a.siblings().size() + 1) {
+        for_deletion.push_back(std::move(a.array_desc_));
+      }
+    }
+  };
+
+  append_deletable_inputs(*this);
 
   while (!for_deletion.empty()) {
     // top is going to be deleted at the end of the block *after* the arrays
     // with inputs have been moved into the vector
     auto top = std::move(for_deletion.back());
     for_deletion.pop_back();
-
-    for (array& a : top->inputs) {
-      if (a.array_desc_.use_count() == 1) {
-        for_deletion.push_back(std::move(a.array_desc_));
-      }
-    }
+    append_deletable_inputs(*top);
   }
 }
 

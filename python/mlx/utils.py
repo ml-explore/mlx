@@ -1,10 +1,10 @@
 # Copyright © 2023 Apple Inc.
 from collections import defaultdict
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 
 def tree_map(
-    fn: Callable, tree: Any, *rest: Tuple[Any], is_leaf: Callable = None
+    fn: Callable, tree: Any, *rest: Any, is_leaf: Optional[Callable] = None
 ) -> Any:
     """Applies ``fn`` to the leaves of the Python tree ``tree`` and
     returns a new collection with the results.
@@ -59,8 +59,8 @@ def tree_map(
 def tree_map_with_path(
     fn: Callable,
     tree: Any,
-    *rest: Tuple[Any],
-    is_leaf: Callable = None,
+    *rest: Any,
+    is_leaf: Optional[Callable] = None,
     path: Any = None,
 ) -> Any:
     """Applies ``fn`` to the path and leaves of the Python tree ``tree`` and
@@ -111,7 +111,11 @@ def tree_map_with_path(
         return fn(path, tree, *rest)
 
 
-def tree_flatten(tree: Any, prefix: str = "", is_leaf: Callable = None) -> Any:
+
+def tree_flatten(
+    tree: Any, prefix: str = "", is_leaf: Optional[Callable] = None
+) -> Any:
+
     """Flattens a Python tree to a list of key, value tuples.
 
     The keys are using the dot notation to define trees of arbitrary depth and
@@ -155,7 +159,9 @@ def tree_flatten(tree: Any, prefix: str = "", is_leaf: Callable = None) -> Any:
     return [(prefix[1:], tree)]
 
 
-def tree_unflatten(tree: Any) -> Any:
+
+def tree_unflatten(tree: List[Tuple[str, Any]]) -> Any:
+
     """Recreate a Python tree from its flat representation.
 
     .. code-block:: python

@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <fstream>
 #include <list>
+#include <mutex>
+#include <shared_mutex>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/common/compiled_preamble.h"
@@ -12,22 +14,7 @@
 
 namespace mlx::core {
 
-// GPU compile is always available if the GPU is available and since we are in
-// this file CPU compile is also available.
-namespace detail {
-bool compile_available_for_device(const Device& device) {
-  return true;
-}
-} // namespace detail
-
-std::string get_temp_file(const std::string& name) {
-  return std::filesystem::temp_directory_path().append(name);
-}
-
-// Return a pointer to a compiled function
-void* compile(
-    const std::string& kernel_name,
-    const std::string& source_code = "") {
+struct CompilerCache {
   struct DLib {
     DLib(const std::string& libname) {
       lib = dlopen(libname.c_str(), RTLD_NOW);
@@ -44,15 +31,41 @@ void* compile(
     void* lib;
   };
   // Statics to cache compiled libraries and functions
-  static std::list<DLib> libs;
-  static std::unordered_map<std::string, void*> kernels;
-  if (auto it = kernels.find(kernel_name); it != kernels.end()) {
-    return it->second;
-  }
-  if (source_code.empty()) {
-    return nullptr;
+  std::list<DLib> libs;
+  std::unordered_map<std::string, void*> kernels;
+  std::shared_mutex mtx;
+};
+
+static CompilerCache cache{};
+
+// GPU compile is always available if the GPU is available and since we are in
+// this file CPU compile is also available.
+namespace detail {
+bool compile_available_for_device(const Device& device) {
+  return true;
+}
+} // namespace detail
+
+std::string get_temp_file(const std::string& name) {
+  return std::filesystem::temp_directory_path().append(name);
+}
+
+// Return a pointer to a compiled function
+void* compile(
+    const std::string& kernel_name,
+    const std::function<std::string(void)>& source_builder) {
+  {
+    std::shared_lock lock(cache.mtx);
+    if (auto it = cache.kernels.find(kernel_name); it != cache.kernels.end()) {
+      return it->second;
+    }
   }
 
+  std::unique_lock lock(cache.mtx);
+  if (auto it = cache.kernels.find(kernel_name); it != cache.kernels.end()) {
+    return it->second;
+  }
+  std::string source_code = source_builder();
   std::string kernel_file_name;
 
   // Deal with long kernel names. Maximum length for files on macOS is 255
@@ -90,8 +103,8 @@ void* compile(
     source_file.close();
 
     std::ostringstream build_command;
-    build_command << "g++ -std=c++17 -O2 -Wall -fPIC -shared "
-                  << source_file_path << " -o " << shared_lib_path;
+    build_command << "g++ -std=c++17 -O3 -Wall -fPIC -shared '"
+                  << source_file_path << "' -o '" << shared_lib_path << "'";
     std::string build_command_str = build_command.str();
     auto return_code = system(build_command_str.c_str());
     if (return_code) {
@@ -103,10 +116,10 @@ void* compile(
   }
 
   // load library
-  libs.emplace_back(shared_lib_path);
+  cache.libs.emplace_back(shared_lib_path);
 
   // Load function
-  void* fun = dlsym(libs.back().lib, kernel_name.c_str());
+  void* fun = dlsym(cache.libs.back().lib, kernel_name.c_str());
   if (!fun) {
     std::ostringstream msg;
     msg << "[Compile::eval_cpu] Failed to load compiled function "
@@ -114,7 +127,7 @@ void* compile(
         << dlerror();
     throw std::runtime_error(msg.str());
   }
-  kernels.insert({kernel_name, fun});
+  cache.kernels.insert({kernel_name, fun});
   return fun;
 }
 
@@ -316,10 +329,7 @@ void Compiled::eval_cpu(
   }
 
   // Get the function
-  auto fn_ptr = compile(kernel_name);
-
-  // If it doesn't exist, compile it
-  if (fn_ptr == nullptr) {
+  auto fn_ptr = compile(kernel_name, [&]() {
     std::ostringstream kernel;
     kernel << get_kernel_preamble() << std::endl;
     kernel << "extern \"C\"  {" << std::endl;
@@ -334,10 +344,8 @@ void Compiled::eval_cpu(
         ndim);
     // Close extern "C"
     kernel << "}" << std::endl;
-
-    // Compile and get function pointer
-    fn_ptr = compile(kernel_name, kernel.str());
-  }
+    return kernel.str();
+  });
 
   compiled_allocate_outputs(
       inputs, outputs, inputs_, constant_ids_, contiguous, false);

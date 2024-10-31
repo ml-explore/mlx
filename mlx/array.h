@@ -219,11 +219,23 @@ class array {
   };
 
   struct Flags {
-    // True if there are no gaps in the underlying data. Each item
+    // True iff there are no gaps in the underlying data. Each item
     // in the underlying data buffer belongs to at least one index.
+    //
+    // True iff:
+    // prod(shape[i] for i in range(ndim) if strides[i] > 0) == data_size()
     bool contiguous : 1;
 
+    // True iff:
+    // strides[-1] == 1 and
+    // all(strides[i] == (shape[i+1]*strides[i+1]) or shape[i] == 1 for i in
+    // range(ndim - 1))
     bool row_contiguous : 1;
+
+    // True iff:
+    // strides[0] == 1 and
+    // all(strides[i] == (shape[i-1]*strides[i-1]) or shape[i] == 1 for i in
+    // range(1, ndim))
     bool col_contiguous : 1;
   };
 
@@ -291,7 +303,16 @@ class array {
     return array_desc_->flags;
   }
 
-  /** The size (in elements) of the underlying buffer the array points to. */
+  /** The size (in elements) of the underlying buffer the array points to.
+   *
+   * This can be different than the actual size of the array if the array has
+   * been broadcast or irregularly strided.  If ``first`` is the offset into
+   * the data buffer of the first element of the array (i.e. the offset
+   * corresponding to ``arr[0, 0, ...]``) and last is the offset into the
+   * data buffer of the last element of the array (i.e. the offset
+   * corresponding to ``arr[-1, -1, ...]``) then ``data_size = last - first``.
+   * Note, ``data_size`` is in units of ``item_size`` (not bytes).
+   **/
   size_t data_size() const {
     return array_desc_->data_size;
   }
@@ -301,6 +322,10 @@ class array {
   }
   const allocator::Buffer& buffer() const {
     return array_desc_->data->buffer;
+  }
+
+  size_t buffer_size() const {
+    return allocator::allocator().size(buffer());
   }
 
   // Return a copy of the shared pointer
@@ -319,11 +344,33 @@ class array {
     return static_cast<T*>(array_desc_->data_ptr);
   }
 
-  enum Status { unscheduled, scheduled, available };
+  enum Status {
+    // The ouptut of a computation which has not been scheduled.
+    // For example, the status of `x` in `auto x = a + b`.
+    unscheduled,
 
-  bool is_available() const {
-    return status() == Status::available;
-  }
+    // The ouptut of a computation which has been scheduled but `eval_*` has
+    // not yet been called on the array's primitive. A possible
+    // status of `x` in `auto x = a + b; eval(x);`
+    scheduled,
+
+    // The array's `eval_*` function has been run, but the computation is not
+    // necessarily complete. The array will have memory allocated and if it is
+    // not a tracer then it will be detached from the graph.
+    evaluated,
+
+    // If the array is the output of a computation then the computation
+    // is complete. Constant arrays are always available (e.g. `array({1, 2,
+    // 3})`)
+    available
+  };
+
+  // Check if the array is safe to read.
+  bool is_available() const;
+
+  // Wait on the array to be available. After this `is_available` returns
+  // `true`.
+  void wait();
 
   Status status() const {
     return array_desc_->status;
@@ -412,8 +459,6 @@ class array {
     void* data_ptr{nullptr};
 
     // The size in elements of the data buffer the array accesses
-    // This can be different than the actual size of the array if it
-    // has been broadcast or irregularly strided.
     size_t data_size;
 
     // Contains useful meta data about the array

@@ -93,7 +93,7 @@ void init_random(nb::module_& parent_module) {
       "num"_a = 2,
       "stream"_a = nb::none(),
       nb::sig(
-          "def split(key: array, num: int = 2, stream: Union[None, Stream, Device] = None) -> array)"),
+          "def split(key: array, num: int = 2, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Split a PRNG key into sub keys.
 
@@ -321,7 +321,7 @@ void init_random(nb::module_& parent_module) {
       "key"_a = nb::none(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def truncated_normal(lower: Union[scalar, array], upper: Union[scalar, array], shape: Optional[Sequence[int]] = None, dtype: float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+          "def truncated_normal(lower: Union[scalar, array], upper: Union[scalar, array], shape: Optional[Sequence[int]] = None, dtype: Optional[Dtype] = float32, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Generate values from a truncated normal distribution.
 
@@ -352,10 +352,10 @@ void init_random(nb::module_& parent_module) {
       },
       "shape"_a = std::vector<int>{},
       "dtype"_a.none() = float32,
-      "stream"_a = nb::none(),
       "key"_a = nb::none(),
+      "stream"_a = nb::none(),
       nb::sig(
-          "def gumbel(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, stream: Optional[array] = None, key: Union[None, Stream, Device] = None) -> array"),
+          "def gumbel(shape: Sequence[int] = [], dtype: Optional[Dtype] = float32, key: Union[None, Stream, Device] = None, stream: Optional[array] = None) -> array"),
       R"pbdoc(
         Sample from the standard Gumbel distribution.
 
@@ -364,11 +364,14 @@ void init_random(nb::module_& parent_module) {
 
         Args:
             shape (list(int)): The shape of the output.
+            dtype (Dtype, optional): The data type of the output.
+              Default: ``float32``.
             key (array, optional): A PRNG key. Default: ``None``.
 
         Returns:
-            array: The :class:`array` with shape ``shape`` and
-                   distributed according to the Gumbel distribution
+            array:
+              The :class:`array` with shape ``shape`` and distributed according
+              to the Gumbel distribution.
       )pbdoc");
   m.def(
       "categorical",
@@ -453,6 +456,39 @@ void init_random(nb::module_& parent_module) {
 
         Returns:
             array: The output array of random values.
+      )pbdoc");
+  m.def(
+      "permuation",
+      [](const std::variant<int, array>& x,
+         int axis,
+         const std::optional<array>& key_,
+         StreamOrDevice s) {
+        auto key = key_ ? key_.value() : default_key().next();
+        if (auto pv = std::get_if<int>(&x); pv) {
+          return permutation(*pv, key, s);
+        } else {
+          return permutation(std::get<array>(x), axis, key, s);
+        }
+      },
+      "shape"_a = std::vector<int>{},
+      "axis"_a = 0,
+      "key"_a = nb::none(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def permutation(x: Union[int, array], axis: int = 0, key: Optional[array] = None, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Generate a random permutation or permute the entries of an array.
+
+        Args:
+            x (int or array, optional): If an integer is provided a random
+              permtuation of ``mx.arange(x)`` is returned. Otherwise the entries
+              of ``x`` along the given axis are randomly permuted.
+            axis (int, optional): The axis to permute along. Default: ``0``.
+            key (array, optional): A PRNG key. Default: ``None``.
+
+        Returns:
+            array:
+              The generated random permutation or randomly permuted input array.
       )pbdoc");
   // Register static Python object cleanup before the interpreter exits
   auto atexit = nb::module_::import_("atexit");

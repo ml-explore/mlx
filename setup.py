@@ -141,6 +141,8 @@ class GenerateStubs(Command):
             "nanobind.stubgen",
             "-m",
             "mlx.core",
+            "-p",
+            "python/mlx/_stub_patterns.txt",
         ]
         subprocess.run(stub_cmd + ["-r", "-O", out_path])
         # Run again without recursive to specify output file name
@@ -163,7 +165,7 @@ if __name__ == "__main__":
 
     setup(
         name="mlx",
-        version=get_version("0.17.1"),
+        version=get_version("0.19.2"),
         author="MLX Contributors",
         author_email="mlx@group.apple.com",
         description="A framework for machine learning on Apple silicon.",
@@ -176,7 +178,7 @@ if __name__ == "__main__":
         include_package_data=True,
         extras_require={
             "dev": [
-                "nanobind==2.1.0",
+                "nanobind==2.2.0",
                 "numpy",
                 "pre-commit",
                 "setuptools>=42",
@@ -187,5 +189,5 @@ if __name__ == "__main__":
         ext_modules=[CMakeExtension("mlx.core")],
         cmdclass={"build_ext": CMakeBuild, "generate_stubs": GenerateStubs},
         zip_safe=False,
-        python_requires=">=3.8",
+        python_requires=">=3.9",
     )

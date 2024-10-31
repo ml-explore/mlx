@@ -2,13 +2,8 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/lapack.h"
 #include "mlx/primitives.h"
-
-#ifdef ACCELERATE_NEW_LAPACK
-#include <Accelerate/Accelerate.h>
-#else
-#include <lapack.h>
-#endif
 
 namespace mlx::core {
 

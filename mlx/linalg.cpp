@@ -306,6 +306,49 @@ array cholesky(
       {a});
 }
 
+array pinv(const array& a, StreamOrDevice s /* = {} */) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << "[linalg::pinv] Arrays must have >= 2 dimensions. Received array "
+        << "with " << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  int m = a.shape(-2);
+  int n = a.shape(-1);
+  int k = std::min(m, n);
+  auto outs = linalg::svd(a, s);
+  array U = outs[0];
+  array S = outs[1];
+  array V = outs[2];
+
+  std::vector<int> starts(a.ndim(), 0);
+  std::vector<int> ends = a.shape();
+  int i = a.ndim() - 2;
+  int j = a.ndim() - 1;
+
+  // Prepare U
+  ends[i] = m;
+  ends[j] = k;
+  U = swapaxes(slice(U, starts, ends, s), -1, -2, s);
+
+  // Prepare V
+  ends[i] = k;
+  ends[j] = n;
+  V = swapaxes(slice(V, starts, ends, s), -1, -2, s);
+
+  // Prepare S
+  S = expand_dims(S, -2, s);
+
+  return matmul(divide(V, S, s), U);
+}
+
 array cholesky_inv(
     const array& L,
     bool upper /* = false */,
@@ -337,6 +380,124 @@ array cholesky_inv(
   } else {
     return matmul(swapaxes(L_inv, -1, -2, s), L_inv, s);
   }
+}
+
+array cross(
+    const array& a,
+    const array& b,
+    int axis /* = -1 */,
+    StreamOrDevice s /* = {} */) {
+  auto check_ax = [axis](const array& arr) {
+    if (axis >= static_cast<int>(arr.ndim()) || axis + arr.ndim() < 0) {
+      std::ostringstream msg;
+      msg << "[linalg::cross] axis " << axis << " invalid for array with "
+          << arr.ndim() << " dimensions.";
+      throw std::invalid_argument(msg.str());
+    }
+    if (arr.shape(axis) < 2 || arr.shape(axis) > 3) {
+      throw std::invalid_argument(
+          "[linalg::cross] The specified axis must have size 2 or 3.");
+    }
+  };
+  check_ax(a);
+  check_ax(b);
+
+  bool a_2d = a.shape(axis) == 2;
+  bool b_2d = b.shape(axis) == 2;
+
+  auto out_type = promote_types(a.dtype(), b.dtype());
+  auto ashape = a.shape();
+  auto bshape = b.shape();
+
+  ashape[axis < 0 ? axis + a.ndim() : axis] = 3;
+  bshape[axis < 0 ? axis + b.ndim() : axis] = 3;
+  auto out_shape = broadcast_shapes(ashape, bshape);
+
+  if (axis < 0) {
+    axis += out_shape.size();
+  }
+
+  out_shape[axis] = a_2d ? 2 : 3;
+  auto a_ = broadcast_to(astype(a, out_type, s), out_shape, s);
+
+  out_shape[axis] = b_2d ? 2 : 3;
+  auto b_ = broadcast_to(astype(b, out_type, s), out_shape, s);
+
+  auto a_splits = split(a_, a_2d ? 2 : 3, axis);
+  auto b_splits = split(b_, b_2d ? 2 : 3, axis);
+
+  std::vector<array> outputs;
+  if (a_2d && b_2d) {
+    auto z = zeros_like(a_splits[0], s);
+    outputs.push_back(z);
+    outputs.push_back(z);
+  } else if (b_2d) {
+    outputs.push_back(negative(multiply(a_splits[2], b_splits[1], s), s));
+    outputs.push_back(multiply(a_splits[2], b_splits[0], s));
+  } else if (a_2d) {
+    outputs.push_back(multiply(a_splits[1], b_splits[2], s));
+    outputs.push_back(negative(multiply(a_splits[0], b_splits[2], s), s));
+  } else {
+    outputs.push_back(subtract(
+        multiply(a_splits[1], b_splits[2], s),
+        multiply(a_splits[2], b_splits[1], s),
+        s));
+    outputs.push_back(subtract(
+        multiply(a_splits[2], b_splits[0], s),
+        multiply(a_splits[0], b_splits[2], s),
+        s));
+  }
+  outputs.push_back(subtract(
+      multiply(a_splits[0], b_splits[1], s),
+      multiply(a_splits[1], b_splits[0], s),
+      s));
+  return concatenate(outputs, axis, s);
+}
+
+void validate_eigh(const array& a, const std::string fname) {
+  if (a.dtype() != float32) {
+    std::ostringstream msg;
+    msg << fname << " Arrays must have type float32. Received array "
+        << "with type " << a.dtype() << ".";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.ndim() < 2) {
+    std::ostringstream msg;
+    msg << fname << " Arrays must have >= 2 dimensions. Received array with "
+        << a.ndim() << " dimensions.";
+    throw std::invalid_argument(msg.str());
+  }
+
+  if (a.shape(-1) != a.shape(-2)) {
+    throw std::invalid_argument(fname + " Only defined for square matrices.");
+  }
+}
+
+array eigvalsh(
+    const array& a,
+    std::string UPLO /* = "L" */,
+    StreamOrDevice s /* = {} */) {
+  validate_eigh(a, "[linalg::eigvalsh]");
+  std::vector<int> out_shape(a.shape().begin(), a.shape().end() - 1);
+  return array(
+      std::move(out_shape),
+      a.dtype(),
+      std::make_shared<Eigh>(to_stream(s), UPLO, false),
+      {a});
+}
+
+std::pair<array, array> eigh(
+    const array& a,
+    std::string UPLO /* = "L" */,
+    StreamOrDevice s /* = {} */) {
+  validate_eigh(a, "[linalg::eigh]");
+  auto out = array::make_arrays(
+      {std::vector<int>(a.shape().begin(), a.shape().end() - 1), a.shape()},
+      {a.dtype(), a.dtype()},
+      std::make_shared<Eigh>(to_stream(s), UPLO, true),
+      {a});
+  return std::make_pair(out[0], out[1]);
 }
 
 } // namespace mlx::core::linalg

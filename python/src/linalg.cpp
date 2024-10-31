@@ -63,7 +63,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def norm(a: array, /, ord: Union[None, scalar, str] = None, axis: Union[None, int, List[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
+          "def norm(a: array, /, ord: Union[None, int, float, str] = None, axis: Union[None, int, list[int]] = None, keepdims: bool = False, *, stream: Union[None, Stream, Device] = None) -> array"),
       R"pbdoc(
         Matrix or vector norm.
 
@@ -74,7 +74,7 @@ void init_linalg(nb::module_& parent_module) {
           a (array): Input array.  If ``axis`` is ``None``, ``a`` must be 1-D or 2-D,
             unless ``ord`` is ``None``. If both ``axis`` and ``ord`` are ``None``, the
             2-norm of ``a.flatten`` will be returned.
-          ord (scalar or str, optional): Order of the norm (see table under ``Notes``).
+          ord (int, float or str, optional): Order of the norm (see table under ``Notes``).
             If ``None``, the 2-norm (or Frobenius norm for matrices) will be computed
             along the given ``axis``.  Default: ``None``.
           axis (int or list(int), optional): If ``axis`` is an integer, it specifies the
@@ -187,7 +187,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def qr(a: array, *, stream: Union[None, Stream, Device] = None) -> (array, array)"),
+          "def qr(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array]"),
       R"pbdoc(
         The QR factorization of the input matrix.
 
@@ -220,7 +220,7 @@ void init_linalg(nb::module_& parent_module) {
       nb::kw_only(),
       "stream"_a = nb::none(),
       nb::sig(
-          "def svd(a: array, *, stream: Union[None, Stream, Device] = None) -> (array, array, array)"),
+          "def svd(a: array, *, stream: Union[None, Stream, Device] = None) -> Tuple[array, array, array]"),
       R"pbdoc(
         The Singular Value Decomposition (SVD) of the input matrix.
 
@@ -352,5 +352,138 @@ void init_linalg(nb::module_& parent_module) {
 
         Returns:
           array: :math:`\mathbf{A^{-1}}` where :math:`\mathbf{A} = \mathbf{L}\mathbf{L}^T`.
+      )pbdoc");
+  m.def(
+      "pinv",
+      &pinv,
+      "a"_a,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def pinv(a: array, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the (Moore-Penrose) pseudo-inverse of a matrix.
+
+        This function calculates a generalized inverse of a matrix using its
+        singular-value decomposition. This function supports arrays with at least 2 dimensions.
+        When the input has more than two dimensions, the inverse is computed for each
+        matrix in the last two dimensions of ``a``.
+
+        Args:
+            a (array): Input array.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: ``aplus`` such that ``a @ aplus @ a = a``
+      )pbdoc");
+  m.def(
+      "cross",
+      &cross,
+      "a"_a,
+      "b"_a,
+      "axis"_a = -1,
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      nb::sig(
+          "def cross(a: array, b: array, axis: int = -1, *, stream: Union[None, Stream, Device] = None) -> array"),
+      R"pbdoc(
+        Compute the cross product of two arrays along a specified axis.
+
+        The cross product is defined for arrays with size 2 or 3 in the
+        specified axis. If the size is 2 then the third value is assumed
+        to be zero.
+
+        Args:
+            a (array): Input array.
+            b (array): Input array.
+            axis (int, optional): Axis along which to compute the cross
+              product. Default: ``-1``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The cross product of ``a`` and ``b`` along the specified axis.
+      )pbdoc");
+  m.def(
+      "eigvalsh",
+      &eigvalsh,
+      "a"_a,
+      "UPLO"_a = "L",
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Compute the eigenvalues of a complex Hermitian or real symmetric matrix.
+
+        This function supports arrays with at least 2 dimensions. When the
+        input has more than two dimensions, the eigenvalues are computed for
+        each matrix in the last two dimensions.
+
+        Args:
+            a (array): Input array. Must be a real symmetric or complex
+              Hermitian matrix.
+            UPLO (str, optional): Whether to use the upper (``"U"``) or
+              lower (``"L"``) triangle of the matrix.  Default: ``"L"``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            array: The eigenvalues in ascending order.
+
+        Note:
+            The input matrix is assumed to be symmetric (or Hermitian). Only
+            the selected triangle is used. No checks for symmetry are performed.
+
+        Example:
+            >>> A = mx.array([[1., -2.], [-2., 1.]])
+            >>> eigenvalues = mx.linalg.eigvalsh(A, stream=mx.cpu)
+            >>> eigenvalues
+            array([-1., 3.], dtype=float32)
+      )pbdoc");
+  m.def(
+      "eigh",
+      [](const array& a, const std::string UPLO, StreamOrDevice s) {
+        // TODO avoid cast?
+        auto result = eigh(a, UPLO, s);
+        return nb::make_tuple(result.first, result.second);
+      },
+      "a"_a,
+      "UPLO"_a = "L",
+      nb::kw_only(),
+      "stream"_a = nb::none(),
+      R"pbdoc(
+        Compute the eigenvalues and eigenvectors of a complex Hermitian or
+        real symmetric matrix.
+
+        This function supports arrays with at least 2 dimensions. When the input
+        has more than two dimensions, the eigenvalues and eigenvectors are
+        computed for each matrix in the last two dimensions.
+
+        Args:
+            a (array): Input array. Must be a real symmetric or complex
+              Hermitian matrix.
+            UPLO (str, optional): Whether to use the upper (``"U"``) or
+               lower (``"L"``) triangle of the matrix.  Default: ``"L"``.
+            stream (Stream, optional): Stream or device. Defaults to ``None``
+              in which case the default stream of the default device is used.
+
+        Returns:
+            Tuple[array, array]:
+              A tuple containing the eigenvalues in ascending order and
+              the normalized eigenvectors. The column ``v[:, i]`` is the
+              eigenvector corresponding to the i-th eigenvalue.
+
+        Note:
+            The input matrix is assumed to be symmetric (or Hermitian). Only
+            the selected triangle is used. No checks for symmetry are performed.
+
+        Example:
+            >>> A = mx.array([[1., -2.], [-2., 1.]])
+            >>> w, v = mx.linalg.eigh(A, stream=mx.cpu)
+            >>> w
+            array([-1., 3.], dtype=float32)
+            >>> v
+            array([[ 0.707107, -0.707107],
+                  [ 0.707107,  0.707107]], dtype=float32)
       )pbdoc");
 }

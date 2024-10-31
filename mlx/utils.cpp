@@ -58,11 +58,11 @@ inline void PrintFormatter::print(std::ostream& os, complex64_t val) {
 PrintFormatter global_formatter;
 
 Dtype result_type(const std::vector<array>& arrays) {
-  std::vector<Dtype> dtypes(1, bool_);
+  Dtype t = bool_;
   for (auto& arr : arrays) {
-    dtypes.push_back(promote_types(dtypes.back(), arr.dtype()));
+    t = promote_types(t, arr.dtype());
   }
-  return dtypes.back();
+  return t;
 }
 
 std::vector<int> broadcast_shapes(

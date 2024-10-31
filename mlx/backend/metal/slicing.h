@@ -9,8 +9,8 @@ namespace mlx::core {
 void slice_gpu(
     const array& in,
     array& out,
-    std::vector<int> start_indices,
-    std::vector<int> strides,
+    const std::vector<int>& start_indices,
+    const std::vector<int>& strides,
     const Stream& s);
 
 void concatenate_gpu(

@@ -217,7 +217,7 @@ struct Power {
 
   template <>
   complex64_t operator()(complex64_t x, complex64_t y) {
-    auto x_theta = metal::atan(x.imag / x.real);
+    auto x_theta = metal::atan2(x.imag, x.real);
     auto x_ln_r = 0.5 * metal::log(x.real * x.real + x.imag * x.imag);
     auto mag = metal::exp(y.real * x_ln_r - y.imag * x_theta);
     auto phase = y.imag * x_ln_r + y.real * x_theta;

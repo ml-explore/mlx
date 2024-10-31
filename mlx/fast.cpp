@@ -515,7 +515,7 @@ array scaled_dot_product_attention(
     const array& values,
     const float scale,
     const std::optional<array>& mask,
-    const std::optional<int>& memory_efficient_threshold,
+    const std::optional<int> memory_efficient_threshold,
     StreamOrDevice s) {
   for (const auto& tensor : {queries, keys, values}) {
     if (tensor.ndim() != 4) {
@@ -618,40 +618,38 @@ array scaled_dot_product_attention(
   };
 
   auto stream = to_stream(s);
+  const size_t value_head_dim = v.shape(-1);
   const size_t query_head_dim = q.shape(-1);
-  const bool supported_head_dim =
-      query_head_dim == 64 || query_head_dim == 80 || query_head_dim == 128;
-
-  const bool supported_head_dim_self_attn =
-      query_head_dim == 64 || query_head_dim == 128;
   const size_t query_sequence_length = q.shape(2);
-  const bool supports_full_self_attention = query_sequence_length >= 16 &&
-      !mask.has_value() && supported_head_dim_self_attn &&
+
+  bool implementation_supports_use_case = query_head_dim == value_head_dim;
+
+  const bool sdpa_vector_supported_head_dim =
+      query_head_dim == 64 || query_head_dim == 96 || query_head_dim == 128;
+  const bool sdpa_full_supported_head_dim =
+      query_head_dim == 64 || query_head_dim == 128;
+
+  const bool supports_sdpa_full = query_sequence_length >= threshold &&
+      !mask.has_value() && sdpa_full_supported_head_dim &&
       n_q_heads == n_kv_heads && final_type != bfloat16 &&
       stream.device == Device::gpu;
 
-  // fast decoding gpu shader
-  bool supports_sdpa = batch_dim == 1 && query_sequence_length == 1 &&
-      !mask.has_value() && supported_head_dim && final_type != bfloat16 &&
+  const bool supports_sdpa_vector = query_sequence_length == 1 &&
+      !mask.has_value() && sdpa_vector_supported_head_dim &&
       stream.device == Device::gpu;
-  bool implementation_supports_use_case =
-      supports_sdpa || supports_full_self_attention;
 
-  // sdpa gpu shader is disabled except for memory efficient opt-in
-  const int seq_for_threshold = queries.shape(2);
-  bool use_memory_efficient_impl = seq_for_threshold >= threshold;
-  implementation_supports_use_case &= use_memory_efficient_impl;
+  implementation_supports_use_case &=
+      supports_sdpa_full || supports_sdpa_vector;
 
   if (implementation_supports_use_case) {
     auto out_shape =
         std::vector<int>({q.shape(0), q.shape(1), q.shape(2), v.shape(-1)});
-    auto out = array(
+    return array(
         std::move(out_shape),
         final_type,
         std::make_shared<ScaledDotProductAttention>(
             stream, fallback, scale, false),
         {q, k, v});
-    return out;
   }
 
   if (mask.has_value()) {
@@ -682,8 +680,10 @@ array pack_and_quantize(
       clip(
           round(divide(subtract(packed_w, biases, s), scales, s), s),
           zero,
-          n_bins),
-      uint32);
+          n_bins,
+          s),
+      uint32,
+      s);
   packed_w = reshape(packed_w, {packed_w.shape(0), -1, el_per_int}, s);
   packed_w = sum(
       multiply(packed_w, shifts, s), /* axis= */ 2, /* keepdims= */ false, s);
@@ -725,15 +725,6 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
 
   int el_per_int = 32 / bits;
 
-  if (w.shape(-1) < 32 * el_per_int) {
-    std::ostringstream msg;
-    msg << "[quantize] The feature dimension (2nd dimension of the matrix) is "
-        << "too small for quantization. We support >=512 for 2 bits, "
-        << ">= 256 for 4 bits and >= 128 for 8 bits. The provided matrix has "
-        << "shape " << w.shape() << ".";
-    throw std::invalid_argument(msg.str());
-  }
-
   auto fallback = [group_size, bits, el_per_int, s](
                       const std::vector<array>& inputs) -> std::vector<array> {
     auto& w = inputs[0];
@@ -751,11 +742,11 @@ affine_quantize(const array& w, int group_size, int bits, StreamOrDevice s_) {
     array mask = greater(abs(w_min, s), abs(w_max, s), s);
     array scales =
         maximum(divide(subtract(w_max, w_min, s), n_bins, s), eps, s);
-    scales = where(mask, scales, negative(scales), s);
+    scales = where(mask, scales, negative(scales, s), s);
     array edge = where(mask, w_min, w_max, s);
     array q0 = round(divide(edge, scales, s), s);
     scales = where(not_equal(q0, zero, s), divide(edge, q0, s), scales);
-    array biases = where(equal(q0, zero, s), zero, edge);
+    array biases = where(equal(q0, zero, s), zero, edge, s);
 
     packed_w = pack_and_quantize(packed_w, scales, biases, group_size, bits, s);
     return {
@@ -916,47 +907,27 @@ array affine_dequantize(
   return fallback({w, scales, biases})[0];
 }
 
-void validate_output_shapes(
-    std::map<std::string, std::vector<int>> output_shapes,
-    std::map<std::string, Dtype> output_dtypes) {
-  // Make sure output shapes and dtypes have the same keys
-  bool validated = true;
-  if (output_shapes.size() == 0) {
-    throw std::invalid_argument(
-        "[metal_kernel] Must specify at least one output.");
-  }
-  if (output_shapes.size() != output_dtypes.size()) {
-    validated = false;
-  } else {
-    for (const auto& kv : output_shapes) {
-      if (output_dtypes.find(kv.first) == output_dtypes.end()) {
-        validated = false;
-        break;
-      }
-    }
-  }
-  if (!validated) {
-    throw std::invalid_argument(
-        "[metal_kernel] `output_shapes` and `output_dtypes` must have the same keys.");
-  }
-}
-
-void write_signature(
+std::string write_signature(
     std::string func_name,
-    std::string& source,
-    std::map<std::string, array>& inputs,
-    std::map<std::string, std::vector<int>>& output_shapes,
-    std::map<std::string, Dtype>& output_dtypes,
-    std::optional<std::map<std::string, TemplateArg>> template_args,
-    std::vector<CustomKernelShapeInfo>& shape_infos,
-    bool atomic_outputs,
-    std::ostringstream& kernel_source) {
+    const std::string& header,
+    const std::string& source,
+    const std::vector<std::string>& input_names,
+    const std::vector<array>& inputs,
+    const std::vector<std::string>& output_names,
+    const std::vector<Dtype>& output_dtypes,
+    const std::vector<std::pair<std::string, TemplateArg>>& template_args,
+    const std::vector<std::string>& attributes,
+    const std::vector<CustomKernelShapeInfo>& shape_infos,
+    bool atomic_outputs) {
+  std::string kernel_source;
+  kernel_source.reserve(header.size() + source.size() + 16384);
+  kernel_source += header;
   // Auto-generate a function signature based on `template_args`
   // and the dtype/shape of the arrays passed as `inputs`.
-  if (template_args && template_args.value().size() > 0) {
-    kernel_source << "template <";
+  if (!template_args.empty()) {
+    kernel_source += "template <";
     int i = 0;
-    for (const auto& [name, arg] : template_args.value()) {
+    for (const auto& [name, arg] : template_args) {
       std::string param_type;
       if (std::holds_alternative<int>(arg)) {
         param_type = "int";
@@ -966,114 +937,106 @@ void write_signature(
         param_type = "typename";
       }
       if (i > 0) {
-        kernel_source << ", ";
+        kernel_source += ", ";
       }
-      kernel_source << param_type << " " << name;
+      kernel_source += param_type;
+      kernel_source += " ";
+      kernel_source += name;
       i++;
     }
-    kernel_source << ">" << std::endl;
+    kernel_source += ">\n";
   }
-  kernel_source << "[[kernel]] void " << func_name << "(" << std::endl;
-
-  // Metal attributes are automatically added to the arguments if present
-  const std::vector<std::pair<std::string, std::string>> metal_attributes = {
-      {"dispatch_quadgroups_per_threadgroup", "uint"},
-      {"dispatch_simdgroups_per_threadgroup", "uint"},
-      {"dispatch_threads_per_threadgroup", "uint3"},
-      {"grid_origin", "uint3"},
-      {"grid_size", "uint3"},
-      {"quadgroup_index_in_threadgroup", "uint"},
-      {"quadgroups_per_threadgroup", "uint"},
-      {"simdgroup_index_in_threadgroup", "uint"},
-      {"simdgroups_per_threadgroup", "uint"},
-      {"thread_execution_width", "uint"},
-      {"thread_index_in_quadgroup", "uint"},
-      {"thread_index_in_simdgroup", "uint"},
-      {"thread_index_in_threadgroup", "uint"},
-      {"thread_position_in_grid", "uint3"},
-      {"thread_position_in_threadgroup", "uint3"},
-      {"threadgroup_position_in_grid", "uint3"},
-      {"threadgroups_per_grid", "uint3"},
-      {"threads_per_grid", "uint3"},
-      {"threads_per_simdgroup", "uint"},
-      {"thread_per_threadgroup", "uint3"},
-  };
-  std::vector<std::pair<std::string, std::string>> attrs;
-  for (const auto& [attr, dtype] : metal_attributes) {
-    if (source.find(attr) != std::string::npos) {
-      attrs.push_back({attr, dtype});
-    }
-  }
+  kernel_source += "[[kernel]] void ";
+  kernel_source += func_name;
+  kernel_source += "(\n";
 
   int index = 0;
   constexpr int max_constant_array_size = 8;
   // Add inputs
-  for (const auto& [name, arr] : inputs) {
+  for (int i = 0; i < inputs.size(); ++i) {
+    const auto& name = input_names[i];
+    const auto& arr = inputs[i];
     auto dtype = get_type_string(arr.dtype());
-    bool is_constant =
-        arr.is_available() && arr.size() < max_constant_array_size;
-    std::string location = is_constant ? "constant" : "device";
+    std::string location =
+        arr.size() < max_constant_array_size ? "constant" : "device";
     std::string ref = arr.ndim() == 0 ? "&" : "*";
-    kernel_source << "  const " << location << " " << dtype << ref << " "
-                  << name << " [[buffer(" << index << ")]]," << std::endl;
+    kernel_source += "  const ";
+    kernel_source += location;
+    kernel_source += " ";
+    kernel_source += dtype;
+    kernel_source += ref;
+    kernel_source += " ";
+    kernel_source += name;
+    kernel_source += " [[buffer(";
+    kernel_source += std::to_string(index);
+    kernel_source += ")]],\n";
     index++;
     // Add input shape, strides and ndim if present in the source
-    CustomKernelShapeInfo shape_info;
     if (arr.ndim() > 0) {
-      if (source.find(name + "_shape") != std::string::npos) {
-        kernel_source << "  const constant int* " << name << "_shape [[buffer("
-                      << index << ")]]," << std::endl;
-        shape_info.shape = true;
+      if (shape_infos[i].shape) {
+        kernel_source +=
+            ("  const constant int* " + name + "_shape [[buffer(" +
+             std::to_string(index) + ")]],\n");
         index++;
       }
-      if (source.find(name + "_strides") != std::string::npos) {
-        kernel_source << "  const constant size_t* " << name
-                      << "_strides [[buffer(" << index << ")]]," << std::endl;
-        shape_info.strides = true;
+      if (shape_infos[i].strides) {
+        kernel_source +=
+            ("  const constant size_t* " + name + "_strides [[buffer(" +
+             std::to_string(index) + ")]],\n");
         index++;
       }
-      if (source.find(name + "_ndim") != std::string::npos) {
-        kernel_source << "  const constant int& " << name << "_ndim [[buffer("
-                      << index << ")]]," << std::endl;
-        shape_info.ndim = true;
+      if (shape_infos[i].ndim) {
+        kernel_source +=
+            ("  const constant int& " + name + "_ndim [[buffer(" +
+             std::to_string(index) + ")]],\n");
         index++;
       }
     }
-    shape_infos.push_back(shape_info);
   }
   // Add outputs
-  for (const auto& [name, dtype] : output_dtypes) {
-    kernel_source << "  device ";
+  for (int i = 0; i < output_names.size(); ++i) {
+    const auto& name = output_names[i];
+    const auto& dtype = output_dtypes[i];
+    kernel_source += "  device ";
     auto type_string = get_type_string(dtype);
     if (atomic_outputs) {
-      kernel_source << "atomic<" << type_string << ">";
-    } else {
-      kernel_source << type_string;
+      kernel_source += "atomic<";
     }
-    kernel_source << "* " << name << " [[buffer(" << index << ")]]";
-    if (index < inputs.size() + output_shapes.size() - 1 || attrs.size() > 0) {
-      kernel_source << "," << std::endl;
+    kernel_source += type_string;
+    if (atomic_outputs) {
+      kernel_source += ">";
+    }
+    kernel_source += "* ";
+    kernel_source += name;
+    kernel_source += " [[buffer(";
+    kernel_source += std::to_string(index);
+    kernel_source += ")]]";
+    if (index < inputs.size() + output_names.size() - 1 ||
+        attributes.size() > 0) {
+      kernel_source += ",\n";
     } else {
-      kernel_source << ") {" << std::endl;
+      kernel_source += ") {\n";
     }
     index++;
   }
-  // Add metal attributes e.g. `threadgroup_index_in_grid`
+
   index = 0;
-  for (const auto& [attr, dtype] : attrs) {
-    kernel_source << "  " << dtype << " " << attr << " [[" << attr << "]]";
-    if (index < attrs.size() - 1) {
-      kernel_source << "," << std::endl;
+  for (const auto& attr : attributes) {
+    kernel_source += attr;
+    if (index < attributes.size() - 1) {
+      kernel_source += ",\n";
     } else {
-      kernel_source << ") {" << std::endl;
+      kernel_source += ") {\n";
     }
     index++;
   }
-  kernel_source << source << std::endl;
-  kernel_source << "}" << std::endl;
+  kernel_source += source;
+  kernel_source += "\n}\n";
+  return kernel_source;
 }
 
-std::string write_template(std::map<std::string, TemplateArg>& template_args) {
+std::string write_template(
+    const std::vector<std::pair<std::string, TemplateArg>>& template_args) {
   std::ostringstream template_def;
   template_def << "<";
   int i = 0;
@@ -1094,105 +1057,153 @@ std::string write_template(std::map<std::string, TemplateArg>& template_args) {
   return template_def.str();
 }
 
-std::map<std::string, array> MetalKernel::operator()(
-    std::map<std::string, array>& inputs,
-    std::map<std::string, std::vector<int>> output_shapes,
-    std::map<std::string, Dtype> output_dtypes,
-    std::tuple<int, int, int> grid,
-    std::tuple<int, int, int> threadgroup,
-    std::optional<std::map<std::string, TemplateArg>> template_args,
-    std::optional<float> init_value,
-    bool verbose,
-    StreamOrDevice s_) {
-  validate_output_shapes(output_shapes, output_dtypes);
-
-  auto s = to_stream(s_);
-  if (s.device != Device::gpu) {
+MetalKernelFunction metal_kernel(
+    const std::string& name,
+    const std::vector<std::string>& input_names,
+    const std::vector<std::string>& output_names,
+    const std::string& source,
+    const std::string& header /* = "" */,
+    bool ensure_row_contiguous /* = true */,
+    bool atomic_outputs /* = false */) {
+  if (output_names.empty()) {
     throw std::invalid_argument(
-        "[metal_kernel] MetalKernel only works on GPU.");
+        "[metal_kernel] Must specify at least one output.");
   }
-
-  std::ostringstream kernel_source;
-  std::ostringstream func_name;
-
-  std::string template_def = "";
-  bool needs_template = template_args && template_args.value().size() > 0;
-  std::string hash_key = "";
-  if (needs_template) {
-    std::regex disallowed_chars("\\<|\\>|(, )");
-    template_def = write_template(template_args.value());
-    hash_key = std::regex_replace(template_def, disallowed_chars, "_");
-    hash_key.pop_back();
-  }
-
-  func_name << "custom_kernel_" << name_ << hash_key;
-  std::string kernel_name = func_name.str();
-
   std::vector<CustomKernelShapeInfo> shape_infos;
-  write_signature(
-      func_name.str(),
-      source_,
-      inputs,
-      output_shapes,
-      output_dtypes,
-      template_args,
-      shape_infos,
-      atomic_outputs_,
-      kernel_source);
+  for (auto& n : input_names) {
+    CustomKernelShapeInfo shape_info;
+    shape_info.shape = source.find(n + "_shape") != std::string::npos;
+    shape_info.strides = source.find(n + "_strides") != std::string::npos;
+    shape_info.ndim = source.find(n + "_ndim") != std::string::npos;
+    shape_infos.push_back(shape_info);
+  }
+  const std::vector<std::pair<std::string, std::string>> metal_attributes = {
+      {"dispatch_quadgroups_per_threadgroup", "uint"},
+      {"dispatch_simdgroups_per_threadgroup", "uint"},
+      {"dispatch_threads_per_threadgroup", "uint3"},
+      {"grid_origin", "uint3"},
+      {"grid_size", "uint3"},
+      {"quadgroup_index_in_threadgroup", "uint"},
+      {"quadgroups_per_threadgroup", "uint"},
+      {"simdgroup_index_in_threadgroup", "uint"},
+      {"simdgroups_per_threadgroup", "uint"},
+      {"thread_execution_width", "uint"},
+      {"thread_index_in_quadgroup", "uint"},
+      {"thread_index_in_simdgroup", "uint"},
+      {"thread_index_in_threadgroup", "uint"},
+      {"thread_position_in_grid", "uint3"},
+      {"thread_position_in_threadgroup", "uint3"},
+      {"threadgroup_position_in_grid", "uint3"},
+      {"threadgroups_per_grid", "uint3"},
+      {"threads_per_grid", "uint3"},
+      {"threads_per_simdgroup", "uint"},
+      {"threads_per_threadgroup", "uint3"},
+  };
 
-  if (needs_template) {
-    template_def = func_name.str() + template_def;
-    kernel_source << std::endl
-                  << "template [[host_name(\"" << kernel_name
-                  << "\")]] [[kernel]] decltype(" << template_def << ") "
-                  << template_def << ";" << std::endl;
+  std::vector<std::string> attributes;
+  for (const auto& [attr, dtype] : metal_attributes) {
+    if (source.find(attr) != std::string::npos) {
+      attributes.push_back("  " + dtype + " " + attr + " [[" + attr + "]]");
+    }
   }
 
-  if (verbose) {
-    std::cout << "Generated source code for `" << name_ << "`:" << std::endl
-              << "```" << std::endl
-              << kernel_source.str() << std::endl
-              << "```" << std::endl;
-  }
+  return [=,
+          shape_infos = std::move(shape_infos),
+          attributes = std::move(attributes)](
+             const std::vector<array>& inputs,
+             const std::vector<std::vector<int>>& output_shapes,
+             const std::vector<Dtype>& output_dtypes,
+             std::tuple<int, int, int> grid,
+             std::tuple<int, int, int> threadgroup,
+             const std::vector<std::pair<std::string, TemplateArg>>&
+                 template_args = {},
+             std::optional<float> init_value = std::nullopt,
+             bool verbose = false,
+             StreamOrDevice s_ = {}) {
+    if (inputs.size() != input_names.size()) {
+      std::ostringstream msg;
+      msg << "[metal_kernel] Expected `inputs` to have size "
+          << input_names.size() << " but got size " << inputs.size() << "."
+          << std::endl;
+      throw std::invalid_argument(msg.str());
+    }
+    if (output_shapes.size() != output_names.size()) {
+      std::ostringstream msg;
+      msg << "[metal_kernel] Expected `output_shapes` to have size "
+          << output_names.size() << " but got size " << output_shapes.size()
+          << "." << std::endl;
+      throw std::invalid_argument(msg.str());
+    }
+    if (output_dtypes.size() != output_names.size()) {
+      std::ostringstream msg;
+      msg << "[metal_kernel] Expected `output_dtypes` to have size "
+          << output_names.size() << " but got size " << output_dtypes.size()
+          << "." << std::endl;
+      throw std::invalid_argument(msg.str());
+    }
 
-  std::vector<array> in_arrs;
-  for (const auto& kv : inputs) {
-    in_arrs.push_back(kv.second);
-  }
+    auto s = to_stream(s_);
+    if (s.device != Device::gpu) {
+      throw std::invalid_argument("[metal_kernel] Only supports the GPU.");
+    }
 
-  std::vector<std::string> out_keys;
-  std::vector<std::vector<int>> out_shapes;
-  for (const auto& [name, shape] : output_shapes) {
-    out_keys.push_back(name);
-    out_shapes.push_back(shape);
-  }
+    std::ostringstream func_name;
+    std::string template_def = "";
+    std::string hash_key = "";
+    if (!template_args.empty()) {
+      std::regex disallowed_chars("\\<|\\>|(, )");
+      template_def = write_template(template_args);
+      hash_key = std::regex_replace(template_def, disallowed_chars, "_");
+      hash_key.pop_back();
+    }
+    func_name << "custom_kernel_" << name << hash_key;
+    std::string kernel_name = func_name.str();
 
-  std::vector<Dtype> out_dtypes;
-  for (const auto& kv : output_dtypes) {
-    out_dtypes.push_back(kv.second);
-  }
+    std::string kernel_source = write_signature(
+        kernel_name,
+        header,
+        source,
+        input_names,
+        inputs,
+        output_names,
+        output_dtypes,
+        template_args,
+        attributes,
+        shape_infos,
+        atomic_outputs);
 
-  std::map<std::string, array> outputs;
-  auto outputs_vec = array::make_arrays(
-      out_shapes,
-      out_dtypes,
-      std::make_shared<CustomKernel>(
-          s,
-          kernel_name,
-          kernel_source.str(),
-          grid,
-          threadgroup,
-          shape_infos,
-          ensure_row_contiguous_,
-          init_value),
-      in_arrs);
+    if (!template_args.empty()) {
+      template_def = kernel_name + template_def;
+      kernel_source += "\ntemplate [[host_name(\"";
+      kernel_source += kernel_name;
+      kernel_source += "\")]] [[kernel]] decltype(";
+      kernel_source += template_def;
+      kernel_source += ") ";
+      kernel_source += template_def;
+      kernel_source += ";\n";
+    }
 
-  int i = 0;
-  for (const auto& key : out_keys) {
-    outputs.insert({key, outputs_vec[i]});
-    i++;
-  }
-  return outputs;
+    if (verbose) {
+      std::cout << "Generated source code for `" << name << "`:" << std::endl
+                << "```" << std::endl
+                << kernel_source << std::endl
+                << "```" << std::endl;
+    }
+
+    return array::make_arrays(
+        std::move(output_shapes),
+        std::move(output_dtypes),
+        std::make_shared<CustomKernel>(
+            s,
+            std::move(kernel_name),
+            std::move(kernel_source),
+            grid,
+            threadgroup,
+            shape_infos,
+            ensure_row_contiguous,
+            init_value),
+        std::move(inputs));
+  };
 }
 
 } // namespace mlx::core::fast

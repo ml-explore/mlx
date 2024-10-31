@@ -52,7 +52,7 @@ template <typename T, typename Op>
   auto a_idx = elem_to_loc_2(index, a_strides);
   auto b_idx = elem_to_loc_2(index, b_strides);
   auto c_idx = elem_to_loc_2(index, c_strides);
-  size_t out_idx = index.x + (size_t)grid_dim.x * index.y;
+  size_t out_idx = index.x + size_t(grid_dim.x) * index.y;
   d[out_idx] = Op()(a[a_idx], b[b_idx], c[c_idx]);
 }
 
@@ -71,30 +71,11 @@ template <typename T, typename Op>
   auto b_idx = elem_to_loc_3(index, b_strides);
   auto c_idx = elem_to_loc_3(index, c_strides);
   size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
+      index.x + grid_dim.x * (index.y + size_t(grid_dim.y) * index.z);
   d[out_idx] = Op()(a[a_idx], b[b_idx], c[c_idx]);
 }
 
-template <typename T, typename Op, int DIM>
-[[kernel]] void ternary_g_nd(
-    device const bool* a,
-    device const T* b,
-    device const T* c,
-    device T* d,
-    constant const int shape[DIM],
-    constant const size_t a_strides[DIM],
-    constant const size_t b_strides[DIM],
-    constant const size_t c_strides[DIM],
-    uint3 index [[thread_position_in_grid]],
-    uint3 grid_dim [[threads_per_grid]]) {
-  auto idx =
-      elem_to_loc_3_nd<DIM>(index, shape, a_strides, b_strides, c_strides);
-  size_t out_idx =
-      index.x + (size_t)grid_dim.x * (index.y + (size_t)grid_dim.y * index.z);
-  d[out_idx] = Op()(a[idx.x], b[idx.y], c[idx.z]);
-}
-
-template <typename T, typename Op>
+template <typename T, typename Op, int N = 1>
 [[kernel]] void ternary_g(
     device const bool* a,
     device const T* b,
@@ -107,8 +88,23 @@ template <typename T, typename Op>
     constant const int& ndim,
     uint3 index [[thread_position_in_grid]],
     uint3 grid_dim [[threads_per_grid]]) {
-  auto idx =
-      elem_to_loc_3_nd(index, shape, a_strides, b_strides, c_strides, ndim);
-  size_t out_idx = index.x + grid_dim.x * (index.y + grid_dim.y * index.z);
-  d[out_idx] = Op()(a[idx.x], b[idx.y], c[idx.z]);
+  auto idx = elem_to_loc_3_nd(
+      {N * index.x, index.y, index.z},
+      shape,
+      a_strides,
+      b_strides,
+      c_strides,
+      ndim);
+  auto xshape = shape[ndim - 1];
+  size_t out_idx =
+      N * index.x + xshape * (index.y + size_t(grid_dim.y) * index.z);
+  auto a_xstride = a_strides[ndim - 1];
+  auto b_xstride = b_strides[ndim - 1];
+  auto c_xstride = c_strides[ndim - 1];
+  for (int i = 0; i < N && (int(N * index.x) + i) < xshape; ++i) {
+    d[out_idx++] = Op()(a[idx.x], b[idx.y], c[idx.z]);
+    idx.x += a_xstride;
+    idx.y += b_xstride;
+    idx.z += c_xstride;
+  }
 }

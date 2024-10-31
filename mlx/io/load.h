@@ -8,9 +8,13 @@
 #include <memory>
 #include <sstream>
 
+#include "mlx/io/threadpool.h"
+
 namespace mlx::core {
 
 namespace io {
+
+ThreadPool& thread_pool();
 
 class Reader {
  public:
@@ -21,6 +25,7 @@ class Reader {
       int64_t off,
       std::ios_base::seekdir way = std::ios_base::beg) = 0;
   virtual void read(char* data, size_t n) = 0;
+  virtual void read(char* data, size_t n, size_t offset) = 0;
   virtual std::string label() const = 0;
   virtual ~Reader() = default;
 };
@@ -38,12 +43,12 @@ class Writer {
   virtual ~Writer() = default;
 };
 
-class FileReader : public Reader {
+class ParallelFileReader : public Reader {
  public:
-  explicit FileReader(std::string file_path)
+  explicit ParallelFileReader(std::string file_path)
       : fd_(open(file_path.c_str(), O_RDONLY)), label_(std::move(file_path)) {}
 
-  ~FileReader() override {
+  ~ParallelFileReader() override {
     close(fd_);
   }
 
@@ -59,33 +64,23 @@ class FileReader : public Reader {
     return lseek(fd_, 0, SEEK_CUR);
   }
 
-  void seek(int64_t off, std::ios_base::seekdir way = std::ios_base::beg)
-      override {
-    if (way == std::ios_base::beg) {
-      lseek(fd_, off, 0);
-    } else {
-      lseek(fd_, off, SEEK_CUR);
-    }
+  void seek(int64_t, std::ios_base::seekdir = std::ios_base::beg) override {
+    throw std::runtime_error("[ParallelFileReader::seek] Not allowed");
   }
 
-  void read(char* data, size_t n) override {
-    while (n != 0) {
-      auto m = ::read(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
-      if (m <= 0) {
-        std::ostringstream msg;
-        msg << "[read] Unable to read " << n << " bytes from file.";
-        throw std::runtime_error(msg.str());
-      }
-      data += m;
-      n -= m;
-    }
-  }
+  // Warning: do not use this function from multiple threads as
+  // it advances the file descriptor
+  void read(char* data, size_t n) override;
+
+  void read(char* data, size_t n, size_t offset) override;
 
   std::string label() const override {
     return "file " + label_;
   }
 
  private:
+  static constexpr size_t batch_size_ = 1 << 25;
+  static ThreadPool thread_pool_;
   int fd_;
   std::string label_;
 };

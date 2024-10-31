@@ -1,0 +1,20 @@
+mlx.core.distributed.__prefix__:
+  from mlx.core import array, Dtype, Device, Stream
+  from mlx.core.distributed import Group
+  from typing import Sequence, Optional, Union
+
+mlx.core.fast.__prefix__:
+  from mlx.core import array, Dtype, Device, Stream
+  from typing import Sequence, Optional, Union
+
+mlx.core.linalg.__prefix__:
+  from mlx.core import array, Dtype, Device, Stream
+  from typing import Sequence, Optional, Tuple, Union
+
+mlx.core.metal.__prefix__:
+  from mlx.core import array, Dtype, Device, Stream
+  from typing import Sequence, Optional, Union
+
+mlx.core.random.__prefix__:
+  from mlx.core import array, Dtype, Device, Stream
+  from typing import Sequence, Optional, Union

@@ -25,11 +25,13 @@ METAL_FUNC void gather_impl(
       idx_loc = index.x * indices.strides[indices.ndim * i];
     } else {
       idx_loc = index.x * indices.strides[indices.ndim * i];
-      idx_loc += elem_to_loc(
-          index.y,
-          &indices.shapes[indices.ndim * i + 1],
-          &indices.strides[indices.ndim * i + 1],
-          indices.ndim - 1);
+      idx_loc += indices.row_contiguous[i]
+          ? index.y
+          : elem_to_loc(
+                index.y,
+                &indices.shapes[indices.ndim * i + 1],
+                &indices.strides[indices.ndim * i + 1],
+                indices.ndim - 1);
     }
     auto ax = axes[i];
     auto idx_val = offset_neg_idx(indices.buffers[i][idx_loc], src_shape[ax]);

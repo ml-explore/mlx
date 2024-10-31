@@ -72,7 +72,7 @@ void explicit_gemm_conv_ND_gpu(
   wt_reshaped.copy_shared_buffer(wt, wt_restride, wt_flags, wt.data_size());
 
   // Perform gemm
-  std::vector<array> copies = {in_unfolded, wt_reshaped};
+  std::vector<array> copies = {in_unfolded};
   return steel_matmul(
       s,
       d,
@@ -155,22 +155,27 @@ void explicit_gemm_conv_group_ND_gpu(
   copy_gpu(wt_view, wt_transpose, CopyType::General, s);
 
   // Perform gemm
-  std::vector<array> copies = {in_unfolded, wt_view, wt_transpose};
-  return steel_matmul_conv_groups(
+  std::vector<array> copies = {in_unfolded, wt_transpose};
+  return steel_matmul_regular(
       s,
       d,
-      /*a = */ in_unfolded,
-      /*b = */ wt_transpose,
-      /*c = */ out,
-      /*M = */ implicit_M,
-      /*N = */ implicit_N,
-      /*K = */ implicit_K,
-      /*a_cols = */ implicit_K * groups,
-      /*b_cols = */ implicit_K,
-      /*out_cols = */ implicit_N * groups,
-      /*a_transposed = */ false,
-      /*b_transposed = */ true,
-      /* groups = */ groups,
+      /* a = */ in_unfolded,
+      /* b = */ wt_transpose,
+      /* c = */ out,
+      /* M = */ implicit_M,
+      /* N = */ implicit_N,
+      /* K = */ implicit_K,
+      /* batch_size_out = */ groups,
+      /* a_cols = */ implicit_K * groups,
+      /* b_cols = */ implicit_K,
+      /* out_cols = */ implicit_N * groups,
+      /* a_transposed = */ false,
+      /* b_transposed = */ true,
+      /* batch_shape = */ {1},
+      /* batch_strides = */ {0},
+      /* A_batch_strides = */ size_t(implicit_K),
+      /* B_batch_strides = */ size_t(implicit_N) * implicit_K,
+      /* matrix_stride_out = */ size_t(implicit_N),
       /*copies = */ copies);
 }
 
@@ -552,7 +557,7 @@ void winograd_conv_2D_gpu(
 
   // Fill with zeros
   array zero_arr = array(0, in.dtype());
-  copy_gpu(zero_arr, in_padded, CopyType::Scalar, s);
+  fill_gpu(zero_arr, in_padded, s);
   copies_w.push_back(zero_arr);
 
   // Pick input slice from padded
@@ -571,7 +576,6 @@ void winograd_conv_2D_gpu(
 
   copies_w.push_back(in_padded_slice);
   copies_w.push_back(in_padded);
-  copies_w.push_back(zero_arr);
 
   MLXConvParams<2> conv_params_updated{
       /* const int  N = */ in_padded.shape(0),
@@ -748,10 +752,6 @@ void conv_2D_gpu(
   bool is_kdil_one = conv_params.kdil[0] == 1 && conv_params.kdil[1] == 1;
   bool is_idil_one = conv_params.idil[0] == 1 && conv_params.idil[1] == 1;
 
-  bool inp_large = (conv_params.in_strides[0] >= 1ul << 18);
-  bool channels_large = (conv_params.C + conv_params.O) >= 512;
-  bool channels_med = (conv_params.C + conv_params.O) >= 256;
-
   if (groups > 1) {
     const int C_per_group = conv_params.C / groups;
     const int O_per_group = conv_params.O / groups;
@@ -765,10 +765,13 @@ void conv_2D_gpu(
   }
 
   // Direct to winograd conv
+  bool inp_large =
+      (conv_params.N * conv_params.iS[0] * conv_params.iS[1]) >= 1ul << 12;
+  bool channels_large = (conv_params.C + conv_params.O) >= 256;
   if (!flip && is_stride_one && is_kdil_one && is_idil_one &&
       conv_params.wS[0] == 3 && conv_params.wS[1] == 3 &&
-      conv_params.C % 32 == 0 && conv_params.O % 32 == 0 &&
-      (channels_large || (channels_med && inp_large))) {
+      conv_params.C % 32 == 0 && conv_params.O % 32 == 0 && inp_large &&
+      channels_large) {
     return winograd_conv_2D_gpu(s, d, in, wt, out, conv_params, copies);
   }
 
@@ -911,15 +914,11 @@ void Convolution::eval_gpu(const std::vector<array>& inputs, array& out) {
   // Throw error
   else {
     throw std::invalid_argument(
-        "[Convolution::eval_gpu] Only supports 1D or 2D convolutions.");
+        "[Convolution::eval_gpu] Only supports 1D, 2D or 3D convolutions.");
   }
 
-  // Clear copies
-  if (copies.size() > 0) {
-    auto command_buffer = d.get_command_buffer(s.index);
-    command_buffer->addCompletedHandler(
-        [copies](MTL::CommandBuffer*) mutable { copies.clear(); });
-  }
+  // Record copies
+  d.add_temporaries(std::move(copies), s.index);
 }
 
 } // namespace mlx::core

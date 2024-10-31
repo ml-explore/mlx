@@ -5,67 +5,104 @@
 #include "mlx/backend/metal/kernels/steel/gemm/gemm.h"
 #include "mlx/backend/metal/kernels/quantized.h"
 
-#define instantiate_quantized(name, type, group_size, bits) \
-  instantiate_kernel(                                       \
-      #name "_" #type "_gs_" #group_size "_b_" #bits,       \
-      name,                                                 \
-      type,                                                 \
-      group_size,                                           \
+#define instantiate_quantized(name, type, group_size, bits)     \
+  instantiate_kernel(                                                    \
+      #name "_" #type "_gs_" #group_size "_b_" #bits,                    \
+      name,                                                              \
+      type,                                                              \
+      group_size,                                                        \
       bits)
 
-#define instantiate_quantized_types(name, group_size, bits) \
-  instantiate_quantized(name, float, group_size, bits)      \
-  instantiate_quantized(name, float16_t, group_size, bits)  \
-  instantiate_quantized(name, bfloat16_t, group_size, bits)
+#define instantiate_quantized_batched(name, type, group_size, bits, batched)     \
+  instantiate_kernel(                                                    \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_batch_" #batched, \
+      name,                                                              \
+      type,                                                              \
+      group_size,                                                        \
+      bits,                                                              \
+      batched)
 
-#define instantiate_quantized_groups(name, bits) \
-  instantiate_quantized_types(name, 128, bits)   \
-  instantiate_quantized_types(name, 64, bits)    \
-  instantiate_quantized_types(name, 32, bits)
-
-#define instantiate_quantized_all(name) \
-  instantiate_quantized_groups(name, 2) \
-  instantiate_quantized_groups(name, 4) \
-  instantiate_quantized_groups(name, 8)
-
-instantiate_quantized_all(qmv_fast)
-instantiate_quantized_all(qmv)
-instantiate_quantized_all(qvm)
-instantiate_quantized_all(qmm_n)
-instantiate_quantized_all(bs_qmv_fast)
-instantiate_quantized_all(bs_qmv)
-instantiate_quantized_all(bs_qvm)
-instantiate_quantized_all(bs_qmm_n)
-instantiate_quantized_all(affine_quantize)
-instantiate_quantized_all(affine_quantize_scales_biases)
-instantiate_quantized_all(affine_dequantize)
-
-#define instantiate_quantized_aligned(name, type, group_size, bits, aligned) \
-  instantiate_kernel(                                                        \
-      #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned,       \
+#define instantiate_quantized_aligned(name, type, group_size, bits, aligned)     \
+  instantiate_kernel(                                                                     \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned, \
       name,                                                                  \
       type,                                                                  \
       group_size,                                                            \
       bits,                                                                  \
       aligned)
 
-#define instantiate_quantized_types_aligned(name, group_size, bits)       \
-  instantiate_quantized_aligned(name, float, group_size, bits, true)      \
-  instantiate_quantized_aligned(name, float16_t, group_size, bits, true)  \
-  instantiate_quantized_aligned(name, bfloat16_t, group_size, bits, true) \
-  instantiate_quantized_aligned(name, float, group_size, bits, false)     \
-  instantiate_quantized_aligned(name, float16_t, group_size, bits, false) \
-  instantiate_quantized_aligned(name, bfloat16_t, group_size, bits, false)
+#define instantiate_quantized_aligned_batched(name, type, group_size, bits, aligned, batched)     \
+  instantiate_kernel(                                                                     \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_alN_" #aligned "_batch_" #batched, \
+      name,                                                                  \
+      type,                                                                  \
+      group_size,                                                            \
+      bits,                                                                  \
+      aligned,                                                               \
+      batched)
 
-#define instantiate_quantized_groups_aligned(name, bits) \
-  instantiate_quantized_types_aligned(name, 128, bits)   \
-  instantiate_quantized_types_aligned(name, 64, bits)    \
-  instantiate_quantized_types_aligned(name, 32, bits)
+#define instantiate_quantized_quad(name, type, group_size, bits, D, batched)     \
+  instantiate_kernel(                                                            \
+      #name "_" #type "_gs_" #group_size "_b_" #bits "_d_" #D "_batch_" #batched, \
+      name,                                                         \
+      type,                                                         \
+      group_size,                                                   \
+      bits,                                                         \
+      D,                                                            \
+      batched)
 
-#define instantiate_quantized_all_aligned(name) \
-  instantiate_quantized_groups_aligned(name, 2) \
-  instantiate_quantized_groups_aligned(name, 4) \
-  instantiate_quantized_groups_aligned(name, 8) \
+#define instantiate_quantized_batched_wrap(name, type, group_size, bits) \
+  instantiate_quantized_batched(name, type, group_size, bits, 1)      \
+  instantiate_quantized_batched(name, type, group_size, bits, 0)
 
-instantiate_quantized_all_aligned(qmm_t)
-instantiate_quantized_all_aligned(bs_qmm_t) // clang-format on
+#define instantiate_quantized_all_batched(type, group_size, bits) \
+  instantiate_quantized_batched_wrap(qmv_fast, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap(qmv, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap(qvm, type, group_size, bits)     \
+  instantiate_quantized_batched_wrap(qmm_n, type, group_size, bits)
+
+#define instantiate_quantized_all_single(type, group_size, bits) \
+  instantiate_quantized(affine_quantize, type, group_size, bits) \
+  instantiate_quantized(affine_quantize_scales_biases, type, group_size, bits) \
+  instantiate_quantized(affine_dequantize, type, group_size, bits)     \
+  instantiate_quantized(bs_qmv_fast, type, group_size, bits)     \
+  instantiate_quantized(bs_qmv, type, group_size, bits)     \
+  instantiate_quantized(bs_qvm, type, group_size, bits)     \
+  instantiate_quantized(bs_qmm_n, type, group_size, bits)
+
+#define instantiate_quantized_all_aligned(type, group_size, bits)   \
+  instantiate_quantized_aligned(bs_qmm_t, type, group_size, bits, true) \
+  instantiate_quantized_aligned(bs_qmm_t, type, group_size, bits, false) \
+  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, true, 1) \
+  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, true, 0) \
+  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, false, 1) \
+  instantiate_quantized_aligned_batched(qmm_t, type, group_size, bits, false, 0)
+
+#define instantiate_quantized_all_quad(type, group_size, bits)   \
+  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 64, 1)   \
+  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 64, 0)  \
+  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 128, 1)  \
+  instantiate_quantized_quad(qmv_quad, type, group_size, bits, 128, 0)
+
+#define instantiate_quantized_funcs(type, group_size, bits) \
+  instantiate_quantized_all_single(type, group_size, bits)  \
+  instantiate_quantized_all_batched(type, group_size, bits) \
+  instantiate_quantized_all_aligned(type, group_size, bits) \
+  instantiate_quantized_all_quad(type, group_size, bits)
+
+#define instantiate_quantized_types(group_size, bits)       \
+  instantiate_quantized_funcs(float, group_size, bits)      \
+  instantiate_quantized_funcs(float16_t, group_size, bits)  \
+  instantiate_quantized_funcs(bfloat16_t, group_size, bits)
+
+#define instantiate_quantized_groups(bits) \
+  instantiate_quantized_types(128, bits)   \
+  instantiate_quantized_types(64, bits)    \
+  instantiate_quantized_types(32, bits)
+
+#define instantiate_quantized_all() \
+  instantiate_quantized_groups(2) \
+  instantiate_quantized_groups(4) \
+  instantiate_quantized_groups(8)
+
+instantiate_quantized_all() // clang-format on

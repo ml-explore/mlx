@@ -2,45 +2,11 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/common/copy.h"
+#include "mlx/backend/common/lapack.h"
 #include "mlx/linalg.h"
 #include "mlx/primitives.h"
 
-#ifdef ACCELERATE_NEW_LAPACK
-#include <Accelerate/Accelerate.h>
-#else
-#include <lapack.h>
-#endif
-
 namespace mlx::core {
-
-namespace {
-
-// Delegate to the Cholesky factorization taking into account differences in
-// LAPACK implementations (basically how to pass the 'uplo' string to fortran).
-int spotrf_wrapper(char uplo, float* matrix, int N) {
-  int info;
-
-#ifdef LAPACK_FORTRAN_STRLEN_END
-  spotrf_(
-      /* uplo = */ &uplo,
-      /* n = */ &N,
-      /* a = */ matrix,
-      /* lda = */ &N,
-      /* info = */ &info,
-      /* uplo_len = */ static_cast<size_t>(1));
-#else
-  spotrf_(
-      /* uplo = */ &uplo,
-      /* n = */ &N,
-      /* a = */ matrix,
-      /* lda = */ &N,
-      /* info = */ &info);
-#endif
-
-  return info;
-}
-
-} // namespace
 
 void cholesky_impl(const array& a, array& factor, bool upper) {
   // Lapack uses the column-major convention. We take advantage of the fact that
@@ -66,7 +32,14 @@ void cholesky_impl(const array& a, array& factor, bool upper) {
 
   for (int i = 0; i < num_matrices; i++) {
     // Compute Cholesky factorization.
-    int info = spotrf_wrapper(uplo, matrix, N);
+    int info;
+    MLX_LAPACK_FUNC(spotrf)
+    (
+        /* uplo = */ &uplo,
+        /* n = */ &N,
+        /* a = */ matrix,
+        /* lda = */ &N,
+        /* info = */ &info);
 
     // TODO: We do nothing when the matrix is not positive semi-definite
     // because throwing an error would result in a crash. If we figure out how

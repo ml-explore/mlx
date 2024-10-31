@@ -64,6 +64,7 @@ NO_GPU(GatherQMM)
 NO_GPU(Greater)
 NO_GPU(GreaterEqual)
 NO_GPU(Hadamard)
+NO_GPU(Imag)
 NO_GPU(Less)
 NO_GPU(LessEqual)
 NO_GPU(Load)
@@ -85,6 +86,7 @@ NO_GPU(Power)
 NO_GPU_MULTI(QRF)
 NO_GPU(QuantizedMatmul)
 NO_GPU(RandomBits)
+NO_GPU(Real)
 NO_GPU(Reduce)
 NO_GPU(Reshape)
 NO_GPU(Round)
@@ -110,6 +112,7 @@ NO_GPU(Tanh)
 NO_GPU(Transpose)
 NO_GPU(Inverse)
 NO_GPU(Cholesky)
+NO_GPU_MULTI(Eigh)
 NO_GPU(View)
 
 namespace fast {
@@ -126,6 +129,8 @@ NO_GPU_MULTI(CustomKernel)
 namespace distributed {
 NO_GPU_MULTI(AllReduce)
 NO_GPU_MULTI(AllGather)
+NO_GPU_MULTI(Send)
+NO_GPU_MULTI(Recv)
 } // namespace distributed
 
 } // namespace mlx::core

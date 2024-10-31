@@ -144,9 +144,7 @@ array squeeze(
     StreamOrDevice s = {});
 
 /** Remove singleton dimensions at the given axis. */
-inline array squeeze(const array& a, int axis, StreamOrDevice s = {}) {
-  return squeeze(a, std::vector<int>{axis}, s);
-}
+array squeeze(const array& a, int axis, StreamOrDevice s = {});
 
 /** Remove all singleton dimensions. */
 array squeeze(const array& a, StreamOrDevice s = {});
@@ -171,8 +169,8 @@ array slice(
 /** Slice an array with a stride of 1 in each dimension. */
 array slice(
     const array& a,
-    const std::vector<int>& start,
-    const std::vector<int>& stop,
+    std::vector<int> start,
+    std::vector<int> stop,
     StreamOrDevice s = {});
 
 /** Update a slice from the source array */
@@ -416,8 +414,8 @@ array where(
 array nan_to_num(
     const array& a,
     float nan = 0.0f,
-    const std::optional<float>& posinf = std::nullopt,
-    const std::optional<float>& neginf = std::nullopt,
+    const std::optional<float> posinf = std::nullopt,
+    const std::optional<float> neginf = std::nullopt,
     StreamOrDevice s = {});
 
 /** True if all elements in the array are true (or non-zero). **/
@@ -936,14 +934,24 @@ array take(
     const array& indices,
     int axis,
     StreamOrDevice s = {});
+array take(const array& a, int index, int axis, StreamOrDevice s = {});
 
 /** Take array entries at the given indices treating the array as flattened. */
 array take(const array& a, const array& indices, StreamOrDevice s = {});
+array take(const array& a, int index, StreamOrDevice s = {});
 
 /** Take array entries given indices along the axis */
 array take_along_axis(
     const array& a,
     const array& indices,
+    int axis,
+    StreamOrDevice s = {});
+
+/** Put the values into the array at the given indices along the axis */
+array put_along_axis(
+    const array& a,
+    const array& indices,
+    const array& values,
     int axis,
     StreamOrDevice s = {});
 
@@ -1247,12 +1255,42 @@ array conv3d(
     int groups = 1,
     StreamOrDevice s = {});
 
+/** 1D transposed convolution with a filter */
+array conv_transpose1d(
+    const array& input,
+    const array& weight,
+    int stride = 1,
+    int padding = 0,
+    int dilation = 1,
+    int groups = 1,
+    StreamOrDevice s = {});
+
+/** 2D transposed convolution with a filter */
+array conv_transpose2d(
+    const array& input,
+    const array& weight,
+    const std::pair<int, int>& stride = {1, 1},
+    const std::pair<int, int>& padding = {0, 0},
+    const std::pair<int, int>& dilation = {1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
+
+/** 3D transposed convolution with a filter */
+array conv_transpose3d(
+    const array& input,
+    const array& weight,
+    const std::tuple<int, int, int>& stride = {1, 1, 1},
+    const std::tuple<int, int, int>& padding = {0, 0, 0},
+    const std::tuple<int, int, int>& dilation = {1, 1, 1},
+    int groups = 1,
+    StreamOrDevice s = {});
+
 /** Quantized matmul multiplies x with a quantized matrix w*/
 array quantized_matmul(
-    const array& x,
-    const array& w,
-    const array& scales,
-    const array& biases,
+    array x,
+    array w,
+    array scales,
+    array biases,
     bool transpose = true,
     int group_size = 64,
     int bits = 4,
@@ -1418,6 +1456,36 @@ array right_shift(const array& a, const array& b, StreamOrDevice s = {});
 array operator>>(const array& a, const array& b);
 
 array view(const array& a, const Dtype& dtype, StreamOrDevice s = {});
+
+/** Roll elements along an axis and introduce them on the other side */
+array roll(const array& a, int shift, StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    StreamOrDevice s = {});
+array roll(const array& a, int shift, int axis, StreamOrDevice s = {});
+array roll(
+    const array& a,
+    int shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    int axis,
+    StreamOrDevice s = {});
+array roll(
+    const array& a,
+    const std::vector<int>& shift,
+    const std::vector<int>& axes,
+    StreamOrDevice s = {});
+
+/* The real part of a complex array. */
+array real(const array& a, StreamOrDevice s = {});
+
+/* The imaginary part of a complex array. */
+array imag(const array& a, StreamOrDevice s = {});
+
 /** @} */
 
 } // namespace mlx::core

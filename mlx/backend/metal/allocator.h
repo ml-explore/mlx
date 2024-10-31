@@ -8,6 +8,7 @@
 
 #include "mlx/allocator.h"
 #include "mlx/backend/metal/device.h"
+#include "mlx/backend/metal/resident.h"
 
 namespace mlx::core::metal {
 
@@ -56,6 +57,7 @@ class MetalAllocator : public allocator::Allocator {
  public:
   virtual Buffer malloc(size_t size, bool allow_swap = false) override;
   virtual void free(Buffer buffer) override;
+  virtual size_t size(Buffer buffer) const override;
   size_t get_active_memory() {
     return active_memory_;
   };
@@ -71,6 +73,7 @@ class MetalAllocator : public allocator::Allocator {
   };
   size_t set_cache_limit(size_t limit);
   size_t set_memory_limit(size_t limit, bool relaxed);
+  size_t set_wired_limit(size_t limit);
   void clear_cache();
 
  private:
@@ -81,12 +84,15 @@ class MetalAllocator : public allocator::Allocator {
   // Caching allocator
   BufferCache buffer_cache_;
 
+  ResidencySet residency_set_;
+
   // Allocation stats
   size_t block_limit_;
   size_t gc_limit_;
   size_t active_memory_{0};
   size_t peak_memory_{0};
   size_t max_pool_size_;
+  size_t wired_limit_{0};
   bool relaxed_{true};
 
   std::mutex mutex_;

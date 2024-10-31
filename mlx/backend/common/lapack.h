@@ -1,10 +1,11 @@
-// Copyright © 2024 Apple Inc.
+// Copyright © 2023-2024 Apple Inc.
 
 #pragma once
 
 #ifdef ACCELERATE_NEW_LAPACK
 #include <Accelerate/Accelerate.h>
 #else
+#include <cblas.h>
 #include <lapack.h>
 #endif
 

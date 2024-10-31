@@ -37,4 +37,7 @@ void copy_gpu_inplace(
     CopyType ctype,
     const Stream& s);
 
+// Fill the output with the scalar val
+void fill_gpu(const array& val, array& out, const Stream& s);
+
 } // namespace mlx::core

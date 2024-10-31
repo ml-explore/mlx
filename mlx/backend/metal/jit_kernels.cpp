@@ -1,13 +1,9 @@
 // Copyright © 2024 Apple Inc.
-#include <map>
 
 #include "mlx/backend/common/compiled.h"
 #include "mlx/backend/metal/jit/arange.h"
-#include "mlx/backend/metal/jit/copy.h"
 #include "mlx/backend/metal/jit/gemv_masked.h"
 #include "mlx/backend/metal/jit/includes.h"
-#include "mlx/backend/metal/jit/reduce.h"
-#include "mlx/backend/metal/jit/scan.h"
 #include "mlx/backend/metal/jit/softmax.h"
 #include "mlx/backend/metal/jit/steel_conv.h"
 #include "mlx/backend/metal/jit/steel_gemm.h"
@@ -28,37 +24,38 @@ MTL::ComputePipelineState* get_arange_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const array& out) {
-  const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(kernel_name, [&]() {
     std::ostringstream kernel_source;
-    kernel_source
-        << metal::utils() << metal::arange()
-        << fmt::format(arange_kernels, lib_name, get_type_string(out.dtype()));
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    kernel_source << metal::utils() << metal::arange()
+                  << fmt::format(
+                         arange_kernels,
+                         kernel_name,
+                         get_type_string(out.dtype()));
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
 MTL::ComputePipelineState* get_unary_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    Dtype in_type,
     Dtype out_type,
     const std::string op) {
-  std::string lib_name = kernel_name.substr(1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name, [&]() {
+    auto in_t = get_type_string(in_type);
+    auto out_t = get_type_string(out_type);
     std::ostringstream kernel_source;
-    auto u_def = get_template_definition(
-        "v" + lib_name, "unary_v", get_type_string(out_type), op);
-    auto u2_def = get_template_definition(
-        "v2" + lib_name, "unary_v2", get_type_string(out_type), op);
-    auto g_def = get_template_definition(
-        "g" + lib_name, "unary_g", get_type_string(out_type), op);
-    kernel_source << metal::utils() << metal::unary_ops() << metal::unary()
-                  << u_def << u2_def << g_def;
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    kernel_source << metal::utils() << metal::unary_ops() << metal::unary();
+    kernel_source << get_template_definition(
+        "v_" + lib_name, "unary_v", in_t, out_t, op);
+    kernel_source << get_template_definition(
+        "v2_" + lib_name, "unary_v2", in_t, out_t, op);
+    kernel_source << get_template_definition(
+        "gn4_" + lib_name, "unary_g", in_t, out_t, op, 4);
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -68,7 +65,7 @@ void add_binary_kernels(
     Dtype out_type,
     const std::string op,
     std::ostringstream& kernel_source) {
-  const std::map<std::string, std::string> kernel_types = {
+  const std::array<std::pair<std::string, std::string>, 10> kernel_types = {{
       {"ss", "binary_ss"},
       {"vs", "binary_vs"},
       {"sv", "binary_sv"},
@@ -79,31 +76,24 @@ void add_binary_kernels(
       {"g1", "binary_g_nd1"},
       {"g2", "binary_g_nd2"},
       {"g3", "binary_g_nd3"},
-      {"g4", "binary_g_nd"},
-      {"g5", "binary_g_nd"},
-      {"gn", "binary_g"},
-  };
-  for (auto [name, func] : kernel_types) {
+  }};
+  for (auto& [name, func] : kernel_types) {
     std::string template_def;
-    if (name == "g4" || name == "g5") {
-      int dim = std::stoi(name.substr(1));
-      template_def = get_template_definition(
-          name + lib_name,
-          func,
-          get_type_string(in_type),
-          get_type_string(out_type),
-          op,
-          dim);
-    } else {
-      template_def = get_template_definition(
-          name + lib_name,
-          func,
-          get_type_string(in_type),
-          get_type_string(out_type),
-          op);
-    }
+    template_def = get_template_definition(
+        name + "_" + lib_name,
+        func,
+        get_type_string(in_type),
+        get_type_string(out_type),
+        op);
     kernel_source << template_def;
   }
+  kernel_source << get_template_definition(
+      "gn4_" + lib_name,
+      "binary_g",
+      get_type_string(in_type),
+      get_type_string(out_type),
+      op,
+      4);
 }
 
 MTL::ComputePipelineState* get_binary_kernel(
@@ -112,14 +102,13 @@ MTL::ComputePipelineState* get_binary_kernel(
     Dtype in_type,
     Dtype out_type,
     const std::string op) {
-  std::string lib_name = kernel_name.substr(2);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::binary_ops() << metal::binary();
     add_binary_kernels(lib_name, in_type, out_type, op, kernel_source);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -129,15 +118,14 @@ MTL::ComputePipelineState* get_binary_two_kernel(
     Dtype in_type,
     Dtype out_type,
     const std::string op) {
-  std::string lib_name = kernel_name.substr(2);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::binary_ops()
                   << metal::binary_two();
     add_binary_kernels(lib_name, in_type, out_type, op, kernel_source);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -147,34 +135,26 @@ MTL::ComputePipelineState* get_ternary_kernel(
     Dtype type,
     const std::string op) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
-    const std::map<std::string, std::string> kernel_types = {
+    const std::array<std::pair<std::string, std::string>, 5> kernel_types = {{
         {"v", "ternary_v"},
         {"v2", "ternary_v2"},
-        {"g", "ternary_g"},
         {"g1", "ternary_g_nd1"},
         {"g2", "ternary_g_nd2"},
         {"g3", "ternary_g_nd3"},
-        {"g4", "ternary_g_nd"},
-        {"g5", "ternary_g_nd"},
-    };
+    }};
     kernel_source << metal::utils() << metal::ternary_ops() << metal::ternary();
-    for (auto [name, func] : kernel_types) {
+    for (auto& [name, func] : kernel_types) {
       std::string template_def;
-      if (name == "g4" || name == "g5") {
-        int dim = std::stoi(name.substr(1));
-        template_def = get_template_definition(
-            name + "_" + lib_name, func, get_type_string(type), op, dim);
-      } else {
-        template_def = get_template_definition(
-            name + "_" + lib_name, func, get_type_string(type), op);
-      }
+      template_def = get_template_definition(
+          name + "_" + lib_name, func, get_type_string(type), op);
       kernel_source << template_def;
     }
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    kernel_source << get_template_definition(
+        "gn4_" + lib_name, "ternary_g", get_type_string(type), op, 4);
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -184,17 +164,33 @@ MTL::ComputePipelineState* get_copy_kernel(
     const array& in,
     const array& out) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
+    auto in_type = get_type_string(in.dtype());
+    auto out_type = get_type_string(out.dtype());
     kernel_source << metal::utils() << metal::copy()
-                  << fmt::format(
-                         copy_kernels,
-                         lib_name,
-                         get_type_string(in.dtype()),
-                         get_type_string(out.dtype()));
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+                  << get_template_definition(
+                         "s_" + lib_name, "copy_s", in_type, out_type)
+                  << get_template_definition(
+                         "v_" + lib_name, "copy_v", in_type, out_type)
+                  << get_template_definition(
+                         "g1_" + lib_name, "copy_g_nd1", in_type, out_type)
+                  << get_template_definition(
+                         "g2_" + lib_name, "copy_g_nd2", in_type, out_type)
+                  << get_template_definition(
+                         "g3_" + lib_name, "copy_g_nd3", in_type, out_type)
+                  << get_template_definition(
+                         "gn4_" + lib_name, "copy_g", in_type, out_type, 4)
+                  << get_template_definition(
+                         "gg1_" + lib_name, "copy_gg_nd1", in_type, out_type)
+                  << get_template_definition(
+                         "gg2_" + lib_name, "copy_gg_nd2", in_type, out_type)
+                  << get_template_definition(
+                         "gg3_" + lib_name, "copy_gg_nd3", in_type, out_type)
+                  << get_template_definition(
+                         "ggn4_" + lib_name, "copy_gg", in_type, out_type, 4);
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -204,8 +200,7 @@ MTL::ComputePipelineState* get_softmax_kernel(
     bool precise,
     const array& out) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&] {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::softmax()
                   << fmt::format(
@@ -213,8 +208,8 @@ MTL::ComputePipelineState* get_softmax_kernel(
                          lib_name,
                          get_type_string(out.dtype()),
                          get_type_string(precise ? float32 : out.dtype()));
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -227,22 +222,29 @@ MTL::ComputePipelineState* get_scan_kernel(
     const array& in,
     const array& out) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
-    std::string op_name = "Cum" + reduce_type;
-    op_name[3] = toupper(op_name[3]);
+  auto lib = d.get_library(lib_name, [&]() {
+    auto out_type = get_type_string(out.dtype());
+    std::string op = "Cum" + reduce_type + "<" + out_type + ">";
+    op[3] = toupper(op[3]);
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::scan()
-                  << fmt::format(
-                         scan_kernels,
-                         lib_name,
-                         get_type_string(in.dtype()),
-                         get_type_string(out.dtype()),
-                         op_name,
-                         inclusive,
-                         reverse);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    kernel_source << metal::utils() << metal::scan();
+    const std::array<std::pair<std::string, std::string>, 2> scan_kernels = {{
+        {"contig_", "contiguous_scan"},
+        {"strided_", "strided_scan"},
+    }};
+    for (auto& [prefix, kernel] : scan_kernels) {
+      kernel_source << get_template_definition(
+          prefix + lib_name,
+          kernel,
+          get_type_string(in.dtype()),
+          get_type_string(out.dtype()),
+          op,
+          in.itemsize() <= 4 ? 4 : 2,
+          inclusive,
+          reverse);
+    }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -254,8 +256,7 @@ MTL::ComputePipelineState* get_sort_kernel(
     int bn,
     int tn) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     auto in_type = get_type_string(in.dtype());
     auto out_type = get_type_string(out.dtype());
@@ -280,8 +281,8 @@ MTL::ComputePipelineState* get_sort_kernel(
           bn,
           tn);
     }
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -293,15 +294,14 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
     int bn,
     int tn) {
   std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::sort();
-    std::vector<std::pair<std::string, std::string>> kernel_types = {
-        {"sort_", "mb_block_sort"},
-        {"partition_", "mb_block_partition"},
-        {"merge_", "mb_block_merge"}};
-    for (auto [name, func] : kernel_types) {
+    std::array<std::pair<std::string, std::string>, 3> kernel_types = {
+        {{"sort_", "mb_block_sort"},
+         {"partition_", "mb_block_partition"},
+         {"merge_", "mb_block_merge"}}};
+    for (auto& [name, func] : kernel_types) {
       kernel_source << get_template_definition(
           name + lib_name,
           func,
@@ -311,8 +311,8 @@ MTL::ComputePipelineState* get_mb_sort_kernel(
           bn,
           tn);
     }
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -320,44 +320,52 @@ MTL::ComputePipelineState* get_reduce_init_kernel(
     metal::Device& d,
     const std::string& kernel_name,
     const array& out) {
-  auto lib = d.get_library(kernel_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(kernel_name, [&]() {
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduce_utils()
-                  << fmt::format(
-                         reduce_init_kernels,
-                         kernel_name,
-                         get_type_string(out.dtype()),
-                         op_name(out));
-    lib = d.get_library(kernel_name, kernel_source.str());
-  }
+    std::string op_type = op_name(out);
+    op_type[0] = std::toupper(op_name(out)[0]);
+    auto out_type = get_type_string(out.dtype());
+    std::string op = op_type + "<" + out_type + ">";
+    kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce();
+    kernel_source << get_template_definition(
+        kernel_name, "init_reduce", out_type, op);
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
 MTL::ComputePipelineState* get_reduce_kernel(
     metal::Device& d,
     const std::string& kernel_name,
+    const std::string& func_name,
     const std::string& op_name,
     const array& in,
-    const array& out) {
-  std::string lib_name = kernel_name.substr(kernel_name.find("_") + 1);
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+    const array& out,
+    int ndim /* = -1 */,
+    int bm /* = -1 */,
+    int bn /* = -1 */) {
+  auto lib = d.get_library(kernel_name, [&]() {
     std::string op_type = op_name;
     op_type[0] = std::toupper(op_name[0]);
-    bool non_atomic = out.dtype() == int64 || out.dtype() == uint64;
     std::ostringstream kernel_source;
-    kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce()
-                  << fmt::format(
-                         non_atomic ? reduce_non_atomic_kernels
-                                    : reduce_kernels,
-                         lib_name,
-                         get_type_string(in.dtype()),
-                         get_type_string(out.dtype()),
-                         op_type);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
-  return d.get_kernel(kernel_name, lib);
+    auto in_type = get_type_string(in.dtype());
+    auto out_type = get_type_string(out.dtype());
+    std::string op = op_type + "<" + out_type + ">";
+    kernel_source << metal::utils() << metal::reduce_utils() << metal::reduce();
+    if (bm >= 0) {
+      kernel_source << get_template_definition(
+          kernel_name, func_name, in_type, out_type, op, ndim, bm, bn);
+    } else if (ndim >= 0) {
+      kernel_source << get_template_definition(
+          kernel_name, func_name, in_type, out_type, op, ndim);
+    } else {
+      kernel_source << get_template_definition(
+          kernel_name, func_name, in_type, out_type, op);
+    }
+    return kernel_source.str();
+  });
+  auto st = d.get_kernel(kernel_name, lib);
+  return st;
 }
 
 MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
@@ -374,8 +382,7 @@ MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
     int wm,
     int wn) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_fused()
@@ -390,8 +397,8 @@ MTL::ComputePipelineState* get_steel_gemm_fused_kernel(
                          "wn"_a = wn,
                          "trans_a"_a = transpose_a,
                          "trans_b"_a = transpose_b);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
@@ -410,8 +417,7 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
     bool mn_aligned,
     bool k_aligned) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_splitk()
@@ -429,8 +435,8 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_kernel(
                          "trans_b"_a = transpose_b,
                          "mn_aligned"_a = mn_aligned,
                          "k_aligned"_a = k_aligned);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -441,19 +447,19 @@ MTL::ComputePipelineState* get_steel_gemm_splitk_accum_kernel(
     const array& out,
     bool axbpy) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gemm()
                   << metal::steel_gemm_splitk()
                   << fmt::format(
-                         axbpy ? steel_gemm_splitk_accum_axbpy_kernels
-                               : steel_gemm_splitk_accum_kernels,
+                         fmt::runtime(
+                             axbpy ? steel_gemm_splitk_accum_axbpy_kernels
+                                   : steel_gemm_splitk_accum_kernels),
                          "name"_a = lib_name,
                          "atype"_a = get_type_string(in.dtype()),
                          "otype"_a = get_type_string(out.dtype()));
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -473,8 +479,7 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
     bool mn_aligned,
     bool k_aligned) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     auto out_mask_type = mask_out.has_value()
         ? get_type_string((*mask_out).dtype())
@@ -498,8 +503,8 @@ MTL::ComputePipelineState* get_steel_gemm_masked_kernel(
                          "trans_b"_a = transpose_b,
                          "mn_aligned"_a = mn_aligned,
                          "k_aligned"_a = k_aligned);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -518,8 +523,7 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
     int tn,
     bool contiguous) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     auto out_mask_type = mask_out.has_value()
         ? get_type_string((*mask_out).dtype())
@@ -541,8 +545,8 @@ MTL::ComputePipelineState* get_gemv_masked_kernel(
                          "tn"_a = tn,
                          "trans"_a = transpose_mat ? "t_" : "",
                          "nc"_a = contiguous ? "0" : "1");
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -558,8 +562,7 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
     int n_channel_specialization,
     bool small_filter) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::conv() << metal::steel_conv()
                   << fmt::format(
@@ -573,8 +576,8 @@ MTL::ComputePipelineState* get_steel_conv_kernel(
                          "wn"_a = wn,
                          "n_channels"_a = n_channel_specialization,
                          "small_filter"_a = small_filter);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -588,8 +591,7 @@ MTL::ComputePipelineState* get_steel_conv_general_kernel(
     int wm,
     int wn) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::conv()
                   << metal::steel_conv_general()
@@ -602,8 +604,8 @@ MTL::ComputePipelineState* get_steel_conv_general_kernel(
                          "bk"_a = bk,
                          "wm"_a = wm,
                          "wn"_a = wn);
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 
@@ -614,13 +616,12 @@ MTL::ComputePipelineState* get_fft_kernel(
     const metal::MTLFCList& func_consts,
     const std::string& template_def) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     std::string kernel_string;
     kernel_source << metal::fft() << template_def;
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib, hash_name, func_consts);
 }
 
@@ -629,13 +630,12 @@ MTL::ComputePipelineState* get_quantized_kernel(
     const std::string& kernel_name,
     const std::string& template_def) {
   const auto& lib_name = kernel_name;
-  auto lib = d.get_library(lib_name);
-  if (lib == nullptr) {
+  auto lib = d.get_library(lib_name, [&]() {
     std::ostringstream kernel_source;
     kernel_source << metal::utils() << metal::gemm() << metal::quantized()
                   << template_def;
-    lib = d.get_library(lib_name, kernel_source.str());
-  }
+    return kernel_source.str();
+  });
   return d.get_kernel(kernel_name, lib);
 }
 

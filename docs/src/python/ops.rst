@@ -45,6 +45,9 @@ Operations
    conv1d
    conv2d
    conv3d
+   conv_transpose1d
+   conv_transpose2d
+   conv_transpose3d
    conv_general
    cos
    cosh
@@ -77,7 +80,9 @@ Operations
    greater_equal
    hadamard_transform
    identity
+   imag
    inner
+   isfinite
    isclose
    isinf
    isnan
@@ -117,14 +122,17 @@ Operations
    pad
    power
    prod
+   put_along_axis
    quantize
    quantized_matmul
    radians
+   real
    reciprocal
    remainder
    repeat
    reshape
    right_shift
+   roll
    round
    rsqrt
    save

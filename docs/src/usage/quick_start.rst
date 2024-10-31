@@ -64,4 +64,4 @@ Other gradient transformations include :func:`vjp` for vector-Jacobian products
 and :func:`jvp` for Jacobian-vector products.
 
 Use :func:`value_and_grad` to efficiently compute both a function's output and
-gradient with respect to the function's input. 
+gradient with respect to the function's input.

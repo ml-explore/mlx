@@ -298,7 +298,65 @@ array load(std::shared_ptr<io::Reader> in_stream, StreamOrDevice s) {
 
 /** Load array from file in .npy format */
 array load(std::string file, StreamOrDevice s) {
-  return load(std::make_shared<io::FileReader>(std::move(file)), s);
+  return load(std::make_shared<io::ParallelFileReader>(std::move(file)), s);
 }
+
+namespace io {
+
+ThreadPool& thread_pool() {
+  static ThreadPool pool_{4};
+  return pool_;
+}
+
+ThreadPool ParallelFileReader::thread_pool_{4};
+
+void ParallelFileReader::read(char* data, size_t n) {
+  while (n != 0) {
+    auto m = ::read(fd_, data, std::min(n, static_cast<size_t>(INT32_MAX)));
+    if (m <= 0) {
+      std::ostringstream msg;
+      msg << "[read] Unable to read " << n << " bytes from file.";
+      throw std::runtime_error(msg.str());
+    }
+    data += m;
+    n -= m;
+  }
+}
+
+void ParallelFileReader::read(char* data, size_t n, size_t offset) {
+  auto readfn = [fd = fd_](size_t offset, size_t size, char* buffer) -> bool {
+    while (size != 0) {
+      auto m = pread(fd, buffer, size, offset);
+      if (m <= 0) {
+        return false;
+      }
+      buffer += m;
+      size -= m;
+    }
+    return true;
+  };
+  std::vector<std::future<bool>> futs;
+  while (n != 0) {
+    if (n < batch_size_) {
+      if (!readfn(offset, n, data)) {
+        throw std::runtime_error("[read] Unable to read from file.");
+      }
+      break;
+    } else {
+      size_t m = batch_size_;
+      futs.emplace_back(thread_pool_.enqueue(readfn, offset, m, data));
+      data += m;
+      n -= m;
+      offset += m;
+    }
+  }
+  for (auto& f : futs) {
+    if (!f.get()) {
+      throw std::runtime_error("[read] Unable to read from file.");
+    }
+  }
+}
+
+} // namespace io
 
 } // namespace mlx::core

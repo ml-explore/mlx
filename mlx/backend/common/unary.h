@@ -12,7 +12,7 @@ namespace mlx::core {
 namespace {
 
 void set_unary_output_data(const array& in, array& out) {
-  if (in.is_donatable() && in.itemsize() == out.itemsize()) {
+  if (is_donatable(in, out)) {
     out.copy_shared_buffer(in);
   } else {
     auto size = in.data_size();
@@ -24,22 +24,36 @@ void set_unary_output_data(const array& in, array& out) {
   }
 }
 
-template <typename T, typename Op>
+template <typename T, typename U = T, typename Op>
+void unary_op(const T* a, U* out, Op op, size_t shape, size_t stride) {
+  for (size_t i = 0; i < shape; i += 1) {
+    out[i] = op(*a);
+    a += stride;
+  }
+}
+
+template <typename T, typename U = T, typename Op>
 void unary_op(const array& a, array& out, Op op) {
   const T* a_ptr = a.data<T>();
   if (a.flags().contiguous) {
     set_unary_output_data(a, out);
-    T* dst = out.data<T>();
+    U* dst = out.data<U>();
     for (size_t i = 0; i < a.data_size(); ++i) {
       dst[i] = op(a_ptr[i]);
     }
   } else {
     out.set_data(allocator::malloc_or_wait(out.nbytes()));
-    T* dst = out.data<T>();
-    for (size_t i = 0; i < out.size(); ++i) {
-      // TODO this is super inefficient, need to fix.
-      int a_idx = elem_to_loc(i, a.shape(), a.strides());
-      dst[i] = op(a_ptr[a_idx]);
+    U* dst = out.data<U>();
+    size_t shape = a.ndim() > 0 ? a.shape(-1) : 1;
+    size_t stride = a.ndim() > 0 ? a.strides(-1) : 1;
+    if (a.ndim() <= 1) {
+      unary_op(a_ptr, dst, op, shape, stride);
+      return;
+    }
+    ContiguousIterator it(a.shape(), a.strides(), a.ndim() - 1);
+    for (size_t elem = 0; elem < a.size(); elem += shape) {
+      unary_op(a_ptr + it.loc, dst + elem, op, shape, stride);
+      it.step();
     }
   }
 }

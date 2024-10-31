@@ -357,6 +357,7 @@ class ArgPartition : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
+  DEFINE_GRADS()
   DEFINE_PRINT(ArgPartition)
   DEFINE_INPUT_OUTPUT_SHAPE()
   bool is_equivalent(const Primitive& other) const override;
@@ -382,6 +383,7 @@ class ArgReduce : public UnaryPrimitive {
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
 
   DEFINE_VMAP()
+  DEFINE_GRADS()
   DEFINE_PRINT(ArgReduce)
   bool is_equivalent(const Primitive& other) const override;
   std::vector<std::vector<int>> output_shapes(
@@ -1104,6 +1106,20 @@ class Hadamard : public UnaryPrimitive {
   void eval(const std::vector<array>& inputs, array& out);
 };
 
+class Imag : public UnaryPrimitive {
+ public:
+  explicit Imag(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Imag)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
+};
+
 class Less : public UnaryPrimitive {
  public:
   explicit Less(Stream stream) : UnaryPrimitive(stream) {}
@@ -1146,9 +1162,13 @@ class Load : public UnaryPrimitive {
       size_t offset,
       bool swap_endianness = false)
       : UnaryPrimitive(stream),
-        reader_(reader),
+        reader_(std::move(reader)),
         offset_(offset),
-        swap_endianness_(swap_endianness) {}
+        swap_endianness_(swap_endianness) {
+    if (stream.device == Device::gpu) {
+      io_stream();
+    }
+  }
 
   void eval_cpu(const std::vector<array>& inputs, array& out) override;
   void eval_gpu(const std::vector<array>& inputs, array& out) override;
@@ -1156,6 +1176,10 @@ class Load : public UnaryPrimitive {
   DEFINE_PRINT(Load)
 
  private:
+  Stream& io_stream() {
+    static Stream io_stream = new_stream(Device::cpu);
+    return io_stream;
+  };
   void eval(const std::vector<array>& inputs, array& out);
   std::shared_ptr<io::Reader> reader_;
   size_t offset_;
@@ -1549,6 +1573,20 @@ class RandomBits : public UnaryPrimitive {
   int width_;
 
   void eval(const std::vector<array>& inputs, array& out);
+};
+
+class Real : public UnaryPrimitive {
+ public:
+  explicit Real(Stream stream) : UnaryPrimitive(stream) {}
+
+  void eval_cpu(const std::vector<array>& inputs, array& out) override;
+  void eval_gpu(const std::vector<array>& inputs, array& out) override;
+
+  DEFINE_VMAP()
+  DEFINE_GRADS()
+  DEFINE_PRINT(Real)
+  DEFINE_DEFAULT_IS_EQUIVALENT()
+  DEFINE_INPUT_OUTPUT_SHAPE()
 };
 
 class Reshape : public UnaryPrimitive {
@@ -2156,6 +2194,46 @@ class Cholesky : public UnaryPrimitive {
  private:
   void eval(const std::vector<array>& inputs, array& output);
   bool upper_;
+};
+
+class Eigh : public Primitive {
+ public:
+  explicit Eigh(Stream stream, std::string uplo, bool compute_eigenvectors)
+      : Primitive(stream),
+        uplo_(std::move(uplo)),
+        compute_eigenvectors_(compute_eigenvectors) {}
+
+  void eval_cpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+  void eval_gpu(const std::vector<array>& inputs, std::vector<array>& outputs)
+      override;
+
+  DEFINE_VMAP()
+  DEFINE_PRINT(Eigh)
+
+  std::vector<std::vector<int>> output_shapes(
+      const std::vector<array>& inputs) override {
+    auto shape = inputs[0].shape();
+    shape.pop_back(); // Remove last dimension for eigenvalues
+    if (compute_eigenvectors_) {
+      return {shape, inputs[0].shape()}; // Eigenvalues and eigenvectors
+    } else {
+      return {shape}; // Only eigenvalues
+    }
+  }
+
+  bool is_equivalent(const Primitive& other) const override {
+    if (auto* p = dynamic_cast<const Eigh*>(&other)) {
+      return uplo_ == p->uplo_ &&
+          compute_eigenvectors_ == p->compute_eigenvectors_;
+    }
+    return false;
+  }
+
+ private:
+  void eval(const std::vector<array>& inputs, std::vector<array>& outputs);
+  std::string uplo_;
+  bool compute_eigenvectors_;
 };
 
 } // namespace mlx::core

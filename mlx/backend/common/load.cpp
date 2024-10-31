@@ -5,10 +5,8 @@
 #include <utility>
 
 #include "mlx/allocator.h"
-#include "mlx/io/load.h"
+#include "mlx/backend/common/load.h"
 #include "mlx/primitives.h"
-
-namespace mlx::core {
 
 namespace {
 
@@ -29,12 +27,14 @@ void swap_endianness(uint8_t* data_bytes, size_t N) {
 
 } // namespace
 
-void Load::eval(const std::vector<array>& inputs, array& out) {
-  assert(inputs.size() == 0);
-  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+namespace mlx::core {
 
-  reader_->seek(offset_);
-  reader_->read(out.data<char>(), out.nbytes());
+void load(
+    array& out,
+    size_t offset,
+    const std::shared_ptr<io::Reader>& reader,
+    bool swap_endianness_) {
+  reader->read(out.data<char>(), out.nbytes(), offset);
 
   if (swap_endianness_) {
     switch (out.itemsize()) {
@@ -49,6 +49,13 @@ void Load::eval(const std::vector<array>& inputs, array& out) {
         break;
     }
   }
+}
+
+void Load::eval(const std::vector<array>& inputs, array& out) {
+  assert(inputs.size() == 0);
+  out.set_data(allocator::malloc_or_wait(out.nbytes()));
+
+  load(out, offset_, reader_, swap_endianness_);
 }
 
 } // namespace mlx::core

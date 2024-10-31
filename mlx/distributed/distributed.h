@@ -50,17 +50,4 @@ struct Group {
  */
 Group init(bool strict = false);
 
-namespace detail {
-
-/* Return the communication stream. */
-Stream communication_stream();
-
-/* Perform an all reduce sum operation */
-void all_sum(Group group, const array& input, array& output);
-
-/* Perform an all reduce sum operation */
-void all_gather(Group group, const array& input, array& output);
-
-} // namespace detail
-
 } // namespace mlx::core::distributed
